@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
-import { callPillText, pillCompactsAudioStage, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
+import { callPillText, pillCompactsAudioStage, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, pillTakesBound, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS, type CallPillText } from './call-pill-text';
 import { PILL_TEXT_EXIT } from './call-pill-text-exit';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
@@ -117,6 +117,29 @@ describe('une seule largeur pour le verre (P3.10)', () => {
   test('le verre qui porte du texte, et le verre des sous-titres rangés, tiennent en 560 px — sans condition de fenêtre', () => {
     expect(PILL_TEXT_MAX_WIDTH).toBe(560);
     expect(PILL_TEXT_WIDTH_CLASS).toContain(`${PILL_TEXT_MAX_WIDTH}px`);
+  });
+});
+
+/**
+ * #17935 (décision porteur du 2026-11-13, A) — UNE borne pour toute pilule : la pilule
+ * qui a grandi (les deux rangées d'un groupe, un panneau) prend la même largeur que celle
+ * qui porte du texte, en duo comme en groupe. Ouvrir (…) en groupe, sous-titres allumés,
+ * ne resserre donc plus le verre : seule sa hauteur change (loi 17). Les mêmes vecteurs
+ * valent pour `CallPillWidth` d'iOS et d'Android.
+ */
+describe('#17935 — une seule borne de 560 px pour toute pilule', () => {
+  const texts: readonly CallPillText[] = ['none', 'captions', 'journal', 'captionsAlone'];
+
+  test('au repos, sans texte, la pilule épouse sa rangée de base : aucune borne à prendre', () => {
+    expect(pillTakesBound('none', false)).toBe(false);
+  });
+
+  test('la pilule qui a grandi prend la borne, qu’elle porte du texte ou non', () => {
+    expect(texts.every((text) => pillTakesBound(text, true))).toBe(true);
+  });
+
+  test('la pilule qui porte du texte prend la borne, grandie ou non', () => {
+    expect(texts.filter((text) => text !== 'none').every((text) => pillTakesBound(text, false))).toBe(true);
   });
 });
 

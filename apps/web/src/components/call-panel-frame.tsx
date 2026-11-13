@@ -39,24 +39,33 @@ export const chipStyle = (checked: boolean) =>
 
 const FOCUS_ORDER = ['[data-panel-first]', '[aria-checked="true"]', 'input', '[data-row-item]', 'button:not([data-panel-close]):not([data-panel-back])'] as const;
 
-type FrameProps = {
-  readonly id: string;
-  readonly title: string;
+/**
+ * La tête d'un panneau DANS la pilule : ‹ · titre centré · ✕. Le bouton rond et le
+ * glyphe de Fermer sont remis par l'écran ; un panneau posé en colonne n'en reçoit
+ * aucun — sa tête n'a pas de ✕ par construction (#17932).
+ */
+export type PillPanelHead = {
   readonly closeLabel: string;
   readonly closeGlyph: ReactNode;
-  readonly onClose: () => void;
   /** Le bouton rond de l'appel (`CallButton`), remis par l'écran : ‹ et ✕ en sont deux disques. */
   readonly Button: typeof CallButton;
-  readonly children: ReactNode;
-  readonly data: Readonly<Record<`data-${string}`, string>>;
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
   /** ‹ : revenir au menu des rangées (#8578). */
   readonly back?: PanelBack | undefined;
-  /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942) : sa tête est « titre à gauche, bascule à droite », sans ‹ ni ✕ (W1.9) — la colonne se referme par « Journal », par Échap. */
-  readonly fill?: boolean;
+};
+
+/** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942) : sa tête est « titre à gauche, bascule à droite », sans ‹ ni ✕ (W1.9, #17932) — la colonne se referme par « Journal », par Échap. */
+export type ColumnPanelHead = { readonly fill: true };
+
+type FrameProps = {
+  readonly id: string;
+  readonly title: string;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+  readonly data: Readonly<Record<`data-${string}`, string>>;
   /** Ce qui se pose dans l'en-tête, avant ✕ (la bascule Traduit / Original du journal, loi 7). */
   readonly trailing?: ReactNode;
-};
+} & (ColumnPanelHead | (PillPanelHead & { readonly fill?: false }));
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
 
@@ -66,7 +75,26 @@ const chevron = (
   </svg>
 );
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, Button, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
+function PillHead({ head, titleId, title, trailing, onClose }: { readonly head: PillPanelHead; readonly titleId: string; readonly title: string; readonly trailing: ReactNode; readonly onClose: () => void }) {
+  const { Button, back } = head;
+  return (
+    <div className="flex items-center gap-1">
+      {back === undefined ? (
+        <span aria-hidden className="size-11 shrink-0" />
+      ) : (
+        <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
+      )}
+      <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
+        {title}
+      </h2>
+      {trailing}
+      <Button label={head.closeLabel} glyph={head.closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...head.closeData }} />
+    </div>
+  );
+}
+
+export function CallPanelFrame(props: FrameProps) {
+  const { id, title, onClose, children, data, trailing = null } = props;
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useLayoutEffect(() => {
@@ -86,11 +114,11 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, But
       role="group"
       aria-labelledby={titleId}
       onKeyDown={onKeyDown}
-      className={`flex min-w-0 flex-col gap-1.5 rounded-field-ios pb-1.5 text-on-media ${fill ? 'h-full min-h-0' : ''}`}
-      style={fill ? undefined : { background: 'var(--color-media-fill)' }}
+      className={`flex min-w-0 flex-col gap-1.5 rounded-field-ios pb-1.5 text-on-media ${props.fill === true ? 'h-full min-h-0' : ''}`}
+      style={props.fill === true ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      {fill ? (
+      {props.fill === true ? (
         <div className="flex items-center gap-2 ps-3">
           <h2 id={titleId} className="min-w-0 flex-1 truncate text-start text-body font-semibold">
             {title}
@@ -98,18 +126,7 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, But
           {trailing}
         </div>
       ) : (
-        <div className="flex items-center gap-1">
-          {back === undefined ? (
-            <span aria-hidden className="size-11 shrink-0" />
-          ) : (
-            <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
-          )}
-          <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
-            {title}
-          </h2>
-          {trailing}
-          <Button label={closeLabel} glyph={closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...closeData }} />
-        </div>
+        <PillHead head={props} titleId={titleId} title={title} trailing={trailing} onClose={onClose} />
       )}
       {children}
     </div>

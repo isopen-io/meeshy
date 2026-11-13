@@ -299,6 +299,59 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     view.done();
   });
 
+  /**
+   * #17932 (décision porteur du 2026-11-13, A) — colonne ouverte, « Journal » est ACTIF au
+   * pied de la bande comme dans le rail : un disque blanc plein, encre sombre (loi 1,
+   * la tenue `active` du kit), annoncé enfoncé ; le retoucher referme la colonne, qui ne
+   * porte aucun ✕ (#17922). Refermée, il redevient un disque de verre.
+   */
+  const whiteDisc = (button: HTMLElement | null | undefined) => ({
+    fill: button?.style.background ?? '',
+    ink: button?.style.color ?? '',
+    glass: button?.classList.contains('glass-call-disc') ?? true,
+  });
+  const ACTIVE = { fill: 'var(--color-on-media)', ink: 'var(--ios-indigo-950)', glass: false };
+
+  test('#17932 — colonne ouverte, « Journal » du pied des sous-titres est un disque blanc plein, enfoncé ; le retoucher referme la colonne', async () => {
+    const view = mount({}, true);
+    await view.settle();
+    const foot = () => view.find('[data-call-control-pill] [data-call-captions-journal]');
+    expect(foot()?.getAttribute('aria-pressed')).toBe('false');
+    expect(whiteDisc(foot()).glass).toBe(true);
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find(COLUMN)).not.toBeNull();
+    expect(view.find(COLUMN)?.querySelector('[data-panel-close]')).toBeNull();
+    expect(foot()?.getAttribute('aria-pressed')).toBe('true');
+    expect(whiteDisc(foot())).toEqual(ACTIVE);
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find(COLUMN)).toBeNull();
+    expect(foot()?.getAttribute('aria-pressed')).toBe('false');
+    expect(whiteDisc(foot()).glass).toBe(true);
+    view.done();
+  });
+
+  test('#17932 — colonne ouverte, « Journal » du rail est le même disque blanc ; le retoucher referme la colonne', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    const rail = view.find('[data-call-rail] [data-call-control="journal"]');
+    expect(rail?.getAttribute('aria-expanded')).toBe('true');
+    expect(whiteDisc(rail)).toEqual(ACTIVE);
+    view.press('[data-call-rail] [data-call-control="journal"]');
+    await view.settle();
+    expect(view.find(COLUMN)).toBeNull();
+    expect(view.find('[data-call-rail] [data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  test('#17932 — sur une fenêtre étroite, il n’y a pas de colonne : « Journal » du pied n’est jamais annoncé enfoncé', async () => {
+    const view = mount({}, false);
+    await view.settle();
+    expect(view.find('[data-call-control-pill] [data-call-captions-journal]')?.getAttribute('aria-pressed')).toBe('false');
+    view.done();
+  });
+
   test('Échap replie la colonne sans réduire l’appel', async () => {
     const view = mount({}, true);
     await openJournal(view);
