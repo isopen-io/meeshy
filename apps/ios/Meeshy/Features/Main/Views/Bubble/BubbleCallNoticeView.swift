@@ -283,7 +283,7 @@ struct BubbleCallNoticeView: View, Equatable {
 
     /// « Awa, Karim, Lina et vous » sous le titre, quand la passerelle a servi les noms.
     private var participantsLine: String? {
-        summary.participantsLine(youLabel: String(localized: "call.card.participants.you", defaultValue: "vous", bundle: .main))
+        summary.participantsLine(viewerId: notice.viewerId, youLabel: String(localized: "call.card.participants.you", defaultValue: "vous", bundle: .main))
     }
 
     private var accessibilityLabel: Text {

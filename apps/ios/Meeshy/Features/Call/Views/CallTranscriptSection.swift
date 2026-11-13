@@ -131,7 +131,7 @@ struct CallTranscriptSection: View {
     @State private var showDeleteConfirmation = false
     @State private var retentionNotice: CallTranscriptRetentionNotice = .hidden
     private let localUserId = AuthManager.shared.currentUser?.id ?? ""
-    private var theme: ThemeManager { ThemeManager.shared }
+    @ResolvedThemePalette private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -167,6 +167,7 @@ struct CallTranscriptSection: View {
                         .font(.caption2)
                 }
                 .foregroundStyle(theme.textMuted)
+                .transition(.opacity)
             }
 
             Button(role: .destructive) {
@@ -187,6 +188,7 @@ struct CallTranscriptSection: View {
                 Text(String(localized: "call.transcript.delete.confirm.message", defaultValue: "Cette action est définitive.", bundle: .main))
             }
         }
+        .animation(.easeOut(duration: 0.2), value: retentionNotice)
         .task(id: transcript.conversationId) {
             let gate = await CallCaptionsGateResolver().gate(conversationId: transcript.conversationId)
             retentionNotice = CallJournalAfterCall.retentionNotice(for: gate)

@@ -56,9 +56,10 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
     /// ended by its own initiator — "cancelled" from the initiator's viewpoint.
     /// `nil` on every other summary (the gateway omits the key entirely).
     public let endedByInitiator: Bool?
-    /// Les noms des AUTRES participants (jamais le lecteur), quand la passerelle les sert.
+    /// Les participants de l'appel, chacun avec son identifiant, quand la passerelle les sert. Le message est
+    /// le même pour tous ses lecteurs : c'est le lecteur qui s'en retire (`participantsLine(viewerId:…)`).
     /// `nil` sur tout résumé qui n'en porte pas : la carte n'invente alors aucune ligne.
-    public let participantNames: [String]?
+    public let participants: [CallSummaryParticipant]?
 
     public init(
         callId: String,
@@ -71,7 +72,7 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         networkQuality: NetworkQuality?,
         isLive: Bool = false,
         endedByInitiator: Bool? = nil,
-        participantNames: [String]? = nil
+        participants: [CallSummaryParticipant]? = nil
     ) {
         self.callId = callId
         self.initiatorId = initiatorId
@@ -83,12 +84,12 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         self.networkQuality = networkQuality
         self.isLive = isLive
         self.endedByInitiator = endedByInitiator
-        self.participantNames = participantNames
+        self.participants = participants
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, callId, initiatorId, callType, outcome, durationSeconds
-        case bytesTotal, bytesEstimated, networkQuality, endedByInitiator, participantNames
+        case bytesTotal, bytesEstimated, networkQuality, endedByInitiator, participants
     }
 
     /// Decodes only when `kind` is `"call"` (terminal summary) or `"call-live"`
@@ -117,7 +118,7 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         bytesEstimated = try c.decodeIfPresent(Bool.self, forKey: .bytesEstimated) ?? false
         networkQuality = try c.decodeIfPresent(NetworkQuality.self, forKey: .networkQuality)
         endedByInitiator = try c.decodeIfPresent(Bool.self, forKey: .endedByInitiator)
-        participantNames = try c.decodeIfPresent([String].self, forKey: .participantNames)
+        participants = try? c.decodeIfPresent([CallSummaryParticipant].self, forKey: .participants)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -132,7 +133,18 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         try c.encode(bytesEstimated, forKey: .bytesEstimated)
         try c.encodeIfPresent(networkQuality, forKey: .networkQuality)
         try c.encodeIfPresent(endedByInitiator, forKey: .endedByInitiator)
-        try c.encodeIfPresent(participantNames, forKey: .participantNames)
+        try c.encodeIfPresent(participants, forKey: .participants)
+    }
+}
+
+/// Une personne qui a pris part à l'appel, telle que la passerelle la sert sur le résumé.
+public struct CallSummaryParticipant: Codable, Sendable, Equatable {
+    public let userId: String
+    public let displayName: String
+
+    public init(userId: String, displayName: String) {
+        self.userId = userId
+        self.displayName = displayName
     }
 }
 
@@ -166,17 +178,20 @@ public extension CallSummaryMetadata {
         return bytesEstimated ? "~\(size)" : size
     }
 
-    /// « Awa, Karim, Lina et vous » : les autres participants, puis le lecteur, joints à la
-    /// façon de la langue (`ListFormatter`). `youLabel` est le « vous » de la langue de l'app.
-    /// `nil` quand aucun nom n'a été servi : pas de ligne.
-    func participantsLine(youLabel: String, locale: Locale = .current) -> String? {
-        let names = (participantNames ?? [])
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// « Awa, Karim, Lina et vous » : les autres participants, puis le lecteur s'il a pris part à l'appel,
+    /// joints à la façon de la langue (`ListFormatter`). `youLabel` est le « vous » de la langue de l'app.
+    /// `nil` quand aucun autre nom n'a été servi : pas de ligne.
+    func participantsLine(viewerId: String, youLabel: String, locale: Locale = .current) -> String? {
+        let served = participants ?? []
+        let others = served
+            .filter { $0.userId != viewerId }
+            .map { $0.displayName.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        guard !names.isEmpty else { return nil }
+        guard !others.isEmpty else { return nil }
+        let viewerTookPart = !viewerId.isEmpty && served.contains { $0.userId == viewerId }
         let formatter = ListFormatter()
         formatter.locale = locale
-        return formatter.string(from: names + [youLabel])
+        return formatter.string(from: viewerTookPart ? others + [youLabel] : others)
     }
 
     static func formatDuration(_ seconds: Int) -> String {
