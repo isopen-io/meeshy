@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
+import { MenuActsRing } from './menu-acts-ring';
 import { MenuGlyph } from './menu-glyph';
 import { UnreadCornerBadge, UnreadRungBadge, unreadBadgeText } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
@@ -36,6 +37,7 @@ import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { useActsRing } from '@/lib/view/use-acts-ring';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -207,6 +209,10 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
   const maPhoto = session.status === 'authenticated' ? participantAvatarOf(session.user) : undefined;
   /* MON CONTOUR SUR LE DISQUE (#10946) — le même que sur mon profil. */
   const monContour = useMyRing();
+  /* L'ANNEAU DES ACTES DU JOUR (#17768) — lu dans le cache du jeu, décrit par le bouton menu fermé. */
+  const actes = useActsRing();
+  const actesId = useId();
+  const decritActes = actes !== null && !open;
 
   /**
    * **Le second tap ouvre le profil** — la règle d'iOS
@@ -384,6 +390,12 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
           </div>
         ) : null}
 
+        {actes === null ? null : <MenuActsRing ring={actes} size={FLOATING_BUTTON} />}
+        {decritActes ? (
+          <span id={actesId} className="sr-only">
+            {translate(langue, 'a11y.floating.menu.acts', { done: String(actes.done), total: String(actes.total) })}
+          </span>
+        ) : null}
         <button
           ref={buttonRef}
           /* La PRISE des gates et des recettes. Sans elle, `aria-haspopup` ne
@@ -398,6 +410,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
           onClick={onMenuButton}
           aria-haspopup="menu"
           aria-expanded={open}
+          aria-describedby={decritActes ? actesId : undefined}
           aria-label={open ? translate(langue, PROFILE_DESTINATION.labelKey) : closedMenuLabel(langue, unread)}
           className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{

@@ -272,6 +272,7 @@ const en = {
   'a11y.floating.menu.ladder': 'Meeshy navigation',
   'a11y.floating.menu.unread.one': 'Menu, {count} unread notification',
   'a11y.floating.menu.unread.other': 'Menu, {count} unread notifications',
+  'a11y.floating.menu.acts': 'Today’s acts: {done} of {total}',
   'a11y.floating.rung.notifications.unread.one': 'Notifications, {count} unread',
   'a11y.floating.rung.notifications.unread.other': 'Notifications, {count} unread',
 
