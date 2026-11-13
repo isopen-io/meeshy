@@ -822,8 +822,30 @@ socket jusqu'au client.
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
 
-## Cycle 22 — 2026-11-13 (en cours)
+## Cycle 22 — 2026-11-13
 
 - **Base** : `origin/dev` @ `6e2d9e55`. Le lot du cycle 21 (#18041) y est fusionné.
 - **Branche** : `claude/determined-volta-fe3zrg`.
-- **Objectif** : #18042.
+- **Objectif** : #18042, piste 1 du cycle 21. Un `translation_skipped` ne solde que la traduction texte qu'il vise, il se compte, et ses champs sont filtrés par type.
+- **Livré** (seule la passerelle change : ni le protocole ZMQ, ni le traducteur) :
+  - **`ZmqRequestSender`** : chaque entrée en attente porte un `kind` (`translation`, `audio_process`, `transcription`, `voice_api` ou `voice_profile`), posé aux cinq sites d'insertion. Le `kind` survit au réarmement. Nouvel accesseur : `hasPendingTranslationRequest`.
+  - **`ZmqTranslationClient`** : l'écouteur `translationSkipped` ne solde que si l'entrée est une traduction texte, et il ré-émet toujours l'événement. La traduction directe (#18041) reste soldée. Nouveau compteur `translation_skipped` dans `ZMQClientStats`.
+  - **`ZmqMessageHandler`** : un `messageId` ou un `conversationId` qui n'est pas une chaîne devient `''`, et une `reason` qui n'en est pas une devient `'unknown'`. Le log utilise les valeurs filtrées.
+- **Tests** : `ZmqTranslationClient.translationSkipped-scope.test.ts` (8) et `..._qa.test.ts` (QA, 6). Tous passent par une vraie trame JSON.
+  - **Rouge avant le correctif** : `5 failed, 3 passed`. Les 3 verts gardaient le comportement existant.
+  - **Vert** : relancé par moi, `29 passed` sur `translationSkipped*` et `direct-too-long`, puis `14 passed` sur les deux fichiers du lot.
+  - **Gate QA** : 41 suites et 883 tests (`zmq-translation`, `ZmqRequestSender`, `MessageTranslationService`, `ZmqMessageHandler`, `admin-monitoring`). `tsc --noEmit` passe.
+  - **Mutations QA** : 12 sur 12 font rougir les témoins. M3c (site audio posé en `translation`) survivait à la suite d'origine ; c'est le témoin QA qui la tue.
+- **Preuve CI** : le gel `CI_DEV_SEUL` (#18048) ne fait tourner que les jobs de `dev`. Le lot est donc prouvé en local, puis par la CI de `dev` après fusion.
+- **QA** : favorable avec réserves.
+  - R1 (le compteur n'est lu par aucun monitoring) et R3 (la `reason` n'a pas de borne de longueur) → #18064.
+  - R4 : `''` sur un identifiant invalide n'a aucun consommateur aujourd'hui.
+  - La même largeur subsiste sur `translationError` → #18063.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18063 (`translationError` borné aux requêtes texte, champs filtrés), puis #18064 (compteurs ZMQ visibles dans le monitoring admin).
+2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+3. #17132 et #17133.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
