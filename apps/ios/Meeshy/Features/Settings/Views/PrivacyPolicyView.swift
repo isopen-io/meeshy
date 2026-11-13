@@ -26,19 +26,19 @@ struct PrivacyPolicyView: View {
     private let sections: [String: [(title: String, content: String)]] = [
         "fr": [
             ("Collecte d'informations",
-             "Nous collectons les informations que vous fournissez directement lors de la creation de votre compte, de l'envoi de messages et de l'utilisation de nos services. Cela inclut votre nom d'utilisateur, adresse email, numero de telephone et le contenu de vos communications."),
+             "Nous collectons les informations que vous fournissez directement lors de la création de votre compte, de l'envoi de messages et de l'utilisation de nos services. Cela inclut votre nom d'utilisateur, adresse e-mail, numéro de téléphone et le contenu de vos communications."),
             ("Utilisation des informations",
-             "Vos informations sont utilisees pour fournir, maintenir et ameliorer nos services de messagerie, y compris la traduction en temps reel et le clonage vocal. Nous n'utilisons jamais vos donnees a des fins publicitaires."),
-            ("Securite des donnees",
-             "Nous utilisons le chiffrement de bout en bout (E2E) pour proteger vos messages. Vos cles de chiffrement sont stockees uniquement sur vos appareils. Meeshy ne peut pas lire le contenu de vos messages chiffres."),
-            ("Conservation des donnees",
-             "Vos messages sont conserves tant que votre compte est actif. Vous pouvez supprimer vos messages a tout moment. Les donnees de compte sont supprimees dans les 30 jours suivant la fermeture du compte."),
+             "Vos informations sont utilisées pour fournir, maintenir et améliorer nos services de messagerie, y compris la traduction en temps réel et le clonage vocal. Nous n'utilisons jamais vos données à des fins publicitaires."),
+            ("Sécurité des données",
+             "Nous utilisons le chiffrement de bout en bout (E2E) pour protéger vos messages. Vos clés de chiffrement sont stockées uniquement sur vos appareils. Meeshy ne peut pas lire le contenu de vos messages chiffrés."),
+            ("Conservation des données",
+             "Vos messages sont conservés tant que votre compte est actif. Vous pouvez supprimer vos messages à tout moment. Les données de compte sont supprimées dans les 30 jours suivant la fermeture du compte."),
             ("Vos droits",
-             "Vous avez le droit d'acceder a vos donnees, de les modifier, de les exporter et de les supprimer. Contactez-nous pour exercer ces droits."),
+             "Vous avez le droit d'accéder à vos données, de les modifier, de les exporter et de les supprimer. Contactez-nous pour exercer ces droits."),
             ("Modifications de cette politique",
-             "Nous pouvons mettre a jour cette politique periodiquement. Nous vous informerons de tout changement significatif par notification dans l'application."),
+             "Nous pouvons mettre à jour cette politique périodiquement. Nous vous informerons de tout changement significatif par notification dans l'application."),
             ("Contact",
-             "Pour toute question concernant cette politique, contactez-nous a privacy@meeshy.me")
+             "Pour toute question concernant cette politique, contactez-nous à privacy@meeshy.me")
         ],
         "en": [
             ("Information Collection",

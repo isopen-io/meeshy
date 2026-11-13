@@ -386,6 +386,14 @@ jobs:
       - name: Règles maison — cliquets sur la référence
         run: bash apps/ios/scripts/check_house_rules.sh --self-test && bash apps/ios/scripts/check_house_rules.sh
 
+      # L'app servait « Communautes », « Reglages », « a ete envoye a votre
+      # telephone » pendant que le web servait « Communautés » (#6451). Les
+      # valeurs `fr` des catalogues, les `defaultValue:` Swift et les blocs `fr`
+      # des textes juridiques ne servent plus aucun mot français privé de ses
+      # accents ; le `--self-test` rejoue un rouge sur chaque source.
+      - name: Le français d'iOS porte ses accents
+        run: bash apps/ios/scripts/check_french_accents.sh --self-test && bash apps/ios/scripts/check_french_accents.sh
+
       # Les cinq gardes ci-dessous lisent du SWIFT (et le script de résolution
       # SPM) et rien d'autre : elles jugent donc ICI, là où vivent leurs entrées,
       # et non dans `quality` de ci.yml, où un cliquet Swift rouge sautait toute

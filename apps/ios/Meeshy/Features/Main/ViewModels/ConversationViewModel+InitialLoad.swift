@@ -161,7 +161,7 @@ extension ConversationViewModel {
     /// Purge par conversation après un 403 : le reste du cache des autres conversations reste chaud.
     func handleAccessRevoked(reason: String?) async {
         await historyLoader.forgetConversation()
-        error = reason ?? "Vous n'avez plus acces a cette conversation"
+        error = reason ?? "Vous n'avez plus accès à cette conversation"
         accessRevoked = true
     }
 

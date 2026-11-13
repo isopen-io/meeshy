@@ -42,6 +42,6 @@ struct StoryActionButton: View {
     }
 
     static func hint(label: String, isActive: Bool) -> String {
-        isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())"
+        isActive ? "\(label) actif, toucher pour désactiver" : "Toucher pour \(label.lowercased())"
     }
 }
