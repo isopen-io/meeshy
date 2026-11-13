@@ -174,6 +174,24 @@ final class CallPillTextTests: XCTestCase {
         }
     }
 
+    /// Les cas du miroir Android (#17942), par la disposition réelle : le (…) du duo sort les
+    /// rails sans faire grandir la pilule (440) ; une option tenue dans la pilule, duo comme
+    /// groupe, et les rangées du groupe prennent 560, comme le journal, pour que la largeur
+    /// ne saute pas d'une option au journal.
+    func test_width_byDisposition_matchesTheAndroidCases() {
+        func cap(_ disposition: CallControlsDisposition, _ layer: CallScreenLayer, captions: Bool = false) -> CGFloat {
+            let content = text(captions: captions, layer)
+            return CallPillWidth.maxWidth(for: content, unfoldsAbove: content.hasBaseRow && disposition.unfoldsPill(for: layer))
+        }
+        XCTAssertEqual(cap(.rails, .idle), 440, "Rangée de base seule")
+        XCTAssertEqual(cap(.rails, .menu), 440, "Le (…) du duo sort les rails, la pilule ne grandit pas")
+        XCTAssertEqual(cap(.rails, .panel(.record)), 560, "Une option tenue dans la pilule du duo")
+        XCTAssertEqual(cap(.rows, .menu), 560, "Les deux rangées du groupe")
+        XCTAssertEqual(cap(.rows, .panel(.react)), 560, "Une option tenue dans la pilule du groupe")
+        XCTAssertEqual(cap(.rails, .panel(.journal)), 560)
+        XCTAssertEqual(cap(.rows, .idle, captions: true), 560, "Les sous-titres du groupe")
+    }
+
     /// La pilule lit sa borne de ce qu'elle déplie VRAIMENT au-dessus de sa rangée :
     /// le même prédicat que celui qui dessine les rangées ou l'option.
     func test_pill_readsItsCap_fromWhatItUnfolds() throws {
