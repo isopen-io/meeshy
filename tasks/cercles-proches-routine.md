@@ -480,3 +480,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
+
+- Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
+  toutes poussées par d'autres sessions dans les vingt minutes précédentes : ce réveil n'en a doublé aucune. Aucune
+  branche vivante n'écrivait « ensemble » côté Android : lot #17100 réservé sur `claude/cercles-17100-android`.
+- Lot : la couche `:core:model` (Kotlin pur) de « ensemble » — lecture stricte des quatre événements et des accusés
+  `invite`/`join` (`Together.kt`), loi de synchronisation portée à l'identique du web et d'iOS (`TogetherSync.kt`), état
+  de séance en valeur (`TogetherState.kt`). Les 20 témoins reprennent un à un les cas web et iOS.
+- Gate local : `./meeshy.sh jvm-check -PjvmCheckModelOnly --tests '*TogetherTest*'` 20/20 vert (module entier compilé).
+  La preuve Android complète est `android.yml` sur la PR.
+- Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
+  bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.

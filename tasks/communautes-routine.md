@@ -209,11 +209,21 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
 
-## 2026-11-13 — réveil de 14:34 UTC
+## 2026-11-13 — réveil 27
+
+- Début du run : #17960 (#6451, réveil 26) ouverte et menée EN DIRECT par sa session (commit poussé 4 minutes après ce réveil ; elle attend #17968, la garde maison iOS rouge sur dev depuis `b5b821612`). Une autre session écrit #17209 (`claude/communautes-story-blocage`). Les deux cédées, non touchées.
+- Lot : #17182 (passerelle, sécurité). `getBookmarks` servait les publications en favori sans aucun filtre d'audience : une publication `COMMUNITY` d'une communauté quittée, une `FRIENDS` d'un ami retiré, une publication passée en `PRIVATE` ou d'un auteur bloqué restaient lisibles entières depuis les favoris. La requête des favoris pose désormais `post: { is: { deletedAt: NOT_DELETED, AND: [audience] } }`, l'audience étant `viewerPostAudience` (amis ∪ contacts DM, co-membres, puis `buildFeedVisibilityFilter` : blocage, cercles, communautés lisibles). Dans la requête, pas après : la page reste pleine et le curseur reste sur la table des favoris. Le favori lui-même n'est pas supprimé : il réapparaît si l'audience se rouvre (on rejoint de nouveau).
+- `viewerPostAudience` quitte `search/globalPostSearch.ts` pour `posts/feedVisibility.ts` (le module de l'audience des listes), ré-exporté par la recherche : une seule composition, deux consommateurs.
+- Pas de revue adversariale : resserrement d'une lecture sur une loi existante, ni authentification, ni nouvelle permission, ni migration.
+- Témoins : `bookmarks-audience.test.ts` (4 : loi posée, communautés lisibles, blocage, suppression + curseur), rouges avant le correctif.
+- iOS / web / Android : aucun code client à changer (une page de favoris plus courte se décode à l'identique).
+- Reste : `bookmarkCount` d'une publication compte toujours les favoris des lecteurs qui ne la lisent plus (agrégat sans identité, inchangé).
+
+## 2026-11-13 — réveil 28 (14:34 UTC)
 
 - Début du run : quatre PR de la routine ouvertes depuis moins d'une heure par une autre session (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182), CI en file : cédées, non touchées.
 - Lot : #17104 (Android). Le détail d'une communauté dit POURQUOI il ne s'ouvre pas, comme iOS et le web (#7816). `CommunityLoadFailure` (`:core:model`) : refusée (403 = 404), réseau, serveur ; `CommunityFetchException` porte sa cause, classée par `ApiError.toContentFetchFailure()` (un hors-ligne n'a pas de statut). Un refus efface la fiche en cache et le dit avec « Retour aux communautés » (la fermeture silencieuse sur 404 disparaît) ; réseau et serveur gardent une fiche déjà peinte. Sept chaînes adoptées du catalogue SDK.
 - Pas de revue adversariale : ni authentification, ni permission serveur, ni migration.
 - Gotcha : `./apps/android/meeshy.sh jvm-check` échoue en conteneur (`build-artifacts.signal.org` refusé par le proxy) ; seule `android.yml` prouve, même pour `:core:model`.
-- PR #18006.
+- PR #18006. CI des PR gelée (`PR_CI_GEL`) : preuve par `workflow_dispatch` d'`android.yml` sur la tête. Premier run rouge sur « Graphe des modules » : le cliquet de bavardage (`scripts/check-verbosity-native.mjs`) compte comme explication toute clé contenant `detail` ; les sept clés `community_detail_*` portaient la famille de 32 à 39. Renommées `community_load_*`, run suivant vert (assemble + tests unitaires).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes (#17960 après #17972), puis #16879 (publications de la communauté sur Android) ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
