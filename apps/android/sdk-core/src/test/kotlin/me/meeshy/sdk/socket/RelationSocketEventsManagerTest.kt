@@ -10,6 +10,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationRitualStage
+import me.meeshy.sdk.model.relation.SharedLocationCircle
+import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.TalkieEvent
 import me.meeshy.sdk.model.socket.SocketEventNames
 import org.json.JSONObject
@@ -134,6 +136,37 @@ class RelationSocketEventsManagerTest {
         manager.talkie.test {
             handlers.deliver(SocketEventNames.TALKIE_CHUNK, """{"talkieId":"t1","fromUserId":"u2","seq":0,"data":"AAEC"}""")
             expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `une position partagee atteint son flux bornee, une charge hors du contrat n'arrive jamais`() = runTest {
+        val (manager, handlers) = wired()
+        manager.sharedLocationChanged.test {
+            handlers.deliver(
+                SocketEventNames.LOCATION_SHARE_CHANGED,
+                """{"userId":"u2","latitude":95.0,"longitude":2.0,"precision":"city","radiusMeters":12000,"updatedAt":"2026-11-13T18:00:00Z","expiresAt":"2026-11-13T19:00:00Z"}""",
+            )
+            handlers.deliver(
+                SocketEventNames.LOCATION_SHARE_CHANGED,
+                """{"userId":"u2","latitude":48.85,"longitude":2.35,"precision":"neighborhood","radiusMeters":1200,"accuracy":4,"circle":"CLOSE","updatedAt":"2026-11-13T18:00:00Z","expiresAt":"2026-11-13T19:00:00Z"}""",
+            )
+            val served = awaitItem()
+            assertThat(served.userId).isEqualTo("u2")
+            assertThat(served.precision).isEqualTo(SharedLocationPrecision.NEIGHBORHOOD)
+            assertThat(served.circle).isEqualTo(SharedLocationCircle.CLOSE)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `la fin d'un partage nomme la personne`() = runTest {
+        val (manager, handlers) = wired()
+        manager.sharedLocationEnded.test {
+            handlers.deliver(SocketEventNames.LOCATION_SHARE_ENDED, """{"userId":"u2"}""")
+            assertThat(awaitItem().userId).isEqualTo("u2")
             cancelAndIgnoreRemainingEvents()
         }
     }
