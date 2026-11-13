@@ -58,6 +58,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany:   jest.fn<any>().mockResolvedValue([]),
       update:     jest.fn<any>().mockResolvedValue({}),
     },
+    relationFeatureSetting: { findUnique: jest.fn<any>().mockResolvedValue(null), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     ...overrides,
   } as any;
 }

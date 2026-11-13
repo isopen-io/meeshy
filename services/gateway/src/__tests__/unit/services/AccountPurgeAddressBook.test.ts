@@ -84,6 +84,8 @@ function base() {
     userRelation: table([]),
     pairInteractionDay: table([]),
     relationFeatureSetting: table([]),
+    bloodLocationPoint: table([]),
+    bloodLocationConsultation: table([]),
     friendRequest: table([]),
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: table([]),

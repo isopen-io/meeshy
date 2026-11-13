@@ -14,6 +14,7 @@ package me.meeshy.sdk.net.routes
 public object ApiRoutesRelations {
     public const val BY_USER_ID: String = "relations/{userId}"
     public const val BY_USER_ID_LEVEL: String = "relations/{userId}/level"
+    public const val BY_USER_ID_LOCATION_HISTORY: String = "relations/{userId}/location/history"
     public const val BY_USER_ID_RITUAL: String = "relations/{userId}/ritual"
     public const val BY_USER_ID_SETTINGS: String = "relations/{userId}/settings"
     public const val CONFIG: String = "relations/config"

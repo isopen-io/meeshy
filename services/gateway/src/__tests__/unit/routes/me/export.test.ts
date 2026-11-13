@@ -105,9 +105,9 @@ async function buildApp(opts: {
     ),
     // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
     callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
-    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement, aucune position du Sang (#13937).
     ...Object.fromEntries(
-      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting', 'bloodLocationPoint', 'bloodLocationConsultation'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
       ),
     ),

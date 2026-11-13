@@ -11,7 +11,7 @@ final class MeeshyTileRestTimer {
     func schedule(_ action: @escaping @MainActor () -> Void) {
         task?.cancel()
         task = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(MeeshyTileRecipe.restDelay * 1_000_000_000))
+            do { try await Task.sleep(for: .seconds(MeeshyTileRecipe.restDelay)) } catch { return }
             guard !Task.isCancelled else { return }
             action()
         }

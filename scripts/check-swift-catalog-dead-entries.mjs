@@ -591,6 +591,13 @@ const PENDING_CLIENT_ENTRIES = {
   // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
   // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
   'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
+  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
+  // journal et la proximité avant les clients ; `sang-position-historique@ios` les appellera.
+  'MeEndpoint.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
+  'MeEndpoint.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
+  'MeEndpoint.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
+  'MeEndpoint.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
+  'RelationsEndpoint.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;
