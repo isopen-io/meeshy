@@ -58,12 +58,22 @@ enum CallPillText: Equatable, Sendable {
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre
 /// des sous-titres rangés sont limités à 560 pt pour que l'œil ne balaie pas tout
 /// l'écran (paysage, tablette) ; la pilule au repos garde ses 440 pt.
+/// #17935 — UNE borne pour toute pilule agrandie, duo comme groupe : les rangées du
+/// groupe ou une option dépliées au-dessus de la rangée de base la prennent aussi.
+/// C'est la loi du verre partagée (K10, `MeeshyGlassPillRecipe.width`) : un dessus
+/// porte le plafond agrandi, une rangée seule le plafond réparti.
 enum CallPillWidth {
     static let resting: CGFloat = MeeshyGlassPillRecipe.spreadMaxWidth
     static let text: CGFloat = MeeshyGlassPillRecipe.expandedMaxWidth
 
-    static func maxWidth(for content: CallPillText) -> CGFloat {
-        content == .none ? resting : text
+    static func maxWidth(for content: CallPillText, unfoldsAbove: Bool) -> CGFloat {
+        MeeshyGlassPillRecipe.width(
+            layout: .spread(maxWidth: resting),
+            hasAbove: content != .none || unfoldsAbove,
+            place: .greatestFiniteMagnitude,
+            naturalWidth: 0,
+            expandedMaxWidth: text
+        )
     }
 }
 
