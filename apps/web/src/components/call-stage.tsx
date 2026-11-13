@@ -298,10 +298,6 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     onWheel: pinch.onWheel,
   };
   const cornerFrame = useRef<HTMLDivElement>(null);
-  /* W1.20 : la colonne qui entre ou repart fait glisser la scène vers son nouveau centre (`useFollowInline`, `call-screen.tsx`, dont le moteur est chargé dès que l'écran d'appel vit) ; elle porte ma vignette d'une part du chemin, le FLIP n'en joue que le reste. */
-  const bleedSeen = useRef(bleedEnd);
-  const sceneSlides = bleedSeen.current !== bleedEnd;
-  bleedSeen.current = bleedEnd;
   /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
   const pressed = usePressedChrome(chromeVisible);
   const tap = (): void => {
@@ -310,13 +306,14 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   };
   /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen) ? 'couchée' : 'debout'}:${topInset}:${bleedEnd}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${offset === null}` : null,
     origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
     reducedDuration: STOW_REDUCED_MS,
     easing: 'ease-out',
-    carrier: sceneSlides ? () => cornerFrame.current?.closest<HTMLElement>('[data-call-stage-surface]') ?? null : undefined,
+    /* W1.20 : la colonne qui entre ou repart fait glisser la scène vers son nouveau centre (`useFollowInline`, `call-screen.tsx`) ; elle porte ma vignette d'une part du chemin, le FLIP n'en joue que le reste. */
+    carrier: '[data-call-stage-surface]',
   });
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);

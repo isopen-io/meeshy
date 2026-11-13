@@ -59,11 +59,13 @@ export function useFlip(
     /** La durée du fondu qui remplace le mouvement sous « réduire les animations ». Défaut : `duration`. */
     readonly reducedDuration?: number;
     /**
-     * L'ancêtre qui, dans le MÊME rendu, rejoint son nouveau centre horizontal en glissant (`useFollowInline`) : il
-     * porte l'élément d'une part du chemin, l'élément ne joue que le reste — sans lui, les deux glissés s'ajoutent
-     * et l'élément part d'à côté de sa place. À ne déclarer que pour le rendu où l'ancêtre glisse vraiment.
+     * Le sélecteur de l'ancêtre qui, quand le RENDU le déplace (la colonne du journal qui entre ou repart), rejoint
+     * son nouveau centre horizontal en glissant dans le même rendu (`useFollowInline`) : il porte l'élément d'une
+     * part du chemin, l'élément ne joue que le reste — sans lui, les deux glissés s'ajoutent et l'élément part d'à
+     * côté de sa place. Son centre se relève au rendu, quand la mise en page suit déjà la fenêtre : une fenêtre qu'on
+     * tourne ne le déplace pas entre les deux mesures, et rien ne se retire.
      */
-    readonly carrier?: (() => HTMLElement | null) | undefined;
+    readonly carrier?: string;
   },
 ): void {
   const committed = useRef<string | null>(null);
@@ -72,8 +74,9 @@ export function useFlip(
   const running = useRef<Animation | null>(null);
 
   if (key !== committed.current) {
-    first.current = key === null || committed.current === null ? null : pointOf(ref.current);
-    carrierCenter.current = centerXOf(carrier?.());
+    const moving = key !== null && committed.current !== null;
+    first.current = moving ? pointOf(ref.current) : null;
+    carrierCenter.current = moving && carrier !== undefined ? centerXOf(ref.current?.closest<HTMLElement>(carrier)) : null;
   }
 
   useLayoutEffect(() => {
@@ -91,7 +94,7 @@ export function useFlip(
     const seen = pointOf(element);
     if (seen === null) return;
     const reducedMotion = prefersReducedMotion();
-    const carrierTo = carrierFrom === null || reducedMotion ? null : centerXOf(carrier?.());
+    const carrierTo = carrierFrom === null || carrier === undefined || reducedMotion ? null : centerXOf(element.closest<HTMLElement>(carrier));
     const last = carrierFrom === null || carrierTo === null ? seen : { ...seen, x: seen.x + carrierFrom - carrierTo };
     const carried = carriedOf(element);
     const frames = flipKeyframes({ first: from, last, reducedMotion, ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(origin === undefined ? {} : { origin }), ...(carried === undefined ? {} : { carried }) });

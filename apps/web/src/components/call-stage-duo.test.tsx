@@ -102,7 +102,7 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
     if (this.hasAttribute('data-call-stage-surface')) {
-      const width = 1000 - Number(this.getAttribute('data-bleed') ?? 0);
+      const width = window.innerWidth - Number(this.getAttribute('data-bleed') ?? 0);
       return { left: 0, top: 0, right: width, bottom: 800, width, height: 800, x: 0, y: 0, toJSON: () => ({}) };
     }
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
@@ -390,6 +390,21 @@ describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur 
     expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
     expect(first?.[1]).toEqual({ transform: 'none' });
     expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
+  });
+
+  test('la scène qui suit la fenêtre qu’on tourne ne glisse pas : ma vignette joue tout son mouvement, rien ne s’en retire (W1.20)', () => {
+    const rotate = (surface: boolean) => {
+      fresh();
+      turn(upright.width, upright.height);
+      return withFlipProbe(() => {
+        const view = mount(call(), { surface });
+        turn(844, 390);
+        view.done();
+      });
+    };
+    const alone = rotate(false);
+    expect(alone).toHaveLength(1);
+    expect(rotate(true)).toEqual(alone);
   });
 
   test('redimensionner la fenêtre sans changer de forme ne rejoue rien : la vignette suit la fenêtre, aucune mesure ni animation à chaque image', () => {
