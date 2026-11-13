@@ -709,3 +709,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `socket-rate-limiter` sans `callSignalBudgetId`, ajouté par dda1585572) ; corrigé dans ce lot, 2282/2282.
 - Prochain lot recommandé : mener à la fusion les PR ouvertes ; « ensemble » sur Android (#17100) est tenu par le
   réveil 28.
+
+## 2026-11-13 — réveil 26 : la position partagée dit de quel cercle vient la personne (#17966 ⊂ #17013)
+
+- Reprise : #17956 (carte web des positions, #16984) est menée par un réveil actif (commits de 13:13 à 13:19) ;
+  #17147 (« ensemble » dans une conversation close) a été réservée à 13:34 par un autre réveil
+  (`claude/cercles-ensemble-conversation-close`). Ce réveil n'avait rien écrit : il cède les deux.
+- Lot choisi : la tranche SERVEUR de l'icône de position par cercle (#17013), petite, prouvable en conteneur, et
+  préalable aux trois marqueurs. Issue #17966 ouverte sous #17013 (milestone #215).
+- Livré dans la PR : `location:share-changed` et `GET /relations/locations` portent `circle` (`FRIEND` · `CLOSE` ·
+  `BLOOD`), le niveau effectif du verdict qui ouvre `location.temporary` pour CE lecteur ; l'accès d'un lecteur est
+  `{précision, cercle}`, donc une montée ou une baisse de cercle à précision égale ressert la position ; le schéma
+  du rattrapage déclare le champ (enum) et retire toujours tout voisin. Champ additif : un ancien client l'ignore.
+- Décision écrite dans la PR : entre deux comptes de l'équipe, la loi rend le niveau Sang (#16623) ; le marqueur
+  le montre donc en Sang, comme les autres outils de cercle.
+- Ce qui reste de #17013 : les marqueurs web (après la fusion de #17956), iOS (#16983) et Android (#16985).
+- Prochain lot recommandé : la position temporaire sur iOS (#16983), qui dessinera directement le marqueur du cercle ;
+  sinon « ensemble » sur Android (#17100).
+- Le 2026-11-13 à 17:17, la passe de fusion a signalé un conflit de fond avec #17976 (maille retenue par
+  destinataire, heure arrondie, rayons 1200/12000) : `dev` fusionnée à la main dans la branche, le cercle reposé
+  sur la forme de `dev` (projection, `snapshotAllowed` rend désormais le cercle par émetteur), les témoins du cercle
+  déplacés dans `sharedLocationRelay.cercle.test.ts` pour tenir le budget de taille.
