@@ -203,6 +203,21 @@ describe('CallScreen — la scène d’un groupe (#17699)', () => {
     view.done();
   });
 
+  test('#17945 (extension du 2026-11-13) — en groupe SANS AUCUNE caméra, un toucher sur le fond range en-tête et pilule, un autre les rend ; une vignette touchée, commandes visibles, passe toujours à la une', () => {
+    const view = mount({ members: peers });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    expect(view.find('[data-call-header]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBe('true');
+    tapStage(view);
+    expect(chrome()).toBe('shown');
+    view.press('[data-call-tile="u-b"]');
+    expect(chrome()).toBe('shown');
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-b');
+    view.done();
+  });
+
   test('#17949 — la grille s’arrête au-dessus de la pilule, au repos comme agrandie : deux étages du même flux, jamais l’un sur l’autre (P11, P12 ; la mesure est dans `check-calls-controls.mjs`)', async () => {
     const view = mount({ members: peers });
     const stage = view.find('[data-call-stage-surface]') as HTMLElement;
