@@ -3,7 +3,7 @@
 *2026-11-13, cycle 153. Trouvé en vérifiant pourquoi un `check_suite.completed`
 annonçait un succès sur une PR dont je savais les dix-sept jobs sautés.*
 
-## Le fait
+### Le fait
 
 `scripts/ci/pr-verte.mjs` — « UNE PR EST-ELLE VERTE ? **Un seul outil pour tous
 les fusionneurs** » (#12559) — rendait **vert** sur la charge réelle d'une PR
@@ -19,7 +19,7 @@ Et ce `success` n'avait **exécuté aucune étape** : les trois étapes du job
 portaient le gel, son `if: always()` de job le faisait démarrer, et un job sans
 étape exécutée conclut `success` **par absence d'échec**.
 
-## La forme générale
+### La forme générale
 
 > **Un job conclut vert quand rien n'a échoué — y compris quand rien n'a
 > tourné.** « Vert » et « rien à signaler » sont le même symbole, et seul le
@@ -37,7 +37,7 @@ L'oracle lisait `SKIPPED` comme vert — **juste** pour la première ligne, qui 
 le cas nominal du dépôt. Le gel a réemployé le même mécanisme pour dire
 l'inverse, et rien ne pouvait distinguer les deux.
 
-## Les trois questions à poser à un gate
+### Les trois questions à poser à un gate
 
 1. **Ce check peut-il rougir dans l'état où je l'interroge ?** Sous le gel,
    l'unique étape capable de rendre un verdict était gelée avec les autres :
@@ -48,7 +48,7 @@ l'inverse, et rien ne pouvait distinguer les deux.
 3. **Le symbole que je lis a-t-il UN sens, ou plusieurs selon son émetteur ?**
    S'il en a plusieurs, la garde doit porter sur l'ÉMETTEUR, pas sur le symbole.
 
-## Le correctif, et pourquoi il a deux moitiés
+### Le correctif, et pourquoi il a deux moitiés
 
 **La première piste écrite dans l'issue était fausse**, et je ne l'avais pas
 exécutée avant de la proposer : « que le gel retire `Verdict CI` du SHA de
@@ -70,7 +70,7 @@ La forme juste tient en deux moitiés dont l'ordre compte :
 2. **Le gel passe des ÉTAPES au JOB.** N'est une garde que GRÂCE au point 1 :
    posé seul, il ne change rien, comme la mesure ci-dessus le montre.
 
-## Le corollaire de manœuvre
+### Le corollaire de manœuvre
 
 **Deux `workflow_dispatch` sur la même ref ne sont pas deux preuves.**
 `concurrency: cancel-in-progress` fait annuler le premier par le second, et une
@@ -79,7 +79,7 @@ d'heure plus tard, donc le rouge ne ressemble plus au geste qui l'a causé : j'a
 cru à un échec de code avant d'ouvrir la liste des jobs (dix-neuf `cancelled`,
 zéro `failure`). **Ouvrir les JOBS avant de qualifier un rouge de run.**
 
-## Le second corollaire, sur la mesure
+### Le second corollaire, sur la mesure
 
 **Une suite longue lancée en arrière-plan mesure l'arbre tel qu'il est quand
 chaque fichier est LU, pas tel qu'il était au lancement.** J'ai commité une
