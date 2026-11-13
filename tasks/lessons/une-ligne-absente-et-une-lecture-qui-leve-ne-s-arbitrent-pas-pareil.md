@@ -41,13 +41,22 @@ lien, quand un INSCRIT peut entrer par un lien. La seconde n'est pas un
 incident : c'est le cycle de vie NOMINAL de tout lien qui porte un `expiresAt`.
 Devant un cas d'erreur présenté comme résiduel, demander **qui l'écrit**.
 
-**2. Quatre témoins gelaient la posture, à quatre étages.** Ce n'est pas une
-mauvaise nouvelle, c'est l'information : une posture qu'on retrouve quatre fois
+**2. CINQ témoins gelaient la posture, à cinq étages.** Ce n'est pas une
+mauvaise nouvelle, c'est l'information : une posture qu'on retrouve cinq fois
 n'est pas une ligne oubliée, elle est ÉTABLIE — et c'est ce qui justifie de
 l'instruire plutôt que de la « corriger » au passage. Chacun s'inverse en disant
 pourquoi ; aucun ne se supprime. Et l'un d'eux gardait DEUX choses (« aucun
 plancher, **et pas de 403** ») dont une seule change : un `toEqual` et un
 intitulé affirment chacun sur ce qu'ils gardent ET sur ce qu'ils admettent.
+
+**Le cinquième n'a pas été trouvé en cherchant**, et le lot avait publié « quatre »
+avant qu'il ne tombe à la suite COMPLÈTE, deux étages plus loin, sur une surface
+qu'aucun des quatre ne nomme. *Un inventaire de témoins relevé par grep sur le
+mot d'une posture ne rend que les sites qui l'ont écrite avec ce mot-là.* Même
+cycle, même faute, sur un autre compte : « 35 consommateurs » comptait les
+fichiers qui MENTIONNENT le module (56), pas ceux qui l'APPELLENT (26). **Un
+compte se compte avec le prédicat exact de la phrase qu'il sert, et le gate qui
+l'exerce TOUS passe avant sa publication.**
 
 **3. Une affirmation périmée survit chez la jumelle.** Le doc-comment de
 `resolveEntryRights` énonçait « défaut `true` — un lien introuvable ne borne

@@ -103,10 +103,20 @@ commentaire qui exige l'alignement était au-dessus.
 > par ne pas avoir** — et ici le site qui ne l'avait pas était celui dont le
 > commentaire jurait de l'avoir.
 
-**Un seul correctif couvre 35 consommateurs de production** (relevé mécanique
-des importateurs de `historyFloor`) : fil, `/sync`, recherche globale, favoris,
-épinglés, fils de discussion, accusés, pièces jointes, aperçu poussé,
-statistiques, mentions, tableau de bord. C'est ce que vaut la source unique.
+**Un seul correctif couvre 26 fichiers de production** — ceux qui APPELLENT un
+résolveur de plancher, commentaires exclus, mesurés sur l'arbre fusionné : fil,
+`/sync`, recherche globale, favoris, épinglés, fils de discussion, accusés,
+pièces jointes, aperçu poussé, statistiques, mentions, tableau de bord. C'est
+ce que vaut la source unique.
+
+> **Ce compte a d'abord été publié à 35, et il était faux dans ce journal même**
+> — le relevé comptait les fichiers qui MENTIONNENT `historyFloor`, doc-comments
+> compris (`participantRights.ts` en est un : il la cite, il ne l'appelle pas).
+> 56 fichiers la mentionnent, 36 l'importent, **26 l'appellent**, et seul le
+> dernier chiffre soutient la phrase « un seul correctif les couvre ». Règle du
+> cycle 93, appliquée à soi-même deux heures après l'avoir citée : **un compte
+> est une AFFIRMATION, il se compte avec le prédicat exact de la phrase qu'il
+> sert.**
 
 ## Ce que le lot a trouvé en se faisant relire par ses propres témoins
 
