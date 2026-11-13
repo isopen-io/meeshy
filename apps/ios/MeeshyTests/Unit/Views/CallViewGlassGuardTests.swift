@@ -369,6 +369,40 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(montage.contains("CallCaptureCopy.faces"))
         XCTAssertTrue(montage.contains("CallFrameHoldChip("), "L'option « Cadre » reste, au-dessus des ambiances")
         XCTAssertTrue(montage.contains("hold.toggle("), "Retirer la couche cadre gardée passe par le même chemin que décocher « Cadre »")
+        XCTAssertTrue(montage.contains("onCapturePhoto: shoot"), "La photo du Montage reste à deux tapes sur le cadre choisi")
+        XCTAssertTrue(montage.contains("onStartRecording: film"), "Le film du Montage reste à l'appui long sur le cadre choisi")
+        XCTAssertTrue(montage.contains("settingsHint: CallModeCopy.montageSettingsHint"), "En Montage, Réglages annonce « Chaque visage », pas la luminosité")
+    }
+
+    /// #16979 — « effets, filtres et cadres font partie d'une même famille d'outils » : UNE rangée de
+    /// genres (Visage · Couleur · Cadres), tirée de la loi pure, la même en Effets et en Montage.
+    /// Toucher le genre de l'autre mode y passe, sur ce genre ; l'hôte de la famille, posé au-dessus
+    /// des deux modes, retient le genre demandé pendant que le mode change.
+    func test_effectsAndMontage_shareOneGenreRow_andCrossToTheOtherModeOnItsGenre() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        for (name, code) in [("Effets", effects), ("Montage", montage)] {
+            XCTAssertEqual(code.components(separatedBy: "CallEffectsGenreChips(").count - 1, 1, "\(name) pose LA rangée de genres de la famille")
+            XCTAssertTrue(code.contains("CallEffectsGenreRule.adding(from:"), "\(name) : (+) ouvre un genre absent de la même famille")
+        }
+        XCTAssertFalse(effects.contains("CallEffectsCategory.allCases"), "Effets ne refait plus sa rangée Visage · Couleur à part")
+        XCTAssertFalse(montage.contains("Text(CallModeCopy.framesChip)"), "Le Montage ne pose plus une puce « Cadres » seule")
+        XCTAssertTrue(effects.contains("onOpenFrames()"), "« Cadres » touché en Effets ouvre le Montage")
+        XCTAssertTrue(montage.contains("onOpenEffects(look)"), "« Visage » ou « Couleur » touché en Montage ouvre Effets sur ce genre")
+        let bar = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let host = try block("struct CallEffectsFamilyHost<Effects: View, Montage: View>: View {", until: "struct CallEffectsGenreChips: View {", in: bar)
+        XCTAssertTrue(host.contains("@State private var entry"), "L'hôte retient le genre demandé d'un mode à l'autre")
+        XCTAssertTrue(host.contains("CallEffectsGenreRule.row("), "La rangée se lit dans la loi pure")
+        let chips = try block("struct CallEffectsGenreChips: View {", until: "struct CallEffectsBar<Looks: View>: View {", in: bar)
+        XCTAssertTrue(chips.contains("MeeshyControlSize.tapTarget"), "Cible de 44 pt")
+        XCTAssertTrue(chips.contains(".isSelected"), "VoiceOver dit quel genre est pressé")
+        XCTAssertTrue(chips.contains("ViewThatFits(in: .horizontal)"), "Grand texte : la rangée défile plutôt que de se couper")
+        XCTAssertTrue(chips.contains("ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true)"), "Une rangée qui défile s'efface en fondu à ses deux bords")
+        let route = try block("private func modeControls(_ mode: CallScreenMode) -> some View {", until: "func enterMode(", in: try callViewCode())
+        XCTAssertTrue(route.contains("CallEffectsFamilyHost(mode: mode"), "Les deux modes passent par l'hôte de la famille")
+        XCTAssertTrue(route.contains("offersFrames: currentActionSet.contains(.capture)"), "« Cadres » n'est offert que là où le Montage l'est")
+        XCTAssertTrue(route.contains("offersEffects: currentActionSet.contains(.effects)"), "« Visage » et « Couleur » ne sont offerts que là où Effets l'est")
     }
 
     /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la

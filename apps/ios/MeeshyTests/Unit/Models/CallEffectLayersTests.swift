@@ -149,22 +149,68 @@ final class CallEffectLayersTests: XCTestCase {
         XCTAssertEqual(CallEffectsStackRule.removing(.frame, from: config), config)
     }
 
-    // MARK: - (+) dans Effets : généralisation de « ajouter un autre look »
+    // MARK: - UNE rangée de genres pour Effets et Montage (#16979)
 
-    func test_addingALook_fromFace_opensTheColorLooks() {
-        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .face, layers: stack(face)), .color)
+    private var family: [CallEffectKind] { [.face, .color, .frame] }
+    private var effectsOnly: [CallEffectKind] { [.face, .color] }
+
+    func test_genreRow_isOneFamily_whateverTheMode() {
+        XCTAssertEqual(CallEffectsGenreRule.row(offersEffects: true, offersFrames: true), family)
     }
 
-    func test_addingALook_fromColor_opensTheFaceLooks() {
-        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .color, layers: stack(filterA)), .face)
+    func test_genreRow_withoutTheMontage_keepsTheEffectsGenres() {
+        XCTAssertEqual(CallEffectsGenreRule.row(offersEffects: true, offersFrames: false), effectsOnly)
     }
 
-    func test_addingALook_whenBothKindsAreApplied_stillLetsYouBrowseTheOtherKind() {
-        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .face, layers: stack(filterA, face)), .color)
+    func test_genreRow_withoutEffects_keepsTheFrames() {
+        XCTAssertEqual(CallEffectsGenreRule.row(offersEffects: false, offersFrames: true), [.frame])
     }
 
-    func test_addingALook_onAFullStack_addsNothing() {
-        XCTAssertNil(CallEffectsModeRule.addingLook(from: .face, layers: stack(frame, filterA, face)))
+    func test_genreName_isTheWordOfEachMode() {
+        XCTAssertEqual(CallModeCopy.genreName(.face), CallModeCopy.categoryName(.face))
+        XCTAssertEqual(CallModeCopy.genreName(.color), CallModeCopy.categoryName(.color))
+        XCTAssertEqual(CallModeCopy.genreName(.frame), CallModeCopy.framesChip)
+    }
+
+    // MARK: - (+) ouvre un genre absent de la famille, d'abord dans le mode où l'on est
+
+    func test_adding_fromFace_opensTheColorLooks() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .face, layers: stack(face), row: family), .color)
+    }
+
+    func test_adding_fromColor_opensTheFaceLooks() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .color, layers: stack(filterA), row: family), .face)
+    }
+
+    func test_adding_whenBothEffectsGenresAreApplied_opensTheFrames() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .face, layers: stack(filterA, face), row: family), .frame)
+    }
+
+    func test_adding_withoutTheMontage_whenBothKindsAreApplied_stillLetsYouBrowseTheOtherKind() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .face, layers: stack(filterA, face), row: effectsOnly), .color)
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .color, layers: stack(filterA, face), row: effectsOnly), .face)
+    }
+
+    func test_adding_fromTheFrames_opensTheFirstAbsentEffectsGenre() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .frame, layers: stack(frame), row: family), .face)
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .frame, layers: stack(frame, face), row: family), .color)
+    }
+
+    func test_adding_fromTheFrames_withBothEffectsApplied_stillOpensEffects() {
+        XCTAssertEqual(CallEffectsGenreRule.adding(from: .frame, layers: stack(filterA, face), row: family), .face)
+    }
+
+    func test_adding_fromTheFrames_whenEffectsAreNotOffered_opensNothing() {
+        XCTAssertNil(CallEffectsGenreRule.adding(from: .frame, layers: stack(frame), row: [.frame]))
+    }
+
+    func test_adding_fromAGenreOutsideTheRow_opensNothing() {
+        XCTAssertNil(CallEffectsGenreRule.adding(from: .frame, layers: CallEffectLayers(), row: effectsOnly))
+    }
+
+    func test_adding_onAFullStack_addsNothing() {
+        XCTAssertNil(CallEffectsGenreRule.adding(from: .face, layers: stack(frame, filterA, face), row: family))
+        XCTAssertNil(CallEffectsGenreRule.adding(from: .frame, layers: stack(frame, filterA, face), row: family))
     }
 
     // MARK: - La barre revient au menu de base
