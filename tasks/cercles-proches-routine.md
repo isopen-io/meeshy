@@ -466,3 +466,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 25 : la carte web des positions partagées menée jusqu'à `dev` (#16984)
+
+- Reprise : aucune PR de la routine ouverte (#17148 fusionnée). Un réveil du 2026-11-10 a été coupé par une erreur
+  d'API sans rien laisser. La branche `claude/cercles-16984-web` portait la carte web des positions, écrite et passée
+  par deux revues-corrections le 2026-11-08 (commentaires de #16984), mais aucune PR ne l'avait proposée et aucune
+  session ne l'écrivait depuis cinq jours : ce réveil la reprend plutôt que d'ouvrir un autre lot.
+- Fait : `origin/dev` fusionnée à la main (un conflit dans `scripts/check-ts-catalog-dead-entries.mjs` : les entrées
+  ajoutées par `dev` gardées, `relations.locations` retirée puisque la carte l'appelle). Gates : témoins du lot 118/118,
+  `tsc --noEmit` web vert, `vite build` et `check-sw-api-cache` verts, catalogue TS 269/269.
+- Trouvé en chemin : `dev` tenait à 0,02 Ko du plafond de la première peinture (97,01 Ko en local, 96,98 en CI) ; la
+  route neuve le portait à 97,10. Plafond relevé à 98 avec son relevé daté (`budgets.json`), selon la procédure des lots
+  précédents — à confirmer par le porteur.
+- PR #17956 vers `dev`.
+- Prochain lot recommandé : #16983 (position temporaire sur iOS, émettre + carte), puis #17147 (la porte « ensemble »
+  lit la conversation close), puis l'icône de position par cercle (#17013).
