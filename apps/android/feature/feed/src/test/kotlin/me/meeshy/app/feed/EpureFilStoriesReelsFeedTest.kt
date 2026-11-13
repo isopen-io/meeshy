@@ -143,9 +143,10 @@ class FeedEpureStringsContractTest {
     }
 
     @Test
-    fun `the refusal to republish wider is one short line without the English typo`() {
+    fun `the refusal to republish wider is one short line that says what was refused`() {
         val french = names("values-fr")
-        assertThat(french["status_repost_audience_refused"]).isEqualTo("Même audience ou plus restreinte.")
+        assertThat(french["status_repost_audience_refused"]).isEqualTo("Impossible d'élargir l'audience de l'originale.")
+        assertThat(names("values")["status_repost_audience_refused"]).isEqualTo("Can't widen the original audience.")
         folders.forEach { folder ->
             assertWithMessage(folder).that(names(folder)["status_repost_audience_refused"]).doesNotContain("can'")
         }

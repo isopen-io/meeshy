@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="status_repost_audience_refused">Dasselbe oder ein kleineres Publikum.</string>
+    <string name="status_repost_audience_refused">Das ursprüngliche Publikum lässt sich nicht erweitern.</string>
 </resources>

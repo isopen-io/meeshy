@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="status_repost_audience_refused">Mesmo público ou mais restrito.</string>
+    <string name="status_repost_audience_refused">Não é possível ampliar o público original.</string>
 </resources>
