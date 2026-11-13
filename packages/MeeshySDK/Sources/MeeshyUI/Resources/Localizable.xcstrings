@@ -1708,6 +1708,54 @@
         }
       }
     },
+    "kit.object_menu.dismiss": {
+      "comment": "K18 — nom de la fermeture du menu d'un objet (action d'accessibilité, voile du menu).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق القائمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menü schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close menu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar el menú"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer le menu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi il menu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar o menu"
+          }
+        }
+      }
+    },
     "kit.color_dots.position": {
       "comment": "K07 — nom dit d'une pastille de couleur sans nom : sa position (rang, total), nombres déjà localisés.",
       "extractionState": "manual",

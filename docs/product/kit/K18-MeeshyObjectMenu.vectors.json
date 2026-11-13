@@ -1,0 +1,147 @@
+{
+  "kit": "K18",
+  "recipe": {
+    "width": 236,
+    "maximumWidth": 320,
+    "accessibilityWidth": 320,
+    "rowHeight": 46,
+    "headerHeight": 32,
+    "endOverhang": 11,
+    "anchorGap": 10,
+    "margin": 12,
+    "radius": 16,
+    "inset": 14,
+    "glyph": 18,
+    "dividerOpacity": 0.12,
+    "enterScale": 0.92,
+    "springResponse": 0.28,
+    "springDamping": 0.86,
+    "enterMs": 200,
+    "exitMs": 150,
+    "reducedMs": 150
+  },
+  "estimatedHeight": [
+    { "rows": 0, "header": false, "height": 0 },
+    { "rows": 0, "header": true, "height": 0 },
+    { "rows": 1, "header": false, "height": 46 },
+    { "rows": 5, "header": false, "height": 230 },
+    { "rows": 5, "header": true, "height": 262 },
+    { "rows": 8, "header": false, "height": 368 }
+  ],
+  "order": [
+    {
+      "case": "la ligne destructive passe en dernier",
+      "items": [["a", "Retirer", "destructive"], ["b", "Mettre devant", "normal"], ["c", "Verrouiller", "normal"]],
+      "ids": ["b", "c", "a"]
+    },
+    {
+      "case": "les titres vides et les doublons sont retirés, un titre vide ne masque pas un identifiant",
+      "items": [["a", "", "normal"], ["b", "B", "normal"], ["c", "   ", "normal"], ["a", "A", "normal"], ["b", "B bis", "normal"], ["d", "D", "destructive"], ["e", "E", "normal"]],
+      "ids": ["a", "b", "e", "d"]
+    },
+    {
+      "case": "deux destructives gardent leur ordre relatif, derrière les normales",
+      "items": [["x", "X", "destructive"], ["y", "Y", "normal"], ["z", "Z", "destructive"], ["w", "W", "normal"]],
+      "ids": ["y", "w", "x", "z"]
+    },
+    {
+      "case": "un ordre déjà juste ne bouge pas",
+      "items": [["a", "A", "normal"], ["b", "B", "normal"], ["c", "C", "destructive"]],
+      "ids": ["a", "b", "c"]
+    },
+    {
+      "case": "une seule ligne destructive",
+      "items": [["a", "Retirer", "destructive"]],
+      "ids": ["a"]
+    },
+    {
+      "case": "aucune ligne",
+      "items": [],
+      "ids": []
+    }
+  ],
+  "placement": [
+    {
+      "case": "O2 : au-dessus de la pilule, le bord de fin 11 au-delà de celui de la pilule",
+      "control": [279, 760, 48, 48], "surface": [55, 752, 280, 64], "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [110, 512, 236, 230], "resolvedEdge": "above", "origin": [0.8178, 1], "scrolls": false
+    },
+    {
+      "case": "O2 en miroir (RTL) : le bord de fin est à gauche",
+      "control": [63, 760, 48, 48], "surface": [55, 752, 280, 64], "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": true,
+      "frame": [44, 512, 236, 230], "resolvedEdge": "above", "origin": [0.1822, 1], "scrolls": false
+    },
+    {
+      "case": "le haut manque : le menu passe sous l'ancre",
+      "control": [300, 40, 48, 48], "surface": null, "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [123, 98, 236, 230], "resolvedEdge": "below", "origin": [0.8517, 0], "scrolls": false
+    },
+    {
+      "case": "le bord préféré est dessous, il ne tient pas : au-dessus",
+      "control": [279, 700, 48, 48], "surface": null, "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "below", "alignment": "end", "rtl": false,
+      "frame": [102, 460, 236, 230], "resolvedEdge": "above", "origin": [0.8517, 1], "scrolls": false
+    },
+    {
+      "case": "le bord de fin déborde : rabattu à la marge de fin",
+      "control": [350, 700, 40, 40], "surface": null, "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [142, 460, 236, 230], "resolvedEdge": "above", "origin": [0.9661, 1], "scrolls": false
+    },
+    {
+      "case": "le bord de début déborde : rabattu à la marge de début",
+      "control": [4, 700, 40, 40], "surface": null, "menu": [236, 230],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [12, 460, 236, 230], "resolvedEdge": "above", "origin": [0.0508, 1], "scrolls": false
+    },
+    {
+      "case": "ni dessus ni dessous ne tiennent : la colonne défile dans la place du bord préféré",
+      "control": [300, 150, 48, 48], "surface": null, "menu": [236, 460],
+      "container": [390, 300], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [123, 12, 236, 128], "resolvedEdge": "above", "origin": [0.8517, 1], "scrolls": true
+    },
+    {
+      "case": "moins d'une ligne de place : rabattu dans les marges, la colonne défile",
+      "control": [300, 60, 48, 48], "surface": null, "menu": [236, 230],
+      "container": [390, 150], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [123, 12, 236, 126], "resolvedEdge": "above", "origin": [0.8517, 1], "scrolls": true
+    },
+    {
+      "case": "centré sur un point (clic droit, touche Menu), dessous",
+      "control": [195, 400, 0, 0], "surface": null, "menu": [236, 138],
+      "container": [390, 844], "insets": [0, 0, 0, 0], "edge": "below", "alignment": "center", "rtl": false,
+      "frame": [77, 410, 236, 138], "resolvedEdge": "below", "origin": [0.5, 0], "scrolls": false
+    },
+    {
+      "case": "la zone sûre compte dans les marges",
+      "control": [279, 80, 48, 48], "surface": null, "menu": [236, 230],
+      "container": [390, 844], "insets": [59, 0, 34, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [102, 138, 236, 230], "resolvedEdge": "below", "origin": [0.8517, 0], "scrolls": false
+    },
+    {
+      "case": "un conteneur étroit : la largeur est le conteneur moins deux marges",
+      "control": [150, 300, 40, 40], "surface": null, "menu": [236, 138],
+      "container": [200, 600], "insets": [0, 0, 0, 0], "edge": "above", "alignment": "end", "rtl": false,
+      "frame": [12, 152, 176, 138], "resolvedEdge": "above", "origin": [0.8977, 1], "scrolls": false
+    }
+  ],
+  "chrome": [
+    { "rows": 0, "header": null, "backdrop": "clear", "showsMenu": false, "showsHeader": false, "showsScrim": false, "dividers": 0, "requestsDismiss": true },
+    { "rows": 0, "header": "Fond", "backdrop": "dim", "showsMenu": false, "showsHeader": false, "showsScrim": false, "dividers": 0, "requestsDismiss": true },
+    { "rows": 5, "header": null, "backdrop": "clear", "showsMenu": true, "showsHeader": false, "showsScrim": false, "dividers": 4, "requestsDismiss": false },
+    { "rows": 5, "header": "Fond", "backdrop": "clear", "showsMenu": true, "showsHeader": true, "showsScrim": false, "dividers": 4, "requestsDismiss": false },
+    { "rows": 3, "header": "   ", "backdrop": "dim", "showsMenu": true, "showsHeader": false, "showsScrim": true, "dividers": 2, "requestsDismiss": false },
+    { "rows": 1, "header": null, "backdrop": "dim", "showsMenu": true, "showsHeader": false, "showsScrim": true, "dividers": 0, "requestsDismiss": false }
+  ],
+  "contrast": {
+    "titleMin": 4.5,
+    "destructiveMin": 3.0,
+    "worstBackdrop": "FFFFFF",
+    "glassFill": "000000",
+    "denseFillOpacity": 0.66
+  },
+  "choice": ["haptic", "dismiss", "select"]
+}
