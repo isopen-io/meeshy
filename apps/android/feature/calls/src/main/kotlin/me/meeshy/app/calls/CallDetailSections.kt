@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,7 +49,6 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.component.MeeshyInfoNoted
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -214,19 +211,11 @@ internal fun TranscriptDisclaimer() {
         onOpenNoteIdChange = { openNote = it },
         tint = MeeshyTheme.tokens.textMuted,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-            Icon(
-                imageVector = MeeshyIcons.Info,
-                contentDescription = null,
-                tint = MeeshyTheme.tokens.textMuted,
-                modifier = Modifier.size(14.dp),
-            )
-            Text(
-                text = stringResource(R.string.call_transcript_disclaimer),
-                style = MaterialTheme.typography.labelSmall,
-                color = MeeshyTheme.tokens.textMuted,
-            )
-        }
+        Text(
+            text = stringResource(R.string.call_transcript_disclaimer),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textMuted,
+        )
     }
 }
 
