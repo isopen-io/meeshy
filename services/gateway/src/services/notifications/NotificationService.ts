@@ -631,6 +631,97 @@ export class NotificationService {
     };
   }
 
+  /**
+   * Le corps SERVI d'une bannière de RÉPONSE ou de MENTION, et le fragment de
+   * contexte qui le QUALIFIE — composés UNE fois pour les deux (#18038).
+   *
+   * Les deux éventails portaient ce bloc au mot près, `readerId` excepté.
+   * **Deux exemplaires d'une règle de Prisme est la configuration qui a produit
+   * les cycles 121 à 128** : un défaut corrigé sur un éventail, retrouvé sur son
+   * jumeau au cycle suivant, huit fois de suite. #18029 l'a remontré d'un cran
+   * plus haut — un champ présent sur deux éventails, absent du troisième, et
+   * aucun endroit où ils se regardent.
+   *
+   * **`createMessageNotification` garde la sienne, et ce n'est pas un oubli :**
+   * elle en diffère par trois COMPORTEMENTS, pas par sa forme — sa source est
+   * une relecture VIVANTE qui lui sert de gate d'éligibilité, elle élit un
+   * MÉDIUM que les deux autres n'attachent pas (décision du cycle 125 bis), et
+   * elle REFUSE une ligne absente là où les deux autres continuent d'annoncer.
+   * Les fondre effacerait ces trois-là.
+   *
+   * Cycle 123 — UNE descente, deux projections : le corps et les champs du fil.
+   * C'est ce qui garantit que la charge remise à APNs décrit le texte que la
+   * bannière montre, et rien d'autre.
+   */
+  private replyOrMentionBanner(params: {
+    readerId: string;
+    prism: { readonly lang: string; readonly ordered: readonly string[] };
+    source: MessageBannerSource;
+    preview: string;
+    basis?: PreviewPrismBasis;
+    media: NotificationBannerMedia;
+    detail?: NotificationContentDetail;
+    notificationLocKey?: string;
+    encryptedContent?: string;
+  }): {
+    readonly body: string;
+    readonly context: NotificationContext;
+  } {
+    const basis = params.basis ?? MESSAGE_CONTENT_BASIS;
+    const protectedByLocKey = !!params.notificationLocKey;
+
+    const servedTranslation = this.prismTranslation(
+      this.previewPrismSource({
+        basis,
+        messageSource: params.source,
+        protectedByLocKey,
+      }),
+      params.prism.ordered
+    );
+
+    // #14309 — la SYNTHÈSE du message, jamais son texte : cf. `servedBannerBody`.
+    const body = servedBannerBody({
+      lang: params.prism.lang,
+      preview: params.preview,
+      translation: servedTranslation,
+      media: params.media,
+      detail: params.detail,
+      readerId: params.readerId,
+      basis,
+      protectedByLocKey,
+    });
+
+    return {
+      body,
+      context: {
+        // Cycle 122 — le Prisme s'applique à TOUT le contenu poussé vers un
+        // destinataire NOMMÉ, pas au seul `new_message`.
+        ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — ces deux éventails poussent un `messageId`, donc font
+        // pré-enregistrer une bulle côté NSE exactement comme un message
+        // simple. Sans ce couple, la bulle restait VIDE et étiquetée « en ».
+        // La langue vient de la source déjà relue : aucune lecture de plus.
+        ...this.prePersistedMessageFields({
+          basis,
+          preview: params.preview,
+          originalLanguage: params.source.originalLanguage,
+          protectedByLocKey,
+        }),
+        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
+        // premier est redondant avec la base `protected-placeholder` que
+        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
+        // unique producteur, donc sa présence DÉCLARE la protection là où une
+        // base peut être omise par un appelant solo.
+        notificationLocKey: params.notificationLocKey,
+        ...(params.detail ? { contentDetail: params.detail } : {}),
+        // #17080 — l'enveloppe que la NSE ouvre. Sans elle, cette bannière
+        // restait « 🔒 💬 » à vie.
+        encryptedContent: params.encryptedContent,
+        ...this.messageClockFields(params.source),
+      } as NotificationContext,
+    };
+  }
+
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
   private async resolveRecipientLangs(userIds: readonly string[]): Promise<Map<string, string>> {
     const out = new Map<string, string>();
@@ -1744,27 +1835,18 @@ export class NotificationService {
     // il ne coûte pas une requête par destinataire.
     if (prismSource.liveness === 'gone') return null;
 
-    // Cycle 123 — UNE descente, deux projections : le corps et les champs du
-    // fil. Cf. `createMessageNotification`.
-    const servedTranslation = this.prismTranslation(
-      this.previewPrismSource({
-        basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-        messageSource: prismSource,
-        protectedByLocKey: !!params.notificationLocKey,
-      }),
-      prism.ordered
-    );
-
-    // #14309 — la SYNTHÈSE du message, jamais son texte : cf. `servedBannerBody`.
-    const bannerBody = servedBannerBody({
-      lang: prism.lang,
+    // #18038 — le corps et le fragment qui le QUALIFIE, composés par le site
+    // que cet éventail partage avec la RÉPONSE.
+    const banner = this.replyOrMentionBanner({
+      readerId: params.mentionedUserId,
+      prism,
+      source: prismSource,
       preview: params.messagePreview,
-      translation: servedTranslation,
+      basis: params.previewBasis,
       media: params,
       detail: params.contentDetail,
-      readerId: params.mentionedUserId,
-      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-      protectedByLocKey: !!params.notificationLocKey,
+      notificationLocKey: params.notificationLocKey,
+      encryptedContent: params.encryptedContent,
     });
 
     return this.createNotification({
@@ -1775,7 +1857,7 @@ export class NotificationService {
       // les trois plateformes rendent, pas les champs de service du fil push.
       // Cycle 125 bis — et il se compose comme celui d'un message simple : le
       // libellé de la pièce jointe prend la place d'un texte absent.
-      content: bannerBody,
+      content: banner.body,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       // #18030 — la plus PROCHE des deux : la bannière ne survit pas au message
@@ -1794,38 +1876,12 @@ export class NotificationService {
         conversationTitle: conversation?.title,
         // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
         ...conversationRegimeField(conversation?.encryptionMode),
-        // Group avatar — fallback for the iOS in-app toast when the sender
-        // has no personal avatar (group messages).
+        // #18029 — le repli de GROUPE de l'avatar iOS, servi par les TROIS
+        // éventails depuis ce lot.
         conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
-        // Cycle 122 — le Prisme s'applique à TOUT le contenu poussé vers un
-        // destinataire NOMMÉ, pas au seul `new_message` : sans cette descente,
-        // la bannière d'une mention restait dans la langue de l'expéditeur
-        // pendant que celle d'un message simple servait la traduction.
-        ...this.servedTranslationFields(servedTranslation),
-        // Cycle 124 — la JUMELLE : cette bannière pousse un `messageId`, donc
-        // elle fait pré-enregistrer une bulle côté NSE, exactement comme celle
-        // d'un message simple. Sans ce couple, la bulle d'une MENTION restait
-        // vide pendant que celle d'un message en avait une — le symptôme « deux
-        // textes pour un même message » que les cycles 121 à 123 poursuivent.
-        // La langue vient de la source déjà relue : aucune lecture de plus.
-        ...this.prePersistedMessageFields({
-          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-          preview: params.messagePreview,
-          originalLanguage: prismSource.originalLanguage,
-          protectedByLocKey: !!params.notificationLocKey,
-        }),
-        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
-        // premier est redondant avec la base `protected-placeholder` que
-        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
-        // unique producteur, donc sa présence DÉCLARE la protection là où une
-        // base peut être omise par un appelant solo.
-        notificationLocKey: params.notificationLocKey,
-        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
-        // #17080 — cf. `createReplyNotification` : l'enveloppe que la NSE ouvre.
-        encryptedContent: params.encryptedContent,
-        ...this.messageClockFields(prismSource),
+        ...banner.context,
       },
 
       // #17195 — second verrou, depuis la relecture que ce lot fait déjà.
@@ -1833,7 +1889,7 @@ export class NotificationService {
 
       metadata: {
         action: 'view_message',
-        messagePreview: bannerBody,
+        messagePreview: banner.body,
       } as any,
     });
   }
@@ -2442,27 +2498,18 @@ export class NotificationService {
     // relecture ci-dessus le sait déjà ; seul le lot `regular` le demandait.
     if (prismSource.liveness === 'gone') return null;
 
-    // Cycle 123 — UNE descente, deux projections : le corps et les champs du
-    // fil. Cf. `createMessageNotification`.
-    const servedTranslation = this.prismTranslation(
-      this.previewPrismSource({
-        basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-        messageSource: prismSource,
-        protectedByLocKey: !!params.notificationLocKey,
-      }),
-      prism.ordered
-    );
-
-    // #14309 — la SYNTHÈSE du message, jamais son texte : cf. `servedBannerBody`.
-    const bannerBody = servedBannerBody({
-      lang: prism.lang,
+    // #18038 — cf. `createMentionNotification` : le corps et le fragment qui le
+    // QUALIFIE viennent du site que les deux éventails partagent.
+    const banner = this.replyOrMentionBanner({
+      readerId: params.recipientUserId,
+      prism,
+      source: prismSource,
       preview: params.messagePreview,
-      translation: servedTranslation,
+      basis: params.previewBasis,
       media: params,
       detail: params.contentDetail,
-      readerId: params.recipientUserId,
-      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-      protectedByLocKey: !!params.notificationLocKey,
+      notificationLocKey: params.notificationLocKey,
+      encryptedContent: params.encryptedContent,
     });
 
     return this.createNotification({
@@ -2472,7 +2519,7 @@ export class NotificationService {
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
       // Cycle 125 bis — et il se compose comme celui d'un message simple.
-      content: bannerBody,
+      content: banner.body,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       // #18030 — cf. `createMentionNotification` : la plus PROCHE des deux.
@@ -2499,29 +2546,11 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,
-        // Cycle 122 — le Prisme de la RÉPONSE, celle que cette bannière annonce
-        // et ouvre : jamais celle du message cité.
-        ...this.servedTranslationFields(servedTranslation),
-        // Cycle 124 — cf. `createMentionNotification` : la bulle pré-enregistrée
-        // est celle de la RÉPONSE, le message que cette bannière annonce et
-        // ouvre — jamais celle du message cité.
-        ...this.prePersistedMessageFields({
-          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-          preview: params.messagePreview,
-          originalLanguage: prismSource.originalLanguage,
-          protectedByLocKey: !!params.notificationLocKey,
-        }),
-        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
-        // premier est redondant avec la base `protected-placeholder` que
-        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
-        // unique producteur, donc sa présence DÉCLARE la protection là où une
-        // base peut être omise par un appelant solo.
-        notificationLocKey: params.notificationLocKey,
-        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
-        // #17080 — l'enveloppe que la NSE ouvre. Sans elle, cette bannière
-        // restait « 🔒 💬 » à vie.
-        encryptedContent: params.encryptedContent,
-        ...this.messageClockFields(prismSource),
+        // Cycle 122 / 124 — tout ce qui suit décrit la RÉPONSE, celle que cette
+        // bannière annonce et ouvre : jamais le message cité. C'est la source
+        // passée à `replyOrMentionBanner` qui le dit, et elle est relue sur
+        // `params.messageId`.
+        ...banner.context,
       },
 
       // #17195 — second verrou, depuis la relecture que ce lot fait déjà.
@@ -2529,7 +2558,7 @@ export class NotificationService {
 
       metadata: {
         action: 'view_message',
-        messagePreview: bannerBody,
+        messagePreview: banner.body,
       } as any,
     });
   }
