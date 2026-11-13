@@ -53,6 +53,7 @@ export interface ZMQClientStats {
   results_received: number;
   errors_received: number;
   pool_full_rejections: number;
+  translation_skipped: number;
   avg_response_time: number;
   uptime_seconds: number;
   memory_usage_mb: number;
@@ -127,6 +128,7 @@ export class ZmqTranslationClient extends EventEmitter {
     results_received: 0,
     errors_received: 0,
     pool_full_rejections: 0,
+    translation_skipped: 0,
     avg_response_time: 0,
     uptime_seconds: 0,
     memory_usage_mb: 0
@@ -378,9 +380,11 @@ export class ZmqTranslationClient extends EventEmitter {
     // faisait renvoyer jusqu'à ZMQ_MAX_RETRIES puis annoncer un échec. Il se
     // solde sans rien compter au disjoncteur — ce n'est ni une panne ni un
     // succès — et son lecteur garde l'original. Sans taskId (ancien
-    // translator), il n'y a rien à solder.
+    // translator), il n'y a rien à solder. Le refus ne vise que la traduction
+    // TEXTE : sous un taskId d'audio ou de voix, la requête reste armée (#18042).
     this.messageHandler.on('translationSkipped', (event: TranslationSkippedPayload) => {
-      if (event.taskId) {
+      this.stats.translation_skipped++;
+      if (event.taskId && this.requestSender.hasPendingTranslationRequest(event.taskId)) {
         this.retryCount.delete(event.taskId);
         this.requestSender.removePendingRequest(event.taskId);
       }
