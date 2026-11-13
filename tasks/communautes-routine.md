@@ -18,6 +18,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
+| 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
 
 ## 2026-11-07 — lot 1
 
@@ -208,3 +209,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil « N en ligne »
+
+- Début du run : cinq PR de la routine ouvertes (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182, #18006 #17104), toutes menées EN DIRECT par d'autres sessions (commentaires et poussées de moins de deux heures) : cédées, non touchées. Le run précédent de ce fil avait été coupé par une erreur d'API le 2026-11-10 ; sa branche était déjà fusionnée.
+- Lot : #18014 (issue ouverte). `GET /communities/:id` sert `onlineMemberCount` (additif) : les AUTRES membres actifs en ligne (règle 1/3/5), hors comptes non vivants, bloqués dans un sens ou dans l'autre, ou ayant coupé `showOnlineStatus` ; `null` sous dix autres membres actifs (`ONLINE_COUNT_ANONYMITY_FLOOR`) — dans une petite communauté, un compte désigne quelqu'un. Site unique : `services/community-online-count.ts`. Lecture bornée (membres dans la fenêtre de 5 min, 1 000 au plus), comptage APRÈS la garde d'accès, panne ⇒ `null` sans casser le détail.
+- Web : `CommunityStats` écrit « N en ligne » ; iOS : `CommunityDetailScreen.statsSection`. Rien à 0, `null` ou absent. Clé `community.detail.online` × 7 langues des deux côtés.
+- Suivi ouvert : #18026 (miroir Android).
+- Décision prise sur la lecture la plus probable, à confirmer par le porteur : plancher d'anonymat à 10 ; le compte est servi aussi à un non-membre d'une communauté PUBLIQUE (il peut déjà la lire).
+- Gotcha : `act-leak-guard.test.ts` (web) est rouge en conteneur sans ce diff aussi (mesuré par `git stash`).
+- Prochain lot recommandé : #18026 (Android, petit), puis les événements temps réel `community:*` (membre rejoint/parti, rôle, réglages) — dont un `community:online-count-changed` pourrait rafraîchir l'agrégat ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
