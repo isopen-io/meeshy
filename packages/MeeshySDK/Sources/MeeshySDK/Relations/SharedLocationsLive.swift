@@ -17,8 +17,9 @@ public struct SharedLocationEntry: Equatable, Sendable {
 ///   la rend plus fine sans recharger, une baisse la rend plus grossière. Une position plus ancienne que celle gardée
 ///   n'écrase rien.
 /// - `location:share-ended` l'efface (arrêt, baisse sous Ami, blocage, retrait).
-/// - Sans nouvel envoi, la position s'éteint à son échéance, comptée à l'horloge de l'APPAREIL depuis la réception
-///   (une horloge décalée ne la prolonge pas), jamais au-delà des 8 h du contrat.
+/// - Sans nouvel envoi, la position s'éteint au PLUS TÔT de deux bornes : `expiresAt`, le terme choisi par l'émetteur
+///   (une position ancienne rejouée par un rattrapage ne lui survit pas), et sa durée de vie servie comptée à
+///   l'horloge de l'APPAREIL depuis la réception (une horloge en retard ne la prolonge pas), jamais au-delà des 8 h.
 /// - À chaque socket accrochée, et à chaque emprise que la carte demande, `GET /relations/locations` rattrape : le
 ///   rattrapage FAIT FOI dans son emprise à l'instant où il est parti — une fin survenue pendant la coupure efface la
 ///   position au lieu de la laisser jusqu'à son terme ; ce qui est arrivé pendant la demande reste.
@@ -74,8 +75,9 @@ public final class SharedLocationsLive: ObservableObject {
     public func receive(_ changed: SharedLocationChanged) {
         guard changed.userId != viewerId() else { return }
         if let kept = byUser[changed.userId], changed.updatedAt < kept.updatedAt { return }
-        let deadline = now().addingTimeInterval(changed.lifetime)
-        guard deadline > now() else {
+        let instant = now()
+        let deadline = min(instant.addingTimeInterval(changed.lifetime), changed.expiresAt)
+        guard deadline > instant else {
             clear(changed.userId)
             return
         }
