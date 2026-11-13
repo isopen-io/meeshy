@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="community_add_channel_empty_hint">Créez d\'abord une conversation pour l\'ajouter ici.</string>
     <string name="community_add_channel_empty_no_conversations">Aucune conversation disponible</string>
     <string name="community_add_channel_empty_no_results">Aucun résultat</string>
     <string name="community_add_channel_move_button">Déplacer</string>

@@ -28,7 +28,6 @@ class EpureCommunityStringsTest {
         }.toMap()
 
     private val removed = listOf(
-        "community_add_channel_empty_hint",
         "community_load_network_body",
         "community_load_server_body",
         "community_list_empty_subtitle",
@@ -76,7 +75,8 @@ class EpureCommunityStringsTest {
     }
 
     @Test
-    fun `the add-channel empty list keeps its one line`() {
+    fun `the add-channel empty list says there is nothing to add, and how to have something`() {
         assertThat(all("values-fr")["community_add_channel_empty_no_conversations"]).isEqualTo("Aucune conversation disponible")
+        assertThat(all("values-fr")["community_add_channel_empty_hint"]).isEqualTo("Créez d'abord une conversation pour l'ajouter ici.")
     }
 }
