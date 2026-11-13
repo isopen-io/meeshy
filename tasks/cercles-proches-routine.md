@@ -479,5 +479,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates locaux : témoins rouges prouvés (6 dans `togetherRelay.test.ts`, 1 dans `announceConversationClosed.test.ts`),
   puis 443 suites voisines (together, socketio, conversations, relations, directory, attachments, admin, security,
   balayage des promesses détachées) 6 806/6 806 vertes ; `tsc` passerelle vert.
+- Revue adversariale : fusionnable, un défaut moyen corrigé dans le lot — l'archivage admin (`isActive: false` sans
+  `closed`) ne passe pas par `announceConversationClosed` ; la route souveraine appelle désormais `cutTogetherWhere`
+  après l'écriture (témoin de route). Assumé : `obsoleteConversation` rejuge deux fois (sans effet). Hors lot, en
+  suivi : la désactivation d'une communauté ne touche pas ses conversations (voir l'issue ouverte).
 - Prochain lot recommandé : « ensemble » sur Android (#17100), sinon la préférence de réception d'« ensemble » (#17023),
   puis la position temporaire iOS (#16983) et l'icône par cercle (#17013) quand #17956 aura fusionné.

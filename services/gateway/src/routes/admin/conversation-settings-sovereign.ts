@@ -69,6 +69,7 @@ import { invalidateParticipantLookup } from '../../utils/participant-lookup-cach
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { cutTogetherWhere } from '../../services/together/togetherDeps';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
 import {
@@ -258,6 +259,9 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
         : await ecriture;
       // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
       if (ferme) await eraseExternalPeerOnClose(fastify.prisma, { id: conversationId, type: avant.type });
+      // #17147 — archiver (`isActive: false` sans fermer) éteint aussi les séances « ensemble » :
+      // la fermeture le fait par `announceConversationClosed`, l'archivage n'y passe pas.
+      if (isActive === false && !ferme) await cutTogetherWhere({ conversationId });
 
       const { manager, io: serveur } = io(fastify);
       if (Object.keys(changedFields).length > 0) {
