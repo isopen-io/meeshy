@@ -220,7 +220,6 @@
     <string name="links_affiliate_create_name_label">Link name</string>
     <string name="links_affiliate_create_name_placeholder">E.g. Twitter invitation</string>
     <string name="links_affiliate_create_title">New link</string>
-    <string name="links_affiliate_empty_subtitle">Create a link to invite your friends</string>
     <string name="links_affiliate_empty_title">No referral links</string>
     <string name="links_affiliate_section_my_links">MY LINKS</string>
     <string name="links_affiliate_stat_clicks">Clicks</string>
@@ -262,17 +261,13 @@
     <string name="links_community_title">Community links</string>
     <string name="links_hub_affiliate_create_a11y">Create an affiliate link</string>
     <string name="links_hub_affiliate_description">Monetise your network with affiliate tokens</string>
-    <string name="links_hub_affiliate_title">Affiliate links</string>
     <string name="links_hub_banner_subtitle">Share, track and monetise your audience</string>
     <string name="links_hub_community_description">Manage the invitation links to your communities</string>
-    <string name="links_hub_community_title">Community links</string>
     <string name="links_hub_share_create_a11y">Create a share link</string>
     <string name="links_hub_share_description">Invite contacts to join your conversations</string>
-    <string name="links_hub_share_title">Share links</string>
     <string name="links_hub_title">My links</string>
     <string name="links_hub_tracking_create_a11y">Create a tracking link</string>
     <string name="links_hub_tracking_description">Track how your referral links perform</string>
-    <string name="links_hub_tracking_title">Tracking links</string>
     <string name="links_section_collapsed">Collapsed</string>
     <string name="links_section_expanded">Expanded</string>
     <string name="links_tracking_create_a11y">Create a tracking link</string>
@@ -310,7 +305,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">Unique clicks</string>
     <string name="links_tracking_detail_unknown">Unknown</string>
     <string name="links_tracking_detail_utm_title">UTM CONFIGURATION</string>
-    <string name="links_tracking_empty_subtitle">Create a link to track your clicks and campaigns</string>
     <string name="links_tracking_empty_title">No tracking links</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d click</item>

@@ -26,4 +26,8 @@
     <string name="share_link_field_description">الوصف</string>
     <string name="share_link_field_slug">عنوان الرابط</string>
     <string name="conversations_action_more">المزيد</string>
+    <string name="links_hub_share_title">مشاركة</string>
+    <string name="links_hub_tracking_title">التتبّع</string>
+    <string name="links_hub_affiliate_title">الإحالة</string>
+    <string name="links_hub_community_title">المجتمعات</string>
 </resources>

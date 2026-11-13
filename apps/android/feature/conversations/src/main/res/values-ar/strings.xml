@@ -30,7 +30,6 @@
     <string name="new_conversation_search_hint">ابحث عن أشخاص</string>
     <string name="share_link_field_max_uses">الحد الأقصى للاستخدامات</string>
     <string name="share_link_created_title">تم إنشاء الرابط</string>
-    <string name="share_link_created_subtitle">شاركه لدعوة الأشخاص إلى المحادثة.</string>
     <string name="my_share_links_share">مشاركة الرابط</string>
     <string name="my_share_links_delete">حذف الرابط</string>
     <string name="my_share_links_extend">تمديد الصلاحية</string>

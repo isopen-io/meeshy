@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "conversation.appearance.shop",
-          "androidName": "conversation_appearance_shop",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.appearance.accent.auto",
           "androidName": "conversation_appearance_accent_auto",
           "status": "adopted"

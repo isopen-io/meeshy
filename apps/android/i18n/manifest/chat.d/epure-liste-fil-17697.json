@@ -67,6 +67,22 @@
         {
           "androidName": "riviere_bubble_actions",
           "status": "android-only"
+        },
+        {
+          "androidName": "conversation_appearance_shop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "export_card_gallery_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_end_to_end_never_turned_off_direct",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_permanence_question",
+          "status": "android-only"
         }
       ]
     }

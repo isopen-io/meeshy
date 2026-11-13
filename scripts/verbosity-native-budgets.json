@@ -20,7 +20,7 @@
     },
     "android:feature/chat": {
       "labels": 1136,
-      "words": 4343,
+      "words": 4307,
       "long": 53,
       "explanations": 112
     },
@@ -37,10 +37,10 @@
       "explanations": 14
     },
     "android:feature/conversations": {
-      "labels": 635,
-      "words": 1849,
+      "labels": 632,
+      "words": 1819,
       "long": 9,
-      "explanations": 149
+      "explanations": 146
     },
     "android:feature/feed": {
       "labels": 341,

@@ -26,4 +26,8 @@
     <string name="share_link_field_description">Beschreibung</string>
     <string name="share_link_field_slug">Link-Adresse</string>
     <string name="conversations_action_more">Mehr</string>
+    <string name="links_hub_share_title">Teilen</string>
+    <string name="links_hub_tracking_title">Tracking</string>
+    <string name="links_hub_affiliate_title">Empfehlung</string>
+    <string name="links_hub_community_title">Communities</string>
 </resources>

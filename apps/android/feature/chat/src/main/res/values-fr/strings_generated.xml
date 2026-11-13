@@ -256,7 +256,6 @@
     <string name="conversation_appearance_section_photo">Photo de la conversation</string>
     <string name="conversation_appearance_section_solid">Couleur unie</string>
     <string name="conversation_appearance_sheet_title">Fond et accent</string>
-    <string name="conversation_appearance_shop">Plus dans la boutique</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils.</string>
     <string name="conversation_info_created_on">Créé le %1$s</string>
@@ -390,7 +389,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_fact_end_to_end_is_final">Une fois activé, le chiffrement de bout en bout ne se désactive plus.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.</string>
     <string name="encryption_fact_every_server_feature">Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche.</string>
     <string name="encryption_fact_group_sending_unavailable">Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré.</string>
     <string name="encryption_fact_no_edit">Un message envoyé ne peut pas être modifié.</string>
@@ -448,7 +446,6 @@
     <string name="export_card_default_save">Utiliser comme format par défaut</string>
     <string name="export_card_gallery_close">Fermer la galerie</string>
     <string name="export_card_gallery_count">%1$d styles</string>
-    <string name="export_card_gallery_empty">Aucun style ne porte ce nom. Essayez une couleur, une police ou « sombre ».</string>
     <string name="export_card_gallery_open">Tout voir</string>
     <string name="export_card_gallery_placeholder">Plume, sombre, bulles…</string>
     <string name="export_card_gallery_title">Tous les styles</string>

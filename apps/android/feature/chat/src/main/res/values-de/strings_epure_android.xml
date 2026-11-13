@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">E-Mail</string>
     <string name="starred_more_options">Mehr</string>
     <string name="riviere_bubble_actions">Mehr</string>
+    <string name="conversation_appearance_shop">Shop</string>
+    <string name="export_card_gallery_empty">Kein Stil</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt. Um zum Klartext zurückzukehren, öffne eine andere Unterhaltung.</string>
+    <string name="encryption_note_permanence_question">Und wenn der Server sie anders darstellt?</string>
 </resources>

@@ -37,6 +37,7 @@ private fun Topic.notedFacts(): Set<Fact> = when (this) {
     Topic.WHO_READS -> setOf(Fact.HYBRID_SECOND_LAYER)
     Topic.DEVICES -> setOf(Fact.DEVICE_LIMIT, Fact.RESTORED_DEVICE_IS_NEW)
     Topic.SWITCHING -> setOf(Fact.WHO_MAY_TOGGLE, Fact.SWITCH_KEEPS_HISTORY)
+    Topic.PERMANENCE -> setOf(Fact.SERVER_CANNOT_TURN_IT_OFF)
     else -> emptySet()
 }
 
@@ -45,6 +46,7 @@ private fun Topic.noteQuestionRes(): Int? = when (this) {
     Topic.WHO_READS -> R.string.encryption_note_second_layer_question
     Topic.DEVICES -> R.string.encryption_note_devices_question
     Topic.SWITCHING -> R.string.encryption_note_switching_question
+    Topic.PERMANENCE -> R.string.encryption_note_permanence_question
     else -> null
 }
 

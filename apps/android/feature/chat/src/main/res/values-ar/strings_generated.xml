@@ -274,7 +274,6 @@
     <string name="conversation_appearance_section_photo">صورة المحادثة</string>
     <string name="conversation_appearance_section_solid">لون موحد</string>
     <string name="conversation_appearance_sheet_title">الخلفية واللون المميز</string>
-    <string name="conversation_appearance_shop">المزيد في المتجر</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">تم تفعيل التشفير التام بين الطرفين: تُشفّر الرسائل الجديدة على أجهزتك.</string>
     <string name="conversation_info_created_on">أُنشئ في %1$s</string>
@@ -411,7 +410,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_fact_end_to_end_is_final">بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية مشفّرة. يمكنك دائمًا أن تفتح بجانبها محادثة أخرى، دون تشفير تام بين الطرفين، مع هذا الشخص: كلتاهما في القائمة، وهذه مميّزة بقفل.</string>
     <string name="encryption_fact_every_server_feature">جميع الميزات متاحة: الترجمة التلقائية، تفريغ الرسائل الصوتية، معاينة الإشعارات، البحث.</string>
     <string name="encryption_fact_group_sending_unavailable">في هذه المجموعة، لا يستطيع التطبيق بعد إرسال رسائل مشفّرة.</string>
     <string name="encryption_fact_no_edit">لا يمكن تعديل رسالة مُرسلة.</string>
@@ -469,7 +467,6 @@
     <string name="export_card_default_save">استخدام كتنسيق افتراضي</string>
     <string name="export_card_gallery_close">إغلاق المعرض</string>
     <string name="export_card_gallery_count">%1$d نمطًا</string>
-    <string name="export_card_gallery_empty">لا يحمل أي نمط هذا الاسم. جرّب لونًا أو خطًا أو «داكن».</string>
     <string name="export_card_gallery_open">عرض الكل</string>
     <string name="export_card_gallery_placeholder">ريشة، داكن، فقاعات…</string>
     <string name="export_card_gallery_title">كل الأنماط</string>

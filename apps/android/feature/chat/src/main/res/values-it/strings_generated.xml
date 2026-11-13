@@ -256,7 +256,6 @@
     <string name="conversation_appearance_section_photo">Foto della conversazione</string>
     <string name="conversation_appearance_section_solid">Tinta unita</string>
     <string name="conversation_appearance_sheet_title">Sfondo e accento</string>
-    <string name="conversation_appearance_shop">Altro nel negozio</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Crittografia end-to-end attivata: i nuovi messaggi sono crittografati sui tuoi dispositivi.</string>
     <string name="conversation_info_created_on">Creato il %1$s</string>
@@ -390,7 +389,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano.</string>
     <string name="encryption_fact_end_to_end_is_final">Una volta attivata, la crittografia end-to-end non si può più disattivare.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">La crittografia end-to-end non si disattiva mai: questa chat individuale resta crittografata. Potrai sempre aprire accanto un’altra conversazione, senza crittografia end-to-end, con questa persona: entrambe sono nell’elenco, questa segnata da un lucchetto.</string>
     <string name="encryption_fact_every_server_feature">Tutte le funzioni sono disponibili: traduzione automatica, trascrizione dei vocali, anteprima delle notifiche, ricerca.</string>
     <string name="encryption_fact_group_sending_unavailable">In questo gruppo l’app non può ancora inviare messaggi crittografati.</string>
     <string name="encryption_fact_no_edit">Un messaggio inviato non può essere modificato.</string>
@@ -448,7 +446,6 @@
     <string name="export_card_default_save">Usa come formato predefinito</string>
     <string name="export_card_gallery_close">Chiudi la galleria</string>
     <string name="export_card_gallery_count">%1$d stili</string>
-    <string name="export_card_gallery_empty">Nessuno stile ha questo nome. Prova un colore, un carattere o «scuro».</string>
     <string name="export_card_gallery_open">Vedi tutti</string>
     <string name="export_card_gallery_placeholder">Piuma, scuro, bolle…</string>
     <string name="export_card_gallery_title">Tutti gli stili</string>

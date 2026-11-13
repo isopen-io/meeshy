@@ -30,7 +30,6 @@
     <string name="new_conversation_search_hint">Buscar personas</string>
     <string name="share_link_field_max_uses">Usos máximos</string>
     <string name="share_link_created_title">Enlace creado</string>
-    <string name="share_link_created_subtitle">Compártelo para invitar a personas a la conversación.</string>
     <string name="my_share_links_share">Compartir enlace</string>
     <string name="my_share_links_delete">Eliminar enlace</string>
     <string name="my_share_links_extend">Ampliar caducidad</string>

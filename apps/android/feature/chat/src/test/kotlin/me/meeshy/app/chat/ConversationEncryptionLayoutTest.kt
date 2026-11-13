@@ -42,7 +42,7 @@ class ConversationEncryptionLayoutTest {
     @Test
     fun `a topic with nothing behind a note has no question`() {
         assertThat(layout("e2ee").getValue(Topic.WHO_READS).questionRes).isNull()
-        assertThat(layout("e2ee").getValue(Topic.PERMANENCE).noted).isEmpty()
+        assertThat(layout("e2ee").getValue(Topic.DEVICES).questionRes).isNotNull()
     }
 
     @Test
@@ -70,5 +70,17 @@ class ConversationEncryptionLayoutTest {
         ).inOrder()
         assertThat(whoReads.noted).containsExactly(Fact.HYBRID_SECOND_LAYER)
         assertThat(whoReads.questionRes).isEqualTo(R.string.encryption_note_second_layer_question)
+    }
+
+    @Test
+    fun `permanence keeps the irreversibility visible and puts the served-gap precision behind its question`() {
+        listOf(true, false).forEach { direct ->
+            val permanence = layout("e2ee", isDirect = direct).getValue(Topic.PERMANENCE)
+
+            assertThat(permanence.visible).hasSize(1)
+            assertThat(permanence.visible.single()).isIn(listOf(Fact.END_TO_END_NEVER_TURNED_OFF, Fact.END_TO_END_NEVER_TURNED_OFF_DIRECT))
+            assertThat(permanence.noted).containsExactly(Fact.SERVER_CANNOT_TURN_IT_OFF)
+            assertThat(permanence.questionRes).isEqualTo(R.string.encryption_note_permanence_question)
+        }
     }
 }

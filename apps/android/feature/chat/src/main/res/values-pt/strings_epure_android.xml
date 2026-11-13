@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">E-mail</string>
     <string name="starred_more_options">Mais</string>
     <string name="riviere_bubble_actions">Mais</string>
+    <string name="conversation_appearance_shop">Loja</string>
+    <string name="export_card_gallery_empty">Nenhum estilo</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada. Para voltar ao texto simples, abra outra conversa.</string>
+    <string name="encryption_note_permanence_question">E se o servidor a apresentar de outra forma?</string>
 </resources>

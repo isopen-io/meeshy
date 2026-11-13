@@ -250,7 +250,6 @@
     <string name="conversation_appearance_section_photo">Foto der Unterhaltung</string>
     <string name="conversation_appearance_section_solid">Einfarbig</string>
     <string name="conversation_appearance_sheet_title">Hintergrund und Akzent</string>
-    <string name="conversation_appearance_shop">Mehr im Shop</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Ende-zu-Ende-Verschlüsselung aktiviert: Neue Nachrichten werden auf deinen Geräten verschlüsselt.</string>
     <string name="conversation_info_created_on">Erstellt am %1$s</string>
@@ -383,7 +382,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_fact_end_to_end_is_final">Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt. Du kannst daneben jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert.</string>
     <string name="encryption_fact_every_server_feature">Alle Funktionen sind verfügbar: automatische Übersetzung, Transkription von Sprachnachrichten, Benachrichtigungsvorschau, Suche.</string>
     <string name="encryption_fact_group_sending_unavailable">In dieser Gruppe kann die App noch keine verschlüsselten Nachrichten senden.</string>
     <string name="encryption_fact_no_edit">Eine gesendete Nachricht kann nicht bearbeitet werden.</string>
@@ -441,7 +439,6 @@
     <string name="export_card_default_save">Als Standardformat verwenden</string>
     <string name="export_card_gallery_close">Galerie schließen</string>
     <string name="export_card_gallery_count">%1$d Stile</string>
-    <string name="export_card_gallery_empty">Kein Stil heißt so. Versuche eine Farbe, eine Schrift oder „dunkel“.</string>
     <string name="export_card_gallery_open">Alle ansehen</string>
     <string name="export_card_gallery_placeholder">Feder, dunkel, Blasen …</string>
     <string name="export_card_gallery_title">Alle Stile</string>

@@ -107,6 +107,22 @@
         {
           "androidName": "conversations_action_more",
           "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_share_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_tracking_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_affiliate_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_community_title",
+          "status": "android-only"
         }
       ]
     }

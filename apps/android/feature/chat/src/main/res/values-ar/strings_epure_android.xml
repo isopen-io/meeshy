@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">البريد الإلكتروني</string>
     <string name="starred_more_options">المزيد</string>
     <string name="riviere_bubble_actions">المزيد</string>
+    <string name="conversation_appearance_shop">المتجر</string>
+    <string name="export_card_gallery_empty">لا يوجد نمط</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية مشفّرة. للعودة إلى النص الواضح، افتح محادثة أخرى.</string>
+    <string name="encryption_note_permanence_question">وماذا لو عرضها الخادم بشكل مختلف؟</string>
 </resources>

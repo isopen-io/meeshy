@@ -250,7 +250,6 @@
     <string name="conversation_appearance_section_photo">Conversation photo</string>
     <string name="conversation_appearance_section_solid">Solid color</string>
     <string name="conversation_appearance_sheet_title">Background and accent</string>
-    <string name="conversation_appearance_shop">More in the shop</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">End-to-end encryption turned on: new messages are encrypted on your devices.</string>
     <string name="conversation_info_created_on">Created on %1$s</string>
@@ -383,7 +382,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_fact_end_to_end_is_final">Once turned on, end-to-end encryption can’t be turned off.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. You can always open another conversation alongside, without end-to-end encryption, with this person: both are in the list, this one marked with a padlock.</string>
     <string name="encryption_fact_every_server_feature">Every feature is available: automatic translation, voice message transcription, notification previews, search.</string>
     <string name="encryption_fact_group_sending_unavailable">In this group, the app can’t send encrypted messages yet.</string>
     <string name="encryption_fact_no_edit">A sent message can’t be edited.</string>
@@ -441,7 +439,6 @@
     <string name="export_card_default_save">Use as default format</string>
     <string name="export_card_gallery_close">Close the gallery</string>
     <string name="export_card_gallery_count">%1$d styles</string>
-    <string name="export_card_gallery_empty">No style has that name. Try a color, a font or “dark”.</string>
     <string name="export_card_gallery_open">See all</string>
     <string name="export_card_gallery_placeholder">Quill, dark, bubbles…</string>
     <string name="export_card_gallery_title">All styles</string>

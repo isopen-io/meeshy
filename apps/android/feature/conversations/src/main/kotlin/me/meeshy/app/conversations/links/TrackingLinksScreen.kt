@@ -88,8 +88,7 @@ fun TrackingLinksScreen(
                 LinkEmptyState(
                     MeeshyIcons.ChartBar,
                     stringResource(R.string.links_tracking_empty_title),
-                    stringResource(R.string.links_tracking_empty_subtitle),
-                    accent,
+                    accent = accent,
                 )
             }
             else -> items(state.links.links, key = { it.id }, contentType = { "link" }) { link ->

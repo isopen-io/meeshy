@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">Email</string>
     <string name="starred_more_options">More</string>
     <string name="riviere_bubble_actions">More</string>
+    <string name="conversation_appearance_shop">Shop</string>
+    <string name="export_card_gallery_empty">No style</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. To go back to plain, open another conversation.</string>
+    <string name="encryption_note_permanence_question">What if the server presents it differently?</string>
 </resources>

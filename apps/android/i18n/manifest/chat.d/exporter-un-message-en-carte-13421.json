@@ -264,12 +264,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "export.card.gallery.empty",
-          "androidName": "export_card_gallery_empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "export.card.gallery.open",
           "androidName": "export_card_gallery_open",
           "status": "adopted"

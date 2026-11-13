@@ -256,7 +256,6 @@
     <string name="conversation_appearance_section_photo">Foto da conversa</string>
     <string name="conversation_appearance_section_solid">Cor sólida</string>
     <string name="conversation_appearance_sheet_title">Fundo e destaque</string>
-    <string name="conversation_appearance_shop">Mais na loja</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos.</string>
     <string name="conversation_info_created_on">Criado em %1$s</string>
@@ -390,7 +389,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
     <string name="encryption_fact_end_to_end_is_final">Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada. Você sempre poderá abrir ao lado outra conversa, sem criptografia de ponta a ponta, com esta pessoa: as duas estão na lista, esta marcada com um cadeado.</string>
     <string name="encryption_fact_every_server_feature">Todas as funções estão disponíveis: tradução automática, transcrição de áudios, prévia das notificações, busca.</string>
     <string name="encryption_fact_group_sending_unavailable">Neste grupo, o app ainda não pode enviar mensagens criptografadas.</string>
     <string name="encryption_fact_no_edit">Uma mensagem enviada não pode ser editada.</string>
@@ -448,7 +446,6 @@
     <string name="export_card_default_save">Usar como formato predefinido</string>
     <string name="export_card_gallery_close">Fechar a galeria</string>
     <string name="export_card_gallery_count">%1$d estilos</string>
-    <string name="export_card_gallery_empty">Nenhum estilo tem esse nome. Experimente uma cor, uma fonte ou «escuro».</string>
     <string name="export_card_gallery_open">Ver tudo</string>
     <string name="export_card_gallery_placeholder">Pena, escuro, bolhas…</string>
     <string name="export_card_gallery_title">Todos os estilos</string>

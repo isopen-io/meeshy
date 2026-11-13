@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">Correo</string>
     <string name="starred_more_options">Más</string>
     <string name="riviere_bubble_actions">Más</string>
+    <string name="conversation_appearance_shop">Tienda</string>
+    <string name="export_card_gallery_empty">Ningún estilo</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado. Para volver al texto claro, abre otra conversación.</string>
+    <string name="encryption_note_permanence_question">¿Y si el servidor la presenta de otra forma?</string>
 </resources>

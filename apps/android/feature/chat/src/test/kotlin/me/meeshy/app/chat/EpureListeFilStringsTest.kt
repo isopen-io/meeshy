@@ -191,4 +191,47 @@ class EpureListeFilStringsTest {
         assertThat(epure("values")["encryption_e2ee_direct_only_here"])
             .isEqualTo("On this phone, end-to-end encryption exists for one-to-one conversations only.")
     }
+
+    @Test
+    fun `the shop link, the empty gallery and the direct permanence sentence are the short forms`() {
+        val shop = mapOf(
+            "values" to "Shop", "values-fr" to "Boutique", "values-es" to "Tienda", "values-pt" to "Loja",
+            "values-de" to "Shop", "values-it" to "Negozio", "values-ar" to "المتجر",
+        )
+        shop.forEach { (folder, word) -> assertThat(epure(folder)["conversation_appearance_shop"]).isEqualTo(word) }
+        assertThat(epure("values-fr")["export_card_gallery_empty"]).isEqualTo("Aucun style")
+        assertThat(epure("values")["export_card_gallery_empty"]).isEqualTo("No style")
+        assertThat(epure("values-fr")["encryption_fact_end_to_end_never_turned_off_direct"]).isEqualTo(
+            "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Pour revenir au clair, ouvrez une autre conversation.",
+        )
+        folders.forEach { folder ->
+            val direct = epure(folder).getValue("encryption_fact_end_to_end_never_turned_off_direct")
+            assertWithMessage("$folder direct").that(direct.length).isAtMost(160)
+            assertWithMessage("$folder cadenas").that(direct).doesNotContain("🔒")
+        }
+        assertThat(epure("values-fr").getValue("encryption_fact_end_to_end_never_turned_off_direct").length).isLessThan(140)
+    }
+
+    @Test
+    fun `the permanence note is a question in every language and the served-gap fact is still said`() {
+        folders.forEach { folder ->
+            assertWithMessage(folder).that(epure(folder).getValue("encryption_note_permanence_question")).containsMatch("[?؟]")
+            assertWithMessage(folder).that(all(folder).getValue("encryption_fact_server_cannot_turn_it_off")).isNotEmpty()
+        }
+        assertThat(epure("values-fr")["encryption_note_permanence_question"]).isEqualTo("Et si le serveur la présente autrement ?")
+    }
+
+    @Test
+    fun `the two menu notices say end to end encrypted once, the second drops the prefix`() {
+        folders.forEach { folder ->
+            val strings = all(folder)
+            val first = strings.getValue("chat_menu_e2ee_notice")
+            val second = strings.getValue("chat_menu_e2ee_signals_notice")
+            val prefix = first.substringBefore(":")
+            assertWithMessage("$folder prefix").that(second).doesNotContain(prefix)
+            assertWithMessage("$folder second").that(second).containsMatch(":")
+        }
+        assertThat(all("values-fr")["chat_menu_e2ee_signals_notice"])
+            .isEqualTo("Réagir, épingler et supprimer pour tous : depuis l’application Meeshy sur iPhone.")
+    }
 }

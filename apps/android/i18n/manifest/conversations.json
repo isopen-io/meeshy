@@ -1039,10 +1039,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "share_link_created_subtitle",
-          "status": "android-only"
-        },
-        {
           "androidName": "share_link_created_title",
           "status": "android-only"
         },

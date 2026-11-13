@@ -256,7 +256,6 @@
     <string name="conversation_appearance_section_photo">Foto de la conversación</string>
     <string name="conversation_appearance_section_solid">Color liso</string>
     <string name="conversation_appearance_sheet_title">Fondo y acento</string>
-    <string name="conversation_appearance_shop">Más en la tienda</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Cifrado de extremo a extremo activado: los nuevos mensajes se cifran en tus dispositivos.</string>
     <string name="conversation_info_created_on">Creado el %1$s</string>
@@ -390,7 +389,6 @@
     <string name="encryption_fact_encrypted_on_server_server_reads">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_fact_end_to_end_is_final">Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar.</string>
     <string name="encryption_fact_end_to_end_never_turned_off">El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
-    <string name="encryption_fact_end_to_end_never_turned_off_direct">El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado. Siempre podrás abrir al lado otra conversación, sin cifrado de extremo a extremo, con esta persona: las dos están en la lista, esta marcada con un candado.</string>
     <string name="encryption_fact_every_server_feature">Todas las funciones están disponibles: traducción automática, transcripción de audios, vista previa de notificaciones, búsqueda.</string>
     <string name="encryption_fact_group_sending_unavailable">En este grupo, la app aún no puede enviar mensajes cifrados.</string>
     <string name="encryption_fact_no_edit">Un mensaje enviado no se puede editar.</string>
@@ -448,7 +446,6 @@
     <string name="export_card_default_save">Usar como formato predeterminado</string>
     <string name="export_card_gallery_close">Cerrar la galería</string>
     <string name="export_card_gallery_count">%1$d estilos</string>
-    <string name="export_card_gallery_empty">Ningún estilo se llama así. Prueba un color, una fuente u «oscuro».</string>
     <string name="export_card_gallery_open">Ver todo</string>
     <string name="export_card_gallery_placeholder">Pluma, oscuro, burbujas…</string>
     <string name="export_card_gallery_title">Todos los estilos</string>

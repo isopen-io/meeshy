@@ -202,7 +202,7 @@ internal fun LinkStatTile(icon: ImageVector, value: Int, @PluralsRes label: Int,
 
 /** État vide d'une liste de liens : icône, titre, sous-titre. */
 @Composable
-internal fun LinkEmptyState(icon: ImageVector, title: String, subtitle: String, accent: Color) {
+internal fun LinkEmptyState(icon: ImageVector, title: String, subtitle: String? = null, accent: Color) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xxxl),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -210,7 +210,7 @@ internal fun LinkEmptyState(icon: ImageVector, title: String, subtitle: String, 
     ) {
         Icon(icon, contentDescription = null, tint = accent.copy(alpha = 0.45f), modifier = Modifier.size(40.dp))
         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+        subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted) }
     }
 }
 

@@ -221,7 +221,6 @@
     <string name="links_affiliate_create_name_label">Nombre del enlace</string>
     <string name="links_affiliate_create_name_placeholder">Ej.: Invitación de Twitter</string>
     <string name="links_affiliate_create_title">Nuevo enlace</string>
-    <string name="links_affiliate_empty_subtitle">Crea un enlace para invitar a tus amigos</string>
     <string name="links_affiliate_empty_title">Sin enlaces de recomendación</string>
     <string name="links_affiliate_section_my_links">MIS ENLACES</string>
     <string name="links_affiliate_stat_clicks">Clics</string>
@@ -266,17 +265,13 @@
     <string name="links_community_title">Enlaces de la comunidad</string>
     <string name="links_hub_affiliate_create_a11y">Crear un enlace de afiliado</string>
     <string name="links_hub_affiliate_description">Monetiza tu red con tokens de afiliado</string>
-    <string name="links_hub_affiliate_title">Enlaces de afiliado</string>
     <string name="links_hub_banner_subtitle">Comparte, mide y monetiza tu audiencia</string>
     <string name="links_hub_community_description">Gestiona los enlaces de invitación a tus comunidades</string>
-    <string name="links_hub_community_title">Enlaces de la comunidad</string>
     <string name="links_hub_share_create_a11y">Crear un enlace para compartir</string>
     <string name="links_hub_share_description">Invita a contactos a unirse a tus conversaciones</string>
-    <string name="links_hub_share_title">Enlaces para compartir</string>
     <string name="links_hub_title">Mis enlaces</string>
     <string name="links_hub_tracking_create_a11y">Crear un enlace de seguimiento</string>
     <string name="links_hub_tracking_description">Sigue el rendimiento de tus enlaces de recomendación</string>
-    <string name="links_hub_tracking_title">Enlaces de seguimiento</string>
     <string name="links_section_collapsed">Contraída</string>
     <string name="links_section_expanded">Expandida</string>
     <string name="links_tracking_create_a11y">Crear un enlace de seguimiento</string>
@@ -314,7 +309,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">Clics únicos</string>
     <string name="links_tracking_detail_unknown">Desconocido</string>
     <string name="links_tracking_detail_utm_title">CONFIGURACIÓN UTM</string>
-    <string name="links_tracking_empty_subtitle">Crea un enlace para seguir tus clics y campañas</string>
     <string name="links_tracking_empty_title">Sin enlaces de seguimiento</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d clic</item>

@@ -348,12 +348,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.fact.endToEndNeverTurnedOffDirect",
-          "androidName": "encryption_fact_end_to_end_never_turned_off_direct",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.fact.serverCannotTurnItOff",
           "androidName": "encryption_fact_server_cannot_turn_it_off",
           "status": "adopted"

@@ -41,6 +41,7 @@ class EpureListeStringsTest {
         "share_link_access_account_subtitle", "share_link_access_nickname_subtitle",
         "share_link_access_email_subtitle", "share_link_access_birthday_subtitle",
         "new_conversation_contacts_empty_subtitle", "share_link_picker_empty_body",
+        "links_affiliate_empty_subtitle", "links_tracking_empty_subtitle", "share_link_created_subtitle",
     )
 
     /** Mots que le lexique écrit pareil en français et en anglais : ce n'est pas une recopie. */
@@ -157,5 +158,33 @@ class EpureListeStringsTest {
             .isEqualTo("Chiffré sur nos serveurs, avec vérification entre appareils compatibles")
         assertThat(epure("values")["encryption_mode_hybrid_description"])
             .isEqualTo("Encrypted on our servers, with verification between compatible devices")
+    }
+
+    @Test
+    fun `the four link families are the lexicon words on the hub, with their one line description kept`() {
+        val expected = mapOf(
+            "values" to listOf("Sharing", "Tracking", "Referral", "Communities"),
+            "values-fr" to listOf("Partage", "Suivi", "Parrainage", "Communautés"),
+            "values-es" to listOf("Compartir", "Seguimiento", "Referidos", "Comunidades"),
+            "values-pt" to listOf("Compartilhamento", "Rastreamento", "Indicação", "Comunidades"),
+            "values-de" to listOf("Teilen", "Tracking", "Empfehlung", "Communities"),
+            "values-it" to listOf("Condivisione", "Tracciamento", "Referral", "Community"),
+            "values-ar" to listOf("مشاركة", "التتبّع", "الإحالة", "المجتمعات"),
+        )
+        val keys = listOf("share", "tracking", "affiliate", "community").map { "links_hub_${it}_title" }
+        expected.forEach { (folder, words) ->
+            assertThat(keys.map { epure(folder)[it] }).containsExactlyElementsIn(words).inOrder()
+            listOf("share", "tracking", "affiliate", "community").forEach { family ->
+                assertWithMessage("$folder description $family").that(all(folder)["links_hub_${family}_description"]).isNotEmpty()
+            }
+        }
+        assertThat(all("values-fr")["links_hub_affiliate_title"]).isEqualTo(all("values-fr")["links_affiliate_title"])
+    }
+
+    @Test
+    fun `the empty states of referral and tracking keep their title, the creation action stays on the bar`() {
+        assertThat(all("values-fr")["links_affiliate_empty_title"]).isEqualTo("Aucun lien de parrainage")
+        assertThat(all("values-fr")["links_tracking_empty_title"]).isEqualTo("Aucun lien de suivi")
+        folders.forEach { assertThat(all(it)["links_tracking_create_a11y"]).isNotEmpty() }
     }
 }

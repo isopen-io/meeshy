@@ -16,4 +16,8 @@
     <string name="participant_profile_info_email">E-mail</string>
     <string name="starred_more_options">Altro</string>
     <string name="riviere_bubble_actions">Altro</string>
+    <string name="conversation_appearance_shop">Negozio</string>
+    <string name="export_card_gallery_empty">Nessuno stile</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">La crittografia end-to-end non si disattiva mai: questa chat individuale resta crittografata. Per tornare in chiaro, apri un’altra conversazione.</string>
+    <string name="encryption_note_permanence_question">E se il server la presenta diversamente?</string>
 </resources>

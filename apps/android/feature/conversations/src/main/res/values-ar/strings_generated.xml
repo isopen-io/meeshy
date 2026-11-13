@@ -224,7 +224,6 @@
     <string name="links_affiliate_create_name_label">اسم الرابط</string>
     <string name="links_affiliate_create_name_placeholder">مثال: دعوة تويتر</string>
     <string name="links_affiliate_create_title">رابط جديد</string>
-    <string name="links_affiliate_empty_subtitle">أنشئ رابطًا لدعوة أصدقائك</string>
     <string name="links_affiliate_empty_title">لا توجد روابط إحالة</string>
     <string name="links_affiliate_section_my_links">روابطي</string>
     <string name="links_affiliate_stat_clicks">النقرات</string>
@@ -278,17 +277,13 @@
     <string name="links_community_title">روابط المجتمع</string>
     <string name="links_hub_affiliate_create_a11y">إنشاء رابط تسويق بالعمولة</string>
     <string name="links_hub_affiliate_description">حقّق دخلًا من شبكتك عبر رموز العمولة</string>
-    <string name="links_hub_affiliate_title">روابط العمولة</string>
     <string name="links_hub_banner_subtitle">شارك وتابع واربح من جمهورك</string>
     <string name="links_hub_community_description">أدر روابط الدعوة إلى مجتمعاتك</string>
-    <string name="links_hub_community_title">روابط المجتمع</string>
     <string name="links_hub_share_create_a11y">إنشاء رابط مشاركة</string>
     <string name="links_hub_share_description">ادعُ جهات اتصال للانضمام إلى محادثاتك</string>
-    <string name="links_hub_share_title">روابط المشاركة</string>
     <string name="links_hub_title">روابطي</string>
     <string name="links_hub_tracking_create_a11y">إنشاء رابط تتبُّع</string>
     <string name="links_hub_tracking_description">تابع أداء روابط الإحالة الخاصة بك</string>
-    <string name="links_hub_tracking_title">روابط التتبّع</string>
     <string name="links_section_collapsed">مطوية</string>
     <string name="links_section_expanded">موسّعة</string>
     <string name="links_tracking_create_a11y">إنشاء رابط تتبُّع</string>
@@ -326,7 +321,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">النقرات الفريدة</string>
     <string name="links_tracking_detail_unknown">غير معروف</string>
     <string name="links_tracking_detail_utm_title">إعداد UTM</string>
-    <string name="links_tracking_empty_subtitle">أنشئ رابطًا لتتبُّع نقراتك وحملاتك</string>
     <string name="links_tracking_empty_title">لا توجد روابط تتبُّع</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="zero">%1$d نقرات</item>
