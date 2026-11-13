@@ -162,11 +162,20 @@ describe('la bulle d’appel', () => {
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });
 
-  test('seul un appel TERMINÉ, identifié et qui a DURÉ offre sa transcription (#8048)', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 272 } })?.transcript).toBe(true);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 0 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', durationSeconds: 60 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', durationSeconds: 60 } })?.transcript).toBe(false);
+  test('seul un appel ABOUTI (completed), identifié et qui a DURÉ offre sa transcription (#8048, #17878 A1.1)', () => {
+    const offered = (metadata: Record<string, unknown>) => callNoticeTarget({ conversationId: 'c', metadata })?.transcript;
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 272 })).toBe(true);
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 0 })).toBe(false);
+    expect(offered({ kind: 'call', outcome: 'completed', durationSeconds: 60 })).toBe(false);
+    expect(offered({ kind: 'call-live', outcome: 'completed', callId: 'k', durationSeconds: 60 })).toBe(false);
+  });
+
+  test('un appel connecté puis interrompu (failed, avec sa durée), manqué ou refusé n’offre pas la transcription (#17878 A1.1)', () => {
+    const offered = (outcome: unknown) => callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', outcome, callId: 'k', durationSeconds: 90 } })?.transcript;
+    expect(offered('failed')).toBe(false);
+    expect(offered('missed')).toBe(false);
+    expect(offered('rejected')).toBe(false);
+    expect(offered(undefined)).toBe(false);
   });
 
   test('l’enregistrement consenti rattaché à la bulle se réécoute depuis le fil (#8064)', () => {
