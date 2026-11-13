@@ -51,10 +51,19 @@
 7. **Le journal est FIDÈLE, pendant et après l'appel.**
    - C'est le MÊME journal avant et après la fin de l'appel : mêmes phrases, même ordre, mêmes couleurs, même descente du Prisme.
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
-   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction.
+   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction, et la bascule y inverse les deux lignes (#17862, ci-dessous).
    - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place, en haut à droite, pendant qu'il est ouvert (porteur, 2026-11-10 ; P6). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
    - Rien n'est tronqué, et une ligne dont la traduction arrive après la fin de la phrase est mise à jour sur place, pas dupliquée. Les règles de fusion sont web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android `CallLiveJournal.merged`.
-   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique. Une bascule Traduit / Original s'y applique à tout l'appel.
+   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique.
+   - **Après l'appel, la bascule INVERSE les deux lignes, sur tout l'appel** (décision porteur du 2026-11-13, #17862). C'est la même bascule Traduit · Original que celle du journal vivant (P6).
+     - Par défaut, la traduction servie par le Prisme est la ligne principale, et « Original · … » est dessous (#17340).
+     - « Voir l'original », au pied du journal, fait de l'original la ligne principale de chaque phrase traduite. La traduction passe dessous, étiquetée « Traduit · … ».
+     - Le libellé devient alors « Voir la traduction », qui rend l'état par défaut.
+     - Rien ne disparaît. Une phrase sans traduction (la mienne, ou une phrase déjà dans la langue du lecteur) reste seule dans les deux états.
+     - La bascule n'est offerte que si une phrase au moins est traduite.
+     - En tête, l'original reste à l'encre du thème et la traduction à la couleur de son auteur (loi 4). La ligne dessous garde la même place, le même retrait et l'encre secondaire, qu'elle dise « Original · » ou « Traduit · ».
+     - Le passage d'un état à l'autre se fait en fondu ; avec Réduire les animations, il n'y a aucun déplacement.
+     - Exemple : Awa a dit « Nos vemos mañana », traduit « On se voit demain ». Par défaut, le journal montre « On se voit demain » et, dessous, « Original · Nos vemos mañana ». Après « Voir l'original », il montre « Nos vemos mañana » et, dessous, « Traduit · On se voit demain ».
    - Pendant l'appel :
      - le défilement est libre ;
      - « Revenir au direct » apparaît dès qu'on a remonté ;
@@ -199,6 +208,8 @@ Les rails restent sur les bords, centrés verticalement. La pilule et la bande d
 
 ### Après l'appel : le journal fidèle
 
+Les captures A1 et A2 montrent l'état par défaut : la traduction en tête, « Original · … » dessous, et « Voir l'original » au pied. Toucher « Voir l'original » inverse les deux lignes de tout l'appel. L'original passe en tête, la traduction dessous (« Traduit · … »), et le pied dit « Voir la traduction » (loi 7, #17862).
+
 | A1 · Bulle d'appel, fil clair | A2 · Bulle d'appel, fil sombre |
 |---|---|
 | ![A1](appels-vue-finale/vues/A1.png) | ![A2](appels-vue-finale/vues/A2.png) |
@@ -227,6 +238,7 @@ Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glas
 | Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, #17494 (#17492) ; avatar réduit à 56 pt en audio journal ouvert, `CallCompactAudioHeader` (#17529) | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
 | Le journal garde tout l'appel, sous-titres allumés ou non (loi 7, #17342) | gardé avant la décision (constat de #17342) ; heure dans l'appel et ordre, fusionné, #17519 (#17517) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516), le témoin qui jetait ces phrases y est retourné |
 | Original au toucher pendant l'appel, bascule Traduit · Original sur tout le journal (lois 6, 7, #17340) | original seulement sous la phrase touchée, fusionné, #17519 (#17517) ; bascule dans la tête du journal (#16942) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516) |
+| Après l'appel, « Voir l'original » inverse les deux lignes, « Traduit · … » dessous (loi 7, A1/A2, #17862) | à faire, #17897 ; la bascule remplace encore la traduction (relevé du 2026-11-13) | à faire, #17895 ; idem | à faire, #17896 ; idem |
 | Mode Effets : sous-titres gardés au-dessus des looks, Réglages à l'engrenage légendé (lois 9, 11, 14 ; P8) | fusionné, #17525 (#17524) ; engrenage : ligne P8b | P8 conforme à l'audit du 2026-11-11 (10/10, glyphe d'Effets alors dessiné sur Réglages) ; engrenage : ligne P8b | fusionné, #17512 (#17511, sous-titres gardés) ; engrenage : ligne P8b |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
 | Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
