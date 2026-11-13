@@ -480,3 +480,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil repris (14:21) : accorder « Ce que j'écoute » depuis Android (#16836 ⊂ #13934)
+
+- Reprise : onze PR de la routine ouvertes, toutes tenues par des réveils vivants (CI en cours) ; aucune n'est
+  touchée. #16836 attendait la fusion de #16643 (faite, #17056) ; aucune branche n'écrivait la fiche d'un lien Android.
+  Branche `claude/cercles-16836-android` réservée vide avant toute écriture.
+- Lot : `:core:model` — `RelationPersonSettings.listeningCategoryShared` (absent ⇒ non accordé), `RelationShareGrant`,
+  `RelationPersonSwitch` (Réception = blocage, Partage = accord ; iso `CirclePersonSwitch` iOS),
+  `CirclePersonSetting.personSwitch`, `ListeningCategoryShareBody`. Réseau : `setListeningCategoryShared`. Dépôt :
+  `BringGateway.setShareGranted`. Fiche d'un lien : `CircleReceptionBlockViewModel` porte un interrupteur
+  (`isOn` / `setOn`), « Ce que j'écoute » actif dès Proche, décoché par défaut, optimiste avec retour arrière dit.
+- Écart à l'issue : le texte d'explication sous l'interrupteur n'est PAS posé — le cliquet du texte natif (#17587)
+  refuse un libellé d'explication de plus dans `feature/contacts` (15 > 14). Le libellé du titre suffit à iso du geste ;
+  l'explication suivra derrière un (i) si le porteur la veut.
+- Gates locaux : `jvm-check` (modèle) `RelationPersonSwitchTest` 5/5 et `ProfileCircleTest` 4/4 verts ;
+  `check-verbosity-native` sans échec ; budget de taille et frontières des modules verts. Compose, Hilt et les témoins
+  de `:feature:contacts` / `:sdk-core` se prouvent par `android.yml` sur la PR.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; ensuite l'émission de l'écoute sur Android, ou la
+  position temporaire sur Android (#16985), aucune branche ne l'écrivant au 2026-11-13 14:40.

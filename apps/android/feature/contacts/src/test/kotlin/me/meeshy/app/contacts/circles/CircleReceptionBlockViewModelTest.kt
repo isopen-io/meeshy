@@ -12,14 +12,16 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
+import me.meeshy.sdk.model.relation.RelationPersonSwitch
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.sdk.relation.BringGateway
 import me.meeshy.sdk.relation.BringSendOutcome
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/** « Bloquer ses Bring » et « Couper son talkie » sur la fiche d'un lien (#16617, #16675) — iso `CircleReceptionBlockViewModelTests.swift`. */
+/** « Bloquer ses Bring », « Couper son talkie » et « Ce que j'écoute » sur la fiche d'un lien (#16617, #16675, #16836) — iso `CircleReceptionBlockViewModelTests.swift`. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CircleReceptionBlockViewModelTest {
 
@@ -31,6 +33,7 @@ class CircleReceptionBlockViewModelTest {
         var answer: CompletableDeferred<RelationPersonSettings?>? = null
         val writes = mutableListOf<Boolean>()
         val settings = mutableListOf<RelationReceptionSetting>()
+        val grants = mutableListOf<RelationShareGrant>()
         override val outgoing: StateFlow<Map<String, BringSent>> = MutableStateFlow(emptyMap())
         override suspend fun availability(userId: String): BringAvailability? = null
         override suspend fun send(userId: String): BringSendOutcome = BringSendOutcome.Failed
@@ -49,15 +52,30 @@ class CircleReceptionBlockViewModelTest {
             }
             return pending.await()
         }
+
+        override suspend fun setShareGranted(
+            userId: String,
+            grant: RelationShareGrant,
+            granted: Boolean,
+        ): RelationPersonSettings? {
+            writes += granted
+            grants += grant
+            return answer?.await() ?: RelationPersonSettings(userId, listeningCategoryShared = granted)
+        }
     }
 
+    private val listening = RelationPersonSwitch.Share(RelationShareGrant.LISTENING_CATEGORY)
+
     private fun loaded(gateway: FakeGateway, setting: RelationReceptionSetting = RelationReceptionSetting.BRING) =
-        CircleReceptionBlockViewModel(gateway).also { it.load("u2", setting) }
+        loaded(gateway, RelationPersonSwitch.Reception(setting))
+
+    private fun loaded(gateway: FakeGateway, personSwitch: RelationPersonSwitch) =
+        CircleReceptionBlockViewModel(gateway).also { it.load("u2", personSwitch) }
 
     @Test
     fun `le reglage servi est lu a l'ouverture`() {
         val viewModel = loaded(FakeGateway(served = RelationPersonSettings("u2", bringBlocked = true)))
-        assertThat(viewModel.state.value.blocked).isTrue()
+        assertThat(viewModel.state.value.isOn).isTrue()
     }
 
     @Test
@@ -65,12 +83,12 @@ class CircleReceptionBlockViewModelTest {
         val gateway = FakeGateway().apply { answer = CompletableDeferred() }
         val viewModel = loaded(gateway)
 
-        viewModel.setBlocked(true)
-        assertThat(viewModel.state.value.blocked).isTrue()
+        viewModel.setOn(true)
+        assertThat(viewModel.state.value.isOn).isTrue()
         assertThat(viewModel.state.value.isSaving).isTrue()
 
         gateway.answer!!.complete(RelationPersonSettings("u2", bringBlocked = true))
-        assertThat(viewModel.state.value.blocked).isTrue()
+        assertThat(viewModel.state.value.isOn).isTrue()
         assertThat(viewModel.state.value.isSaving).isFalse()
         assertThat(gateway.writes).containsExactly(true)
     }
@@ -80,10 +98,10 @@ class CircleReceptionBlockViewModelTest {
         val gateway = FakeGateway().apply { answer = CompletableDeferred() }
         val viewModel = loaded(gateway)
 
-        viewModel.setBlocked(true)
+        viewModel.setOn(true)
         gateway.answer!!.complete(null)
 
-        assertThat(viewModel.state.value.blocked).isFalse()
+        assertThat(viewModel.state.value.isOn).isFalse()
         assertThat(viewModel.state.value.failed).isTrue()
         viewModel.consumeFailure()
         assertThat(viewModel.state.value.failed).isFalse()
@@ -94,9 +112,9 @@ class CircleReceptionBlockViewModelTest {
         val gateway = FakeGateway().apply { answer = CompletableDeferred() }
         val viewModel = loaded(gateway)
 
-        viewModel.setBlocked(false)
-        viewModel.setBlocked(true)
-        viewModel.setBlocked(false)
+        viewModel.setOn(false)
+        viewModel.setOn(true)
+        viewModel.setOn(false)
 
         assertThat(gateway.writes).containsExactly(true)
     }
@@ -105,11 +123,44 @@ class CircleReceptionBlockViewModelTest {
     fun `couper le talkie lit et ecrit son propre reglage, jamais celui du Bring`() {
         val gateway = FakeGateway(served = RelationPersonSettings("u2", bringBlocked = true, talkieBlocked = false))
         val viewModel = loaded(gateway, RelationReceptionSetting.TALKIE)
-        assertThat(viewModel.state.value.blocked).isFalse()
+        assertThat(viewModel.state.value.isOn).isFalse()
 
-        viewModel.setBlocked(true)
+        viewModel.setOn(true)
 
-        assertThat(viewModel.state.value.blocked).isTrue()
+        assertThat(viewModel.state.value.isOn).isTrue()
         assertThat(gateway.settings).containsExactly(RelationReceptionSetting.TALKIE)
+    }
+
+    @Test
+    fun `ce que j'ecoute est decoche par defaut, meme quand un blocage est pose`() {
+        val viewModel = loaded(FakeGateway(served = RelationPersonSettings("u2", bringBlocked = true, talkieBlocked = true)), listening)
+        assertThat(viewModel.state.value.isOn).isFalse()
+    }
+
+    @Test
+    fun `accorder ce que j'ecoute coche tout de suite et n'ecrit que l'accord`() {
+        val gateway = FakeGateway().apply { answer = CompletableDeferred() }
+        val viewModel = loaded(gateway, listening)
+
+        viewModel.setOn(true)
+        assertThat(viewModel.state.value.isOn).isTrue()
+        assertThat(viewModel.state.value.isSaving).isTrue()
+
+        gateway.answer!!.complete(RelationPersonSettings("u2", listeningCategoryShared = true))
+        assertThat(viewModel.state.value.isOn).isTrue()
+        assertThat(gateway.grants).containsExactly(RelationShareGrant.LISTENING_CATEGORY)
+        assertThat(gateway.settings).isEmpty()
+    }
+
+    @Test
+    fun `un accord refuse revient decoche et le dit`() {
+        val gateway = FakeGateway().apply { answer = CompletableDeferred() }
+        val viewModel = loaded(gateway, listening)
+
+        viewModel.setOn(true)
+        gateway.answer!!.complete(null)
+
+        assertThat(viewModel.state.value.isOn).isFalse()
+        assertThat(viewModel.state.value.failed).isTrue()
     }
 }
