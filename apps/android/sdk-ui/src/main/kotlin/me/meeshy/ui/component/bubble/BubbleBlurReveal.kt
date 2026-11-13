@@ -34,6 +34,10 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -76,9 +80,10 @@ internal fun Modifier.viewOnceRetouch(isActive: Boolean, onRetouch: () -> Unit):
 
 /**
  * Wraps a message bubble body in a "tap to reveal" fog + blur — Android render of the
- * iOS `BubbleBlurRevealController` / blurred-bubble treatment. The content is concealed
- * at rest behind a near-opaque scrim (so it stays hidden even below API 31, where
- * [blur] is a no-op) plus a real blur on API 31+. Tapping replays the pure
+ * iOS `BubbleBlurRevealController` / blurred-bubble treatment. On API 31+ the real
+ * blur alone conceals, and its edges fade out like the iOS blurred mask (#18021) — no
+ * frame, no slab. Below API 31, where [blur] is a no-op, the content is not drawn and
+ * an opaque (feathered) veil stands in. Tapping replays the pure
  * [BlurRevealLifecycle.revealTimeline] keyframes: reveal → fog-in → re-blur → fog-out,
  * leaving the bubble concealed again.
  *
@@ -169,6 +174,7 @@ public fun BubbleBlurReveal(
                     // Le flou ne cache qu'à l'œil : tant que c'est masqué, le contenu sort
                     // aussi de l'arbre d'accessibilité, sinon TalkBack le lirait en clair.
                     Modifier
+                        .featheredEdges()
                         .blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
                         .graphicsLayer { alpha = BlurVeil.contentAlpha(sdkInt, concealed = true) }
                         .clearAndSetSemantics {}
@@ -184,11 +190,13 @@ public fun BubbleBlurReveal(
                 me.meeshy.ui.component.focal.LocalFocalMessageRevealed provides (isRevealing && !isViewOnceText),
             ) { content() }
         }
-        if (!opened && scrimAlpha > 0.01f) {
+        val awaitsTap = concealed && !isRevealing
+        if (scrimAlpha > 0.01f || awaitsTap) {
             val revealActionLabel = stringResource(R.string.bubble_blur_reveal_action)
             Box(
                 modifier = Modifier
                     .matchParentSize()
+                    .featheredEdges()
                     .background(FOG_COLOR.copy(alpha = scrimAlpha))
                     .let { base ->
                         if (isRevealing) base
@@ -200,13 +208,38 @@ public fun BubbleBlurReveal(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                if (concealed && !isRevealing) {
+                if (awaitsTap && BlurVeil.showsRevealHint(request.requiresConsume)) {
                     RevealHint(isViewOnce = request.requiresConsume)
                 }
             }
         }
     }
 }
+
+/**
+ * #18021 — the blurred layer fades to nothing at its edges, the Android render of the iOS
+ * `BlurRevealModifier` mask (a rounded rectangle itself blurred): no edge of the message
+ * reads, the content stays blurred.
+ */
+private fun Modifier.featheredEdges(): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val fx = BlurVeil.featherFraction(FEATHER_X.toPx(), size.width)
+            val fy = BlurVeil.featherFraction(FEATHER_Y.toPx(), size.height)
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    0f to Color.Transparent, fx to Color.Black, 1f - fx to Color.Black, 1f to Color.Transparent,
+                ),
+                blendMode = BlendMode.DstIn,
+            )
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to Color.Transparent, fy to Color.Black, 1f - fy to Color.Black, 1f to Color.Transparent,
+                ),
+                blendMode = BlendMode.DstIn,
+            )
+        }
 
 @Composable
 private fun OpenedChip() {
@@ -249,16 +282,25 @@ private fun RevealHint(isViewOnce: Boolean) {
 /**
  * #14662 — le voile d'un contenu flouté selon ce que l'appareil sait flouter. `Modifier.blur` ne fait rien sous l'API
  * 31 : le contenu masqué ne s'y dessine pas, et le voile au repos y est plein, sinon le texte transparaît (Android 9–11).
+ * Dès l'API 31, le flou seul cache, sans voile, et ses bords s'estompent comme sur iOS (#18021).
  */
 internal object BlurVeil {
     private const val BLUR_MIN_SDK = 31
-    private const val TRANSLUCENT_RESTING_ALPHA = 0.94f
 
-    fun restingScrimAlpha(sdkInt: Int): Float = if (sdkInt >= BLUR_MIN_SDK) TRANSLUCENT_RESTING_ALPHA else 1f
+    /** #18021 — from API 31 the real blur alone conceals: no slab over it, as on iOS. */
+    fun restingScrimAlpha(sdkInt: Int): Float = if (sdkInt >= BLUR_MIN_SDK) 0f else 1f
+
+    /** iOS `ProtectedVeilAffordance`: a plain blur has no label; a view-once offers its gesture. */
+    fun showsRevealHint(isViewOnce: Boolean): Boolean = isViewOnce
+
+    fun featherFraction(featherPx: Float, sidePx: Float): Float =
+        if (sidePx <= 0f) 0.5f else (featherPx / sidePx).coerceAtMost(0.5f)
 
     fun contentAlpha(sdkInt: Int, concealed: Boolean): Float = if (!concealed || sdkInt >= BLUR_MIN_SDK) 1f else 0f
 }
 
 private const val REVEAL_MILLIS = 300
-private val CONCEAL_BLUR_RADIUS = 18.dp
+private val CONCEAL_BLUR_RADIUS = 20.dp
+private val FEATHER_X = 16.dp
+private val FEATHER_Y = 10.dp
 private val FOG_COLOR = Color(0xFF1E1B4B) // indigo950 — the fog reads as a Meeshy-brand veil
