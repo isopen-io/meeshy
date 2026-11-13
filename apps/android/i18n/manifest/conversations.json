@@ -235,10 +235,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "conversations_empty_subtitle",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "conversations.error.subtitle",
           "androidName": "conversations_error_subtitle",
@@ -517,10 +513,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "conversations_no_results_subtitle",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "widget.preview.dashboard",
           "androidName": "conversations_open_dashboard",
@@ -769,10 +761,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "global_search_no_results_hint",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "connection.online",
           "androidName": "global_search_online",
@@ -837,12 +825,6 @@
         {
           "androidName": "my_share_links_delete",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.links.empty.subtitle",
-          "androidName": "my_share_links_empty_subtitle",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -1018,24 +1000,6 @@
           "catalog": "app",
           "iosKey": "conversation.new.title",
           "androidName": "new_conversation_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.access.account_required",
-          "androidName": "share_link_access_account",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.access.email_required",
-          "androidName": "share_link_access_email",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.access.nickname_required",
-          "androidName": "share_link_access_nickname",
           "status": "adopted"
         },
         {
@@ -1250,30 +1214,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "share.link.create.permission.send_files",
-          "androidName": "share_link_permission_files",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.permission.view_history",
-          "androidName": "share_link_permission_history",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.permission.send_images",
-          "androidName": "share_link_permission_images",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.permission.send_messages",
-          "androidName": "share_link_permission_messages",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "a11y.back",
           "androidName": "share_link_picker_back",
           "status": "adopted"
@@ -1304,12 +1244,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "share.link.create.section.access",
-          "androidName": "share_link_section_access",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "share.link.create.section.identity",
           "androidName": "share_link_section_identity",
           "status": "adopted"
@@ -1318,12 +1252,6 @@
           "catalog": "app",
           "iosKey": "share.link.create.section.limits",
           "androidName": "share_link_section_limits",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.section.permissions",
-          "androidName": "share_link_section_permissions",
           "status": "adopted"
         }
       ]

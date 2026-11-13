@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="context_more_options">Plus</string>
+    <string name="share_link_permission_messages">Messages</string>
+    <string name="share_link_permission_images">Images</string>
+    <string name="share_link_permission_files">Fichiers</string>
+    <string name="share_link_permission_history">Historique</string>
+    <string name="share_link_section_permissions">Autoriser</string>
+    <string name="share_link_section_access">Demander aux invités</string>
+    <string name="share_link_access_account">Compte Meeshy</string>
+    <string name="share_link_access_nickname">Pseudo</string>
+    <string name="share_link_access_email">E-mail</string>
+    <string name="share_link_access_birthday">Date de naissance</string>
+    <string name="invite_access_account">Compte Meeshy</string>
+    <string name="invite_access_nickname">Pseudo</string>
+    <string name="invite_access_email">E-mail</string>
+    <string name="invite_section_permissions">Autoriser</string>
+    <string name="invite_section_access">Demander aux invités</string>
+    <string name="shareLink_detail_requireAccount">Compte Meeshy</string>
+    <string name="shareLink_detail_requireBirthday">Date de naissance</string>
+    <string name="shareLink_detail_requireEmail">E-mail</string>
+    <string name="shareLink_detail_requireNickname">Pseudo</string>
+    <string name="shareLink_detail_historyRight">Historique</string>
+    <string name="new_conversation_group_solo_hint">Vous pourrez inviter des personnes plus tard.</string>
+</resources>

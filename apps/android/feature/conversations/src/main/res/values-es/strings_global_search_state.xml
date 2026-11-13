@@ -4,5 +4,4 @@
     <string name="global_search_partial_failure">Algunos resultados no se pudieron cargar</string>
     <string name="global_search_retry">Reintentar</string>
     <string name="global_search_failed_title">Búsqueda no disponible</string>
-    <string name="global_search_failed_hint">Comprueba tu conexión e inténtalo de nuevo.</string>
 </resources>

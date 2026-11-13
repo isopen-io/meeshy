@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_no_results_subtitle">Essayez une autre recherche ou un autre filtre.</string>
     <string name="conversations_no_messages">Aucun message pour l\'instant</string>
     <string name="conversations_preview_expired_content_description">dernier message expiré</string>
     <string name="conversations_preview_hidden_content_description">dernier message masqué</string>
@@ -46,7 +45,6 @@
 
     <!-- Global search screen -->
     <string name="global_search_empty_title">Rechercher dans Meeshy</string>
-    <string name="global_search_no_results_hint">Essayez avec d\'autres termes</string>
 
     <!-- Dashboard screen -->
 
@@ -55,7 +53,6 @@
     <string name="global_search_tab_users">Utilisateurs</string>
     <string name="conversations_action_mark_unread">Marquer comme non lu</string>
     <string name="conversations_empty">Aucune conversation pour l\'instant</string>
-    <string name="conversations_empty_subtitle">Démarrez une conversation pour la voir ici.</string>
     <string name="conversations_no_results">Aucune conversation ne correspond</string>
     <string name="conversations_open_global_search">Recherche globale</string>
     <string name="conversations_section_all">Mes conversations</string>

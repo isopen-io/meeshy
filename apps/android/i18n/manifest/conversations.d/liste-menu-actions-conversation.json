@@ -42,12 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "context.more_options",
-          "androidName": "context_more_options",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "context.rename",
           "androidName": "context_rename",
           "status": "adopted"

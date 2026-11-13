@@ -54,12 +54,12 @@ internal class ConversationOptionsSlots(
     val body: @Composable () -> Unit,
 )
 
-private enum class OptionsDialog { FAVORITE, ARCHIVE, LEAVE_GROUP, DELETE, OBSOLETE, LEAVE, BLOCK }
+private enum class OptionsDialog { FAVORITE, ARCHIVE, DELETE, OBSOLETE, LEAVE, BLOCK }
 
 /**
- * Les Options de la fiche Conversation (#13777) : « Bloquer cet utilisateur », « Partager » et
- * « Quitter » sous l'en-tête (iOS `blockUserButton`, `actionButtons`), puis Mon affichage,
- * Organisation, Notifications et Actions (iOS `ConversationPreferencesTab`), avec les mêmes
+ * Les Options de la fiche Conversation (#13777) : « Partager » et « Quitter » sous
+ * l'en-tête (iOS `actionButtons`), puis Mon affichage, Organisation, Notifications et Plus, qui range
+ * « Bloquer cet utilisateur » au repos (iOS `ConversationPreferencesTab`, #17697), avec les mêmes
  * confirmations. [onExit] est appelé une fois la conversation quittée, supprimée ou le pair bloqué.
  */
 @Composable
@@ -104,15 +104,6 @@ internal fun rememberConversationOptionsSlots(
 private fun OptionsHeaderActions(ui: ConversationOptionsUiState, onShare: () -> Unit, onAsk: (OptionsDialog) -> Unit) {
     val plan = ui.plan ?: return
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        if (plan.blockUserId != null) {
-            OptionsPillButton(
-                icon = MeeshyIcons.GppMaybe,
-                label = stringResource(R.string.conversation_options_block_title),
-                color = MeeshyPalette.Error,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onAsk(OptionsDialog.BLOCK) },
-            )
-        }
         if (plan.share || plan.leave) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 if (plan.share) {
@@ -232,8 +223,18 @@ private fun OptionsSections(
 @Composable
 private fun OptionsActionsSection(ui: ConversationOptionsUiState, onAsk: (OptionsDialog) -> Unit) {
     val plan = ui.plan ?: return
-    if (!plan.toggleArchive && !plan.leaveGroup && !plan.deleteForMe && !plan.obsolete) return
+    if (plan.blockUserId == null && !plan.toggleArchive && !plan.deleteForMe && !plan.obsolete) return
     val rows = buildList<@Composable () -> Unit> {
+        if (plan.blockUserId != null) {
+            add {
+                SettingsRow(
+                    icon = MeeshyIcons.GppMaybe,
+                    title = stringResource(R.string.conversation_options_block_title),
+                    color = MeeshyPalette.Error,
+                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.BLOCK) },
+                )
+            }
+        }
         if (plan.toggleArchive) {
             add {
                 val archived = ui.values.archiveGesture == ArchiveGesture.UNARCHIVE
@@ -242,16 +243,6 @@ private fun OptionsActionsSection(ui: ConversationOptionsUiState, onAsk: (Option
                     title = stringResource(if (archived) R.string.conversation_options_unarchive else R.string.conversation_options_archive),
                     color = MeeshyPalette.Amber500,
                     modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.ARCHIVE) },
-                )
-            }
-        }
-        if (plan.leaveGroup) {
-            add {
-                SettingsRow(
-                    icon = MeeshyIcons.SignOut,
-                    title = stringResource(R.string.conversation_options_leave_group),
-                    color = MeeshyPalette.Orange500,
-                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.LEAVE_GROUP) },
                 )
             }
         }
@@ -339,13 +330,6 @@ private fun OptionsDialogHost(
                 onDismiss = onDismiss,
             )
         }
-        OptionsDialog.LEAVE_GROUP -> ConfirmDialog(
-            title = stringResource(R.string.conversation_options_leave_group_title),
-            message = stringResource(R.string.conversation_options_leave_group_message),
-            confirm = stringResource(R.string.conversation_options_leave_group_confirm),
-            onConfirm = viewModel::leave,
-            onDismiss = onDismiss,
-        )
         OptionsDialog.LEAVE -> ConfirmDialog(
             title = stringResource(R.string.conversation_options_leave_title),
             message = stringResource(R.string.conversation_options_leave_message),

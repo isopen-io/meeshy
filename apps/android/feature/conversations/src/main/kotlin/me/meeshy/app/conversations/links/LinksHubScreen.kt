@@ -83,19 +83,11 @@ private fun HubBanner(accent: androidx.compose.ui.graphics.Color) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(MeeshyIcons.AddLink, contentDescription = null, tint = accent, modifier = Modifier.size(32.dp))
-        Column {
-            Text(
-                stringResource(R.string.links_hub_banner_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                stringResource(R.string.links_hub_banner_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
+        Text(
+            stringResource(R.string.links_hub_banner_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
     }
 }
 

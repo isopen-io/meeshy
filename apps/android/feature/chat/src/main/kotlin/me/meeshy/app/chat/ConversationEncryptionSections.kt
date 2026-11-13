@@ -13,6 +13,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,24 +26,44 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionExplanation
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Ce que la fiche explique de la conversation ouverte, sujet par sujet (iOS `ConversationEncryptionExplanationSections`). */
+/**
+ * Ce que la fiche explique de la conversation ouverte, sujet par sujet (iOS `ConversationEncryptionExplanationSections`).
+ * Le détail secondaire d'un sujet (appareils, bascule) passe derrière son (i) : sa question en nom
+ * accessible, sa note lue par le lecteur d'écran même repliée (#17697).
+ */
 @Composable
-internal fun ConversationEncryptionExplanationSections(explanation: ConversationEncryptionExplanation) {
-    explanation.sections.forEach { section ->
+internal fun ConversationEncryptionExplanationSections(explanation: ConversationEncryptionExplanation, footerStatesFinality: Boolean = false) {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    explanation.layout(footerStatesFinality).forEach { topic ->
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            Text(
-                text = stringResource(section.topic.titleRes()),
-                style = MaterialTheme.typography.titleSmall,
-                color = MeeshyTheme.tokens.textPrimary,
-                modifier = Modifier.semantics { heading() },
-            )
-            section.facts.forEach { fact -> FactRow(fact.icon(), stringResource(fact.textRes())) }
+            val note = topic.questionRes?.let { question ->
+                MeeshyInfoNote(
+                    question = stringResource(question),
+                    text = topic.noted.joinToString(" ") { stringResource(it.textRes()) },
+                )
+            }
+            MeeshyInfoNoted(
+                note = note,
+                openNoteId = openNote,
+                onOpenNoteIdChange = { openNote = it },
+                tint = MeeshyTheme.tokens.textMuted,
+            ) {
+                Text(
+                    text = stringResource(topic.topic.titleRes()),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
+            topic.visible.forEach { fact -> FactRow(fact.icon(), stringResource(fact.textRes())) }
         }
     }
 }
@@ -53,9 +77,9 @@ private fun FactRow(icon: ImageVector, text: String) {
     }
 }
 
-/** Une carte d'état : un glyphe teinté, un titre, une phrase. */
+/** Une carte d'état : un glyphe teinté et son titre — le régime se lit dans le sujet « Qui peut lire » (#17697). */
 @Composable
-internal fun EncryptionStateCard(icon: ImageVector, tint: Color, title: String, subtitle: String) {
+internal fun EncryptionStateCard(icon: ImageVector, tint: Color, title: String) {
     MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg), modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(MeeshySpacing.md),
@@ -63,10 +87,7 @@ internal fun EncryptionStateCard(icon: ImageVector, tint: Color, title: String, 
         ) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(MeeshySpacing.md))
-            Column {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = MeeshyTheme.tokens.textPrimary)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
-            }
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MeeshyTheme.tokens.textPrimary)
         }
     }
 }

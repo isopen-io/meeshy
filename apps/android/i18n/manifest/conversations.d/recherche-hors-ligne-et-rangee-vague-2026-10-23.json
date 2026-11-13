@@ -5,7 +5,6 @@
       "resDir": "feature/conversations/src/main/res",
       "entries": [
         {"androidName": "conversations_row_opens_conversation", "status": "android-only"},
-        {"androidName": "global_search_failed_hint", "status": "android-only"},
         {"androidName": "global_search_failed_title", "status": "android-only"},
         {"androidName": "global_search_offline_banner", "status": "android-only"},
         {"androidName": "global_search_partial_failure", "status": "android-only"},

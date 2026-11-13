@@ -100,7 +100,6 @@ fun GlobalSearchScreen(
                 GlobalSearchContent.ERROR -> SearchFailureState(onRetry = viewModel::retryLastSearch)
                 GlobalSearchContent.NO_RESULTS -> SearchStatus(
                     label = stringResource(R.string.global_search_no_results),
-                    sublabel = stringResource(R.string.global_search_no_results_hint),
                 )
                 GlobalSearchContent.RESULTS -> Column {
                     if (state.showsPartialBanner) SearchStateBanner(state = state, onRetry = viewModel::retryLastSearch)

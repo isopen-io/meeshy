@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_no_results_subtitle">جرّب بحثًا أو عامل تصفية آخر.</string>
     <string name="conversations_no_messages">لا توجد رسائل بعد</string>
     <string name="conversations_preview_expired_content_description">انتهت صلاحية آخر رسالة</string>
     <string name="conversations_preview_hidden_content_description">آخر رسالة مخفية</string>
@@ -42,12 +41,10 @@
     <string name="share_link_detail_not_found">هذا الرابط لم يعد متاحًا.</string>
     <string name="share_link_detail_dismiss">إغلاق</string>
     <string name="global_search_empty_title">ابحث في Meeshy</string>
-    <string name="global_search_no_results_hint">جرّب كلمات مفتاحية أخرى</string>
     <string name="global_search_recent_title">عمليات البحث الأخيرة</string>
     <string name="global_search_tab_users">المستخدمون</string>
     <string name="conversations_action_mark_unread">تعليم كغير مقروء</string>
     <string name="conversations_empty">لا توجد محادثات بعد</string>
-    <string name="conversations_empty_subtitle">ابدأ محادثة جديدة لتظهر هنا.</string>
     <string name="conversations_no_results">لا توجد محادثات مطابقة</string>
     <string name="conversations_open_global_search">بحث شامل</string>
     <string name="conversations_section_all">محادثاتي</string>

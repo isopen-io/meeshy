@@ -182,12 +182,6 @@ private fun EmptyLinks() {
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
         )
-        Text(
-            text = stringResource(R.string.my_share_links_empty_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(top = MeeshySpacing.sm),
-        )
     }
 }
 
@@ -377,6 +371,14 @@ private fun ShareLinkRow(
                 link.conversationTitle?.let { title ->
                     Text(
                         text = title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                        maxLines = 1,
+                    )
+                }
+                isoToEpochMillisOrNull(link.createdAt)?.let { created ->
+                    Text(
+                        text = stringResource(R.string.shareLink_detail_createdOn, ShareLinkDateFormat.day(created)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MeeshyTheme.tokens.textMuted,
                         maxLines = 1,

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="context_more_options">المزيد</string>
+    <string name="share_link_permission_messages">الرسائل</string>
+    <string name="share_link_permission_images">الصور</string>
+    <string name="share_link_permission_files">الملفات</string>
+    <string name="share_link_permission_history">السجل</string>
+    <string name="share_link_section_permissions">السماح</string>
+    <string name="share_link_section_access">اطلب من الضيوف</string>
+    <string name="share_link_access_account">حساب Meeshy</string>
+    <string name="share_link_access_nickname">اسم المستخدم</string>
+    <string name="share_link_access_email">البريد الإلكتروني</string>
+    <string name="share_link_access_birthday">تاريخ الميلاد</string>
+    <string name="invite_access_account">حساب Meeshy</string>
+    <string name="invite_access_nickname">اسم المستخدم</string>
+    <string name="invite_access_email">البريد الإلكتروني</string>
+    <string name="invite_section_permissions">السماح</string>
+    <string name="invite_section_access">اطلب من الضيوف</string>
+    <string name="shareLink_detail_requireAccount">حساب Meeshy</string>
+    <string name="shareLink_detail_requireBirthday">تاريخ الميلاد</string>
+    <string name="shareLink_detail_requireEmail">البريد الإلكتروني</string>
+    <string name="shareLink_detail_requireNickname">اسم المستخدم</string>
+    <string name="shareLink_detail_historyRight">السجل</string>
+    <string name="new_conversation_group_solo_hint">يمكنك دعوة أشخاص لاحقًا.</string>
+</resources>

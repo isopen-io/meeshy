@@ -36,12 +36,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.inactiveSubtitle",
-          "androidName": "encryption_detail_inactive_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.detail.loading",
           "androidName": "encryption_detail_loading",
           "status": "adopted"

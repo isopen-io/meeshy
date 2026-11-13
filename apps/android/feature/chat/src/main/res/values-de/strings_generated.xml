@@ -2,7 +2,6 @@
 <resources>
     <string name="a11y_composer_language_hint">Sprache wählen, in der die Nachricht gesendet wird</string>
     <string name="a11y_message_location">geteilter Standort</string>
-    <string name="action_more">Mehr…</string>
     <string name="add_participant_add_button">Hinzufügen</string>
     <string name="add_participant_close">Schließen</string>
     <string name="add_participant_member_badge">Mitglied</string>
@@ -300,17 +299,12 @@
     <string name="conversation_options_error_save">Die Änderungen konnten nicht gespeichert werden.</string>
     <string name="conversation_options_favorite">Favorit</string>
     <string name="conversation_options_leave">Verlassen</string>
-    <string name="conversation_options_leave_group">Gruppe verlassen</string>
-    <string name="conversation_options_leave_group_confirm">Verlassen</string>
-    <string name="conversation_options_leave_group_message">Du erhältst keine Nachrichten mehr. Dein Verlauf bleibt lesbar.</string>
-    <string name="conversation_options_leave_group_title">Unterhaltung verlassen?</string>
     <string name="conversation_options_leave_message">Du erhältst keine Nachrichten mehr. Dein Verlauf bleibt lesbar.</string>
     <string name="conversation_options_leave_title">Unterhaltung verlassen</string>
     <string name="conversation_options_mentions_only">Nur Erwähnungen</string>
     <string name="conversation_options_muted">Stumm</string>
     <string name="conversation_options_pin">Anheften</string>
     <string name="conversation_options_reaction_none">Keine</string>
-    <string name="conversation_options_section_actions">Aktionen</string>
     <string name="conversation_options_section_display">Meine Anzeige</string>
     <string name="conversation_options_section_notifications">Mitteilungen</string>
     <string name="conversation_options_section_organization">Organisation</string>
@@ -367,7 +361,6 @@
     <string name="encryption_detail_direct_not_a_pair">Dieser Einzelchat hat nicht genau zwei registrierte Mitglieder: Ende-zu-Ende-Verschlüsselung ist hier nicht möglich.</string>
     <string name="encryption_detail_enabled_on">Aktiviert am</string>
     <string name="encryption_detail_inactive_label">Unverschlüsselte Unterhaltung</string>
-    <string name="encryption_detail_inactive_subtitle">Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt.</string>
     <string name="encryption_detail_loading">Status wird geladen…</string>
     <string name="encryption_detail_mode_header">Modus</string>
     <string name="encryption_detail_mode_label">Modus</string>
@@ -715,7 +708,6 @@
     <string name="share_button_forward">Weiterleiten · %1$d</string>
     <string name="share_button_send">Senden · %1$d</string>
     <string name="share_caption_hint">Nachricht hinzufügen…</string>
-    <string name="share_capture_warning">Dieses Medium wurde soeben von der App aufgenommen. Beim Veröffentlichen wird es über diese Unterhaltung hinaus sichtbar.</string>
     <string name="share_close">Schließen</string>
     <string name="share_community_channels">Kanäle, in denen du schreiben kannst</string>
     <string name="share_community_no_channel">Kein Kanal, in dem du schreiben kannst</string>
@@ -726,7 +718,6 @@
     <string name="share_content_over_limit">über dem Limit</string>
     <string name="share_content_piece_number">Element %1$d</string>
     <string name="share_content_piece_of">Element %1$d von %2$d</string>
-    <string name="share_content_refused_source">Diese App hat nur einen Dateipfad übergeben, den Meeshy nicht öffnet. Teile die Datei selbst oder sichere sie zuerst in Fotos oder Dateien.</string>
     <string name="share_content_remove">Entfernen</string>
     <string name="share_content_remove_last">Die letzten %1$d entfernen</string>
     <string name="share_content_unprepared">Einige Dateien konnten nicht vorbereitet werden. Lade sie zuerst herunter und versuche es erneut.</string>
@@ -748,7 +739,6 @@
     <string name="share_limits_recipients">Höchstens 10 Empfänger pro Sendung</string>
     <string name="share_limits_too_heavy">%1$d Dateien, %2$s. Ein Teilen umfasst höchstens %3$d Dateien und %4$s.</string>
     <string name="share_limits_trim">Entferne %1$d Dateien zum Senden</string>
-    <string name="share_offline">Offline. Was noch nicht gesendet wurde, geht raus, sobald das Netz zurück ist – auch wenn du Meeshy schließt.</string>
     <string name="share_publish_feed">Mein Feed</string>
     <string name="share_publish_reel">Reel</string>
     <string name="share_publish_section">Veröffentlichen</string>

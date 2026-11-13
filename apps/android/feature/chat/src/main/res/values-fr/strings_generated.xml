@@ -2,7 +2,6 @@
 <resources>
     <string name="a11y_composer_language_hint">Choisir la langue d\'envoi du message</string>
     <string name="a11y_message_location">position partagée</string>
-    <string name="action_more">Plus…</string>
     <string name="add_participant_add_button">Ajouter</string>
     <string name="add_participant_close">Fermer</string>
     <string name="add_participant_member_badge">Membre</string>
@@ -307,17 +306,12 @@
     <string name="conversation_options_error_save">Erreur lors de la sauvegarde.</string>
     <string name="conversation_options_favorite">Favori</string>
     <string name="conversation_options_leave">Quitter</string>
-    <string name="conversation_options_leave_group">Quitter le groupe</string>
-    <string name="conversation_options_leave_group_confirm">Quitter</string>
-    <string name="conversation_options_leave_group_message">Vous ne recevrez plus de messages. Votre historique restera consultable.</string>
-    <string name="conversation_options_leave_group_title">Quitter la conversation ?</string>
     <string name="conversation_options_leave_message">Vous ne recevrez plus de messages. Votre historique restera lisible.</string>
     <string name="conversation_options_leave_title">Quitter la conversation</string>
     <string name="conversation_options_mentions_only">Mentions seulement</string>
     <string name="conversation_options_muted">Muet</string>
     <string name="conversation_options_pin">Épingler</string>
     <string name="conversation_options_reaction_none">Aucune</string>
-    <string name="conversation_options_section_actions">Actions</string>
     <string name="conversation_options_section_display">Mon affichage</string>
     <string name="conversation_options_section_notifications">Notifications</string>
     <string name="conversation_options_section_organization">Organisation</string>
@@ -374,7 +368,6 @@
     <string name="encryption_detail_direct_not_a_pair">Ce tête-à-tête ne réunit pas exactement deux membres inscrits : le chiffrement de bout en bout n’y est pas possible.</string>
     <string name="encryption_detail_enabled_on">Activé le</string>
     <string name="encryption_detail_inactive_label">Conversation non chiffrée</string>
-    <string name="encryption_detail_inactive_subtitle">Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés.</string>
     <string name="encryption_detail_loading">Chargement du statut…</string>
     <string name="encryption_detail_mode_header">Mode</string>
     <string name="encryption_detail_mode_label">Mode</string>
@@ -723,7 +716,6 @@
     <string name="share_button_forward">Transférer · %1$d</string>
     <string name="share_button_send">Envoyer · %1$d</string>
     <string name="share_caption_hint">Ajouter un message…</string>
-    <string name="share_capture_warning">Ce média vient d\'être capturé par l\'application. Le publier le rendra visible au-delà de cette conversation.</string>
     <string name="share_close">Fermer</string>
     <string name="share_community_channels">Les canaux où vous pouvez écrire</string>
     <string name="share_community_no_channel">Aucun canal où vous pouvez écrire</string>
@@ -734,7 +726,6 @@
     <string name="share_content_over_limit">dépasse la limite</string>
     <string name="share_content_piece_number">Pièce %1$d</string>
     <string name="share_content_piece_of">Pièce %1$d sur %2$d</string>
-    <string name="share_content_refused_source">Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers.</string>
     <string name="share_content_remove">Retirer</string>
     <string name="share_content_remove_last">Retirer les %1$d derniers</string>
     <string name="share_content_unprepared">Des fichiers n’ont pas pu être préparés. Téléchargez-les d’abord, puis réessayez.</string>
@@ -756,7 +747,6 @@
     <string name="share_limits_recipients">Au plus 10 destinataires par envoi</string>
     <string name="share_limits_too_heavy">%1$d fichiers, %2$s. Un partage emporte au plus %3$d fichiers et %4$s.</string>
     <string name="share_limits_trim">Retirez %1$d fichiers pour envoyer</string>
-    <string name="share_offline">Hors ligne. Ce qui n’est pas parti partira au retour du réseau, même si vous fermez Meeshy.</string>
     <string name="share_publish_feed">Mon fil</string>
     <string name="share_publish_reel">Réel</string>
     <string name="share_publish_section">Publier</string>

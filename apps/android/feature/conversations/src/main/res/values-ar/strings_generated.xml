@@ -15,7 +15,6 @@
     <string name="context_details">التفاصيل</string>
     <string name="context_favorite">مفضّل</string>
     <string name="context_invite_friends">دعوة أصدقائي</string>
-    <string name="context_more_options">خيارات أخرى</string>
     <string name="context_rename">إعادة تسمية</string>
     <string name="context_report">إبلاغ</string>
     <string name="context_search">بحث</string>
@@ -193,9 +192,6 @@
     <string name="invite_a11y_summary_expiration">انتهاء الصلاحية: %1$s</string>
     <string name="invite_a11y_summary_noPermissions">%1$s. لا يُسمح بأي محتوى</string>
     <string name="invite_a11y_summary_permissions">%1$s. المحتوى المسموح به: %2$s</string>
-    <string name="invite_access_account">الحساب مطلوب</string>
-    <string name="invite_access_email">البريد الإلكتروني مطلوب</string>
-    <string name="invite_access_nickname">اسم المستخدم مطلوب</string>
     <string name="invite_copied">تم النسخ!</string>
     <string name="invite_copy">نسخ</string>
     <string name="invite_creatingLink">جارٍ إنشاء الرابط…</string>
@@ -213,10 +209,8 @@
     <string name="invite_perm_images">الصور</string>
     <string name="invite_perm_messages">الرسائل</string>
     <string name="invite_retry">إعادة المحاولة</string>
-    <string name="invite_section_access">الوصول</string>
     <string name="invite_section_identity">الهوية</string>
     <string name="invite_section_limits">الحدود</string>
-    <string name="invite_section_permissions">الصلاحيات</string>
     <string name="invite_share">مشاركة</string>
     <string name="invite_title">دعوة</string>
     <string name="invite_unlimited">غير محدود</string>
@@ -288,7 +282,6 @@
     <string name="links_hub_affiliate_description">حقّق دخلًا من شبكتك عبر رموز العمولة</string>
     <string name="links_hub_affiliate_title">روابط العمولة</string>
     <string name="links_hub_banner_subtitle">شارك وتابع واربح من جمهورك</string>
-    <string name="links_hub_banner_title">أدر روابطك</string>
     <string name="links_hub_community_description">أدر روابط الدعوة إلى مجتمعاتك</string>
     <string name="links_hub_community_title">روابط المجتمع</string>
     <string name="links_hub_share_create_a11y">إنشاء رابط مشاركة</string>
@@ -362,7 +355,6 @@
     <string name="my_share_links_back">رجوع</string>
     <string name="my_share_links_copied">تم نسخ الرابط</string>
     <string name="my_share_links_copy">نسخ الرابط</string>
-    <string name="my_share_links_empty_subtitle">أنشئ رابطًا لدعوة أشخاص إلى محادثة</string>
     <string name="my_share_links_empty_title">لا توجد روابط مشاركة</string>
     <string name="my_share_links_expired">منتهٍ</string>
     <string name="my_share_links_expiry_24h">24 ساعة</string>
@@ -396,7 +388,6 @@
     <string name="new_conversation_encryption_collapsed">مطوية</string>
     <string name="new_conversation_encryption_expanded">موسّعة</string>
     <string name="new_conversation_error_create">تعذّر إنشاء المحادثة</string>
-    <string name="new_conversation_group_solo_hint">يمكنك إنشاؤها بمفردك، لتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا.</string>
     <string name="new_conversation_group_title">اسم المجموعة (إلزامي)</string>
     <string name="new_conversation_group_toggle">مجموعة جديدة</string>
     <string name="new_conversation_no_user_found">لم يتم العثور على مستخدم</string>
@@ -463,7 +454,6 @@
     <string name="shareLink_detail_fieldLastName">اسم العائلة</string>
     <string name="shareLink_detail_fieldNickname">اسم المستخدم</string>
     <string name="shareLink_detail_guestRights">صلاحيات الضيوف دون حساب</string>
-    <string name="shareLink_detail_historyRight">رؤية السجل</string>
     <string name="shareLink_detail_invalidLimits">يجب ألا يقل الحد عن 1.</string>
     <string name="shareLink_detail_limits">الحدود</string>
     <string name="shareLink_detail_maxConcurrentField">الأشخاص في الوقت نفسه</string>
@@ -476,10 +466,6 @@
     <string name="shareLink_detail_noArrivals">لم ينضم أحد عبر هذا الرابط بعد.</string>
     <string name="shareLink_detail_optional">اختياري</string>
     <string name="shareLink_detail_recentArrivals">انضموا مؤخرًا</string>
-    <string name="shareLink_detail_requireAccount">حساب Meeshy إلزامي</string>
-    <string name="shareLink_detail_requireBirthday">طلب تاريخ الميلاد</string>
-    <string name="shareLink_detail_requireEmail">طلب بريد إلكتروني</string>
-    <string name="shareLink_detail_requireNickname">طلب اسم مستخدم</string>
     <string name="shareLink_detail_required">إلزامي</string>
     <string name="shareLink_detail_save">حفظ</string>
     <string name="shareLink_detail_saveFailed">تعذّر حفظ الرابط. أعد المحاولة.</string>
@@ -490,14 +476,6 @@
     <string name="shareLink_detail_usesUnlimited">%1$d / غير محدود</string>
     <string name="shareLink_detail_visits">الزيارات</string>
     <string name="shareLink_detail_withoutAccount">دون حساب</string>
-    <string name="share_link_access_account">الحساب مطلوب</string>
-    <string name="share_link_access_account_subtitle">لا يمكن الانضمام إلا لأعضاء Meeshy</string>
-    <string name="share_link_access_birthday">تاريخ الميلاد مطلوب</string>
-    <string name="share_link_access_birthday_subtitle">يتيح التحقّق من العمر</string>
-    <string name="share_link_access_email">البريد الإلكتروني مطلوب</string>
-    <string name="share_link_access_email_subtitle">على الزائر تقديم بريده الإلكتروني</string>
-    <string name="share_link_access_nickname">الاسم المستعار مطلوب</string>
-    <string name="share_link_access_nickname_subtitle">على الزائر اختيار اسم مستعار</string>
     <string name="share_link_conversation_a11y_hint">يختار المحادثة المراد مشاركتها</string>
     <string name="share_link_create_back">رجوع</string>
     <string name="share_link_create_choose_group">اختر مجموعة أو مجتمعًا</string>
@@ -540,21 +518,12 @@
         <item quantity="many">%1$d استخدامًا كحد أقصى</item>
         <item quantity="other">%1$d استخدام كحد أقصى</item>
     </plurals>
-    <string name="share_link_permission_files">إرسال الملفات</string>
-    <string name="share_link_permission_files_subtitle">يمكن للضيوف إرسال المستندات</string>
-    <string name="share_link_permission_history">عرض السجل</string>
-    <string name="share_link_permission_history_subtitle">يرى الضيوف الرسائل السابقة</string>
-    <string name="share_link_permission_images">إرسال الصور</string>
-    <string name="share_link_permission_images_subtitle">يمكن للضيوف مشاركة الصور</string>
-    <string name="share_link_permission_messages">إرسال الرسائل</string>
-    <string name="share_link_permission_messages_subtitle">يمكن للضيوف الكتابة في المحادثة</string>
     <string name="share_link_picker_back">رجوع</string>
     <string name="share_link_picker_empty_body">أنشئ مجموعة أو مجتمعًا لمشاركة رابط دعوة</string>
     <string name="share_link_picker_empty_cta">محادثة جديدة</string>
     <string name="share_link_picker_empty_title">لم يتم العثور على أي مجموعة</string>
     <string name="share_link_picker_search">ابحث عن مجموعة…</string>
     <string name="share_link_picker_title">اختر محادثة</string>
-    <string name="share_link_section_access">وصول الضيوف</string>
     <string name="share_link_section_access_subtitle">ما يجب على الزوار تقديمه للانضمام</string>
     <string name="share_link_section_communities">المجتمعات</string>
     <string name="share_link_section_conversation">المحادثة</string>
@@ -562,7 +531,6 @@
     <string name="share_link_section_identity">هوية الرابط</string>
     <string name="share_link_section_limits">الحدود</string>
     <string name="share_link_section_limits_subtitle">تحكّم في جمهور الرابط ومدة صلاحيته</string>
-    <string name="share_link_section_permissions">الصلاحيات</string>
     <string name="share_link_section_permissions_subtitle">ما يمكن للضيوف المجهولين فعله</string>
     <string name="share_link_type_broadcast">بث</string>
     <string name="share_link_type_channel">قناة</string>

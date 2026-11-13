@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_more">More</string>
+    <string name="conversation_options_section_actions">More</string>
+    <string name="encryption_note_devices_question">What if I change phones?</string>
+    <string name="encryption_note_switching_question">Who can change the mode, and what happens to the history?</string>
+    <string name="share_content_refused_source">Meeshy can\'t open a file path. Share the file itself.</string>
+    <string name="share_capture_warning">Publishing this capture shows it beyond this conversation.</string>
+    <string name="share_offline">Offline: unsent items go out when you\'re back.</string>
+</resources>

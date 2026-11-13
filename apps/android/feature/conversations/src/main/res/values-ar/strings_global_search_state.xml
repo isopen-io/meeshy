@@ -4,5 +4,4 @@
     <string name="global_search_partial_failure">تعذّر تحميل بعض النتائج</string>
     <string name="global_search_retry">إعادة المحاولة</string>
     <string name="global_search_failed_title">البحث غير متاح</string>
-    <string name="global_search_failed_hint">تحقق من اتصالك وحاول مرة أخرى.</string>
 </resources>

@@ -2,7 +2,6 @@
 <resources>
     <string name="a11y_composer_language_hint">اختر لغة إرسال الرسالة</string>
     <string name="a11y_message_location">موقع مشارَك</string>
-    <string name="action_more">المزيد…</string>
     <string name="add_participant_add_button">إضافة</string>
     <string name="add_participant_close">إغلاق</string>
     <string name="add_participant_member_badge">عضو</string>
@@ -328,17 +327,12 @@
     <string name="conversation_options_error_save">تعذّر حفظ التغييرات.</string>
     <string name="conversation_options_favorite">مفضّل</string>
     <string name="conversation_options_leave">مغادرة</string>
-    <string name="conversation_options_leave_group">مغادرة المجموعة</string>
-    <string name="conversation_options_leave_group_confirm">مغادرة</string>
-    <string name="conversation_options_leave_group_message">لن تتلقى رسائل بعد الآن. سيبقى سجلّك قابلًا للقراءة.</string>
-    <string name="conversation_options_leave_group_title">مغادرة المحادثة؟</string>
     <string name="conversation_options_leave_message">لن تتلقى رسائل بعد الآن. سيظل سجلّك قابلًا للقراءة.</string>
     <string name="conversation_options_leave_title">مغادرة المحادثة</string>
     <string name="conversation_options_mentions_only">الإشارات فقط</string>
     <string name="conversation_options_muted">مكتوم</string>
     <string name="conversation_options_pin">تثبيت</string>
     <string name="conversation_options_reaction_none">لا شيء</string>
-    <string name="conversation_options_section_actions">الإجراءات</string>
     <string name="conversation_options_section_display">عرضي</string>
     <string name="conversation_options_section_notifications">الإشعارات</string>
     <string name="conversation_options_section_organization">التنظيم</string>
@@ -395,7 +389,6 @@
     <string name="encryption_detail_direct_not_a_pair">لا تضم هذه المحادثة الثنائية عضوين مسجّلين بالضبط: التشفير التام بين الطرفين غير ممكن هنا.</string>
     <string name="encryption_detail_enabled_on">فُعّل في</string>
     <string name="encryption_detail_inactive_label">محادثة غير مشفّرة</string>
-    <string name="encryption_detail_inactive_subtitle">محادثة أُنشئت قبل التشفير المنهجي: رسائلها غير مشفّرة.</string>
     <string name="encryption_detail_loading">جارٍ تحميل الحالة…</string>
     <string name="encryption_detail_mode_header">الوضع</string>
     <string name="encryption_detail_mode_label">الوضع</string>
@@ -747,7 +740,6 @@
     <string name="share_button_forward">إعادة توجيه · %1$d</string>
     <string name="share_button_send">إرسال · %1$d</string>
     <string name="share_caption_hint">أضف رسالة…</string>
-    <string name="share_capture_warning">تم التقاط هذه الوسائط للتو بواسطة التطبيق. سيؤدي نشرها إلى جعلها مرئية خارج هذه المحادثة.</string>
     <string name="share_close">إغلاق</string>
     <string name="share_community_channels">القنوات التي يمكنك الكتابة فيها</string>
     <string name="share_community_no_channel">لا توجد قناة يمكنك الكتابة فيها</string>
@@ -758,7 +750,6 @@
     <string name="share_content_over_limit">يتجاوز الحد</string>
     <string name="share_content_piece_number">العنصر %1$d</string>
     <string name="share_content_piece_of">العنصر %1$d من %2$d</string>
-    <string name="share_content_refused_source">لم يسلّم هذا التطبيق سوى مسار ملف، ولا يفتحه Meeshy. شارك الملف نفسه، أو احفظه أولًا في الصور أو الملفات.</string>
     <string name="share_content_remove">إزالة</string>
     <string name="share_content_remove_last">إزالة آخر %1$d</string>
     <string name="share_content_unprepared">تعذّر تجهيز بعض الملفات. نزّلها أولًا ثم أعد المحاولة.</string>
@@ -780,7 +771,6 @@
     <string name="share_limits_recipients">10 مستلمين على الأكثر لكل إرسال</string>
     <string name="share_limits_too_heavy">%1$d ملفات، %2$s. تحمل المشاركة %3$d ملفًا و%4$s على الأكثر.</string>
     <string name="share_limits_trim">أزل %1$d ملفات للإرسال</string>
-    <string name="share_offline">غير متصل. سيُرسَل ما لم يُرسَل عند عودة الشبكة، حتى لو أغلقت Meeshy.</string>
     <string name="share_publish_feed">خلاصتي</string>
     <string name="share_publish_reel">ريل</string>
     <string name="share_publish_section">نشر</string>

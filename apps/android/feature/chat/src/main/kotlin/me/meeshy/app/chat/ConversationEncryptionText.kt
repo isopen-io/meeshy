@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.e2ee.ConversationEncryptionExplanation
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionExplanation.Fact
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionExplanation.Topic
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionModeChoice
@@ -21,6 +22,43 @@ internal fun Topic.titleRes(): Int = when (this) {
     Topic.SWITCHING -> R.string.encryption_topic_switching
     Topic.PERMANENCE -> R.string.encryption_topic_permanence
 }
+
+/**
+ * Un sujet de la fiche tel qu'il se dessine (#17697) : ce qui se lit au repos, et le détail secondaire
+ * rangé derrière le (i) du sujet, dont le nom accessible est [questionRes]. Aucun fait ne disparaît :
+ * [noted] est lu par le lecteur d'écran même replié.
+ */
+internal data class ExplanationTopicLayout(val topic: Topic, val visible: List<Fact>, val noted: List<Fact>) {
+    @get:StringRes
+    val questionRes: Int? get() = if (noted.isEmpty()) null else topic.noteQuestionRes()
+}
+
+private fun Topic.notedFacts(): Set<Fact> = when (this) {
+    Topic.DEVICES -> setOf(Fact.DEVICE_LIMIT, Fact.RESTORED_DEVICE_IS_NEW)
+    Topic.SWITCHING -> setOf(Fact.WHO_MAY_TOGGLE, Fact.SWITCH_KEEPS_HISTORY)
+    else -> emptySet()
+}
+
+@StringRes
+private fun Topic.noteQuestionRes(): Int? = when (this) {
+    Topic.DEVICES -> R.string.encryption_note_devices_question
+    Topic.SWITCHING -> R.string.encryption_note_switching_question
+    else -> null
+}
+
+/**
+ * Ce que la fiche dit au repos, sujet par sujet. [footerStatesFinality] : le pied d'activation, déjà
+ * visible près du bouton, dit l'irréversibilité en entier ; la phrase courte quitte alors le sujet
+ * « Changer de mode » au lieu de la redire. Le sujet garde le fait « change visible dans la
+ * conversation » ; l'irréversibilité reste visible (au pied, ou dans le sujet quand il n'y a pas de pied).
+ */
+internal fun ConversationEncryptionExplanation.layout(footerStatesFinality: Boolean): List<ExplanationTopicLayout> =
+    sections.mapNotNull { section ->
+        val facts = section.facts.filterNot { footerStatesFinality && it == Fact.END_TO_END_IS_FINAL }
+        val noted = section.topic.notedFacts()
+        ExplanationTopicLayout(section.topic, facts.filterNot { it in noted }, facts.filter { it in noted })
+            .takeIf { it.visible.isNotEmpty() || it.noted.isNotEmpty() }
+    }
 
 @StringRes
 internal fun Fact.textRes(): Int = when (this) {

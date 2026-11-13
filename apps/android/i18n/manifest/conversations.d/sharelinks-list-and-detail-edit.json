@@ -162,12 +162,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.historyRight",
-          "androidName": "shareLink_detail_historyRight",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.invalidLimits",
           "androidName": "shareLink_detail_invalidLimits",
           "status": "adopted"
@@ -218,30 +212,6 @@
           "catalog": "app",
           "iosKey": "shareLink.detail.optional",
           "androidName": "shareLink_detail_optional",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireAccount",
-          "androidName": "shareLink_detail_requireAccount",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireBirthday",
-          "androidName": "shareLink_detail_requireBirthday",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireEmail",
-          "androidName": "shareLink_detail_requireEmail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireNickname",
-          "androidName": "shareLink_detail_requireNickname",
           "status": "adopted"
         },
         {

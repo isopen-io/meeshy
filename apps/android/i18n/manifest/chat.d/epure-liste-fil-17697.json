@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "action_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_options_section_actions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_devices_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_switching_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_content_refused_source",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_capture_warning",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_offline",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

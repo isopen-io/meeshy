@@ -15,7 +15,6 @@
     <string name="context_details">Detalles</string>
     <string name="context_favorite">Favorito</string>
     <string name="context_invite_friends">Invitar a mis amigos</string>
-    <string name="context_more_options">Más opciones</string>
     <string name="context_rename">Renombrar</string>
     <string name="context_report">Denunciar</string>
     <string name="context_search">Buscar</string>
@@ -190,9 +189,6 @@
     <string name="invite_a11y_summary_expiration">Vencimiento: %1$s</string>
     <string name="invite_a11y_summary_noPermissions">%1$s. Ningún contenido permitido</string>
     <string name="invite_a11y_summary_permissions">%1$s. Contenido permitido: %2$s</string>
-    <string name="invite_access_account">Cuenta obligatoria</string>
-    <string name="invite_access_email">Correo obligatorio</string>
-    <string name="invite_access_nickname">Usuario obligatorio</string>
     <string name="invite_copied">¡Copiado!</string>
     <string name="invite_copy">Copiar</string>
     <string name="invite_creatingLink">Creando el enlace…</string>
@@ -210,10 +206,8 @@
     <string name="invite_perm_images">Imágenes</string>
     <string name="invite_perm_messages">Mensajes</string>
     <string name="invite_retry">Reintentar</string>
-    <string name="invite_section_access">ACCESO</string>
     <string name="invite_section_identity">IDENTIDAD</string>
     <string name="invite_section_limits">LÍMITES</string>
-    <string name="invite_section_permissions">Permisos</string>
     <string name="invite_share">Compartir</string>
     <string name="invite_title">Invitación</string>
     <string name="invite_unlimited">Ilimitado</string>
@@ -276,7 +270,6 @@
     <string name="links_hub_affiliate_description">Monetiza tu red con tokens de afiliado</string>
     <string name="links_hub_affiliate_title">Enlaces de afiliado</string>
     <string name="links_hub_banner_subtitle">Comparte, mide y monetiza tu audiencia</string>
-    <string name="links_hub_banner_title">Gestiona tus enlaces</string>
     <string name="links_hub_community_description">Gestiona los enlaces de invitación a tus comunidades</string>
     <string name="links_hub_community_title">Enlaces de la comunidad</string>
     <string name="links_hub_share_create_a11y">Crear un enlace para compartir</string>
@@ -344,7 +337,6 @@
     <string name="my_share_links_back">Atrás</string>
     <string name="my_share_links_copied">Enlace copiado</string>
     <string name="my_share_links_copy">Copiar el enlace</string>
-    <string name="my_share_links_empty_subtitle">Crea un enlace para invitar a personas a una conversación</string>
     <string name="my_share_links_empty_title">Sin enlaces para compartir</string>
     <string name="my_share_links_expired">Caducado</string>
     <string name="my_share_links_expiry_24h">24 horas</string>
@@ -375,7 +367,6 @@
     <string name="new_conversation_encryption_collapsed">Contraída</string>
     <string name="new_conversation_encryption_expanded">Expandida</string>
     <string name="new_conversation_error_create">No se pudo crear la conversación</string>
-    <string name="new_conversation_group_solo_hint">Puedes crearlo solo, para una auditoría o para recoger opiniones, e invitar más tarde.</string>
     <string name="new_conversation_group_title">Nombre del grupo (obligatorio)</string>
     <string name="new_conversation_group_toggle">Nuevo grupo</string>
     <string name="new_conversation_no_user_found">No se encontró ningún usuario</string>
@@ -433,7 +424,6 @@
     <string name="shareLink_detail_fieldLastName">apellido</string>
     <string name="shareLink_detail_fieldNickname">seudónimo</string>
     <string name="shareLink_detail_guestRights">Derechos de los invitados sin cuenta</string>
-    <string name="shareLink_detail_historyRight">Ver el historial</string>
     <string name="shareLink_detail_invalidLimits">Un límite debe ser al menos 1.</string>
     <string name="shareLink_detail_limits">Límites</string>
     <string name="shareLink_detail_maxConcurrentField">Personas al mismo tiempo</string>
@@ -446,10 +436,6 @@
     <string name="shareLink_detail_noArrivals">Nadie ha llegado todavía por este enlace.</string>
     <string name="shareLink_detail_optional">Opcional</string>
     <string name="shareLink_detail_recentArrivals">Llegados recientemente</string>
-    <string name="shareLink_detail_requireAccount">Cuenta Meeshy obligatoria</string>
-    <string name="shareLink_detail_requireBirthday">Pedir la fecha de nacimiento</string>
-    <string name="shareLink_detail_requireEmail">Pedir un correo electrónico</string>
-    <string name="shareLink_detail_requireNickname">Pedir un seudónimo</string>
     <string name="shareLink_detail_required">Obligatoria</string>
     <string name="shareLink_detail_save">Guardar</string>
     <string name="shareLink_detail_saveFailed">No se pudo guardar el enlace. Inténtalo de nuevo.</string>
@@ -460,14 +446,6 @@
     <string name="shareLink_detail_usesUnlimited">%1$d / ilimitado</string>
     <string name="shareLink_detail_visits">Visitas</string>
     <string name="shareLink_detail_withoutAccount">Sin cuenta</string>
-    <string name="share_link_access_account">Cuenta obligatoria</string>
-    <string name="share_link_access_account_subtitle">Solo los miembros de Meeshy pueden unirse</string>
-    <string name="share_link_access_birthday">Fecha de nacimiento obligatoria</string>
-    <string name="share_link_access_birthday_subtitle">Permite la verificación de edad</string>
-    <string name="share_link_access_email">Correo obligatorio</string>
-    <string name="share_link_access_email_subtitle">El visitante debe facilitar su correo</string>
-    <string name="share_link_access_nickname">Apodo obligatorio</string>
-    <string name="share_link_access_nickname_subtitle">El visitante debe elegir un apodo</string>
     <string name="share_link_conversation_a11y_hint">Elige la conversación que se compartirá</string>
     <string name="share_link_create_back">Atrás</string>
     <string name="share_link_create_choose_group">Elegir un grupo o una comunidad</string>
@@ -507,21 +485,12 @@
         <item quantity="many">%1$d usos como máximo</item>
         <item quantity="other">%1$d usos como máximo</item>
     </plurals>
-    <string name="share_link_permission_files">Enviar archivos</string>
-    <string name="share_link_permission_files_subtitle">Los invitados pueden enviar documentos</string>
-    <string name="share_link_permission_history">Ver el historial</string>
-    <string name="share_link_permission_history_subtitle">Los invitados ven los mensajes anteriores</string>
-    <string name="share_link_permission_images">Enviar imágenes</string>
-    <string name="share_link_permission_images_subtitle">Los invitados pueden compartir fotos</string>
-    <string name="share_link_permission_messages">Enviar mensajes</string>
-    <string name="share_link_permission_messages_subtitle">Los invitados pueden escribir en la conversación</string>
     <string name="share_link_picker_back">Atrás</string>
     <string name="share_link_picker_empty_body">Cree un grupo o una comunidad para compartir un enlace de invitación</string>
     <string name="share_link_picker_empty_cta">Nueva conversación</string>
     <string name="share_link_picker_empty_title">No se encontró ningún grupo</string>
     <string name="share_link_picker_search">Buscar un grupo…</string>
     <string name="share_link_picker_title">Elegir una conversación</string>
-    <string name="share_link_section_access">Acceso de invitados</string>
     <string name="share_link_section_access_subtitle">Lo que los visitantes deben facilitar para unirse</string>
     <string name="share_link_section_communities">Comunidades</string>
     <string name="share_link_section_conversation">Conversación</string>
@@ -529,7 +498,6 @@
     <string name="share_link_section_identity">Identidad del enlace</string>
     <string name="share_link_section_limits">Límites</string>
     <string name="share_link_section_limits_subtitle">Controle la audiencia y la duración del enlace</string>
-    <string name="share_link_section_permissions">Permisos</string>
     <string name="share_link_section_permissions_subtitle">Lo que pueden hacer los invitados anónimos</string>
     <string name="share_link_type_broadcast">Difusión</string>
     <string name="share_link_type_channel">Canal</string>

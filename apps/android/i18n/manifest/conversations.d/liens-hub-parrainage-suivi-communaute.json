@@ -5,7 +5,6 @@
       "resDir": "feature/conversations/src/main/res",
       "entries": [
         {"catalog": "app", "iosKey": "links.hub.title", "androidName": "links_hub_title", "status": "adopted"},
-        {"catalog": "app", "iosKey": "links.hub.banner.title", "androidName": "links_hub_banner_title", "status": "adopted"},
         {"catalog": "app", "iosKey": "links.hub.banner.subtitle", "androidName": "links_hub_banner_subtitle", "status": "adopted"},
         {"catalog": "app", "iosKey": "links.hub.share.title", "androidName": "links_hub_share_title", "status": "adopted"},
         {"catalog": "app", "iosKey": "links.hub.share.description", "androidName": "links_hub_share_description", "status": "adopted"},

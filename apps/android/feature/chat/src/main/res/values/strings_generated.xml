@@ -2,7 +2,6 @@
 <resources>
     <string name="a11y_composer_language_hint">Choose the language the message is sent in</string>
     <string name="a11y_message_location">shared location</string>
-    <string name="action_more">More…</string>
     <string name="add_participant_add_button">Add</string>
     <string name="add_participant_close">Close</string>
     <string name="add_participant_member_badge">Member</string>
@@ -300,17 +299,12 @@
     <string name="conversation_options_error_save">Couldn\'t save your changes.</string>
     <string name="conversation_options_favorite">Favorite</string>
     <string name="conversation_options_leave">Leave</string>
-    <string name="conversation_options_leave_group">Leave group</string>
-    <string name="conversation_options_leave_group_confirm">Leave</string>
-    <string name="conversation_options_leave_group_message">You will no longer receive messages. Your history will remain readable.</string>
-    <string name="conversation_options_leave_group_title">Leave conversation?</string>
     <string name="conversation_options_leave_message">You\'ll no longer receive messages. Your history stays readable.</string>
     <string name="conversation_options_leave_title">Leave the conversation</string>
     <string name="conversation_options_mentions_only">Mentions only</string>
     <string name="conversation_options_muted">Muted</string>
     <string name="conversation_options_pin">Pin</string>
     <string name="conversation_options_reaction_none">None</string>
-    <string name="conversation_options_section_actions">Actions</string>
     <string name="conversation_options_section_display">My display</string>
     <string name="conversation_options_section_notifications">Notifications</string>
     <string name="conversation_options_section_organization">Organization</string>
@@ -367,7 +361,6 @@
     <string name="encryption_detail_direct_not_a_pair">This one-to-one chat doesn’t have exactly two registered members: end-to-end encryption isn’t possible here.</string>
     <string name="encryption_detail_enabled_on">Activated on</string>
     <string name="encryption_detail_inactive_label">Unencrypted conversation</string>
-    <string name="encryption_detail_inactive_subtitle">Conversation created before systematic encryption: its messages are not encrypted.</string>
     <string name="encryption_detail_loading">Loading status…</string>
     <string name="encryption_detail_mode_header">Mode</string>
     <string name="encryption_detail_mode_label">Mode</string>
@@ -715,7 +708,6 @@
     <string name="share_button_forward">Forward · %1$d</string>
     <string name="share_button_send">Send · %1$d</string>
     <string name="share_caption_hint">Add a message…</string>
-    <string name="share_capture_warning">This media was just captured by the app. Publishing it will make it visible beyond this conversation.</string>
     <string name="share_close">Close</string>
     <string name="share_community_channels">Channels where you can write</string>
     <string name="share_community_no_channel">No channel where you can write</string>
@@ -726,7 +718,6 @@
     <string name="share_content_over_limit">over the limit</string>
     <string name="share_content_piece_number">Item %1$d</string>
     <string name="share_content_piece_of">Item %1$d of %2$d</string>
-    <string name="share_content_refused_source">This app only handed over a file path, which Meeshy does not open. Share the file itself, or save it to Photos or Files first.</string>
     <string name="share_content_remove">Remove</string>
     <string name="share_content_remove_last">Remove the last %1$d</string>
     <string name="share_content_unprepared">Some files could not be prepared. Download them first, then try again.</string>
@@ -748,7 +739,6 @@
     <string name="share_limits_recipients">At most 10 recipients per send</string>
     <string name="share_limits_too_heavy">%1$d files, %2$s. A share carries at most %3$d files and %4$s.</string>
     <string name="share_limits_trim">Remove %1$d files to send</string>
-    <string name="share_offline">Offline. What hasn’t been sent will go when the network is back, even if you close Meeshy.</string>
     <string name="share_publish_feed">My feed</string>
     <string name="share_publish_reel">Reel</string>
     <string name="share_publish_section">Publish</string>

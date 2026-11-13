@@ -66,12 +66,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "share.sheet.offline",
-          "androidName": "share_offline",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "share.sheet.status.queued",
           "androidName": "share_status_queued",
           "status": "adopted"

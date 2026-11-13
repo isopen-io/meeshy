@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_more">Mehr</string>
+    <string name="conversation_options_section_actions">Mehr</string>
+    <string name="encryption_note_devices_question">Was, wenn ich das Handy wechsle?</string>
+    <string name="encryption_note_switching_question">Wer kann den Modus ändern, und was passiert mit dem Verlauf?</string>
+    <string name="share_content_refused_source">Meeshy öffnet keinen Dateipfad. Teile die Datei selbst.</string>
+    <string name="share_capture_warning">Veröffentlichen macht diese Aufnahme über diese Unterhaltung hinaus sichtbar.</string>
+    <string name="share_offline">Offline: Unversendetes geht raus, sobald du wieder da bist.</string>
+</resources>
