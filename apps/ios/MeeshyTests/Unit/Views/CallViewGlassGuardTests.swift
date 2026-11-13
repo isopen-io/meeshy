@@ -622,7 +622,7 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// deux bords (le masque de l'appel, axe vertical), au lieu d'être coupé net.
     func test_actionRail_thatScrolls_fadesAtItsTwoEdges() throws {
         let rails = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Rails.swift"))
-        let rail = try block("private func actionRail(", until: "/// G1.11", in: rails)
+        let rail = try block("private func actionRail(", until: "private struct CallRailStow", in: rails)
         XCTAssertTrue(rail.contains("ScrollView(.vertical, showsIndicators: false)"))
         XCTAssertTrue(rail.contains(".mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }"))
     }
