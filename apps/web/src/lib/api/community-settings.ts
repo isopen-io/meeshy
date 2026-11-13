@@ -28,6 +28,11 @@ import type { ApiResult } from './http';
  * EXACTEMENT ce qui était en cache. La réponse du `PUT` ne sert pas
  * `currentUserRole` : le rôle déjà lu reste celui du cache.
  *
+ * **Une communauté disparue en cours d'édition** (404 : désactivée par
+ * l'administration, supprimée ailleurs) quitte chaque liste et chaque détail,
+ * comme une suppression : l'écran dessine le refus au lieu d'un formulaire
+ * qui échouerait encore (#16787).
+ *
  * **Supprimer** retire la communauté de chaque liste et de chaque détail ; un
  * 404 est l'état visé (déjà supprimée ailleurs), un refus la rend à sa place.
  *
@@ -95,6 +100,19 @@ export function settingsChangesOf(community: CommunitySummary, draft: CommunityS
     ...(draft.banner === null || draft.banner === community.banner ? {} : { banner: draft.banner }),
   };
   return { ok: true, body: Object.keys(body).length === 0 ? null : body };
+}
+
+/**
+ * Passer une communauté de publique à privée se CONFIRME (#16787) : la
+ * passerelle y fait entrer les occupants admissibles de ses conversations et
+ * en fait SORTIR les anciens membres et les comptes qui ne peuvent pas entrer
+ * (`communitySalonAdoption.ts`, #16723) — des sorties qui ne se défont pas.
+ * Rouvrir une communauté, ou tout autre changement, part sans détour ; un
+ * brouillon invalide ne partira pas, il n'a rien à confirmer.
+ */
+export function privacyConfirmationNeeded(community: CommunitySummary, draft: CommunitySettingsDraft): boolean {
+  const changes = settingsChangesOf(community, draft);
+  return changes.ok && changes.body?.isPrivate === true;
 }
 
 export async function updateCommunity(deps: CommunitiesDeps, communityId: string, body: CommunitySettingsBody): Promise<ApiResult<CommunitySummary | null>> {
@@ -202,7 +220,7 @@ const served = (community: CommunitySummary) => (cached: CommunitySummary): Comm
   banner: community.banner,
 });
 
-const refusalOf = (status: number): UpdateSettingsOutcome => ({ status: status === 403 ? 'refused' : status === 404 ? 'gone' : 'error' });
+const refusalOf = (status: number): UpdateSettingsOutcome => ({ status: status === 403 ? 'refused' : 'error' });
 
 export async function performUpdateCommunitySettings({
   community,
@@ -223,6 +241,11 @@ export async function performUpdateCommunitySettings({
   patchEverywhere(queryClient, community.id, applyBody(changes.body));
 
   const result = await updateCommunity(deps, community.id, changes.body);
+  if (!result.ok && result.status === 404) {
+    removeEverywhere(queryClient, community.id);
+    queryClient.removeQueries({ queryKey: communityConversationsQueryKey(community.id) });
+    return { status: 'gone' };
+  }
   if (!result.ok) {
     restore(queryClient, snapshot);
     return refusalOf(result.status);

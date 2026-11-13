@@ -208,3 +208,27 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 27
+
+- Début du run : #17960 (#6451, réveil 26) ouverte et menée EN DIRECT par sa session (commit poussé 4 minutes après ce réveil ; elle attend #17968, la garde maison iOS rouge sur dev depuis `b5b821612`). Une autre session écrit #17209 (`claude/communautes-story-blocage`). Les deux cédées, non touchées.
+- Lot : #17182 (passerelle, sécurité). `getBookmarks` servait les publications en favori sans aucun filtre d'audience : une publication `COMMUNITY` d'une communauté quittée, une `FRIENDS` d'un ami retiré, une publication passée en `PRIVATE` ou d'un auteur bloqué restaient lisibles entières depuis les favoris. La requête des favoris pose désormais `post: { is: { deletedAt: NOT_DELETED, AND: [audience] } }`, l'audience étant `viewerPostAudience` (amis ∪ contacts DM, co-membres, puis `buildFeedVisibilityFilter` : blocage, cercles, communautés lisibles). Dans la requête, pas après : la page reste pleine et le curseur reste sur la table des favoris. Le favori lui-même n'est pas supprimé : il réapparaît si l'audience se rouvre (on rejoint de nouveau).
+- `viewerPostAudience` quitte `search/globalPostSearch.ts` pour `posts/feedVisibility.ts` (le module de l'audience des listes), ré-exporté par la recherche : une seule composition, deux consommateurs.
+- Pas de revue adversariale : resserrement d'une lecture sur une loi existante, ni authentification, ni nouvelle permission, ni migration.
+- Témoins : `bookmarks-audience.test.ts` (4 : loi posée, communautés lisibles, blocage, suppression + curseur), rouges avant le correctif.
+- iOS / web / Android : aucun code client à changer (une page de favoris plus courte se décode à l'identique).
+- Reste : `bookmarkCount` d'une publication compte toujours les favoris des lecteurs qui ne la lisent plus (agrégat sans identité, inchangé).
+
+## 2026-11-13 — réveil 28
+
+- Début du run : cinq PR de la routine ouvertes (#17960, #17972, #17974, #18006, #18028), chacune menée par sa session ou en file CI (Mac saturé) ; aucune reprise, aucune touchée.
+- Lot : #16787 (web, iOS, Android). Rendre une communauté publique PRIVÉE se confirme sur les trois plateformes avant d'enregistrer : « Anciens membres et comptes bloqués quitteront ses conversations, sans retour. » (la passerelle les sort depuis #16723). Rouvrir une communauté, ou tout autre changement, part sans détour ; « Annuler » garde le brouillon.
+  - Web : `privacyConfirmationNeeded` (`lib/api/community-settings.ts`), `ConfirmDialog` « community-private » ; un `PUT` qui rend 404 (communauté désactivée pendant l'édition) retire la fiche de chaque liste et de chaque détail, et l'écran dessine le refus au lieu d'un formulaire actif.
+  - iOS : `needsPrivacyConfirmation` / `showPrivacyConfirm` (protocole `CommunitySettingsModeling`, ViewModel de l'app), alerte destructive dans `CommunitySettingsScreen`.
+  - Android : `CommunitySettingsDraft.needsPrivacyConfirmation`, `AlertDialog` dans `CommunitySettingsScreen.kt` ; chaînes générées depuis le catalogue SDK (manifeste `community.json`).
+- Le corps tient en 80 caractères : la garde de bavardage natif (`check-verbosity-native.mjs`) plafonne à deux les libellés longs des familles communauté iOS et Android.
+- Catalogue `community.settings.*` remesuré : 5,27 Ko, plafond 5 → 6 (un second catalogue paresseux pour trois clés a été écarté, justification dans `budgets.json`).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (confirmation et cache côté clients).
+- Rouge étranger connu : `call_overlay` 21,01 Ko pour un plafond de 21 sur dev nu (#17930) ; la garde maison iOS rouge sur dev (#17968).
+- Prochain lot recommandé : #16741 (le nouveau membre d'une communauté devenue privée est prévenu), puis #16739 (décision) ; #14227 / #16696 demandent une session de staging.
+

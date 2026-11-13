@@ -75,6 +75,9 @@
     <string name="community_settings_leave_confirm_title">Leave community</string>
     <string name="community_settings_leave_label">Leave community</string>
     <string name="community_settings_privacy_by_invitation">By invitation</string>
+    <string name="community_settings_privacy_confirm_button">Make private</string>
+    <string name="community_settings_privacy_confirm_message">Former members and blocked accounts will leave its conversations for good.</string>
+    <string name="community_settings_privacy_confirm_title">Make the community private?</string>
     <string name="community_settings_privacy_open_to_all">Open to all</string>
     <string name="community_settings_privacy_title">Private community</string>
     <string name="community_settings_section_danger">Danger zone</string>

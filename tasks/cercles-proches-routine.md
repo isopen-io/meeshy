@@ -494,6 +494,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
   bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.
 
+## 2026-11-13 — réveil de 14:52 : débloquer `dev`, rouge sur les témoins de `call:signal`
+
+- Reprise : seize PR de la routine ouvertes, toutes écrites dans l'heure par des réveils vivants ; aucune n'est prise
+  ici (« celui qui n'a rien écrit cède »). #17967 (#17147) attend sa CI, rouge en tranche gateway 3/3.
+- Cause de ce rouge, hors cercles : depuis #17952, `call:signal` appelle `callSignalBudgetId`, que six suites simulant
+  `utils/socket-rate-limiter` ne fournissaient pas — 18 témoins rouges sur `dev` même, donc sur toute PR passerelle
+  qui la fusionne.
+- Lot : PR #18012 vers `dev` — la fonction réelle passe dans les modules simulés par `jest.requireActual`. Gates :
+  `src/__tests__/unit/socketio` + `src/socketio` 3 380/3 380 (18 rouges avant), `tsc` passerelle vert.
+- Prochain lot recommandé : fusionner `origin/dev` dans les PR passerelle de la routine restées rouges (#17967,
+  #17984) une fois #18012 sur `dev`, puis « ensemble » sur Android (#17100, couche cœur fusionnée par #17998).
+
 ## 2026-11-13 — réveil repris : le prochain minuit du Bring quand le minuit local n'existe pas (#14473)
 
 - Reprise : onze PR de la routine ouvertes et toutes poussées dans l'heure par des réveils vivants ; ce réveil n'en prend
@@ -513,3 +525,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reprise : dix-neuf PR de la routine ouvertes ; toutes sauf #18000 et #17979 poussées dans l'heure par des réveils
   vivants. #18000 était en conflit (journal seul) et sans écriture depuis 14:21 : ce réveil la mène à la fusion.
 - `origin/dev` fusionnée à la main, conflit du journal résolu en gardant les deux entrées.
+
+## 2026-11-13 — réveil repris (17:15) : #18000 rouge sur le poids web hérité de `dev`
+
+- La CI dispatchée sur `7c2ea8c85` rend « Qualité TS » rouge : `call_overlay` 21.01 Ko > plafond 21 Ko, chunk web
+  que ce lot ne touche pas (diff passerelle seule). `origin/dev` refusionnée à la main (journal : les trois entrées
+  gardées) pour reprendre le correctif de `dev`, puis CI redispatchée.

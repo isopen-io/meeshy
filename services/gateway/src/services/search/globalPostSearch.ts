@@ -2,15 +2,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GlobalSearchPagination, GlobalSearchPostType } from '@meeshy/shared/types/global-search';
 
 import type { CacheStore } from '../CacheStore';
-import { getCommunityCoMemberIds } from '../posts/communityVisibility';
-import { loadFeedDirectContactIds } from '../posts/feedContacts';
-import { loadFeedFriendIds } from '../posts/feedFriends';
-import { buildFeedVisibilityFilter } from '../posts/feedVisibility';
+import { viewerPostAudience } from '../posts/feedVisibility';
 import { NOT_DELETED, postInclude } from '../posts/postIncludes';
 import { withMentions, type WireReader } from '../posts/postReferences';
 import { withViewerPostState } from '../posts/viewerPostState';
 import { hoistLocationDeep } from '../location/sharedPlace';
 import { decodeCursor, encodeCursor, keysetBeforeClause, type CursorData } from '../../utils/keyset-cursor';
+
+export { viewerPostAudience };
 
 /**
  * #14620 — LA RECHERCHE GÉNÉRALE DES POSTS, RÉELS ET STORIES.
@@ -45,15 +44,6 @@ export type GlobalPostSearchPage = {
 const TRANSLATION_SCAN_SIZE = 200;
 
 type PostRow = { readonly id: string; readonly createdAt: Date; readonly translations?: unknown };
-
-export async function viewerPostAudience(prisma: PrismaClient, viewerId: string, cache?: CacheStore) {
-  const [friendIds, directContactIds, communityCoMemberIds] = await Promise.all([
-    loadFeedFriendIds({ prisma, cache, userId: viewerId }),
-    loadFeedDirectContactIds({ prisma, cache, userId: viewerId }),
-    getCommunityCoMemberIds(prisma, viewerId, cache),
-  ]);
-  return buildFeedVisibilityFilter(prisma, viewerId, [...new Set([...friendIds, ...directContactIds])], communityCoMemberIds, cache);
-}
 
 const notExpired = (now: Date) => ({
   OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }],
