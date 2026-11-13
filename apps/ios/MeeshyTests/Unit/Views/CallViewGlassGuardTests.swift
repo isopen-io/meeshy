@@ -116,7 +116,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         for removed in ["selfTileControlRows", "selfTileControlRow(", "CallSelfTileControlsPlacement", "CallSelfTileControlButton", "CallSelfTileControlGlyph", "menuRows(", "selfTileRows(", "selfTileControlsBounds"] {
             XCTAssertFalse(code.contains(removed), "\(removed) : une seconde forme des commandes de ma caméra")
         }
-        let handler = try block(".adaptiveOnChange(of: isGroupStage) { _, isGroup in", until: ".adaptiveOnChange(of: isVideoStage)", in: code)
+        let handler = try block(".adaptiveOnChange(of: isGroupStage) { _, isGroup in", until: ".adaptiveOnChange(of: isTapStage)", in: code)
         XCTAssertFalse(handler.contains("layer"), "De deux à trois, l'état du (…) ne bouge pas : seule la forme change")
     }
 
