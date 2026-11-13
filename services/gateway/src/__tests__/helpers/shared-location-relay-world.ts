@@ -51,6 +51,7 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
   const lectures = { cache: 0, comptes: 0 };
   let pauseLecture: Promise<void> | null = null;
   let lectureEnPanne = false;
+  let lecturesAPasser = 0;
   let relacherLecture = (): void => undefined;
   const users = world.prisma.user as unknown as { findMany: (args: unknown) => Promise<unknown> };
   const prisma = new Proxy(world.prisma, {
@@ -61,6 +62,10 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
               userProp === 'findMany'
                 ? async (args: unknown) => {
                     lectures.comptes += 1;
+                    if (lecturesAPasser > 0) {
+                      lecturesAPasser -= 1;
+                      return users.findMany(args);
+                    }
                     if (lectureEnPanne) {
                       lectureEnPanne = false;
                       throw new Error('base injoignable');
@@ -88,15 +93,21 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
     cache,
     lectures,
     emissions,
-    /** La prochaine lecture des comptes (l'accès d'un lecteur) attend `relacherLecture()`. */
-    suspendreProchaineLecture: () => {
+    /**
+     * La prochaine lecture des comptes (l'accès d'un lecteur) attend `relacherLecture()`.
+     * `passer` laisse filer autant de lectures d'abord : un démarrage relit son émetteur
+     * avant de ranger quoi que ce soit, son éventail lit ensuite.
+     */
+    suspendreProchaineLecture: (passer = 0) => {
+      lecturesAPasser = passer;
       pauseLecture = new Promise<void>((resolve) => {
         relacherLecture = resolve;
       });
     },
     relacherLecture: () => relacherLecture(),
-    /** La prochaine lecture des comptes lève (base injoignable). */
-    echouerProchaineLecture: () => {
+    /** La prochaine lecture des comptes lève (base injoignable), après `passer` lectures. */
+    echouerProchaineLecture: (passer = 0) => {
+      lecturesAPasser = passer;
       lectureEnPanne = true;
     },
     avancer: (ms: number) => {

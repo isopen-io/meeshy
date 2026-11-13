@@ -381,7 +381,7 @@ describe('les rejeux en vol — un rejeu ou un rattrapage lus avant un geste ne 
     const m = monde();
     await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
 
-    m.suspendreProchaineLecture();
+    m.suspendreProchaineLecture(1);
     const enVol = demarrer(m, [{ userId: AMI, precision: 'exact' }]);
     await tick();
     expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'city' }])).toMatchObject({ success: true });
@@ -588,7 +588,7 @@ describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu
 
   it('F3 — un démarrage dont l\'éventail échoue après la prise est annoncé tel qu\'il est : courant', async () => {
     const m = monde();
-    m.echouerProchaineLecture();
+    m.echouerProchaineLecture(1);
 
     expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);

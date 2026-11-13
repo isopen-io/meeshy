@@ -234,8 +234,28 @@ async function fanOut(
   const sent = deliveries.map((delivery) => delivery.readerId);
   await markSharedLocationSeen(deps.cache, emitterId, state, sent, deps.now());
   deliveries.forEach((delivery) => serve(deps.io, delivery.readerId, delivery.projection));
+  await closeStaleReaders(deps, emitterId, state, access);
   const revoked = await revokedSince(deps, emitterId, state, sent);
   return { access, served: sent.filter((readerId) => !revoked.includes(readerId)) };
+}
+
+/**
+ * Un lecteur SERVI dont l'accès est désormais fermé reçoit la fin à la position suivante,
+ * même quand le chemin qui l'a fermé (un rôle qui redescend, une loi qui change) ne
+ * rejoue rien (#16987, M2). Qui n'a jamais vu n'apprend rien.
+ */
+async function closeStaleReaders(
+  deps: SharedLocationRelayDeps,
+  emitterId: string,
+  state: SharedLocationState,
+  access: ReadonlyMap<string, SharedLocationReaderAccess>,
+): Promise<void> {
+  const closed = [...access].filter(([, readerAccess]) => readerAccess === 'none').map(([readerId]) => readerId);
+  if (closed.length === 0) return;
+  const stale = await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, closed);
+  if (stale.length === 0) return;
+  stale.forEach((readerId) => unserve(deps.io, readerId, emitterId));
+  await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, stale);
 }
 
 /**
@@ -270,6 +290,7 @@ async function reconcile(deps: SharedLocationRelayDeps, emitterId: string, reade
   if (current) await markSharedLocationSeen(deps.cache, emitterId, current, deliveries.filter((delivery) => delivery.projection !== null).map((delivery) => delivery.readerId), now);
   deliveries.forEach((delivery) => (delivery.projection ? serve(deps.io, delivery.readerId, delivery.projection) : unserve(deps.io, delivery.readerId, emitterId)));
   if (current && ended.length > 0) await unmarkSharedLocationSeen(deps.cache, emitterId, current.sessionId, ended);
+  if (current) await revokedSince(deps, emitterId, current, deliveries.filter((delivery) => delivery.projection !== null).map((delivery) => delivery.readerId));
 }
 
 /**
@@ -313,6 +334,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
+    if (!(await usableAccounts(deps.prisma, [emitterId])).has(emitterId)) return STOPPED;
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
@@ -430,6 +452,7 @@ export async function refreshSharedLocationBetween(
     if (served && after !== before) {
       await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
       serve(deps.io, readerId, served);
+      await revokedSince(deps, emitterId, state, [readerId]);
     }
     if (!served && (await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId])).length > 0) {
       unserve(deps.io, readerId, emitterId);
@@ -492,19 +515,32 @@ export async function sharedLocationSnapshotFor(
   const addressed = [...states].filter(([, state]) => state.recipients.some((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase()));
   if (addressed.length === 0) return { items: [] };
 
-  const emitterIds = addressed.map(([emitterId]) => emitterId);
+  const allowed = await snapshotAllowed(deps, readerId, addressed.map(([emitterId]) => emitterId), now);
+  const opened = addressed.flatMap(([emitterId, state]) => {
+    const chosen = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision ?? 'none';
+    const projection = projectSharedLocation(emitterId, state, allowed.has(emitterId) ? chosen : 'none', readerId);
+    return projection ? [{ emitterId, state, projection }] : [];
+  });
+  await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
+  const confirmed = opened.length > 0 ? await snapshotAllowed(deps, readerId, opened.map(({ emitterId }) => emitterId), now) : new Set<string>();
+  const lost = opened.filter(({ emitterId }) => !confirmed.has(emitterId));
+  await Promise.all(lost.map(({ emitterId, state }) => unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, [readerId])));
+  const kept = opened.filter(({ emitterId }) => confirmed.has(emitterId));
+  const current = await currentSharedLocationSessions(deps.cache, kept.map(({ emitterId }) => emitterId));
+  const items = kept.filter(({ emitterId, state }) => current.get(emitterId) === state.sessionId).map(({ projection }) => projection);
+  return { items: items.filter((item) => within(item, options.bbox)) };
+}
+
+/**
+ * Les émetteurs dont la loi ouvre le partage à `readerId`, en une lecture groupée. Le
+ * rattrapage la relit APRÈS avoir noté le lecteur servi (#16987, M1) : une baisse écrite
+ * pendant la première lecture a pu envoyer sa fin avant que le lecteur soit noté, et la
+ * réponse HTTP ne la contredit pas ; une baisse écrite après la relecture le trouve noté.
+ */
+async function snapshotAllowed(deps: SharedLocationRelayDeps, readerId: string, emitterIds: readonly string[], now: number): Promise<ReadonlySet<string>> {
   const [law, usable] = await Promise.all([
     pairAccessAmong(deps.prisma, { feature: 'location.temporary', subjectId: readerId, otherIds: emitterIds, subjectIs: 'viewer', now: new Date(now), consentOf: () => 'granted' }),
     usableAccounts(deps.prisma, [readerId, ...emitterIds]),
   ]);
-  const opened = addressed.flatMap(([emitterId, state]) => {
-    const chosen = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision ?? 'none';
-    const access: SharedLocationReaderAccess = usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true ? chosen : 'none';
-    const projection = projectSharedLocation(emitterId, state, access, readerId);
-    return projection ? [{ emitterId, state, projection }] : [];
-  });
-  await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
-  const current = await currentSharedLocationSessions(deps.cache, opened.map(({ emitterId }) => emitterId));
-  const items = opened.filter(({ emitterId, state }) => current.get(emitterId) === state.sessionId).map(({ projection }) => projection);
-  return { items: items.filter((item) => within(item, options.bbox)) };
+  return new Set(emitterIds.filter((emitterId) => usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true));
 }
