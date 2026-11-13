@@ -564,6 +564,7 @@
 - [Leçon 397 — Un contrôle monté par la branche d'ÉCHEC n'existe que quand ça rate](lessons/lecon-397-un-controle-monte-par-la-branche-d-echec-n-existe-que-quand-ca-rate.md)
 - [Leçon 398 — `removeAll` + `append` disent « supprime et repose » là où l'auteur a dit « modifie »](lessons/lecon-398-removeall-append-disent-supprime-et-repose-la-ou-l-auteur-a-dit.md)
 - [Leçon 399 — Un lot qui change la POPULATION d'une liste doit relire ce qui la LIT](lessons/lecon-399-un-lot-qui-change-la-population-d-une-liste-doit-relire-ce-qui-la-lit.md)
+- [Une ligne ABSENTE et une lecture qui LÈVE ne s'arbitrent pas pareil (cycle 154, #17140)](lessons/une-ligne-absente-et-une-lecture-qui-leve-ne-s-arbitrent-pas-pareil.md)
 - [Leçon 400 — Dans un arbre partagé, un rouge de COMPILATION du bundle de tests peut être le WIP du voisin](lessons/lecon-400-dans-un-arbre-partage-un-rouge-de-compilation-du-bundle-de-tests-peut.md)
 - [Leçon 401 — Un disque plein ne se présente pas comme un disque plein](lessons/lecon-401-un-disque-plein-ne-se-presente-pas-comme-un-disque-plein.md)
 - [Leçon 402 — Un backtick dans une commande `ssh` s'exécute SUR LE SERVEUR, et une règle Traefik n'est faite que de backticks](lessons/lecon-402-un-backtick-dans-une-commande-ssh-s-execute-sur-le-serveur-et-une.md)

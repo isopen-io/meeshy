@@ -18,6 +18,8 @@ import {
   disclosableEntryRights,
   resolveEntryRights,
 } from '../../services/participantRights';
+import { linkGrantsHistory } from '../../services/historyFloor';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -496,9 +498,14 @@ export function registerParticipantReadRoutes(
       const profile = participant.anonymousSession?.profile;
       const isAnonymous = participant.type === 'anonymous';
 
-      const shareLink = participant.anonymousSession?.shareLinkId
+      // #17140 — l'id du lien se prend par `guestShareLinkId` : la COLONNE
+      // d'abord, la copie embarquée en repli. Lire la seule copie embarquée
+      // faisait sauter la lecture du lien pour toute ligne qui ne porte que la
+      // colonne, et divergeait du plancher, qui lisait la seule colonne.
+      const guestLinkId = guestShareLinkId(participant);
+      const shareLink = guestLinkId
         ? await prisma.conversationShareLink.findUnique({
-            where: { id: participant.anonymousSession.shareLinkId },
+            where: { id: guestLinkId },
             select: {
               name: true,
               isActive: true,
@@ -525,6 +532,15 @@ export function registerParticipantReadRoutes(
       // qui décide de la lecture. Les énoncer différemment ferait annoncer à la
       // fiche un droit que la lecture ne respecte pas.
       //
+      // #17140 — le repli était `shareLink?.allowViewHistory ?? true`, qui
+      // CONFOND les deux raisons d'avoir `shareLink === null` : « cette
+      // participation n'a emprunté aucun lien » (accorde) et « son lien a
+      // disparu » (refuse). Les deux rendaient `true`. Le repli vient
+      // désormais de `linkGrantsHistory`, le site UNIQUE de cet arbitrage :
+      // c'est la seule façon que les deux phrases ne puissent pas diverger —
+      // une règle qu'il faut retaper à chaque site est une règle qu'un site
+      // finira par ne pas avoir.
+      //
       // **`canViewHistory` en SORT quand le lecteur n'héberge pas la
       // conversation** (#4056). Le porteur a tranché que c'est un fait de
       // MODÉRATION ; #4009 l'a retiré de l'événement diffusé à la room, mais
@@ -537,7 +553,11 @@ export function registerParticipantReadRoutes(
       // jamais.
       const entryCapabilities = isAnonymous
         ? disclosableEntryRights(
-            resolveEntryRights(participant, null, shareLink?.allowViewHistory ?? true),
+            resolveEntryRights(
+              participant,
+              null,
+              linkGrantsHistory(guestLinkId, shareLink),
+            ),
             viewerHostsTheRoom,
           )
         : null;
