@@ -646,3 +646,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - La CI dispatchée sur `7c2ea8c85` rend « Qualité TS » rouge : `call_overlay` 21.01 Ko > plafond 21 Ko, chunk web
   que ce lot ne touche pas (diff passerelle seule). `origin/dev` refusionnée à la main (journal : les trois entrées
   gardées) pour reprendre le correctif de `dev`, puis CI redispatchée.
+## 2026-11-13 — réveil 26 : couper les invitations « ensemble » d'une personne ou de tous, et borner leurs rafales (#17023)
+
+- Reprise : #17148 fusionnée le 2026-11-09. Lots vivants d'autres réveils, non touchés : #16984 (carte web, PR #17956),
+  #17147 (conversation close) et #17013 (cercle de la position), réservés à 13:34 et 13:36. Lot #17023 réservé sur
+  `claude/cercles-17023-ensemble-reception` avant toute écriture.
+- Lot : l'invité coupe les invitations « ensemble » d'une personne (`togetherBlocked` sur
+  `GET|PUT /relations/:userId/settings`, colonne `RelationFeatureSetting.togetherBlockedAt`, optionnelle et sans
+  migration) ou de tous (`notification.togetherEnabled`, actif par défaut, gardé quand un remplacement ne le nomme pas).
+  Une paire n'invite pas plus de 5 fois par 10 minutes (`TOGETHER_INVITES_PER_PAIR`, compteur sous un nom HMAC qui ne
+  dit ni l'hôte ni l'invité, pris en DERNIER : seule une invitation qui part consomme la fenêtre). Tout refus est le
+  `NOT_ALLOWED` d'un inconnu. La préférence gouverne l'INVITATION, pas la séance : une séance rejointe continue, d'où
+  son absence du consentement de la loi d'accès (aucun miroir Swift / Kotlin à changer). Web : l'interrupteur sur la
+  fiche d'un Proche, sept langues.
+- Suivis ouverts : iOS #17988, Android #17989, réglage global sur le web #17990.
+- Prochain lot recommandé : #17988 (iOS, la référence), puis l'icône de position par cercle (#17013) si son réveil ne
+  l'a pas fini.

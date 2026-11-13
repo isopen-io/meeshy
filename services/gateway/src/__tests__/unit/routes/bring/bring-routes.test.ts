@@ -378,7 +378,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(reglage.status).toBe(200);
-    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
+    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
   });
 
   it('bloqué par le destinataire : 403 BRING_NOT_ALLOWED neutre (#14677), et le bouton disparaît (available: false, 0 restant)', async () => {
@@ -389,7 +389,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(pose.status).toBe(200);
-    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: false, togetherBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('BRING_NOT_ALLOWED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
