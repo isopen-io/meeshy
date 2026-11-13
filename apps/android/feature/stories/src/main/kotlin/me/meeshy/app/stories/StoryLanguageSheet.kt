@@ -155,7 +155,7 @@ internal fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(if (selected) accent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) { this.selected = selected; role = Role.Button; contentDescription = label }
+            .semantics(mergeDescendants = true) { this.selected = selected; role = Role.Button }
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),

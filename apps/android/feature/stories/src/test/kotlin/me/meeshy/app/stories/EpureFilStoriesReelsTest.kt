@@ -210,4 +210,13 @@ class StoryLanguageOriginalHintTest {
         hint.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
         assertThat(layouts.single().hasVisualOverflow).isFalse()
     }
+
+    @Test
+    fun `the screen reader hears the Prism sentence with Original`() {
+        compose.setContent { MeeshyTheme { OriginalRow(selected = false, onClick = {}) } }
+        val row = compose.onNode(androidx.compose.ui.test.hasClickAction()).fetchSemanticsNode().config
+        val spoken = (row.getOrNull(SemanticsProperties.ContentDescription) ?: row.getOrNull(SemanticsProperties.Text)?.map { it.text }).orEmpty()
+        assertThat(spoken.joinToString(" ")).contains("Original")
+        assertThat(spoken.joinToString(" ")).contains("Each text in its own language")
+    }
 }
