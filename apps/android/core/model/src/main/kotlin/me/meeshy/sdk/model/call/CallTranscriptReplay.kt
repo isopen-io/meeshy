@@ -6,7 +6,7 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * Who reads a replayed transcript: their id (to recognise their own words), their
- * name, and their prism (`ReaderPrism.resolve`) to elect the served translation.
+ * name (kept for callers: their own lines read « Vous », never it), and their prism (`ReaderPrism.resolve`) to elect the served translation.
  */
 data class CallTranscriptReader(
     val userId: String?,
@@ -34,6 +34,16 @@ data class CallTranscriptLine(
 ) {
     /** What the row shows: the original when asked for, or when nothing was translated. */
     fun text(showOriginal: Boolean): String = if (showOriginal) original else translated ?: original
+
+    /** A sentence is served translated only when it is not mine, not a capture, and the translation says something. */
+    val servesTranslation: Boolean get() = !isLocal && captureKind == null && !translated.isNullOrBlank()
+
+    /**
+     * #17340 — the original of a translated sentence, unfolded below it. Never for my own sentence, never without a
+     * translation, never when the toggle already shows it in place of the translation.
+     */
+    fun originalBelow(showsOriginalInstead: Boolean): String? =
+        original.takeIf { servesTranslation && !showsOriginalInstead }
 }
 
 /**
@@ -61,7 +71,7 @@ object CallTranscriptReplay {
                 val translation = if (isLocal) null else served(segment, reader.prism)
                 CallTranscriptLine(
                     speakerName = if (isLocal) {
-                        reader.name?.takeIf { it.isNotBlank() } ?: youLabel
+                        youLabel
                     } else {
                         segment.speakerDisplayName?.takeIf { it.isNotBlank() } ?: participantLabel
                     },
@@ -73,19 +83,18 @@ object CallTranscriptReplay {
                     speakerId = segment.speakerId,
                 ).let { segment.capturedAtMs to it }
             }
-        val captures = page.captures.mapNotNull { capture(it, startMs, readerId, reader.name, youLabel, participantLabel) }
+        val captures = page.captures.mapNotNull { capture(it, startMs, readerId, youLabel, participantLabel) }
         return (speech + captures).sortedBy { it.first }.map { it.second }
     }
 
     /**
      * #16665 — a capture takes its place among the sentences, at its instant (or the call
-     * start plus its offset). The reader's own capture carries the reader's name.
+     * start plus its offset). The reader's own capture reads « Vous ».
      */
     private fun capture(
         capture: PersistedTranscriptCapture,
         startMs: Long?,
         readerId: String?,
-        readerName: String?,
         youLabel: String,
         participantLabel: String,
     ): Pair<Long, CallTranscriptLine>? {
@@ -95,7 +104,7 @@ object CallTranscriptReplay {
         val isLocal = readerId != null && capturerId == readerId
         val name = when {
             !kind.namesCapturer -> ""
-            isLocal -> readerName?.takeIf { it.isNotBlank() } ?: youLabel
+            isLocal -> youLabel
             else -> capture.displayName?.takeIf { it.isNotBlank() } ?: participantLabel
         }
         return atMs to CallTranscriptLine(
@@ -144,7 +153,7 @@ sealed interface CallTranscriptState {
         override val isVisible: Boolean get() = true
 
         /** The original/translation toggle only exists when it changes something. */
-        val canShowOriginal: Boolean get() = lines.any { it.translated != null }
+        val canShowOriginal: Boolean get() = lines.any { it.servesTranslation }
     }
 
     companion object {
