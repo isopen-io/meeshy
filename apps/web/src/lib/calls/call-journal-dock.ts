@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import { useMediaFlag } from '@/lib/use-media-flag';
 
@@ -25,6 +25,19 @@ export const JOURNAL_COLUMN_GUTTER = 12;
 
 /** Ce que la colonne retire à la scène : elle, et une gouttière de chaque côté. */
 export const JOURNAL_COLUMN_RESERVE = JOURNAL_COLUMN_WIDTH + 2 * JOURNAL_COLUMN_GUTTER;
+
+/**
+ * L'HÔTE DE LA COLONNE (W1.2, W1.18, W1.20) — ce que l'écran pose sur la case qui entre et repart par le
+ * bord de fin (`HeldSwap`, forme `end`) : le verre prononcé, la géométrie, et `data-call-chrome-keep`, qui
+ * lui fait retenir le toucher (titre, marge, état vide) au lieu de ranger l'en-tête et la pilule comme un
+ * toucher sur l'image (`use-call-chrome.ts`). Le conteneur a déjà retiré la zone sûre (`pt-safe`, `pb-safe` de la
+ * racine) : la colonne ne la compte pas une seconde fois — 60 px sous le haut du conteneur, 24 px (le `pb-6` de
+ * la pilule) au-dessus de son bas.
+ */
+export const journalColumnHost = (): { readonly className: string; readonly style: CSSProperties } => ({
+  className: 'glass-call-prominent absolute z-30 flex flex-col rounded-[28px] p-2 text-on-media',
+  style: { insetInlineEnd: JOURNAL_COLUMN_GUTTER, top: '3.75rem', bottom: '1.5rem', width: JOURNAL_COLUMN_WIDTH },
+});
 
 const STAGE_MIN_WIDTH = 720;
 

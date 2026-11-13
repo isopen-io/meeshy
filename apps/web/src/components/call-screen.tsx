@@ -19,7 +19,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { once, preloadedView } from '@/lib/calls/preloaded-view';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
-import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
+import { journalColumnHost, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, pillCompactsAudioStage, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
@@ -38,7 +38,7 @@ import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { callChromeStore, usePublishChrome } from '@/lib/calls/call-chrome-store';
-import { HeldSwap, LEAVING, useBannersClose, useModeHold, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
+import { HeldSwap, LEAVING, useBannersClose, useFollowInline, useModeHold, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
@@ -345,7 +345,7 @@ function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveF
 /**
  * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1).
  */
-export function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
+export function CallTopBannerStack({ call, present, language, hidden, liveFrame, reserveEnd, reserve }: { readonly reserveEnd?: { readonly paddingInlineEnd?: number }; readonly reserve?: Readonly<Record<`data-${string}`, string>>; readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
   const sharedOnce = useRef(false);
   if (present['screen-share'] === true) sharedOnce.current = true;
   /* La pile se referme (ou s'ouvre) en mouvement (S2.6, #17774) : le bandeau qui repart quitte la mise en page (`call-motion.css`), les suivants rejoignent leur place par une translation. La hauteur de la case de l'enregistrement en fait partie : la carte d'accord qui arrive ou repart repousse la capture et le cadre en glissant. */
@@ -365,7 +365,7 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame 
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
   };
   return (
-    <div ref={stack} className="relative z-30 flex flex-col items-center gap-2 empty:hidden" data-call-banner-stack="">
+    <div ref={stack} className="relative z-30 flex flex-col items-center gap-2 empty:hidden" style={reserveEnd} data-call-banner-stack="" {...reserve}>
       {sharedOnce.current ? (
         <Suspense fallback={null}>
           <CallScreenShareBanner sharing={present['screen-share'] === true} language={language} hidden={hidden} />
@@ -387,6 +387,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const middleRow = useRef<HTMLDivElement>(null);
+  const controlsPlane = useRef<HTMLDivElement>(null);
   const audioStage = useRef<HTMLDivElement>(null);
   const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
@@ -575,7 +577,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   ) : null;
 
   const present = usePresentBanners(call, live, liveFrame);
-  const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} /> : null;
+  const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} reserveEnd={reserveEnd} reserve={reserve} /> : null;
 
   const recordingCard = useStore(callChromeStore, (chrome) => chrome.recordingCard);
   const selfTopInset = selfTileClearance(present, recordingCard);
@@ -676,7 +678,10 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   useStowFade(root, hidden);
   useViewMotion(root, motion);
   useStageMorph(audioStage, compactStage);
-  usePublishChrome(hidden || chrome.mode !== null);
+  usePublishChrome(hidden || chrome.mode !== null, bleedEnd);
+  useFollowInline(stageRef, bleedEnd);
+  useFollowInline(middleRow, bleedEnd);
+  useFollowInline(controlsPlane, bleedEnd);
 
   return (
     <div
@@ -722,7 +727,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
             </div>
           </>
         ) : overlayVideo ? (
-          <div className={`flex flex-col items-center gap-2 px-6 ${chrome.mode === null ? '' : 'invisible'}`} data-call-stow="" style={reserveEnd} aria-hidden={hidden || chrome.mode !== null ? true : undefined} {...reserve}>
+          <div ref={middleRow} className={`flex flex-col items-center gap-2 px-6 ${chrome.mode === null ? '' : 'invisible'}`} data-call-stow="" style={reserveEnd} aria-hidden={hidden || chrome.mode !== null ? true : undefined} {...reserve}>
             {sharer === null ? null : (
               <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
                 {translate(language, 'call.screen.peerSharing', {
@@ -740,7 +745,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
+          <div ref={controlsPlane} className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions() : null}
             <HeldSwap value={chrome.mode === null ? true : null} shape="bottom" className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
               {() => (
@@ -782,11 +787,13 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
             />
           </Suspense>
         ) : null}
-        {column.shown ? (
-          <Suspense fallback={null}>
-            <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} callId={call.callId ?? ''} closeGlyph={closeGlyph} language={language} Button={CallButton} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
-          </Suspense>
-        ) : null}
+        <HeldSwap value={column.shown ? true : null} shape="end" {...journalColumnHost()} data-call-journal-column="" data-call-chrome-keep="">
+          {() => (
+            <Suspense fallback={null}>
+              <CallJournalInColumn id={CALL_PANEL_ID.journal} callId={call.callId ?? ''} closeGlyph={closeGlyph} language={language} Button={CallButton} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
+            </Suspense>
+          )}
+        </HeldSwap>
         {chrome.panel !== null && !panelInThePill(chrome.panel) ? <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense> : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
