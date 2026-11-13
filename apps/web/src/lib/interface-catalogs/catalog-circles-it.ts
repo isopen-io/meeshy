@@ -157,6 +157,21 @@ const it = {
   'together.outcome.rateLimited': 'Troppi inviti: riprova tra un attimo.',
   'together.outcome.offline': 'Offline: l’invito non è partito.',
   'together.outcome.failed': 'L’invito non è partito. Riprova.',
+  'positions.title': 'Posizioni condivise',
+  'positions.empty': 'Nessuno sta condividendo la posizione con te in questo momento.',
+  'positions.cannotEmit': 'Il web non condivide la tua posizione: apri l’app Meeshy sul telefono per condividere la tua.',
+  'positions.map.a11y': 'Mappa delle posizioni condivise con te',
+  'positions.list.title': 'Elenco delle posizioni',
+  'positions.row.exact': '{name} · posizione esatta · fino alle {time}',
+  'positions.row.neighborhood': '{name} · a livello di quartiere · fino alle {time}',
+  'positions.row.city': '{name} · a livello di città · fino alle {time}',
+  'positions.someone': 'Qualcuno',
+  'positions.offline': 'Offline: le posizioni mostrate potrebbero non essere aggiornate.',
+  'positions.attribution': '© contributori di OpenStreetMap',
+  'positions.zoomIn': 'Ingrandisci la mappa',
+  'positions.zoomOut': 'Riduci la mappa',
+  'positions.failed': 'Non è stato possibile caricare le posizioni.',
+  'positions.retry': 'Riprova',
 } as const satisfies CirclesCatalog;
 
 export default it;

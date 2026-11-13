@@ -205,6 +205,14 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(found).toEqual(['find']);
   });
 
+  test('« Positions partagées » mène à la carte de ce que mes liens me partagent (#16984)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
+    const host = await mount(panel([]));
+    const entry = host.querySelector<HTMLAnchorElement>('[data-circles-positions]');
+    expect(entry?.getAttribute('href')).toBe('/positions');
+    expect(entry?.textContent).toContain('Positions partagées');
+  });
+
   test('toucher la ligne ouvre la fiche du lien', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
     const host = await mount(panel([]));
