@@ -57,4 +57,19 @@ class HeaderFlameLawTest {
         assertThat(HeaderFlameLaw.card(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0))).isNull()
         assertThat(HeaderFlameLaw.card(null)).isNull()
     }
+
+    @Test
+    fun `the unfolded pill opens the same card as the folded flame while a streak runs (#17987)`() {
+        val running = ConversationEngagementSnapshot("c", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-13")
+        assertThat(HeaderFlameLaw.pillTap(running))
+            .isEqualTo(EngagementPillTap.FlameCard(HeaderFlameCard(streakDays = 12, todayPoints = 40, totalPoints = 340)))
+    }
+
+    @Test
+    fun `the total alone leads to My Legend, and no points means no gesture (#17987)`() {
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0)))
+            .isEqualTo(EngagementPillTap.Legend)
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 0, streakDays = 0))).isNull()
+        assertThat(HeaderFlameLaw.pillTap(null)).isNull()
+    }
 }

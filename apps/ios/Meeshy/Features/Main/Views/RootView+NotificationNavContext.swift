@@ -10,6 +10,8 @@ extension RootView {
     struct NotificationNavContext {
         let type: MeeshyNotificationType
         let conversationId: String?
+        /// #18052 — « Ajouté à la communauté Y » ouvre la communauté.
+        let communityId: String?
         let messageId: String?
         let postId: String?
         /// Commentaire ciblé (like/réponse/commentaire) — l'app ouvre l'entité
@@ -55,6 +57,7 @@ extension RootView {
         init(from notification: APINotification) {
             type = notification.notificationType
             conversationId = notification.context?.conversationId
+            communityId = notification.context?.communityId
             messageId = notification.context?.messageId
             postId = notification.context?.postId ?? notification.metadata?.postId
             commentId = notification.context?.commentId ?? notification.metadata?.commentId
@@ -75,6 +78,7 @@ extension RootView {
         init(from event: SocketNotificationEvent) {
             type = event.notificationType
             conversationId = event.conversationId
+            communityId = event.communityId
             messageId = event.messageId
             postId = event.postId
             commentId = event.commentId
@@ -95,6 +99,7 @@ extension RootView {
         init(from payload: NotificationPayload) {
             type = MeeshyNotificationType(rawValue: payload.type ?? "") ?? .system
             conversationId = payload.conversationId
+            communityId = payload.communityId
             messageId = payload.messageId
             postId = payload.postId
             commentId = payload.commentId

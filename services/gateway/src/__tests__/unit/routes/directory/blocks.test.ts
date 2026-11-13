@@ -13,6 +13,7 @@
  * @jest-environment node
  */
 
+import { ritualSharesStore } from '../../../helpers/ritual-shares-store';
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
@@ -66,6 +67,7 @@ function prismaDouble(bloques: string[]) {
           return {};
         }),
       },
+      relationFeatureSetting: ritualSharesStore([]).relationFeatureSetting,
     },
   };
 }

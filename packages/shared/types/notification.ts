@@ -313,6 +313,10 @@ export interface NotificationContext extends NotificationAttachmentWire {
   readonly messageOriginalLanguage?: string;
   /** #8857 — position, contact, invitation, lien, sticker, vignette vidéo, réponse à une story. */
   readonly contentDetail?: NotificationContentDetail;
+  /** #18052 — la communauté où le destinataire vient d'être ajouté : le tap ouvre son détail. */
+  readonly communityId?: string;
+  /** #18052 — son nom tel qu'écrit, pour la ligne de la cloche. */
+  readonly communityName?: string;
 }
 
 /**
@@ -391,7 +395,7 @@ export interface NotificationDelivery {
  * Metadata de base commune à toutes les notifications
  */
 interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'update_app' | 'none';
+  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'view_community' | 'update_app' | 'none';
 }
 
 /**

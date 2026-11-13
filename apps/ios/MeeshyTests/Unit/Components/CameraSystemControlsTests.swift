@@ -5,8 +5,8 @@ import XCTest
 @MainActor
 final class CameraSystemControlsTests: XCTestCase {
 
-    func test_controls_zoomThenExposure_whenTheButtonExists() {
-        XCTAssertEqual(CameraSystemControlsRule.controls(supportsControls: true), [.zoom, .exposure])
+    func test_controls_zoomExposureThenAmbiance_whenTheButtonExists() {
+        XCTAssertEqual(CameraSystemControlsRule.controls(supportsControls: true), [.zoom, .exposure, .ambiance])
     }
 
     func test_controls_none_withoutTheButton() {
@@ -24,7 +24,13 @@ final class CameraSystemControlsTests: XCTestCase {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertEqual(camera.components(separatedBy: "photoPlan: { self.adoptLens($0) }").count - 1, 2,
                        "la préparation ET la bascule d'objectif posent les curseurs")
-        XCTAssertTrue(camera.contains("CameraSystemControlsHost.install(in: session, for: device)"))
+        XCTAssertTrue(camera.contains("CameraSystemControlsHost.install(in: session, for: device, ambiance: ambianceLink)"))
+    }
+
+    func test_session_connectsTheAmbiancePicker_andFollowsTheBand() throws {
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".modifier(ComposerCameraAmbianceFollow(session: session))"),
+                      "la bande relie le bouton au look et le fait suivre")
     }
 
     private static func code(_ relative: String) throws -> String {

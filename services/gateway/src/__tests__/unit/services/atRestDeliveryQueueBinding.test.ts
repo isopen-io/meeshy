@@ -140,7 +140,7 @@ describe('le sceau v2 lie l’entrée à son destinataire, son événement et sa
     const { redis, queue } = world();
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
     expect(redis.read('u-1')[0]?.sealedPayload?.aad).toBe('delivery-queue:v2');
-    expect(JSON.stringify(redis.read('u-1'))).not.toContain('4471');
+    expect(JSON.stringify(redis.read('u-1'))).not.toContain('coffre');
   });
 
   it('déplacée dans la file d’un autre membre, elle ne s’ouvre pas et n’est pas rejouée', async () => {

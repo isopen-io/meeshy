@@ -22,14 +22,14 @@ final class FrenchLabelAccentGuardTests: XCTestCase {
         "Createur", "Creer", "Creez", "creer", "Creation",
         "Debloquer", "debloquer", "Deplacer", "deplacee", "Desactive", "desactivees",
         "Donnees", "donnees", "Duree", "Echantillon", "Echantillons", "echantillon", "echantillons",
-        "Echec", "Etats", "Intensite", "Itineraire", "Luminosite", "Medias",
+        "Echec", "Etats", "Intensite", "Irreversible", "Itineraire", "Luminosite", "Medias",
         "Moderateur", "Moderateurs", "Nettete", "Numero", "numero", "Parametres", "parametres",
         "Prenom", "Prive", "Privee", "privee", "Qualite", "Reessayer", "reessayez", "Reglages",
         "Retrograder", "Systeme", "systeme", "Telechargement", "Telecharger", "Telechargez",
         "telechargement", "Visibilite", "acceptee", "acceder", "affectes", "annulee",
         "apparaitront", "apres", "clonee", "decouvrir", "definitivement", "deja", "demarrera",
         "desormais", "disparaitra", "echoue", "ecrire", "effectuee", "envoyee", "ephemere",
-        "fermee", "modele", "partagee", "recente", "recentes", "refusee", "repondre", "reponses",
+        "fermee", "irreversible", "modele", "partagee", "recente", "recentes", "refusee", "repondre", "reponses",
         "resultat", "resultats", "reussi", "revoquera", "supprimees", "televerse", "televersee",
         "utilisee", "Verifier",
     ]
@@ -111,13 +111,56 @@ final class FrenchLabelAccentGuardTests: XCTestCase {
         XCTAssertTrue(Self.faults(in: "Qui peut écrire").isEmpty)
         XCTAssertTrue(Self.faults(in: "Communauté mise à jour").isEmpty)
         XCTAssertTrue(Self.faults(in: "Reactions and Media").isEmpty)
+        XCTAssertEqual(Self.faults(in: "ECHANTILLONS VOCAUX"), ["ECHANTILLONS"])
+        XCTAssertTrue(Self.faults(in: "ÉCHANTILLONS VOCAUX").isEmpty)
+        XCTAssertEqual(Self.faults(in: "Cette action est irreversible"), ["irreversible"])
+    }
+
+    /// #6451 : les écrans de communauté parlaient anglais en français — « Invite Members »,
+    /// « No Users Found », « Remove » — pendant que l'arabe, l'allemand et l'espagnol étaient
+    /// traduits. Une valeur `fr` recopiée de l'anglais ne porte aucun accent manquant : la garde
+    /// ci-dessus ne pouvait pas la voir. Seuls les mots identiques dans les deux langues passent.
+    func test_frenchValues_ofCommunityKeys_areNotTheEnglishCopy() throws {
+        let url = Self.meeshyUISources.appendingPathComponent("Resources/Localizable.xcstrings")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let sharedByBothLanguages: Set<String> = ["Avatar", "Conversation", "Conversations", "Description", "Emoji"]
+        var scanned = 0
+        var offenders: [String] = []
+        for (key, entry) in strings where key.hasPrefix("community.") {
+            guard let localizations = (entry as? [String: Any])?["localizations"] as? [String: Any],
+                  let french = Self.singleValue(localizations["fr"]),
+                  let english = Self.singleValue(localizations["en"]) else { continue }
+            scanned += 1
+            if french == english && !sharedByBothLanguages.contains(french) {
+                offenders.append("\(key) — « \(french) »")
+            }
+        }
+        XCTAssertGreaterThan(scanned, 50, "le catalogue MeeshyUI n'a livré aucune clé community. — a-t-il bougé ?")
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "valeurs fr de communauté recopiées de l'anglais :\n" + offenders.sorted().joined(separator: "\n")
+        )
+    }
+
+    private static func singleValue(_ node: Any?) -> String? {
+        ((node as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
     }
 
     private static func faults(in text: String) -> [String] {
         let words = text.components(separatedBy: CharacterSet.letters.inverted)
-        let wordFaults = words.filter { wordsRequiringAnAccent.contains($0) }
+        let wordFaults = words.filter { word in
+            wordsRequiringAnAccent.contains(word) || isShoutedFormRequiringAnAccent(word)
+        }
         let phraseFaults = phrasesRequiringAnAccent.filter { containsWholePhrase($0, in: text) }
         return wordFaults + phraseFaults
+    }
+
+    private static func isShoutedFormRequiringAnAccent(_ word: String) -> Bool {
+        guard word.count > 1, word == word.uppercased() else { return false }
+        let lowered = word.lowercased()
+        return wordsRequiringAnAccent.contains(lowered)
+            || wordsRequiringAnAccent.contains(lowered.prefix(1).uppercased() + lowered.dropFirst())
     }
 
     private static func containsWholePhrase(_ phrase: String, in text: String) -> Bool {

@@ -46,6 +46,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
+  'community.added',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'attachment.contact',
   'content.location', 'content.sticker', 'content.invitation',

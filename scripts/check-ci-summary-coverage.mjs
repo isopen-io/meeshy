@@ -116,7 +116,7 @@ const JOB_DU_STATUT = /^\$\{\{\s*needs\.([A-Za-z0-9_-]+)\.result\s*\}\}$/;
 export const violations = (workflow) => {
   const jobs = jobsOf(workflow);
   const agregateurs = jobs.filter(
-    (job) => conditionOf(job) === 'always()' && scriptOf(job).includes('$GITHUB_STEP_SUMMARY'),
+    (job) => /^always\(\)( &&|$)/.test(conditionOf(job) ?? '') && scriptOf(job).includes('$GITHUB_STEP_SUMMARY'),
   );
 
   if (agregateurs.length !== 1) {

@@ -8,6 +8,7 @@ import {
   performCommunityImageUpload,
   performDeleteCommunity,
   performUpdateCommunitySettings,
+  privacyConfirmationNeeded,
   settingsChangesOf,
   settingsDraftOf,
 } from './community-settings';
@@ -96,6 +97,24 @@ describe('settingsChangesOf', () => {
   });
 });
 
+describe('privacyConfirmationNeeded (#16787)', () => {
+  const open = summary({ isPrivate: false });
+
+  test('passer de publique à privée se confirme : des personnes vont quitter ses conversations', () => {
+    expect(privacyConfirmationNeeded(open, { ...settingsDraftOf(open), isPrivate: true })).toBe(true);
+  });
+
+  test('un autre changement, ou rouvrir une communauté privée, part sans confirmation', () => {
+    expect(privacyConfirmationNeeded(open, { ...settingsDraftOf(open), name: 'Club du jeudi' })).toBe(false);
+    expect(privacyConfirmationNeeded(summary({ isPrivate: true }), { ...settingsDraftOf(summary({ isPrivate: true })), isPrivate: false })).toBe(false);
+    expect(privacyConfirmationNeeded(summary({ isPrivate: true }), settingsDraftOf(summary({ isPrivate: true })))).toBe(false);
+  });
+
+  test('un brouillon invalide ne se confirme pas : il ne partira pas', () => {
+    expect(privacyConfirmationNeeded(open, { ...settingsDraftOf(open), name: '', isPrivate: true })).toBe(false);
+  });
+});
+
 describe('performUpdateCommunitySettings', () => {
   const draft = { ...settingsDraftOf(summary()), name: 'Club de lecture' };
 
@@ -134,11 +153,13 @@ describe('performUpdateCommunitySettings', () => {
     expect(listNames(queryClient)).toEqual(['Club', 'Autre']);
   });
 
-  test('une communauté disparue (404) se dit, et le cache est rendu', async () => {
+  test('une communauté disparue (404, désactivée entre-temps) se dit, et quitte chaque liste et chaque détail (#16787)', async () => {
     const { deps, queryClient } = depsReplying({ status: 404, body: { success: false, error: 'Community not found' } });
     seed(queryClient, summary());
     expect(await performUpdateCommunitySettings({ community: summary(), draft, deps })).toEqual({ status: 'gone' });
-    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.name).toBe('Club');
+    expect(listNames(queryClient)).toEqual(['Autre']);
+    expect(queryClient.getQueryData(communityQueryKey('m-club'))).toBeUndefined();
+    expect(queryClient.getQueryData(communityQueryKey('mshy_club'))).toBeUndefined();
   });
 
   test('un brouillon invalide ne part pas ; hors ligne non plus ; rien de changé non plus', async () => {

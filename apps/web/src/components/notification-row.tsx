@@ -121,6 +121,9 @@ export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readon
       return <Link to="discover" search={target.search} {...surface} />;
     case 'userProfile':
       return <Link to="userProfile" params={target.params} {...surface} />;
+    case 'community':
+      /* « Ajouté à la communauté Y » (#18052) — le détail de la communauté. */
+      return <Link to="community" params={target.params} {...surface} />;
     case 'progression':
       /* La mission personnelle ouvre la section des missions (#9539) : la destination PORTE sa section. */
       return target.search === undefined ? <Link to="progression" {...surface} /> : <Link to="progression" search={target.search} {...surface} />;

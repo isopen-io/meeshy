@@ -100,12 +100,13 @@ describe('le contrat du Bring', () => {
     expect(relationPersonSettingsUpdateSchema.safeParse({}).success).toBe(false);
   });
 
-  it('#14401 — un partage consenti au rituel se RETIRE par le réglage, il ne s’y accorde jamais', () => {
+  it('#14401 — un partage consenti au rituel se RETIRE par le réglage ; son accord hors rituel est jugé par la passerelle (#16642)', () => {
     expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: false }).success).toBe(true);
     expect(
       relationPersonSettingsUpdateSchema.safeParse({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }).success,
     ).toBe(true);
-    expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: true }).success).toBe(false);
+    // Le CORPS accepte l'accord (#16642) : c'est la passerelle qui le réserve aux comptes de l'équipe, par la loi.
+    expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: true }).success).toBe(true);
     // Mêmes refus sur la route, qui déclare `{ enum: [false] }` sans `type` pour qu'AJV ne coerce rien
     // (`relation-settings-withdraw.test.ts`, audit #14535 constat 4).
     [null, 0, 'false'].forEach((value) =>

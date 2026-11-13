@@ -8,8 +8,9 @@ enum class CallChromeElement {
 }
 
 /**
- * What the call chrome shows. It hides by a tap on the stage ([isTapStage]: the image on video, the background behind
- * the avatar on a duo audio call), in [FADE_DURATION_MILLIS]; never under TalkBack. Captions and the consent card
+ * What the call chrome shows. It hides by a tap on the stage ([isTapStage]: the image on video, the background of a call
+ * in progress with no image — behind the avatar of a duo, around the tiles of a group with no camera), in
+ * [FADE_DURATION_MILLIS]; never under TalkBack. Captions and the consent card
  * always stay. Mirrors iOS `CallChromeVisibility`.
  */
 data class CallChromeVisibility(
@@ -39,13 +40,13 @@ data class CallChromeVisibility(
             isTapStage && !isTouchExplorationOn
 
         /**
-         * Law 11 (#16663; extended to audio by #17945): a tap on the STAGE stows the chrome — the image on video, the
-         * background behind the avatar on a duo audio call in progress. A group with no camera on has no image to free:
-         * its tiles answer the tap. Vectors shared with iOS and the web: (duo, video) → true · (duo, audio, in
-         * progress) → true · (duo, audio, not yet in progress) → false · (group, a camera) → true · (group, none) → false.
+         * Law 11 (#16663; extended to audio by #17945, then to a group with no camera by the owner on 2026-11-13): a tap
+         * on the STAGE stows the chrome — the image on video, the background of a call in progress with no image (behind
+         * the avatar of a duo, around the tiles of a group). Vectors shared with iOS and the web: (duo, video) → true ·
+         * (duo, audio, in progress) → true · (duo, audio, not yet in progress) → false · (group, a camera) → true ·
+         * (group, none) → true.
          */
-        fun isTapStage(isGroup: Boolean, isVideoStage: Boolean, isConnected: Boolean): Boolean =
-            isVideoStage || (!isGroup && isConnected)
+        fun isTapStage(isVideoStage: Boolean, isConnected: Boolean): Boolean = isVideoStage || isConnected
 
         fun isVideoStage(
             isGroup: Boolean,

@@ -15,8 +15,8 @@ import type { TalkieSendPhase } from './talkie-sender';
  *   TRAÎNE défilante pour l'enregistrement.
  */
 
-/** `recording-copy` : la copie en message vocal qui s'enregistre quand le talkie ne passe pas (iOS `recordingCopy`). */
-export type TalkieHeaderPhase = TalkieSendPhase['kind'] | 'recording-copy';
+/** Dont `recording-copy` : la copie en message vocal qui s'enregistre quand le talkie ne passe pas (iOS `recordingCopy`, #16698). */
+export type TalkieHeaderPhase = TalkieSendPhase['kind'];
 
 export type TalkieHeaderVoice = 'none' | 'outgoing' | 'incoming';
 

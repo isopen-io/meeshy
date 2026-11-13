@@ -123,6 +123,12 @@ function makePrisma(overrides: {
     relationFeatureSetting: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    bloodLocationPoint: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    bloodLocationConsultation: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     friendRequest: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
