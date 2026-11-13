@@ -28,7 +28,7 @@
     <string name="call_network_tier_good">جيدة</string>
     <string name="call_network_tier_fair">متوسطة</string>
     <string name="call_network_tier_poor">ضعيفة</string>
-    <string name="call_transcript_disclaimer">نسخة مشفّرة محفوظة على هذا الجهاز. يُحفظ سجل المكالمة أيضًا على خادم Meeshy ولا يقرؤه إلا المشاركون فيها. ويتضمن كلام محاورك كما وصل أثناء المكالمة.</string>
+    <string name="call_transcript_disclaimer">نسخة مشفّرة على هذا الجهاز. يُحفظ سجل المكالمة أيضًا على خادم Meeshy ولا يقرؤه إلا المشاركون فيها.</string>
     <string name="call_transcript_delete">حذف هذا النص</string>
     <string name="call_transcript_delete_confirm_title">حذف هذا النص؟</string>
     <string name="call_transcript_delete_confirm_message">يُحذف من هذا الجهاز نهائيًا. لا يُمحى السجل المحفوظ على الخادم.</string>

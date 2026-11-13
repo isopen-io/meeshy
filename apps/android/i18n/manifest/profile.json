@@ -73,12 +73,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.action.unblockUser",
-          "androidName": "profile_action_unblock_user",
-          "status": "adopted"
-        },
-        {
           "androidName": "profile_activity_average",
           "status": "android-only"
         },
@@ -91,10 +85,6 @@
           "iosKey": "dashboard.section.activity",
           "androidName": "profile_activity_title",
           "status": "adopted"
-        },
-        {
-          "androidName": "profile_avatar",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -143,16 +133,6 @@
           "iosKey": "profile.connection.context.received",
           "androidName": "profile_connection_context_received",
           "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "profile.connection.context.sent",
-          "androidName": "profile_connection_context_sent",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_custom_language_label",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -247,26 +227,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "presence.away",
-          "androidName": "profile_presence_away",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "presence.online",
-          "androidName": "profile_presence_online",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_regional_language_label",
-          "status": "android-only"
-        },
-        {
-          "androidName": "profile_report",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "profile.save",
           "androidName": "profile_save",
@@ -348,12 +308,6 @@
           "catalog": "ui",
           "iosKey": "profile.status.connected",
           "androidName": "profile_status_connected",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.language.primary",
-          "androidName": "profile_system_language_label",
           "status": "adopted"
         },
         {

@@ -136,11 +136,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "profile.progression.hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.decor.title",
           "status": "adopted"
         },

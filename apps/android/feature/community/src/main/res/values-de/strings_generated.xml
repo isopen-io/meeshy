@@ -1,6 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_conversation_fallback_name">Unterhaltung</string>
     <string name="community_add_channel_empty_hint">Erstellen Sie zuerst eine Unterhaltung.</string>
     <string name="community_add_channel_empty_no_conversations">Keine Unterhaltungen verfügbar</string>
     <string name="community_add_channel_empty_no_results">Keine Ergebnisse</string>
@@ -44,10 +43,8 @@
     <string name="community_detail_leave_label">Community verlassen</string>
     <string name="community_detail_menu_leave">Verlassen</string>
     <string name="community_detail_menu_settings">Einstellungen</string>
-    <string name="community_detail_posts_empty_action">Beitrag erstellen</string>
     <string name="community_list_create_accessibility_label">Community erstellen</string>
     <string name="community_list_empty_create_button">Community erstellen</string>
-    <string name="community_list_empty_subtitle">Treten Sie einer Community bei oder erstellen Sie eine</string>
     <string name="community_list_empty_title">Keine Community</string>
     <string name="community_list_search_placeholder">Suchen...</string>
     <string name="community_list_title">Communities</string>

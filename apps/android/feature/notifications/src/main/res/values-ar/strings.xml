@@ -2,14 +2,12 @@
 <resources>
     <string name="notifications_mark_all_read">تعليم الكل كمقروء</string>
     <string name="notifications_action_mark_read">مقروء</string>
-    <string name="notifications_empty_category">لا توجد إشعارات هنا</string>
     <string name="notification_banner_preview_hidden">إشعار جديد</string>
     <string name="notifications_unread_prefix">غير مقروء.</string>
     <string name="notifications_error_title">الإشعارات غير متاحة</string>
     <string name="notifications_error_subtitle">تحقق من اتصالك ثم أعد المحاولة.</string>
     <string name="notifications_error_retry">إعادة المحاولة</string>
     <string name="notifications_loading">جارٍ التحميل…</string>
-    <string name="notifications_empty_subtitle">ستظهر إشعاراتك هنا</string>
     <string name="notifications_empty_unread">لا توجد إشعارات غير مقروءة</string>
     <string name="notifications_empty_messages">لا توجد إشعارات رسائل</string>
     <string name="notifications_empty_reactions">لا توجد تفاعلات</string>

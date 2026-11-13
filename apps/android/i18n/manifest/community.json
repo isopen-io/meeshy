@@ -10,12 +10,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "community.addChannel.conversation.fallbackName",
-          "androidName": "community_add_channel_conversation_fallback_name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "community.addChannel.empty.hint",
           "androidName": "community_add_channel_empty_hint",
           "status": "adopted"
@@ -253,10 +247,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "community_detail_channels_empty_subtitle",
-          "status": "android-only"
-        },
-        {
           "androidName": "community_detail_channels_empty_title",
           "status": "android-only"
         },
@@ -297,16 +287,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "community.detail.posts.empty.action",
-          "androidName": "community_detail_posts_empty_action",
-          "status": "adopted"
-        },
-        {
-          "androidName": "community_detail_posts_empty_subtitle",
-          "status": "android-only"
-        },
-        {
           "androidName": "community_detail_posts_empty_title",
           "status": "android-only"
         },
@@ -328,10 +308,6 @@
         },
         {
           "androidName": "community_invite_button",
-          "status": "android-only"
-        },
-        {
-          "androidName": "community_invite_empty_subtitle",
           "status": "android-only"
         },
         {
@@ -360,12 +336,6 @@
           "catalog": "ui",
           "iosKey": "community.list.empty.createButton",
           "androidName": "community_list_empty_create_button",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.list.empty.subtitle",
-          "androidName": "community_list_empty_subtitle",
           "status": "adopted"
         },
         {
@@ -434,10 +404,6 @@
         },
         {
           "androidName": "community_members_empty_action",
-          "status": "android-only"
-        },
-        {
-          "androidName": "community_members_empty_subtitle",
           "status": "android-only"
         },
         {

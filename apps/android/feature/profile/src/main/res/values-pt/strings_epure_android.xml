@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
+<resources>
+    <string name="profile_connection_context_sent">Pedido enviado para %1$s, aguardando a resposta.</string>
+</resources>

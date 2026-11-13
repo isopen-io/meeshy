@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
+<resources>
+    <string name="call_journal_search_empty">No call matches “%1$s” in the last three months.</string>
+    <string name="call_transcript_note">It includes what the other person said, as received during the call.</string>
+    <string name="call_transcript_note_question">What does this log contain?</string>
+</resources>

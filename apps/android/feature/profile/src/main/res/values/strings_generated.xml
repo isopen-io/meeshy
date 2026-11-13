@@ -12,7 +12,6 @@
     <string name="profile_action_report">Report</string>
     <string name="profile_action_resend_request">Resend request</string>
     <string name="profile_action_send_message">Send a message</string>
-    <string name="profile_action_unblock_user">Unblock user</string>
     <string name="profile_activity_title">Activity</string>
     <string name="profile_avatar_edit">Edit profile photo</string>
     <string name="profile_back">Back</string>
@@ -23,7 +22,6 @@
     <string name="profile_call_not_placed">No connection: the call didn\'t go through</string>
     <string name="profile_close_hint">Closes the profile</string>
     <string name="profile_connection_context_received">%1$s wants to connect with you. Accept to exchange messages.</string>
-    <string name="profile_connection_context_sent">You sent a connection request to %1$s. Waiting for their reply.</string>
     <string name="profile_conversations_interactionsDisabled">Interactions disabled</string>
     <string name="profile_conversations_noShared">No shared conversations</string>
     <string name="profile_decor_banner_section">Banner</string>
@@ -42,7 +40,6 @@
     <string name="profile_detail_system_language">Primary language</string>
     <string name="profile_display_name_label">Display name</string>
     <string name="profile_e2ee">End-to-end encrypted</string>
-    <string name="profile_e2ee_enabled">End-to-end encryption enabled</string>
     <string name="profile_edit">Edit</string>
     <string name="profile_email">Email</string>
     <string name="profile_first_name_label">First name</string>
@@ -61,9 +58,6 @@
     <string name="profile_not_verified">Not verified</string>
     <string name="profile_open_conversation_error">Unable to open the conversation</string>
     <string name="profile_phone">Phone</string>
-    <string name="profile_presence_away">Away</string>
-    <string name="profile_presence_online">Online</string>
-    <string name="profile_progression_hint">Opens your progress</string>
     <string name="profile_progression_subtitle">Badges, level and streak</string>
     <string name="profile_progression_title">My Legend</string>
     <string name="profile_report_quick_reason_fake_profile">Fake profile</string>
@@ -100,7 +94,6 @@
     <string name="profile_stats_messagesShort">Messages</string>
     <string name="profile_stats_title">Statistics</string>
     <string name="profile_status_connected">Connected</string>
-    <string name="profile_system_language_label">Primary language</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_details">Details</string>
     <string name="profile_tab_posts">Posts</string>

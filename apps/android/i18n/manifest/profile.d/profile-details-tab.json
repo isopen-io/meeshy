@@ -6,7 +6,6 @@
       "entries": [
         {"catalog": "ui", "iosKey": "profile.section.about", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.section.actions", "status": "adopted"},
-        {"catalog": "ui", "iosKey": "profile.e2ee.enabled", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.voice.title", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.stats.memberSince", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.stats.messagesShort", "status": "adopted"},

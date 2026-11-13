@@ -1,6 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_conversation_fallback_name">محادثة</string>
     <string name="community_add_channel_empty_hint">أنشئ محادثة أولًا لإضافتها هنا.</string>
     <string name="community_add_channel_empty_no_conversations">لا توجد محادثات متاحة</string>
     <string name="community_add_channel_empty_no_results">لا توجد نتائج</string>
@@ -44,10 +43,8 @@
     <string name="community_detail_leave_label">مغادرة المجتمع</string>
     <string name="community_detail_menu_leave">مغادرة</string>
     <string name="community_detail_menu_settings">الإعدادات</string>
-    <string name="community_detail_posts_empty_action">إنشاء منشور</string>
     <string name="community_list_create_accessibility_label">إنشاء مجتمع</string>
     <string name="community_list_empty_create_button">إنشاء مجتمع</string>
-    <string name="community_list_empty_subtitle">انضم إلى مجتمع أو أنشئ واحدًا للتعاون</string>
     <string name="community_list_empty_title">لا توجد مجتمعات</string>
     <string name="community_list_search_placeholder">بحث...</string>
     <string name="community_list_title">المجتمعات</string>

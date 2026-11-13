@@ -2,14 +2,12 @@
 <resources>
     <string name="notifications_mark_all_read">Marcar tudo como lido</string>
     <string name="notifications_action_mark_read">Lido</string>
-    <string name="notifications_empty_category">Nenhuma notificação aqui</string>
     <string name="notification_banner_preview_hidden">Nova notificação</string>
     <string name="notifications_unread_prefix">Não lida.</string>
     <string name="notifications_error_title">Notificações indisponíveis</string>
     <string name="notifications_error_subtitle">Verifique sua conexão e tente novamente.</string>
     <string name="notifications_error_retry">Tentar novamente</string>
     <string name="notifications_loading">Carregando…</string>
-    <string name="notifications_empty_subtitle">Suas notificações aparecerão aqui</string>
     <string name="notifications_empty_unread">Nenhuma notificação não lida</string>
     <string name="notifications_empty_messages">Nenhuma notificação de mensagem</string>
     <string name="notifications_empty_reactions">Nenhuma reação</string>

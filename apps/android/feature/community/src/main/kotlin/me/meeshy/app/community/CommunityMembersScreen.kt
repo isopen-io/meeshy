@@ -136,13 +136,13 @@ fun CommunityMembersScreen(
                         repeat(6) { MeeshySkeletonBox(Modifier.fillMaxWidth().height(48.dp)) }
                     }
                     state.showError -> MeeshyEmptyState(
-                        MeeshyIcons.WarningFilled, stringResource(R.string.community_common_error),
-                        stringResource(R.string.community_settings_error_default),
+                        MeeshyIcons.WarningFilled, stringResource(R.string.community_settings_error_default),
+                        "",
                         actionLabel = stringResource(R.string.community_common_retry), onAction = viewModel::retry,
                     )
                     state.isEmpty -> MeeshyEmptyState(
                         MeeshyIcons.GroupsFilled, stringResource(R.string.community_members_empty_title),
-                        stringResource(R.string.community_members_empty_subtitle),
+                        "",
                         actionLabel = if (state.canInvite) stringResource(R.string.community_members_empty_action) else null,
                         onAction = if (state.canInvite) onInvite else null,
                     )

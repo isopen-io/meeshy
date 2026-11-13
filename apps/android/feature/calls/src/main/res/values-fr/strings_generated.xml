@@ -168,8 +168,6 @@
     <string name="call_journal_erase_failed">L\'effacement a échoué. Réessayez.</string>
     <string name="call_journal_filter_video">Vidéo</string>
     <string name="call_journal_hide">Effacer</string>
-    <string name="call_journal_search_empty">Aucun appel ne correspond à « %1$s »</string>
-    <string name="call_journal_search_empty_hint">Le journal couvre les trois derniers mois.</string>
     <string name="call_journal_search_placeholder">Rechercher un appel</string>
     <string name="call_live_frame_accept">Appliquer</string>
     <string name="call_live_frame_answer_accepted_anonymous">Votre correspondant a appliqué votre cadre</string>

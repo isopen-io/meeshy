@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
+<resources>
+    <string name="call_journal_search_empty">Ninguna llamada coincide con «%1$s» en los últimos tres meses.</string>
+    <string name="call_transcript_note">Incluye las palabras de tu interlocutor, tal como se recibieron durante la llamada.</string>
+    <string name="call_transcript_note_question">¿Qué contiene este registro?</string>
+</resources>

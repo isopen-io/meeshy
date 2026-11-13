@@ -196,7 +196,7 @@ private fun LoadedDetail(
                 MeeshyEmptyState(
                     icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),
-                    subtitle = stringResource(R.string.community_detail_posts_empty_subtitle),
+                    subtitle = "",
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                 )
             }
@@ -451,7 +451,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.channelsSection(
             MeeshyEmptyState(
                 icon = MeeshyIcons.Chat,
                 title = stringResource(R.string.community_detail_channels_empty_title),
-                subtitle = stringResource(R.string.community_detail_channels_empty_subtitle),
+                subtitle = "",
                 actionLabel = if (canAdd) stringResource(R.string.community_detail_channels_empty_action) else null,
                 onAction = if (canAdd) onAddChannel else null,
                 modifier = Modifier.fillMaxWidth().height(220.dp),

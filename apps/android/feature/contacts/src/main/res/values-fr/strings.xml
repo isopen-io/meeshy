@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="contacts_requests_empty">Aucune demande en attente</string>
     <string name="contacts_list_error">Échec du chargement des contacts</string>
     <string name="contacts_discover_prompt">Recherchez des personnes à ajouter</string>
     <string name="contacts_discover_suggestions_title">Suggestions</string>
     <string name="contacts_discover_suggestions_empty">Aucune suggestion pour le moment</string>
     <string name="contacts_discover_error">Échec de la recherche d\'utilisateurs</string>
-    <string name="contacts_discover_connect">Connecter</string>
-    <string name="contacts_discover_contact">Contact</string>
     <string name="contacts_blocked_error">Échec du chargement des utilisateurs bloqués</string>
 </resources>

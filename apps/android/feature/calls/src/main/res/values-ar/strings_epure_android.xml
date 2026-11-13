@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
+<resources>
+    <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%1$s» في الأشهر الثلاثة الأخيرة.</string>
+    <string name="call_transcript_note">ويتضمن كلام محاورك كما وصل أثناء المكالمة.</string>
+    <string name="call_transcript_note_question">ماذا يتضمن هذا السجل؟</string>
+</resources>

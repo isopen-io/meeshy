@@ -2,14 +2,12 @@
 <resources>
     <string name="notifications_mark_all_read">Mark all read</string>
     <string name="notifications_action_mark_read">Mark read</string>
-    <string name="notifications_empty_category">No notifications here</string>
     <string name="notification_banner_preview_hidden">New notification</string>
     <string name="notifications_unread_prefix">Unread.</string>
     <string name="notifications_error_title">Notifications unavailable</string>
     <string name="notifications_error_subtitle">Check your connection, then try again.</string>
     <string name="notifications_error_retry">Retry</string>
     <string name="notifications_loading">Loading…</string>
-    <string name="notifications_empty_subtitle">Your notifications will appear here</string>
     <string name="notifications_empty_unread">No unread notifications</string>
     <string name="notifications_empty_messages">No message notifications</string>
     <string name="notifications_empty_reactions">No reactions</string>

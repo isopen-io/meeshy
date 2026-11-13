@@ -3,7 +3,6 @@
     <string name="call_status_reconnecting">Reconnexion (%1$d)…</string>
     <string name="call_pill_ongoing">Appel en cours avec %1$s</string>
     <string name="call_pill_reopen">Revenir à l\'appel</string>
-    <string name="call_history_empty">Aucun appel</string>
     <string name="call_history_outgoing">Appel sortant</string>
     <string name="call_quality_excellent">Connexion excellente</string>
     <string name="call_quality_fair">Connexion moyenne</string>

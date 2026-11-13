@@ -2,8 +2,6 @@
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
     <string name="circles_empty_action">Buscar contactos</string>
-    <string name="circles_empty_subtitle">A medida que interactúas con personas, se unen a tus círculos</string>
-    <string name="circles_empty_title">Tus vínculos aparecerán aquí</string>
     <string name="circles_error_load">No se pudieron cargar tus círculos</string>
     <string name="circles_error_retry">Reintentar</string>
     <string name="circles_offline_banner">Sin conexión: estos son tus últimos círculos conocidos</string>
@@ -54,6 +52,6 @@
     <string name="circles_sheet_close">Cerrar</string>
     <string name="circles_sheet_settings_none">Nada que ajustar en este nivel.</string>
     <string name="circles_sheet_settings_title">Ajustes para esta persona</string>
-    <string name="circles_sheet_settings_unavailable">Estos ajustes llegarán con la próxima etapa de Meeshy. Por ahora están desactivados.</string>
+    <string name="circles_sheet_settings_unavailable">Pronto disponible</string>
     <string name="contacts_tab_circles">Círculos</string>
 </resources>

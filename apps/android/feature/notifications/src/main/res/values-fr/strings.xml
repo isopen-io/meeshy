@@ -2,14 +2,12 @@
 <resources>
     <string name="notifications_mark_all_read">Tout marquer comme lu</string>
     <string name="notifications_action_mark_read">Lu</string>
-    <string name="notifications_empty_category">Aucune notification ici</string>
     <string name="notification_banner_preview_hidden">Nouvelle notification</string>
     <string name="notifications_unread_prefix">Non lu.</string>
     <string name="notifications_error_title">Notifications indisponibles</string>
     <string name="notifications_error_subtitle">Vérifiez votre connexion, puis réessayez.</string>
     <string name="notifications_error_retry">Réessayer</string>
     <string name="notifications_loading">Chargement…</string>
-    <string name="notifications_empty_subtitle">Vos notifications apparaîtront ici</string>
     <string name="notifications_empty_unread">Aucune notification non lue</string>
     <string name="notifications_empty_messages">Aucune notification de message</string>
     <string name="notifications_empty_reactions">Aucune réaction</string>

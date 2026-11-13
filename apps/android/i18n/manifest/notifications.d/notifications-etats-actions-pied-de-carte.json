@@ -13,7 +13,6 @@
         {"androidName": "notifications_empty_messages", "status": "android-only"},
         {"androidName": "notifications_empty_reactions", "status": "android-only"},
         {"androidName": "notifications_empty_social", "status": "android-only"},
-        {"androidName": "notifications_empty_subtitle", "status": "android-only"},
         {"androidName": "notifications_empty_system", "status": "android-only"},
         {"androidName": "notifications_empty_translations", "status": "android-only"},
         {"androidName": "notifications_empty_unread", "status": "android-only"},

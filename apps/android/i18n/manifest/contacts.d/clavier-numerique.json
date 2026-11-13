@@ -24,12 +24,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "keypad.delete.a11y.hint",
-          "androidName": "keypad_delete_a11y_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "keypad.clear.a11y",
           "androidName": "keypad_clear_a11y",
           "status": "adopted"
@@ -42,20 +36,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "keypad.no-match.subtitle",
-          "androidName": "keypad_no_match_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "keypad.prompt.title",
           "androidName": "keypad_prompt_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "keypad.prompt.subtitle",
-          "androidName": "keypad_prompt_subtitle",
           "status": "adopted"
         },
         {

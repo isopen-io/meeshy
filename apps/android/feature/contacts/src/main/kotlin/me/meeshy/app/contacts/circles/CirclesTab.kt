@@ -71,8 +71,8 @@ fun CirclesTab(
         when {
             state.showsSkeleton -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             state.isEmptyState -> FullState(
-                title = stringResource(R.string.circles_empty_title),
-                subtitle = stringResource(R.string.circles_empty_subtitle),
+                title = stringResource(R.string.circles_intro),
+                subtitle = null,
                 action = stringResource(R.string.circles_empty_action),
                 onAction = onFindContacts,
             )
@@ -124,6 +124,7 @@ private fun CirclesList(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         item(key = "banner") { Banner(state = state, onRetry = { viewModel.load(forceNetwork = true) }) }
+        item(key = "intro") { CirclesIntro() }
         if (state.incomingRaises.isNotEmpty() || state.outgoingRaises.isNotEmpty()) {
             item(key = "requests-header") {
                 Text(
@@ -178,6 +179,17 @@ private fun CirclesList(
             }
         }
     }
+}
+
+/** La phrase d'orientation du bloc, lisible au repos : ce que sont les cercles (règle 7, #18083). */
+@Composable
+internal fun CirclesIntro(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.circles_intro),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
 }
 
 /** Le cache reste affiché ; l'état se dit discrètement au-dessus. */

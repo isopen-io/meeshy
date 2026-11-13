@@ -2,14 +2,12 @@
 <resources>
     <string name="notifications_mark_all_read">Alle als gelesen markieren</string>
     <string name="notifications_action_mark_read">Gelesen</string>
-    <string name="notifications_empty_category">Hier gibt es keine Benachrichtigungen</string>
     <string name="notification_banner_preview_hidden">Neue Benachrichtigung</string>
     <string name="notifications_unread_prefix">Ungelesen.</string>
     <string name="notifications_error_title">Mitteilungen nicht verfügbar</string>
     <string name="notifications_error_subtitle">Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="notifications_error_retry">Erneut versuchen</string>
     <string name="notifications_loading">Wird geladen…</string>
-    <string name="notifications_empty_subtitle">Ihre Benachrichtigungen erscheinen hier</string>
     <string name="notifications_empty_unread">Keine ungelesenen Benachrichtigungen</string>
     <string name="notifications_empty_messages">Keine Nachrichtenbenachrichtigungen</string>
     <string name="notifications_empty_reactions">Keine Reaktionen</string>

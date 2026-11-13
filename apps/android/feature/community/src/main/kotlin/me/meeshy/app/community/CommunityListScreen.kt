@@ -111,15 +111,15 @@ fun CommunityListScreen(
                 state.showSkeleton -> SkeletonGrid()
                 state.showError -> MeeshyEmptyState(
                     icon = MeeshyIcons.WarningFilled,
-                    title = stringResource(R.string.community_common_error),
-                    subtitle = stringResource(R.string.community_settings_error_default),
+                    title = stringResource(R.string.community_settings_error_default),
+                    subtitle = "",
                     actionLabel = stringResource(R.string.community_common_retry),
                     onAction = viewModel::retry,
                 )
                 state.showEmpty -> MeeshyEmptyState(
                     icon = MeeshyIcons.GroupsFilled,
                     title = stringResource(R.string.community_list_empty_title),
-                    subtitle = stringResource(R.string.community_list_empty_subtitle),
+                    subtitle = "",
                     actionLabel = stringResource(R.string.community_list_empty_create_button),
                     onAction = onCreateCommunity,
                 )

@@ -28,7 +28,7 @@
     <string name="call_network_tier_good">Bonne</string>
     <string name="call_network_tier_fair">Moyenne</string>
     <string name="call_network_tier_poor">Faible</string>
-    <string name="call_transcript_disclaimer">Copie chiffrée conservée sur cet appareil. Le journal de l’appel est aussi conservé sur le serveur Meeshy, lisible par ses seuls participants. Il inclut les paroles de votre interlocuteur, telles que reçues pendant l’appel.</string>
+    <string name="call_transcript_disclaimer">Copie chiffrée sur cet appareil. Le journal de l’appel est aussi conservé sur le serveur Meeshy, lisible par ses seuls participants.</string>
     <string name="call_transcript_delete">Supprimer ce transcript</string>
     <string name="call_transcript_delete_confirm_title">Supprimer ce transcript ?</string>
     <string name="call_transcript_delete_confirm_message">Il disparaît de cet appareil, définitivement. Le journal conservé sur le serveur n’est pas effacé.</string>

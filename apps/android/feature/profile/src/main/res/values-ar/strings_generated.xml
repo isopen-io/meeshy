@@ -12,7 +12,6 @@
     <string name="profile_action_report">إبلاغ</string>
     <string name="profile_action_resend_request">إعادة إرسال الطلب</string>
     <string name="profile_action_send_message">إرسال رسالة</string>
-    <string name="profile_action_unblock_user">إلغاء حظر المستخدم</string>
     <string name="profile_activity_title">النشاط</string>
     <string name="profile_avatar_edit">تعديل صورة الملف الشخصي</string>
     <string name="profile_back">رجوع</string>
@@ -23,7 +22,6 @@
     <string name="profile_call_not_placed">لا يوجد اتصال: لم تنطلق المكالمة</string>
     <string name="profile_close_hint">يغلق الملف الشخصي</string>
     <string name="profile_connection_context_received">يرغب %1$s في التواصل معك. اقبل لتبادل الرسائل.</string>
-    <string name="profile_connection_context_sent">أرسلت طلب اتصال إلى %1$s. في انتظار ردّه.</string>
     <string name="profile_conversations_interactionsDisabled">التفاعلات معطّلة</string>
     <string name="profile_conversations_noShared">لا توجد محادثات مشتركة</string>
     <string name="profile_decor_banner_section">البانر</string>
@@ -42,7 +40,6 @@
     <string name="profile_detail_system_language">اللغة الأساسية</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_e2ee">مشفّرة من طرف إلى طرف</string>
-    <string name="profile_e2ee_enabled">التشفير من طرف إلى طرف مفعّل</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_email">البريد الإلكتروني</string>
     <string name="profile_first_name_label">الاسم الأول</string>
@@ -61,9 +58,6 @@
     <string name="profile_not_verified">غير موثّق</string>
     <string name="profile_open_conversation_error">تعذر فتح المحادثة</string>
     <string name="profile_phone">الهاتف</string>
-    <string name="profile_presence_away">بعيد</string>
-    <string name="profile_presence_online">متصل</string>
-    <string name="profile_progression_hint">يفتح تقدّمك</string>
     <string name="profile_progression_subtitle">الشارات والمستوى والسلسلة</string>
     <string name="profile_progression_title">أسطورتي</string>
     <string name="profile_report_quick_reason_fake_profile">ملف شخصي مزيّف</string>
@@ -100,7 +94,6 @@
     <string name="profile_stats_messagesShort">الرسائل</string>
     <string name="profile_stats_title">الإحصائيات</string>
     <string name="profile_status_connected">متصلون</string>
-    <string name="profile_system_language_label">اللغة الأساسية</string>
     <string name="profile_tab_conversations">المحادثات</string>
     <string name="profile_tab_details">التفاصيل</string>
     <string name="profile_tab_posts">المنشورات</string>

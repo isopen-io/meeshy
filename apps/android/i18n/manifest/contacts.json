@@ -28,12 +28,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "contacts.blocked.unblock-a11y",
-          "androidName": "contacts_blocked_unblock_a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "2fa_cancel",
           "androidName": "contacts_blocked_unblock_cancel",
           "status": "adopted"
@@ -67,20 +61,6 @@
           "iosKey": "contacts.blocked.unblock-title",
           "androidName": "contacts_blocked_unblock_title",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "discovery.tab.blocked",
-          "androidName": "contacts_discover_blocked",
-          "status": "adopted"
-        },
-        {
-          "androidName": "contacts_discover_connect",
-          "status": "android-only"
-        },
-        {
-          "androidName": "contacts_discover_contact",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -212,20 +192,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "call.incoming.accept",
-          "androidName": "contacts_request_accept",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "2fa_cancel",
           "androidName": "contacts_request_cancel",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.incoming.decline",
-          "androidName": "contacts_request_decline",
           "status": "adopted"
         },
         {
@@ -241,16 +209,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "contacts_requests_empty",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "contacts.requests.filter.received",
-          "androidName": "contacts_requests_received",
-          "status": "adopted"
-        },
-        {
           "catalog": "app",
           "iosKey": "contacts.requests.received.intent",
           "androidName": "contacts_requests_received_intent",
@@ -260,12 +218,6 @@
           "catalog": "app",
           "iosKey": "contacts.requests.reject-a11y",
           "androidName": "contacts_requests_reject_a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "contacts.requests.filter.sent",
-          "androidName": "contacts_requests_sent",
           "status": "adopted"
         },
         {

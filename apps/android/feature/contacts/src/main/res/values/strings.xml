@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="contacts_requests_empty">No pending requests</string>
     <string name="contacts_list_error">Couldn\'t load contacts</string>
     <string name="contacts_discover_prompt">Search for people to connect with</string>
     <string name="contacts_discover_suggestions_title">Suggestions</string>
     <string name="contacts_discover_suggestions_empty">No suggestions right now</string>
     <string name="contacts_discover_error">Couldn\'t search users</string>
-    <string name="contacts_discover_connect">Connect</string>
-    <string name="contacts_discover_contact">Contact</string>
     <string name="contacts_blocked_error">Couldn\'t load blocked users</string>
 </resources>

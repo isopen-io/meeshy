@@ -1,6 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_conversation_fallback_name">Conversa</string>
     <string name="community_add_channel_empty_hint">Crie uma conversa primeiro para adicioná-la aqui.</string>
     <string name="community_add_channel_empty_no_conversations">Sem conversas disponíveis</string>
     <string name="community_add_channel_empty_no_results">Sem resultados</string>
@@ -44,10 +43,8 @@
     <string name="community_detail_leave_label">Sair da comunidade</string>
     <string name="community_detail_menu_leave">Sair</string>
     <string name="community_detail_menu_settings">Configurações</string>
-    <string name="community_detail_posts_empty_action">Criar uma publicação</string>
     <string name="community_list_create_accessibility_label">Criar uma comunidade</string>
     <string name="community_list_empty_create_button">Criar uma comunidade</string>
-    <string name="community_list_empty_subtitle">Entre ou crie uma comunidade para colaborar</string>
     <string name="community_list_empty_title">Sem comunidades</string>
     <string name="community_list_search_placeholder">Pesquisar...</string>
     <string name="community_list_title">Comunidades</string>

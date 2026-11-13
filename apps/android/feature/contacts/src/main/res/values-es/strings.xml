@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="contacts_requests_empty">No hay solicitudes pendientes</string>
     <string name="contacts_list_error">No se pudieron cargar los contactos</string>
     <string name="contacts_discover_prompt">Busca personas para conectar</string>
     <string name="contacts_discover_suggestions_title">Sugerencias</string>
     <string name="contacts_discover_suggestions_empty">No hay sugerencias por ahora</string>
     <string name="contacts_discover_error">No se pudo buscar usuarios</string>
-    <string name="contacts_discover_connect">Conectar</string>
-    <string name="contacts_discover_contact">Contacto</string>
     <string name="contacts_blocked_error">No se pudieron cargar los usuarios bloqueados</string>
 </resources>

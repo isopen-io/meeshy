@@ -12,7 +12,6 @@
     <string name="profile_action_report">Denunciar</string>
     <string name="profile_action_resend_request">Reenviar solicitação</string>
     <string name="profile_action_send_message">Enviar uma mensagem</string>
-    <string name="profile_action_unblock_user">Desbloquear usuário</string>
     <string name="profile_activity_title">Atividade</string>
     <string name="profile_avatar_edit">Editar foto do perfil</string>
     <string name="profile_back">Voltar</string>
@@ -23,7 +22,6 @@
     <string name="profile_call_not_placed">Sem conexão: a chamada não foi feita</string>
     <string name="profile_close_hint">Fecha o perfil</string>
     <string name="profile_connection_context_received">%1$s quer se conectar com você. Aceite para trocar mensagens.</string>
-    <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %1$s. Aguardando a resposta.</string>
     <string name="profile_conversations_interactionsDisabled">Interações desativadas</string>
     <string name="profile_conversations_noShared">Sem conversas em comum</string>
     <string name="profile_decor_banner_section">Banner</string>
@@ -42,7 +40,6 @@
     <string name="profile_detail_system_language">Idioma principal</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_e2ee">Criptografada de ponta a ponta</string>
-    <string name="profile_e2ee_enabled">Criptografia de ponta a ponta ativada</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_email">E-mail</string>
     <string name="profile_first_name_label">Nome</string>
@@ -61,9 +58,6 @@
     <string name="profile_not_verified">Não verificado</string>
     <string name="profile_open_conversation_error">Não foi possível abrir a conversa</string>
     <string name="profile_phone">Telefone</string>
-    <string name="profile_presence_away">Ausente</string>
-    <string name="profile_presence_online">Online</string>
-    <string name="profile_progression_hint">Abre seu progresso</string>
     <string name="profile_progression_subtitle">Emblemas, nível e sequência</string>
     <string name="profile_progression_title">Minha Lenda</string>
     <string name="profile_report_quick_reason_fake_profile">Perfil falso</string>
@@ -100,7 +94,6 @@
     <string name="profile_stats_messagesShort">Mensagens</string>
     <string name="profile_stats_title">Estatísticas</string>
     <string name="profile_status_connected">Conectados</string>
-    <string name="profile_system_language_label">Idioma principal</string>
     <string name="profile_tab_conversations">Conversas</string>
     <string name="profile_tab_details">Detalhes</string>
     <string name="profile_tab_posts">Posts</string>

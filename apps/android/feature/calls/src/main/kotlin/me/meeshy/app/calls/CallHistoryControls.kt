@@ -244,10 +244,5 @@ internal fun CallHistorySearchEmpty(query: String, modifier: Modifier = Modifier
             style = MaterialTheme.typography.bodyLarge,
             color = MeeshyTheme.tokens.textSecondary,
         )
-        Text(
-            text = stringResource(R.string.call_journal_search_empty_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textMuted,
-        )
     }
 }
