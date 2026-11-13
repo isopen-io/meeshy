@@ -54,4 +54,25 @@ class FocalCallJournalOfferTest {
             assertThat(FocalCallJournalOffer.saysNothingWasKept(state)).isFalse()
         }
     }
+
+    /** A1.14 — sur cache vide, la bulle dépliée attend le replay avec un indicateur sobre ; jamais sur une copie déjà là. */
+    @Test fun `un journal qui charge sans rien a montrer affiche son attente`() {
+        assertThat(FocalCallJournalOffer.showsWaiting(CallTranscriptState.Loading)).isTrue()
+    }
+
+    @Test fun `un journal pret, vide ou en echec n'affiche plus d'attente`() {
+        val line = CallTranscriptLine(
+            speakerName = "Awa", isLocal = false, elapsedLabel = "00:04", original = "Hi", translated = null, translatedLanguage = null,
+        )
+        listOf(CallTranscriptState.Absent, CallTranscriptState.Failed, CallTranscriptState.Ready(listOf(line))).forEach { state ->
+            assertThat(FocalCallJournalOffer.showsWaiting(state)).isFalse()
+        }
+    }
+
+    /** A1.14 — la copie chiffrée de l'appareil en lecture n'est pas une attente du réseau : ni indicateur, ni « vide ». */
+    @Test fun `un journal dont la copie de l'appareil se lit n'affiche ni attente ni vide`() {
+        assertThat(FocalCallJournalOffer.showsWaiting(CallTranscriptState.ReadingCopy)).isFalse()
+        assertThat(FocalCallJournalOffer.saysNothingWasKept(CallTranscriptState.ReadingCopy)).isFalse()
+        assertThat(CallTranscriptState.ReadingCopy.isVisible).isFalse()
+    }
 }

@@ -116,7 +116,7 @@ internal fun CallDetailTranscriptSection(
     onDelete: () -> Unit,
 ) {
     when (state) {
-        CallTranscriptState.Loading, CallTranscriptState.Absent -> Unit
+        CallTranscriptState.ReadingCopy, CallTranscriptState.Loading, CallTranscriptState.Absent -> Unit
         CallTranscriptState.Failed -> TranscriptFailure(onRetry)
         is CallTranscriptState.Ready -> TranscriptLines(state, accent, onDelete)
     }

@@ -20,4 +20,11 @@ object FocalCallJournalOffer {
      * `callTranscript.empty`). Le chargement ne dit rien : la copie de l'appareil se dessine aussitôt quand elle existe.
      */
     fun saysNothingWasKept(state: CallTranscriptState): Boolean = state == CallTranscriptState.Absent
+
+    /**
+     * A1.14 — sur cache vide, le journal déplié attend le replay du serveur avec un indicateur sobre (iOS `ProgressView`,
+     * `BubbleCallJournalUnderCard`). Pendant la lecture de la copie de l'appareil ([CallTranscriptState.ReadingCopy]) rien
+     * n'attend encore le réseau : une copie trouvée se dessine aussitôt, sans être jamais passée par [CallTranscriptState.Loading].
+     */
+    fun showsWaiting(state: CallTranscriptState): Boolean = state == CallTranscriptState.Loading
 }
