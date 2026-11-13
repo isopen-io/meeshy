@@ -208,3 +208,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 26
+
+- Début du run : aucune PR ouverte ; toutes les branches `claude/communautes-*` sont dans dev. Le journal s'arrêtait au réveil 25 (2026-11-09).
+- Lot : #6451 (iOS, cohérence). Les accents des libellés de communauté avaient déjà été réparés par #10606, qui a posé `FrenchLabelAccentGuardTests`. Mais la mesure a trouvé pire : **21 valeurs `fr` de communauté recopiaient l'ANGLAIS** (« Invite Members », « No Users Found », « Members », « Remove », « No Posts Yet »…) pendant que l'arabe, l'allemand et l'espagnol étaient traduits — la garde des accents ne pouvait pas les voir, un texte anglais n'ayant aucun accent manquant. Traduites (vocabulaire du web et d'iOS : « Conversations », « Publications », « Membres », « Retirer »), plus « Touchez pour réduire / développer » (transcription) et deux défauts que la garde laissait passer : « ECHANTILLONS » (forme CAPITALE) et « irreversible » (absent de la liste).
+- Garde étendue : formes capitales, « irreversible », et `test_frenchValues_ofCommunityKeys_areNotTheEnglishCopy` (une valeur `fr` de `community.*` égale à l'anglais rougit, sauf mots communs aux deux langues).
+- Gates locaux : simulation Python des trois balayages verte ; `xcstrings_to_android.py --check` vert (ces clés n'alimentent pas Android). iOS ne compile pas en conteneur : preuve par `ios.yml` / `sdk-tests.yml`.
+- Reste hors communautés (même défaut, autre domaine) : `story.post.*`, `story.slide.addSlide`, repères de timeline (« Keyframe », « Playhead », « VIDEO ») — laissés au composer, issue de suivi.
+- Prochain lot recommandé : #17209 (traductions de story et blocage), puis #16739 (décision) ; #14227 / #16696 et #6381 demandent une session de staging.
