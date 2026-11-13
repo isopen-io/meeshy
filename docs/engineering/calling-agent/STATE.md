@@ -795,3 +795,29 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 21 — 2026-11-13
+
+- **Base** : `origin/dev` @ `16999369`. La PR du cycle 20 (#18043, #17204) y est fusionnée.
+- **Branche** : `claude/determined-volta-xyx877`.
+- **Objectif** : #18041, piste 1 du cycle 20. Une traduction directe (`POST /translate-blocking` sans `message_id`) d'un texte trop long rend l'original tout de suite au lieu d'attendre 10 s puis de servir le faux `"[EN] <texte>"`.
+- **Livré** (seule la passerelle change : ni le protocole ZMQ, ni le traducteur, ni la forme de la réponse) :
+  - `directTextTranslation.ts` : `awaitResponse` écoute `translationSkipped`. Sur le `taskId` de sa requête, `cleanup()` retire les QUATRE écouteurs et le délai, puis rejette `TooLongRefusal`. `servesOriginal` (ex-`isUnsupportedPair`) rend alors `untranslatedResult` (`modelType: 'none'`, règle 1 du Prisme), sans `incrementErrors`.
+  - **Rétrocompatibilité** : un skipped sans `taskId` (ancien traducteur) est ignoré, et la requête retombe sur le comportement d'avant. La route sert la même forme que pour une paire non servie (#3659).
+- **Tests** : `MessageTranslationService.direct-too-long.test.ts` (8 tests, dont un bout-en-bout qui fait passer la trame JSON réelle du traducteur par le vrai `ZmqMessageHandler` et le vrai `ZmqTranslationClient`).
+  - **Rouge avant le correctif** : `3 failed, 5 passed` (`still waiting after 1s`, `Exceeded timeout of 10000 ms`). Les 5 verts gardent le nettoyage.
+  - **Vert** : relancé par moi, `11 passed` sur `MessageTranslationService.direct*`. La QA mesure 41 suites et 818 tests (`MessageTranslationService*`, `routes/translation-*`, `zmq-translation`), `tsc --noEmit` à 0.
+  - **Mutations QA** : 7 sur 7 font rougir les témoins.
+- **QA** : favorable. Remarques non bloquantes : le bout-en-bout touche des internes privés par cast (comme le test de référence de `ZmqTranslationClient`) ; un refus qui arriverait avant la pose des écouteurs reste théorique, comme pour les trois autres événements.
+
+### Limites connues
+
+- La route ne dit pas au client POURQUOI rien n'a été traduit (texte trop long). Le dire changerait le contrat ; ce n'est pas demandé tant qu'aucun client ne sait l'afficher (voir la limite du cycle 20).
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : lancer `workflow_dispatch` de `ci.yml`, puis fusionner au vert.
+1. #18042 (solde restreint aux traductions texte, compteur des refus, contrôle de type des champs relayés).
+2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+3. #17132 et #17133.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
