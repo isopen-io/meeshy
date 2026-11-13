@@ -131,6 +131,22 @@ public nonisolated struct MeeshyObjectMenuChrome: Sendable, Equatable {
     }
 }
 
+// MARK: - La fermeture d'office
+
+/// **Quand le menu se ferme sans que personne ne l'ait demandé** : sa liste est
+/// vide (loi 13), ou son ancre DISPARAÎT (objet retiré, pilule rangée). Une ancre
+/// qui n'est pas ENCORE publiée (première image, avant que la préférence
+/// remonte) n'est pas une ancre disparue : le menu attend, il ne se ferme pas.
+public nonisolated enum MeeshyObjectMenuDismissal {
+    public static func isEmpty(isPresented: Bool, rowCount: Int) -> Bool {
+        isPresented && rowCount == 0
+    }
+
+    public static func anchorLost(isPresented: Bool, hadAnchor: Bool, hasAnchor: Bool) -> Bool {
+        isPresented && hadAnchor && !hasAnchor
+    }
+}
+
 // MARK: - Les marges de la zone sûre
 
 public nonisolated struct MeeshyObjectMenuInsets: Sendable, Equatable {

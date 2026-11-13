@@ -158,6 +158,17 @@ struct MeeshyObjectMenuTests {
         }
     }
 
+    @Test("fermeture d'office : une liste vide ferme, une ancre disparue ferme, une ancre pas encore publiée n'est pas une ancre disparue")
+    func dismissal_waitsForTheFirstAnchorButClosesWhenItIsLost() {
+        #expect(MeeshyObjectMenuDismissal.isEmpty(isPresented: true, rowCount: 0))
+        #expect(!MeeshyObjectMenuDismissal.isEmpty(isPresented: true, rowCount: 1))
+        #expect(!MeeshyObjectMenuDismissal.isEmpty(isPresented: false, rowCount: 0))
+        #expect(MeeshyObjectMenuDismissal.anchorLost(isPresented: true, hadAnchor: true, hasAnchor: false))
+        #expect(!MeeshyObjectMenuDismissal.anchorLost(isPresented: true, hadAnchor: false, hasAnchor: false))
+        #expect(!MeeshyObjectMenuDismissal.anchorLost(isPresented: true, hadAnchor: false, hasAnchor: true))
+        #expect(!MeeshyObjectMenuDismissal.anchorLost(isPresented: false, hadAnchor: true, hasAnchor: false))
+    }
+
     // MARK: - Choix
 
     @Test("choisir une ligne : le retour haptique, la fermeture, PUIS l'identifiant, une fois chacun")

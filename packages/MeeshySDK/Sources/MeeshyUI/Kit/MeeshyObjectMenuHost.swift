@@ -118,8 +118,13 @@ private struct MeeshyObjectMenuLayer: View {
             if isPresented { stage }
         }
         .animation(isPresented ? motion.enter : motion.exit, value: isPresented)
-        .adaptiveOnChange(of: shouldDismiss, initial: true) { _, wanted in
-            if wanted { dismiss() }
+        .adaptiveOnChange(of: MeeshyObjectMenuDismissal.isEmpty(isPresented: isPresented, rowCount: rows.count), initial: true) { _, empty in
+            if empty { dismiss() }
+        }
+        .adaptiveOnChange(of: hasAnchor) { was, has in
+            if MeeshyObjectMenuDismissal.anchorLost(isPresented: isPresented, hadAnchor: was, hasAnchor: has) {
+                dismiss()
+            }
         }
     }
 
@@ -133,16 +138,13 @@ private struct MeeshyObjectMenuLayer: View {
 
     private var hasAnchor: Bool { configuration.anchor != nil || anchors.control != nil }
 
-    /// Une liste vide ou une ancre disparue : le menu se ferme.
-    private var shouldDismiss: Bool {
-        isPresented && (rows.isEmpty || !hasAnchor)
-    }
-
     private var stage: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                scrim
-                if let placement = placement(in: proxy) { menu(placement) }
+                if let placement = placement(in: proxy) {
+                    scrim
+                    menu(placement)
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
