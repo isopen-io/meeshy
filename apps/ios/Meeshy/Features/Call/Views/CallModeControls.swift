@@ -84,10 +84,13 @@ struct CallEffectsModeControls: View {
         }
     }
 
-    /// ‹ revient à l'appel en gardant le look : chaque look touché s'est appliqué tout de suite.
+    /// ‹ referme d'abord le panneau de réglages ouvert (#17947), par le chemin inverse de
+    /// « Réglages » ; sinon il revient à l'appel en gardant le look : chaque look touché s'est
+    /// appliqué tout de suite.
     private func goBack() {
         HapticFeedback.light()
-        onExit()
+        guard let closed = CallEffectsBarRule.afterBack(from: barMode) else { return onExit() }
+        withAnimation(settingsAnimation) { barMode = closed }
     }
 
     private func toggleSettings() {
@@ -395,10 +398,12 @@ struct CallMontageModeControls: View {
             .combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))
     }
 
-    /// ‹ revient à l'appel : ce qui a été touché s'est appliqué tout de suite.
+    /// ‹ referme d'abord le panneau de réglages ouvert (#17947) ; sinon il revient à l'appel :
+    /// ce qui a été touché s'est appliqué tout de suite.
     private func goBack() {
         HapticFeedback.light()
-        onExit()
+        guard let closed = CallEffectsBarRule.afterBack(from: barMode) else { return onExit() }
+        withAnimation(settingsAnimation) { barMode = closed }
     }
 
     private func toggleSettings() {

@@ -45,11 +45,25 @@ const offsetAt = (at: number, timeZone: string): number => {
   return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - Math.floor(at / 1000) * 1000;
 };
 
-/** L'instant UTC d'un minuit local, corrigé une seconde fois pour un changement d'heure entre les deux lectures. */
+const sameLocalDay = (at: number, timeZone: string, target: WallClock): boolean => {
+  const w = wallClock(at, timeZone);
+  return w.year === target.year && w.month === target.month && w.day === target.day;
+};
+
+/**
+ * Le PREMIER instant UTC du jour local `year-monthIndex-day`. Minuit se lit avec
+ * le décalage d'avant et celui d'après un éventuel changement d'heure ; on garde
+ * le plus tôt des deux qui tombe DANS ce jour. Quand minuit n'existe pas (heure
+ * sautée à minuit, ex. `America/Santiago` le 2026-09-06), seul le décalage
+ * d'avant y tombe : il désigne l'instant du saut, 01:00 locale (#14473).
+ */
 function localMidnightUtc(year: number, monthIndex: number, day: number, timeZone: string): number {
   const naive = Date.UTC(year, monthIndex, day);
+  const target: WallClock = { year, month: monthIndex + 1, day, hour: 0, minute: 0, second: 0 };
   const first = naive - offsetAt(naive, timeZone);
-  return naive - offsetAt(first, timeZone);
+  const second = naive - offsetAt(first, timeZone);
+  const inDay = [first, second].filter((at) => sameLocalDay(at, timeZone, target));
+  return inDay.length > 0 ? Math.min(...inDay) : second;
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0');

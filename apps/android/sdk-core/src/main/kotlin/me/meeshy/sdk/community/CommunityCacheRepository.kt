@@ -14,7 +14,10 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ContentFetchFailure
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.toContentFetchFailure
 import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.session.AccountFence
@@ -109,7 +112,7 @@ class CommunityCacheRepository(
 
     private fun <T> NetworkResult<T>.orThrow(): T = when (this) {
         is NetworkResult.Success -> data
-        is NetworkResult.Failure -> throw CommunityFetchException(error.message, error.httpStatus)
+        is NetworkResult.Failure -> throw error.toCommunityFetchException()
     }
 
 
@@ -124,7 +127,16 @@ class CommunityCacheRepository(
     }
 }
 
-/** Un refus de la passerelle sur une lecture de communauté ; [httpStatus] dit si elle n'existe plus (404). */
-class CommunityFetchException(message: String, val httpStatus: Int? = null) : RuntimeException(message) {
-    val isNotFound: Boolean get() = httpStatus == 404
-}
+/**
+ * Un refus de la passerelle sur une lecture de communauté ; [failure] dit sa CAUSE (refusée,
+ * absente, réseau, serveur), que [httpStatus] seul ne dit pas : une requête qui n'est pas arrivée
+ * n'a pas de statut, et ce n'est pas une panne du serveur.
+ */
+class CommunityFetchException(
+    message: String,
+    val httpStatus: Int? = null,
+    val failure: ContentFetchFailure = httpStatus?.let(ContentFetchFailure::fromHttpStatus) ?: ContentFetchFailure.SERVER,
+) : RuntimeException(message)
+
+fun ApiError.toCommunityFetchException(): CommunityFetchException =
+    CommunityFetchException(message, httpStatus, toContentFetchFailure())

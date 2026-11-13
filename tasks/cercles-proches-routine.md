@@ -467,6 +467,249 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
 
+## 2026-11-13 — réveil 25 : mener #16987 (partage de position : comptes qui partent, ligne de maille, course) à la fusion
+
+- Reprise : #17956 (carte des positions sur le web, #16984) et `claude/cercles-ensemble-conversation-close` (#17147)
+  sont menées par des réveils actifs (poussées dans la dernière demi-heure) ; `claude/cercles-16588-web` aussi. Ce réveil
+  ne les touche pas.
+- Trouvé : la branche `claude/cercles-16987-serveur`, écrite et contre-auditée deux fois le 2026-11-08 (voir #16987),
+  n'avait jamais été proposée et n'avait plus de réveil depuis quatre jours. Ce réveil la reprend.
+- `origin/dev` fusionnée à la main : un conflit dans `AccountPurgeService.ts`, les deux côtés gardés (dev efface les
+  relais externes ouverts par le compte, la branche arrête son partage de position), l'arrêt placé en dernier pour ne
+  pas décaler la déstructuration du résumé de purge.
+- Gates locaux : `tsc --noEmit` passerelle (8 Go de tas) et shared verts ; témoins passerelle du lot et voisins
+  (sharedLocation, rituel, blocage, purge, administration, suppression de compte, maintenance, relations, balayages,
+  gardes et cliquets) 1 689/1 689 ; shared (`shared-location`, `relation-access`) 252/252.
+- Contre-audit adversarial des dernières corrections (b5837a213c, fede6d4463) relancé avant la fusion.
+- Contre-audit de 7e7dde1 : **bloquant**, deux constats élevés (un socket resté ouvert d'un compte désactivé ou
+  supprimé rangeait un nouveau partage, que la réactivation faisait revenir) et deux moyens (le rejeu d'une montée et
+  le rattrapage ne relisaient pas la loi après avoir noté le lecteur ; un lecteur dont l'accès se fermait sans rejeu,
+  un rôle d'équipe qui redescend, gardait le point). Corrigés en TDD : le démarrage relit l'émetteur après la
+  génération, le rejeu, la réconciliation et le rattrapage relisent après avoir noté, et l'éventail envoie la fin aux
+  servis dont l'accès est fermé. Le monde des témoins du relais sort dans un helper partagé (budget de taille).
+- Vérification des corrections : une régression trouvée (le rattrapage qui constatait une perte dénotait le lecteur
+  sans lui envoyer la fin, et la baisse ne le trouvait plus), corrigée : la fin part à qui avait reçu le point en
+  direct, rien à qui n'avait rien vu. Chaque correction a son témoin, prouvé rouge sur la tête d'avant.
+- Constats faibles mis en suivi : #17992 (ligne de maille au franchissement, purge annulée, fin perdue sans socket,
+  `MGET` sous Redis Cluster, p95 de la relecture, rejeu au changement de rôle).
+- Prochain lot recommandé : #16983 (position temporaire sur iOS, la référence), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil repris après coupure : clore #17188 sur sa preuve
+
+- Reprise : run coupé à 05:13 par une erreur d'API, repris à 13:49. Onze PR de la routine ou voisines sont ouvertes et
+  toutes écrites dans les vingt dernières minutes par des réveils vivants (#17956, #17967, #17969, #17973, #17976,
+  #17979, #17981…) : ce réveil n'en prend aucune et n'ouvre pas de branche de code concurrente (« celui qui n'a rien
+  écrit cède »).
+- Lot : #17188 (témoin « ensemble » du SDK, écart d'horloge en `Double`) fermée sur preuve. Le correctif était sur
+  `dev` par #17186 ; `sdk-tests.yml` sur `0a77cc7dbd` (run 43391316368) rend « Verdict iOS SDK » vert, six tranches
+  `Passed`, 0 échec, aucun témoin `TogetherTests` désactivé.
+- Décisions ouvertes pour le porteur : #17218 (niveau d'accès servi entre deux comptes de l'équipe dont l'un bloque
+  l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
+- Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
+  Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
+
+- Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
+  toutes poussées par d'autres sessions dans les vingt minutes précédentes : ce réveil n'en a doublé aucune. Aucune
+  branche vivante n'écrivait « ensemble » côté Android : lot #17100 réservé sur `claude/cercles-17100-android`.
+- Lot : la couche `:core:model` (Kotlin pur) de « ensemble » — lecture stricte des quatre événements et des accusés
+  `invite`/`join` (`Together.kt`), loi de synchronisation portée à l'identique du web et d'iOS (`TogetherSync.kt`), état
+  de séance en valeur (`TogetherState.kt`). Les 20 témoins reprennent un à un les cas web et iOS.
+- Gate local : `./meeshy.sh jvm-check -PjvmCheckModelOnly --tests '*TogetherTest*'` 20/20 vert (module entier compilé).
+  La preuve Android complète est `android.yml` sur la PR.
+- Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
+  bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.
+
+## 2026-11-13 — réveil de 14:52 : débloquer `dev`, rouge sur les témoins de `call:signal`
+
+- Reprise : seize PR de la routine ouvertes, toutes écrites dans l'heure par des réveils vivants ; aucune n'est prise
+  ici (« celui qui n'a rien écrit cède »). #17967 (#17147) attend sa CI, rouge en tranche gateway 3/3.
+- Cause de ce rouge, hors cercles : depuis #17952, `call:signal` appelle `callSignalBudgetId`, que six suites simulant
+  `utils/socket-rate-limiter` ne fournissaient pas — 18 témoins rouges sur `dev` même, donc sur toute PR passerelle
+  qui la fusionne.
+- Lot : PR #18012 vers `dev` — la fonction réelle passe dans les modules simulés par `jest.requireActual`. Gates :
+  `src/__tests__/unit/socketio` + `src/socketio` 3 380/3 380 (18 rouges avant), `tsc` passerelle vert.
+- Prochain lot recommandé : fusionner `origin/dev` dans les PR passerelle de la routine restées rouges (#17967,
+  #17984) une fois #18012 sur `dev`, puis « ensemble » sur Android (#17100, couche cœur fusionnée par #17998).
+## 2026-11-13 — réveil : un Bring refusé ne dit plus le blocage (#14677, volet refus)
+
+- Reprise : 14 PR « cercles » ouvertes, toutes tenues par des branches vivantes (mises à jour dans l'heure) ; ce réveil
+  n'en touche aucune. Lot libre pris : #14677, branche `claude/cercles-14677-bring-neutre`.
+- Lot : le blocage par personne et la coupure globale se servent désormais en `403 BRING_NOT_ALLOWED`, la réponse
+  exacte d'un niveau insuffisant (même statut, même corps, même disponibilité). Le nom `BRING_UNAVAILABLE` proposé par
+  l'issue n'a pas été pris : il désigne déjà le compteur injoignable (503, « réessayer » chez les clients).
+  `BRING_BLOCKED` reste dans le contrat, plus servi ; les clients web, iOS et Android le lisaient déjà comme « parti ».
+  Décision du 2026-11-02 (point 2) et spec § Bring amendées.
+- Reste de #14677 : retirer `resetsAt` de la disponibilité servie à l'expéditeur. Non fait : #18000 (#14473) corrige au
+  même moment l'heure « de nouveau à » que le client affiche depuis `resetsAt` — les deux issues se contredisent, à
+  trancher par le porteur.
+- Prochain lot recommandé : une issue libre du jalon 2 (#14685/#14686, retrait d'un partage du Sang), ou finir les PR
+  ouvertes dont la branche s'est arrêtée.
+## 2026-11-13 — réveil 29 : le passage en E2EE coupe le talkie à l'instant (#14490)
+
+- Reprise : dix-neuf PR de la routine ouvertes, toutes poussées par d'autres réveils dans l'heure ; aucune n'a été
+  doublée. Aucune branche n'écrivait le talkie côté passerelle hors `talkieRelay.ts` (#18010, traces seulement) : lot
+  #14490 réservé sur `claude/cercles-14490-talkie-e2ee`, témoins rouges poussés avant toute logique.
+- Lot : `cutTalkiesOnEndToEnd` (`talkieCut.ts`) pose la coupure partagée d'un blocage dans les deux sens de la paire,
+  appelée par `POST /conversations/:id/encryption` juste après l'écriture du régime `e2ee` ; `REJUDGE_TIMEOUT_MS`
+  (`talkieRelay.ts`) coupe une prise de parole dont le rejugement ne rend pas en 2 s. Une coupure qui ne s'écrit pas
+  ne défait pas la bascule : le rejugement borné prend le relais.
+- Gates locaux : 69 suites voisines (talkie, conversation-encryption, handlers socket, gardes de minuterie et de
+  promesse détachée) 1 318/1 318 vertes ; ROUGE prouvé en retirant la production (9 témoins tombent) ; `tsc`
+  passerelle vert ; cliquet `any` 489 inchangé.
+- Revue adversariale : fusionnable après correctifs. Corrigés dans le lot : un tête-à-tête qui NAÎT `e2ee`
+  (`POST /conversations`, `core-lifecycle.ts`) coupe aussi (M1) ; les deux sens sont coupés localement avant toute
+  écriture partagée, chacune tentée (m2) ; la coupure par délai se journalise (m3) ; un témoin qui ne pouvait pas
+  tomber est réécrit (m7). Ouverts en suivi : #18033 (une coupure non écrite dans Redis le dit), #18034 (délai
+  du rejugement mesuré sous charge), #18035 (restaurer « pour moi » un tête-à-tête chiffré), #18036 (une seule
+  définition de « paire chiffrée »).
+- Gates après correctifs : 165 suites voisines (talkie, conversations, encryption, handlers, gardes) 2 363/2 363
+  vertes ; ROUGE du témoin de création prouvé ; `tsc` vert ; cliquet `any` inchangé.
+- Prochain lot recommandé : #18035 ou #18036 (petits, serveur, talkie), sinon mener à la fusion les PR ouvertes.
+## 2026-11-13 — réveil repris (15:15) : un contenu de Sang n'offre plus « Republier » sur le web (#14501)
+
+- Reprise : run du 2026-11-12 coupé par une erreur d'API sans trace. Seize PR de la routine sont ouvertes ; toutes
+  écrites dans l'heure par des sessions vivantes. #17956 (carte web des positions) semblait abandonnée depuis 14:05 :
+  sa fusion de `dev` était faite ici quand une autre session y a poussé à 15:16 — ce réveil a cédé sans rien pousser.
+- Lot : #14501, aucune branche ne l'écrivant. `isRepostable` (vue « offre-t-on le geste ? » de
+  `allowedRepostVisibilities`, `packages/shared/utils/repost-audience.ts`), `FeedCardModel.repostClosed`, carte du fil
+  et rail des réels sans hôte « Republier » sur un contenu `BLOOD`. Le rail des stories web n'a aucun gestionnaire de
+  republication : rien à fermer. Gater sa loi (`showsRepost`) faisait passer `story_reader` à 16,02 Ko pour 16 Ko de
+  plafond, sans effet visible : laissé, à reprendre le jour où le rail reçoit le geste.
+- Gates : shared `repost-audience` 14/14 ; web, témoins voisins 1 336/1 336, `tsc --noEmit` vert, `measure-weight`
+  vert (feed 15,51 Ko, story_reader 15,97 Ko) ; suite web complète 31 645/31 648, les trois échecs hors lot (deux
+  témoins de présence verts isolément, `act-leak-guard` rouge aussi sur `dev`).
+- Prochain lot recommandé : la jumelle iOS (#14417, ouverte), après avoir mené les PR ouvertes de la routine.
+## 2026-11-13 — réveil 29 : « ensemble » sur Android, couche transport (#17100)
+
+- Reprise (run coupé le 2026-11-11 par une erreur d'API, relancé à 15:02) : 25 PR ouvertes vers `dev`, toutes poussées
+  dans l'heure par des réveils vivants ; ce réveil n'en double aucune. Aucune branche n'écrivait le transport
+  Android d'« ensemble » : lot réservé sur `claude/cercles-17100-android-socket`.
+- Lot : `TogetherWire` (`:core:model`, Kotlin pur) — les quatre charges sortantes au schéma STRICT du serveur (position
+  bornée à [0, 24 h] et arrondie, comme iOS), l'accusé de `sync`, et la lecture typée des quatre événements entrants ;
+  `TogetherSocket` (`sdk-core`) — les quatre routes sur la voie série commune, UN flux `events` dans l'ordre du fil, et
+  l'émetteur à accusé (8 s, comme le web et iOS), « hors ligne » sans rien émettre quand la socket est tombée.
+- Gate local : `jvm-check -PjvmCheckModelOnly` sur `TogetherWireTest` + `TogetherTest`. Le `sdk-core` (Robolectric)
+  se prouve par `android.yml` sur la PR.
+- Reste pour fermer #17100 : lecteur Media3 piloté par la loi, bandeau d'invitation, ligne de la fiche d'un Proche,
+  libellés `together.*`.
+## 2026-11-13 — réveil suivant : la copie vocale du talkie sur le web (#16698)
+
+- Reprise : toutes les PR ouvertes de la routine sont tenues par des réveils vivants, et #17100 (Android) a un brouillon
+  (#17998) : ce réveil les cède. #16698 n'avait aucune branche : c'est le lot.
+- Fait : un talkie refusé en voix (repli ou blocage, indiscernables) garde le micro ouvert, l'en-tête dit « Enregistré »
+  et la fiche « Le talkie ne passe pas : votre voix part en message vocal » ; au relâcher (ou à 30 s), la voix part en
+  message vocal. Une voix réveillée que personne n'a rejointe (`joined: false`) part aussi en copie ; un verdict arrivé
+  pendant que le micro s'arrête attend la voix. Destination iso iOS et #17141 : la conversation nommée par la passerelle,
+  sinon la partagée la plus récente qui peut la porter, sinon le direct EN CLAIR — jamais une conversation chiffrée.
+- Sites : `apps/web/src/lib/talkie/talkie-sender.ts` (mode copie, `ended(…, joined)`), `talkie-voice-copy.ts` (choix
+  de la destination, fichier `audio/aac`, envoi), `talkie-live.ts` (`joined` décodé), `useTalkieSender`.
+- Prochain lot recommandé : « ensemble » sur Android (#17100) si son brouillon s'arrête, sinon l'icône de position par
+  cercle (#17013).
+## 2026-11-13 — réveil de 14:34 : la purge et l'export des cercles lisent par index (#14529)
+
+- Reprise : run précédent coupé (erreur d'API). Les onze PR « cercles » ouvertes ont toutes été écrites dans l'heure par
+  des réveils vivants : ce réveil n'en prend aucune (« celui qui n'a rien écrit cède »). #14677 (Bring neutre) cédé
+  aussi : #18000 écrit `bringDay.ts` / `resetsAt`. #14678 (copie de talkie à 30 jours) laissé : la copie est créée par
+  les trois clients, et la poser en éphémère change sa bannière — à instruire comme un lot client, pas en un réveil.
+- Lot : #14529, serveur seul. `@@index([otherId])` sur `RelationFeatureSetting`, `@@index([userHighId, day])` sur
+  `PairInteractionDay` (le préfixe sert la purge, `day` la fenêtre de `loadProgressByPartner`) ; la branche basse est
+  déjà servie par l'unique. Migration `2026-11-13-circle-pair-reverse-indexes.mongodb.js`, additive et idempotente,
+  témoin qui exécute le fichier et confronte `schema.prisma`.
+- Reste : jouer la migration sur staging et relever l'`explain()` avant/après (critère de preuve de l'issue) ; la
+  production attend le feu vert du porteur.
+- Prochain lot recommandé : mener les PR ouvertes ; puis « ensemble » sur Android (#17100, PR #17998 en cours).
+
+## 2026-11-13 — réveil repris : le prochain minuit du Bring quand le minuit local n'existe pas (#14473)
+
+- Reprise : onze PR de la routine ouvertes et toutes poussées dans l'heure par des réveils vivants ; ce réveil n'en prend
+  aucune. Aucune branche n'écrit `services/bring/` : lot #14473 (petit, serveur seul, prouvable en conteneur) réservé
+  sur `claude/cercles-14473-minuit`, témoin rouge poussé avant le correctif.
+- Lot : `bringDayOf` lisait minuit avec le décalage d'APRÈS le changement d'heure ; un jour où l'heure saute à minuit
+  (Santiago le 2026-09-06, La Havane), `resetsAt` tombait une heure trop tôt, encore dans la veille. Il garde désormais
+  le plus tôt des deux minuits candidats qui tombe dans le jour visé. La clé du quota était déjà juste.
+- Gates locaux : `bringDay.test.ts` 12/12 (dont un balayage des 365 jours de 2026 sur sept fuseaux, rouge sur
+  Santiago et La Havane sans le correctif) ; routes et services du Bring 101/101 ; `tsc` passerelle vert.
+- Reste du Bring côté décisions : #14450 (fuseau servi) inchangée.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; ensuite un autre petit lot serveur sans branche vivante
+  (#14468, #14469 ou #14470, contre-audit du Bring).
+
+## 2026-11-13 — réveil repris (15:27) : mener #18000 (minuit du Bring) à la fusion (#14473)
+
+- Reprise : dix-neuf PR de la routine ouvertes ; toutes sauf #18000 et #17979 poussées dans l'heure par des réveils
+  vivants. #18000 était en conflit (journal seul) et sans écriture depuis 14:21 : ce réveil la mène à la fusion.
+- `origin/dev` fusionnée à la main, conflit du journal résolu en gardant les deux entrées.
+
+## 2026-11-13 — réveil repris (17:15) : #18000 rouge sur le poids web hérité de `dev`
+
+- La CI dispatchée sur `7c2ea8c85` rend « Qualité TS » rouge : `call_overlay` 21.01 Ko > plafond 21 Ko, chunk web
+  que ce lot ne touche pas (diff passerelle seule). `origin/dev` refusionnée à la main (journal : les trois entrées
+  gardées) pour reprendre le correctif de `dev`, puis CI redispatchée.
+## 2026-11-13 — réveil 26 : couper les invitations « ensemble » d'une personne ou de tous, et borner leurs rafales (#17023)
+
+- Reprise : #17148 fusionnée le 2026-11-09. Lots vivants d'autres réveils, non touchés : #16984 (carte web, PR #17956),
+  #17147 (conversation close) et #17013 (cercle de la position), réservés à 13:34 et 13:36. Lot #17023 réservé sur
+  `claude/cercles-17023-ensemble-reception` avant toute écriture.
+- Lot : l'invité coupe les invitations « ensemble » d'une personne (`togetherBlocked` sur
+  `GET|PUT /relations/:userId/settings`, colonne `RelationFeatureSetting.togetherBlockedAt`, optionnelle et sans
+  migration) ou de tous (`notification.togetherEnabled`, actif par défaut, gardé quand un remplacement ne le nomme pas).
+  Une paire n'invite pas plus de 5 fois par 10 minutes (`TOGETHER_INVITES_PER_PAIR`, compteur sous un nom HMAC qui ne
+  dit ni l'hôte ni l'invité, pris en DERNIER : seule une invitation qui part consomme la fenêtre). Tout refus est le
+  `NOT_ALLOWED` d'un inconnu. La préférence gouverne l'INVITATION, pas la séance : une séance rejointe continue, d'où
+  son absence du consentement de la loi d'accès (aucun miroir Swift / Kotlin à changer). Web : l'interrupteur sur la
+  fiche d'un Proche, sept langues.
+- Suivis ouverts : iOS #17988, Android #17989, réglage global sur le web #17990.
+- Prochain lot recommandé : #17988 (iOS, la référence), puis l'icône de position par cercle (#17013) si son réveil ne
+  l'a pas fini.
+## 2026-11-13 — réveil : « Recevoir des Bring » se règle sur le web (#16588)
+
+- Reprise : deux autres réveils sont actifs — #17956 (carte des positions sur le web, #16984) et la branche
+  `claude/cercles-ensemble-conversation-close` (#17147), toutes deux poussées dans le quart d'heure. Ce réveil n'y touche
+  pas (« celui qui n'a rien écrit cède ») et prend un lot web court, sans chemin commun.
+- Lot : PR #17981 vers `dev`. Le port des réglages lit `notification.bringEnabled` (optionnel : absent = reçu), le rend
+  après écriture seulement s'il est servi, l'écrit sous `notification` ; rangée « Recevoir des Bring » + explication
+  dans Réglages › Notifications, optimiste avec retour arrière, sept langues (tranche `contact-discovery`).
+- Gates locaux : 11 témoins rouges sans l'implémentation, puis verts ; `tsc` web vert ; `bun test` web 31 652 verts,
+  1 rouge hors lot (`act-leak-guard`, bun 1.4.4 local) ; `vite build` vert ; poids 96,97 Ko avant le premier pixel.
+- Ce qui reste du Bring : interrupteur global sur iOS (#16609) et sur Android (à ouvrir quand #16617 aura fusionné),
+  Critical Alerts (#14112, #17475–#17477), #16619, décisions #14409 et #14450.
+- Prochain lot recommandé : #16609 (le même interrupteur sur iOS), sinon l'icône de position par cercle (#17013) une fois
+  #17956 fusionnée.
+## 2026-11-13 — réveil 25 : la carte web des positions partagées menée jusqu'à `dev` (#16984)
+
+- Reprise : aucune PR de la routine ouverte (#17148 fusionnée). Un réveil du 2026-11-10 a été coupé par une erreur
+  d'API sans rien laisser. La branche `claude/cercles-16984-web` portait la carte web des positions, écrite et passée
+  par deux revues-corrections le 2026-11-08 (commentaires de #16984), mais aucune PR ne l'avait proposée et aucune
+  session ne l'écrivait depuis cinq jours : ce réveil la reprend plutôt que d'ouvrir un autre lot.
+- Fait : `origin/dev` fusionnée à la main (un conflit dans `scripts/check-ts-catalog-dead-entries.mjs` : les entrées
+  ajoutées par `dev` gardées, `relations.locations` retirée puisque la carte l'appelle). Gates : témoins du lot 118/118,
+  `tsc --noEmit` web vert, `vite build` et `check-sw-api-cache` verts, catalogue TS 269/269.
+- Trouvé en chemin : `dev` tenait à 0,02 Ko du plafond de la première peinture (97,01 Ko en local, 96,98 en CI) ; la
+  route neuve le portait à 97,10. Plafond relevé à 98 avec son relevé daté (`budgets.json`), selon la procédure des lots
+  précédents — à confirmer par le porteur.
+- PR #17956 vers `dev`. CI complète (`ci.yml` en `workflow_dispatch`, run 43432690919) : tout est vert sauf la tranche
+  2/3 de la passerelle (et donc la couverture fusionnée et le Verdict), rouge sur `dev` du même témoin
+  (`CallEventsHandler.test.ts` 4650 → 4657, apporté par #17952) ; ouvert en #17986. **Non fusionnée par ce réveil** :
+  la règle de la routine veut une CI verte ; elle fusionnera dès que `dev` sera reverdi (ou sur décision du porteur).
+- Prochain lot recommandé : #16983 (position temporaire sur iOS, émettre + carte), puis #17147 (la porte « ensemble »
+  lit la conversation close), puis l'icône de position par cercle (#17013).
+## 2026-11-13 — réveil repris (14:20) : l'écoute d'un Proche sur l'avatar de la liste web (#16733)
+
+- Reprise : onze branches de la routine écrites dans les 45 dernières minutes par des réveils vivants (#17100 Android,
+  #16984 web, #16983 iOS, #17013, #17023, #16987…) ; ce réveil n'en touche aucune. Le volet WEB de #16733 (la rangée
+  d'un direct dans la liste) n'était écrit par personne : branche `claude/cercles-16733-web` réservée avant écriture.
+- Lot : `LensRow` lit l'écoute servie du pair (`useListeningBand`, la clé de l'en-tête du fil) et la pose sur l'avatar
+  de 44 px, iso `ConversationRowAvatar` (iOS, #17083) ; un groupe n'en porte jamais ; le lien principal de la rangée la
+  dit au lecteur d'écran (`listening.spoken`, une fois), le bandeau restant décoratif. Aucun libellé neuf.
+- Gates locaux : `lens-row-listening.test.tsx` 5/5 (rouge avant le correctif sur 3 cas) ; rangée, focale, avatar et
+  écoute 492/492 ; `tsc --noEmit` vert ; `vite build` et `measure-weight` verts.
+- Ce qui reste de #16733 : décision #17085 (écoute sur une conversation verrouillée par PIN), recette appareil.
+- En chemin : la tranche 2/3 de la passerelle était rouge sur `dev` (six suites `CallEventsHandler-*` moquaient
+  `socket-rate-limiter` sans `callSignalBudgetId`, ajouté par dda1585572) ; corrigé dans ce lot, 2282/2282.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; « ensemble » sur Android (#17100) est tenu par le
+  réveil 28.
+
 ## 2026-11-13 — réveil 25 : recevoir sur iOS les positions qu'on me partage, couche SDK (#16983)
 
 - Reprise : #17956 (carte web, #16984), #17147 (séance « ensemble » et conversation close) et #17013 (icône par cercle,

@@ -245,4 +245,24 @@ final class CallEffectLayersTests: XCTestCase {
         XCTAssertFalse(CallEffectsBarRule.showsLooks(.settings))
         XCTAssertFalse(CallEffectsBarRule.showsLooks(.applied))
     }
+
+    // MARK: - #17947 — un réglage continu laisse le panneau ouvert
+
+    /// Le panneau Luminosité · Flou du fond se referme par « Réglages » ou par ‹ : ‹ le referme
+    /// par le chemin inverse de « Réglages » (la barre revient à son menu de base) ; ailleurs,
+    /// ‹ revient à l'appel (`nil`).
+    func test_bar_back_closesTheSettingsPanel_elseReturnsToTheCall() {
+        XCTAssertEqual(CallEffectsBarRule.afterBack(from: .settings), .base)
+        XCTAssertEqual(CallEffectsBarRule.afterBack(from: .settings), CallEffectsBarRule.afterSettings(from: .settings), "le même chemin que retoucher Réglages")
+        XCTAssertNil(CallEffectsBarRule.afterBack(from: .base))
+        XCTAssertNil(CallEffectsBarRule.afterBack(from: .applied))
+    }
+
+    /// Un curseur ou un interrupteur n'est pas un choix discret : la pile qui gagne ou perd une
+    /// couche pendant le réglage ne referme jamais le panneau (la fermeture automatique de #16979
+    /// vaut pour un look ou un cadre).
+    func test_bar_aContinuousSetting_neverClosesTheSettingsPanel() {
+        XCTAssertEqual(CallEffectsBarRule.reconciled(.settings, hasLayers: true), .settings)
+        XCTAssertEqual(CallEffectsBarRule.reconciled(.settings, hasLayers: false), .settings)
+    }
 }

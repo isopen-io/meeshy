@@ -8,7 +8,7 @@ import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveF
 import { PeerSpeechRing } from '@/components/call-camera-off';
 import { Portrait } from '@/components/call-portrait';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
-import { CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
+import { CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, callGridView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
@@ -18,7 +18,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { once, preloadedView } from '@/lib/calls/preloaded-view';
-import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { callControlSet, cameraSwitchOf, isVideoScene, tapStowsChrome, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { JOURNAL_COLUMN_PLACE, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
@@ -66,8 +66,10 @@ import '@/styles/call-motion.css';
  * « L'appel » à droite, sans que la pilule grandisse (`call-rails.tsx`) ; à
  * plusieurs, la pilule grandit vers le haut et empile une rangée par famille,
  * qui défile à l'horizontale (`call-control-actions.tsx`, #8550) ; en haut,
- * Réduire et la puce « Nom · durée » (`call-screen-header.tsx`). En vidéo,
- * toucher la scène efface TOUTES les commandes et un second toucher les rend ;
+ * Réduire et la puce « Nom · durée » (`call-screen-header.tsx`). Toucher la
+ * scène — l'image d'une vidéo, le fond derrière l'avatar d'un duo audio ou
+ * celui d'une grille sans caméra (#17945, `tapStowsChrome`) — efface TOUTES les
+ * commandes et un second toucher les rend ;
  * rien d'autre ne les efface, aucune attente (#8988, `use-call-chrome.ts`). En
  * duo, glisser l'écran vers le bas le réduit en bulle, ou dans l'image dans
  * l'image quand le navigateur l'offre (#9096, `use-call-swipe-down.ts`). Au-dessus
@@ -114,8 +116,8 @@ const CallIncomingAnswer = incomingAnswer.View;
 const endedControls = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallEndedControls));
 const CallEndedControls = endedControls.View;
 
-/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, la fin. */
-export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), endedControls.load()]);
+/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, la capture déjà en cours, la fin. */
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), captureAlerts.load(), endedControls.load()]);
 
 /** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
 const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -136,6 +138,9 @@ const CallActionRail = lazy(() => loadActions().then((module) => ({ default: mod
 const loadPreview = once(() => import('./call-preview'));
 const loadShareBanner = once(() => import('./call-share-banner'));
 const CallScreenShareBanner = lazy(loadShareBanner);
+/* La capsule de capture (R1) vit avec le bandeau de partage (`call_top_banners`) : elle ne paraît qu'avec une capture, préchargée quand l'appel vit, et se rend dans le même rendu une fois là. */
+const captureAlerts = preloadedView(() => loadShareBanner().then((module) => module.CallCaptureAlerts));
+const CallCaptureAlerts = captureAlerts.View;
 const CallPreview = lazy(() => loadPreview().then((module) => ({ default: module.CallPreview })));
 const CallPreviewSound = lazy(() => loadPreview().then((module) => ({ default: module.CallPreviewSound })));
 
@@ -203,7 +208,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   () => import('./call-quality-detail'),
   () => import('./call-waiting-banner'),
   loadFloatingPill,
-  loadShareBanner,
+  captureAlerts.load,
   callGridView.load,
   endedControls.load,
   screenZoomSurfaceView.load,
@@ -361,7 +366,11 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame,
     /* La capsule de capture entre par le haut et repart vers le haut, comme le bandeau de partage (R1.6) : toujours montée à sa place d'ordre, elle se retient le temps de repartir. */
     capture: (
       <HeldSwap key="capture" value={capturing ? call.members : null} shape="top" className="flex w-full justify-center" data-call-capture-slot="">
-        {(held) => <CallCaptureAlerts members={held} language={language} />}
+        {(held) => (
+          <Suspense fallback={null}>
+            <CallCaptureAlerts members={held} language={language} />
+          </Suspense>
+        )}
       </HeldSwap>
     ),
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
@@ -444,7 +453,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       callActions.minimize();
     },
   });
-  const { visibility, reveal: revealChrome } = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, swallowTap: swipe.swallowTap });
+  const { visibility, reveal: revealChrome } = useCallChrome({ scene: tapStowsChrome(call) && chrome.mode === null, root, swallowTap: swipe.swallowTap });
   const send = (event: CallLayerEvent) => {
     const next = nextLayer(shown, event);
     focusNext.current = focusTarget(shown, next);
@@ -495,7 +504,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
      resserre autour d'eux. Seul un mode, qui n'a pas de pilule, les pose dans un
      verre à eux. */
   const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
-  /* P9b (#17529) : le journal ouvert dans la pilule réduit l'avatar du duo audio en en-tête compact, nom et durée à côté. */
+  /* P9b (#17529) : le journal ouvert dans la pilule réduit l'avatar du duo audio en en-tête compact, nom et durée à côté ; rangé d'un toucher sur le fond (#17945), il lui rend ses 120 (P9). */
   const compactStage = pillCompactsAudioStage(text);
   const clock = statusKey === null ? <CallClock call={call} active={joined} /> : endedClock;
   /* P17.2, P17.13 : un appel VIDÉO qui sonne se lit dans l'ordre de la planche — la puce de verre « Appel vidéo entrant » (caméra), le nom, puis la puce « Activer le son » quand l'appelant s'écoute. */
@@ -516,7 +525,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
       {phase === 'incoming' && hasVideo(call.preview) ? null : (
         <span data-call-incoming-portrait="">
-          <Portrait name={call.title} avatar={call.avatar} size={compactStage ? 56 : 112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} tint={peerTint}>
+          <Portrait name={call.title} avatar={call.avatar} size={compactStage ? 56 : joined ? 120 : 112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} tint={peerTint}>
             {peerTint === undefined ? null : <PeerSpeechRing color={peerTint} stream={joined ? (call.remoteStreams[call.peerKey ?? ''] ?? null) : null} />}
           </Portrait>
         </span>
@@ -629,10 +638,12 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const stowedWithCaptions = hidden && pillStaysWhenChromeStowed(text);
   /* Toujours montés : c'est `CallCaptionsSlot`, dans son chunk, qui les pose quand
      `visible` et les fait repartir en fondu sinon (#17406) — rangés par (…),
-     éteints, ou laissés seuls quand un mode a pris l'écran. */
+     éteints, ou laissés seuls quand un mode a pris l'écran. Seuls, ils n'ont pas
+     de « Journal » : sans pilule, il n'aurait nulle part où s'ouvrir (#17946,
+     `opensJournal: false` d'iOS) ; leur pied garde la paire et le geste. */
   const captionsOf = (slot: 'captions' | 'captionsAlone', visible: boolean): ReactNode => (
     <Suspense fallback={null}>
-      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined ? () => panels.toggle('journal') : undefined} />
+      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined && slot === 'captions' ? () => panels.toggle('journal') : undefined} />
     </Suspense>
   );
   const standaloneCaptions = (): ReactNode => (

@@ -32,6 +32,12 @@ jest.mock('../../../../services/CacheStore', () => ({
   }),
 }));
 
+const rejeuPosition = jest.fn(async (..._args: unknown[]) => undefined);
+jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => ({
+  ...(jest.requireActual('../../../../services/sharedLocation/sharedLocationDeps') as object),
+  refreshSharedLocationAfter: (...args: unknown[]) => rejeuPosition(...args),
+}));
+
 import { relationsRoutes } from '../../../../routes/relations';
 import {
   AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
@@ -69,7 +75,7 @@ async function jusquAuxDeuxHolds(app: TestApp) {
   return { token, a, b };
 }
 
-beforeEach(() => { cache.clear(); freezeClock(NOW); });
+beforeEach(() => { cache.clear(); rejeuPosition.mockClear(); freezeClock(NOW); });
 afterEach(() => thawClock());
 
 describe('#13933 — le jeton : démarrer et rejoindre', () => {
@@ -265,6 +271,18 @@ describe('#13933 — la double confirmation et le consentement feature par featu
       expect(sent.find((e) => e.room === `user:${MOI}`)?.payload).toMatchObject({ userId: AUTRE, level: 'BLOOD' });
       expect(sent.find((e) => e.room === `user:${AUTRE}`)?.payload).toMatchObject({ userId: MOI, level: 'BLOOD' });
     }
+  });
+
+  it('#16987 — le Sang scellé rejoue la projection de la position partagée de la paire, une fois, et seulement à l’achèvement', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    expect(rejeuPosition).not.toHaveBeenCalled();
+    await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(rejeuPosition).toHaveBeenCalledTimes(1);
+    expect(rejeuPosition.mock.calls[0][1]).toMatchObject({ userA: AUTRE, userB: MOI });
   });
 
   it('refuser un partage ne bloque pas le Sang : il est enregistré à faux, par feature', async () => {

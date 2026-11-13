@@ -37,11 +37,63 @@ class CallChromeVisibilityTest {
     }
 
     @Test
-    fun `taps toggle only on a video stage and never under TalkBack`() {
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = true)).isTrue()
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = false)).isFalse()
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = true, isTouchExplorationOn = true)).isFalse()
+    fun `taps toggle only on a stage that stows and never under TalkBack`() {
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true)).isTrue()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = false)).isFalse()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true, isTouchExplorationOn = true)).isFalse()
     }
+
+    /**
+     * Loi 11, #17945 (B) et son extension (dernier commentaire de l'issue) : la scène qu'un toucher range est l'image en
+     * vidéo, le fond derrière l'avatar en duo audio ET le fond d'un groupe sans aucune caméra. Vecteurs partagés avec iOS et
+     * le web, composés depuis la règle de la scène vidéo : (duo, vidéo) → vrai · (duo, audio, en cours) → vrai · (duo, audio,
+     * pas encore en cours) → faux · (groupe, une caméra) → vrai · (groupe, aucune caméra) → VRAI. Ce dernier vecteur valait
+     * « faux » avant l'extension : il figeait l'ancien dessin.
+     */
+    @Test
+    fun `law 11 (#17945) a tap stows the chrome over a video image, a duo audio call and a group with no camera`() {
+        assertThat(tapStage(isGroup = false, camera = true, isConnected = true)).isTrue()
+        assertThat(tapStage(isGroup = false, camera = false, isConnected = true)).isTrue()
+        assertThat(tapStage(isGroup = false, camera = false, isConnected = false)).isFalse()
+        assertThat(tapStage(isGroup = true, camera = true, isConnected = true)).isTrue()
+        assertThat(tapStage(isGroup = true, camera = false, isConnected = true)).isTrue()
+    }
+
+    @Test
+    fun `a group with no camera stows header, pill, journal and banners, and keeps its captions`() {
+        assertThat(CallChromeVisibility.mayToggleByTap(tapStage(isGroup = true, camera = false, isConnected = true))).isTrue()
+        val stowed = CallChromeVisibility().toggled()
+        listOf(
+            CallChromeElement.Header,
+            CallChromeElement.Controls,
+            CallChromeElement.OpenPanel,
+            CallChromeElement.RecordingStatus,
+            CallChromeElement.ScreenShareBanner,
+            CallChromeElement.FeaturedCapsule,
+        ).forEach { assertThat(stowed.isVisible(it)).isFalse() }
+        assertThat(stowed.isVisible(CallChromeElement.Captions)).isTrue()
+        val journal = CallScreenLayer.Panel(CallScreenPanel.Journal)
+        val stowedText = CallPillText.resolve(isCaptionsEnabled = true, layer = journal, isChromeRevealed = stowed.isVisible(CallChromeElement.Controls))
+        assertThat(stowedText).isEqualTo(CallPillText.CaptionsAlone)
+        assertThat(stowedText.isOnStage(isStageFullScreen = false)).isTrue()
+        val back = CallPillText.resolve(isCaptionsEnabled = true, layer = journal, isChromeRevealed = stowed.toggled().isVisible(CallChromeElement.Controls))
+        assertThat(back).isEqualTo(CallPillText.Journal)
+    }
+
+    @Test
+    fun `under TalkBack a group with no camera stows nothing`() {
+        assertThat(CallChromeVisibility.mayToggleByTap(tapStage(isGroup = true, camera = false, isConnected = true), isTouchExplorationOn = true)).isFalse()
+    }
+
+    private fun tapStage(isGroup: Boolean, camera: Boolean, isConnected: Boolean): Boolean = CallChromeVisibility.isTapStage(
+        isVideoStage = CallChromeVisibility.isVideoStage(
+            isGroup = isGroup,
+            isLocalVideoEnabled = false,
+            isDuoVideoActive = !isGroup && camera,
+            remoteCamerasOn = if (isGroup && camera) 1 else 0,
+        ),
+        isConnected = isConnected,
+    )
 
     @Test
     fun `video stage rules for duo and group`() {
