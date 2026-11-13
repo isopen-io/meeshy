@@ -701,4 +701,84 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(rail.contains("ScrollView(.vertical, showsIndicators: false)"))
         XCTAssertTrue(rail.contains(".mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }"))
     }
+
+    // MARK: - Décisions porteur de l'audit final (2026-11-13)
+
+    /// #17946 — en mode Effets ou Montage, le verre des sous-titres n'a pas de « Journal » : la
+    /// pilule n'y est pas, rien n'y ouvrirait le journal. Son pied garde « EN → FR · toucher =
+    /// original » (`CallCaptionsFooter`, indépendant du bouton). iOS le tenait déjà : témoin.
+    func test_modeCaptions_haveNoJournalButton_butKeepTheirFooter() throws {
+        let mode = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Mode.swift"))
+        XCTAssertTrue(mode.contains("captionsBand(hasOwnGlass: true, opensJournal: false)"))
+        XCTAssertFalse(mode.contains("togglePanel(.journal)"), "aucun chemin vers le journal depuis un mode")
+        let unit = try callViewCode()
+        XCTAssertEqual(unit.components(separatedBy: "opensJournal: false").count - 1, 1, "seul le verre d'un mode retire « Journal »")
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        XCTAssertTrue(transcript.contains("onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil"))
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptionsViews.swift"))
+        let footer = try block("private var footer: some View {", until: "private var fade: Animation {", in: views)
+        XCTAssertTrue(footer.contains("CallCaptionsFooter.resolve(lines: settledLines)"), "le pied se compose sans le bouton")
+        XCTAssertTrue(footer.contains("if note != nil || onOpenJournal != nil {"))
+        XCTAssertTrue(footer.contains("if let onOpenJournal {"), "« Journal » n'est posé que si un journal peut s'ouvrir")
+    }
+
+    /// #17947 — le panneau Luminosité · Flou du fond reste ouvert tant qu'on règle : ni le curseur,
+    /// ni l'interrupteur, ni la pile qu'ils changent n'écrivent la barre. Il se referme par
+    /// « Réglages » (`afterSettings`) ou par ‹ (`afterBack`), dans les deux modes de la famille ;
+    /// ‹ dit alors qu'il ferme, et non qu'il revient à l'appel.
+    func test_settingsPanel_staysOpenWhileAdjusting_andClosesByReglagesOrBack() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        for binding in ["private var brightnessBinding: Binding<Double> {", "private var smoothingBinding: Binding<Double> {", "private var blurBinding: Binding<Bool> {"] {
+            let body = try block(binding, until: "\n    }\n", in: effects)
+            XCTAssertFalse(body.contains("barMode"), "\(binding) : un réglage continu ne referme pas le panneau")
+        }
+        let onConfig = try block(".adaptiveOnChange(of: config) { _, newConfig in", until: "\n        }\n", in: effects)
+        XCTAssertFalse(onConfig.contains("barMode"), "la pile qui change pendant le réglage ne touche pas la barre")
+        for host in [effects, montage] {
+            XCTAssertTrue(host.contains("barMode = CallEffectsBarRule.afterSettings(from: barMode)"), "« Réglages » le referme")
+            let back = try block("private func goBack() {", until: "\n    }\n", in: host)
+            XCTAssertTrue(back.contains("guard let closed = CallEffectsBarRule.afterBack(from: barMode) else { return onExit() }"), "‹ le referme, sinon revient à l'appel")
+            XCTAssertTrue(back.contains("withAnimation(settingsAnimation) { barMode = closed }"), "par le chemin inverse, fondu sous Réduire les animations")
+        }
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let bar = try block("struct CallEffectsBar<Looks: View>: View {", until: "struct CallEffectsAddButton", in: barFile)
+        XCTAssertTrue(bar.contains("label: CallEffectsBarRule.afterBack(from: mode) == nil ? CallModeCopy.backToCall : CallControlsCopy.closePanel"), "VoiceOver : ‹ dit ce qu'il fait")
+    }
+
+    /// #17948 — en groupe, toucher la vignette à la une range les contrôles (loi 11), comme toucher
+    /// l'image ; le retour à la grille passe par la capsule « Revenir à la grille ». iOS le tenait
+    /// déjà ; depuis #17945, une une sans caméra (avatars seuls) le fait aussi.
+    func test_featuredTile_tapStowsTheControls_andTheCapsuleGivesTheGridBack() throws {
+        let stage = try stageSource()
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".onTapGesture { onStageTap() }"), "le toucher à la une est le toucher de la scène")
+        XCTAssertFalse(featured.contains("choose(.grid)"), "le toucher à la une ne rend pas la grille")
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
+        XCTAssertTrue(capsule.contains("choose(.grid)"), "la capsule rend la grille")
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: try callViewCode()))
+        XCTAssertTrue(layout.contains("onStageTap: toggleControls"))
+    }
+
+    /// #17949 — en groupe, la grille se resserre au-dessus de la pilule agrandie (rangées, option,
+    /// sous-titres, journal) : elles sont dans le MÊME flux, la grille d'abord, jamais l'une
+    /// par-dessus l'autre ; les vignettes se partagent la hauteur laissée, donc leurs plaques du bas
+    /// restent visibles au-dessus de la pilule. Sous le minimum de la grille, ce sont les rangées
+    /// qui défilent. iOS le tenait déjà : témoin.
+    func test_groupGrid_tightensAboveTheGrownPill_neverUnderIt() throws {
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: try callViewCode()))
+        XCTAssertTrue(layout.contains("VStack(spacing: MeeshySpacing.sm) {"))
+        XCTAssertFalse(layout.contains("ZStack"), "la pilule ne se pose pas sur la grille")
+        XCTAssertFalse(layout.contains(".overlay(alignment: .bottom)"))
+        let grid = try XCTUnwrap(layout.range(of: "GroupCallStageView("))
+        let pill = try XCTUnwrap(layout.range(of: "callControlsBlock"))
+        XCTAssertLessThan(grid.lowerBound, pill.lowerBound, "la grille au-dessus de la pilule")
+        XCTAssertTrue(layout.contains(".frame(minHeight: CallGroupStageSizing.minimumGridHeight)"))
+        let tiles = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func grid(", in: try stageSource()))
+        XCTAssertTrue(tiles.contains("(size.height - Self.spacing * CGFloat(layout.rows - 1)) / CGFloat(layout.rows)"), "les vignettes tiennent dans la hauteur laissée par la pilule")
+        let pillSource = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        let rows = try block("private func unfoldedRows<Content: View>(", until: "private var baseRow: some View {", in: pillSource)
+        XCTAssertTrue(rows.contains("ScrollView(.vertical, showsIndicators: false) { rows }"), "au minimum de la grille, les rangées défilent")
+    }
 }

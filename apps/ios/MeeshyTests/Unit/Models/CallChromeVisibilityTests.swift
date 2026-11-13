@@ -78,14 +78,31 @@ final class CallChromeVisibilityTests: XCTestCase {
         XCTAssertFalse(toggled.isVisible(.controls))
     }
 
-    // MARK: - Qui peut masquer par un toucher
+    // MARK: - Qui peut masquer par un toucher (loi 11, #17945)
 
-    func test_mayToggleByTap_videoStage_inDuoAndGroup() {
-        XCTAssertTrue(CallChromeVisibility.mayToggleByTap(isVideoStage: true))
+    /// #17945 — la scène, c'est l'image en vidéo et le fond derrière l'avatar en audio : un
+    /// toucher y range tout, en duo comme en groupe. Le témoin d'avant (« une scène audio ne
+    /// cache jamais ses contrôles ») figeait le dessin que la décision porteur a retourné.
+    func test_mayToggleByTap_everyScene_videoOrAudio() {
+        XCTAssertTrue(CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: false))
     }
 
-    func test_mayToggleByTap_audioStage_neverHidesTheOnlyControls() {
-        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isVideoStage: false))
+    /// Sous VoiceOver les contrôles restent en place : le toucher ne les range pas.
+    func test_mayToggleByTap_underVoiceOver_keepsTheControlsInPlace() {
+        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: true))
+    }
+
+    /// #17945 — en duo audio, le journal se range avec la pilule et l'avatar reprend 120 pt ; le
+    /// second toucher rend le journal, donc l'en-tête compact (G1 → G2 rend l'état d'avant).
+    func test_audioDuo_aTapStowsTheJournal_andTheNextGivesItBack() {
+        let journal = CallScreenLayer.panel(.journal)
+        let stowed = CallChromeVisibility(isRevealed: true).toggled()
+        let stowedText = CallPillText.resolve(isCaptionsEnabled: false, layer: journal, isChromeRevealed: stowed.isVisible(.controls))
+        XCTAssertFalse(stowedText.compactsAudioLayout, "rangé, l'avatar grandit à 120 pt")
+        XCTAssertFalse(stowed.isVisible(.header))
+        let revealed = stowed.toggled()
+        let revealedText = CallPillText.resolve(isCaptionsEnabled: false, layer: journal, isChromeRevealed: revealed.isVisible(.controls))
+        XCTAssertTrue(revealedText.compactsAudioLayout, "rendu, le journal revient et resserre l'avatar")
     }
 
     // MARK: - Une scène est-elle vidéo ?

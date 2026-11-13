@@ -72,8 +72,24 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
             XCTAssertFalse(unit.contains(minuterie), "Le masquage minuté est revenu : \(minuterie)")
         }
         let toggle = try block("func toggleControls() {", until: "\n    }\n", in: unit)
-        XCTAssertTrue(toggle.contains("CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage)"))
+        XCTAssertFalse(toggle.contains("isVideoStage"), "#17945 — le toucher range tout sur toute scène, vidéo ou audio")
         XCTAssertTrue(toggle.contains("showControls.toggle()"))
+    }
+
+    /// #17945 (loi 11) — en duo audio, un toucher sur le fond derrière l'avatar range l'en-tête,
+    /// la pilule et le journal, et l'avatar reprend 120 pt (la loi pure `CallPillText` le décide) ;
+    /// un nouveau toucher les rend. Sous VoiceOver les contrôles restent en place.
+    func test_audioDuo_aTapOnTheBackground_stowsTheChrome() throws {
+        let connected = try view("CallView+Connected.swift")
+        let duo = try block("private var duoLayout: some View {", until: "private var swipeDownToLeaveGesture: some Gesture {", in: connected)
+        XCTAssertTrue(duo.contains(".onTapGesture { tapAudioBackground() }"), "Le fond de l'audio est la scène")
+        XCTAssertTrue(duo.contains("if pillText.compactsAudioLayout {"), "L'avatar compact suit le journal servi, rangé ou non")
+        let tap = try block("func tapAudioBackground() {", until: "\n    }\n", in: connected)
+        XCTAssertTrue(tap.contains("guard exposesTheTapToggle else { return }"))
+        XCTAssertTrue(tap.contains("toggleControls()"))
+        let exposes = try block("private var exposesTheTapToggle: Bool {", until: "\n    }\n", in: connected)
+        XCTAssertTrue(exposes.contains("CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
+        XCTAssertFalse(exposes.contains("isVideoStage"))
     }
 
     func test_pillRows_reportTheirScrolling_andFlickFreely() throws {
