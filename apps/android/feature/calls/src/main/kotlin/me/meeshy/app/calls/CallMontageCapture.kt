@@ -166,6 +166,7 @@ private fun CallMontageContent(
             effects.requestEffectsCategory(category)
             onOpenEffects()
         },
+        captions = { CallModeCaptions(state) },
     )
 }
 

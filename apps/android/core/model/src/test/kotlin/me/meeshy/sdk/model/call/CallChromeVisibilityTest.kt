@@ -37,10 +37,24 @@ class CallChromeVisibilityTest {
     }
 
     @Test
-    fun `taps toggle only on a video stage and never under TalkBack`() {
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = true)).isTrue()
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = false)).isFalse()
-        assertThat(CallChromeVisibility.mayToggleByTap(isVideoStage = true, isTouchExplorationOn = true)).isFalse()
+    fun `taps toggle only on a stage that stows and never under TalkBack`() {
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true)).isTrue()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = false)).isFalse()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true, isTouchExplorationOn = true)).isFalse()
+    }
+
+    /**
+     * Loi 11, #17945 (B) : la scène qu'un toucher range est l'image en vidéo ET le fond derrière l'avatar en duo audio.
+     * Vecteurs partagés avec iOS et le web : (duo, vidéo) → vrai · (duo, audio, en cours) → vrai · (duo, audio, pas
+     * encore en cours) → faux · (groupe, une caméra) → vrai · (groupe, aucune caméra) → faux.
+     */
+    @Test
+    fun `law 11 (#17945) a tap stows the chrome over a video image and over the background of a duo audio call`() {
+        assertThat(CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = true, isConnected = true)).isTrue()
+        assertThat(CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = true)).isTrue()
+        assertThat(CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = false)).isFalse()
+        assertThat(CallChromeVisibility.isTapStage(isGroup = true, isVideoStage = true, isConnected = true)).isTrue()
+        assertThat(CallChromeVisibility.isTapStage(isGroup = true, isVideoStage = false, isConnected = true)).isFalse()
     }
 
     @Test
