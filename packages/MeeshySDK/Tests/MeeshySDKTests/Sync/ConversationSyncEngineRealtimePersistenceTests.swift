@@ -266,52 +266,6 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertTrue(received)
     }
 
-    /// #17938 — fil FERMÉ : la mort annoncée s'écrit tout de suite, rien ne brûle.
-    func test_messageExpiredRelay_closedConversation_writesAtOnce() async throws {
-        let (engine, socket, _) = try makeEngine()
-        let collector = RealtimeMutationCollector()
-        engine.realtimeMessagePersistor = { await collector.append($0) }
-        await engine.startSocketRelay()
-
-        socket.messageExpired.send(MessageExpiredEvent(messageId: "m-exp", conversationId: "c-closed"))
-
-        let received = await waitUntil { await collector.mutations.contains {
-            if case let .expired(messageId, _) = $0 { return messageId == "m-exp" }
-            return false
-        } }
-        XCTAssertTrue(received)
-    }
-
-    /// #17938 — fil OUVERT : l'écran fait brûler la ligne pendant
-    /// `EphemeralBurn.fullDuration` ; le moteur n'écrit la mort qu'après, sans
-    /// quoi le magasin la relisait morte et la retirait au milieu de son feu.
-    func test_messageExpiredRelay_openConversation_waitsForTheBurnBeforeWriting() async throws {
-        let (engine, socket, _) = try makeEngine()
-        let collector = RealtimeMutationCollector()
-        engine.realtimeMessagePersistor = { await collector.append($0) }
-        await engine.startSocketRelay()
-        engine.openConversation("c-open")
-        defer { engine.closeConversation("c-open") }
-
-        let sentAt = Date()
-        socket.messageExpired.send(MessageExpiredEvent(messageId: "m-burn", conversationId: "c-open"))
-
-        try await Task.sleep(for: .seconds(EphemeralBurn.fullDuration * 0.5))
-        let early = await collector.mutations.contains { if case .expired = $0 { return true }; return false }
-        XCTAssertFalse(early, "la mort n'est pas écrite pendant la combustion")
-
-        var written = false
-        while !written, Date().timeIntervalSince(sentAt) < EphemeralBurn.relayDelay(conversationIsOpen: true) + 2 {
-            try await Task.sleep(for: .milliseconds(50))
-            written = await collector.mutations.contains {
-                if case let .expired(messageId, _) = $0 { return messageId == "m-burn" }
-                return false
-            }
-        }
-        XCTAssertTrue(written, "la mort est écrite après la combustion")
-        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(sentAt), EphemeralBurn.fullDuration)
-    }
-
     func test_messageDeletedRelay_forwardsDeletionToTheCanonicalStore() async throws {
         let (engine, socket, _) = try makeEngine()
         let collector = RealtimeMutationCollector()

@@ -389,9 +389,7 @@ extension MessageListViewController {
                     messageBubble.longMessageExpansion(longMessageExpansion).modifier(unencryptedMarking)
                 }
             }
-            .environmentObject(host)
-            .environmentObject(stories)
-            .environmentObject(statuses)
+            .environmentObject(host).environmentObject(stories).environmentObject(statuses)
             .environment(\.bubbleSkin, scene.skin)
             .environment(\.pendingUploadProgress, self.conversationViewModel?.collaborators.uploadProgress.progress(for: messageId))
             .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)

@@ -113,7 +113,7 @@ export function registerCallPreviewEvents(
       socket,
       getUserId,
       rateLimiter: deps.rateLimiter,
-      limit: SOCKET_RATE_LIMITS.CALL_SIGNAL,
+      limit: SOCKET_RATE_LIMITS.CALL_PREVIEW_SIGNAL,
       schema: socketSignalSchema,
       label: 'call-preview-signal',
       run: async (userId, { callId, signal }) => {

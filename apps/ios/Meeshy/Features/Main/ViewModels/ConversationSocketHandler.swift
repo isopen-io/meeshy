@@ -666,38 +666,28 @@ final class ConversationSocketHandler {
     /// NEUVE. #7453 — le balayage des bannières est le seul à savoir qu'un
     /// message PRÉCIS vient de mourir pendant que l'application est à l'écran.
     ///
-    /// **Un éphémère ENCORE À L'ÉCRAN brûle avant de partir** (#17938).
-    /// L'annonce du serveur arrive à l'échéance servie, souvent une demi-
-    /// seconde après que l'horloge locale a allumé la combustion : écrire la
-    /// mort tout de suite faisait relire le magasin et retirait la ligne au
-    /// milieu de son feu. L'annonce demande donc la combustion à l'hôte (qui
-    /// ne la rallume pas si elle joue déjà) et ne grave qu'après sa durée —
-    /// hors de la file ordonnée des événements, qu'une attente d'une seconde
-    /// retiendrait. Un message absent de l'écran part sans attendre.
+    /// **Un éphémère ENCORE À L'ÉCRAN brûle avant de partir** (#17938) :
+    /// l'annonce demande la combustion à l'hôte AVANT de graver — l'hôte ne la
+    /// rallume pas si elle joue déjà, et le magasin garde une ligne qui vient
+    /// de mourir le temps de son feu (`MessageStore.burning`,
+    /// `EphemeralBurn.freshDeathWindow`). L'écriture destructrice, elle, reste
+    /// IMMÉDIATE : une mort différée survivrait à une app tuée dans la fenêtre.
     private func applyExpired(_ event: MessageExpiredEvent) async {
         StarredMessagesStore.shared.remove(messageId: event.messageId)
-        let msgId = event.messageId
-        let burnsFirst = delegate?.containsMessage(id: msgId) == true
-        if burnsFirst { delegate?.expireEphemeralsIfNeeded([msgId]) }
-        let persistence = persistence
-        Task { @MainActor in
-            if burnsFirst {
-                let duration = EphemeralBurn.duration(reduceMotion: UIAccessibility.isReduceMotionEnabled)
-                try? await Task.sleep(for: .seconds(duration))
+        delegate?.burnAnnouncedEphemerals([event.messageId])
+        EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
+        if let persistence {
+            let msgId = event.messageId
+            do {
+                try await persistence.markDeleted(localId: msgId, deletedAt: Date(), expired: true)
+                // #10433 — ses réponses partent avec lui, et une réponse dont
+                // la citation est déjà morte part au lieu de rester « Message supprimé ».
+                try await persistence.purgeQuoteCascade(fromDead: [msgId])
+            } catch {
+                Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
-            EphemeralReceiptLedger.shared.noteDestruction(of: msgId)
-            if let persistence {
-                do {
-                    try await persistence.markDeleted(localId: msgId, deletedAt: Date(), expired: true)
-                    // #10433 — ses réponses partent avec lui, et une réponse dont
-                    // la citation est déjà morte part au lieu de rester « Message supprimé ».
-                    try await persistence.purgeQuoteCascade(fromDead: [msgId])
-                } catch {
-                    Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                }
-            }
-            await NotificationActionHandler.sweepExpiredEphemeralBanners()
         }
+        Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
     }
 
     /// **L'échéance SERVIE d'un éphémère** (contrat du fil #7451 point 5).

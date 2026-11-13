@@ -36,9 +36,9 @@ protocol ConversationSocketDelegate: AnyObject {
     /// **Un éphémère ENCORE À L'ÉCRAN brûle avant de partir** (#17938), que
     /// son échéance vienne de l'horloge locale ou de l'annonce du serveur
     /// (`message:expired`). Le gestionnaire socket le demande ici ; l'hôte
-    /// allume la combustion s'il ne l'a pas déjà fait, et retire la ligne
-    /// après `EphemeralBurn.duration`.
-    func expireEphemeralsIfNeeded(_ ids: [String])
+    /// allume la combustion s'il ne l'a pas déjà fait — même si le registre
+    /// porte déjà la mort — et retire la ligne après `EphemeralBurn.duration`.
+    func burnAnnouncedEphemerals(_ ids: [String])
 
     /// O(1) index lookup by message ID (backed by dictionary)
     func messageIndex(for id: String) -> Int?

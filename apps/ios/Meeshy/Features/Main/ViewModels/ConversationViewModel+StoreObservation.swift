@@ -67,6 +67,8 @@ extension ConversationViewModel {
     /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
     /// `objectWillChange` so SwiftUI re-renders.
     func subscribeToMessageStore() {
+        // #17938 — une ligne affichée que le magasin relit morte brûle avant de partir : il demande l'allumage ici.
+        messageStore.onFreshlyDead = { [weak self] ids in self?.burnAnnouncedEphemerals(ids) }
         // #3707 — une enveloppe de CETTE conversation ouverte : le fil relit le magasin, qui pose le clair.
         endToEndOpenings = EndToEndThreadPlaintexts.openings(of: conversationId, from: endToEnd)
             .sink { [weak messageStore, hybrid = startupDependencies.endToEndClear.hybrid] in hybrid.reopen(); messageStore?.messagesDidChange.send() }
@@ -122,7 +124,7 @@ extension ConversationViewModel {
     /// de vue unique et les combustions en cours, qui vivent chez l'hôte.
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let outcome = ConversationMessageMerge.merge(current: messages, incoming: incoming, pendingServerIds: pendingServerIds)
-        let result = applyingEphemeralBurns(applyingViewOnceReveals(outcome.messages))
+        let result = applyingViewOnceReveals(outcome.messages).markingBurning(burningEphemeralIds)
         let drops = ConversationMessageMerge.drops(before: messages, after: result, superseded: outcome.superseded)
         guard !drops.all.isEmpty else { return result }
         if !drops.unexpected.isEmpty {

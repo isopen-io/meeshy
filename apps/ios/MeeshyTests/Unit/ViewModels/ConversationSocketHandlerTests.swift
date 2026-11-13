@@ -641,10 +641,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     /// #17938 — un éphémère ENCORE À L'ÉCRAN brûle avant de partir : l'annonce
-    /// du serveur demande la combustion à l'hôte et ne grave la mort qu'après
-    /// sa durée. Écrire tout de suite relisait le magasin et retirait la ligne
-    /// au milieu de son feu (mesuré : 0,5 s de combustion sur 1,2 s).
-    func test_messageExpired_onScreen_requestsTheBurnAndWritesAfterIt() async throws {
+    /// du serveur demande la combustion à l'hôte AVANT de graver la mort. La
+    /// mort, elle, s'écrit tout de suite (une écriture destructrice ne se
+    /// diffère pas) : c'est le magasin qui garde la ligne le temps de son feu.
+    func test_messageExpired_onScreen_requestsTheBurnThenWrites() async throws {
         let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
         sut.persistence = actor
@@ -653,13 +653,9 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.invalidateIndex()
 
         socket.simulateMessageExpired(MessageExpiredEvent(messageId: "msg1", conversationId: conversationId))
-        await drainEvents(of: sut)
+        try await waitForRow("msg1", in: db, "l'expiration est écrite") { $0?.deletedAt != nil }
 
         XCTAssertEqual(delegate.burnRequests, ["msg1"], "l'annonce allume la combustion de la ligne à l'écran")
-        let duringBurn = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
-        XCTAssertNil(duringBurn?.deletedAt, "la mort n'est pas gravée pendant la combustion")
-
-        try await waitForRow("msg1", in: db, "l'expiration est écrite après la combustion") { $0?.deletedAt != nil }
     }
 
     func test_messageExpired_offScreen_writesAtOnceWithoutBurn() async throws {

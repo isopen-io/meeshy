@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import MeeshySDK
 import SwiftUI
-import os
 
 /// **Un seul réveil pour tout le fil** — l'ordonnanceur qui fait disparaître un
 /// éphémère à son échéance (#7452, dimension 4).
@@ -124,23 +123,33 @@ extension ConversationViewModel {
         }
     }
 
+    /// **Une mort ANNONCÉE d'une ligne à l'écran brûle** (#17938) — annonce du
+    /// serveur (`message:expired`) ou ligne qu'une publication du magasin relit
+    /// morte sous les yeux du lecteur — MÊME si le registre porte déjà sa
+    /// destruction : la règle du triage (#8352, « un mort déjà gravé part sans
+    /// rejouer sa combustion ») vise un RECHARGEMENT, pas une destruction en
+    /// cours. Une ligne absente, ou qui brûle déjà, ne change rien.
+    func burnAnnouncedEphemerals(_ ids: [String]) {
+        let burning = Set(ids.filter { id in messageIndex(for: id).map { !messages[$0].isBurning } ?? false })
+        guard !burning.isEmpty else { return }
+        retire(alreadyDead: [], burning: burning)
+    }
+
     private func retire(alreadyDead: Set<String>, burning: Set<String>) {
         if !alreadyDead.isEmpty {
             messages.removeAll { alreadyDead.contains($0.id) }
             messageStore.dropGoneEphemerals()
-            purgeQuoteCascade(fromDead: Array(alreadyDead))
+            messagePersistence.purgeQuoteCascadeDetached(fromDead: Array(alreadyDead))
         }
         guard !burning.isEmpty else { return }
 
-        for id in burning {
-            guard let index = messageIndex(for: id) else { continue }
-            messages[index].isBurning = true
-            burningEphemeralIds[id] = true
-        }
+        // #17938 — le magasin garde ce qui brûle : une publication pendant la combustion ne retire plus la ligne.
+        messageStore.burning.formUnion(burning)
+        for id in burning { burningEphemeralIds[id] = true }
+        messages = messages.markingBurning(burningEphemeralIds)
 
-        let reduceMotion = UIAccessibility.isReduceMotionEnabled
         Task { @MainActor [weak self] in
-            let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
+            let duration = EphemeralBurn.duration(reduceMotion: UIAccessibility.isReduceMotionEnabled)
             guard await cancellableSleep(for: .seconds(duration)) else { return }
             guard let self else { return }
             for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
@@ -153,36 +162,11 @@ extension ConversationViewModel {
             // #8382 — le fil rend `MessageStore`, pas `messages` : sans cette
             // republication, Focal et Script gardaient la ligne à 0:00 jusqu'à
             // la prochaine écriture en base.
+            self.messageStore.burning.subtract(burning)
             self.messageStore.dropGoneEphemerals()
             for id in burning { self.burningEphemeralIds.removeValue(forKey: id) }
             self.refreshEphemeralExpirySchedule()
-            self.purgeQuoteCascade(fromDead: Array(burning))
-        }
-    }
-
-    /// #10433 — les réponses d'un mort quittent la BASE avec lui : sans quoi
-    /// elles revenaient au fil dès que le message cité sortait de la fenêtre.
-    func purgeQuoteCascade(fromDead ids: [String]) {
-        guard !ids.isEmpty else { return }
-        let persistence = messagePersistence
-        Task {
-            do {
-                try await persistence.purgeQuoteCascade(fromDead: ids)
-            } catch {
-                Logger.messages.warning("[EphemeralExpiry] purgeQuoteCascade failed \(ids.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
-    /// Repose la combustion en cours sur des messages relus du magasin : une
-    /// écriture GRDB pendant la combustion ne la remet pas à zéro (#8382).
-    func applyingEphemeralBurns(_ incoming: [Message]) -> [Message] {
-        guard !burningEphemeralIds.isEmpty else { return incoming }
-        return incoming.map { message in
-            guard burningEphemeralIds[message.id] == true, !message.isBurning else { return message }
-            var burning = message
-            burning.isBurning = true
-            return burning
+            self.messagePersistence.purgeQuoteCascadeDetached(fromDead: Array(burning))
         }
     }
 

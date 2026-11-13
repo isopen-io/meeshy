@@ -16,11 +16,14 @@ struct EphemeralBurnLawTests {
         #expect(EphemeralBurn.duration(reduceMotion: true) == 0.25)
     }
 
-    @Test("le relais d'une mort annoncée attend la combustion quand le fil est ouvert, pas sinon")
-    func relayDelay() {
-        #expect(EphemeralBurn.relayDelay(conversationIsOpen: false) == 0)
-        #expect(EphemeralBurn.relayDelay(conversationIsOpen: true) > EphemeralBurn.fullDuration)
-        #expect(EphemeralBurn.relayDelay(conversationIsOpen: true) == EphemeralBurn.fullDuration + EphemeralBurn.relayMargin)
+    @Test("une mort plus jeune que la combustion est en cours ; à la durée de la combustion elle est ancienne")
+    func freshDeath() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(EphemeralBurn.isFreshDeath(at: now.addingTimeInterval(-0.3), now: now))
+        #expect(EphemeralBurn.isFreshDeath(at: now, now: now))
+        #expect(!EphemeralBurn.isFreshDeath(at: now.addingTimeInterval(-EphemeralBurn.fullDuration), now: now))
+        #expect(!EphemeralBurn.isFreshDeath(at: now.addingTimeInterval(-5), now: now))
+        #expect(EphemeralBurn.freshDeathWindow < EphemeralBurn.fullDuration)
     }
 
     @Test("le vent brut est absent sans capteur, et sous la zone morte")

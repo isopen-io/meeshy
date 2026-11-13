@@ -41,18 +41,18 @@ public enum EphemeralBurn {
         reduceMotion ? fadeDuration : fullDuration
     }
 
-    /// **Le relais d'une mort annoncée ATTEND la combustion quand le fil est
-    /// ouvert** (#17938). `message:expired` a deux consommateurs : l'écran de
-    /// la conversation, qui fait brûler la ligne, et le moteur de
-    /// synchronisation, qui grave la mort en base et au registre pour les
-    /// conversations FERMÉES. Le second écrivait tout de suite, même fil
-    /// ouvert : le magasin relisait une ligne morte et la retirait au milieu
-    /// de son feu — ou avant qu'il ne prenne, quand l'annonce précède
-    /// l'horloge locale. Fil ouvert, le moteur attend la combustion entière
-    /// plus une marge ; fil fermé, rien ne brûle et rien n'attend.
-    public static let relayMargin: TimeInterval = 0.3
+    /// **Une mort est « en cours » tant qu'elle est plus jeune que la
+    /// combustion** (#17938). `message:expired` a deux consommateurs — l'écran
+    /// de la conversation et le moteur de synchronisation — et le second grave
+    /// la mort (base, registre) tout de suite, à raison : une écriture
+    /// destructrice ne se diffère pas. C'est donc l'ÉCRAN qui distingue une
+    /// mort qui vient d'arriver (la ligne brûle) d'une mort ancienne qu'un
+    /// rechargement ressert (la ligne part sans rejouer sa combustion, #8352).
+    /// La frontière est la durée de la combustion, moins une marge pour que le
+    /// retrait de l'hôte, à `fullDuration`, trouve la mort déjà « ancienne ».
+    public static let freshDeathWindow: TimeInterval = fullDuration - 0.1
 
-    public static func relayDelay(conversationIsOpen: Bool) -> TimeInterval {
-        conversationIsOpen ? fullDuration + relayMargin : 0
+    public static func isFreshDeath(at death: Date, now: Date) -> Bool {
+        now.timeIntervalSince(death) < freshDeathWindow
     }
 }
