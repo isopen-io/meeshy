@@ -704,14 +704,16 @@
     "R6",
     "A7",
     "I1",
-    "I4"
+    "I4",
+    "R10",
+    "I2"
    ],
    "lois": [
     2,
     11
    ],
    "contrat": "Vignettes sans cadre ni verre, la courante cerclée de blanc, « + » toujours en dernier, fantômes (envoi avec anneau K09, attente), toucher = aller, double toucher = dupliquer, appui long = croix + glisser pour réordonner. Contenu de vignette opaque.",
-   "ios_existant": "ComposerSlideRail, ComposerSceneThumbnailTile, ComposerSlideRowJiggle, ComposerSceneIntakeGhost ; SDK SlideMiniPreview",
+   "ios_existant": "ComposerSlideRail (grammaire ComposerSlideRowGrammar, ComposerSlideRowDrag), ComposerSceneThumbnailTile (le contenu, reste à l'app)",
    "android_existant": ":sdk-ui SlideRailTile + SlideRailGeometry (public, générique) ; ComposerSlideRail, SlideReorderResolver",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyThumbnailRow.swift",
    "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyThumbnailRow.kt",
@@ -723,7 +725,7 @@
    ],
    "modele_web": "sonnet",
    "cible_web": "apps/web/src/components/kit/meeshy-thumbnail-row.tsx",
-   "web_existant": "components/story-rail.tsx, rail-tile.tsx"
+   "web_existant": "routes/story-compose-pages.tsx (StudioPageRail, StudioPageTile, StudioPageDelete)"
   },
   {
    "cle": "K21",
