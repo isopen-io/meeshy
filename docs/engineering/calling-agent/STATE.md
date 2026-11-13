@@ -850,8 +850,25 @@ socket jusqu'au client.
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
 
-## Cycle 23 — 2026-11-13 (en cours)
+## Cycle 23 — 2026-11-13
 
 - **Base** : `origin/dev` @ `04a61d59`. Le lot du cycle 22 (#18042) y est fusionné.
 - **Branche** : `claude/determined-volta-xsbr3g`.
 - **Objectif** : #18063. Un `translationError` ne solde que la traduction texte qu'il vise, et ses champs relayés sont filtrés par type.
+- **Livré** (seule la passerelle change : ni le protocole ZMQ, ni le traducteur, ni la forme émise pour une trame valide) :
+  - **`ZmqTranslationClient`** : l'écouteur `translationError` commence par une garde (`_isPendingNonTranslationRequest`). Une erreur qui porte le taskId d'une requête audio, transcription ou voix en attente n'est ni soldée, ni comptée (`errors_received`, `pool_full_rejections`, disjoncteur), ni relayée : un `warn` seulement. Le traducteur ne publie `translation_error` que pour du texte, donc l'erreur est mal adressée. La relayer aurait fait diffuser `translation:failed` par `MessageTranslationService`. La garde passe avant les branches `UNSUPPORTED_LANGUAGE` et « pool full » : `settleTranslationLanguage` supprimait toute entrée sans `pendingLanguages`.
+  - **`ZmqMessageHandler.handleTranslationError`** filtre par type, comme `handleTranslationSkipped` : `messageId` et `conversationId` → `''`, `error` → `'unknown error'`, `taskId`, `errorCode` et `targetLanguage` gardés seulement s'ils sont des chaînes non vides, `metadata` gardé seulement si c'est un objet simple, sinon `{}`. Nouveau type `TranslationErrorPayload`.
+  - **Rétrocompatibilité** : une erreur sans taskId (ancien traducteur) ou sous un taskId inconnu est toujours relayée.
+- **Tests** : `ZmqTranslationClient.translationError-scope.test.ts` (18, sur de vraies trames JSON).
+  - **Rouge avant le correctif** : `11 failed, 7 passed`. La QA l'a reproduit en remettant le code de `origin/dev` en place.
+  - **Vert** : relancé par moi, `45 passed` sur `translationError-scope` et `translationSkipped*`. La QA mesure 36 suites et 730 tests (`zmq-translation`, `ZmqRequestSender`, `ZmqMessageHandler`, `MessageTranslationService`, `admin-monitoring`, `directTextTranslation`). `tsc --noEmit` sort à 0.
+  - **Mutations QA** : 15 sur 16 font rougir les témoins. La survivante (M15, garde `if (taskId)` autour de `settle`) est équivalente.
+- **QA** : favorable avec réserves. R1 (`_handleTranslationError` typé `taskId: string`) et R2 (`translation:failed` diffusé vers la room fantôme `conversation:`) → #18097.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18064 (compteurs ZMQ visibles dans le monitoring admin, borne de longueur sur `reason`), puis #18097.
+2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+3. #17132 et #17133.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
