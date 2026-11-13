@@ -32,6 +32,12 @@ jest.mock('../../../../services/CacheStore', () => ({
   }),
 }));
 
+const mockRejeuPosition = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => ({
+  ...(jest.requireActual('../../../../services/sharedLocation/sharedLocationDeps') as object),
+  refreshSharedLocationAfter: (...a: any[]) => mockRejeuPosition(...a),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { blockUser, unblockUser, getBlockedUsers } from '../../../../routes/users/blocking';
@@ -238,6 +244,33 @@ describe('DELETE /users/:userId/block — success', () => {
     expect(res.statusCode).toBe(200);
     expect(mockCacheDel).toHaveBeenCalledWith(blockCacheKey(CURRENT_USER_ID, TARGET_USER_ID));
     await app.close();
+  });
+});
+
+describe('DELETE /users/:userId/block — la position partagée revient au déblocage (#16987)', () => {
+  it('rejoue la projection de la paire, sans capture d\'avant : la dernière position revient sans attendre l\'envoi suivant', async () => {
+    mockRejeuPosition.mockClear();
+    const prisma = makePrisma();
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({ blockedUserIds: [TARGET_USER_ID] });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/users/${TARGET_USER_ID}/block` });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockRejeuPosition).toHaveBeenCalledTimes(1);
+    expect(mockRejeuPosition.mock.calls[0][1]).toEqual({ userA: CURRENT_USER_ID, userB: TARGET_USER_ID });
+  });
+
+  it('ne rejoue rien quand la personne n\'était pas bloquée', async () => {
+    mockRejeuPosition.mockClear();
+    const prisma = makePrisma();
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({ blockedUserIds: [] });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/users/${TARGET_USER_ID}/block` });
+    await app.close();
+
+    expect(res.statusCode).toBe(404);
+    expect(mockRejeuPosition).not.toHaveBeenCalled();
   });
 });
 

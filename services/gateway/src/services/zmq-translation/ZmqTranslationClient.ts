@@ -25,7 +25,8 @@ import type {
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
   VoiceProfileRequest,
-  CacheForgetRequest
+  CacheForgetRequest,
+  TranslationSkippedPayload
 } from './types';
 import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -371,6 +372,19 @@ export class ZmqTranslationClient extends EventEmitter {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationError', event);
+    });
+
+    // Un texte trop long ne sera JAMAIS traduit (#17204) : le laisser armé le
+    // faisait renvoyer jusqu'à ZMQ_MAX_RETRIES puis annoncer un échec. Il se
+    // solde sans rien compter au disjoncteur — ce n'est ni une panne ni un
+    // succès — et son lecteur garde l'original. Sans taskId (ancien
+    // translator), il n'y a rien à solder.
+    this.messageHandler.on('translationSkipped', (event: TranslationSkippedPayload) => {
+      if (event.taskId) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
+      this.emit('translationSkipped', event);
     });
 
     // Audio events

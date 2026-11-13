@@ -11,7 +11,8 @@ import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-cat
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
-import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase } from '@/lib/talkie/talkie-sender';
+import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
+import { createTalkieVoiceCopier } from '@/lib/talkie/talkie-voice-copy';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 
 import { BRAND, BRAND_FILL, FOCUS, INK_2 } from './user-profile-style';
@@ -110,7 +111,9 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   }
   const live = phase !== 'idle';
   const label =
-    phase === 'talking'
+    phase === 'recording-copy'
+      ? translateCircles(language, 'talkie.header.announce.recorded')
+      : phase === 'talking'
       ? translateCircles(language, waking ? 'talkie.send.waking' : 'talkie.send.talking', { name })
       : phase === 'starting' ? translateCircles(language, 'talkie.send.connecting') : translateCircles(language, 'talkie.send.hold');
   return (
@@ -154,7 +157,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
         }}
       >
         <span>
-          <span aria-hidden="true" className={phase === 'talking' ? 'motion-safe:animate-pulse' : undefined}>
+          <span aria-hidden="true" className={live && phase !== 'starting' ? 'motion-safe:animate-pulse' : undefined}>
             🎙️{' '}
           </span>
           {label}
@@ -169,11 +172,33 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   );
 });
 
-export function useTalkieSender({ watch, capture, onOutcome }: { readonly watch: WatchRealtime; readonly capture: TalkieCaptureFactory; readonly onOutcome: (outcome: TalkieSendOutcome) => void }) {
+/** La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. */
+export const liveTalkieCopier = (language: () => string): TalkieVoiceCopier => createTalkieVoiceCopier({ deps: apiDeps, language });
+
+export function useTalkieSender({
+  watch,
+  capture,
+  onOutcome,
+  language,
+  copier,
+}: {
+  readonly watch: WatchRealtime;
+  readonly capture: TalkieCaptureFactory;
+  readonly onOutcome: (outcome: TalkieSendOutcome) => void;
+  readonly language: InterfaceLanguage;
+  /** Un talkie qui n'est pas entendu part en message vocal (#16698) ; par défaut, le copieur vivant. */
+  readonly copier?: TalkieVoiceCopier;
+}) {
   const socketRef = useRef<SocketClient | null>(null);
   const outcomeRef = useRef(onOutcome);
   outcomeRef.current = onOutcome;
-  const sender = useMemo(() => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome) }), [capture]);
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const copierRef = useRef(copier ?? liveTalkieCopier(() => languageRef.current));
+  const sender = useMemo(
+    () => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome), copier: (copy) => copierRef.current(copy) }),
+    [capture],
+  );
   useEffect(
     () =>
       watch((socket) => {
@@ -198,6 +223,7 @@ export function ProfileTalkieRow({
   watch = watchRealtime,
   capture = createTalkieCapture(),
   supported = talkieEncodingSupportedOnce,
+  copier,
 }: {
   readonly language: InterfaceLanguage;
   readonly person: PersonSummary;
@@ -207,6 +233,7 @@ export function ProfileTalkieRow({
   readonly watch?: WatchRealtime;
   readonly capture?: TalkieCaptureFactory;
   readonly supported?: () => Promise<boolean>;
+  readonly copier?: TalkieVoiceCopier;
 }) {
   const ready = useCirclesCatalog(language);
   const links = useQuery(relationLinksQueryOptions(deps), appQueryClient);
@@ -229,7 +256,7 @@ export function ProfileTalkieRow({
     if (outcome === 'not-allowed') return setRefused(true);
     onNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]), outcome !== 'voice');
   };
-  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome });
+  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome, language, ...(copier === undefined ? {} : { copier }) });
   const phase = useStore(sender.store, (state) => state.phase.kind);
   const waking = useStore(sender.store, (state) => state.phase.kind === 'talking' && state.phase.delivery === 'waking');
 

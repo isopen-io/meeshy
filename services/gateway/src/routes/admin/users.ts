@@ -63,6 +63,7 @@ import { sendZodRefusal } from '../../utils/identity-name-floor';
 import { forgetTeamCircles } from '../../services/relations/relationCaches';
 import { revokeTeamSharesOf } from '../../services/relations/teamShareGrant';
 import { nowPlayingRelayDepsOf } from '../../services/nowPlaying/nowPlayingDeps';
+import { endSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 
 const userConversationSortSchema = z.object({
@@ -164,6 +165,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     forgetTeamCircles: (userId) => forgetTeamCircles(fastify, userId),
     revokeTeamShares: (userId) =>
       revokeTeamSharesOf(fastify.prisma, { userId, now: new Date(), nowPlaying: nowPlayingRelayDepsOf({ prisma: fastify.prisma, io: relationIoOf(fastify) }) }),
+    endSharedLocation: (userId) =>
+      endSharedLocationAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logWarn(fastify.log, `[ADMIN] shared location not ended (userId=${userId})`, error) }, userId, { forget: false }),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);
