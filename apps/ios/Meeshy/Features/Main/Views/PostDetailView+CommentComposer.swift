@@ -166,7 +166,7 @@ extension PostDetailView {
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
     /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
     /// la fin), fichiers routés vers le staging commentaire existant
-    /// (spec 2026-07-30, lot 1).
+    /// (lot 1).
     private func handleComposerIngest(_ ingests: [ComposerIngest]) {
         if let block = CommentComposerIngestion.mergedText(from: ingests) {
             if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
@@ -273,14 +273,14 @@ extension PostDetailView {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "pencil")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                         Text(editing.displayContent)
                             .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
                     Spacer()
@@ -291,7 +291,7 @@ extension PostDetailView {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.caption2.bold())
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .frame(width: 24, height: 24)
                             .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                     }
@@ -320,11 +320,11 @@ extension PostDetailView {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(reply.author)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: reply.authorColor))
+                        .foregroundStyle(Color(hex: reply.authorColor))
 
                     Text(reply.displayContent)
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(1)
                 }
 
@@ -337,7 +337,7 @@ extension PostDetailView {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2.bold())
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                 }

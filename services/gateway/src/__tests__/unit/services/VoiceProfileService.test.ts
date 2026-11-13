@@ -226,7 +226,8 @@ describe('VoiceProfileService', () => {
         id: 'user-123',
         dataProcessingConsentAt: null,
         voiceDataConsentAt: null,
-        voiceProfileConsentAt: null
+        voiceProfileConsentAt: null,
+        birthDate: new Date('1990-01-01T00:00:00Z')
       });
       mockPrisma.user.update.mockResolvedValue({
         userId: 'user-123',

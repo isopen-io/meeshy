@@ -1,7 +1,6 @@
 import UIKit
 
-// **Les LIMITES et les lignes MAGNÉTIQUES, pendant une manipulation** (#8370,
-// directive porteur 2026-09-27).
+// **Les LIMITES et les lignes MAGNÉTIQUES, pendant une manipulation** (#8370).
 //
 // La scène se pose sur un sol peint de son propre thumbhash : son bord ne se
 // voit plus, et un objet poussé au-delà se coupe sans que rien ne l'annonce.

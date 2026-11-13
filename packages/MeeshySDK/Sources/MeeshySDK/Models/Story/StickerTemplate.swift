@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Sticker Template
 
-/// **Ce qu'un sticker DÉCORÉ est** (#4716, directive porteur 2026-09-01).
+/// **Ce qu'un sticker DÉCORÉ est** (#4716).
 ///
 /// Un gabarit, c'est un cadre + des EMPLACEMENTS. Il ne dessine rien ici : ce
 /// type est du modèle PUR — aucune I/O, aucun UIKit, aucune chaîne localisée.

@@ -6,7 +6,6 @@ import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.sdk.call.CallSpeakerColor
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import org.junit.Test
 
 /** Loi 4 (`docs/product/appels-vue-finale.md`, vue P1) : le liseré d'une vignette porte la couleur de qui elle montre. */
@@ -38,9 +37,23 @@ class CallTileRimTest {
     }
 
     @Test
-    fun `l'avatar de l'appel reduit se teinte par l'identifiant du pair, le nom n'etant qu'un repli`() {
-        assertThat(CallTileRim.peerAvatar(peerUserId = "u-awa", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("u-awa"))
-        assertThat(CallTileRim.peerAvatar(peerUserId = "", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("Awa"))
+    fun `l'avatar de l'appel reduit prend la couleur de l'autre dans la palette des appels, celle de ses sous-titres`() {
+        assertThat(CallTileRim.peerAvatar(peerUserId = "u-awa", peerName = "Awa")).isEqualTo(CallSpeakerColor.hex("u-awa"))
+    }
+
+    @Test
+    fun `sans identifiant, l'appel reduit se rabat sur le nom comme cle de la meme palette, jamais sur une seconde`() {
+        assertThat(CallTileRim.peerAvatar(peerUserId = "", peerName = "Awa")).isEqualTo(CallSpeakerColor.hex("Awa"))
+    }
+
+    @Test
+    fun `le lisere de l'appel reduit porte la couleur de l'autre au trait fort`() {
+        val hex = CallTileRim.peerAvatar(peerUserId = "u-awa", peerName = "Awa")
+
+        assertThat(CallTileRim.reducedRim(peerUserId = "u-awa", peerName = "Awa", warning = Color.Yellow))
+            .isEqualTo(CallTileRim.selfTileBorder(paused = false, rimHex = hex, warning = Color.Yellow))
+        assertThat(CallTileRim.reducedRim(peerUserId = "u-awa", peerName = "Awa", warning = Color.Yellow).width)
+            .isEqualTo(MeeshyBorder.strong)
     }
 
     @Test
@@ -57,5 +70,16 @@ class CallTileRimTest {
             .isEqualTo(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)))
         assertThat(CallTileRim.selfTileBorder(paused = false, rimHex = "pas-une-couleur", warning = Color.Yellow))
             .isEqualTo(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)))
+    }
+
+    @Test
+    fun `le visage du pair en caméra coupée prend sa couleur d'auteur, la meme que ses sous-titres`() {
+        assertThat(CallTileRim.peerFace("u-awa")).isEqualTo(CallSpeakerColor.hex("u-awa"))
+    }
+
+    @Test
+    fun `sans identifiant du pair, aucune couleur n'est inventee pour son visage`() {
+        assertThat(CallTileRim.peerFace("")).isNull()
+        assertThat(CallTileRim.peerFace("  ")).isNull()
     }
 }

@@ -38,8 +38,7 @@ nonisolated enum MediaStageActionColumn {
     static let target: CGFloat = FullscreenChromeMetrics.tapTarget
 
     /// L'intervalle entre deux actions. Le gabarit de la barre latérale du
-    /// lecteur de story (`StoryViewerView+Sidebar.swift`, « rapprocher les FABs,
-    /// on y voit trop d'espace », directive 2026-07-10).
+    /// lecteur de story (`StoryViewerView+Sidebar.swift`, « rapprocher les FABs, on y voit trop d'espace »).
     static let spacing: CGFloat = FullscreenChromeMetrics.railSpacing
 
     /// La largeur que la colonne occupe SUR le cadre. Elle n'en retire rien au
@@ -132,8 +131,7 @@ extension ConversationMediaGalleryView {
 
     // MARK: - Couche haute : la traînée d'émojis
 
-    /// **Rien ne passe devant elle, rien ne la rogne** (précision porteur
-    /// 2026-09-11).
+    /// **Rien ne passe devant elle, rien ne la rogne**.
     ///
     /// Montée en DERNIER dans le `ZStack` racine — voir `body`. Aucun ancêtre de
     /// cette chaîne ne porte `.clipped()`, `.mask()` ni `.cornerRadius()` :

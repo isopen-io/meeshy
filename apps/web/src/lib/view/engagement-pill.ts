@@ -85,3 +85,35 @@ export function engagementPillModel(
 export type StreakMarkModel = EngagementPillModel;
 
 export const streakMarkModel = engagementPillModel;
+
+/**
+ * LA CARTE DE LA FLAMME (#17770) — ce que montre le toucher sur la flamme du
+ * jour sous l'avatar replié : la série en jours, les étincelles du jour et le
+ * total gagné dans la conversation. Relue au jour du lecteur comme la
+ * pastille ; sans série en cours, aucune carte, puisqu'aucune flamme.
+ */
+export type FlameCardModel = {
+  readonly streakDays: number;
+  /** « jours de suite ici », accordé à la série. */
+  readonly streakText: string;
+  /** « +12 » — les étincelles du jour, abrégées. */
+  readonly todayText: string;
+  /** Le total gagné dans la conversation, abrégé. */
+  readonly totalText: string;
+};
+
+export function flameCardModel(
+  snapshot: ConversationEngagementSnapshot | undefined,
+  today: string,
+  language: InterfaceLanguage,
+): FlameCardModel | null {
+  if (snapshot === undefined || snapshot.totalPoints <= 0) return null;
+  const shown = conversationEngagementForDay(snapshot, today);
+  if (shown.streakDays <= 0) return null;
+  return {
+    streakDays: shown.streakDays,
+    streakText: translate(language, shown.streakDays === 1 ? 'engagement.card.streak.one' : 'engagement.card.streak.other'),
+    todayText: `+${compactCount(shown.todayPoints, language)}`,
+    totalText: compactCount(shown.totalPoints, language),
+  };
+}

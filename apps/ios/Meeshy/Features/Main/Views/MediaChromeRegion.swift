@@ -8,7 +8,7 @@ import MeeshyUI
 //
 // `MediaChromeScheme.swift` lit la luminance du média ENTIER : c'est juste pour un
 // contrôle posé sur du VERRE (la colonne de la galerie, le « … » de la carte Réel),
-// pas pour un glyphe nu. Vérification du 2026-09-15 sur une mire de barres vives : la
+// pas pour un glyphe nu. Vérification sur une mire de barres vives: la
 // moyenne du réel restait sombre pendant que la bande sous le rail était claire —
 // J'aime 2,17:1, Enregistrer 2,62:1 — et le voile bas de la page assombrissait le fond
 // de Repartager (4,56:1) et de Plus (5,83:1).

@@ -197,7 +197,7 @@ extension View {
 
 // MARK: - Ce qui SOULÈVE le composeur d'une story (#10544)
 
-// Constat porteur du 2026-10-13 (iPhone 15 Pro Max, iOS 17.5) : toucher le
+// (iPhone 15 Pro Max, iOS 17.5): toucher le
 // champ de commentaire remontait la scène alors qu'aucun clavier ne montait.
 // La réduction de la scène (#8642) se lisait sur le FOCUS : avec un clavier
 // matériel, la scène se réduisait et s'ancrait 64 pt plus haut pour rien.

@@ -107,8 +107,8 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
   });
 });
 
-describe('à la fin de la bannière : la Gloire au-dessus du blason, le nom du rang dessous (porteur 2026-10-19, #10951)', () => {
-  test('« ♛ 41 250 » AU-DESSUS du blason, puis le nom du rang AVEC sa division dessous', async () => {
+describe('à la fin de la bannière : le nom du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17202)', () => {
+  test('le nom du rang AVEC sa division AU-DESSUS du blason, puis « ♛ 41 250 » dessous', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const end = host.querySelector('[data-profile-banner-rank]');
     const glory = end?.querySelector('[data-profile-banner-glory]');
@@ -116,8 +116,8 @@ describe('à la fin de la bannière : la Gloire au-dessus du blason, le nom du r
     const name = end?.querySelector('[data-profile-banner-rank-name]');
     expect(words(glory)).toBe(`${GLORY_GLYPH} ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
     expect((glory?.getAttribute('class') ?? '').split(/\s+/)).toContain('font-bold');
-    expect(((glory?.compareDocumentPosition(crest as Node) ?? 0) & 4) !== 0).toBe(true);
-    expect(((crest?.compareDocumentPosition(name as Node) ?? 0) & 4) !== 0).toBe(true);
+    expect(((name?.compareDocumentPosition(crest as Node) ?? 0) & 4) !== 0).toBe(true);
+    expect(((crest?.compareDocumentPosition(glory as Node) ?? 0) & 4) !== 0).toBe(true);
     expect(words(name)).toBe('Murmure V');
     expect((end?.getAttribute('class') ?? '').split(/\s+/)).toContain('flex-col');
   });

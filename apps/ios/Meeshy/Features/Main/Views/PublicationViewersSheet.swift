@@ -152,7 +152,7 @@ struct PublicationViewersSheet: View {
                             if let visitorsLine {
                                 Text(visitorsLine)
                                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(Color.secondary)
                                     .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
                             }
                         }
@@ -216,14 +216,14 @@ struct PublicationViewersSheet: View {
                     HStack {
                         Text(viewer.displayName)
                             .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(Color.primary)
                             .lineLimit(1)
 
                         Spacer()
 
                         Text(viewer.viewedAt, style: .time)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
 
                     let marks = viewer.engagement.marks

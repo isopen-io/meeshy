@@ -99,7 +99,7 @@ extension PostDetailView {
     /// de laisser `StoryReaderRepresentable(feedPost:)` reconvertir le même
     /// `FeedPost` : une seconde conversion par évaluation de body, et surtout
     /// deux valeurs qui pourraient diverger si la cascade de repli changeait
-    /// d'un côté sans l'autre (post-revue 2026-07-13).
+    /// d'un côté sans l'autre.
     @ViewBuilder
     func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
         sceneSoundHeader(renderedItem.storyEffects)

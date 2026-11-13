@@ -180,7 +180,7 @@ public struct SoundLibraryPicker: View {
             Label(String(localized: "story.sound.library.removeFailed",
                          defaultValue: "Le son n'a pas pu être retiré. Réessayez.", bundle: .module),
                   systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: MeeshyFont.footnoteSize))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(MeeshyColors.error)
                 .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -251,7 +251,7 @@ public struct SoundLibraryPicker: View {
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "waveform")
-                .font(.system(size: 34, weight: .light))
+                .meeshyScaledFont(34, weight: .light)
                 .foregroundStyle(.secondary)
             Text(model.emptyMessage(for: formatWording))
                 .font(.subheadline)
@@ -288,14 +288,14 @@ struct SoundLibraryRow: View {
             Button(action: onOpenDetail) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                        .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .lineLimit(1)
                     metadataLine
                     // Gris discret, et seulement dans « Mes sons » sur un son
                     // NOMMÉ : ailleurs la date est déjà le libellé principal.
                     if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
                         Text(date)
-                            .font(.system(size: MeeshyFont.footnoteSize))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
@@ -310,7 +310,7 @@ struct SoundLibraryRow: View {
             Spacer(minLength: 8)
             if canRename {
                 Button(action: onRename) {
-                    Image(systemName: "pencil").font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    Image(systemName: "pencil").meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -320,7 +320,7 @@ struct SoundLibraryRow: View {
             Button(action: onPick) {
                 Text(String(localized: "story.sound.library.use",
                             defaultValue: "Utiliser", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)

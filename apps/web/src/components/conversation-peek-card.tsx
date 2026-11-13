@@ -13,21 +13,17 @@ import { flattenMessagePages, type MessagesInfiniteData } from '@/lib/api/messag
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Conversation, Message } from '@/lib/api/types';
 import { place, type PlacedMessage } from '@/lib/grouping';
-import { translate } from '@/lib/i18n-catalog';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { appearanceOf } from '@/lib/appearance/read';
 import { resolveThreadMode, toStickyPreference, type FlatRowMode } from '@/lib/reading-mode/decision';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore, type ReadingModeStore } from '@/lib/reading-mode/store';
-import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
-import { avatarOf, initialsOf, isGroup, peerOf, titleOf, unreadOf } from '@/lib/view/conversation';
+import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import { endToEndRegimeOf, endToEndSealed, sealForgedPlaintext } from '@/lib/view/end-to-end-sealed';
 import { isMineOf } from '@/lib/view/message';
-import { usePresence } from '@/lib/view/use-presence';
 
-import { Avatar } from './avatar';
 import { Bubble } from './bubble';
 import { ConversationBackdrop } from './conversation-backdrop';
 import { FocalRow } from './focal-row';
@@ -37,7 +33,7 @@ import '@/styles/conversation-peek.css';
 
 /**
  * L'APERÇU D'UNE CONVERSATION TENUE (#11211) — ce que le fil montrerait en
- * l'ouvrant, sans l'ouvrir : les cinq derniers messages au plus, dans le MODE
+ * l'ouvrant, sans l'ouvrir : les vingt derniers messages au plus, dans le MODE
  * DE LECTURE que le fil élirait (décision #11204), à l'accent de la
  * conversation. Rien n'est demandé au réseau : le cache des messages est LU
  * (`getQueryData`), jamais observé — une conversation jamais ouverte montre son
@@ -65,7 +61,8 @@ import '@/styles/conversation-peek.css';
 /** Ce que l'aperçu dessine : ce que le fil dessinerait, le Résumé retombant sur Focal. */
 export type PeekReadingMode = FlatRowMode | 'bubbles';
 
-export const PEEK_MESSAGE_COUNT = 5;
+/** Assez pour remplir la carte agrandie (#17243), sous la première page du fil (50). */
+export const PEEK_MESSAGE_COUNT = 20;
 /** Un cache plus jeune que ça est servi sans revalidation. */
 export const PEEK_STALE_MS = 30_000;
 
@@ -126,7 +123,12 @@ export type ConversationPeekCardProps = {
   readonly languages: readonly string[];
   readonly isAnonymous: boolean;
   readonly interfaceLanguage: InterfaceLanguage;
-  /** La hauteur que la grappe laisse à la carte (`placeMessageMenuCluster`), 120 à 300. */
+  /**
+   * La hauteur que le cran courant de la grappe laisse à la carte
+   * (`peek-sheet.ts`, #17243). La carte suit son hôte (`height: 100%`, que le
+   * tirage pilote sans la re-rendre) ; ce nombre ne sert qu'à re-mesurer le
+   * débordement quand le cran change.
+   */
   readonly maxHeight: number;
   readonly onOpen: () => void;
   /**
@@ -160,11 +162,7 @@ export function ConversationPeekCard({
 }: ConversationPeekCardProps) {
   const group = isGroup(conversation);
   const title = titleOf(conversation, viewerId);
-  const photo = avatarOf(conversation, viewerId);
   const accent = accentOf(conversation);
-  const peer = group ? undefined : peerOf(conversation, viewerId);
-  const presence = usePresence(peer, { now });
-  const peerRing = useRingDesign(servedRingOf(peer));
   const [openedAt] = useState(now);
   const [revision, setRevision] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -210,50 +208,24 @@ export function ConversationPeekCard({
   const background = appearanceOf(conversation).background.kind;
   const painted = background !== 'signature';
   const e2ee = conversationIsEndToEnd({ type: conversation.type, encryptionMode: conversation.encryptionMode ?? null });
-  const memberCount = conversation.memberCount ?? 0;
+  const name = [title, label, ...(e2ee ? [rowMenuText(interfaceLanguage, 'rowMenu.peek.e2ee')] : [])].join(', ');
 
   return (
     <div
       role="group"
-      aria-label={`${title}, ${label}`}
+      aria-label={name}
       {...(idBase === undefined ? {} : { id: `${idBase}-card` })}
       data-peek-card
       data-peek-mode={mode}
       {...(painted ? { 'data-peek-backdrop': background } : {})}
       className="conversation-peek-card"
-      style={withAccent(accent, { maxHeight, ...personalBubbleVars(conversation) })}
+      style={withAccent(accent, { height: '100%', ...personalBubbleVars(conversation) })}
     >
       {painted ? (
         <QueryClientProvider client={client}>
           <ConversationBackdrop conversation={conversation} accent={accent} live={false} deps={deps} />
         </QueryClientProvider>
       ) : null}
-      <div data-peek-header className="conversation-peek-header">
-        <Avatar
-          initials={initialsOf(title)}
-          color={accent}
-          size={36}
-          {...(photo === undefined ? {} : { src: photo })}
-          {...(group ? {} : { presence })}
-          {...(peerRing === null ? {} : { ring: peerRing })}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-bubble font-extrabold" style={{ color: 'var(--color-ios-ink)' }}>
-            {title}
-          </span>
-          {group || e2ee ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-              {group ? <span>{translate(interfaceLanguage, memberCount === 1 ? 'community.members.one' : 'community.members.other', { count: String(memberCount) })}</span> : null}
-              {e2ee ? (
-                <span data-peek-e2ee className="inline-flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-                  <Glyph name="lock" size={11} />
-                  {rowMenuText(interfaceLanguage, 'rowMenu.peek.e2ee')}
-                </span>
-              ) : null}
-            </span>
-          ) : null}
-        </div>
-      </div>
       <div ref={bodyRef} className="conversation-peek-body" inert {...(overflowing ? { 'data-peek-overflowing': '' } : {})} {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
         {placed === null && !failed ? <PeekSkeleton /> : null}
         {placed === null && failed ? (

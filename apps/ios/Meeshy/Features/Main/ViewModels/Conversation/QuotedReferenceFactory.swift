@@ -13,9 +13,11 @@ enum QuotedReferenceFactory {
     /// - `servedText` : le texte que la BULLE du cité rend en ce moment (traduction élue par le Prisme,
     ///   bascule manuelle comprise, `nil` ⇒ l'original, jamais `translations.first`). Jamais appelé pour
     ///   un message protégé : une réponse ne republie pas le secret le temps que le serveur accuse.
+    /// - `viewerId` : le LECTEUR — l'avis d'un appel cité (#17441) se dit de son point de vue.
     static func reference(
         quoting quoted: Message,
         citing named: MessageAttachment?,
+        viewerId: String? = nil,
         servedText: () -> String?
     ) -> ReplyReference {
         let representative = named
@@ -29,7 +31,8 @@ enum QuotedReferenceFactory {
             authorName: quoted.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main),
             previewText: messageIsProtected
                 ? protectedPlaceholder(for: quoted, representative: representative)
-                : previewText(for: quoted, representative: representative, servedText: servedText),
+                : noticeText(of: quoted, viewerId: viewerId)
+                    ?? previewText(for: quoted, representative: representative, servedText: servedText),
             isMe: quoted.isMe,
             authorColor: quoted.senderColor,
             authorAvatarUrl: quoted.senderAvatarURL,
@@ -47,6 +50,14 @@ enum QuotedReferenceFactory {
             reference.quotedPieceCount = tiles.isEmpty ? nil : tiles.count
         }
         return reference
+    }
+
+    /// L'avis cité (appel, arrivée, arrivées regroupées — #17441) dans la langue de l'app, jamais le
+    /// repli français stocké : la MÊME phrase que l'écho serveur (`APIMessageReplyTo.toReplyReference`).
+    private static func noticeText(of quoted: Message, viewerId: String?) -> String? {
+        guard quoted.messageSource == .system else { return nil }
+        let notice = QuotedNotice(call: quoted.callSummary, join: quoted.joinNotice, arrivals: quoted.arrivalsNotice)
+        return notice?.text(viewerId: viewerId, strings: ConversationPreviewCatalog.strings())
     }
 
     private static func previewText(

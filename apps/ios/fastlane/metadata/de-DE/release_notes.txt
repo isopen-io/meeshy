@@ -1,9 +1,9 @@
-Meeshy 1.1.3 – alles entsteht direkt in der Szene
+Meeshy 1.1.8 – schönere, klarere Anrufe, in deiner Sprache.
 
-• Sticker: ein einziges Fenster, in deinen Chats genauso wie in deinen Storys, Posts und Reels; Mee und Meo werden lebendig, und ein Shop installiert oder entfernt ein Paket mit einem Tipp
-• Editor: Tippe auf das Text-Werkzeug, um deine Szene zu erstellen, und bearbeite Text, Bilder, Sticker und Hintergrund direkt darin; mit zwei Fingern vergrößerst du deinen Text, ohne dass seine Zeilen umbrechen
-• Fotos und Videos bearbeitest du vor dem Senden direkt in der Szene: Bild zuschneiden (Original, 1:1, 4:5, 9:16), Video kürzen, und die Kamera öffnet sich im Vollbild
-• Schlankere Eingabeleiste: Mediathek und Kamera mit einem Tipp, und Symbole in den Farben deines Effekts
-• Anrufe: Sieh, wann dein Gegenüber Kamera oder Mikrofon ausschaltet, setze einen unterbrochenen Anruf fort, statt ihn zu verlieren, und ein Gruppenanruf geht weiter, wenn jemand geht; im Video ein natürlicher Teint und einstellbare Hautglättung
-• Ein Meeshy-Link, der ohne Konto geöffnet wird, zeigt den Beitrag und wer ihn mit dir geteilt hat; ein Reel ohne Text zeigt seine Bildunterschrift, und beim Bearbeiten behält ein Beitrag seinen Typ
-• Fehlerbehebungen und noch flüssigere Bedienung
+• Neu gestaltete Anrufe: Jede Taste ist aus Glas (Liquid Glass ab iOS 26), wer spricht, leuchtet in seiner Farbe, und im Querformat passen bis zu vier Personen in eine Reihe.
+• Untertitel: Jeder Satz zeigt seine Sprache und klappt mit einem Tippen sein Original auf. Nach dem Anruf klappt das Protokoll unter seiner Blase im Chat auf.
+• Aufnahme und Bildschirmfreigabe: Alle sehen, wer fragt und wer zustimmt, die Aufnahme startet als Audio oder Video, und „Freigabe beenden" ist immer erreichbar.
+• Gestalten: Füge ein Bild ein, um den Szenenhintergrund zu setzen, oder einen Text für die Bildunterschrift; der Sucher bietet zuerst Text, Hintergrund, Galerie und Sticker.
+• Überall einfacher: Registrierung, Einstellungen und das Spiel sagen alles nur einmal, die Details warten hinter einem (i).
+
+Und natürlich Fehlerbehebungen und mehr Flüssigkeit überall.

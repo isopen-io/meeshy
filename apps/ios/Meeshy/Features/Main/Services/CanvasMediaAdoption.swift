@@ -3,7 +3,7 @@ import MeeshySDK
 import os
 
 /// **Un canvas publié ne peut désigner que des médias que le post POSSÈDE**
-/// (#5280, 2026-09-05).
+/// (#5280).
 ///
 /// ## Le défaut que cette règle nomme
 ///
@@ -70,7 +70,7 @@ nonisolated enum CanvasMediaAdoption {
         // relire `payload["postMediaId"]` seul rendait un fond `plane: bg` à
         // `mediaId` (forme servie par la passerelle) invisible à cette garde,
         // dans toute scène ≥ 1 (gardée verbatim, jamais migrée par le
-        // runtime) — revue 2026-09-17.
+        // runtime) —.
         let scenes = (effects.canvasV3?.scenes ?? [])
             .flatMap(\.objects)
             .filter { $0.kind == .media }
@@ -252,7 +252,7 @@ nonisolated extension CanvasMediaAdoption {
                     // est RETIRÉ, pas seulement supplanté : le laisser sur le
                     // fil offrait à `unclaimedCanvasMediaIds`
                     // (`storyEffectsV3.ts`, qui lit les deux clés) un id périmé
-                    // à réclamer comme non adopté (revue 2026-09-17).
+                    // à réclamer comme non adopté.
                     charge.removeValue(forKey: "mediaId")
                     // L'URL n'est réécrite que si le dispatch en a servi une :
                     // un objet dont le fichier est déjà en ligne garde la sienne.

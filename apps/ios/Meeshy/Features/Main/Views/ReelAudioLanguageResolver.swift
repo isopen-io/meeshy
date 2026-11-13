@@ -12,7 +12,7 @@ import MeeshyUI
 /// that rank (nothing to translate, returns `nil`), or because a translated
 /// audio is available for it (returns that language). The original language
 /// competes for ITS rank in the chain; it is never tested as a short-circuit
-/// ahead of the loop (Prisme rule 3, 2026-08-10) — with preferred languages
+/// ahead of the loop (Prisme rule 3) — with preferred languages
 /// `["en", "fr"]`, original `fr`, and an `en` translated audio available, the
 /// `en` translation wins because it occupies rank 1. Returns `nil` when
 /// nothing should be auto-selected (the original stays authoritative; the

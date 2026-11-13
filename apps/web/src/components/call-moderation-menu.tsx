@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { CallMember } from '@/lib/calls/call-store';
+import { useGlassToneRef } from '@/lib/calls/use-pill-motion';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -77,6 +78,7 @@ export function CallModerationMenu({
   const anchor = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  const glass = useGlassToneRef(prominent);
   const trigger = () => anchor.current?.querySelector<HTMLElement>('[data-call-moderate]');
 
   useEffect(() => {
@@ -116,6 +118,7 @@ export function CallModerationMenu({
   return (
     <div ref={anchor} className="relative" data-call-moderation={member.userId}>
       <button
+        ref={glass}
         type="button"
         aria-label={t(language, 'callControls.moderate.menu', { name: member.name })}
         title={t(language, 'callControls.moderate.menu', { name: member.name })}

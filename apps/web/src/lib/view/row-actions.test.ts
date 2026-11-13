@@ -48,17 +48,14 @@ describe('rowMenuItems — les libellés BASCULENT avec l’état (#5559 T13)', 
   });
 });
 
-describe('rowMenuItems — appeler depuis la ligne (#8109)', () => {
+describe('rowMenuItems — #17243 : la tête du menu, sans appel', () => {
   const flags = { isPinned: false, isMuted: false, isArchived: false };
 
-  test('quand l’appel est permis, « Appel vocal » et « Appel vidéo » ouvrent le menu', () => {
-    const items = rowMenuItems({ flags, unread: false, language: 'fr', canCall: true });
-    expect(items.map((i) => i.id)).toEqual(['callAudio', 'callVideo', 'pin', 'mute', 'read', 'archive']);
-    expect(items.slice(0, 2).map((i) => i.label)).toEqual(['Appel vocal', 'Appel vidéo']);
-  });
-
-  test('sans droit d’appeler, aucune entrée d’appel', () => {
-    expect(rowMenuItems({ flags, unread: false, language: 'fr' }).some((i) => i.id === 'callAudio' || i.id === 'callVideo')).toBe(false);
+  test('le menu s’ouvre sur sa tête Épingler · Sourdine · Lu ; l’appel se passe depuis la conversation, plus depuis la ligne', () => {
+    const items = rowMenuItems({ flags, unread: false, language: 'fr' });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive']);
+    expect(items.map((i) => i.label)).not.toContain('Appel vocal');
+    expect(items.map((i) => i.label)).not.toContain('Appel vidéo');
   });
 });
 
@@ -66,9 +63,7 @@ describe('rowMenuItems — le menu parle la langue d’interface du lecteur (#81
   test('en anglais, chaque ligne est anglaise, avec les mots d’iOS (swipe.*)', async () => {
     await loadInterfaceCatalog('en');
     const flags = { isPinned: false, isMuted: false, isArchived: false };
-    expect(rowMenuItems({ flags, unread: true, language: 'en', canCall: true }).map((i) => i.label)).toEqual([
-      'Voice call',
-      'Video call',
+    expect(rowMenuItems({ flags, unread: true, language: 'en' }).map((i) => i.label)).toEqual([
       'Pin',
       'Mute',
       'Read',

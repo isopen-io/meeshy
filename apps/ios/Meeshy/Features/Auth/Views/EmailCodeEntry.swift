@@ -122,7 +122,7 @@ struct EmailCodeEntry: View {
         // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
         // champ — inintelligible. On pose un label + un indice explicites.
         .accessibilityLabel(String(localized: "emailVerification.code.a11yLabel", defaultValue: "Code de vérification"))
-        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par email"))
+        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par e-mail"))
     }
 
     // MARK: - Error View

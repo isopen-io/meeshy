@@ -1221,6 +1221,14 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_AUTHENTICATED' }));
     });
 
+    it('judges each device against its own signal budget, so one device cannot starve another (#17952)', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:signal', validSignal);
+      const signalChecks = mockCheckSocketRateLimit.mock.calls.filter((c: any[]) => c[2]?.max === 100);
+      expect(signalChecks).toHaveLength(1);
+      expect(signalChecks[0][1]).toBe(`${USER_ID}:${SOCKET_ID}`);
+    });
+
     it('returns early when rate limit exceeded', async () => {
       const { socket } = setupWithSocket();
       mockCheckSocketRateLimit.mockResolvedValue(false);

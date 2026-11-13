@@ -65,7 +65,7 @@ struct SupportView: View {
                     requestReview()
                 }
             }
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -79,7 +79,7 @@ struct SupportView: View {
                 supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email du support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
                 supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.infoHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))
         }
     }
 
@@ -93,7 +93,7 @@ struct SupportView: View {
                 supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
                 supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggérer une fonctionnalité", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.warningHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
@@ -108,7 +108,7 @@ struct SupportView: View {
                 infoRow(icon: "hammer.fill", title: String(localized: "support.info.build", defaultValue: "Build", bundle: .main), value: buildNumber, color: MeeshyColors.neutral500Hex)
                 infoRow(icon: "apple.logo", title: String(localized: "support.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: MeeshyColors.neutral500Hex)
             }
-            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
@@ -118,7 +118,7 @@ struct SupportView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
@@ -129,22 +129,13 @@ struct SupportView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
-    }
-
     private func fieldIcon(_ name: String, color: String) -> some View {
         // Fixed size: glyph pinned inside a 28×28 tinted badge — scaling it with
         // Dynamic Type would burst the fixed frame (doctrine 74i/86i/91i). The
         // adjacent row label carries the meaning, so the glyph is decorative to VoiceOver.
         Image(systemName: name)
-            .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .medium))
+            .foregroundStyle(Color(hex: color))
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -168,7 +159,7 @@ struct SupportView: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -195,7 +186,7 @@ struct SupportView: View {
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)

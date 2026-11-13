@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - Magnification EN PLACE : le contexte + ses trois affordances
 //
-// Directive produit 2026-08-23 (second message) :
+// (second message):
 // - « mettre à jour la rangée cible avec des données et un style adéquats afin
 //   qu'elle hérite des features du mode normal » ⇒ la magnification n'est plus
 //   une VUE CONCURRENTE de la rangée : c'est `LentilleConversationRow`
@@ -259,7 +259,7 @@ struct LentilleTagChip: View {
 /// une par rangée de la liste.
 ///
 /// `Menu` SYSTÈME (Liquid Glass sur iOS 26), jamais un `.popover` : sur iPhone
-/// un popover se présente en FEUILLE plein écran (retour du 2026-08-21).
+/// un popover se présente en FEUILLE plein écran.
 struct LentilleModePill: View {
 
     let conversation: Conversation
@@ -429,7 +429,7 @@ struct LentilleMagnifiableRow: View {
     let row: (LentilleMagnification?) -> LentilleConversationRow
 
     /// La magnification n'existe que PENDANT la scène — « le cadre apparaît
-    /// quand on scrolle, au repos il disparaît » (directive 2026-08-21, tenue
+    /// quand on scrolle, au repos il disparaît » (tenue
     /// telle quelle). Au repos, la rangée élue redevient une rangée comme les
     /// autres.
     private var isMagnified: Bool {

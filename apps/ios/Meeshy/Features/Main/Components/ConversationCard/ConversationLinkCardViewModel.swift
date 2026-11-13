@@ -100,8 +100,8 @@ final class ConversationLinkCardViewModel: ObservableObject {
         changeSubscription = NotificationCenter.default
             .publisher(for: ConversationCardChange.notification)
             .compactMap { $0.object as? ConversationCardChange }
-            .sink { [weak self] change in
-                Task { @MainActor [weak self] in self?.conversationDidChange(change) }
+            .relay(through: OrderedEventLane()) { [weak self] change in
+                await self?.conversationDidChange(change)
             }
     }
 

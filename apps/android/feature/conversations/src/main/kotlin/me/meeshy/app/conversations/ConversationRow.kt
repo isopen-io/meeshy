@@ -21,13 +21,9 @@ internal fun ConversationRow(
     }
     val swipe = ConversationSwipeActionModel.of(
         isPinned = prefs?.isPinned == true,
-        isMuted = prefs?.isMuted == true,
-        isLocked = model.isLocked,
         isArchived = prefs?.isArchived == true,
         hasUnread = conversation.unreadCount > 0,
         canToggleArchive = capabilities.canToggleArchive,
-        removal = capabilities.removal,
-        obsolete = capabilities.obsolete,
     )
     ConversationSwipeActions(swipe = swipe, actions = actions) {
         ConversationRowContainer(model = model, actions = actions)

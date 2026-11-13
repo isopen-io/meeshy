@@ -89,7 +89,7 @@ enum DeviceLayout {
     /// an AttributeGraph cycle (« cycle detected ») after which the call view
     /// never updated again: the caller stayed on « Appel en cours… » with no
     /// microphone control, the callee on « Appel entrant » after answering,
-    /// and the peer's video never took the screen (2026-09-30, measured on the
+    /// and the peer's video never took the screen (measured on the
     /// simulator: zero body re-evaluation once the cycle was reported). The
     /// app window and a full-screen overlay share the same insets; reading
     /// the app window breaks the loop.

@@ -19,7 +19,7 @@ import MeeshyUI
 /// geste, qui est idempotent par construction.
 ///
 /// **Pourquoi ce fichier plutôt que l'hôte.** `ConversationView.swift` est dans
-/// la dette héritée du cliquet de taille, où la directive du 2026-08-28
+/// la dette héritée du cliquet de taille, où la
 /// interdit d'ajouter : on extrait d'abord, on ajoute ensuite. L'hôte ne garde
 /// donc que les deux appels, à l'endroit où les sorties se lisent déjà.
 extension ConversationView {

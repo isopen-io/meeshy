@@ -345,7 +345,7 @@ describe('SocialEventsHandler', () => {
       mockPrisma.communityMember.findMany
         .mockResolvedValueOnce([{ communityId: 'c1' }])
         .mockResolvedValueOnce([{ userId: 'co-1' }]);
-      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY' });
+      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY', communityId: null });
 
       await handler.broadcastStoryCreated(story, AUTHOR_ID);
 

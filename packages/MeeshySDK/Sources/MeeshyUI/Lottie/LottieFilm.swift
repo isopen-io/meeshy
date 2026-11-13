@@ -36,20 +36,22 @@ nonisolated public final class LottieFilmSource: @unchecked Sendable {
 ///   de lottie-ios (`DotLottieCache.sharedCache`).
 /// - Rendu : moteur « main thread » de lottie-ios, le seul qui dessine dans un
 ///   `CGContext` (`render(in:)`) ; son `display()` ne fait rien hors du fil
-///   principal, d'où `@MainActor`. Le rendu asynchrone rend la main toutes
-///   les quelques images pour ne jamais figer un geste.
+///   principal, d'où `@MainActor`. Le rendu asynchrone rend la main à chaque
+///   image pour ne jamais figer un geste.
 /// - Le rendu passe par une `LottieAnimationView` hors écran, jamais par un
 ///   `LottieAnimationLayer` nu : seule la vue PLACE le calque d'animation
 ///   (`layoutAnimation()`). Un calque nu le laisse centré sur son origine, et
 ///   l'image ne montrait qu'un quart du sticker (7 % de pixels opaques contre
-///   20 % au web, mesuré le 2026-10-15).
+/// 20 % au web, mesuré).
 nonisolated public enum LottieFilm {
 
     /// Le rythme des images rasterisées : celui des films WebP qu'elles
     /// remplacent. Un `LottieView` joue, lui, à la cadence de l'écran.
     public static let rasterFramesPerSecond: Double = 15
 
-    private static let yieldEvery = 4
+    /// Une image par tour : une image à 360 px coûte ~25 ms sur iPhone, et un
+    /// lot de quatre gelait déjà un geste (#17040).
+    private static let yieldEvery = 1
 
     // MARK: Lecture
 
@@ -84,8 +86,8 @@ nonisolated public enum LottieFilm {
 
     /// Une lecture à la fois : `DotLottieFile` échoue quand plusieurs fichiers
     /// se décompressent en même temps — sur iPhone, 15 lectures simultanées
-    /// sur 17 rendaient une erreur et les cases de la feuille restaient vides
-    /// (recette du 2026-10-15). Une file série, et non un verrou : les tâches
+    /// sur 17 rendaient une erreur et les cases de la feuille restaient vides.
+    /// Une file série, et non un verrou : les tâches
     /// en attente n'immobilisent aucun fil du pool coopératif. Une lecture
     /// coûte quelques millisecondes ; le cache de lottie-ios sert ensuite les
     /// suivantes sans décompresser.
@@ -122,18 +124,12 @@ nonisolated public enum LottieFilm {
         Renderer(source, pixelSize: pixelSize)?.image(at: source.animation.startFrame)
     }
 
-    /// Toutes les images d'une boucle, d'un coup — pour un appel synchrone.
-    @MainActor
-    public static func decodedNow(_ source: LottieFilmSource, pixelSize: Int,
-                                  framesPerSecond: Double = rasterFramesPerSecond) -> AnimatedImageDecoder.Decoded? {
-        guard let renderer = Renderer(source, pixelSize: pixelSize) else { return nil }
-        let times = frameTimes(source, framesPerSecond: framesPerSecond)
-        let frames = times.compactMap { renderer.image(at: $0) }
-        return decoded(frames, expected: times.count, framesPerSecond: framesPerSecond)
-    }
-
     /// Toutes les images d'une boucle, en rendant la main au fil principal
     /// toutes les `yieldEvery` images. Annulable entre deux lots.
+    ///
+    /// Il n'existe PAS de variante synchrone (#17040) : rendre une boucle d'un
+    /// coup tenait le fil principal jusqu'à 1,09 s sur iPhone, le temps de
+    /// poser un Mee sur la scène.
     @MainActor
     public static func decoded(_ source: LottieFilmSource, pixelSize: Int,
                                framesPerSecond: Double = rasterFramesPerSecond) async -> AnimatedImageDecoder.Decoded? {

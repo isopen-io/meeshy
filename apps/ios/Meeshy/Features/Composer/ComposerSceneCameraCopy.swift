@@ -147,7 +147,7 @@ enum ComposerSceneCameraCopy {
     /// dès le premier objet posé.
     static var emptySceneLine: String {
         String(localized: "composer.scene.empty.line",
-               defaultValue: "Touchez la scène pour la caméra", bundle: .main)
+               defaultValue: "Maintenez la scène pour filmer", bundle: .main)
     }
 
     /// Ce que VoiceOver lit de la scène vide : la même ligne.
@@ -223,31 +223,29 @@ enum ComposerSceneCameraCopy {
 /// propre table `ComposerCamera.xcstrings` : « Quitter · ✓ Valider » comme
 /// tout mode plein écran (loi 9), et le libellé du cadenas.
 enum ComposerCameraCopy {
-    static let table = "ComposerCamera"
-
     /// Le bouton de gauche de l'en-tête : rien n'est pris, la scène revient.
     static var quit: String {
-        String(localized: "composer.camera.quit", defaultValue: "Quitter", table: table, bundle: .main)
+        String(localized: "composer.camera.quit", defaultValue: "Quitter", table: "ComposerCamera", bundle: .main)
     }
 
     /// Le bouton de droite : garder ce qui est pris et rendre la scène.
     static var validate: String {
-        String(localized: "composer.camera.validate.mode", defaultValue: "Valider", table: table, bundle: .main)
+        String(localized: "composer.camera.validate.mode", defaultValue: "Valider", table: "ComposerCamera", bundle: .main)
     }
 
     /// Sous le cadenas, pendant la prise tenue (A9).
     static var handsFree: String {
-        String(localized: "composer.camera.handsFree.label", defaultValue: "mains libres", table: table, bundle: .main)
+        String(localized: "composer.camera.handsFree.label", defaultValue: "mains libres", table: "ComposerCamera", bundle: .main)
     }
 
     /// L'entrée « caméra d'abord » du tray des stories : prendre, puis composer.
     static var openCamera: String {
-        String(localized: "composer.camera.open", defaultValue: "Caméra", table: table, bundle: .main)
+        String(localized: "composer.camera.open", defaultValue: "Caméra", table: "ComposerCamera", bundle: .main)
     }
 
     /// Le bouton du retardateur, à la voix : son nom, puis son réglage.
     static var selfTimerHint: String {
         String(localized: "composer.camera.selfTimer.hint",
-               defaultValue: "Touchez pour passer à 3 s, 10 s ou désactivé", table: table, bundle: .main)
+               defaultValue: "Touchez pour passer à 3 s, 10 s ou désactivé", table: "ComposerCamera", bundle: .main)
     }
 }

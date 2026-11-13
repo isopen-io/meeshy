@@ -58,7 +58,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// La surface étendue `configure(settings:onMaxDurationReached:)` survit
     /// pour les appelants app qui branchent encore un callback, mais celui-ci
     /// n'est plus jamais déclenché : l'enregistrement n'a plus de plafond de
-    /// durée (directive produit 2026-07-26).
+    /// durée.
     func configure(with settings: AudioRecordingSettings) {
         configure(settings: settings, onMaxDurationReached: nil)
     }

@@ -193,25 +193,26 @@ final class ComposerSelectionActionsTests: XCTestCase {
 
     func test_emptyTap_withASelection_deselectsAndNeverArmsTheViewfinder() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: true, effectIsOpen: false,
-                                                     quickCaptureOffered: true, backgroundMediaId: "bg"),
+                                                     backgroundMediaId: "bg"),
                        .deselect)
     }
 
-    func test_emptyTap_blankSceneNothingSelected_armsTheViewfinder() {
+    /// **Le toucher n'arme plus le viseur** (#17269) : la caméra s'arme à l'ouverture.
+    func test_emptyTap_blankSceneNothingSelected_doesNothing() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: true, backgroundMediaId: nil),
-                       .armViewfinder)
+                                                     backgroundMediaId: nil),
+                       .nothing)
     }
 
     func test_emptyTap_mediaBackgroundNothingSelected_selectsTheBackground() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: false, backgroundMediaId: "bg"),
+                                                     backgroundMediaId: "bg"),
                        .selectBackground("bg"))
     }
 
     func test_emptyTap_openEffectCarousel_closesItFirst() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: true,
-                                                     quickCaptureOffered: false, backgroundMediaId: "bg"),
+                                                     backgroundMediaId: "bg"),
                        .closeEffect)
     }
 

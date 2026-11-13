@@ -6,8 +6,7 @@ import MeeshyUI
 /// LECTURE. Le canvas du reader est du pur CALayer sans callback d'item (la
 /// chaîne d'interaction de `StoryCanvasUIView` est gatée `.edit`), et le
 /// `StoryGestureOverlayView` transforme tout tap en navigation prev/next —
-/// une pastille touchée faisait donc simplement avancer la story (constat
-/// user 2026-07-30). Même règle d'empilement que les chips audio
+/// une pastille touchée faisait donc simplement avancer la story. Même règle d'empilement que les chips audio
 /// (Layer 6.5) : rendu AU-DESSUS de l'overlay gestuel, le tap est consommé
 /// avant d'atteindre la navigation.
 ///

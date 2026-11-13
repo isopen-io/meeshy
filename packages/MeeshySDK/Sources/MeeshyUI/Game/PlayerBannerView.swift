@@ -6,7 +6,8 @@ import MeeshySDK
 // MIROIR de `apps/web/src/components/player-banner.tsx` : le bandeau du haut, quand ni un appel ni un audio ne
 // l'occupe, montre la progression du joueur en grand. Ordre FIXE, de gauche à droite : l'anneau de niveau (avec
 // l'emblème du palier et son chiffre romain, #9481), la jauge vers le niveau suivant, les Meeshes, le blason du
-// rang, la gemme de ligue et la place, la Flamme. SEULEMENT ce qui existe (`GamePlayerBanner`) : un élément sans
+// rang, la gemme de ligue et la place, la Flamme ; au milieu, sous la Flamme, le Rêve du jour puis le contenant de
+// l'Héritage (#17437). SEULEMENT ce qui existe (`GamePlayerBanner`) : un élément sans
 // donnée ne se dessine pas.
 //
 // Décor : la Signature en filigrane, teintée par la couleur du palier ; aucune bulle. Le fond est un APLAT
@@ -102,13 +103,13 @@ public struct PlayerBannerView: View {
     /// La cible tactile minimale d'une pièce.
     public static let pieceTarget: CGFloat = 44
 
-    /// Le MILIEU du bandeau (#11125, décision porteur 2026-10-20) : la Flamme et les Meeshes en haut, la mission et
-    /// la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
+    /// Le MILIEU du bandeau (#11125) : la Flamme et les Meeshes en haut, la mission, le contenant de l'Héritage
+    /// (#17437) et la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
     /// demandé par le porteur pour que le bandeau tienne en 48 pt, ces pièces sortent de la cible de 44.
-    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .league]
+    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .treasury, .league]
     public static let cornerTarget: CGFloat = 24
     /// Ce que la rangée compacte montre ; trophées et saison n'y tiennent pas et restent à la disposition empilée.
-    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .league, .rank]
+    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .treasury, .league, .rank]
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -215,7 +216,7 @@ public struct PlayerBannerView: View {
                     ForEach(shown.filter { $0 == .flame || $0 == .meesh }, id: \.self) { middlePiece($0) }
                 }
                 HStack(spacing: 4) {
-                    ForEach(shown.filter { $0 == .mission || $0 == .league }, id: \.self) { middlePiece($0) }
+                    ForEach(shown.filter { $0 == .mission || $0 == .treasury || $0 == .league }, id: \.self) { middlePiece($0) }
                 }
             }
             .fixedSize()
@@ -232,6 +233,8 @@ public struct PlayerBannerView: View {
                 piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 18, height: 18) }
             case .mission:
                 piece(text: texts.mission) { symbol("target", side: 16) }
+            case .treasury:
+                if let tier = model.treasury { TreasuryTierEmblem(tier: tier, side: 18, color: palette.ink) }
             case .league:
                 if let league = model.league { piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 18, height: 18) } }
             default:
@@ -248,7 +251,7 @@ public struct PlayerBannerView: View {
                 if let name = texts.rank {
                     Text(name)
                         .font(.system(.footnote, design: .rounded).weight(.bold))
-                        .foregroundColor(palette.ink)
+                        .foregroundStyle(palette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -330,6 +333,8 @@ public struct PlayerBannerView: View {
             piece(text: texts.trophies) { symbol("trophy.fill") }
         case .mission:
             piece(text: texts.mission) { symbol("target") }
+        case .treasury:
+            if let tier = model.treasury { TreasuryTierEmblem(tier: tier, side: 22, color: palette.ink) }
         case .season:
             piece(text: texts.season) { symbol("calendar") }
         case .level, .sparks:
@@ -340,7 +345,7 @@ public struct PlayerBannerView: View {
     private func symbol(_ name: String, side: CGFloat = 22) -> some View {
         Image(systemName: name)
             .font(.system(size: side * 16 / 22, weight: .semibold))
-            .foregroundColor(palette.ink)
+            .foregroundStyle(palette.ink)
             .frame(width: side, height: side)
             .accessibilityHidden(true)
     }
@@ -424,7 +429,7 @@ public struct PlayerBannerView: View {
         Text(texts.points)
             .font(.system(.footnote, design: .rounded).weight(.bold))
             .monospacedDigit()
-            .foregroundColor(palette.ink)
+            .foregroundStyle(palette.ink)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .modifier(BannerNumericRoll())
@@ -483,7 +488,7 @@ public struct PlayerBannerView: View {
                 Text(text)
                     .font(.system(.footnote, design: .rounded).weight(.bold))
                     .monospacedDigit()
-                    .foregroundColor(palette.ink)
+                    .foregroundStyle(palette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

@@ -88,6 +88,7 @@ import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanup
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { agentInternalTokenConfigured } from './services/AgentHttpClient';
+import { warnPushConfiguration } from './services/push-transport-config';
 import { typedErrorResponse } from './errors/custom-errors';
 import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
 
@@ -890,6 +891,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
   private async initializeServices(): Promise<void> {
     logger.info('Initializing external services...');
+    warnPushConfiguration(logger); // #17249
 
     // Test database connection
     try {

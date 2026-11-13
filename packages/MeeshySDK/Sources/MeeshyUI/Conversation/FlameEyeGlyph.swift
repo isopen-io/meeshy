@@ -34,8 +34,8 @@ public struct FlameEyeGlyph: View {
     }
 }
 
-/// **La flamme-œil en FILIGRANE derrière un message** (#8303, précision porteur
-/// du 2026-09-27) : ni décompte ni pastille — une grande flamme discrète, posée
+/// **La flamme-œil en FILIGRANE derrière un message** (#8303):
+/// ni décompte ni pastille — une grande flamme discrète, posée
 /// derrière l'avatar, dans la GOUTTIÈRE qui sépare le bord de la rangée du bord
 /// d'attaque du contenu (la première lettre du message, ou l'angle de la pièce
 /// jointe). Jamais par-dessus le texte : elle vit dans l'arrière-plan de la

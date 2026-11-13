@@ -87,6 +87,9 @@ export const meDevicesByDeviceId = (deviceId: string): string => `/api/v1/users/
 /** PATCH /api/v1/users/me/password */
 export const mePassword = '/api/v1/users/me/password';
 
+/** POST · DELETE /api/v1/users/me/push-to-talk-token */
+export const mePushToTalkToken = '/api/v1/users/me/push-to-talk-token';
+
 /** GET /api/v1/users/me/referral-code */
 export const meReferralCode = '/api/v1/users/me/referral-code';
 

@@ -13,20 +13,10 @@ final class ComposerCaptureRecordingBudgetTests: XCTestCase {
         XCTAssertNil(ComposerCaptureRecordingBudget.maxDuration(for: .status))
     }
 
-    func test_theBar_hasFiveSlots_filledLeftToRight() {
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slots, 5)
-        let fills = ComposerCaptureRecordingBudget.slotFills(elapsed: 30, budget: 60)
-        XCTAssertEqual(fills.count, 5)
-        XCTAssertEqual(fills[0], 1, accuracy: 0.0001)
-        XCTAssertEqual(fills[1], 1, accuracy: 0.0001)
-        XCTAssertEqual(fills[2], 0.5, accuracy: 0.0001, "la case en cours se remplit à moitié")
-        XCTAssertEqual(fills[3], 0, accuracy: 0.0001)
-        XCTAssertEqual(fills[4], 0, accuracy: 0.0001)
-    }
-
-    func test_theBar_isEmptyWithoutABudget_andNeverOverflows() {
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slotFills(elapsed: 12, budget: nil), [0, 0, 0, 0, 0])
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slotFills(elapsed: 500, budget: 60), [1, 1, 1, 1, 1])
+    func test_theBarFraction_isBounded() {
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 30, budget: 60), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 12, budget: nil), 0)
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 500, budget: 60), 1)
         XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: -3, budget: 60), 0)
     }
 
@@ -91,5 +81,164 @@ final class ComposerCaptureRecordingBudgetTests: XCTestCase {
         XCTAssertFalse(hote.contains("sceneCameraSize = .card"), "plus de carte à l'armement")
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureRecordingBudget.enforce(on: session"), "le chrome fait respecter la limite")
+    }
+}
+
+/// **Les segments paraissent en haut et l'anneau tourne dès que la tenue
+/// commence** (#17268, retour porteur du 2026-11-09).
+@MainActor
+final class ComposerCaptureProgressDisplayTests: XCTestCase {
+
+    // MARK: - La prise est à l'écran dès la tenue
+
+    func test_isCapturing_holdBeforeTheCameraWrites_isTrue() {
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isCapturing(stage: .armed, holding: true),
+                      "la tenue part avant que la session écrive : la barre et l'anneau aussi")
+    }
+
+    func test_isCapturing_recordingLockedWithoutFinger_isTrue() {
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isCapturing(stage: .recording, holding: false))
+    }
+
+    func test_isCapturing_armedWithoutHold_isFalse() {
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isCapturing(stage: .armed, holding: false))
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isCapturing(stage: .off, holding: true))
+    }
+
+    func test_liveDuration_outsideRecording_isZero() {
+        XCTAssertEqual(ComposerCaptureProgressDisplay.liveDuration(7, stage: .armed), 0,
+                       "la caméra garde la durée de la prise close : la tenue suivante ne la reprend pas")
+        XCTAssertEqual(ComposerCaptureProgressDisplay.liveDuration(7, stage: .recording), 7)
+        XCTAssertEqual(ComposerCaptureProgressDisplay.liveDuration(-1, stage: .recording), 0)
+    }
+
+    // MARK: - La barre paraît dès le début de la prise
+
+    func test_showsBudgetBar_fromTheFirstHold_evenWithoutSegment() {
+        XCTAssertTrue(ComposerCaptureProgressDisplay.showsBudgetBar(editing: false, budget: 60,
+                                                                    capturing: true, segmentCount: 0))
+    }
+
+    func test_showsBudgetBar_withPendingSegments_stays() {
+        XCTAssertTrue(ComposerCaptureProgressDisplay.showsBudgetBar(editing: false, budget: 60,
+                                                                    capturing: false, segmentCount: 2))
+    }
+
+    func test_showsBudgetBar_idleEditingOrWithoutBudget_isHidden() {
+        XCTAssertFalse(ComposerCaptureProgressDisplay.showsBudgetBar(editing: false, budget: 60,
+                                                                     capturing: false, segmentCount: 0))
+        XCTAssertFalse(ComposerCaptureProgressDisplay.showsBudgetBar(editing: true, budget: 60,
+                                                                     capturing: true, segmentCount: 1))
+        XCTAssertFalse(ComposerCaptureProgressDisplay.showsBudgetBar(editing: false, budget: nil,
+                                                                     capturing: true, segmentCount: 1))
+        XCTAssertFalse(ComposerCaptureProgressDisplay.showsBudgetBar(editing: false, budget: 0,
+                                                                     capturing: true, segmentCount: 1))
+    }
+
+    // MARK: - Une capsule par segment, la prise en cours en dernier
+
+    func test_spans_oneCapsulePerSegment_placedAtItsShareOfTheBudget() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [6, 12], live: 0, capturing: false, budget: 60)
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertEqual(parts[0].start, 0, accuracy: 0.0001)
+        XCTAssertEqual(parts[0].length, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(parts[1].start, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(parts[1].length, 0.2, accuracy: 0.0001)
+        XCTAssertFalse(parts.contains { $0.live }, "sans prise en cours, aucune capsule rouge")
+    }
+
+    func test_spans_whileCapturing_appendsTheLiveTakeAfterTheSegments() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [6], live: 3, capturing: true, budget: 60)
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertEqual(parts[1].start, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(parts[1].length, 0.05, accuracy: 0.0001)
+        XCTAssertTrue(parts[1].live, "la prise en cours se distingue des segments clos")
+    }
+
+    func test_spans_holdJustStarted_showsAnEmptyLiveSpan() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [], live: 0, capturing: true, budget: 60)
+        XCTAssertEqual(parts, [ComposerCaptureBarSpan(start: 0, length: 0, live: true)],
+                       "la prise paraît dès la tenue, avant sa première seconde")
+    }
+
+    func test_spans_neverOverflowTheBudget() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [50], live: 30, capturing: true, budget: 60)
+        let fin = parts.last.map { $0.start + $0.length } ?? 0
+        XCTAssertEqual(fin, 1, accuracy: 0.0001)
+    }
+
+    func test_spans_withoutBudget_isEmpty() {
+        XCTAssertTrue(ComposerCaptureProgressDisplay.spans(segments: [6], live: 3, capturing: true, budget: nil).isEmpty)
+    }
+
+    // MARK: - Une ligne tant qu'il n'y a qu'une prise, N segments à partir de deux (#17433)
+
+    func test_isSegmented_noTakeYet_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [], live: 0, capturing: true, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts), "la tenue qui commence n'est pas un segment")
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented([]))
+    }
+
+    func test_isSegmented_firstTakeRecording_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [], live: 12, capturing: true, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts),
+                       "au premier enregistrement, la barre est une seule ligne qui avance")
+        XCTAssertEqual(ComposerCaptureProgressDisplay.gap(parts), 0)
+    }
+
+    func test_isSegmented_oneClosedTake_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [12], live: 0, capturing: false, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts))
+        XCTAssertEqual(ComposerCaptureProgressDisplay.gap(parts), 0)
+    }
+
+    func test_isSegmented_secondTakeRecording_cutsTheLineInTwo() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [12], live: 3, capturing: true, budget: 60)
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isSegmented(parts))
+        XCTAssertGreaterThan(ComposerCaptureProgressDisplay.gap(parts), 0, "deux prises se lisent séparées")
+    }
+
+    func test_isSegmented_threeTakes_drawsThreeSegments() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [6, 12, 4], live: 0, capturing: false, budget: 60)
+        XCTAssertEqual(parts.count, 3)
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isSegmented(parts))
+    }
+
+    func test_budgetBar_drawsOneTrack_neverFixedSlots() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertFalse(barre.contains("ComposerCaptureRecordingBudget.slots"),
+                       "des cases fixes se lisent comme des segments dès la première prise")
+        XCTAssertTrue(barre.contains("ComposerCaptureProgressDisplay.gap("), "l'écart vient de la loi")
+    }
+
+    // MARK: - L'anneau
+
+    func test_ringProgress_countsSegmentsAndTheLiveTake() {
+        let segment = ComposerCaptureSegment(url: URL(fileURLWithPath: "/tmp/a.mov"), duration: 15)
+        XCTAssertEqual(ComposerCaptureProgressDisplay.ringProgress(segments: [segment], rawLive: 15,
+                                                                   stage: .recording, budget: 60), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerCaptureProgressDisplay.ringProgress(segments: [segment], rawLive: 15,
+                                                                   stage: .armed, budget: 60), 0.25, accuracy: 0.0001,
+                       "hors enregistrement, la durée gardée par la caméra ne compte pas deux fois")
+    }
+
+    // MARK: - Le câblage
+
+    func test_topBar_readsTheDisplayRule_andDrawsTheSegments() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("ComposerCaptureProgressDisplay.showsBudgetBar("))
+        XCTAssertTrue(barre.contains("ComposerCaptureProgressDisplay.spans("))
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("holding: session.barCapture.holding"), "la barre sait que la tenue a commencé")
+    }
+
+    func test_everyTrigger_carriesTheRecordingProgress() throws {
+        let bande = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("ComposerCaptureProgressDisplay.ringProgress("), "l'anneau du déclencheur simple")
+        XCTAssertTrue(bande.contains(".environment(\\.composerCaptureProgress"),
+                      "la miniature choisie, seule ou dans la bande ouverte, porte la progression")
+        let cadre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTriggerOutline.swift")
+        XCTAssertTrue(cadre.contains(".trim(from: 0, to:"), "le cadre de la miniature se remplit comme l'anneau")
     }
 }

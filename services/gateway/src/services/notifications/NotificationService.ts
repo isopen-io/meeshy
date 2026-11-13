@@ -68,7 +68,17 @@ import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, p
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
 import { reactedMessageSynthesis, reactionBody } from './reaction-body';
-import { messageLivenessOf } from '../messages/message-liveness';
+import {
+  messageLivenessOf,
+  MESSAGE_LIVENESS_SELECT,
+  type MessageLivenessRow,
+} from '../messages/message-liveness';
+import {
+  envelopeAwareContext,
+  messageProtectionRow,
+  MESSAGE_PROTECTION_SELECT,
+  type MessageProtectionRow,
+} from '../messages/push-envelope-protection';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
@@ -310,15 +320,20 @@ export class NotificationService {
         // `expiresAt`, dans la lecture qui se faisait déjà : quatre colonnes de
         // plus, aucune requête de plus. C'est ce qui rend la garde gratuite, et
         // c'est pourquoi elle appartient ICI plutôt qu'à chaque éventail.
+        // #17208 — les colonnes des deux LOIS sont SPREADÉES, jamais retapées.
+        // `MESSAGE_LIVENESS_SELECT` en porte trois depuis le cycle 143 bis, et
+        // l'énumération à la main en manquait une : `viewOnceBurnedAt`, la seule
+        // preuve que laisse `purgeViewOnceContent`, qui détruit le clair d'une
+        // vue unique SANS écrire `deletedAt`. Un témoin de verdict ne peut pas
+        // voir ça — un double Prisma rend ce qu'on lui dit quel que soit le
+        // `select` —, donc la liste appartient à la loi, pas à ses appelants.
         select: {
           translations: true,
           originalLanguage: true,
           createdAt: true,
           messageType: true,
-          ephemeralDuration: true,
-          effectFlags: true,
-          deletedAt: true,
-          expiresAt: true },
+          ...MESSAGE_LIVENESS_SELECT,
+          ...MESSAGE_PROTECTION_SELECT },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
@@ -327,6 +342,11 @@ export class NotificationService {
         messageType: message?.messageType ?? null,
         ephemeralDuration: message?.ephemeralDuration ?? null,
         effectFlags: message?.effectFlags ?? null,
+        // #17195 — ce que la base dit de la protection, pour le second verrou.
+        // Une ligne ABSENTE rend `null`, qui se lit « protégé » : l'arbitrage
+        // INVERSE de la vivacité juste en dessous, et les deux sont justes —
+        // là une LIVRAISON est en jeu, ici un SECRET.
+        protection: messageProtectionRow(message),
         liveness: this.messageLiveness(message, messageId),
       };
     } catch (error) {
@@ -359,7 +379,11 @@ export class NotificationService {
    * mais il le fait CHEZ LUI — c'est sa politique, pas une propriété du message.
    */
   private messageLiveness(
-    message: { deletedAt?: Date | null; expiresAt?: Date | null } | null,
+    // #17208 — la LOI déclare la forme qu'elle interroge. Ce paramètre
+    // énumérait deux colonnes quand la loi en lit trois : il ne POUVAIT pas
+    // faire rougir le compilateur sur une ligne sans `viewOnceBurnedAt`,
+    // puisqu'il ne la demandait pas.
+    message: MessageLivenessRow | null,
     messageId: string
   ): MessageLiveness {
     const verdict = messageLivenessOf(message);
@@ -770,6 +794,25 @@ export class NotificationService {
      * localisé du `title`/`subtitle` persistés (source unique multi-plateforme).
      */
     lang?: string;
+    /**
+     * #17195 — le SECOND VERROU de l'enveloppe de l'appareil : ce que la base
+     * dit de la protection du message, relu par l'appelant CHEZ LUI.
+     *
+     * `deviceEnvelopeForPush` élit l'enveloppe depuis la ligne que l'éventail
+     * tient, et c'est le maximum qu'une fonction pure puisse garantir — un
+     * appelant peut écrire `null` de bonne foi sur une ligne qu'il n'a pas
+     * chargée entière. Ce paramètre-ci vient de la relecture VIVANTE que les
+     * trois créateurs font déjà : une protection trouvée à la relecture retient
+     * l'enveloppe même si l'éventail l'avait laissée passer.
+     *
+     * **Absent ⇒ l'enveloppe ne part pas** (`protectedBeyondEncryption`
+     * répondant « protégé » sur l'absence de ligne). Ce n'est pas un paramètre
+     * dont l'oubli désactive la garde : son oubli la SERRE, et c'est le seul
+     * sens dans lequel une porte de confidentialité a le droit d'échouer. Les
+     * dizaines d'appelants qui ne poussent aucun chiffré n'ont donc rien à
+     * déclarer.
+     */
+    liveProtection?: MessageProtectionRow | null;
   }): Promise<Notification | null> {
     try {
       // SECURITY: Validate notification type
@@ -810,6 +853,18 @@ export class NotificationService {
       // les rend visibles.
       const { content: sanitizedContent, actor: sanitizedActor, metadata: sanitizedMetadata } =
         sanitizeNotificationInputs(params);
+
+      // #17195 — SECOND VERROU de l'enveloppe de l'appareil, posé UNE fois pour
+      // les DEUX projections : la ligne `Notification` persistée (et servie sur
+      // `notification:new`) et la charge APNs/FCM. La garder sur le seul fil
+      // push aurait rejoué le défaut du cycle 123 d'un cran — le contexte est
+      // servi aux clients in-app, donc l'enveloppe d'un message à vue unique y
+      // serait restée déchiffrable.
+      //
+      // `cf. liveProtection` : absent ⇒ retenue. Les appelants qui ne poussent
+      // aucun chiffré n'ont rien à déclarer, `encryptedContent` étant alors
+      // absent du contexte et la fonction rendant l'objet tel quel.
+      const servedContext = envelopeAwareContext(params.context, params.liveProtection);
 
       // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
@@ -868,7 +923,7 @@ export class NotificationService {
 
           // Groupes V2 (cast en any car Prisma doit être régénéré)
           actor: (sanitizedActor || null) as any,
-          context: params.context as any,
+          context: servedContext as any,
           metadata: sanitizedMetadata as any,
 
           // State (isRead, readAt, createdAt en DB, expiresAt si fourni)
@@ -1100,7 +1155,14 @@ export class NotificationService {
                   // Android #10641), sous le SECOND VERROU du cycle 125 :
                   // `push-media-fields.ts`.
                   ...pushMediaFields(params.context),
-                  encryptedContent: params.context.encryptedContent || '',
+                  // #17195 — l'enveloppe se lit sur le contexte SERVI, jamais
+                  // sur celui que l'appelant a remis : le second verrou l'en a
+                  // retirée si la relecture vivante a trouvé une protection
+                  // plus forte que le chiffrement (`envelopeAwareContext`).
+                  // `''` plutôt qu'une clé absente — c'est la valeur que la NSE
+                  // lit déjà comme « rien à déchiffrer », et la forme de la
+                  // charge ne change pas.
+                  encryptedContent: servedContext.encryptedContent || '',
                   // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
                   ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
                   // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
@@ -1377,7 +1439,10 @@ export class NotificationService {
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
       // `ephemeralDuration`/`effectFlags` (#7451) : cf. `messageClockFields`.
-      select: { deletedAt: true, expiresAt: true, createdAt: true, messageType: true, translations: true, originalLanguage: true, ephemeralDuration: true, effectFlags: true },
+      // #17208 — les deux LOIS sont spreadées, jamais retapées : l'énumération
+      // à la main manquait `viewOnceBurnedAt`, et #17195 ajoute les deux
+      // colonnes booléennes de la préséance. Aucune requête de plus.
+      select: { createdAt: true, messageType: true, translations: true, originalLanguage: true, ...MESSAGE_LIVENESS_SELECT, ...MESSAGE_PROTECTION_SELECT },
     });
     // La ligne ABSENTE est la politique PROPRE à ce lot, et elle lui reste :
     // `messageLiveness` ne se prononce que sur ce qu'une ligne PROUVE (cf.
@@ -1495,6 +1560,9 @@ export class NotificationService {
       // vient de la relecture VIVANTE ci-dessus, pas de l'appelant : celui-ci
       // ne pourrait que rapporter ce qu'il croyait savoir à l'envoi.
       expiresAt: liveMessage.expiresAt ?? undefined,
+
+      // #17195 — la relecture VIVANTE de ce lot est AUSSI son second verrou.
+      liveProtection: messageProtectionRow(liveMessage),
 
       actor: {
         id: params.senderId,
@@ -1630,6 +1698,8 @@ export class NotificationService {
     notificationLocKey?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
+    /** Cf. `createMessageNotification.encryptedContent` — élue par `deviceEnvelopeForPush` (#17080). */
+    encryptedContent?: string;
   }): Promise<Notification | null> {
     // Anti-spam : le budget de la paire, CONSOMMÉ ici et nulle part ailleurs
     // (#17073). Le filtre du lot ne fait que poser la question.
@@ -1742,8 +1812,13 @@ export class NotificationService {
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
+        // #17080 — cf. `createReplyNotification` : l'enveloppe que la NSE ouvre.
+        encryptedContent: params.encryptedContent,
         ...this.messageClockFields(prismSource),
       },
+
+      // #17195 — second verrou, depuis la relecture que ce lot fait déjà.
+      liveProtection: prismSource.protection,
 
       metadata: {
         action: 'view_message',
@@ -1775,6 +1850,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** Cf. `createMentionNotification.encryptedContent` — #17080. */
+      encryptedContent?: string;
       /** Cf. `createMessageNotification.contentDetail` — #8857. */
       contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
@@ -2321,6 +2398,8 @@ export class NotificationService {
     notificationLocKey?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
+    /** Cf. `createMessageNotification.encryptedContent` — élue par `deviceEnvelopeForPush` (#17080). */
+    encryptedContent?: string;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -2418,8 +2497,14 @@ export class NotificationService {
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
+        // #17080 — l'enveloppe que la NSE ouvre. Sans elle, cette bannière
+        // restait « 🔒 💬 » à vie.
+        encryptedContent: params.encryptedContent,
         ...this.messageClockFields(prismSource),
       },
+
+      // #17195 — second verrou, depuis la relecture que ce lot fait déjà.
+      liveProtection: prismSource.protection,
 
       metadata: {
         action: 'view_message',

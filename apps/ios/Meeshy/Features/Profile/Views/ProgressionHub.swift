@@ -188,7 +188,7 @@ struct ProgressionLastAchievementHero: View {
 /// LE HERO DU NIVEAU — pleine largeur, et il ÉNUMÈRE (#5841).
 ///
 /// Le barème est DÉRIVÉ d'`EngagementCatalog.axisWeights`, jamais recopié : le
-/// porteur l'a réglé trois fois le 2026-09-09, et une phrase en dur se serait
+/// et une phrase en dur se serait
 /// périmée au premier réglage sans qu'aucun témoin ne rougisse.
 struct ProgressionLevelHero: View {
 
@@ -246,7 +246,7 @@ struct ProgressionElansHero: View {
     /// La FENÊTRE servie (#5927), la même que la phrase juste en dessous. Balayer
     /// les compteurs cumulés contredisait la phrase dès qu'une famille était
     /// délaissée, et, après une frappe qui les avait vidés, affichait « 5 familles
-    /// actives » au-dessus d'une seule pastille (staging, 2026-09-14).
+    /// actives » au-dessus d'une seule pastille (staging).
     private var famillesActives: [EngagementAxisFamily] {
         progress.elan?.activeFamilies ?? []
     }
@@ -336,8 +336,7 @@ struct ProgressionFlammeHero: View {
                 Text(ProgressionCopy.streakRecord(progress.streak.longestDays))
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
-                // Le jalon passe en DERNIÈRE LIGNE (directive porteur
-                // 2026-09-09). À droite, il était cadré à l'opposé de ce qu'il
+                // Le jalon passe en DERNIÈRE LIGNE. À droite, il était cadré à l'opposé de ce qu'il
                 // qualifie et se lisait comme une colonne à part ; en dessous,
                 // il termine la phrase que les deux lignes commencent — où j'en
                 // suis, mon record, ce qui reste. C'est aussi la forme qu'a
@@ -408,7 +407,7 @@ struct ProgressionSectionPage: View {
 
     let section: ProgressionSection
 
-    /// **La page est AUTONOME dans la pile** (directive porteur 2026-09-09).
+    /// **La page est AUTONOME dans la pile**.
     ///
     /// Présentée en feuille, elle recevait l'état de son parent. Poussée, elle
     /// peut être atteinte sans lui — un lien profond, une notification, un

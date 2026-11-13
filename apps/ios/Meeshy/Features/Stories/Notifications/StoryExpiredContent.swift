@@ -129,7 +129,7 @@ public struct StoryExpiredContent: View {
             // and localised title already convey the trigger, so hide it from
             // VoiceOver. Hero glyph ≥40pt → kept fixed, same rationale as above.
             Image(systemName: "bubble.left.fill")
-                .font(.system(size: 56))
+                .font(MeeshyFont.fixedGlyph(56))
                 .foregroundStyle(Self.foregroundOnBackground(background).opacity(MeeshyOpacity.intense))
                 .accessibilityHidden(true)
         }

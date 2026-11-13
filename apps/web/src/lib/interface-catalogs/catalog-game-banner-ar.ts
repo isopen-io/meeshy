@@ -62,6 +62,8 @@ const ar = {
   'game.banner.link.trophies': 'الكؤوس: {count}',
   'game.banner.link.missions': 'الحلم: {done} من {total}',
   'game.banner.link.season': 'خُطى الرحلة: {stars}',
+  'game.banner.treasury.tiers': 'كيس|جراب|صندوق صغير|صندوق|كنز|احتياطي',
+  'game.banner.link.treasury': 'الإرث: {tier}',
   'game.banner.link.meesh': '{count} Meesh في إرثك',
   'game.banner.glory': 'المجد {glory}',
   'game.banner.glory_missing': '{glory} من المجد حتى {rank}',

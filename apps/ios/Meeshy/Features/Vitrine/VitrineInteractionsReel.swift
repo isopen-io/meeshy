@@ -30,7 +30,7 @@ extension VitrineInteractions {
         VitrineRendu.shared.montrerLeFil?()
         Task {
             await VitrineRendu.shared.attendre([.fil])
-            try? await Task.sleep(for: VitrineStage.pose)
+            guard await cancellableSleep(for: VitrineStage.pose) else { return }
             VitrineRendu.shared.mediaDuComposeur = VitrineMediaDOuverture(url: copie, mimeType: "video/mp4")
             NotificationCenter.default.post(name: .openStoryComposer, object: nil)
         }
@@ -38,14 +38,14 @@ extension VitrineInteractions {
 
     /// Le geste de l'auteur : « Réel » armé au chevron, « Publier » touché ; la scène tient jusqu'au réel dans le fil.
     static func publierLeReel(_ scene: VitrineScene) async {
-        try? await Task.sleep(for: tenueDuComposeur)
+        guard await cancellableSleep(for: tenueDuComposeur) else { return }
         guard let armer = VitrineRendu.shared.armerDepuisLeComposeur,
               let publier = VitrineRendu.shared.publierDepuisLeComposeur else {
             fatalError("Vitrine « \(scene.rawValue) » : le composeur n'a pas prêté son chevron ni sa flèche de publication")
         }
         VitrineTournage.etape("armement")
         armer(choixDuReel)
-        try? await Task.sleep(for: tenueDuChoix)
+        guard await cancellableSleep(for: tenueDuChoix) else { return }
         VitrineTournage.etape("publication")
         publier(choixDuReel)
         await VitrineRendu.shared.attendre([.reelPublie])

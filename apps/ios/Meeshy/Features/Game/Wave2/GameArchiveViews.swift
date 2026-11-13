@@ -90,7 +90,7 @@ struct GameSeasonRecord: View {
             if let themeName = GameWave2Format.seasonTheme(season.themeKey) {
                 Text(GameText.seasonTheme(theme: themeName))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
             }
             GameNote(text: GameText.archiveSeasonDates(start: GameWave2Format.day(season.startDay), end: GameWave2Format.day(season.endDay)))
             if let progress = season.progress {
@@ -212,11 +212,11 @@ struct GameLeagueWeekArchiveCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(GameText.leagueName(result.league))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 if let rank = result.finalRank {
                     Text(GameText.archiveWeekRank(rank: GameCopy.formatCount(rank)))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                 }
                 if let points = result.finalPoints {
                     GameNote(text: GameText.archiveWeekPoints(points: GameCopy.points(points)))

@@ -32,7 +32,7 @@ public nonisolated enum StoryTextEffectRendering {
         case .text:  base = textColor
         case .dark:  base = .black
         case .light: base = .white
-        // **La TEINTE d'un effet coloré** (2026-09-05). Le repli est la
+        // **La TEINTE d'un effet coloré**. Le repli est la
         // couleur du TEXTE, jamais le noir : un hexadécimal illisible doit
         // dégrader vers la lueur la plus proche de l'intention — un halo — et
         // non vers une ombre, qui est un AUTRE effet.

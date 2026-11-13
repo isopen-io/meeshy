@@ -2,8 +2,7 @@ import SwiftUI
 import PhotosUI
 import MeeshySDK
 
-// Extrait de `ConversationView.swift` (3 029 lignes, hors budget 800-1100 de
-// la directive 2026-08-28, qui interdit d'AJOUTER à un fichier hors budget).
+// Extrait de `ConversationView.swift` (3 029 lignes, qui interdit d'AJOUTER à un fichier hors budget).
 // Le lot #4823 ajoute une porte de présentation à cet état : on extrait
 // d'abord, on ajoute ensuite. Responsabilité tenue ici : l'ÉTAT du composer
 // de conversation — pièces en attente, pickers, lieu, langue, réponse et
@@ -12,14 +11,14 @@ import MeeshySDK
 struct ConversationComposerState {
     /// Plafond de sélection média du composer de conversation.
     ///
-    /// Relevé de 10 à 199 (2026-08-14). Le planner ne découpe PAS par lot :
+    /// Relevé de 10 à 199. Le planner ne découpe PAS par lot:
     /// `MultiAttachmentSendPlanner` produit UNE bulle par type (audio /
     /// visuel), donc 199 photos restent un seul message — la montée de plafond
     /// ne multiplie pas les bulles, elle lève juste la contrainte de saisie.
     /// L'envoi lui-même est borné par la concurrence d'upload, pas par ce
     /// nombre (cf. `TusUploadManager.maxConcurrent`).
     ///
-    /// Cette dernière phrase n'est vraie que depuis le 2026-08-16 : la boucle
+    /// Cette dernière phrase n'est vraie que: la boucle
     /// d'upload attendait chaque fichier avant de lancer le suivant, donc le
     /// pool de l'acteur ne dépassait jamais un actif et 199 photos partaient
     /// l'une après l'autre. `sendMessageWithAttachments` confie désormais le
@@ -56,7 +55,7 @@ struct ConversationComposerState {
     @Indirect var pendingComposeTarget: ComposerSeedTarget? = nil
     var showConversationInfo = false
 
-    // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
+    // Popup consentement vocal à l'envoi d'audio: proposé UNE
     // fois par session de conversation ; quelle que soit la décision, l'envoi
     // repart — le refus envoie l'audio sans transcription/traduction.
     var showVoiceAutoTranslateConsent = false
@@ -104,7 +103,7 @@ struct ConversationComposerState {
     var showLocationPicker = false
     /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
     /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
-    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    /// n'est plus le véhicule (Task 11/12).
     var pendingPlace: SharedPlace? = nil
     
     // Language (source language for outgoing messages).

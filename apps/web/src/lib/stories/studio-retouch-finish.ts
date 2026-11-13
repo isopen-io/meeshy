@@ -1,3 +1,5 @@
+import { entityImageRenderSize } from '@/lib/profile/entity-image-format';
+
 import { isStudioPageEmpty, studioPageVideo, type StudioPage } from './studio-page';
 import type { StudioRetouch } from '@/routes/use-studio-retouch';
 
@@ -50,7 +52,7 @@ function capturedPageUntouched(page: StudioPage, taken: File): boolean {
 
 export async function renderedImage(retouch: StudioRetouch, page: StudioPage, original: File | null): Promise<File | null> {
   const { renderStudioRetouch, browserRetouchDeps, retouchedFileName } = await import('@/lib/stories/studio-retouch');
-  const blob = await renderStudioRetouch(page, retouch.render ?? browserRetouchDeps);
+  const blob = await renderStudioRetouch(page, retouch.render ?? browserRetouchDeps, retouch.format === undefined ? {} : { size: entityImageRenderSize(retouch.format) });
   return blob === null ? null : new File([blob], retouchedFileName(original?.name ?? 'photo.jpg'), { type: 'image/jpeg' });
 }
 

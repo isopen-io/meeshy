@@ -26,17 +26,19 @@ import { useParams } from '@/lib/router';
 import { useTapGate } from '@/lib/view/tap-gate';
 import { LinksAnnouncement, LinksHeader, LinksLoadError, LinksOfflineNotice, ShareLinkDetailSkeleton, ShareLinkRefused } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
-import { ArrivalLanguages, ConfigurationCard, InviteLinkCard, LinkBreadcrumb, LinkStatTiles, RecentArrivals } from '@/routes/share-link-detail-parts';
-import { EditLinkForm } from '@/routes/share-link-edit';
+import { LinkConfiguration } from '@/routes/share-link-configuration';
+import { ArrivalLanguages, InviteLinkCard, LinkBreadcrumb, LinkStatTiles, RecentArrivals } from '@/routes/share-link-detail-parts';
 
 /**
  * **LA PAGE DU CRÉATEUR D'UN LIEN D'INVITATION** (#7797, maquette validée) —
  * détails ET édition, ouverte depuis Liens › Liens de conversation › le lien.
  *
- * Deux colonnes au-delà de 768 px (les détails à gauche, l'édition à
- * droite), empilement iOS en dessous (`IosLienDetail`) : carte du lien,
- * Visites / Arrivées / Sans compte, langues des arrivants, arrivés récemment,
- * configuration en lecture, puis le formulaire.
+ * Une colonne centrée à toutes les largeurs, empilement iOS (`IosLienDetail`) :
+ * carte du lien, Visites / Arrivées / Sans compte, langues des arrivants,
+ * arrivés récemment, configuration en lecture ; le formulaire s'ouvre dans une
+ * fiche derrière « Modifier » (épure #17595) — la colonne d'édition de droite
+ * n'existe plus, et le fil d'Ariane comme le titre suivent la même largeur
+ * que le contenu, sans laisser de vide à droite.
  *
  * **Le lien se lit dans la liste de SES liens, jamais par identifiant
  * public** (D-63) : ouvert depuis la liste, il se peint sans attendre ; ouvert
@@ -145,14 +147,14 @@ export default function ShareLinkScreen() {
         <LinksHeader language={language} back="shareLinks" backLabel={translate(language, 'links.detail.back')} title={title} />
       </div>
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe md:px-10">
-        <div className="mx-auto grid max-w-xl gap-5 pb-24 pt-2 md:max-w-[1200px] md:gap-4 md:pt-7">
+        <div className="mx-auto grid max-w-xl gap-5 pb-24 pt-2 md:gap-4 md:pt-7">
           <LinkBreadcrumb language={language} name={title} />
           <h1 className="hidden text-screen font-extrabold tracking-tight md:block" style={{ color: 'var(--color-ios-ink)' }}>
-            {translateInvite(language, 'linkDetail.title')}
+            {title}
           </h1>
           {online ? null : <LinksOfflineNotice language={language} />}
           {link !== undefined ? (
-            <div data-share-link-layout className="grid gap-5 md:grid-cols-2 md:items-start md:gap-7">
+            <div data-share-link-layout className="grid gap-5">
               <div className="grid gap-3.5">
                 <InviteLinkCard
                   language={language}
@@ -169,10 +171,7 @@ export default function ShareLinkScreen() {
                     <RecentArrivals language={language} linkId={link.linkId} stats={served} now={now} />
                   </>
                 )}
-                <ConfigurationCard language={language} link={link} policy={link.policy} />
-              </div>
-              {link.policy === null ? null : (
-                <EditLinkForm
+                <LinkConfiguration
                   key={link.linkId}
                   language={language}
                   link={link}
@@ -182,7 +181,7 @@ export default function ShareLinkScreen() {
                   onToggleActive={() => toggle(link)}
                   onDelete={() => setConfirming(true)}
                 />
-              )}
+              </div>
               {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149,
                   défaut majeur 2, issue #7858) — `ConfirmDelete` était la
                   TROISIÈME copie divergente, et la seule avec un rayon écrit

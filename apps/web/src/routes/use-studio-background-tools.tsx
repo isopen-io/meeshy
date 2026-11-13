@@ -49,6 +49,7 @@ export function useStudioBackgroundTools({
   kind,
   frame,
   retouching,
+  formatLocked = false,
   timelineOpen,
   locked,
   edit,
@@ -60,6 +61,8 @@ export function useStudioBackgroundTools({
   readonly kind: PublicationKind;
   readonly frame: StoryFrame;
   readonly retouching: boolean;
+  /** Une image d'identité (#17256) : ni recadrage ni quart de tour. */
+  readonly formatLocked?: boolean;
   readonly timelineOpen: boolean;
   readonly locked: boolean;
   readonly edit: (change: (current: StudioDraft) => StudioDraft, key?: string | null) => void;
@@ -74,7 +77,7 @@ export function useStudioBackgroundTools({
 } {
   const background = page.background;
   const resolved = studioBackgroundEditResolved(state.edit, { hasBackground: background !== null, timelineOpen });
-  const served = background === null ? [] : studioBackgroundSections({ mediaType: background.mediaType, retouching });
+  const served = background === null ? [] : studioBackgroundSections({ mediaType: background.mediaType, retouching, formatLocked });
 
   // Un fond retiré (ou défait) ferme l'édition pour de bon : un fond posé
   // plus tard ne rouvre pas les outils d'un autre.
@@ -90,7 +93,7 @@ export function useStudioBackgroundTools({
       : {
           sections: served,
           open: resolved.open,
-          actions: studioBackgroundToolActions({ offersPhoto: kind !== 'REEL', overlayFree: page.overlay === null, retouching }),
+          actions: studioBackgroundToolActions({ offersPhoto: kind !== 'REEL', overlayFree: page.overlay === null, retouching, formatLocked }),
         };
 
   const panel =

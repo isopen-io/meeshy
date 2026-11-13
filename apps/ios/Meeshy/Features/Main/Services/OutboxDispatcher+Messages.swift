@@ -5,7 +5,7 @@ import os
 // MARK: - OutboxDispatcher — l'envoi de MESSAGES (#4282)
 //
 // Extrait d'`OutboxDispatcher.swift`, qui portait 1519 lignes — 40 % au-dessus
-// du budget 800–1100. La directive du 2026-08-28 interdit d'AJOUTER à un
+// du budget 800–1100. La interdit d'AJOUTER à un
 // fichier déjà hors budget : on extrait d'abord, on ajoute ensuite. La
 // migration des chemins d'API (#4282) y ajoutait onze lignes, et c'est ce que
 // le cliquet de dette a refusé — en faisant exactement son travail : rendre le

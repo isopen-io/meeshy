@@ -9,7 +9,7 @@ internal enum class ConversationMenuHaptic { LIGHT, MEDIUM, HEAVY }
 internal enum class ConversationMenuSection {
     /** Épingler · Silence · Lu : la tête compacte, trois tuiles. */
     HEADER,
-    /** Joindre la conversation autrement : recherche, appel. */
+    /** Ouvrir la conversation autrement : ses détails, en tête de la liste (#17244). */
     REACH,
     /** La regarder et la ranger. */
     ORGANIZE,
@@ -38,8 +38,6 @@ internal enum class ConversationMenuEntry(
     UNMUTE,
     MARK_READ,
     MARK_UNREAD,
-    SEARCH,
-    CALL(ConversationMenuHaptic.MEDIUM),
     READING_MODE(opensSubmenu = true),
     DETAILS,
     VIEW_PROFILE,
@@ -80,7 +78,6 @@ internal data class ConversationMenuGroup(
 internal data class ConversationMenuDestinations(
     val details: Boolean = false,
     val profile: Boolean = false,
-    val call: Boolean = false,
     val manageMembers: Boolean = false,
     val admin: Boolean = false,
 )
@@ -125,6 +122,9 @@ internal data class ConversationMenuModel(
 
     val entries: List<ConversationMenuEntry> get() = groups.flatMap { it.entries }
 
+    /** Le menu sans sa rangée de tête : ce que l'appui long révèle sous [ConversationQuickActions] (#17244). */
+    fun withoutQuickActions(): ConversationMenuModel = copy(header = emptyList())
+
     companion object {
         fun make(input: ConversationMenuInput): ConversationMenuModel {
             val law = input.capabilities
@@ -136,12 +136,10 @@ internal data class ConversationMenuModel(
                     if (input.hasUnread) ConversationMenuEntry.MARK_READ else ConversationMenuEntry.MARK_UNREAD,
                 ),
                 reach = offered(
-                    ConversationMenuEntry.SEARCH to true,
-                    ConversationMenuEntry.CALL to (law.call && dest.call),
+                    ConversationMenuEntry.DETAILS to dest.details,
                 ),
                 organize = offered(
                     ConversationMenuEntry.READING_MODE to input.offersReadingModes,
-                    ConversationMenuEntry.DETAILS to dest.details,
                     ConversationMenuEntry.VIEW_PROFILE to dest.profile,
                     ConversationMenuEntry.RENAME to law.rename,
                     ConversationMenuEntry.MANAGE_MEMBERS to (dest.manageMembers && law.offersManageMembers(input.isLocked)),

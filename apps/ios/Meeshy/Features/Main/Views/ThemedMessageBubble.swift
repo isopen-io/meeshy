@@ -102,6 +102,11 @@ struct QuickReactionDoubleTap: ViewModifier {
             HapticFeedback.light()
             onOpen()
         }
+        .accessibilityActions {
+            if isEnabled {
+                Button(String(localized: "a11y.main.bubble.quickReact", bundle: .main)) { onOpen() }
+            }
+        }
     }
 }
 

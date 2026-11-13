@@ -48,6 +48,7 @@ import me.meeshy.sdk.model.call.CallReactionEmoji
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CallSocialSignalManager
+import me.meeshy.ui.R as UiR
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.pressable
 import me.meeshy.ui.theme.MeeshySpacing
@@ -133,7 +134,12 @@ class CallReactionsController internal constructor(
 @Singleton
 class CallReactionsActionHandler @Inject constructor() : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED) CallActionPresentation(MeeshyIcons.Emoji, R.string.call_control_react) else null
+        if (state.status == CallStatus.CONNECTED) {
+            // The short legend is iOS's `call.control.react.caption`, generated once, in :sdk-ui.
+            CallActionPresentation(MeeshyIcons.Emoji, R.string.call_control_react, captionRes = UiR.string.fullscreen_react)
+        } else {
+            null
+        }
 
     override fun perform() = Unit
 }

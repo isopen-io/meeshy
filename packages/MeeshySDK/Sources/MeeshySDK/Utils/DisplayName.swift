@@ -3,7 +3,7 @@ import Foundation
 /// Borne d'affichage des noms d'utilisateur dans les surfaces sociales —
 /// header du reader de story, identity bar des bulles de conversation.
 ///
-/// Règle produit (directive user 2026-07-30) : un nom d'utilisateur ne dépasse
+/// Règle produit : un nom d'utilisateur ne dépasse
 /// jamais 16 caractères à l'écran ; au-delà on coupe et l'ellipse signale la
 /// coupe. `lineLimit(1)` seul ne suffisait pas : il laissait la LARGEUR du nom
 /// dicter la mise en page (le pseudo long poussait la méta qui le suit hors

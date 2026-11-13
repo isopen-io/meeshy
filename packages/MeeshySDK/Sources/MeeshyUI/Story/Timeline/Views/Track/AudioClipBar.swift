@@ -217,7 +217,7 @@ public struct AudioClipBar: View, Equatable {
                         .foregroundStyle(.white)
                         .accessibilityHidden(true)
                     Text(title)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -267,6 +267,7 @@ public struct AudioClipBar: View, Equatable {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onToggleMute?() }
             .accessibilityLabel(isMuted
                 ? String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
                 : String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module))

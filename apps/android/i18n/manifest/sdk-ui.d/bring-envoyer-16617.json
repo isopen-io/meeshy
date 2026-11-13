@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bring.explain",
+          "androidName": "bring_explain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.action",
+          "androidName": "bring_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.remaining",
+          "androidName": "bring_remaining",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.unlimited",
+          "androidName": "bring_unlimited",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.quota",
+          "androidName": "bring_quota",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.ringing",
+          "androidName": "bring_ringing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.cancel",
+          "androidName": "bring_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.confirm.title",
+          "androidName": "bring_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.confirm.body",
+          "androidName": "bring_confirm_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.confirm.send",
+          "androidName": "bring_confirm_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.offline",
+          "androidName": "bring_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.failed",
+          "androidName": "bring_failed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

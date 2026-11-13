@@ -13,10 +13,10 @@ public nonisolated enum StoryCanvasFraming {
 
     /// Alignement vertical de la carte DANS la région libre quand elle ne la
     /// remplit pas (contrainte largeur active). `.center` = historique ;
-    /// `.top` = flush sous le header, le mou entier en bas (directive user
-    /// 2026-07-04) ; `.bottom` = collée juste au-dessus du sheet, le mou entier
+    /// `.top` = flush sous le header, le mou entier en bas;
+    /// `.bottom` = collée juste au-dessus du sheet, le mou entier
     /// en haut — une carte PAYSAGE (courte) reste ainsi au ras du sheet et
-    /// « remonte » avec lui quand il grandit (directive user 2026-07-20).
+    /// « remonte » avec lui quand il grandit.
     public enum VerticalAlignment: Equatable, Sendable { case center, top, bottom }
 
     public struct Input: Equatable, Sendable {
@@ -58,7 +58,7 @@ public nonisolated enum StoryCanvasFraming {
 
     /// Truth-table helper for `canvasIsCarded`.
     ///
-    /// **RETOURNÉE au #4124 (directive porteur 2026-08-28).** La règle disait
+    /// **RETOURNÉE au #4124.** La règle disait
     /// « plein écran par défaut, cardée quand un panneau réduit la zone
     /// visible » ; elle dit maintenant l'inverse — **cardée par défaut**, plein
     /// écran seulement là où l'immersion est le sujet :
@@ -69,13 +69,13 @@ public nonisolated enum StoryCanvasFraming {
     /// Les deux exceptions ne sont pas des restes : ce sont deux directives
     /// antérieures du même porteur, et elles ne sont pas révoquées.
     ///
-    /// - **DESSIN immersif** (2026-07-11) : pendant le dessin le canvas reste
+    /// - **DESSIN immersif** : pendant le dessin le canvas reste
     ///   plein écran, dessinable jusqu'aux angles, bulles flottantes sans sheet.
     ///   Le paramètre était jusqu'ici conservé « pour documenter la table » et
     ///   ne décidait RIEN — tant que le repos ne cardait pas, lui et le repos
     ///   rendaient le même verdict. Il redevient décisif, et il l'emporte même
     ///   band déployée.
-    /// - **ÉDITION TEXTE** (2026-07-28) : sortie anticipée, jamais un terme de
+    /// - **ÉDITION TEXTE** : sortie anticipée, jamais un terme de
     ///   la disjonction. Quand l'éditeur s'ouvre depuis la tuile Texte, la band
     ///   n'est PAS `.hidden` (seulement masquée et non-interactive), donc un
     ///   terme ordinaire serait écrasé par `bandPresent`.
@@ -86,7 +86,7 @@ public nonisolated enum StoryCanvasFraming {
     /// obligerait chaque appelant à re-prouver qu'il n'en avait pas besoin, et
     /// perdrait la trace de la règle qu'on vient d'inverser.
     ///
-    /// **RETOURNÉE une seconde fois au #8370 (directive porteur 2026-09-27).**
+    /// **RETOURNÉE une seconde fois au #8370.**
     /// La maquette plein écran (`docs/product/composer-plein-ecran/`) dit :
     /// « la scène est en plein écran et le reste des contrôleurs sont par-dessus
     /// la scène ». Elle supplante la carte de #4124 : au repos, la scène occupe
@@ -199,7 +199,7 @@ public nonisolated enum StoryCanvasFraming {
         // width (side margins). Never upscales past intrinsic. So the canvas is always a
         // centred rounded card that (a) starts below the header, (b) never overlaps the sheet
         // when open, (c) grows toward full-but-margined when the sheet collapses — identical
-        // for every tool incl. drawing (user spec 2026-06-02).
+        // for every tool incl. drawing.
         //
         // **Cet ajustement est la loi de `MediaStageFraming`, et il n'en existe
         // qu'un** (#6141, moitié de convergence). La story le calculait avec sa

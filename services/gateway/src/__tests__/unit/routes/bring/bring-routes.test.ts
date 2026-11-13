@@ -89,6 +89,19 @@ describe('#16623 — l\'équipe a le Bring sans lien', () => {
     expect(res.status).toBe(201);
   });
 
+  it.each([
+    ['un analyste face à un administrateur', { [MOI]: { role: 'ANALYST' }, [AUTRE]: { role: 'ADMIN' } }],
+    ['deux analystes', { [MOI]: { role: 'ANALYST' }, [AUTRE]: { role: 'ANALYST' } }],
+    ['un auditeur face à un modérateur', { [MOI]: { role: 'AUDIT' }, [AUTRE]: { role: 'MODERATOR' } }],
+  ])('%s : l\'équipe commence à ANALYST, ça sonne sans lien', async (_label, personnes) => {
+    const app = await appli({ personnes });
+    const disponible = await dispo(app);
+    const res = await sonner(app);
+    await app.close();
+    expect(disponible.body.data.available).toBe(true);
+    expect(res.status).toBe(201);
+  });
+
   it('un rôle ne laisse aucune trace de lien', async () => {
     const app = await appli(equipe);
     await sonner(app);
@@ -101,7 +114,7 @@ describe('#16623 — l\'équipe a le Bring sans lien', () => {
     ['un modérateur face à un utilisateur ordinaire', { [MOI]: { role: 'MODERATOR' } }],
     ['un utilisateur ordinaire face à un administrateur', { [AUTRE]: { role: 'ADMIN' } }],
     ['un rôle de cible inconnu', { [MOI]: { role: 'ADMIN' }, [AUTRE]: { role: 'SUPERADMIN' } }],
-    ['un analyste', { [MOI]: { role: 'ANALYST' }, [AUTRE]: { role: 'ADMIN' } }],
+    ['un analyste face à un utilisateur ordinaire', { [MOI]: { role: 'ANALYST' } }],
   ])('%s : le même refus qu\'à un inconnu', async (_label, personnes) => {
     const app = await appli({ personnes });
     const inconnu = await appli();

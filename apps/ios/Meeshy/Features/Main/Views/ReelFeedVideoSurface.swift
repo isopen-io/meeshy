@@ -44,8 +44,7 @@ nonisolated enum ReelEngineOwnershipPolicy {
 /// ni scrub (ils vivent dans le viewer plein écran). Affiché aspect-fill.
 ///
 /// Différence avec le viewer : le son suit l'intention de SESSION du fil
-/// (`ReelFeedSoundIntent`, S2 — bouton de son du fil, exigence produit
-/// 2026-08-22) — muet par défaut, activable par carte via le bouton de son.
+/// (`ReelFeedSoundIntent`, S2 — bouton de son du fil) — muet par défaut, activable par carte via le bouton de son.
 /// L'écriture du mute passe par `ReelFeedSoundButtonPolicy.apply(soundOn:to:)`
 /// (cf. `drive`) : couper le son du fil ne touche jamais `isMuted`
 /// (préférence globale), mais l'ACTIVER le clarifie explicitement à `false`

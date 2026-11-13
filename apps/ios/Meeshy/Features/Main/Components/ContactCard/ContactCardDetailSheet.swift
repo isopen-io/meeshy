@@ -11,6 +11,7 @@ import MeeshyUI
 /// haptique + toast. La section « Sur Meeshy » montre le profil PUBLIC du
 /// compte associé (bannière, avatar, nom, @username, bio) avec ses actions.
 struct ContactCardDetailSheet: View {
+    @State private var delayed = DelayedActions()
     @ObservedObject var model: ContactCardViewModel
     let accentHex: String
 
@@ -34,6 +35,7 @@ struct ContactCardDetailSheet: View {
                 .onTapGesture { close() }
                 .accessibilityLabel(String(localized: "contact-card.detail.close", defaultValue: "Fermer la fiche", bundle: .main))
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { close() }
 
             if isVisible {
                 card
@@ -109,20 +111,20 @@ struct ContactCardDetailSheet: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(model.card?.displayName ?? "")
                     .font(.title3.weight(.bold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             Spacer(minLength: 8)
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Circle())
             }
@@ -162,14 +164,14 @@ struct ContactCardDetailSheet: View {
                     .accessibilityAddTraits(.isHeader)
                 Text(account.displayName)
                     .font(.headline)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                 Text("@" + account.username)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 if let bio = account.bio, !bio.isEmpty {
                     Text(bio)
                         .font(.subheadline)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // #9481 — trois coupes au plus, ce que SA visibilité autorise ; rien quand elle est fermée.
@@ -237,7 +239,7 @@ struct ContactCardDetailSheet: View {
         withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeOut(duration: 0.2)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        delayed.run(after: .milliseconds(200)) {
             withoutCoverAnimation { dismiss() }
         }
     }
@@ -268,10 +270,10 @@ struct ContactCardFieldRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(field.label)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
                 Text(field.value)
                     .font(.body)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

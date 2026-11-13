@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "androidName": "game2_atlas_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_atlas_privacy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_pseudonym_drawn",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_pseudonym_hint_change",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_pseudonym_invalid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_snapshot",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_prestige_confirm_access",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_prestige_meo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_season_how",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_season_seal_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_celebrations_switch",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_friends_league_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_notifications_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_notifications_switch",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_showcase_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_showcase_visibility_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_flame_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_level_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_missions_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_use_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_detail_coin_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_detail_fact_mint_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_error_league_pseudonym_invalid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_flame_panel_freeze_full",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_guide_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_guide_step_welcome_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_mint_blocked_debt_plain",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_notebook_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_photo_camera_denied",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_photo_camera_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_photo_camera_unsupported",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_progression_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_2_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_4_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_5_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_6_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_7_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_section_concepts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_section_rules",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_sparks_cumul_record",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_state_elans_idle",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

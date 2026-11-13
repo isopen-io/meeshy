@@ -1,18 +1,29 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { callActions } from '@/lib/calls/call-actions';
 import type { CallCaption } from '@/lib/calls/call-captions';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import { callAudioOf, hasVideo } from '@/lib/calls/call-view';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
-import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
-import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
-import { translate } from '@/lib/i18n-catalog';
+import { addingGenre, canAdd, genreRow, isFull, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
+import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
+import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
+import { onRowWheel } from '@/lib/calls/call-row-keys';
+import { useEffectLayers } from '@/lib/calls/use-effect-layers';
+import { useSwapPresence } from '@/lib/calls/use-mode-motion';
+import { FACE_EFFECTS, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
-import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
+import type { Portrait } from './call-portrait';
+import { StreamVideo } from './call-media-elements';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
+import type { LiveFrameHold } from './call-live-frame-hold-option';
+import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
 /**
  * **LE MODE EFFETS** (#8442, #8551, #8578) — « Effets » (rangée Mon image, ou
@@ -22,11 +33,14 @@ import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call
  *
  * - au-dessus du carrousel, la catégorie en texte discret — « Visage ·
  *   Couleur » — n'en montre qu'une ;
- * - « Réglages », à droite de la barre, remplace le carrousel par une rangée
- *   compacte (luminosité, flou d'arrière-plan là où la caméra l'offre) ; le
- *   re-toucher rend le carrousel ;
- * - « Valider », à droite, garde l'effet et rend l'appel ; ✕ (ou Échap)
- *   quitte en rendant les effets d'avant le mode ;
+ * - la barre est UN verre : ‹ · Réglages · (+) (P8, P8b, #17580), et les puces
+ *   « Visage · Couleur » y sont posées au-dessus de sa rangée de base. « Réglages »
+ *   remplace la bande de looks et les puces par un verre SÉPARÉ, posé au-dessus
+ *   de la barre — Luminosité · Flou du fond, là où la caméra l'offre — qui monte en
+ *   fondu depuis elle pendant que la barre se resserre (morphisme) ; le
+ *   re-toucher rend la bande de looks par le chemin inverse ;
+ * - le look touché s'applique tout de suite et RESTE : ni Valider ni ✕. ‹ (ou
+ *   Échap) rend l'appel ; (+) ouvre les looks d'un autre genre, à poser par-dessus ;
  * - plus de déclencheur (#8625) : DEUX TAPES sur l'effet choisi capturent mon
  *   image, un APPUI LONG la filme avec le son de l'appel, jusqu'au stop posé
  *   au centre (`call-capture-studio.tsx`) ;
@@ -40,9 +54,32 @@ import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call
  * d'appel ; son catalogue se charge avec lui (`loadEffectsModeText`).
  */
 
-export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language)]);
 
-type Category = 'face' | 'color';
+/**
+ * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
+ * chez lui — le portrait et la couleur d'un locuteur : ce chunk n'importe rien
+ * de `call_overlay`, et c'est lui, chargé à l'entrée du mode, qui en fait des
+ * compagnons — leur vidéo quand elle se montre, leur portrait sinon — et le son
+ * qu'un film emporte (`callAudioOf`).
+ */
+export type CallOthers = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream'> & {
+  readonly Portrait: typeof Portrait;
+  readonly colorOf: (userId: string) => string;
+};
+
+export const companionsOf = ({ members, remoteStreams, Portrait: Face, colorOf }: CallOthers): readonly EffectsCompanion[] =>
+  Object.values(members).map((member) => {
+    const stream = remoteStreams[member.userId] ?? null;
+    const shows = (member.cameraOn || member.screenSharing) && hasVideo(stream);
+    return {
+      id: member.userId,
+      name: member.name,
+      color: colorOf(member.userId),
+      render: (width) =>
+        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Face name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} presenceKey={member.userId} />,
+    };
+  });
 
 type ModeProps = {
   readonly language: InterfaceLanguage;
@@ -52,11 +89,11 @@ type ModeProps = {
   readonly preview: ReactNode;
   /** L'élément de MA vidéo (#8737) : la seule source des photos et des films du mode. */
   readonly selfVideo: () => HTMLVideoElement | null;
-  /** Les autres participants, qui accompagnent mon image (#8737). */
+  /** Les autres participants, qui accompagnent mon image (#8737) : remis par l'écran (`others`), ou déjà composés. */
+  readonly others?: CallOthers;
   readonly companions?: readonly EffectsCompanion[];
   /** Les sous-titres de l'appel : qui parle, faute d'un niveau audio (#8737). */
   readonly captions?: readonly CallCaption[];
-  readonly quitGlyph: ReactNode;
   readonly onExit: () => void;
   readonly onWheel?: ((event: WheelEvent<HTMLElement>) => void) | undefined;
   readonly apply?: (patch: Partial<VideoEffects>) => void;
@@ -65,6 +102,12 @@ type ModeProps = {
   readonly grab?: FrameGrab;
   readonly save?: (files: readonly CaptureFile[]) => Promise<SaveOutcome>;
   readonly clipEnv?: () => ClipEnv;
+  /** Le genre ouvert à l'entrée : celui que le Montage demande en touchant (+) ou une puce. */
+  readonly startOn?: EffectsCategory;
+  /** Le cadre gardé en direct (loi 16) : annuler la couche « cadre » le rend, comme décocher « Cadre » au Montage. */
+  readonly hold?: LiveFrameHold | undefined;
+  /** La puce « Cadres » ouvre le Montage : sans lui, la rangée ne propose que Visage et Couleur. */
+  readonly onOpenFrames?: (() => void) | undefined;
 };
 
 /** Ce qu'on tire de ma vidéo affichée : une image, ou une piste à filmer. */
@@ -80,12 +123,6 @@ const VIDEO_GRAB: FrameGrab = {
   film: (video) => filmedTrack(video, EFFECTS_RECORD_FPS),
 };
 
-const NO_AUDIO = (): readonly MediaStream[] => [];
-
-const applyNow = (patch: Partial<VideoEffects>): void => {
-  setVideoEffects(patch);
-  callActions.refreshEffects();
-};
 
 const FACE_GLYPH: Readonly<Record<FaceEffect, ReactNode>> = {
   none: (
@@ -175,6 +212,20 @@ const SWATCH: Readonly<Record<VideoPreset, string>> = {
   vivid: 'linear-gradient(135deg, #ff5fa2, #ffd23f 55%, #36d1a6)',
   // harmony-exempt: pastille de preset video, teintes propres a chaque preset
   muted: 'linear-gradient(135deg, #d7d2cc, #8a8580)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  golden: 'linear-gradient(135deg, #ffe0a3, #e8962e)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  film: 'linear-gradient(135deg, #cdb79a, #4f6f7a)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  softNight: 'linear-gradient(135deg, #9fb0d8, #2b3a67)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  bright: 'linear-gradient(135deg, #ffffff, #cfe4ee)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  velvet: 'linear-gradient(135deg, #c98aa6, #5a2a4a)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  sky: 'linear-gradient(135deg, #bfe3ff, #4a90d9)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  monochrome: 'linear-gradient(135deg, #f2f2f2, #1a1a1a)',
 };
 
 const faceVisual = (effect: FaceEffect): ReactNode => (
@@ -185,32 +236,29 @@ const faceVisual = (effect: FaceEffect): ReactNode => (
 
 const swatch = (preset: VideoPreset): ReactNode => <span aria-hidden className="size-full" style={{ background: SWATCH[preset] }} />;
 
-const check = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
-  </svg>
-);
+/** Les genres que ce mode possède : il en lit la valeur dans les effets appliqués, et le cadre dans celui qu'on garde en direct (loi 16). */
+const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
 
-const sliders = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
-    <circle cx="16" cy="7" r="2" />
-    <circle cx="10" cy="17" r="2" />
-  </svg>
-);
+const layerChoice = (id: string): string => (id === 'none' || id === 'natural' ? NO_CHOICE : id);
 
-const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
-
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, companions = [], captions = [], quitGlyph, onExit, onWheel, apply = applyNow, audio = NO_AUDIO, grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
-  const before = useRef(effects);
   const root = useRef<HTMLDivElement>(null);
-  const [category, setCategory] = useState<Category>('face');
+  const [category, setCategory] = useState<EffectsCategory>(startOn);
   const [settings, setSettings] = useState(!colorAvailable);
-  const t = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>): string => translateCallStudio(language, key, ...params);
-  const percent = Math.round(effects.brightness * 100);
+  const t = textOf(language);
+  const words = layersTextOf(language);
+  const heldFrame = hold?.heldFrameId ?? null;
+  const stack = useEffectLayers([...effectsApplied(effects), ...(heldFrame === null ? [] : [{ genre: 'frame' as const, choice: heldFrame }])], OWNED);
+  const full = isFull(stack);
+  const row = genreRow(true, onOpenFrames !== undefined);
+  const list = useLayersList();
   const controls = useRef<HTMLDivElement>(null);
+  const rider = useRef<HTMLDivElement>(null);
   const style = useRef('none');
+  const puces = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
+  const looks = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
+  const panel = useSwapPresence<HTMLDivElement>(settings);
   const studio = useCaptureStudio({
     language,
     still: async () => {
@@ -228,30 +276,64 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   });
 
   useEffect(() => {
-    root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [data-call-effects-validate]')?.focus();
+    root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [data-call-mode-quit]')?.focus();
   }, []);
 
-  const quit = (): void => {
-    apply(before.current);
-    onExit();
-  };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    quit();
+    if (list.open) list.hide();
+    else onExit();
   };
 
   const items: readonly CarouselItem[] =
     category === 'face'
       ? FACE_EFFECTS.map((effect) => ({ id: effect, label: t(`callStudio.face.${effect}`), visual: faceVisual(effect) }))
-      : VIDEO_PRESETS.map((preset) => ({ id: preset, label: translate(language, `call.effects.preset.${preset}`), visual: swatch(preset) }));
+      : VIDEO_PRESET_CATALOG.map((preset) => ({ id: preset, label: t(`callStudio.preset.${preset}`), visual: swatch(preset) }));
   const selected = category === 'face' ? effects.faceEffect : effects.preset;
   style.current = selected;
+  /** À trois couches, un genre absent n'entre plus : le choix est refusé et dit ; remplacer un genre présent reste permis. */
+  const refuses = (genre: EffectGenre, id: string): boolean => layerChoice(id) !== NO_CHOICE && !canAdd(stack, genre);
+  const refuse = (): void => studio.setStatus({ text: words.full, tone: 'error' });
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
-    const preset = VIDEO_PRESETS.find((entry) => entry === id);
-    if (category === 'face' && face !== undefined && face !== effects.faceEffect) apply({ faceEffect: face });
-    if (category === 'color' && preset !== undefined && preset !== effects.preset) apply({ preset });
+    const preset = VIDEO_PRESET_CATALOG.find((entry) => entry === id);
+    list.hide();
+    if (category === 'face' && face !== undefined && face !== effects.faceEffect) {
+      if (refuses('face', face)) refuse();
+      else apply({ faceEffect: face });
+    }
+    if (category === 'color' && preset !== undefined && preset !== effects.preset) {
+      if (refuses('color', preset)) refuse();
+      else apply({ preset });
+    }
+  };
+  const addLook = (): void => {
+    setSettings(false);
+    list.hide();
+    if (full) {
+      refuse();
+      return;
+    }
+    const target = addingGenre(category, stack, row);
+    if (target === 'frame') onOpenFrames?.();
+    else if (target === 'face' || target === 'color') setCategory(target);
+  };
+  const undo = (genre: EffectGenre): void => {
+    list.hide();
+    if (genre === 'face') apply({ faceEffect: 'none' });
+    else if (genre === 'color') apply({ preset: 'natural' });
+    else {
+      if (genre === 'frame' && hold !== undefined && heldFrame !== null) hold.toggle(heldFrame);
+      setEffectLayers(removeLayer(stack, genre));
+    }
+  };
+  const labelOf = (genre: EffectGenre): string => (genre === 'face' ? t('callStudio.mode.face') : genre === 'color' ? t('callStudio.effects.color') : words.frames);
+  const entries = row.map((genre) => ({ id: genre === 'frame' ? 'frames' : genre, label: labelOf(genre) }));
+  const pick = (id: string): void => {
+    list.hide();
+    if (id === 'frames') onOpenFrames?.();
+    else if (id === 'face' || id === 'color') setCategory(id);
   };
 
   return (
@@ -262,68 +344,38 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       {companions.length === 0 ? null : <CallEffectsCompanions language={language} companions={companions} captions={captions} floor={controls} />}
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
       <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
-        <CaptureStatus status={studio.status} />
-        {settings ? (
-          <div role="group" aria-label={t('callStudio.effects.settings')} className="glass-call flex max-w-[calc(100%-2rem)] flex-wrap items-center justify-center gap-3 rounded-[24px] px-4 py-2" data-call-effects-settings="">
-            {colorAvailable ? (
-              <label className="flex min-h-11 items-center gap-3 text-mini text-on-media">
-                <span className="shrink-0">{translate(language, 'call.effects.brightness')}</span>
-                <input
-                  type="range"
-                  min="-50"
-                  max="50"
-                  step="5"
-                  value={percent}
-                  aria-label={translate(language, 'call.effects.brightness')}
-                  aria-valuetext={`${percent > 0 ? '+' : ''}${percent} %`}
-                  onInput={(event) => apply({ brightness: Number((event.target as HTMLInputElement).value) / 100 })}
-                  onChange={() => undefined}
-                  className="h-11 w-36 accent-on-media"
+        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+          <CaptureStatus status={studio.status} />
+          <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+            {looks.mounted ? (
+              <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-effects-looks="">
+                <CaptureHint language={language} />
+                <ModeCarousel
+                  key={category}
+                  label={t('callStudio.mode.pickEffect')}
+                  items={items}
+                  selected={selected}
+                  onSelect={select}
+                  onWheel={onWheel}
+                  capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
                 />
-              </label>
+              </div>
             ) : null}
-            {blurAvailable ? (
-              <button type="button" role="switch" aria-checked={effects.blur} onClick={() => apply({ blur: !effects.blur })} className="flex min-h-11 items-center gap-2 text-mini font-semibold text-on-media" data-call-effects-blur="">
-                <span>{translate(language, 'call.effects.blur')}</span>
-                <span aria-hidden className="relative h-6 w-10 rounded-full transition-colors motion-reduce:transition-none" style={{ background: effects.blur ? 'var(--ios-success)' : 'var(--color-media-hairline)' }}>
-                  <span className={`absolute top-0.5 size-5 rounded-full bg-on-media transition-transform motion-reduce:transition-none ${effects.blur ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
-                </span>
-              </button>
-            ) : null}
+            {panel.mounted ? <SettingsGlass presence={panel} open={settings} language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} /> : null}
           </div>
-        ) : (
-          <>
-            <div role="group" aria-label={t('callStudio.mode.categories')} className="flex items-center text-on-media [text-shadow:0_1px_2px_var(--color-scrim)]" data-call-effects-categories="">
-              {(['face', 'color'] as const).map((entry, index) => (
-                <span key={entry} className="flex items-center">
-                  {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
-                  <button type="button" aria-pressed={category === entry} onClick={() => setCategory(entry)} className={`${TEXT_TAB} ${category === entry ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry}>
-                    {entry === 'face' ? t('callStudio.mode.face') : t('callStudio.effects.color')}
-                  </button>
-                </span>
-              ))}
-            </div>
-            <CaptureHint language={language} />
-            <ModeCarousel
-              key={category}
-              label={t('callStudio.mode.pickEffect')}
-              items={items}
-              selected={selected}
-              onSelect={select}
-              onWheel={onWheel}
-              capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
-            />
-          </>
-        )}
-        <CallModeBar
-          quit={{ label: t('callStudio.mode.quitEffects'), glyph: quitGlyph, onPress: quit, data: { 'data-call-mode-quit': '' } }}
-          center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
-          options={
-            <>
-              {colorAvailable ? <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={sliders} pressed={settings} onPress={() => setSettings((open) => !open)} data={{ 'data-call-effects-settings-toggle': '' }} /> : null}
-              <ModeOption label={t('callStudio.mode.validateLabel')} glyph={check} onPress={onExit} data={{ 'data-call-effects-validate': '' }} />
-            </>
-          }
+          <KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />
+        </div>
+        <EffectsBar
+          language={language}
+          rider={rider}
+          stack={stack}
+          full={full}
+          chips={{ mounted: puces.mounted, ref: puces.ref, leaving: settings }}
+          categories={{ entries, pressed: category, onPick: pick }}
+          settings={colorAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
+          add={colorAvailable ? { onAdd: addLook } : null}
+          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
+          onBack={onExit}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

@@ -708,7 +708,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     }
 
     /// Ordered list of preferred content languages for the Prisme Linguistique.
-    /// Resolution order (extended 2026-05-26):
+    /// Resolution order:
     /// 1. `systemLanguage`             — primary in-app preference
     /// 2. `regionalLanguage`           — secondary in-app preference
     /// 3. `customDestinationLanguage`  — per-conversation override

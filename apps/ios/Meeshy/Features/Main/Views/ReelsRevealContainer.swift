@@ -140,7 +140,7 @@ nonisolated enum ReelsCover {
 
 /// **Un sous-arbre que les réels recouvrent ne se réévalue plus par son parent.**
 ///
-/// Profilé sur l'iPhone 16 Pro Max (build Release, 2026-10-12) pendant des
+/// Profilé sur l'iPhone 16 Pro Max (build Release) pendant des
 /// balayages de réels : `MeeshyAvatar.body` et `StoryCoverURLMemo.coverURL`
 /// (≈ 2 % chacun) — la liste des conversations, montée SOUS la couche des
 /// réels, se réévaluait à chaque rendu de `RootView`, dont elle reçoit des

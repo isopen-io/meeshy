@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,9 +66,11 @@ internal fun groupStageShown(state: CallUiState, mesh: GroupCallMeshUi): Boolean
 
 /**
  * La scène d'un appel de groupe (iOS `GroupCallStageView`), posée ENTRE l'en-tête et la pilule. Grille par défaut :
- * ma vignette d'abord, puis les membres dans l'ordre d'arrivée — la grille ne se réagence jamais. Toucher une vignette
- * la met à la une avec la pellicule des autres ([GroupCallSpotlight]) ; un partage d'écran d'un membre y monte seul ;
- * « Revenir à la grille » rend la grille. Le choix reste LOCAL, jamais partagé.
+ * les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3) — la grille ne se réagence jamais, même quand quelqu'un
+ * parle. Toucher une vignette la met à la une avec la pellicule des autres ([GroupCallSpotlight], ma vignette comprise,
+ * toujours en queue) ; un partage d'écran d'un membre y monte seul ; « Revenir à la grille » rend la grille. Le choix reste
+ * LOCAL, jamais partagé. D'une disposition à l'autre chaque vignette garde son identité (P14.10) : elle change de place
+ * par un mouvement de transformation et d'opacité, sans que sa vidéo soit recréée.
  */
 @Composable
 internal fun CallGroupStage(
@@ -82,6 +85,12 @@ internal fun CallGroupStage(
     onStageTap: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onFocusChange: (GroupCallStageFocus) -> Unit = {},
+    /** U1.10 · #8550 : la capsule de la une se range avec les contrôles (`CallChromeElement.FeaturedCapsule`). */
+    isCapsuleVisible: Boolean = true,
+    /** Un toucher reçu sur la capsule rangée rallume le chrome. */
+    onChromeRevive: () -> Unit = {},
+    /** L4.1 · W2 : la fenêtre est de hauteur compacte (`CallGroupStageSizing`) — la rangée de quatre n'a lieu qu'alors. */
+    isCompactHeight: Boolean = false,
 ) {
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
@@ -111,14 +120,7 @@ internal fun CallGroupStage(
         choice = next
     }
     val scope = CallGroupStageScope(
-        trackOf = { tile ->
-            when {
-                !tile.showsVideo -> null
-                tile.isLocal -> localTrack
-                tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
-                else -> mesh.videoTracks[tile.id]
-            }
-        },
+        trackOf = stageTrackOf(mesh, localTrack, primaryTrack),
         eglContext = eglContext,
         mirrorsLocal = state.isFrontCamera,
         onTileTap = { tile ->
@@ -127,36 +129,72 @@ internal fun CallGroupStage(
                 GroupStageTapOutcome.Spotlight -> choose(GroupCallSpotlightChoice.Tile(tile.id))
             }
         },
+        contentOf = rememberCallGroupTileContents(tiles.map { it.id }),
     )
     val stageLabel = stringResource(R.string.call_group_stage)
     val stageModifier = modifier.semantics { contentDescription = stageLabel }
     val spotlight = focus as? GroupCallStageFocus.Spotlight
     val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
-    if (spotlight == null || featured == null) {
-        CallGroupGrid(tiles, scope, onStageTap, stageModifier)
-    } else {
-        CallGroupSpotlightStage(
-            tiles = tiles,
-            featured = featured,
-            isScreenShare = spotlight.isScreenShare,
+    BoxWithConstraints(stageModifier) {
+        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight, isCompactHeight))
+        val isLandscape = maxWidth > maxHeight
+        if (spotlight == null || featured == null) {
+            CallGroupGrid(tiles, staged, isLandscape, isCompactHeight, onStageTap, Modifier.fillMaxSize())
+        } else {
+            CallGroupSpotlightStage(
+                tiles = tiles,
+                featured = featured,
+                isScreenShare = spotlight.isScreenShare,
+                isFullScreen = isFullScreen,
+                isLandscape = isLandscape,
+                zoom = zoom,
+                onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
+                onResetZoom = { zoom = 1f },
+                onStageTap = onStageTap,
+                scope = staged,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        CallGroupFeaturedCapsule(
+            tileIds = tiles.map { it.id },
+            featuredId = featured?.id,
+            focus = focus,
             isFullScreen = isFullScreen,
-            zoom = zoom,
-            onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
-            onResetZoom = { zoom = 1f },
+            width = maxWidth,
+            height = maxHeight,
+            isCompactHeight = isCompactHeight,
+            isChromeVisible = isCapsuleVisible,
+            onRevive = onChromeRevive,
             onGrid = { choose(GroupCallSpotlightChoice.Grid) },
             onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
-            onStageTap = onStageTap,
-            scope = scope,
-            modifier = stageModifier,
         )
     }
 }
 
-/** La grille — iOS `GroupCallStageView.grid` ; l'espace entre les vignettes rallume ou éteint le chrome. */
+/** La vidéo de chaque vignette : la mienne, celle du principal, ou celle du lien du maillage ; rien caméra coupée. */
+private fun stageTrackOf(
+    mesh: GroupCallMeshUi,
+    localTrack: VideoTrack?,
+    primaryTrack: VideoTrack?,
+): (GroupCallStageTile) -> VideoTrack? = { tile ->
+    when {
+        !tile.showsVideo -> null
+        tile.isLocal -> localTrack
+        tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
+        else -> mesh.videoTracks[tile.id]
+    }
+}
+
+/**
+ * La grille — iOS `GroupCallStageView.grid` ; l'espace entre les vignettes rallume ou éteint le chrome. Elle se pose
+ * dans la composition de la scène (aucune mesure imbriquée) : une vignette qui passe à la une y DÉPLACE son contenu mobile.
+ */
 @Composable
 private fun CallGroupGrid(
     tiles: List<GroupCallStageTile>,
     scope: CallGroupStageScope,
+    isLandscape: Boolean,
+    isCompactHeight: Boolean,
     onStageTap: (() -> Unit)?,
     modifier: Modifier,
 ) {
@@ -165,14 +203,14 @@ private fun CallGroupGrid(
     } else {
         Modifier
     }
-    BoxWithConstraints(modifier.then(stageTap)) {
-        val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = maxWidth > maxHeight)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-            tiles.chunked(layout.columns).forEach { row ->
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-                    row.forEach { tile -> CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
-                    repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
+    val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = isLandscape, isCompactHeight = isCompactHeight)
+    Column(modifier.then(stageTap), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+        tiles.chunked(layout.columns).forEach { row ->
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+                row.forEach { tile ->
+                    key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
                 }
+                repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
             }
         }
     }

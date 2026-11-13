@@ -1,0 +1,1386 @@
+{
+ "chantier": 17312,
+ "milestone": 258,
+ "demande": "Il faut à présent un workflow dont l'objet est de vérifier la cohérence et de s'assurer l'implémentation de chaque composant de cette planche et réutilisable sur toute l'ensemble de l'application ! Applicable principalement sous iOS et reproduit sous Android. La réflexion, le plan d'implémentation et la définition du workflow se font avec Fable ; l'exécution avec Haiku ou Sonnet selon le degré de réflexion encore nécessaire ; les intégrations et la vérification des divergences et conflits avec Opus. (porteur, 2026-11-09)",
+ "sources": {
+  "planche": "docs/product/composer-vue-finale/planche.html",
+  "lois": "docs/product/composer-vue-finale.md",
+  "captures": "docs/product/composer-vue-finale/vues/",
+  "grammaire_appels": "docs/product/appels-vue-finale.md",
+  "modele": "docs/product/meeshy-composer-modele.md"
+ },
+ "kit": {
+  "ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/",
+  "android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/",
+  "fiches": "docs/product/kit/",
+  "catalogue_ios": "apps/ios/Meeshy/Features/Kit/",
+  "catalogue_android": "apps/android/feature/kit/",
+  "web": "apps/web/src/components/kit/",
+  "catalogue_web": "apps/web/src/routes/ (route /kit, hors production) + apps/web/scripts/check-kit.mjs"
+ },
+ "regles": [
+  "AUCUNE RÉGRESSION DE FEATURE (directive porteur 2026-11-09 22:22). Quand le code et la planche divergent, la planche garde sa disposition, sa simplicité et son épure, ET chaque feature que le code porte en plus est conservée : on l'ajoute à la planche, à la place où elle s'intègre le plus sobrement (menu (…), options d'un outil, réglages), sans la dupliquer si la planche la rend déjà autrement. Un lot qui retire un comportement existant sans équivalent sur la planche est un écart bloquant ; le doute se tranche par la conservation, et la place choisie se dit dans la PR.",
+  "Un composant du kit est un atome agnostique : paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy (règle SDK Purity). L'orchestration reste côté app.",
+  "On EXTRAIT avant de créer : le jumeau le plus complet devient le composant, les autres sont supprimés par le lot d'intégration. Un composant redessiné alors qu'un jumeau existait est un échec de revue.",
+  "Le verre a UNE entrée, et Liquid Glass l'emporte (directive porteur du 2026-11-09). iOS 26 et plus : le vrai Liquid Glass du système (glassEffect), INTERACTIF sur tout ce qui se touche, avec la réponse au toucher des boutons de l'en-tête de conversation (ConversationListHeaderActions : adaptiveGlass(in:interactive: true)), et les verres voisins fondus dans un même conteneur. iOS 16 à 25 : le verre DESSINÉ (LiquidGlassFallbackRecipe : flou, reflet, liseré, ombre), avec une réponse au toucher dessinée qui imite celle du système. Android : le verre dessiné (LiquidGlassRecipe, MeeshyGlassSurface) et la même réponse au toucher. Aucun composant du kit ne choisit lui-même entre les deux : il passe par K01.",
+  "Pas de légende sous un bouton rond : le nom vit dans l'accessibilité. Petits boutons de verre séparés, aucune bande vide, seulement l'outil utile à cet instant (loi 13).",
+  "Conformité = disposition, hiérarchie, états et gestes. Polices, rayons et teintes viennent du design system (MeeshyColors, tokens) : aucune couleur en dur.",
+  "iOS d'abord. Android reproduit la FICHE et le composant iOS fusionné, pas la planche seule : mêmes états, mêmes noms d'accessibilité, mêmes gestes.",
+  "Chaque composant a : sa fiche, son témoin de comportement, son instantané (clair, sombre, grande police, RTL), son entrée au catalogue. Sans les quatre, il n'est pas livré.",
+  "Un lot de kit ne change aucun écran : il fusionne au vert. Un lot d'intégration change ce que l'utilisateur voit : il s'arrête à la PR ouverte et attend les captures simulateur et l'accord du porteur.",
+  "Trois plateformes (directive porteur du 2026-11-09, 21:57) : iOS d'abord, puis Android ET le web reproduisent la fiche et le composant iOS fusionné. Sur le web, le verre est la matière de styles/glass.css enveloppée par K01, avec une réponse au toucher dessinée ; chaque composant tient au clavier, au pointeur et au doigt, du téléphone au grand écran.",
+  "Un lot d'intégration livre la VUE, pas seulement l'adoption du kit : si l'écran n'existe pas encore sur une plateforme (c'est le cas de plusieurs vues du composer sur le web), le lot le construit à partir du kit. Trop gros pour une PR, il se découpe en sous-issues, une par vue, dans le même milestone.",
+  "Optimisé, pas seulement conforme : cache d'abord, mise à jour optimiste, états vide / chargement / erreur / hors ligne dessinés, aucune image perdue pendant un geste, aucun re-rendu inutile, rien de retenu une fois l'écran quitté. Une lenteur est un bug du lot."
+ ],
+ "modeles": {
+  "reflexion": "fable",
+  "mecanique": "haiku",
+  "execution_simple": "haiku",
+  "execution": "sonnet",
+  "relecture": "opus",
+  "divergence": "opus",
+  "integration": "opus",
+  "note_web": "modele_web suit modele_android ; le web compile et se teste dans le conteneur."
+ },
+ "divergences_connues": [
+  "La planche compte quatre effets de texte ; StoryTextEffect en porte davantage (hors kit, à l'intégration I3).",
+  "Android n'a ni catalogue, ni @Preview, ni test d'instantané (ADR-016 promet Roborazzi) : le lot K00 le pose."
+ ],
+ "lots": [
+  {
+   "cle": "K00",
+   "type": "socle",
+   "nom": "Catalogue",
+   "titre": "Chaque composant du kit se voit dans un catalogue et se prouve par un instantané, sur iOS, Android et le web",
+   "contrat": "iOS : écran catalogue (debug) listant chaque composant dans tous ses états + helper d'instantané (swift-snapshot-testing est déjà câblé à MeeshyUITests) + garde KitRegistryGuardTests qui lit ce registre (chaque composant livré a fichier, témoin, instantané, entrée) + cliquet interdisant un nouveau bouton de verre dessiné à la main hors du kit. Android : module catalogue, test d'instantané (Roborazzi sur Robolectric, version réelle à vérifier), garde miroir. Second cliquet : hors du kit, plus aucun nouvel appel direct à glassEffect, adaptiveGlass ou adaptiveLiquidGlass sur un contrôle qui se touche sans réponse au toucher. Le catalogue montre chaque composant au repos ET pressé, et se capture sur un simulateur iOS 26 (Liquid Glass) et sur un simulateur antérieur (verre dessiné). Web : route /kit (hors production) listant chaque composant dans tous ses états, témoins bun test + happy-dom, captures Playwright (clair, sombre, 390 / 820 / 1440 px, RTL) rangées sous docs/product/kit/captures/, et garde apps/web/scripts/check-kit.mjs (branchée à bun run gate) qui lit ce registre et compte les verres et boutons ronds dessinés hors du kit (cliquet).",
+   "vues": [],
+   "lois": [
+    13
+   ],
+   "depend": [],
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/",
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/"
+  },
+  {
+   "cle": "K01",
+   "type": "kit",
+   "nom": "MeeshyGlassTone",
+   "titre": "Le verre de l'application est le Liquid Glass du système quand l'appareil le permet, un verre dessiné sinon, et il répond au toucher partout",
+   "planche": "classes .glass / .deep / .onlight",
+   "vues": [
+    "toutes"
+   ],
+   "lois": [
+    4
+   ],
+   "contrat": "Une seule entrée pour tout verre du kit. (1) Matière : iOS 26+ ⇒ glassEffect réel, interactif dès que la surface se touche, regroupé par AdaptiveGlassContainer pour que les verres voisins fusionnent ; iOS 16 à 25 ⇒ verre dessiné de LiquidGlassFallbackRecipe ; Android ⇒ verre dessiné de LiquidGlassRecipe. Liquid Glass l'emporte toujours quand il existe : aucun site ne force le verre dessiné sur iOS 26+. (2) Réponse au toucher : sur iOS 26+ celle du système (.interactive()), référence visuelle = les boutons de l'en-tête de conversation ; sous iOS 26 et sur Android, une réponse DESSINÉE qui l'imite (léger agrandissement, reflet qui s'éclaire, retour élastique), coupée si « réduire les animations ». Aujourd'hui le repli ignore le paramètre interactive : c'est l'écart à fermer. (3) Ton : luminance du contenu sous le contrôle → plain, deep, onLight, par un seul échantillonneur. Jamais de verre posé sur du verre. Repli opaque si « réduire la transparence ». Témoins : la recette choisie par version d'OS et par état (repos, pressé) se lit comme des valeurs, pas dans un modificateur opaque.",
+   "ios_existant": "SDK Compatibility/AdaptiveLiquidGlass (adaptiveLiquidGlass(in:tint:interactive:) : glassEffect sur iOS 26+, verre dessiné dessous, MAIS interactive ignoré dans le repli), Compatibility/AdaptiveGlass (adaptiveGlass : repli simple matière, makeMeeshyGlass, AdaptiveGlassContainer), Theme/CanvasChromeScheme ; référence du toucher : ConversationListHeaderActions ; TROIS échantillonneurs app : MediaChromeScheme, ComposerCaptureChromeLegibility, CallBannerContrast ; dans Composer et Call, 51 appels de verre dont 13 seulement interactifs",
+   "android_existant": ":sdk-ui chrome/MeeshyGlassSurface + LiquidGlassRecipe ; ton adaptatif seulement dans :feature:calls (CallGlassTone, CallGlassToneUi) ; voiles en dur SCENE_VEIL / SOCLE_VEIL ; aucune réponse au toucher sur le verre",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassTone.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyGlassTone.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-glass-tone.tsx",
+   "web_existant": "styles/glass.css (matière unique, gardée par scripts/lib/glass-site.mjs), components/glass-surface.tsx ; aucune réponse au toucher commune"
+  },
+  {
+   "cle": "K02",
+   "type": "kit",
+   "nom": "MeeshyGlassButton",
+   "titre": "Un seul bouton rond de verre sert tous les écrans, avec ses états normal, actif, destructif et doux",
+   "planche": "B() / .btn",
+   "vues": [
+    "toutes"
+   ],
+   "lois": [
+    1,
+    13
+   ],
+   "contrat": "Disque 44 pt (tailles 36, 40, 44, 48), icône seule, nom porté par l'accessibilité (jamais de légende). États : normal (sans fond dans un conteneur de verre, verre seul hors conteneur), actif = disque blanc plein à icône sombre, destructif rouge, doux. Cible tactile ≥ 44 pt / 48 dp. Retour haptique par le site unique. Le verre et sa réponse au toucher viennent de K01 (interactif par défaut) : le bouton ne dessine aucun verre lui-même.",
+   "ios_existant": "Jumeaux : CallPillButton / CallPillGlyph / CallPillButtonKind (la grammaire complète), ComposerSceneRoundGlyph, glassControl (ComposerSceneCameraBar), CallSelfTileControlButton, SDK FullscreenChromeDisc / FullscreenChromeButton, MeeshyIconButton ; ~45 fichiers appellent adaptiveGlass(in: Circle()) en direct",
+   "android_existant": "Jumeaux : CallPillButton + CallPillKind (calls, interne), SceneRoundButton, StoryRailButton, :sdk-ui FullscreenChromeDisc, ComposerRailButton, FloatingDisc privé",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassButton.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyGlassButton.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-glass-button.tsx",
+   "web_existant": "components/call-glass-button.tsx (propre aux appels)"
+  },
+  {
+   "cle": "K03",
+   "type": "kit",
+   "nom": "MeeshySegmented",
+   "titre": "Un choix entre deux à quatre options se fait dans un même segment de verre partout",
+   "planche": "seg()",
+   "vues": [
+    "A2",
+    "A3",
+    "A10",
+    "A13",
+    "A14",
+    "S2",
+    "S3"
+   ],
+   "lois": [
+    7,
+    10
+   ],
+   "contrat": "2 à 4 segments, le courant en pastille blanche à texte sombre, texte sur une ligne, Dynamic Type, RTL, rôle « onglet » pour l'accessibilité.",
+   "ios_existant": "Aucun type : seulement .pickerStyle(.segmented) du système",
+   "android_existant": "Aucun contrôle segmenté dans le dépôt",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshySegmented.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshySegmented.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-segmented.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K04",
+   "type": "kit",
+   "nom": "MeeshyChipRow",
+   "titre": "Les puces de choix ont une seule rangée, à choix simple ou multiple, qui s'estompe au bord quand elle déborde",
+   "planche": "chips() / .fade",
+   "vues": [
+    "A2",
+    "A6",
+    "A12",
+    "A16",
+    "O7",
+    "S1"
+   ],
+   "lois": [
+    7,
+    8
+   ],
+   "contrat": "Rangée défilante ou repliée (wrap), choix simple ou multiple, puce courante blanche, icône optionnelle, estompe de bord seulement s'il y a débordement.",
+   "ios_existant": "Jumeaux : ComposerObjectChipsRow, ComposerLookFilterChips, FlowingChips, CallPillChip, CallFrameMoodChip(s), SDK OpeningEffectChips, ReferenceChipRow, ThemedFilterChip ; estompe : ComposerScrollEdgeCue / ComposerScrollEdgeMask",
+   "android_existant": "Jumeaux privés : ChipRow, OptionChip, KindChip, SceneChip, FooterChip ; :sdk-ui PeopleFilterChip",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyChipRow.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyChipRow.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-chip-row.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K05",
+   "type": "kit",
+   "nom": "MeeshyLabeledSlider",
+   "titre": "Un réglage continu a un seul curseur, avec son nom à gauche et sa valeur à droite",
+   "planche": "slider()",
+   "vues": [
+    "A2",
+    "A3",
+    "A13",
+    "O5"
+   ],
+   "lois": [
+    9,
+    10
+   ],
+   "contrat": "Libellé + valeur lisible, piste fine, pouce 20 pt dans une cible de 44 pt, pas et bornes en paramètres, valeur annoncée (accessibilityValue), ajustable au clavier et à VoiceOver.",
+   "ios_existant": "Jumeaux : ComposerFlashIntensitySlider, SDK MediaVolumeSlider",
+   "android_existant": "Jumeaux : ValueSlider, TimeSlider, AdjustmentSlider (stories), PanelSlider, EffectsSlider (calls)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyLabeledSlider.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyLabeledSlider.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-labeled-slider.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K06",
+   "type": "kit",
+   "nom": "MeeshyToggleRow",
+   "titre": "Une bascule et sa ligne de liste (icône, titre, sous-titre, accessoire) sont les mêmes dans toutes les feuilles",
+   "planche": "lrow() + tg()",
+   "vues": [
+    "R11",
+    "A14",
+    "A15",
+    "A17",
+    "A18",
+    "O10"
+   ],
+   "lois": [
+    8
+   ],
+   "contrat": "Ligne : icône optionnelle, titre, sous-titre, accessoire (bascule, coche, chevron, texte), variante destructive rouge, filet entre lignes, hauteur ≥ 46 pt. La ligne entière est la cible.",
+   "ios_existant": "Jumeaux : SDK SettingsRow, ComposerMediaActionRow, CallQualityRowView ; bascules ComposerSceneToggle, SoundExtractionToggle, CallFrameScopeToggle",
+   "android_existant": ":sdk-ui SettingsRow / SettingsSwitchRow ; privés AlignToggle, PermanentSwitch, LoopSwitch, AudienceRow, PersonRow",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyToggleRow.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyToggleRow.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-toggle-row.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K07",
+   "type": "kit",
+   "nom": "MeeshyColorDots",
+   "titre": "Une couleur se choisit dans une seule rangée de pastilles, la courante cerclée",
+   "planche": "dots()",
+   "vues": [
+    "A3",
+    "A13",
+    "S1"
+   ],
+   "lois": [
+    10,
+    7
+   ],
+   "contrat": "Pastilles rondes 28 pt dans une cible de 44 pt, la courante cerclée de blanc, palette en paramètre (les couleurs restent celles du design system), nom de couleur annoncé.",
+   "ios_existant": "Jumeaux : ComposerSharedPalette, SDK TextEditPalette, StoryDrawingColors, BackgroundColorPalette",
+   "android_existant": "Jumeaux : ColorSwatch, BackgroundSwatch (deux fois)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyColorDots.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyColorDots.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-color-dots.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K08",
+   "type": "kit",
+   "nom": "MeeshyField",
+   "titre": "Un champ de saisie de feuille (recherche, hashtag, description) a une seule forme",
+   "planche": "classe .field",
+   "vues": [
+    "A16",
+    "A17",
+    "A18",
+    "O9",
+    "O10",
+    "P5"
+   ],
+   "lois": [
+    8
+   ],
+   "contrat": "Champ arrondi à icône de tête optionnelle, compteur optionnel, effacement, focus au clavier, invite localisée.",
+   "ios_existant": "Jumeaux : SDK MediaAltTextField, AuthTextField",
+   "android_existant": "Jumeaux : ComposerInlineTextField, MediaAltField ; :sdk-ui component/field/*",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyField.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyField.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-field.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K09",
+   "type": "kit",
+   "nom": "MeeshyProgressRing",
+   "titre": "Une progression circulaire se dessine par un seul anneau, du bouton Publier à la vignette qui s'envoie",
+   "planche": "ring() + thumb(:up)",
+   "vues": [
+    "P1",
+    "A7",
+    "A9"
+   ],
+   "lois": [
+    11,
+    16
+   ],
+   "contrat": "Anneau déterminé (0 à 100) ou indéterminé, pourcentage optionnel au centre, tailles 22 à 48, rôle progressbar avec valeur annoncée, animation coupée si « réduire les animations ».",
+   "ios_existant": "Jumeaux : StorySaveProgressRing, ComposerShutterRing, ComposerCaptureProgressDisplay, SDK ProfileCompletionRing ; aucun anneau générique",
+   "android_existant": "Jumeaux : DownloadProgressRing, SendProgressPill, :sdk-ui ProfileCompletionRing ; aucun anneau de publication",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyProgressRing.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyProgressRing.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-progress-ring.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K10",
+   "type": "kit",
+   "nom": "MeeshyGlassPill",
+   "titre": "La pilule de verre du bas est un seul composant, pour les appels, le composer et la retouche",
+   "planche": "pill() / objPill()",
+   "vues": [
+    "R1",
+    "R2",
+    "R3",
+    "R5",
+    "R6",
+    "R10",
+    "R13",
+    "A7",
+    "P1",
+    "P2",
+    "P3",
+    "P6",
+    "C1",
+    "C2",
+    "O1",
+    "O2",
+    "O14",
+    "O15"
+   ],
+   "lois": [
+    1,
+    6,
+    17
+   ],
+   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app. La pilule d'un objet porte DIRECTEMENT les outils de son type, sans étape « Modifier » : ‹ · outils · (…) (sticker : Remplacer, Miroir, Temps ; texte : Aa, couleur, alignement, fond ; photo : Looks, Recadrer, Réglages, Pivoter ; vidéo : Looks, Recadrer, Couper, Son). La liste d'outils par type est UNE table fournie par l'app, partagée avec la retouche. Toucher un outil ouvre ses options dans K11 au-dessus ; le (…) ouvre le menu K18, Retirer en dernier. Aucun bouton rouge au repos.",
+   "ios_existant": "Appels : callControlsPill (CallView+Pill) + règles CallControlsLayout. Composer : seulement les règles (ComposerPillGrammar, ComposerPillSlot) ; AUCUNE vue de pilule, le socle la remplace",
+   "android_existant": "Appels : CallControlsPill, CallPill (public). Composer : aucun, ScenePublishSocle + SceneToolColumn + SceneTopBar",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPill.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyGlassPill.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01",
+    "K02"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-glass-pill.tsx",
+   "web_existant": "components/call-control-pill.tsx (propre aux appels)"
+  },
+  {
+   "cle": "K11",
+   "type": "kit",
+   "nom": "MeeshyExpandingPill",
+   "titre": "Une option à réglages s'ouvre dans la pilule, qui grandit vers le haut avec Retour et Fermer",
+   "planche": "xpill()",
+   "vues": [
+    "R7",
+    "R8",
+    "R9",
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "P5",
+    "R9",
+    "R12",
+    "P4",
+    "O10"
+   ],
+   "lois": [
+    7,
+    12,
+    16
+   ],
+   "contrat": "La pilule K10 grandit vers le haut : en-tête Retour · titre · Fermer, corps opaque, rangée de pilule conservée en pied (optionnelle). Le contenu derrière garde sa taille. Sert aussi les confirmations (Tout effacer, Fermer le brouillon).",
+   "ios_existant": "Appels seulement : unfoldedRows / familyRows, CallPillRow, CallPanelHeader. Composer : ComposerInlineToolPanel + ComposerPropertiesHeader, ComposerSceneMoreMenu",
+   "android_existant": "Appels seulement : CallPillPanel. Composer : EditingRailLevels / SceneLevelBack",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyExpandingPill.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyExpandingPill.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K10"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-expanding-pill.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K12",
+   "type": "kit",
+   "nom": "MeeshyEdgeRails",
+   "titre": "Les rails d'actions sortent vers les bords et s'y rangent, et prennent leur libellé quand l'écran est large",
+   "planche": "rails() / rail() / rl()",
+   "vues": [
+    "R3",
+    "I2",
+    "I4",
+    "I1",
+    "I3"
+   ],
+   "lois": [
+    3,
+    15
+   ],
+   "contrat": "Deux rails verticaux centrés, aussi courts que leurs boutons, qui sortent et se rangent ; sur grand écran (place libre autour du contenu, jamais la classe de taille) ils restent sortis, libellés, avec un en-tête, et se grisent dans un mode plein écran. L'arrangement reste la loi existante (ComposerSceneArrangement).",
+   "ios_existant": "ComposerSceneRailsLayer, ComposerLabeledRail / Row, ComposerSelectionRail, ComposerTrailingRail, ComposerRailCard, ComposerRailGeometry ; appels CallView+CameraRail ; SDK FullscreenActionRail, ComposerToolRow",
+   "android_existant": "StoryLeadingRail / StoryTrailingRail / LabeledRailItem, SceneRail ; appels CallCameraRail ; :sdk-ui FullscreenActionRail, RetouchRail, Rail privé de ComposerPlateau ; loi :core:model ComposerSceneArrangement",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyEdgeRails.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyEdgeRails.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01",
+    "K02"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-edge-rails.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K13",
+   "type": "kit",
+   "nom": "MeeshySplitActionButton",
+   "titre": "L'action principale porte son libellé et, à côté, le choix de ce qui part, puis devient un anneau pendant l'envoi",
+   "planche": "pub()",
+   "vues": [
+    "I4",
+    "R1",
+    "R2",
+    "R3",
+    "R5",
+    "R6",
+    "R10",
+    "R13",
+    "A7",
+    "P1",
+    "P2",
+    "P3",
+    "P6",
+    "C1",
+    "C2"
+   ],
+   "lois": [
+    1,
+    16
+   ],
+   "contrat": "Bouton plein en couleur de marque : libellé (touche = agir) + chevron séparé (touche = choisir seulement, n'envoie jamais). États : absent, actif, en cours (anneau K09), différé hors ligne, sans chevron (Enregistrer). Largeur libre ou imposée (iPad).",
+   "ios_existant": "ComposerPublishMenu, ComposerPublishChevron, publishButton / publishCapsule (Socle), ComposerExportProgressVeil (un voile, pas un anneau)",
+   "android_existant": "ScenePublishSocle (label + chevron optionnel), PublishOneLineLabel",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshySplitActionButton.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshySplitActionButton.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K09"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-split-action-button.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K14",
+   "type": "kit",
+   "nom": "MeeshyStatusCapsule",
+   "titre": "Un refus, une limite ou une panne se dit dans une capsule posée au-dessus de la pilule, jamais dans une alerte",
+   "planche": "caps()",
+   "vues": [
+    "R10",
+    "P2",
+    "P3"
+   ],
+   "lois": [
+    12,
+    16
+   ],
+   "contrat": "Capsule de verre au-dessus de la pilule : icône, une ligne, action optionnelle (Réessayer), retour haptique et annonce VoiceOver à l'apparition, disparaît seule sauf si elle porte une action.",
+   "ios_existant": "Jumeaux : ComposerLimitCapsule / View / NoticeBoard, CallControlsNoticePill, CallCaptureAlertCapsule, SDK FeedbackToast, ErrorBannerView, UnsentPublicationsToast, PendingPublicationPill",
+   "android_existant": "Jumeaux : :sdk-ui MeeshyToast / ToastPill / MeeshySyncPill ; CallToastHost, CallStatusPill, CallVideoNoticePill ; SceneNoticeLine, StorySocleNotice",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyStatusCapsule.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyStatusCapsule.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-status-capsule.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K15",
+   "type": "kit",
+   "nom": "MeeshyAnchoredSheet",
+   "titre": "Une liste longue s'ouvre en feuille ancrée, et le contenu se réduit au-dessus d'elle au lieu de passer dessous",
+   "planche": "sheet()",
+   "vues": [
+    "R11",
+    "A6",
+    "A11",
+    "A12",
+    "A14",
+    "A15",
+    "A16",
+    "A17",
+    "A18"
+   ],
+   "lois": [
+    8
+   ],
+   "contrat": "Feuille ancrée en bas avec poignée, titre et Fermer optionnels, hauteurs fixes ou crans, qui PUBLIE sa hauteur pour que l'hôte réduise son contenu au-dessus. Fermeture au glisser, focus accessible.",
+   "ios_existant": "ComposerAnchoredSheet, ComposerFixedHeightSheet, ComposerSheetScheme, ComposerHostAnchoredSheetLayer ; appels panelSheet",
+   "android_existant": "ComposerAnchoredSheet + StoryComposerSheet ; la réduction vit dans StorySceneFirstLayout (AnchoredSheetHost, sceneFraming)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyAnchoredSheet.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyAnchoredSheet.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-anchored-sheet.tsx",
+   "web_existant": "components/sheet.tsx"
+  },
+  {
+   "cle": "K16",
+   "type": "kit",
+   "nom": "MeeshyModeChrome",
+   "titre": "Un mode plein écran a toujours le même cadre : Quitter à gauche, Valider à droite, ses réglages dans une plaque basse",
+   "planche": "modeHead() + plaque()",
+   "vues": [
+    "A8",
+    "A10",
+    "A13",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8",
+    "O9",
+    "S8",
+    "S9",
+    "C1",
+    "C2"
+   ],
+   "lois": [
+    9,
+    17
+   ],
+   "contrat": "En-tête : Quitter (capsule de verre) · emplacement central optionnel · Valider (capsule blanche ou coche). Plaque basse de verre unique pour les options de l'outil. Le contenu reste manipulable derrière.",
+   "ios_existant": "Jumeaux : ComposerSceneFriseFullScreen, SDK MeeshySheetHeader, StoryTextEditTopBar, FullscreenTopBar ; plaque : ComposerPropertiesSheetPlate, ComposerTrailingOptionsPlate, SDK MeeshyToolOptionsPanel",
+   "android_existant": ":sdk-ui RetouchTopRow (interne), FullscreenTopBar",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyModeChrome.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyModeChrome.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01",
+    "K02"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-mode-chrome.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K17",
+   "type": "kit",
+   "nom": "MeeshyKeyboardDock",
+   "titre": "Écrire colle une barre d'outils au clavier, et un panneau d'options prend exactement la place du clavier",
+   "planche": "kbar() + panel()",
+   "vues": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "O11",
+    "S6",
+    "S7"
+   ],
+   "lois": [
+    10
+   ],
+   "contrat": "Barre de verre collée au clavier (emplacements K02 + bouton de validation) ; un panneau peut remplacer le clavier à sa hauteur exacte, sans saut de mise en page. Suit le clavier flottant et matériel.",
+   "ios_existant": "ComposerKeyboardDock / Bar / Panel, ComposerKeyboardStyleBarView, ComposerKeyboardOrOptions ; SDK StoryTextEditToolbar, StoryKeyboardOverlap (jumeau ancien)",
+   "android_existant": "ComposerKeyboardStyleBar, TypingBarFrame, TypingDock, Modifier.typingScene ; :sdk-ui HostedTextField (état seul)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyKeyboardDock.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyKeyboardDock.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K02"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-keyboard-dock.tsx",
+   "web_existant": "components/composer-format-bar.tsx, thread-composer-chrome.tsx"
+  },
+  {
+   "cle": "K18",
+   "type": "kit",
+   "nom": "MeeshyObjectMenu",
+   "titre": "Le (…) d'un objet ouvre un seul menu de verre, où Retirer est toujours le dernier",
+   "planche": "classe .menu",
+   "vues": [
+    "O2"
+   ],
+   "lois": [
+    6
+   ],
+   "contrat": "Menu de verre ancré au bouton (…) qui l'ouvre (jamais à l'appui long), lignes titre + icône, la ligne destructive en rouge TOUJOURS en dernier, se replace pour rester à l'écran, fermé par un toucher dehors. Lignes opaques fournies par l'app.",
+   "ios_existant": "SDK StoryCanvasUIView+ContextMenu (UIKit, à l'appui long : à retirer à l'intégration) ; app ComposerSceneContextMenu, ComposerSceneMoreMenu",
+   "android_existant": "Jumeaux : :sdk-ui SceneObjectMenu (sans appelant) et SceneObjectMenuPopup (stories, à l'appui long : à retirer) ; la garde ComposerEditGrammarGuardTest interdit le menu à l'appui long et reste vraie",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyObjectMenu.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyObjectMenu.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-object-menu.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K19",
+   "type": "kit",
+   "nom": "MeeshyTileStrip",
+   "titre": "Filtres, looks et effets se choisissent dans une seule bande de vignettes, la courante cerclée",
+   "planche": "ftiles()",
+   "vues": [
+    "A10",
+    "O6",
+    "S4"
+   ],
+   "lois": [
+    7,
+    9
+   ],
+   "contrat": "Bande défilante de vignettes (aperçu fourni par l'hôte + nom), la courante cerclée, estompe de bord, variante grille repliée. L'aperçu est opaque : le kit ne connaît ni filtre ni look.",
+   "ios_existant": "Jumeaux : ComposerLookStrip / ComposerLookRail, SDK StoryFilterGridView, StoryFilterThumbnails, CallModeCarousel / CallModeThumbnail",
+   "android_existant": "Jumeaux : :sdk-ui ComposerLookStrip (interne), ComposerMediaLookPanel ; PlacedLooks, FilterRow ; appels VideoFiltersPanel",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyTileStrip.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyTileStrip.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-tile-strip.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K20",
+   "type": "kit",
+   "nom": "MeeshyThumbnailRow",
+   "titre": "Une rangée de vignettes montre la courante, l'ajout et l'envoi en cours, et se réordonne au doigt",
+   "planche": "srow() / thumb()",
+   "vues": [
+    "R5",
+    "R6",
+    "A7",
+    "I1",
+    "I4"
+   ],
+   "lois": [
+    2,
+    11
+   ],
+   "contrat": "Vignettes sans cadre ni verre, la courante cerclée de blanc, « + » toujours en dernier, fantômes (envoi avec anneau K09, attente), toucher = aller, double toucher = dupliquer, appui long = croix + glisser pour réordonner. Contenu de vignette opaque.",
+   "ios_existant": "ComposerSlideRail, ComposerSceneThumbnailTile, ComposerSlideRowJiggle, ComposerSceneIntakeGhost ; SDK SlideMiniPreview",
+   "android_existant": ":sdk-ui SlideRailTile + SlideRailGeometry (public, générique) ; ComposerSlideRail, SlideReorderResolver",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyThumbnailRow.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyThumbnailRow.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K09"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-thumbnail-row.tsx",
+   "web_existant": "components/story-rail.tsx, rail-tile.tsx"
+  },
+  {
+   "cle": "K21",
+   "type": "kit",
+   "nom": "MeeshyTrimTrack",
+   "titre": "Couper un son ou une vidéo se fait sur une seule piste : onde ou vignettes, deux poignées, tête de lecture",
+   "planche": "trimTrack() + soundRows()",
+   "vues": [
+    "A15",
+    "O8",
+    "C2"
+   ],
+   "lois": [
+    8,
+    9,
+    14,
+    17
+   ],
+   "contrat": "Piste unique : contenu opaque (onde, ou vignettes avec onde dessous), zones écartées assombries, deux poignées jaunes de 44 pt de cible, tête de lecture, bornes et durée gardée affichées, durée minimale et maximale en paramètres, poignées ajustables à VoiceOver.",
+   "ios_existant": "Au moins 4 jumeaux : ComposerTrimTrack (+ Handle, Rule), ComposerMediaTrimBand, SDK MediaTrimStrip (+ Playhead, Chip), ClipTrimHandles, AudioEditorWaveform, WaveformStrip, AudioPostTrimZone",
+   "android_existant": "Jumeaux : :sdk-ui MediaTrimStrip, MeeshyAudioTrimmer, AudioTrimHandle, RetouchTrimPanel ; BackgroundTrimStrip, PlacedTrimSection, SoundTrimSection",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyTrimTrack.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyTrimTrack.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-trim-track.tsx",
+   "web_existant": "components/composer-audio-trim.tsx"
+  },
+  {
+   "cle": "K22",
+   "type": "kit",
+   "nom": "MeeshyTimelineFrise",
+   "titre": "La frise du temps montre le contenu réel de chaque piste, s'aimante et se zoome, par un seul composant",
+   "planche": "timeline()",
+   "vues": [
+    "S8",
+    "S9",
+    "I3"
+   ],
+   "lois": [
+    9,
+    15
+   ],
+   "contrat": "Règle graduée, pistes à contenu opaque, tête de lecture, sélection d'une piste (poignées, images clés en losanges, les autres s'effacent), pincer pour zoomer le temps, aimantation avec retour haptique. Réutilise SnapEngine ; ne réécrit pas la loi d'aimantation.",
+   "ios_existant": "Jumeaux : SDK Story/Timeline (StoryTimelineView, TrackBarView, PlayheadView, KeyframeMarkerView, SnapEngine, SnapGuideView) contre app ComposerSceneFrise (+ Ruler, BarContent), ComposerObjectTimingStripView",
+   "android_existant": "SceneFrise (Ruler, Playhead, FriseTrackRow, KeyframeMarkers privés), FriseTransport, composer/timeline/*",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyTimelineFrise.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyTimelineFrise.kt",
+   "modele_ios": "opus",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-timeline-frise.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K23",
+   "type": "kit",
+   "nom": "MeeshySelectionFeedback",
+   "titre": "Un objet choisi se reconnaît à son halo et se place grâce aux mêmes repères d'aimantation partout",
+   "planche": "halo de MEE() + finger() + repères O3",
+   "vues": [
+    "O1",
+    "O3",
+    "O11",
+    "O14",
+    "O15"
+   ],
+   "lois": [
+    6,
+    13
+   ],
+   "contrat": "Halo de sélection sans cadre ni poignée ; pendant un glisser, seules les lignes de centre et de bord apparaissent. Modificateur générique + calque de repères ; la loi d'aimantation existante est réutilisée.",
+   "ios_existant": "SDK StoryCanvasUIView+SelectionMarker, AlignmentGuidesOverlay / StoryAlignmentSnap, SceneFocusFrame ; app ComposerSelectionChrome",
+   "android_existant": ":sdk-ui SceneSelectionMarker, SceneGuidesOverlay, SceneManipulationLayer ; Modifier.sceneSelection, StorySnapResolver",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshySelectionFeedback.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshySelectionFeedback.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-selection-feedback.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K24",
+   "type": "kit",
+   "nom": "MeeshyContextLines",
+   "titre": "Ce qui accompagne un contenu se lit en une ligne fine : le son au-dessus, les références dessous, l'audience en puce",
+   "planche": "trace() + refs() + .chip",
+   "vues": [
+    "R2",
+    "R3",
+    "R5",
+    "R7",
+    "R8",
+    "R10",
+    "R12",
+    "A15",
+    "O1",
+    "S5",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P6",
+    "I4",
+    "R13",
+    "A7",
+    "A17",
+    "A18",
+    "A9",
+    "R2",
+    "R9",
+    "O14",
+    "O15"
+   ],
+   "lois": [
+    2,
+    14
+   ],
+   "contrat": "Trois petits éléments de texte sur le contenu : ligne de son (icône, titre · auteur, onde), ligne de références (une ligne, absente si vide), puce de verre (icône + libellé + chevron). Chacun est un bouton qui rouvre sa feuille.",
+   "ios_existant": "ComposerSoundTraceRow, ComposerSceneSoundHeader, ComposerSceneReferenceFooter, audienceChip (Socle) ; SDK SceneSoundChipLayer, ReferenceChipRow, ReferenceNoteRow",
+   "android_existant": "SoundTraceRow, ComposerSceneReferenceFooter, AudiencePastille",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyContextLines.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyContextLines.kt",
+   "modele_ios": "haiku",
+   "modele_android": "haiku",
+   "depend": [
+    "K00",
+    "K01"
+   ],
+   "modele_web": "haiku",
+   "cible_web": "apps/web/src/components/kit/meeshy-context-lines.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "K25",
+   "type": "kit",
+   "nom": "MeeshyDragTargets",
+   "titre": "Glisser un élément fait apparaître deux cibles, la duplication en haut et la poubelle en bas, et les lâcher dessus agit",
+   "planche": "dropZone()",
+   "vues": [
+    "O3",
+    "O12",
+    "O13",
+    "C3"
+   ],
+   "lois": [
+    6,
+    13
+   ],
+   "contrat": "Pendant un glisser, deux cibles rondes de verre apparaissent : duplication en haut, poubelle en bas à la place de la pilule. La cible survolée grossit (la poubelle rougit), retour haptique à l'entrée ; l'élément rétrécit au-dessus de la poubelle. Lâcher sur la poubelle = retirer (annulable) ; lâcher sur la duplication = l'hôte crée une copie identique un rang au-dessus et l'original revient à sa place. Le composant ne connaît que des rectangles, un point de doigt et deux rappels ; il sert aussi hors du composer (toute surface où l'on glisse un élément). Équivalent accessible : les mêmes actions existent dans la pilule et le menu de l'objet.",
+   "ios_existant": "Aucune cible de dépôt sur la scène ; à rapprocher de ComposerSlideRowJiggle (réordonner) et des corbeilles éventuelles du canvas (à relever par la fiche)",
+   "android_existant": "Aucune cible de dépôt sur la scène (à relever par la fiche)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyDragTargets.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyDragTargets.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
+   "depend": [
+    "K00",
+    "K01"
+   ],
+   "modele_web": "sonnet",
+   "cible_web": "apps/web/src/components/kit/meeshy-drag-targets.tsx",
+   "web_existant": "à relever par la fiche (apps/web/src/components : call-*, composer-*, scene-*, story-*, sheet, glass-surface)"
+  },
+  {
+   "cle": "I1",
+   "type": "integration",
+   "titre": "Les appels dessinent leur pilule, leurs boutons et leurs capsules avec le kit, sans composant jumeau",
+   "vues": [],
+   "lois": [
+    1,
+    3,
+    4
+   ],
+   "consomme": [
+    "K01",
+    "K02",
+    "K10",
+    "K11",
+    "K12",
+    "K14"
+   ],
+   "contrat": "Les appels sont le modèle de la grammaire : ils adoptent le kit SANS changer d'aspect ni de geste (captures avant / après identiques), puis leurs types jumeaux sont supprimés. docs/product/appels-vue-finale.md reste la cible.",
+   "depend": [
+    "K01",
+    "K02",
+    "K10",
+    "K11",
+    "K12",
+    "K14"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I2",
+   "type": "integration",
+   "titre": "Le composer au repos est fait du kit : pilule, rails derrière (…), Publier, audience, rangée des scènes",
+   "vues": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R8",
+    "R9",
+    "R10",
+    "R11",
+    "R12",
+    "R13"
+   ],
+   "lois": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    12,
+    13,
+    14
+   ],
+   "consomme": [
+    "K01",
+    "K02",
+    "K10",
+    "K11",
+    "K12",
+    "K13",
+    "K14",
+    "K15",
+    "K20",
+    "K24"
+   ],
+   "contrat": "Vues R1 à R13 reproduites avec le kit ; plus aucune colonne de boutons ronds ni socle ; jumeaux supprimés.",
+   "depend": [
+    "K10",
+    "K11",
+    "K12",
+    "K13",
+    "K14",
+    "K15",
+    "K20",
+    "K24"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I3",
+   "type": "integration",
+   "titre": "Ajouter au composer (texte, média, stickers, son, mention, hashtags, lieu) passe par le kit",
+   "vues": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A11",
+    "A12",
+    "A14",
+    "A15",
+    "A16",
+    "A17",
+    "A18",
+    "A19"
+   ],
+   "lois": [
+    8,
+    10,
+    11,
+    14
+   ],
+   "consomme": [
+    "K03",
+    "K04",
+    "K05",
+    "K06",
+    "K07",
+    "K08",
+    "K15",
+    "K17",
+    "K21"
+   ],
+   "contrat": "Barre du clavier et panneaux de texte, feuilles ancrées de listes, piste de rognage unique.",
+   "depend": [
+    "K03",
+    "K04",
+    "K05",
+    "K06",
+    "K07",
+    "K08",
+    "K15",
+    "K17",
+    "K21",
+    "I2"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I4",
+   "type": "integration",
+   "titre": "La caméra et le dessin du composer sont des modes plein écran du kit",
+   "vues": [
+    "A8",
+    "A9",
+    "A10",
+    "A13"
+   ],
+   "lois": [
+    9,
+    13
+   ],
+   "consomme": [
+    "K02",
+    "K03",
+    "K05",
+    "K07",
+    "K09",
+    "K16",
+    "K19"
+   ],
+   "contrat": "Quitter · Valider, plaque basse, bande des looks, anneau du déclencheur.",
+   "depend": [
+    "K16",
+    "K19",
+    "K09",
+    "I2"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I5",
+   "type": "integration",
+   "titre": "Toucher un objet du composer montre ses outils et ses options dans la pilule, et le modifier ouvre les modes de retouche du kit",
+   "vues": [
+    "O1",
+    "O2",
+    "O3",
+    "O12",
+    "O13",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8",
+    "O9",
+    "O10",
+    "O11",
+    "O14",
+    "O15"
+   ],
+   "lois": [
+    6,
+    9
+   ],
+   "consomme": [
+    "K10",
+    "K11",
+    "K16",
+    "K18",
+    "K19",
+    "K21",
+    "K23",
+    "K25",
+    "K05",
+    "K08"
+   ],
+   "contrat": "Sélection sans cadre ; TOUCHER un objet affiche DIRECTEMENT ses outils dans la pilule, sans étape « Modifier » ni mode plein écran : ‹ · outils du type · (…) (vues O1, O14, O4, O15) ; un outil ouvre ses options dans la pilule qui grandit (O5 à O8). Le (…) ouvre le menu (Dupliquer, Mettre devant, Mettre en fond, Verrouiller ; Temps, Description, Faire un sticker pour un média ; Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Les outils d'une photo ou d'une vidéo (O4 à O9) sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est la même table d'outils que le lot I9 montre depuis une conversation.",
+   "depend": [
+    "K04",
+    "K18",
+    "K23",
+    "K25",
+    "K16",
+    "K21",
+    "I2"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I6",
+   "type": "integration",
+   "titre": "Les réglages de la scène, la frise et l'aperçu du composer passent par le kit",
+   "vues": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10"
+   ],
+   "lois": [
+    7,
+    9,
+    10
+   ],
+   "consomme": [
+    "K11",
+    "K03",
+    "K04",
+    "K07",
+    "K19",
+    "K22",
+    "K16",
+    "K17"
+   ],
+   "contrat": "Fond, cadre, transitions, effet, durée dans la pilule ; frise en mode plein écran.",
+   "depend": [
+    "K04",
+    "K22",
+    "K11",
+    "K16",
+    "I2"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I7",
+   "type": "integration",
+   "titre": "Publier, hors ligne, échec partiel, brouillon, mood et modification se lisent dans la pilule du kit",
+   "vues": [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6"
+   ],
+   "lois": [
+    1,
+    12,
+    16
+   ],
+   "consomme": [
+    "K09",
+    "K10",
+    "K11",
+    "K13",
+    "K14"
+   ],
+   "contrat": "Anneau de progression dans Publier, capsules, confirmations dans la pilule.",
+   "depend": [
+    "K13",
+    "K14",
+    "I2"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I8",
+   "type": "integration",
+   "titre": "Sur grand écran, le composer garde ses rails libellés du kit et Publier sous la scène",
+   "vues": [
+    "I1",
+    "I2",
+    "I3",
+    "I4"
+   ],
+   "lois": [
+    15
+   ],
+   "consomme": [
+    "K12",
+    "K13",
+    "K20",
+    "K22"
+   ],
+   "contrat": "iPad paysage et portrait, tablette Android : rails libellés, grisés en mode plein écran.",
+   "depend": [
+    "K12",
+    "I2",
+    "I5",
+    "I6"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I9",
+   "type": "integration",
+   "titre": "Retoucher une image ou une vidéo, d'où qu'elle vienne, ouvre le composer lui-même : la pièce est une scène, on y pose texte et stickers, et « Terminé » rend un média",
+   "vues": [
+    "C1",
+    "C2",
+    "C3",
+    "C4"
+   ],
+   "lois": [
+    6,
+    9,
+    17
+   ],
+   "consomme": [
+    "K10",
+    "K16",
+    "K18",
+    "K19",
+    "K21",
+    "K23",
+    "K25"
+   ],
+   "contrat": "UN seul éditeur : le composer, ouvert en MODE SIMPLE (mission « retoucher »). La pièce est le fond d'une scène d'une seule diapo, aux proportions du média (ou du format imposé d'une image d'identité, #17251) ; pilule Looks · Recadrer · Texte · Sticker · Dessin, plus Couper et Son pour une vidéo ; aucun rail de publication, aucune audience, aucun Publier. Ce qu'on pose est un objet de la scène : même pilule d'objet, mêmes gestes, mêmes cibles au glisser. RIEN N'EST APLATI AVANT L'ENVOI (directive porteur du 2026-11-09) : « Terminé » rend au message, au statut ou à la publication une pièce EN ATTENTE qui garde son document de scène ; la toucher rouvre la scène avec chaque élément déplaçable et modifiable ; l'aplatissement en image ou en vidéo se fait au moment de l'envoi, et seulement si la scène porte autre chose que la pièce d'origine. Le brouillon de message garde le document de scène tant que la pièce n'est pas partie (survit à la fermeture de la conversation). Portes qui deviennent des appels minces au composer : iOS ConversationPieceRetouch, EntityImageRetouch, CommentSceneRetouch, ComposerRetouchSeries, la feuille de création d'un post ; Android ComposerRetouchScreen, ComposerVideoRetouchScreen, EntityImageRetouch. Le web le fait déjà pour l'ouverture (D-147) mais aplatit à « Terminé » : il s'aligne. Garde-fous, chacun avec son témoin : (a) envoyer sans retoucher reste à un geste ; (b) une pièce NON modifiée part telle quelle, sans réencodage ni perte ; (c) l'ouverture se fait directement sur la pièce, outils visibles, pas plus lente que la retouche actuelle (mesuré) ; (d) une vidéo seulement coupée reste sans perte ; (e) plusieurs pièces se retouchent une à une ; (f) l'aplatissement à l'envoi ne retarde pas la bulle : elle apparaît tout de suite (optimistic), l'aplatissement et l'envoi suivent, et un échec garde la scène modifiable. Ce lot REMPLACE la décision du 2026-10-20 (#11133) : une décision datée l'écrit dans apps/ios/decisions/ et côté Android, et #11133 est mise à jour.",
+   "depend": [
+    "K10",
+    "K16",
+    "K19",
+    "K21",
+    "K23",
+    "I5"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  },
+  {
+   "cle": "I10",
+   "type": "integration",
+   "titre": "Le reste de l'application (lecteur, conversation, profils, réglages) consomme le kit, et un bouton de verre ne se redessine plus à la main",
+   "vues": [],
+   "lois": [
+    4,
+    13
+   ],
+   "consomme": [
+    "K01",
+    "K02",
+    "K03",
+    "K04",
+    "K05",
+    "K06",
+    "K07",
+    "K08",
+    "K09",
+    "K14",
+    "K15"
+   ],
+   "contrat": "Balayage par écran : chaque appel direct à adaptiveGlass(in: Circle()) et chaque atome redéclaré passe au kit ; le cliquet de la garde descend à zéro, écran par écran, sans changement visuel non voulu.",
+   "depend": [
+    "K02",
+    "K03",
+    "K04",
+    "K05",
+    "K06",
+    "K07",
+    "K08",
+    "K09",
+    "K14",
+    "K15",
+    "I1"
+   ],
+   "plateformes": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "modele_ios": "opus",
+   "modele_android": "opus",
+   "recette_mac": true,
+   "modele_web": "opus"
+  }
+ ],
+ "decisions_porteur": [
+  "2026-11-09 — Liquid Glass l'emporte quand l'OS le permet, verre dessiné sinon, réponse au toucher partout (K01).",
+  "2026-11-09 — Un seul éditeur d'image et de vidéo : le composer, en mission « retoucher » ; la retouche de conversation y pose texte et stickers comme sur une scène (I9). Remplace la décision du 2026-10-20 (#11133).",
+  "2026-11-09 — Toucher un objet affiche sa pilule ‹ · outils · (…) ; le (…) ouvre un menu dont Retirer est le dernier ; pas de menu à l'appui long (K18, I5).",
+  "2026-11-09 21:45 — La pilule d'un objet porte DIRECTEMENT les outils de son type : pas de bouton « Modifier », pas de Dupliquer ni Temps en bas par défaut (Dupliquer vit dans le (…) et au glisser) ; un outil ouvre ses options dans la pilule, sans mode plein écran (K10, K11, I5, I9).",
+  "2026-11-09 — Glisser un objet fait apparaître la duplication en haut et la poubelle en bas à la place de la pilule ; la copie se pose un rang au-dessus de l'original (K25).",
+  "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9).",
+  "2026-11-09 21:57 — Le chantier vise TOUTES les vues sur iOS, Android ET le web, de manière sophistiquée et optimisée ; le workflow reçoit la plateforme web.",
+  "2026-11-09 22:11 — Les actions de l'appel gardent Journal, Réagir, Capture et Image dans l'image ; Messages reste à droite comme la vue P2 le dessine (I1).",
+  "2026-11-09 22:22 — Aucune régression de feature : la planche est préservée et s'enrichit de ce que le code porte en plus, sans doublon de ce qu'elle rend déjà autrement (règle en tête de « regles »).",
+  "2026-11-09 22:20 — Lecture consolidée de la liste de l'appel (#17329, #17333) : tout est gardé, rien n'est en double. Liste « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture ; en-tête : Réduire, Image dans l'image, Conversation. Remplace la ligne de 22:11 sur la place de Messages et d'Image dans l'image (I1)."
+ ]
+}

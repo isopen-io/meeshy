@@ -14,7 +14,7 @@ public protocol PreferenceServiceProviding: Sendable {
     func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory
     func getMyConversationTags() async throws -> [String]
 
-    // MARK: - Cache-first accessors (added 2026-05-11)
+    // MARK: - Cache-first accessors
     //
     // Each `loadCached…` returns the L2-cached snapshot synchronously (well,
     // through the GRDB actor hop) so the caller can paint UI immediately.

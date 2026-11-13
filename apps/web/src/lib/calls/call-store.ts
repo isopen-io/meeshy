@@ -91,6 +91,8 @@ export type ActiveCall = {
   readonly members: Readonly<Record<string, CallMember>>;
   readonly display: CallDisplay;
   readonly localStream: MediaStream | null;
+  /** Pendant MON partage : ma caméra, aperçu local seulement — jamais émise (S2.8). */
+  readonly cameraPreview?: MediaStream | null;
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
   /** Le journal des sous-titres de l'appel (#8048), les deux sens, borné. */
   readonly captions: readonly CallCaption[];

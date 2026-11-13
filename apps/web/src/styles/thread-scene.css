@@ -513,3 +513,25 @@ button.focus-stamp::after {
     animation: none;
   }
 }
+/*
+ * LE TALKIE PREND TOUTE LA BARRE (#17338, iOS #17337) — une voix qui part ou
+ * arrive : retour, identité et actions s'effacent SANS libérer leur place (la
+ * mise en page ne bouge pas), et ne prennent plus de geste ; le bouton talkie,
+ * dessous, garde le pointeur qui le tient. La barre élargie (`data-talkie-band`)
+ * se pose par-dessus (`talkie-header-band.tsx`).
+ */
+:where(.thread-header > .thread-column > *) {
+  transition: opacity 150ms ease-out;
+}
+.thread-header > .thread-column[data-talkie-spans] > :not([data-talkie-band]) {
+  opacity: 0;
+  pointer-events: none;
+}
+.thread-header > .thread-column[data-talkie-spans] [data-thread-talkie] {
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.thread-header > .thread-column > *) {
+    transition: none;
+  }
+}

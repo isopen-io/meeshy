@@ -30,7 +30,7 @@ struct StoryViewerContentView: View {
     let neighborGroup: StoryGroup?
     let neighborEntryStory: StoryItem?
     let neighborDirection: Int
-    // Interlude du voisin révélé AU DOIGT (directive user 2026-07-25) —
+    // Interlude du voisin révélé AU DOIGT —
     // valeurs OPAQUES résolues par `StoryViewerView` (cache d'intros
     // pré-résolues + présence + amitié) et descendues jusqu'à la face du cube.
     // `nil` = pas encore résolu → la face reste sur son backdrop seul.
@@ -113,7 +113,7 @@ struct StoryViewerContentView: View {
                     // La croix de fermeture du preview est portée par le
                     // `StoryHeaderView` (coin haut-droit, `dismissViewer()`).
                     // Pas de bouton ✕ additionnel en haut-gauche — une seule
-                    // croix de fermeture (directive user 2026-07-23).
+                    // croix de fermeture.
 
                 }
             }

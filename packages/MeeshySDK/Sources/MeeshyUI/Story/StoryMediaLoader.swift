@@ -216,27 +216,6 @@ public final class StoryMediaLoader {
         // KVO callback, timeout and cancellation all resume on main to avoid a
         // race on the resumed flag.
         if item.status != .readyToPlay, !Task.isCancelled {
-            // Use a class wrapper for shared mutable state to satisfy Sendable
-            final class ResumeState: @unchecked Sendable {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-                var resumed = false
-                var observation: NSKeyValueObservation?
-                var continuation: CheckedContinuation<Void, Never>?
-
-                /// Sur le fil principal uniquement : une seule reprise, quel
-                /// que soit le premier des trois signaux.
-                func resumeOnce() {
-                    guard !resumed else { return }
-                    resumed = true
-                    observation?.invalidate()
-                    continuation?.resume()
-                    continuation = nil
-                }
-            }
             let state = ResumeState()
             await withTaskCancellationHandler {
                 await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -245,8 +224,7 @@ public final class StoryMediaLoader {
                         guard item.status == .readyToPlay || item.status == .failed else { return }
                         DispatchQueue.main.async { state.resumeOnce() }
                     }
-                    // Timeout after 5 seconds to avoid hanging on bad URLs
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { state.resumeOnce() }
+                    state.armTimeout(after: .seconds(5))
                 }
             } onCancel: {
                 Task { @MainActor in state.resumeOnce() }
@@ -466,5 +444,30 @@ private final class PrerollHandle: @unchecked Sendable {
 
     func cancel() {
         player.cancelPendingPrerolls()
+    }
+}
+
+fileprivate final class ResumeState: @unchecked Sendable {
+    nonisolated deinit {}
+    var resumed = false
+    var observation: NSKeyValueObservation?
+    var continuation: CheckedContinuation<Void, Never>?
+    var timeout: Task<Void, Never>?
+
+    func armTimeout(after duration: Duration) {
+        timeout = Task { [weak self] in
+            guard await cancellableSleep(for: duration) else { return }
+            self?.resumeOnce()
+        }
+    }
+
+    func resumeOnce() {
+        guard !resumed else { return }
+        resumed = true
+        timeout?.cancel()
+        timeout = nil
+        observation?.invalidate()
+        continuation?.resume()
+        continuation = nil
     }
 }

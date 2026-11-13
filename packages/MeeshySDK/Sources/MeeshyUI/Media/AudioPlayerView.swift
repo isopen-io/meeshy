@@ -22,7 +22,7 @@ public struct AudioPlayerView: View {
     /// every existing call site) means "show the original". The SDK stays
     /// agnostic of the resolution rule itself (systemLanguage > regional >
     /// custom > deviceLocale); it only renders whichever code it is handed.
-    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// Prisme audio-follow — this now ALSO seeds playback: a
     /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
     /// `init`, so the matching translated audio track (if one exists) plays
     /// automatically, exactly like the transcription strip. See
@@ -125,7 +125,7 @@ public struct AudioPlayerView: View {
     /// can observe the seeding decision from MeeshyUITests without exposing
     /// it publicly — same pattern as `usesExternalPlayer` above.
     @State internal var selectedAudioLanguage: String
-    /// Prisme audio-follow (2026-08-09) — `selectedAudioLanguage` doubles as
+    /// Prisme audio-follow — `selectedAudioLanguage` doubles as
     /// the Prisme-seeded transcription-STRIP default AND the playback
     /// language: this flag says whether `selectedAudioLanguage` should steer
     /// which audio track plays. Seeded in `init` to `true` when Prisme
@@ -523,7 +523,6 @@ public struct AudioPlayerView: View {
         //     the first tap on every fresh bubble bypasses the coordinator
         //     and plays via the dummy local engine, leaving `activeContext`
         //     nil. That broke the mini-player + background continuation
-        //     (cf. 2026-05-28 bug report).
         //  2. The bubble is ACTIVE but the shared engine is loaded with a
         //     DIFFERENT attachment (`player.attachmentId != attachment.id`)
         //     — the parent must rebuild the queue around this audio.
@@ -672,11 +671,11 @@ public struct AudioPlayerView: View {
     private var timeRow: some View {
         HStack(spacing: 0) {
             Text(MediaFormat.duration(displayedProgress.elapsed))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
             Text(MediaFormat.duration(estimatedDuration))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }
     }
@@ -706,13 +705,15 @@ public struct AudioPlayerView: View {
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                             .frame(width: 26, height: 26)
                     }
+                    .accessibilityLabel(String(localized: "media.audio.edit", bundle: .module))
                 }
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: MeeshyIconSize.sm))
-                            .foregroundColor(MeeshyColors.error)
+                            .meeshyScaledFont(MeeshyIconSize.sm)
+                            .foregroundStyle(MeeshyColors.error)
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
             }
         }

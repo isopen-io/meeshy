@@ -119,7 +119,7 @@ extension StoryViewModel {
         await OutboxFlushTrigger.flushNow()
     }
 
-    /// C3 (unification des remontées, 2026-07-14) : chaque slide de story affiché émet
+    /// C3 (unification des remontées): chaque slide de story affiché émet
     /// UNE impression (non dédupliquée, `source: "story"`) pour CE post-slide — aligne
     /// `impressionCount` de la story sur le détail/réel (« chaque visionnage fait monter
     /// les impressions »). Volontairement SÉPARÉ de `markViewed` (vue UNIQUE, coalescée

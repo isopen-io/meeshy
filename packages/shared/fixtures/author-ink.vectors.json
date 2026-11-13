@@ -1,0 +1,423 @@
+{
+  "_law": "La couleur d'auteur est servie lisible (#17879) : une teinte à 4,5:1 sur CHAQUE fond reste la sienne, sinon elle est rapprochée de l'encre du thème du plus petit pas (0,04, color-mix srgb) qui tient l'AA. 78 couples = la palette partagée (VIBRANT_PALETTE, 39) × 2 schémas. Générés en exécutant la loi TS (utils/author-ink.ts) sur les fonds du fil web, puis rejoués par le web, iOS (AuthorInk) et Android (AuthorInk).",
+  "aa": 4.5,
+  "step": 0.04,
+  "ink": {
+    "dark": "#eef2ff",
+    "light": "#1e1b4b"
+  },
+  "backgrounds": {
+    "dark": [
+      "#09090b",
+      "#13111c",
+      "#0f0c29",
+      "#2c2943",
+      "#24243e",
+      "#2c2943",
+      "#45435a",
+      "#3e3e55"
+    ],
+    "light": [
+      "#ffffff",
+      "#f8f7ff",
+      "#ebebeb",
+      "#ffffff",
+      "#f2f2f2",
+      "#dbdbdb",
+      "#ededed",
+      "#e1e1e1"
+    ]
+  },
+  "vectors": [
+    {
+      "scheme": "dark",
+      "tint": "#e74c3c",
+      "expected": "#eba2a1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#c0392b",
+      "expected": "#dca8aa"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#dc4a5a",
+      "expected": "#e5a1b0"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#d94452",
+      "expected": "#e5a5b3"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#f43f5e",
+      "expected": "#f19cb2"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#ff7f50",
+      "expected": "#fb9b7a"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#e67e22",
+      "expected": "#e9a872"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#f97316",
+      "expected": "#f5a16a"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#ea580c",
+      "expected": "#eca281"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#d4763b",
+      "expected": "#dea889"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#d97706",
+      "expected": "#e1a86a"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#b8860b",
+      "expected": "#ceb16d"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#ca8a04",
+      "expected": "#d7af5e"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#2ecc71",
+      "expected": "#2ecc71"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#27ae60",
+      "expected": "#6fc699"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#059669",
+      "expected": "#75c2b1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#16a34a",
+      "expected": "#75c69a"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#22c55e",
+      "expected": "#43cc78"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#1abc9c",
+      "expected": "#44c7b0"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#14b8a6",
+      "expected": "#48c6bb"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#0d9488",
+      "expected": "#79c1c1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#0891b2",
+      "expected": "#76c0d7"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#00ced1",
+      "expected": "#00ced1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#3498db",
+      "expected": "#7ebce9"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#2980b9",
+      "expected": "#8fbbdd"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#0ea5e9",
+      "expected": "#56bef0"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#3b82f6",
+      "expected": "#91b8fa"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#2563eb",
+      "expected": "#96b3f6"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#6366f1",
+      "expected": "#abaff8"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#4f46e5",
+      "expected": "#aeadf5"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#7c3aed",
+      "expected": "#c0a8f8"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#6d28d9",
+      "expected": "#c0a9f1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#9b59b6",
+      "expected": "#c6a9dc"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#a855f7",
+      "expected": "#caa0fb"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#d946ef",
+      "expected": "#e399f7"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#c026d3",
+      "expected": "#dca0ed"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#ec4899",
+      "expected": "#ed9aca"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#e91e63",
+      "expected": "#ec9dc1"
+    },
+    {
+      "scheme": "dark",
+      "tint": "#db2777",
+      "expected": "#e6a1c9"
+    },
+    {
+      "scheme": "light",
+      "tint": "#e74c3c",
+      "expected": "#a73c41"
+    },
+    {
+      "scheme": "light",
+      "tint": "#c0392b",
+      "expected": "#ad352f"
+    },
+    {
+      "scheme": "light",
+      "tint": "#dc4a5a",
+      "expected": "#9f3b55"
+    },
+    {
+      "scheme": "light",
+      "tint": "#d94452",
+      "expected": "#a53950"
+    },
+    {
+      "scheme": "light",
+      "tint": "#f43f5e",
+      "expected": "#a73257"
+    },
+    {
+      "scheme": "light",
+      "tint": "#ff7f50",
+      "expected": "#8a4b4d"
+    },
+    {
+      "scheme": "light",
+      "tint": "#e67e22",
+      "expected": "#864e36"
+    },
+    {
+      "scheme": "light",
+      "tint": "#f97316",
+      "expected": "#90492f"
+    },
+    {
+      "scheme": "light",
+      "tint": "#ea580c",
+      "expected": "#a14223"
+    },
+    {
+      "scheme": "light",
+      "tint": "#d4763b",
+      "expected": "#844e42"
+    },
+    {
+      "scheme": "light",
+      "tint": "#d97706",
+      "expected": "#874f24"
+    },
+    {
+      "scheme": "light",
+      "tint": "#b8860b",
+      "expected": "#7a5b25"
+    },
+    {
+      "scheme": "light",
+      "tint": "#ca8a04",
+      "expected": "#7e5923"
+    },
+    {
+      "scheme": "light",
+      "tint": "#2ecc71",
+      "expected": "#25695c"
+    },
+    {
+      "scheme": "light",
+      "tint": "#27ae60",
+      "expected": "#236756"
+    },
+    {
+      "scheme": "light",
+      "tint": "#059669",
+      "expected": "#0e6a5e"
+    },
+    {
+      "scheme": "light",
+      "tint": "#16a34a",
+      "expected": "#196d4a"
+    },
+    {
+      "scheme": "light",
+      "tint": "#22c55e",
+      "expected": "#206653"
+    },
+    {
+      "scheme": "light",
+      "tint": "#1abc9c",
+      "expected": "#1c6872"
+    },
+    {
+      "scheme": "light",
+      "tint": "#14b8a6",
+      "expected": "#196677"
+    },
+    {
+      "scheme": "light",
+      "tint": "#0d9488",
+      "expected": "#136872"
+    },
+    {
+      "scheme": "light",
+      "tint": "#0891b2",
+      "expected": "#10678d"
+    },
+    {
+      "scheme": "light",
+      "tint": "#00ced1",
+      "expected": "#126381"
+    },
+    {
+      "scheme": "light",
+      "tint": "#3498db",
+      "expected": "#2a619c"
+    },
+    {
+      "scheme": "light",
+      "tint": "#2980b9",
+      "expected": "#256096"
+    },
+    {
+      "scheme": "light",
+      "tint": "#0ea5e9",
+      "expected": "#16639d"
+    },
+    {
+      "scheme": "light",
+      "tint": "#3b82f6",
+      "expected": "#2f59b2"
+    },
+    {
+      "scheme": "light",
+      "tint": "#2563eb",
+      "expected": "#2457d1"
+    },
+    {
+      "scheme": "light",
+      "tint": "#6366f1",
+      "expected": "#5051c3"
+    },
+    {
+      "scheme": "light",
+      "tint": "#4f46e5",
+      "expected": "#4f46e5"
+    },
+    {
+      "scheme": "light",
+      "tint": "#7c3aed",
+      "expected": "#7136da"
+    },
+    {
+      "scheme": "light",
+      "tint": "#6d28d9",
+      "expected": "#6d28d9"
+    },
+    {
+      "scheme": "light",
+      "tint": "#9b59b6",
+      "expected": "#7d4a9c"
+    },
+    {
+      "scheme": "light",
+      "tint": "#a855f7",
+      "expected": "#7640b9"
+    },
+    {
+      "scheme": "light",
+      "tint": "#d946ef",
+      "expected": "#8e35ad"
+    },
+    {
+      "scheme": "light",
+      "tint": "#c026d3",
+      "expected": "#9923b2"
+    },
+    {
+      "scheme": "light",
+      "tint": "#ec4899",
+      "expected": "#9a367a"
+    },
+    {
+      "scheme": "light",
+      "tint": "#e91e63",
+      "expected": "#b01d5c"
+    },
+    {
+      "scheme": "light",
+      "tint": "#db2777",
+      "expected": "#ae246c"
+    }
+  ]
+}

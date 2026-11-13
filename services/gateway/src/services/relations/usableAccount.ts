@@ -29,7 +29,7 @@ export const lawRoleOf = (account: (AccountState & { readonly role: string | nul
   isUsableAccount(account) && account.role !== null && STORED_ROLES.has(account.role) ? account.role : null;
 
 /**
- * Un compte UTILISABLE de l'équipe (MODERATOR, ADMIN, BIGBOSS) : celui qui, face à un autre
+ * Un compte UTILISABLE de l'équipe (ANALYST et au-dessus) : celui qui, face à un autre
  * compte de l'équipe, a les outils de cercle sans lien (#16623). Ce n'est jamais un accès —
  * la loi juge chaque paire — mais ce qui dit où chercher hors des liens (#16642).
  */

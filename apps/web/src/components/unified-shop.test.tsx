@@ -170,7 +170,9 @@ describe('UnifiedShop', () => {
     const host = await mountShop(deps, 'wallpaper', 'en');
     await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"] h3') !== null);
     expect(host.querySelector('[data-shop-pack="wallpaper:w1"] h3')?.textContent).toBe('Dawn');
-    expect(host.querySelector('[data-shop-pack="wallpaper:w1"]')?.textContent).toContain('Glows');
+    expect(host.querySelector('[data-shop-pack="wallpaper:w1"]')?.textContent).not.toContain('Glows');
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-open="wallpaper:w1"]'));
+    await until(() => (document.querySelector('[data-pack-sheet]')?.textContent ?? '').includes('Glows'));
   });
 
   test('un pack inclus non retirable ne propose pas de désinstaller : aucun geste voué au refus', async () => {

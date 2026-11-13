@@ -102,6 +102,8 @@ data class MessageActionContext(
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     /** A conversation notice (join, leave, call summary): nobody answers or forwards a notice. */
     val isNotice: Boolean = false,
+    /** A notice the reader may QUOTE (#17441, `quotableNoticeKind`): a call, an arrival (one or grouped), an announced leave. */
+    val isQuotableNotice: Boolean = false,
     /** A view-once message: it is opened, never quoted. */
     val isViewOnce: Boolean = false,
     /** The bubble still carries a client id (`cid_…`): the server does not know it yet. */
@@ -149,7 +151,7 @@ data class MessageActionContext(
 
     /** `canReply` of the shared law: a live, server-known message the reader may answer in writing. */
     val offersReply: Boolean
-        get() = offersRelay && !isViewOnce && canWrite
+        get() = isActionable && (!isNotice || isQuotableNotice) && !isUnconfirmed && !isViewOnce && canWrite
 
     /** `forward` of the shared law, its exit verdict aside ([MessageExitOffer]). */
     val offersForward: Boolean

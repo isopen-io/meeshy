@@ -89,7 +89,7 @@ final class ProfileBringViewModel: ObservableObject {
 /// Les phrases du Bring, une clé par sens (sept langues dans `Localizable.xcstrings`).
 enum ProfileBringWording {
     static var explain: String {
-        String(localized: "bring.explain", defaultValue: "Pour une urgence extrême : son téléphone sonne, même en silencieux.", bundle: .main)
+        String(localized: "bring.explain", defaultValue: "Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.", bundle: .main)
     }
 
     static var action: String { String(localized: "bring.action", defaultValue: "Bring", bundle: .main) }
@@ -120,4 +120,16 @@ enum ProfileBringWording {
     }
 
     static var confirmSend: String { String(localized: "bring.confirm.send", defaultValue: "Faire sonner", bundle: .main) }
+}
+
+/// Les phrases de l'alarme système d'un Bring (#17442) — celles que montre l'écran verrouillé.
+enum BringAlarmWording {
+    static func title(name: String?) -> String {
+        guard let name, !name.isEmpty else {
+            return String(localized: "bring.alarm.titleHidden", defaultValue: "Quelqu’un te fait sonner", bundle: .main)
+        }
+        return String(format: String(localized: "bring.alarm.title", defaultValue: "%@ te fait sonner", bundle: .main), name)
+    }
+
+    static var stop: String { String(localized: "bring.alarm.stop", defaultValue: "Arrêter", bundle: .main) }
 }

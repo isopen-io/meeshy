@@ -22,6 +22,9 @@ nonisolated enum CameraFailure: String, Sendable, Equatable {
 protocol GamePhotoCameraProviding: AnyObject {
     /// La session que l'aperçu affiche (`CameraPreviewLayer`).
     var session: AVCaptureSession { get }
+    /// La file qui configure, lance et arrête la session — l'aperçu s'y
+    /// rattache, jamais sur le fil principal (#17041).
+    var sessionQueue: ComposerCaptureSessionQueue { get }
     /// Ouvre la caméra avant ; `nil` = elle est vivante, sinon la raison.
     func start() async -> CameraFailure?
     func stop()
@@ -38,15 +41,22 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     nonisolated deinit {}
 
     nonisolated(unsafe) let session = AVCaptureSession()
+    /// Configuration, lancement et arrêt, dans l'ordre et hors du fil
+    /// principal : valider une configuration attend la file de capture (#17041).
+    nonisolated let sessionQueue = ComposerCaptureSessionQueue()
     /// Le traitement UNIQUE de toute prise photo de l'app (#8695) : redressée, bornée, améliorée.
     nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
-    private let output = AVCapturePhotoOutput()
+    /// La sortie photo, née et branchée sur la file de la session : le fil
+    /// principal la relit dans la session, il ne la construit pas.
+    private var output: AVCapturePhotoOutput? {
+        session.outputs.lazy.compactMap { $0 as? AVCapturePhotoOutput }.first
+    }
     /// L'horizon de la caméra avant : sans lui, la photo sort dans
     /// l'orientation du capteur — couchée, même l'appareil tenu debout.
     private let horizon = ComposerCaptureHorizon()
     private var configured = false
-    /// Ce que le déroulé VEUT : démarrage et arrêt partent chacun sur leur tâche, sans
-    /// ordre garanti ; un arrêt demandé pendant le démarrage est rejoué à son issue.
+    /// Ce que le déroulé VEUT : l'attente du démarrage cesse dès qu'il ne la veut plus.
+    /// L'ordre démarrage / arrêt, lui, est celui de la file (`setRunning` suit le dernier vœu).
     private var wantsRunning = false
     private var pending: CheckedContinuation<UIImage?, Never>?
 
@@ -60,47 +70,49 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
             return .denied
         }
         if !configured {
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
-                  let input = try? AVCaptureDeviceInput(device: device) else {
-                return .unsupported
+            let refus = await sessionQueue.run { [weak self] in
+                self.map { Self.configure($0.session) } ?? CameraFailure.unavailable
             }
-            session.beginConfiguration()
-            session.sessionPreset = .photo
-            guard session.canAddInput(input), session.canAddOutput(output) else {
-                session.commitConfiguration()
-                return .unavailable
-            }
-            session.addInput(input)
-            session.addOutput(output)
-            session.commitConfiguration()
-            horizon.follow(device)
+            if let refus { return refus }
+            if let objectif = Self.frontLens() { horizon.follow(objectif) }
             configured = true
         }
         wantsRunning = true
-        Task.detached { [weak self] in
-            self?.session.startRunning()
-            await self?.settleAfterStart()
-        }
+        sessionQueue.setRunning(true, session)
         guard await waitUntilRunning(timeout: 3) else { return .unavailable }
         return nil
     }
 
     func stop() {
         wantsRunning = false
-        Task.detached { [weak self] in
-            self?.session.stopRunning()
-        }
+        sessionQueue.setRunning(false, session)
     }
 
-    /// Le déroulé s'est refermé pendant que la caméra démarrait : l'arrêt parti avant
-    /// le démarrage n'a rien arrêté, il se rejoue maintenant.
-    private func settleAfterStart() {
-        guard !wantsRunning else { return }
-        stop()
+    private nonisolated static func frontLens() -> AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+    }
+
+    /// Sur la file de la session : l'objectif avant et la sortie photo, en une
+    /// transaction ; `nil` quand la session est prête.
+    private nonisolated static func configure(_ session: AVCaptureSession) -> CameraFailure? {
+        guard let device = frontLens(), let input = try? AVCaptureDeviceInput(device: device) else {
+            return .unsupported
+        }
+        let output = AVCapturePhotoOutput()
+        session.beginConfiguration()
+        session.sessionPreset = .photo
+        guard session.canAddInput(input), session.canAddOutput(output) else {
+            session.commitConfiguration()
+            return .unavailable
+        }
+        session.addInput(input)
+        session.addOutput(output)
+        session.commitConfiguration()
+        return nil
     }
 
     func capture() async -> UIImage? {
-        guard pending == nil, session.isRunning else { return nil }
+        guard pending == nil, session.isRunning, let output else { return nil }
         return await withCheckedContinuation { continuation in
             pending = continuation
             horizon.level(output.connection(with: .video))

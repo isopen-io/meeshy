@@ -87,7 +87,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             await PushDeliveryReceiptService.shared.flushPending()
         }
         await withBudget("sockets.prepareForBackground") {
-            // CALL-FIX 2026-06-05 — NEVER tear down the realtime sockets while a
+            // CALL-FIX — NEVER tear down the realtime sockets while a
             // call is active. CallKit + UIBackgroundModes(voip/audio) keep the app
             // running in background during a call; suspending the socket here kills
             // the WebRTC signaling channel mid-call (gateway sees "client namespace
@@ -212,7 +212,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             ShareRelayConsumer.shared.consumeNext()
         }
         await resumeStep(epoch, "sockets.resume") {
-            // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
+            // CALL-FIX — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
             // tear down and rebuild the very socket carrying the live call's
             // signaling. Only reconnect when no call is active.

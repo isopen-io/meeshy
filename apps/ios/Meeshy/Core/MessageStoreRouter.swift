@@ -37,38 +37,51 @@ private nonisolated let storeRouterLogger = MeeshyLog.logger(.messageStoreRouter
 nonisolated final class MessageStoreRouter: @unchecked Sendable {
     typealias Opener = (MessageStoreAccountKey?) -> MessageStoreSession
 
-    private let lock = NSLock()
+    nonisolated private struct State {
+        var sessions: [MessageStoreAccountKey: MessageStoreSession] = [:]
+        var signedOut: MessageStoreSession?
+        var current: MessageStoreSession
+
+        func lookup(_ key: MessageStoreAccountKey?) -> MessageStoreSession? {
+            guard let key else { return signedOut }
+            return sessions[key]
+        }
+
+        mutating func store(_ session: MessageStoreSession, for key: MessageStoreAccountKey?) {
+            guard let key else {
+                signedOut = session
+                return
+            }
+            sessions[key] = session
+        }
+    }
+
+    private let state: Locked<State>
     private let open: Opener
-    private var sessions: [MessageStoreAccountKey: MessageStoreSession] = [:]
-    private var signedOut: MessageStoreSession?
-    private var _current: MessageStoreSession
 
     init(initialKey: MessageStoreAccountKey?, open: @escaping Opener) {
         self.open = open
         let first = open(initialKey)
-        _current = first
-        if let initialKey {
-            sessions[initialKey] = first
-        } else {
-            signedOut = first
-        }
+        var initial = State(current: first)
+        initial.store(first, for: initialKey)
+        state = Locked(uncheckedState: initial)
     }
 
-    var current: MessageStoreSession { lock.withLock { _current } }
+    var current: MessageStoreSession { state.mutateUnchecked { $0.current } }
 
     /// Rend active la base de `key` (celle de personne pour `nil`) et rend la
     /// session QUITTÉE quand elle change. `keepingOutgoing` la garde ouverte
     /// pour le retour de son compte ; sinon l'appelant la purge.
     @discardableResult
     func activate(_ key: MessageStoreAccountKey?, keepingOutgoing: Bool = false) -> MessageStoreSession? {
-        let (current, cached) = lock.withLock { (_current, lookup(key)) }
+        let (current, cached) = state.mutateUnchecked { ($0.current, $0.lookup(key)) }
         guard current.key != key else { return nil }
         let incoming = cached ?? open(key)
-        return lock.withLock {
-            let outgoing = _current
-            if let outgoingKey = outgoing.key, !keepingOutgoing { sessions[outgoingKey] = nil }
-            store(incoming, for: key)
-            _current = incoming
+        return state.mutateUnchecked { state in
+            let outgoing = state.current
+            if let outgoingKey = outgoing.key, !keepingOutgoing { state.sessions[outgoingKey] = nil }
+            state.store(incoming, for: key)
+            state.current = incoming
             storeRouterLogger.info("Message store switched to \(incoming.fileName, privacy: .public)")
             return outgoing
         }
@@ -77,9 +90,9 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
     /// La base du compte `userId`, seulement s'il est ACTIF. `nil` pour une
     /// écriture non attribuée : elle suit la base courante.
     func session(ownedBy userId: String?) -> MessageStoreSession? {
-        lock.withLock {
-            guard let userId else { return _current }
-            return _current.key?.userId == userId ? _current : nil
+        state.mutateUnchecked { state in
+            guard let userId else { return state.current }
+            return state.current.key?.userId == userId ? state.current : nil
         }
     }
 
@@ -87,10 +100,10 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
     /// l'appareil — et les rend pour que l'appelant les purge (#8674). La
     /// session active n'est jamais lâchée.
     func dropSessions(keeping keys: Set<MessageStoreAccountKey>) -> [MessageStoreSession] {
-        lock.withLock {
-            let activeKey = _current.key
-            let dropped = sessions.filter { key, _ in !keys.contains(key) && key != activeKey }
-            dropped.keys.forEach { sessions[$0] = nil }
+        state.mutateUnchecked { state in
+            let activeKey = state.current.key
+            let dropped = state.sessions.filter { key, _ in !keys.contains(key) && key != activeKey }
+            dropped.keys.forEach { state.sessions[$0] = nil }
             return Array(dropped.values)
         }
     }
@@ -98,7 +111,7 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
     /// Les fichiers des comptes tenus ouverts — l'actif et ceux qui sont
     /// gardés : aucun balayage n'a le droit de les retirer.
     var openAccountFileNames: Set<String> {
-        lock.withLock { Set(sessions.values.map(\.fileName)) }
+        state.mutateUnchecked { Set($0.sessions.values.map(\.fileName)) }
     }
 
     /// Retire du disque la base d'une session QUITTÉE, une fois sa purge de
@@ -106,24 +119,12 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
     /// Une écriture tardive d'un acteur capturé tombe ensuite dans un inode
     /// orphelin, jamais dans la base que le compte rouvrira.
     func retire(_ session: MessageStoreSession) {
-        lock.withLock {
-            guard let key = session.key, _current.key != key, sessions[key] == nil else { return }
+        state.mutateUnchecked { state in
+            guard let key = session.key, state.current.key != key, state.sessions[key] == nil else { return }
             Self.removeDatabaseFiles(at: session.path, fileManager: .default)
         }
     }
 
-    private func lookup(_ key: MessageStoreAccountKey?) -> MessageStoreSession? {
-        guard let key else { return signedOut }
-        return sessions[key]
-    }
-
-    private func store(_ session: MessageStoreSession, for key: MessageStoreAccountKey?) {
-        guard let key else {
-            signedOut = session
-            return
-        }
-        sessions[key] = session
-    }
 }
 
 // MARK: - Fichiers sur disque

@@ -78,7 +78,7 @@ struct MessageEditMenuAction: Identifiable {
 extension MessageEditMenuAction {
 
     /// **Les opérations primaires d'un message, dans l'ordre que le porteur a
-    /// fixé** (2026-09-12) : « les options qu'il faut en premier c'est editer,
+    /// fixé**: « les options qu'il faut en premier c'est editer,
     /// selectionner et composer ».
     ///
     /// L'ordre n'est pas cosmétique — le menu système est une BARRE, et ce qui
@@ -126,8 +126,7 @@ extension MessageEditMenuAction {
         if let selectionner {
             actions.append(.init(id: "select", verb: .select) { selectionner(messageId) })
         }
-        // **« Imager » prend la troisième place** (directive porteur
-        // 2026-09-29, #8692) : « à la place de Composer lorsqu'on double-tape,
+        // **« Imager » prend la troisième place** (#8692): « à la place de Composer lorsqu'on double-tape,
         // il faut mettre Imager ». Un message qui ne s'image pas la rend à
         // « Composer ».
         let composerEntry = composer.map { composer in

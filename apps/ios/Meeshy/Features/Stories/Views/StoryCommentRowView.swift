@@ -192,7 +192,7 @@ struct StoryCommentRowView: View, Equatable {
         // La couleur suit `readerChromeScheme` (posé par le viewer sur
         // l'overlay) : blanc sur fond sombre, quasi-noir sur fond clair — un
         // blanc fixe restait illisible sur une story à dominante claire/blanche
-        // (bug user 2026-08-11), le halo seul ne suffisant pas à cette extrémité.
+        // le halo seul ne suffisant pas à cette extrémité.
         let textColor = Self.legibleOverlayColor(for: colorScheme)
         return MessageTextRenderer.render(
             displayContent,

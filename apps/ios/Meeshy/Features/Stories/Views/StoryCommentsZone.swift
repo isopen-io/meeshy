@@ -2,7 +2,7 @@ import CoreGraphics
 
 // MARK: - LA ZONE DE COMMENTAIRES D'UNE STORY SUIT LE COMPOSEUR (#9893)
 //
-// Demande porteur du 2026-10-10 : composeur visible, la liste des commentaires
+// Demande: composeur visible, la liste des commentaires
 // MONTE et prend plus de place ; clavier ouvert, elle monte ENCORE et occupe
 // l'espace libre au-dessus du composeur et du clavier ; replié en bulle, elle
 // redescend.
@@ -98,7 +98,7 @@ nonisolated enum StoryCommentsZone {
     }
 
     /// - Replié : la liste s'arrête au-dessus de la bulle, sans la recouvrir.
-    /// - Déplié : elle « émerge » du milieu de la plaque (spec 2026-05-28).
+    /// Déplié: elle « émerge » du milieu de la plaque.
     /// - Clavier ouvert : elle occupe tout l'espace libre jusqu'à l'en-tête.
     ///
     /// Le bas suit le clavier point pour point, donc la liste monte et descend

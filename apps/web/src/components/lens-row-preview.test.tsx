@@ -8,6 +8,7 @@ import {
   type ConversationPreviewInput,
 } from '@meeshy/shared/utils/conversation-preview';
 
+import { RAINBOW_SPECTRUM } from '@/lib/effects-playback';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
@@ -239,6 +240,16 @@ describe('LensRow applique l’effet du dernier message, figé (#16975)', () => 
     expect(glow?.getAttribute('style')).toContain('text-shadow');
     expect(rainbow?.getAttribute('style')).toContain('linear-gradient');
     for (const node of [glow, rainbow]) expect(node?.getAttribute('style') ?? '').not.toContain('animation');
+  });
+
+  test('l’arc-en-ciel d’un aperçu chiffre LE SPECTRE DE LA MAISON, pas une jumelle codée en dur (parité iOS + bulle)', () => {
+    // Le même fini « rainbow » doit afficher le MÊME spectre dans la ligne de
+    // liste, dans la bulle (effects-runner) et sur iOS (houseSpectrum). Le
+    // dégradé de l’aperçu dérive donc de `RAINBOW_SPECTRUM` (la source unique,
+    // déjà jouée par la bulle) — jamais d’un arc-en-ciel réécrit à la main ici.
+    const style = (visibleOf(lineOf('effect-finish-rainbow')).querySelector<HTMLElement>('[data-preview-text]')?.getAttribute('style') ?? '').toLowerCase();
+    for (const stop of RAINBOW_SPECTRUM) expect(style).toContain(stop.toLowerCase());
+    for (const twin of ['#f43f5e', '#a855f7', '#22c55e', '#3b82f6']) expect(style).not.toContain(twin);
   });
 
   test('un éphémère qui brille ne brille pas : la protection prime', () => {

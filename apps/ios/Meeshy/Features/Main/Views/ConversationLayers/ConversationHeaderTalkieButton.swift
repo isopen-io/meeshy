@@ -2,9 +2,10 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// L'appel et, dans un direct, le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
-/// un direct chiffré ni dans un aperçu. Le doigt posé enfonce et vibre, la voix qui part allume le bouton et fait battre
-/// ses ondes ; un `TALKIE_NOT_ALLOWED` le retire, comme sur la fiche.
+/// L'appel et, dans un direct, le Bring (#17442, dès Ami, même chiffré) puis le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
+/// un direct chiffré ni dans un aperçu. Le doigt posé enfonce et vibre ; la voix qui part, ou celle du pair qui arrive,
+/// étend le talkie sur toute la barre d'en-tête, son onde suivant le niveau en direct (#17310) ; un `TALKIE_NOT_ALLOWED`
+/// le retire, comme sur la fiche. Le (i) du talkie ne vit que sur la fiche profil.
 struct ConversationHeaderCallCluster: View {
     let entry: HeaderCallEntry?
     let conversationId: String
@@ -18,6 +19,10 @@ struct ConversationHeaderCallCluster: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            if case .peer(let userId)? = entry?.callee {
+                ConversationHeaderBringButton(userId: userId, peerName: peerName)
+                    .id(userId)
+            }
             if let peer = talkiePeer {
                 ConversationHeaderTalkieButton(userId: peer, peerName: peerName, accentColor: accentColor, secondaryColor: secondaryColor)
                     .id(peer)
@@ -48,22 +53,34 @@ struct ConversationHeaderTalkieButton: View {
 
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
+    @ObservedObject private var center: TalkieCenter
     @State private var pressed = false
     @State private var withdrawn = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(userId: String, peerName: String, accentColor: String, secondaryColor: String) {
+    init(userId: String, peerName: String, accentColor: String, secondaryColor: String, center: TalkieCenter = .shared) {
         self.userId = userId
         self.peerName = peerName
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         _offer = StateObject(wrappedValue: TalkieOfferModel(userId: userId))
+        _center = ObservedObject(wrappedValue: center)
     }
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
 
+    /// La voix qui part, ou celle du pair qui arrive (#17310) : publiée à la bande, qui donne alors toute la barre au
+    /// talkie. Une voix qui arrive s'y montre même quand le talkie n'est pas proposé dans ce sens.
+    private var live: TalkieHeaderLive {
+        let peerSpeaking = center.active.contains { $0.fromUserId == userId }
+        let voice = TalkieHeaderVoice.resolve(look: look, peerSpeaking: peerSpeaking)
+        let delivery = TalkieHeaderDelivery.resolve(voice: voice, phase: sender.phase, waking: sender.waking)
+        return TalkieHeaderLive(voice: voice, delivery: delivery, accent: accent, secondary: secondary)
+    }
+
+    /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé, elle existe quand même, et c'est elle
+    /// qui porte le chargement de l'offre (#17247). Sans largeur ni espacement, la mise en page de l'en-tête ne bouge pas.
     var body: some View {
-        Group {
+        HStack(spacing: 0) {
             if offer.offered && !withdrawn {
                 glyph
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed))
@@ -71,14 +88,20 @@ struct ConversationHeaderTalkieButton: View {
                     .transition(.scale.combined(with: .opacity))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(ProfileTalkieWording.holdA11y(name: peerName))
-                    .accessibilityValue(look == .live ? ProfileTalkieWording.talking(name: peerName) : "")
+                    .accessibilityValue(look == .live ? liveValue : "")
                     .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
                     .accessibilityIdentifier("conversation.header.talkie")
             }
         }
+        .preference(key: TalkieHeaderLiveKey.self, value: live)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer.offered)
         .task(id: userId) { await offer.load() }
+        .adaptiveOnChange(of: sender.waking) { _, waking in
+            // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
+            guard waking else { return }
+            FeedbackToastManager.shared.show(ProfileTalkieWording.waking(name: peerName), type: .info)
+        }
         .adaptiveOnChange(of: sender.notice) { _, new in
             guard let new else { return }
             sender.notice = nil
@@ -86,18 +109,24 @@ struct ConversationHeaderTalkieButton: View {
                 withdrawn = true
                 return
             }
-            FeedbackToastManager.shared.showError(ProfileTalkieWording.notice(new))
+            ProfileTalkieWording.present(new)
         }
     }
 
     private var accent: Color { Color(hex: accentColor) }
-    private var gradient: LinearGradient { LinearGradient(colors: [accent, Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+    private var secondary: Color { Color(hex: secondaryColor) }
+    private var gradient: LinearGradient { LinearGradient(colors: [accent, secondary], startPoint: .topLeading, endPoint: .bottomTrailing) }
+
+    private var liveValue: String {
+        switch sender.phase {
+        case .recordingCopy: ProfileTalkieWording.recordingCopy
+        case .talking where sender.waking: ProfileTalkieWording.waking(name: peerName)
+        default: ProfileTalkieWording.talking(name: peerName)
+        }
+    }
 
     private var glyph: some View {
         ZStack {
-            if look == .live && !reduceMotion {
-                TalkieHeaderWaves(color: accent)
-            }
             Circle()
                 .fill(
                     gradient
@@ -121,43 +150,6 @@ struct ConversationHeaderTalkieButton: View {
         } else {
             image
                 .foregroundStyle(Color.white)
-                .modifier(TalkieWaveformPulse(active: look == .live && !reduceMotion))
-        }
-    }
-}
-
-/// Deux ondes qui s'élargissent autour du bouton pendant que la voix part.
-private struct TalkieHeaderWaves: View {
-    let color: Color
-    @State private var spread = false
-
-    var body: some View {
-        ZStack {
-            wave(delay: 0)
-            wave(delay: 0.45)
-        }
-        .onAppear { spread = true }
-        .accessibilityHidden(true)
-    }
-
-    private func wave(delay: Double) -> some View {
-        Circle()
-            .stroke(color, lineWidth: 2)
-            .scaleEffect(spread ? 1.9 : 1)
-            .opacity(spread ? 0 : 0.7)
-            .animation(.easeOut(duration: 0.9).repeatForever(autoreverses: false).delay(delay), value: spread)
-    }
-}
-
-private struct TalkieWaveformPulse: ViewModifier {
-    let active: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 17.0, *) {
-            content.symbolEffect(.variableColor.iterative, isActive: active)
-        } else {
-            content
         }
     }
 }

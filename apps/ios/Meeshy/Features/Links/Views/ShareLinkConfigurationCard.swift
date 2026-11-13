@@ -19,7 +19,7 @@ struct ShareLinkConfigurationCard: View {
                 Spacer()
                 Button(ShareLinkDetailCopy.edit, action: onEdit)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
                     .meeshyTapTarget()
             }
 
@@ -41,7 +41,7 @@ struct ShareLinkConfigurationCard: View {
             subtitle(ShareLinkDetailCopy.allowedLanguages)
             Text(ShareLinkDetailCopy.languages(settings.allowedLanguages))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,14 +54,14 @@ struct ShareLinkConfigurationCard: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .scriptSafeTracking(1.1)
             .textCase(.uppercase)
-            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .accessibilityAddTraits(.isHeader)
     }
 
     private func subtitle(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-            .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+            .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
             .padding(.top, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
     }
@@ -69,11 +69,11 @@ struct ShareLinkConfigurationCard: View {
     private func row(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.md) {
             Text(label)
-                .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral600)
+                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral600)
             Spacer(minLength: MeeshySpacing.sm)
             Text(value)
                 .fontWeight(.semibold)
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .multilineTextAlignment(.trailing)
         }
         .font(MeeshyFont.relative(MeeshyFont.bodySize))

@@ -128,17 +128,17 @@ struct ConversationLinkCardNotice: View, Equatable {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(isDark ? MeeshyColors.indigo900 : MeeshyColors.indigo50))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 Text(hint)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

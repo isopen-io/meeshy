@@ -20,7 +20,7 @@ struct StoryElementLanguageBar: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "globe")
-                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                            .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                             .foregroundStyle(.secondary)
                         ForEach(TextEditToolOptions.languageChoices(current: current), id: \.self) { code in
                             chip(code, current: current, elementId: elementId)
@@ -48,7 +48,7 @@ struct StoryElementLanguageBar: View {
             HapticFeedback.light()
         } label: {
             Text(code.uppercased())
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .frame(minWidth: 38, minHeight: 30)
                 .padding(.horizontal, MeeshySpacing.xs)

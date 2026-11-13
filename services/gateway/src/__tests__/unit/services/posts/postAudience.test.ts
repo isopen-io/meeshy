@@ -192,6 +192,7 @@ describe('filterPostConsumers — COMMUNITY n’admet que les co-membres', () =>
       prisma,
       authorId: AUTHOR,
       visibility: 'COMMUNITY',
+      communityId: null,
       candidateUserIds: ['u-comember', 'u-friend'],
     });
 

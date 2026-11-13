@@ -32,6 +32,7 @@ export * from './presence-visibility.js';
 export * from './call-permission.js';
 export * from './message-content-kind.js';
 export * from './message-action-policy.js';
+export * from './quotable-notice.js';
 export * from './conversation-action-policy.js';
 export * from './forward-source-visibility.js';
 export * from './participant-helpers.js';

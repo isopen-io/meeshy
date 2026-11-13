@@ -350,7 +350,7 @@ extension UniversalComposerBar {
 
                 Image(systemName: icon)
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
                     .offset(
                         x: isEditMode ? 0 : (sendBounce ? 2 : -1),
@@ -404,7 +404,7 @@ extension UniversalComposerBar {
             // source (`composerText.text = ""`), et la synchro différée y
             // re-pousserait l'ancien `text`. Le texte réapparaît, l'auteur tape
             // la suite, et l'envoi suivant emporte tout — un message par
-            // accumulation, mesuré le 2026-09-10.
+            // accumulation.
             //
             // Le dépôt connaissait ce piège : le doc-comment de
             // `sendQuickEmoji` le décrit mot pour mot et le referme, pour

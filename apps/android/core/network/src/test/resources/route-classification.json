@@ -234,7 +234,16 @@
    "routes": [
     "GET /api/attachments/file/*",
     "GET /api/v1/lens/partners/:partnerId/logo",
-    "GET /api/v1/static/:filename"
+    "GET /api/v1/static/:filename",
+    "GET /api/v1/talkie/:talkieId/audio"
+   ]
+  },
+  {
+   "status": "hors-perimetre-mobile",
+   "reason": "Jeton PushToTalk d'Apple (#17142) : seul iOS en enregistre un ; Android se réveille par FCM, avec le jeton de push ordinaire.",
+   "routes": [
+    "DELETE /api/v1/users/me/push-to-talk-token",
+    "POST /api/v1/users/me/push-to-talk-token"
    ]
   },
   {
@@ -337,6 +346,7 @@
     "POST /api/v1/auth/revoke-all-sessions",
     "POST /api/v1/conversations/:id/mark-read",
     "POST /api/v1/conversations/:id/message-request/accept",
+    "POST /api/v1/conversations/external",
     "POST /api/v1/e2ee/conversations/:conversationId/signals",
     "POST /api/v1/e2ee/devices",
     "POST /api/v1/e2ee/envelopes/ack",

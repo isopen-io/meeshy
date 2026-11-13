@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -186,6 +188,17 @@ describe('ModeCarousel', () => {
     await act(frame);
     expect(view.chosen).toEqual(['redcarpet']);
     expect(view.scrolls).toEqual([]);
+    view.done();
+  });
+
+  test('une piste qui quitte la page ne choisit rien : son dernier défilement, remis à zéro par le démontage, ne rend pas « Naturel » sous Échap', async () => {
+    const view = mount();
+    view.track.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    view.host.remove();
+    await view.scrollTo(3 * PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
     view.done();
   });
 
@@ -379,6 +392,22 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  /* UNE RANGÉE QUI DÉFILE N'EST JAMAIS COUPÉE NET (#17409, facture #17406) :
+     la piste s'efface en fondu à ses DEUX bords, de la même largeur à gauche
+     et à droite — l'arabe n'a donc rien à inverser. Le masque est posé sur la
+     piste elle-même : les éléments défilent dessous, le fondu ne bouge pas. */
+  test('la piste s’efface en fondu à ses deux bords, la même largeur à gauche et à droite (#17409)', () => {
+    const view = mountRecorded();
+    const style = view.track.getAttribute('style') ?? '';
+    const mask = /(?:^|;)\s*mask-image:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+    expect(mask).toMatch(/^linear-gradient\(/);
+    const stops = /linear-gradient\(\s*(?:90deg|to right)\s*,\s*transparent(?:\s+0(?:px)?)?\s*,\s*(?:#000|black)\s+(\d+)px\s*,\s*(?:#000|black)\s+calc\(100% - (\d+)px\)\s*,\s*transparent(?:\s+100%)?\s*\)/.exec(mask);
+    expect(stops).not.toBeNull();
+    expect(Number(stops?.[1])).toBeGreaterThanOrEqual(16);
+    expect(stops?.[1]).toBe(stops?.[2]);
+    view.done();
+  });
+
   /* Chromium, sous `scroll-snap-type: mandatory`, recalcule les points
      d'accroche à chaque mise en page de la piste ; s'ils ont bougé pendant un
      glissé du doigt, il RÉACCROCHE sur-le-champ au dernier élément accroché et
@@ -410,5 +439,214 @@ describe('ModeCarousel', () => {
     expect(name?.className).toContain('w-full');
     act(() => root.unmount());
     host.remove();
+  });
+
+  /* C1.5 — la vignette du Montage est PORTRAIT (48 × 85, comme iOS et Android) : un disque rognait l'aperçu 9:16 du cadre. */
+  test('une vignette portrait : la boîte fait 48 × 85 et sa face n’est plus un disque, donc l’aperçu entier se voit (C1.5)', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<ModeCarousel label="Cadres" items={IDS.map((id) => ({ id, label: id, visual: <canvas data-visual={id} /> }))} selected="gold" onSelect={() => undefined} itemSize={{ width: 48, height: 85 }} />));
+    const item = host.querySelector<HTMLElement>('[data-carousel-item="gold"]');
+    const face = item?.querySelector<HTMLElement>('[data-carousel-face]');
+    expect(item?.style.width).toBe('48px');
+    expect(item?.style.height).toBe('85px');
+    expect(item?.className).not.toContain('rounded-full');
+    expect(face?.className).not.toContain('rounded-full');
+    expect(face?.className).toContain('rounded-');
+    const track = host.querySelector<HTMLElement>('[data-call-row-scroll]');
+    expect(track?.style.paddingInline).toBe('calc(50% - 24px)');
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  test('sans taille demandée, la vignette reste le disque de 64 que les effets gardent', () => {
+    const view = mount();
+    const item = view.host.querySelector<HTMLElement>('[data-carousel-item="gold"]');
+    expect([item?.style.width, item?.style.height]).toEqual(['64px', '64px']);
+    expect(item?.querySelector('[data-carousel-face]')?.className).toContain('rounded-full');
+    view.done();
+  });
+
+  /* C1.2 — la vue C1 ne montre pas la ligne « où il sert » : le texte reste lu, jamais vu. */
+  test('l’usage d’un élément n’est plus une ligne visible sous son nom, mais reste lu par le lecteur d’écran (C1.2)', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<ModeCarousel label="Cadres" items={[{ id: 'a', label: 'Aurore', visual: null, detail: 'Utilisable : appels vidéo et captures' }]} selected="a" onSelect={() => undefined} />));
+    expect(host.querySelector('[data-call-mode-detail]')).toBeNull();
+    const item = host.querySelector('[data-carousel-item="a"]');
+    const described = (item?.getAttribute('aria-describedby') ?? '').split(' ').map((id) => host.querySelector(`[id="${id}"]`));
+    expect(described.map((node) => node?.textContent)).toEqual(['Utilisable : appels vidéo et captures']);
+    expect(described[0]?.className).toContain('sr-only');
+    expect(item?.getAttribute('title')).toBe('Utilisable : appels vidéo et captures');
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  /* C1.6 — les déclinaisons d'un cadre : un balayage vertical dans la vignette choisie, des points, des actions nommées. */
+  const DECLINATIONS = ['base', 'relief', 'neon'] as const;
+
+  const mountDeclined = (options: { readonly index?: number; readonly recording?: boolean } = {}) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const stepped: number[] = [];
+    const captured: string[] = [];
+    const items = IDS.map((id) => ({
+      id,
+      label: id,
+      visual: <canvas data-visual={id} />,
+      ...(id === 'gold'
+        ? { declinations: { pages: DECLINATIONS.map((name) => <canvas key={name} data-page={name} />), index: options.index ?? 0, onSelect: (index: number) => void stepped.push(index), next: 'Déclinaison suivante', previous: 'Déclinaison précédente' } }
+        : {}),
+    }));
+    act(() =>
+      root.render(
+        <ModeCarousel
+          label="Cadres"
+          items={items}
+          selected="gold"
+          onSelect={() => undefined}
+          itemSize={{ width: 48, height: 85 }}
+          capture={{ recording: options.recording === true, onCapture: (intent) => void captured.push(intent), hint: 'Deux tapes : photo', longPressMs: 30 }}
+        />,
+      ),
+    );
+    const pages = host.querySelector<HTMLElement>('[data-call-declination-pages]');
+    const point = (type: string, y: number, x = 20) => act(() => void pages?.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true, clientX: x, clientY: y })));
+    const swipe = (from: number, to: number, x = 20) => {
+      point('pointerdown', from, x);
+      point('pointermove', (from + to) / 2, x);
+      point('pointermove', to, x);
+      point('pointerup', to, x);
+    };
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { host, pages, point, swipe, stepped, captured, done };
+  };
+
+  test('la vignette choisie qui a des déclinaisons les empile : toutes les pages, la bonne posée, des points qui disent combien et laquelle (C1.6)', () => {
+    const view = mountDeclined({ index: 1 });
+    expect(view.pages).not.toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-declination-pages] [data-page]')].map((page) => page.getAttribute('data-page'))).toEqual(['base', 'relief', 'neon']);
+    expect(view.host.querySelector('[data-carousel-item="gold"] [data-visual]')).toBeNull();
+    expect(view.host.querySelector('[data-carousel-item="cover"] [data-visual]')).not.toBeNull();
+    expect(view.host.querySelector('[data-carousel-item="cover"] [data-call-declination-pages]')).toBeNull();
+    expect(view.pages?.firstElementChild?.getAttribute('style')).toContain('translate3d(0px, -85px, 0px)');
+    const dots = [...view.host.querySelectorAll('[data-call-declination-dots] [data-call-declination-dot]')];
+    expect(dots).toHaveLength(3);
+    expect(dots.map((dot) => dot.getAttribute('data-current'))).toEqual([null, '', null]);
+    expect(view.host.querySelector('[data-call-declination-dots]')?.getAttribute('aria-hidden')).toBe('true');
+    view.done();
+  });
+
+  test('l’axe vertical se laisse au carrousel horizontal : la vignette ne laisse au navigateur que l’horizontal, depuis la feuille de son chunk', () => {
+    const view = mountDeclined();
+    expect(view.pages?.hasAttribute('data-call-declination-pages')).toBe(true);
+    const css = readFileSync(new URL('../styles/call-declinations.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    expect(css).toMatch(/\[data-call-declination-pages\]\s*\{\s*touch-action:\s*pan-x;\s*\}/);
+    expect(css).toMatch(/\[data-call-declination-track\]\s*\{[^}]*transition:\s*transform\b/);
+    view.done();
+  });
+
+  test('un balayage vers le haut passe à la déclinaison suivante ; vers le bas, à la précédente (C1.6)', () => {
+    const up = mountDeclined({ index: 0 });
+    up.swipe(70, 30);
+    expect(up.stepped).toEqual([1]);
+    up.done();
+    const down = mountDeclined({ index: 2 });
+    down.swipe(20, 62);
+    expect(down.stepped).toEqual([1]);
+    down.done();
+  });
+
+  test('un petit geste revient, un bord résiste, et le balayage n’enjambe jamais plus d’une page', () => {
+    const small = mountDeclined({ index: 0 });
+    small.swipe(60, 45);
+    expect(small.stepped).toEqual([]);
+    small.done();
+    const edge = mountDeclined({ index: 0 });
+    edge.swipe(20, 80);
+    expect(edge.stepped).toEqual([]);
+    edge.done();
+    const long = mountDeclined({ index: 0 });
+    long.swipe(84, 0);
+    expect(long.stepped).toEqual([1]);
+    long.done();
+  });
+
+  test('un geste plutôt horizontal ne change aucune déclinaison : il reste au carrousel', () => {
+    const view = mountDeclined({ index: 0 });
+    view.point('pointerdown', 40, 10);
+    view.point('pointermove', 38, 40);
+    view.point('pointermove', 20, 60);
+    view.point('pointerup', 20, 60);
+    expect(view.stepped).toEqual([]);
+    view.done();
+  });
+
+  test('un balayage annulé (le navigateur prend le défilement) ne fige rien et ne change rien', () => {
+    const view = mountDeclined({ index: 0 });
+    view.point('pointerdown', 70);
+    view.point('pointermove', 50);
+    view.point('pointercancel', 50);
+    view.swipe(70, 25);
+    expect(view.stepped).toEqual([1]);
+    view.done();
+  });
+
+  test('le geste qui a balayé n’est pas un toucher : son clic est avalé, il ne compte pas dans les deux tapes de la photo', async () => {
+    const view = mountDeclined({ index: 0 });
+    const tap = () => act(async () => view.pages?.click());
+    view.swipe(70, 25);
+    await tap();
+    await tap();
+    expect(view.captured).toEqual([]);
+    await tap();
+    expect(view.captured).toEqual(['photo']);
+    view.done();
+  });
+
+  test('au clavier, ↓ passe à la déclinaison suivante et ↑ à la précédente, sans changer d’élément (C1.6)', () => {
+    const view = mountDeclined({ index: 1 });
+    const item = view.host.querySelector<HTMLElement>('[data-carousel-item="gold"]');
+    const key = (name: string) => act(() => void item?.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true })));
+    key('ArrowDown');
+    key('ArrowUp');
+    expect(view.stepped).toEqual([2, 0]);
+    view.done();
+  });
+
+  test('aux bords, les flèches verticales ne bouclent pas', () => {
+    const first = mountDeclined({ index: 0 });
+    act(() => void first.host.querySelector('[data-carousel-item="gold"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })));
+    expect(first.stepped).toEqual([]);
+    first.done();
+  });
+
+  test('le lecteur d’écran a deux actions nommées, désactivées au bord ; le changement est annoncé (C1.6)', () => {
+    const view = mountDeclined({ index: 0 });
+    const next = view.host.querySelector<HTMLButtonElement>('[data-call-declination-step="next"]');
+    const previous = view.host.querySelector<HTMLButtonElement>('[data-call-declination-step="previous"]');
+    expect(next?.textContent).toBe('Déclinaison suivante');
+    expect(previous?.textContent).toBe('Déclinaison précédente');
+    expect(next?.className).toContain('sr-only');
+    expect(next?.disabled).toBe(false);
+    expect(previous?.disabled).toBe(true);
+    expect(next?.closest('[role="radiogroup"]')).toBeNull();
+    act(() => next?.click());
+    expect(view.stepped).toEqual([1]);
+    expect(view.host.querySelector('[data-call-declination-status]')?.getAttribute('aria-live')).toBe('polite');
+    view.done();
+  });
+
+  test('sans déclinaison, ni pages, ni points, ni actions', () => {
+    const view = mount();
+    expect(view.host.querySelector('[data-call-declination-pages]')).toBeNull();
+    expect(view.host.querySelector('[data-call-declination-step]')).toBeNull();
+    view.done();
   });
 });

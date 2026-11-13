@@ -97,8 +97,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.incoming.unknown_caller",
           "androidName": "call_unknown_peer",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }

@@ -35,6 +35,73 @@ enum CaptionsMode: Equatable, Sendable {
         case .original: return .off
         }
     }
+
+    /// Le glyphe du bouton Sous-titres : la bulle vide, pleine, puis celle du texte original.
+    var symbol: String {
+        switch self {
+        case .off: return "captions.bubble"
+        case .translated: return "captions.bubble.fill"
+        case .original: return "character.bubble.fill"
+        }
+    }
+
+    /// L'état que VoiceOver lit après le nom du bouton (« Sous-titres, Traduction ») :
+    /// un cycle à trois états, jamais une bascule.
+    var stateLabel: String {
+        switch self {
+        case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
+        case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
+        case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
+        }
+    }
+}
+
+
+/// #17678 (loi 7) — deux surfaces lisent les phrases de l'appel : la bande des
+/// sous-titres, qui suit le bouton Sous-titres, et le journal, dont la bascule
+/// Traduit · Original est SA propre. Choisir « Original » dans le journal ne
+/// touche pas la bande, qui reste dans la langue du lecteur (Prisme).
+nonisolated enum CallCaptionsSurface: Equatable, Sendable {
+    case band
+    case journal
+
+    func prefersOriginal(bandOriginal: Bool, journalOriginal: Bool) -> Bool {
+        switch self {
+        case .band: return bandOriginal
+        case .journal: return journalOriginal
+        }
+    }
+}
+
+/// #17678 (loi 7) — les phrases dépliées au toucher, par surface : toucher une
+/// phrase déplie son original sous elle seule, dans la surface touchée. La même
+/// phrase reste repliée dans l'autre (comme le web : `call-captions-panel.tsx`
+/// et `call-journal-panel.tsx` tiennent chacun leur ensemble).
+nonisolated struct CallCaptionsReveals: Equatable, Sendable {
+    private var band: Set<UUID> = []
+    private var journal: Set<UUID> = []
+
+    func isRevealed(_ id: UUID, on surface: CallCaptionsSurface) -> Bool {
+        ids(on: surface).contains(id)
+    }
+
+    func toggling(_ id: UUID, on surface: CallCaptionsSurface) -> CallCaptionsReveals {
+        let current = ids(on: surface)
+        let next = current.contains(id) ? current.subtracting([id]) : current.union([id])
+        var given = self
+        switch surface {
+        case .band: given.band = next
+        case .journal: given.journal = next
+        }
+        return given
+    }
+
+    private func ids(on surface: CallCaptionsSurface) -> Set<UUID> {
+        switch surface {
+        case .band: return band
+        case .journal: return journal
+        }
+    }
 }
 
 
@@ -53,7 +120,7 @@ nonisolated enum TranscriptionCaptureAction: Equatable, Sendable {
 /// donc que chacun capture. Tant que la capture n'était liée qu'au panneau
 /// local, activer les sous-titres ne rendait l'utilisateur qu'ÉMETTEUR — le
 /// pair recevait tout, lui ne recevait rien tant que le pair n'activait pas
-/// de son côté (spec 2026-07-10 « toggle manuel, jamais automatique »).
+/// de son côté (jamais automatique »).
 ///
 /// La règle est maintenant : **ce device capture dès que quelqu'un écoute**,
 /// que ce soit son propre panneau ou celui d'un pair (signalé par

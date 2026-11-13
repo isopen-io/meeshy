@@ -708,7 +708,7 @@ final class SignupViewModel: ObservableObject {
     /// Le seul refus dont l'écran connaît le REMÈDE, et il le dit.
     static let phoneOwnershipConflictMessage = String(
         localized: "auth.signup.error.phoneOwned",
-        defaultValue: "Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous.",
+        defaultValue: "Numéro déjà rattaché à un compte : saisissez-en un autre ou connectez-vous.",
         bundle: .main
     )
 

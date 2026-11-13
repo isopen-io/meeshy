@@ -180,7 +180,7 @@ extension ConversationViewModel {
         // vivait ici : il datait une frontière de l'ouverture, forcément
         // postérieure au dernier message, et `reconcileUnread` ramenait ensuite
         // à 0 tout instantané serveur — 99 non-lus, 5 vus, liste à 0 pendant
-        // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
+        // que le serveur disait 94. La frontière n'est
         // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
         // contient le message le plus récent) ou un geste explicite.
         // Multi-fenêtre : une scène = une ouverture, équilibrée par la fermeture de `deinit`. Le moteur tient

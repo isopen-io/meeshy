@@ -4,7 +4,7 @@ import MeeshySDK
 
 // MARK: - Les trois décorations d'HEURE (#4718)
 
-/// **L'heure est FIGÉE à la pose** (décision D1 du 2026-09-01) : rien ici ne lit
+/// **L'heure est FIGÉE à la pose** : rien ici ne lit
 /// l'horloge. Les trois gabarits dessinent ce que `StickerSlotFiller` a écrit
 /// dans les emplacements au moment où l'auteur a posé la décoration — c'est ce
 /// qui fait que tout lecteur voit la même heure que lui, et qu'une story

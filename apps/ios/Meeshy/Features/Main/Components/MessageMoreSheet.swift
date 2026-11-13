@@ -67,7 +67,7 @@ struct MessageMoreSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Bouton de fermeture Liquid Glass en HAUT À DROITE (req 2026-07-25)
+            // Bouton de fermeture Liquid Glass en HAUT À DROITE
             // — parité avec le « Close » du sheet réactions et le « X » de la vue
             // Traduire. Remplace l'ancienne capsule « Annuler » épinglée en bas.
             HStack {
@@ -80,7 +80,7 @@ struct MessageMoreSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: MeeshySpacing.lg) {
                     if let selectedItem, isExploration(selectedItem) {
-                        // Morph (req 2026-07-24) : au tap d'un item explorable, la
+                        // Morph: au tap d'un item explorable, la
                         // grille complète se replie en une BANDE D'ICÔNES horizontale
                         // scrollable (Liquid Glass) — le contenu de l'item sélectionné
                         // s'affiche dessous, laissant la place au détail.
@@ -163,8 +163,7 @@ struct MessageMoreSheet: View {
     /// Bouton de fermeture en cercle Liquid Glass, aligné en HAUT À DROITE —
     /// même chrome que le « X » des vues de détail (`MessageLanguageDetailView`,
     /// composer story) et le « Close » du sheet réactions. Glyphe nu dans un
-    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas (req
-    /// 2026-07-25). Ferme la feuille.
+    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas. Ferme la feuille.
     private var closeButton: some View {
         Button {
             HapticFeedback.light()
@@ -172,10 +171,12 @@ struct MessageMoreSheet: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(width: 30, height: 30)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 30))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
@@ -200,7 +201,7 @@ struct MessageMoreSheet: View {
     // MARK: - Bande d'icônes horizontale (morph)
 
     /// TOUS les items des sections — la bande horizontale (morph) les affiche
-    /// tous (feedback 2026-07-24 : « il faut toute la liste en horizontal »).
+    /// tous.
     /// Les actions s'exécutent au tap, les explorables basculent le contenu.
     private var allMoreItems: [MoreItem] {
         sections.flatMap { section -> [MoreItem] in
@@ -262,7 +263,7 @@ struct MessageMoreSheet: View {
                 Text(title)
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.xs)
 
                 let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xsPlus), count: 5)
@@ -431,7 +432,7 @@ struct MessageMoreSheet: View {
                     .foregroundColor(color)
                 Text(item.verb.label)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Button {
                     HapticFeedback.light()
@@ -441,10 +442,12 @@ struct MessageMoreSheet: View {
                     // fermeture glass de l'app) — glyphe nu dans un cercle verre.
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 28, height: 28)
                         .adaptiveGlass(in: Circle())
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                 }
                 .buttonStyle(.plain)
                 // Bouton icône seule qui replie le contenu d'exploration inline —

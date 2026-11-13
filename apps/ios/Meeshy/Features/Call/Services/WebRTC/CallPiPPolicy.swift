@@ -86,7 +86,7 @@ enum CallPiPPolicy {
     /// éligible, sinon vers la pastille. En groupe la scène garde ses propres
     /// gestes ; barre d'effets ouverte, ses curseurs gardent les leurs.
     ///
-    /// Le geste est PROGRESSIF et ANNULABLE (directive 2026-08-30) : l'écran
+    /// Le geste est PROGRESSIF et ANNULABLE: l'écran
     /// suit le doigt sur sa course, et relâcher avant 75 % de la course le
     /// ramène — sauf un lancer franc, dont la fin prévue dépasse la course.
     static let swipeDownCourse: CGFloat = 300
@@ -168,7 +168,7 @@ enum CallAudioSessionPolicy {
     ///
     /// `.default` sur iOS-app-on-Mac : le voice-processing I/O unit engagé par
     /// `.voiceChat`/`.videoChat` faute sur l'uplink micro et le pair n'entend
-    /// rien (CALL-FIX 2026-06-06). La règle vaut pour les deux sites appelants.
+    /// rien. La règle vaut pour les deux sites appelants.
     static func mode(videoUIActive: Bool, isiOSAppOnMac: Bool) -> AVAudioSession.Mode {
         guard !isiOSAppOnMac else { return .default }
         return videoUIActive ? .videoChat : .voiceChat
@@ -181,7 +181,7 @@ enum CallAudioSessionPolicy {
     /// OUTGOING call it lands BEFORE the setup task reaches the configuration.
     /// `setConfiguration(_, active: false)` is `setActive(false)` on the
     /// session CallKit just activated: the audio unit stops, nobody hears
-    /// anyone while video keeps flowing (incident 2026-09-27). Without CallKit
+    /// anyone while video keeps flowing. Without CallKit
     /// (iOS-app-on-Mac, foreground in-app call) we own activation: activate now.
     static func activation(usesCallKit: Bool) -> Bool? {
         usesCallKit ? nil : true

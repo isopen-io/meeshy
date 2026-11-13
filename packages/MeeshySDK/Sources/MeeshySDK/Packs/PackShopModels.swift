@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - La vitrine unique : un pack avec son prix et sa possession (#10632)
 //
-// MIROIR de `PackSummary` / `PackShopResponse` (spec 2026-10-14 §§ 4.1, 4.4).
+// MIROIR de `PackSummary` / `PackShopResponse`.
 // Tout est additif : un ancien serveur ne sert ni `price` ni `owned`, et le
 // pack se lit alors gratuit et possédé — exactement la boutique d'aujourd'hui.
 

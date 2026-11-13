@@ -158,8 +158,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     }
 
     private func refreshLocalAppearance(communityId: String) {
-        localColor = UserDefaults.standard.string(forKey: "community.color.\(communityId)")
-        localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(communityId)")
+        let appearance = CommunityLocalAppearance.read(communityId: communityId)
+        localColor = appearance.color
+        localEmoji = appearance.emoji
     }
 
     private func dismissHost() {
@@ -190,6 +191,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -232,6 +234,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .clipShape(Circle())
                         .meeshyTapTarget()
                 }
+                .accessibilityLabel(String(localized: "community.react.a11y", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
@@ -250,6 +253,11 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 bannerView(community, color: color)
                     .frame(height: 190)
                     .clipped()
+
+                if let localEmoji {
+                    CommunityEmojiMark(emoji: localEmoji)
+                        .frame(height: 190)
+                }
 
                 // Gradient overlay en bas pour lisibilité du header
                 LinearGradient(
@@ -350,7 +358,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.xs))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(theme.textPrimary)
             }
             Text(label)

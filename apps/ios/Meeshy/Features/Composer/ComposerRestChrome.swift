@@ -63,8 +63,9 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// dans leur colonne.
 nonisolated enum ComposerRestChrome {
 
-    /// La marge entre la colonne d'outils et le bord droit de la scène.
-    static let toolColumnInnerMargin: CGFloat = 12
+    /// L'écart de la colonne d'outils EN PLUS de celui de la couche : aucun,
+    /// elle s'aligne sur la rangée du haut (#17469, porteur).
+    static let toolColumnInnerMargin: CGFloat = 0
 
     struct State: Equatable, Sendable {
         var toolIsOpen: Bool
@@ -331,8 +332,8 @@ nonisolated enum ComposerPillGrammar {
 
 /// **Toucher le vide d'une scène habitée MASQUE tout le chrome** : la scène
 /// prend le viewport entier en gardant son 9:16 (letterbox), sans minuteur ;
-/// un second toucher rend le chrome. Une scène VIERGE garde son geste : elle
-/// arme la caméra.
+/// un second toucher rend le chrome. Une scène VIERGE n'a rien à masquer : le
+/// toucher la traverse.
 nonisolated enum ComposerChromeConcealment {
 
     enum Tap: Equatable, Sendable {
@@ -346,7 +347,7 @@ nonisolated enum ComposerChromeConcealment {
         guard sceneHasContent else { return .passThrough }
         switch emptyTap {
         case .nothing, .selectBackground: return .conceal
-        case .endWriting, .deselect, .closeEffect, .armViewfinder, .closeBand: return .passThrough
+        case .endWriting, .deselect, .closeEffect, .closeBand: return .passThrough
         }
     }
 }

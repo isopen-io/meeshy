@@ -18,12 +18,16 @@
 import { ConsentValidationService } from '../services/ConsentValidationService';
 
 const NOW = new Date('2026-01-01T00:00:00Z');
+// #17309 — le clonage exige 18 ans révolus ; ces témoins ne portent pas sur l'âge.
+const ADULT_BIRTH_DATE = new Date('1990-01-01T00:00:00Z');
 
 function makePrisma(userOverrides?: object, userPrefsOverrides?: object | null) {
   return {
     user: {
       findUnique: jest.fn().mockResolvedValue(
-        userOverrides !== undefined ? userOverrides : {
+        userOverrides !== undefined
+          ? (userOverrides === null ? null : { birthDate: ADULT_BIRTH_DATE, ...userOverrides })
+          : {
           dataProcessingConsentAt: null,
           voiceDataConsentAt: null,
           voiceProfileConsentAt: null,

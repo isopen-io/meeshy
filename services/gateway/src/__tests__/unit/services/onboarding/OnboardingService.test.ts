@@ -26,6 +26,7 @@ type UserRow = {
   username: string;
   displayName: string | null;
   avatar: string | null;
+  banner?: string | null;
   birthDate: Date | null;
   systemLanguage: string;
   regionalLanguage: string | null;
@@ -568,5 +569,44 @@ describe('OnboardingService.recordStep', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ onboardingCompletedAt: NOW }) }),
     );
+  });
+});
+
+describe('OnboardingService.getState — l\'étape facultative « profile » (#17235)', () => {
+  const PROFILE_CLIENT = { ageStepAware: true, profileStepAware: true };
+
+  it('avatar ET bannière posés : `profile` pré-cochée pour le client qui l\'annonce', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ avatar: 'https://a/v.png', banner: 'https://a/b.png' }) });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(state?.prefilledSteps).toContain('profile');
+  });
+
+  it('un seul des deux posé : `profile` reste à proposer', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ avatar: 'https://a/v.png', banner: null }) });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(state?.prefilledSteps).not.toContain('profile');
+  });
+
+  it('le select d\'état demande avatar et bannière', async () => {
+    const prisma = makePrisma();
+    await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(prisma.user.findUnique.mock.calls[0][0].select).toEqual(expect.objectContaining({ avatar: true, banner: true }));
+  });
+
+  it('`profile` vue est servie au client qui l\'annonce, jamais à un client antérieur (#9223)', async () => {
+    const viewer = makeUser({ onboardingSteps: ['languages', 'profile'], avatar: 'a', banner: 'b' });
+    const aware = await new OnboardingService(makePrisma({ viewer })).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(aware?.seenSteps).toEqual(['languages', 'profile']);
+    const legacy = await new OnboardingService(makePrisma({ viewer })).getState(VIEWER, NOW, { ageStepAware: true, profileStepAware: false });
+    expect(legacy?.seenSteps).toEqual(['languages']);
+    expect(legacy?.prefilledSteps).not.toContain('profile');
+  });
+
+  it('marquer `profile` passée ne clôt pas le parcours : elle n\'est pas une étape de complétion', async () => {
+    const viewer = makeUser({ onboardingSteps: ['languages', 'global', 'story', 'friends'] });
+    const prisma = makePrisma({ viewer });
+    const state = await new OnboardingService(prisma).recordStep(VIEWER, { step: 'profile', outcome: 'skipped' }, NOW, PROFILE_CLIENT);
+    expect(state?.completedAt).toBeNull();
+    expect(state?.seenSteps).toContain('profile');
   });
 });

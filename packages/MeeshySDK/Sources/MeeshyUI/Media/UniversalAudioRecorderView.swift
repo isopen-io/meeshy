@@ -64,7 +64,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 if let permissionMessage {
                     Text(permissionMessage)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xxxl)
                         .padding(.bottom, MeeshySpacing.md)
@@ -136,20 +136,21 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: "xmark")
                         .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                        .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
             }
+            .accessibilityLabel(String(localized: "common.cancel", bundle: .module))
             .buttonStyle(.plain)
 
             Spacer()
 
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: context.contextIcon)
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                 Text(context.contextLabel)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
-            .foregroundColor(Color(hex: accentColor))
+            .foregroundStyle(Color(hex: accentColor))
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
@@ -199,8 +200,8 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     private var durationDisplay: some View {
         VStack(spacing: MeeshySpacing.xs) {
             Text(MediaFormat.duration(recorder.duration))
-                .font(.system(size: 48, weight: .light, design: .monospaced))
-                .foregroundColor(.white)
+                .meeshyScaledFont(48, weight: .light, design: .monospaced)
+                .foregroundStyle(.white)
                 .contentTransition(.numericText())
 
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -211,7 +212,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                 Text(String(localized: "audio.recorder.recording", defaultValue: "Enregistrement", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.errorStrong)
+                    .foregroundStyle(MeeshyColors.errorStrong)
             }
         }
     }
@@ -224,12 +225,12 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     .frame(width: 100, height: 100)
                 Image(systemName: "mic.fill")
                     .font(.system(size: 36, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor).opacity(MeeshyOpacity.strong))
+                    .foregroundStyle(Color(hex: accentColor).opacity(MeeshyOpacity.strong))
             }
 
             Text(String(localized: "audio.recorder.tapToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
 
@@ -258,9 +259,10 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .frame(width: 56, height: 56)
                     Image(systemName: "trash.fill")
                         .font(.system(size: MeeshyIconSize.xl, weight: .medium))
-                        .foregroundColor(MeeshyColors.errorStrong)
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
             }
+            .accessibilityLabel(String(localized: "common.delete", bundle: .module))
             .buttonStyle(.plain)
 
             // Stop (large)
@@ -313,14 +315,15 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                     Image(systemName: "mic.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
             }
+            .accessibilityLabel(String(localized: "story.voiceRecorder.start", bundle: .module))
             .buttonStyle(.plain)
 
             Text(String(localized: "audio.recorder.record", defaultValue: "Enregistrer", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
 

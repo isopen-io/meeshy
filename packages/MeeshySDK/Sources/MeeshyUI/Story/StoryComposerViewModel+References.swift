@@ -89,8 +89,8 @@ extension StoryComposerViewModel {
         for id in ids { zIndexMap.removeValue(forKey: id) }
     }
 
-    /// Épingle quelqu'un sur la slide SANS l'écrire dans une phrase (directive
-    /// user 2026-08-18). La pastille EST un `StoryTextObject` portant `@pseudo` :
+    /// Épingle quelqu'un sur la slide SANS l'écrire dans une phrase.
+    /// La pastille EST un `StoryTextObject` portant `@pseudo` :
     /// elle hérite ainsi, gratuitement, de tout ce que le texte sait déjà faire —
     /// déplacement, rotation, z-order, timeline, rendu à l'export, persistance
     /// dans `StoryEffects` (la seule unité que le dépôt enregistre et envoie).

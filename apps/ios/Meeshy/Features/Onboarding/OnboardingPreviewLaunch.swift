@@ -12,7 +12,9 @@ import MeeshyUI
 ///     -MeeshyOnboardingPreviewDone YES -AppleLanguages "(ar)"
 /// ```
 ///
-/// Cartes : `languages`, `age`, `global`, `story`, `friends`, `notifications`, `recap`.
+/// Cartes : `languages`, `age`, `email`, `profile`, `global`, `story`, `friends`, `notifications`, `recap`.
+/// `-MeeshyOnboardingPreviewProfile failed` fait échouer l'envoi d'une image de
+/// la carte `profile` (#17236) ; sinon il aboutit après un court délai, sans réseau.
 /// `-MeeshyOnboardingPreviewAge adult|minor|under13|taken|failed` choisit ce que
 /// la passerelle fictive répond à la date confirmée sur la carte `age` (#9929).
 /// `-MeeshyOnboardingPreviewDone YES` montre la carte APRÈS son geste (salut
@@ -122,7 +124,9 @@ struct OnboardingPreviewScreen: View {
         contacts: PreviewContactSync(),
         directory: PreviewContactDirectory(),
         birthDates: PreviewBirthDateService(),
-        signOut: {}
+        signOut: {},
+        profileImages: PreviewProfileImageUploader(),
+        currentUser: { OnboardingPreviewLaunch.fixtureUser }
     )
 
     var body: some View {
@@ -237,6 +241,18 @@ nonisolated private final class PreviewBirthDateService: BirthDateServiceProvidi
         case "failed": throw BirthDateDeclarationError.unavailable
         default: return APIBirthDateDeclaration(ageClass: .adult, viewerWriteRestrictionGlobal: false)
         }
+    }
+}
+
+/// L'envoi fictif de la carte `profile` : un court délai, puis l'utilisateur
+/// fictif — ou l'échec, selon `-MeeshyOnboardingPreviewProfile`.
+nonisolated private struct PreviewProfileImageUploader: ProfileImageUploading {
+    func upload(_ image: UIImage, as slot: ProfileImageSlot) async throws -> MeeshyUser {
+        try await Task.sleep(for: .milliseconds(1200))
+        guard UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewProfile") != "failed" else {
+            throw URLError(.notConnectedToInternet)
+        }
+        return OnboardingPreviewLaunch.fixtureUser
     }
 }
 

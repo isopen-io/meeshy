@@ -139,7 +139,11 @@ final class ComposerCaptureHorizon {
 
     func level(_ connection: AVCaptureConnection?) {
         guard let connection else { return }
-        let angle = captureAngle
+        Self.apply(captureAngle, to: connection)
+    }
+
+    /// Pose l'angle lu sur le fil principal, depuis la file de la session (#17433).
+    nonisolated static func apply(_ angle: CGFloat, to connection: AVCaptureConnection) {
         if #available(iOS 17.0, *) {
             guard connection.isVideoRotationAngleSupported(angle) else { return }
             connection.videoRotationAngle = angle

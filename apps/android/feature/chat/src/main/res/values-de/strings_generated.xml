@@ -134,7 +134,13 @@
     <string name="chat_forward_search_hint">Unterhaltung suchen...</string>
     <string name="chat_forward_sent">Weitergeleitet</string>
     <string name="chat_guest_bar_close">Unterhaltung schließen</string>
-    <string name="chat_header_flame_hint">Blendet die Flamme bis zum nächsten Aufklappen der Kopfzeile aus</string>
+    <string name="chat_header_flame_card_hide">Flamme ausblenden</string>
+    <string name="chat_header_flame_card_hint">Öffnet die Serie der Unterhaltung</string>
+    <string name="chat_header_flame_card_open">Zum Spiel</string>
+    <string name="chat_header_flame_card_streak_one">Tag in Folge hier</string>
+    <string name="chat_header_flame_card_streak_other">Tage in Folge hier</string>
+    <string name="chat_header_flame_card_today">Heute</string>
+    <string name="chat_header_flame_card_total">Hier seit Beginn</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d Mitglied</item>
         <item quantity="other">%1$d Mitglieder</item>

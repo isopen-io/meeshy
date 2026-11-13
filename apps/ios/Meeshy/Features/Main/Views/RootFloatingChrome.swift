@@ -17,7 +17,13 @@ struct RootFloatingChrome: View {
     @Binding var menuButtonPosition: String
     @Binding var floatingGeometry: FloatingButtonGeometry?
     let unreadCount: Int
+    /// L'aperçu d'appui long ouvert : les bulles lui cèdent la place (#17260).
+    let peekPresence: LongPressPeekPresence
     let onPush: (Route) -> Void
+    /// « Jeu masqué » : le barreau du jeu quitte l'échelle (#17769), comme le bandeau quitte l'écran.
+    @ObservedObject var gamePrefs: GameDevicePrefsStore = .current()
+
+    private var ladder: [RootMenuLadderEntry] { RootMenuLadderEntry.ladder(gameHidden: gamePrefs.prefs.hidden) }
 
     var body: some View {
         ZStack {
@@ -30,11 +36,17 @@ struct RootFloatingChrome: View {
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
                     }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }
                     .zIndex(99)
             }
 
             menuLadder
         }
+        // L'aperçu d'appui long d'une conversation passe au-dessus de tout :
+        // les bulles s'effacent et ne captent aucun de ses touchers (#17260).
+        .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
     }
 
     // MARK: - Draggable Floating Buttons (Free Position)
@@ -126,7 +138,7 @@ struct RootFloatingChrome: View {
                     } else {
                         Image(systemName: "square.stack.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                 }
             },
@@ -177,7 +189,7 @@ struct RootFloatingChrome: View {
             let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
-            let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
+            let ladderExtent = CGFloat(ladder.count) * (menuItemSize + menuSpacing)
             let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
             let menuX = menuCenter.x
             let menuStartY = expandDown
@@ -185,7 +197,7 @@ struct RootFloatingChrome: View {
                 : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
 
             // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
-            ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
+            ForEach(Array(ladder.enumerated()), id: \.offset) { index, entry in
                 let yOffset = expandDown
                     ? CGFloat(index) * (menuItemSize + menuSpacing)
                     : -CGFloat(index) * (menuItemSize + menuSpacing)
@@ -202,7 +214,7 @@ struct RootFloatingChrome: View {
                     // menu fermé) pour que le ressort d'ouverture parte d'un
                     // état existant : le glow/pulse ne doit vivre que menu
                     // OUVERT — six ombres re-rasterisées par frame en continu
-                    // derrière la liste, sinon (audit chauffe 2026-08-26).
+                    // derrière la liste, sinon.
                     isGlowEnabled: showMenu,
                     action: { openMenuEntry(entry) }
                 )

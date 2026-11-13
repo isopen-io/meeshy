@@ -69,7 +69,7 @@ struct ConversationMediaHubView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(mutedText)
+                .foregroundStyle(mutedText)
                 .accessibilityHidden(true)
             TextField(ConversationMediaHubCopy.searchPlaceholder, text: $query)
                 .font(.body)
@@ -80,7 +80,7 @@ struct ConversationMediaHubView: View {
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(mutedText)
+                        .foregroundStyle(mutedText)
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 }
                 .buttonStyle(.plain)
@@ -217,14 +217,14 @@ struct ConversationMediaHubView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text("\(senderName(item)) · \(dateLabel(item.sentAt))")
                     .font(.caption)
-                    .foregroundColor(mutedText)
+                    .foregroundStyle(mutedText)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if let goToMessage = actions.goToMessage {
                     Button { goToMessage(item.messageId) } label: {
                         Image(systemName: "arrow.turn.up.left")
                             .font(.footnote.weight(.semibold))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                             .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     }
                     .buttonStyle(.plain)

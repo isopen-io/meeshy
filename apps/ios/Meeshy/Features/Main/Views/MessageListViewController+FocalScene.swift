@@ -11,7 +11,7 @@ import MeeshySDK
 // défilement qui diffère la carte de l'élu en plein fling.
 //
 
-// MARK: - Focal : perspective minimale, pendant le défilement seulement (2026-08-21)
+// MARK: - Focal: perspective minimale, pendant le défilement seulement
 
 extension MessageListViewController {
 
@@ -133,7 +133,7 @@ extension MessageListViewController {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
         let focusY = focalFocusY
         let cells = collectionView.visibleCells
-        // Tant que la magnificence n'est pas armée, le fil défile comme en Script (directive 2026-08-24) : la réduction et la compaction sont des fonctions du mode, pas un décor neutre.
+        // Tant que la magnificence n'est pas armée, le fil défile comme en Script: la réduction et la compaction sont des fonctions du mode, pas un décor neutre.
         guard focalMagnificationArmed else {
             resetFocalPerspective(on: cells)
             return
@@ -145,7 +145,7 @@ extension MessageListViewController {
             guard let geometry = focalGeometry(of: cell) else { continue }
             geometries.append(geometry)
         }
-        // Aucune animation ENTRE les messages (directive 2026-08-24) : la loi `poses` reste écrite et testée, plus APPLIQUÉE. Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586) — lui seul grandit.
+        // Aucune animation ENTRE les messages: la loi `poses` reste écrite et testée, plus APPLIQUÉE. Ce qui distingue l'élu: sa CARTE, ses chips et sa LOUPE (#6586) — lui seul grandit.
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
         // #7953 : la rangée qui PORTE ses pastilles ouvre un passage, lue sur la CELLULE (ce qu'elle rend), jamais sur `focalDetailedLocalId`, qui change avant la reconfiguration.

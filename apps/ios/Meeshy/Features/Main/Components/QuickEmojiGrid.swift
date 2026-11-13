@@ -4,8 +4,8 @@ import Foundation
 /// **Les emojis rapides de l'emplacement d'action** (#7931, #7985, #10842).
 ///
 /// Une rangée à la hauteur de la ligne de saisie, EN PERMANENCE, focus ou non
-/// (directive porteur 2026-09-25), dans la MÊME largeur qu'à trois émojis de
-/// 32 pt. Depuis #10842 (retour porteur 2026-10-16) elle sert les 20 derniers
+/// dans la MÊME largeur qu'à trois émojis de
+/// 32 pt. Depuis #10842 elle sert les 20 derniers
 /// émojis utilisés (`RecentEmojiHistory`) et en montre TROIS ET DEMI : la
 /// quatrième coupée en deux dit qu'on peut faire défiler. Chaque cellule reste
 /// sous la cible tactile de 44 pt (décision ouverte #7979) ; l'appui long vers

@@ -13,7 +13,7 @@ import XCTest
 /// Mesuré sur simulateur iOS 26.1 dédié (`Meeshy-Composer-SDK`,
 /// `1BEAF630-3C62-44D8-B176-18387D242AB5`) : 83 crashs de cette signature sur
 /// la suite complète du package, dont `MediaAltCollectionTests` (17),
-/// `ComposerLayerActionsTests` (12), `ImageEditorViewModelTests` (10),
+/// `ComposerLayerActionsTests` (12), le modèle de l'ancien éditeur d'image (10),
 /// `AudienceUserPickerViewModelTests` (5), `AddBorrowedSoundAuthorTests` (1).
 /// Réf. `reference_se0466_implicit_isolated_deinit_double_frees_on_ios18`.
 ///
@@ -21,7 +21,7 @@ import XCTest
 /// restreint à `@MainActor ObservableObject` ; ici le critère est « toute
 /// `class` de `Sources/MeeshyUI/**` non marquée `nonisolated` ». La raison est
 /// mesurée : des crashers du log ne sont PAS `ObservableObject`
-/// (`MediaAltCollection`, `ImageFilterEngine`) — ce sont de simples classes à
+/// (`MediaAltCollection`, le moteur de l'ancien éditeur d'image) — ce sont de simples classes à
 /// état, isolées MainActor par le défaut du module. Le risque suit l'isolation,
 /// pas la conformité `ObservableObject` : sous `.defaultIsolation(MainActor)`,
 /// toute classe non-`nonisolated` porte la forme. Le correctif reste

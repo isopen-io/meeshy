@@ -5,7 +5,7 @@ import Foundation
 /// the feed, comments, stories, notifications, contacts, participants, friend
 /// requests and message detail.
 ///
-/// Two registered styles (product decision 2026-06-13):
+/// Two registered styles:
 /// - `.short` — dense lists (feed, comments, stories, notifications):
 ///   `maintenant` / `45s` / `5 min` / `2h` / `3j` / `2sem` / `2 mois`, then the
 ///   localized absolute date past three months.

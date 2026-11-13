@@ -171,7 +171,7 @@ nonisolated enum MessageCardMotionExporter {
                 throw error
             }
             while !writerInput.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 4_000_000)
+                try await Task.sleep(for: .milliseconds(4))
             }
             guard let buffer = pixelBuffer(from: image, width: pixels.width, height: pixels.height) else {
                 writer.cancelWriting()

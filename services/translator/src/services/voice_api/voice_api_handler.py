@@ -189,7 +189,7 @@ class VoiceAPIHandler:
         audio_path = request_data.get('audioPath')
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
-        generate_voice_clone = request_data.get('generateVoiceClone', True)
+        generate_voice_clone = request_data.get('generateVoiceClone', False)
         mobile_transcription = request_data.get('mobileTranscription')
 
         # STABILITÉ: Utiliser context manager pour nettoyage automatique
@@ -228,7 +228,7 @@ class VoiceAPIHandler:
         audio_path = request_data.get('audioPath')
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
-        generate_voice_clone = request_data.get('generateVoiceClone', True)
+        generate_voice_clone = request_data.get('generateVoiceClone', False)
         mobile_transcription = request_data.get('mobileTranscription')
         webhook_url = request_data.get('webhookUrl')
         priority = request_data.get('priority', 1)

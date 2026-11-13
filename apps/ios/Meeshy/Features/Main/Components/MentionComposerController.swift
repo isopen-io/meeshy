@@ -285,14 +285,14 @@ public final class MentionComposerController: ObservableObject {
 
     /// **Une seule recherche distante, deux sources selon le contexte.** Une
     /// conversation ou un post interrogent `/mentions/suggestions` ; un
-    /// brouillon, sans id serveur, interroge l'annuaire (#3904 → 2026-09-05).
+    /// brouillon, sans id serveur, interroge l'annuaire.
     private func scheduleRemoteLookup(query: String) {
         isResolving = true
         let debounce = debounceNanoseconds
         debounceTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(nanoseconds: debounce)
+                try await Task.sleep(for: .nanoseconds(debounce))
                 guard !Task.isCancelled else { return }
                 let found = try await self.remoteCandidates(for: query)
                 guard !Task.isCancelled else { return }

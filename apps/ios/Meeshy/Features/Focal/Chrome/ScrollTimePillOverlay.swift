@@ -46,7 +46,7 @@ struct ScrollTimePillOverlay: View {
         // plus honnête de la garde R15 en l'absence de cote dédiée.
         Text(label)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            .foregroundColor(textColor)
+            .foregroundStyle(textColor)
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xs)
             .background(

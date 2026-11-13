@@ -23,6 +23,8 @@ import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirro
 import { RelationWeeklyJob } from './relation-weekly';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
+import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
+import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -72,6 +74,8 @@ export class BackgroundJobsManager {
   private obsoletePurgeInterval: NodeJS.Timeout | null = null;
   /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
   private envelopeSweepInterval: NodeJS.Timeout | null = null;
+  /** #17120 — le filet de l'index TTL : les numéros d'amis WhatsApp échus s'effacent, une requête toutes les heures. */
+  private externalPeerSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -150,6 +154,21 @@ export class BackgroundJobsManager {
     };
     this.envelopeSweepInterval = guardedInterval({ name: 'e2ee-envelope-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesEnveloppes });
     this.envelopeSweepInterval.unref();
+
+    const balayerLesNumerosEchus = () => {
+      purgeExpiredExternalPeers(this.prismaClient, new Date())
+        .then((n) => { if (n > 0) logger.info(`${n} expired external peer address(es) erased`); })
+        .catch((err) => logger.error('External peer retention sweep failed', err instanceof Error ? err.name : 'unknown'));
+    };
+    /* Armée là seulement où une conversation externe peut exister (drapeau
+       `EXTERNAL_CONVERSATIONS`, jamais en production avant la signature) :
+       aucune purge ne tourne en production sans décision (#9223). L'index
+       TTL reste le premier mécanisme partout. */
+    if (externalConversationsEnabled(process.env)) {
+      balayerLesNumerosEchus();
+      this.externalPeerSweepInterval = guardedInterval({ name: 'external-peer-retention-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesNumerosEchus });
+      this.externalPeerSweepInterval.unref();
+    }
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
        qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
@@ -255,6 +274,10 @@ export class BackgroundJobsManager {
       this.sessionSweepInterval = null;
     }
 
+    if (this.externalPeerSweepInterval) {
+      clearInterval(this.externalPeerSweepInterval);
+      this.externalPeerSweepInterval = null;
+    }
     if (this.envelopeSweepInterval) {
       clearInterval(this.envelopeSweepInterval);
       this.envelopeSweepInterval = null;

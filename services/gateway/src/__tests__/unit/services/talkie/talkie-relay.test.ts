@@ -5,7 +5,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
-import { TALKIE_MAX_CHUNK_BYTES, TALKIE_MAX_DURATION_MS } from '@meeshy/shared/types/talkie';
+import { TALKIE_MAX_CHUNK_BYTES, TALKIE_MAX_DURATION_MS, TALKIE_SEALED_CODEC } from '@meeshy/shared/types/talkie';
 import { TalkieRelay, type TalkieRelayDeps } from '../../../../services/talkie/talkieRelay';
 import type { TalkieVerdict } from '../../../../services/talkie/talkieGate';
 
@@ -54,7 +54,7 @@ describe('#13935 — ouvrir une prise de parole', () => {
     const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
     t.relay.dispose();
 
-    expect(ack).toEqual({ success: true, data: { talkieId: expect.stringMatching(/^[0-9a-f]{24}$/), maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES } });
+    expect(ack).toEqual({ success: true, data: { talkieId: expect.stringMatching(/^[0-9a-f]{24}$/), maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES, delivery: 'live' } });
     const incoming = of(t, 'talkie:incoming');
     expect(incoming.map((e) => e.room)).toEqual([`user:${TO}`]);
     expect(incoming[0].payload).toMatchObject({ fromUserId: FROM, codec: 'aac-adts', maxDurationMs: TALKIE_MAX_DURATION_MS });
@@ -298,5 +298,94 @@ describe('#14459 (m4, m5) — la coupure partagée', () => {
     await cutTalkiesOnBlock({ cache, relay: null, now: () => 42 }, { blockerId: TO.toUpperCase(), blockedId: FROM.toUpperCase(), scope: 'talkie' });
 
     expect(await readTalkieCut(cache, FROM, TO)).toBe(42);
+  });
+});
+
+describe('#13949 — le relais transporte une voix scellée sans la lire', () => {
+  const KEY_ID = 'q7Hk2-_xVb9LmN0pRsT4uW';
+
+  it('annonce l’identifiant de clé tel quel au destinataire, et juge la paire AVEC le sceau', async () => {
+    const judge = jest.fn(async (_f: string, _t: string, _sealed: boolean): Promise<TalkieVerdict> => ({ ok: true }));
+    const t = relayWith({ judge, sealedVoiceAccepted: () => true });
+    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID } });
+    t.relay.dispose();
+
+    expect(ack.success).toBe(true);
+    expect(judge).toHaveBeenCalledWith(FROM, TO, true);
+    expect(of(t, 'talkie:incoming')[0].payload).toMatchObject({ codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID } });
+  });
+
+  it.each([
+    ['sans drapeau', {}],
+    ['drapeau éteint', { sealedVoiceAccepted: () => false }],
+  ] as const)('%s, une voix scellée est refusée AVANT tout jugement : aucun client déployé ne la déchiffre', async (_label, overrides) => {
+    const judge = jest.fn(async (): Promise<TalkieVerdict> => ({ ok: true }));
+    const t = relayWith({ judge, ...overrides });
+    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID } });
+
+    expect(ack).toMatchObject({ success: false, code: 'TALKIE_INVALID' });
+    expect(judge).not.toHaveBeenCalled();
+    expect(t.emissions).toEqual([]);
+  });
+
+  it('le dernier fragment déclaré repart déclaré ; les autres n’en portent aucune marque', async () => {
+    const t = relayWith();
+    const talkieId = await open(t);
+    await t.relay.chunk(SOCKET, FROM, { talkieId, seq: 0, data: frame() });
+    await t.relay.chunk(SOCKET, FROM, { talkieId, seq: 1, last: true, data: frame() });
+    t.relay.dispose();
+
+    const chunks = of(t, 'talkie:chunk').map((e) => e.payload);
+    expect(chunks[0]).not.toHaveProperty('last');
+    expect(chunks[1]).toMatchObject({ seq: 1, last: true });
+  });
+
+  it('une voix en clair est jugée sans sceau et n’annonce aucun sceau', async () => {
+    const judge = jest.fn(async (_f: string, _t: string, _sealed: boolean): Promise<TalkieVerdict> => ({ ok: true }));
+    const t = relayWith({ judge });
+    await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+    t.relay.dispose();
+
+    expect(judge).toHaveBeenCalledWith(FROM, TO, false);
+    expect(of(t, 'talkie:incoming')[0].payload).not.toHaveProperty('sealed');
+  });
+
+  it('aucune matière de clé ne repart à côté de l’identifiant, même si l’émetteur en glisse une', async () => {
+    const t = relayWith({ sealedVoiceAccepted: () => true });
+    await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID, key: 'clair', keyEnvelope: 'x' } });
+    t.relay.dispose();
+
+    expect(of(t, 'talkie:incoming')[0].payload.sealed).toEqual({ keyId: KEY_ID });
+  });
+
+  it('un fragment scellé repart octet pour octet : ni trame ADTS exigée, ni normalisation', async () => {
+    const t = relayWith({ sealedVoiceAccepted: () => true });
+    const talkieId = await (async () => {
+      const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID } });
+      if (!ack.success) throw new Error(ack.code);
+      return ack.data.talkieId;
+    })();
+    const random = Uint8Array.from({ length: 1500 }, (_, i) => (i * 131 + 17) % 256);
+    await t.relay.chunk(SOCKET, FROM, { talkieId, seq: 0, data: random });
+    t.relay.dispose();
+
+    expect(Array.from(of(t, 'talkie:chunk')[0].payload.data as Uint8Array)).toEqual(Array.from(random));
+  });
+
+  it('le rejugement d’arrière-plan garde le sceau : une paire chiffrée ne coupe pas une voix scellée', async () => {
+    const judge = jest.fn(async (_f: string, _t: string, sealed: boolean): Promise<TalkieVerdict> =>
+      (sealed ? { ok: true } : { ok: false, code: 'TALKIE_E2EE_CONVERSATION', message: 'x' }));
+    const t = relayWith({ judge, sealedVoiceAccepted: () => true });
+    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: KEY_ID } });
+    if (!ack.success) throw new Error(ack.code);
+    t.advance(2_500);
+    await t.relay.chunk(SOCKET, FROM, { talkieId: ack.data.talkieId, seq: 0, data: frame() });
+    await Promise.resolve();
+    await Promise.resolve();
+    const endedBeforeDispose = of(t, 'talkie:ended').length;
+    t.relay.dispose();
+
+    expect(judge).toHaveBeenLastCalledWith(FROM, TO, true);
+    expect(endedBeforeDispose).toBe(0);
   });
 });

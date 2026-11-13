@@ -37,6 +37,10 @@ struct CallStats: Equatable, Sendable {
     /// fort) — nourrit « qui parle » dans un appel de groupe (#3585). Éphémère :
     /// jamais persisté avec le diagnostic.
     let inboundAudioLevel: Double
+    /// Mon niveau audio (0…1, `audioLevel` de la source média audio sortante,
+    /// `media-source`) — nourrit l'illumination de MA vignette quand je parle
+    /// (P11.5). Éphémère comme `inboundAudioLevel`.
+    let outboundAudioLevel: Double
     /// #8698 — whether the selected ICE pair rides a TURN relay (`true`) or a
     /// direct host/srflx path (`false`); `nil` while no pair is selected.
     /// Ephemeral like `inboundAudioLevel`: never persisted with the diagnostic.
@@ -60,6 +64,7 @@ struct CallStats: Equatable, Sendable {
         inboundAudioBytes: Int = 0,
         inboundVideoBytes: Int = 0,
         inboundAudioLevel: Double = 0,
+        outboundAudioLevel: Double = 0,
         relayed: Bool? = nil,
         mediaQuality: CallMediaQuality = .none
     ) {
@@ -77,6 +82,7 @@ struct CallStats: Equatable, Sendable {
         self.inboundAudioBytes = inboundAudioBytes
         self.inboundVideoBytes = inboundVideoBytes
         self.inboundAudioLevel = inboundAudioLevel
+        self.outboundAudioLevel = outboundAudioLevel
         self.relayed = relayed
         self.mediaQuality = mediaQuality
     }
@@ -110,6 +116,7 @@ extension CallStats: Codable {
         inboundAudioBytes = try c.decodeIfPresent(Int.self, forKey: .inboundAudioBytes) ?? 0
         inboundVideoBytes = try c.decodeIfPresent(Int.self, forKey: .inboundVideoBytes) ?? 0
         inboundAudioLevel = 0
+        outboundAudioLevel = 0
         relayed = nil
         mediaQuality = .none
     }
@@ -242,6 +249,7 @@ extension CallStats {
         var audioJitterSum = 0.0
         var audioJitterCount = 0
         var audioLevel = 0.0
+        var localAudioLevel = 0.0
 
         let codecMime: [String: String] = entries.reduce(into: [:]) { map, entry in
             guard entry.type == "codec", let mime = entry.mimeType else { return }
@@ -272,6 +280,8 @@ extension CallStats {
             case "outbound-rtp":
                 outbound += Int(entry.values["packetsSent"] ?? 0)
                 bytesSent += Int(entry.values["bytesSent"] ?? 0)
+            case "media-source" where entry.kind == "audio":
+                localAudioLevel = max(localAudioLevel, entry.values["audioLevel"] ?? 0)
             default:
                 break
             }
@@ -298,6 +308,7 @@ extension CallStats {
             inboundAudioBytes: inboundAudioBytes,
             inboundVideoBytes: inboundVideoBytes,
             inboundAudioLevel: audioLevel,
+            outboundAudioLevel: localAudioLevel,
             relayed: relayedRoute(in: entries),
             mediaQuality: CallMediaQuality.reduce(entries: entries)
         )

@@ -1,8 +1,7 @@
 import SwiftUI
 import MeeshySDK
 
-/// **Le panneau d'options de l'outil DÉPLIÉ, sans ses bulles** (directive
-/// porteur 2026-08-30).
+/// **Le panneau d'options de l'outil DÉPLIÉ, sans ses bulles**.
 ///
 /// ## Pourquoi il existe
 ///
@@ -50,7 +49,7 @@ public struct MeeshyToolOptionsPanel: View {
         }
     }
 
-    /// Le binding vit sur le VIEWMODEL depuis le 2026-08-31 (#4634) : un
+    /// Le binding vit sur le VIEWMODEL (#4634) : un
     /// troisième hôte en avait besoin — l'éditeur d'objet plein écran — et le
     /// recopier une troisième fois aurait divergé au premier champ ajouté à
     /// `StoryTextObject`, exactement ce que sa remontée ici avait déjà évité une

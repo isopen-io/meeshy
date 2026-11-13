@@ -40,6 +40,7 @@ import { LevelRing } from './game/level-ring';
 import { MeeshCoin } from './game/meesh-coin';
 import { RankBlason } from './game/rank-blason';
 import { Signature } from './game/signature';
+import { TreasuryEmblem } from './game/treasury-emblem';
 import { Trophy } from './game/trophy';
 import { useChoreography } from './game/use-choreography';
 import { useRollingNumber, type RollEnv } from './game/use-rolling-number';
@@ -303,7 +304,7 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
             </Piece>
           </PieceLink>
         )}
-        {model.flame === null && model.meeshes === null && model.missions === null && model.league === null ? null : (
+        {model.flame === null && model.meeshes === null && model.missions === null && model.treasury === null && model.league === null ? null : (
           <span data-player-banner-middle="" className="flex shrink-0 flex-col justify-center">
             {model.flame === null && model.meeshes === null ? null : (
               <span data-player-banner-row="top" className="flex items-center">
@@ -325,13 +326,20 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
                 )}
               </span>
             )}
-            {model.missions === null && model.league === null ? null : (
+            {model.missions === null && model.treasury === null && model.league === null ? null : (
               <span data-player-banner-row="bottom" className="flex items-center">
                 {model.missions === null ? null : (
                   <PieceLink concept="missions" label={names.missions} compact>
                     <Piece name="missions" value={`${model.missions.done}/${model.missions.total}`}>
                       <span aria-hidden="true">✓</span>
                       {formatCount(model.missions.done, language)}/{formatCount(model.missions.total, language)}
+                    </Piece>
+                  </PieceLink>
+                )}
+                {model.treasury === null ? null : (
+                  <PieceLink concept="meesh" label={names.treasury} compact>
+                    <Piece name="treasury" value={model.treasury}>
+                      <TreasuryEmblem tier={model.treasury} />
                     </Piece>
                   </PieceLink>
                 )}

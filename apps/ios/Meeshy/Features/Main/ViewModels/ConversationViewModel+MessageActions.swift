@@ -93,7 +93,7 @@ extension ConversationViewModel {
     func toggleAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
         guard let mIdx = messageIndex(for: messageId),
               let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
-        // Multi-reactions (2026-08-18) : les emojis s'empilent, par piece
+        // Multi-reactions: les emojis s'empilent, par piece
         // jointe comme partout — plus jamais de swap. La bascule vit dans
         // `AttachmentReactionToggle`, partagée avec la pièce hors fenêtre (#9910).
         let outcome = AttachmentReactionToggle.apply(

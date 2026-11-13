@@ -3,12 +3,12 @@ import Foundation
 // MARK: - Adjustment Kind
 
 /// A single non-destructive tonal/colour adjustment. `CaseIterable` drives the
-/// adjustment panels (the full-screen avatar editor and the scene's in-place
-/// editor, #9175) so adding a slider never requires touching a view.
+/// scene's in-place adjustment panel (#9175) so adding a slider never requires
+/// touching a view.
 ///
 /// Lives in the CORE since #9175: an image placed on a scene CARRIES its
 /// adjustments (`StoryMediaObject.adjustments`), and an object model cannot
-/// depend on the UI layer. The rendering stays in `ImageFilterEngine` (MeeshyUI).
+/// depend on the UI layer. The rendering stays in `ImageAdjustmentStage` (MeeshyUI).
 public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case exposure
     case brightness
@@ -34,14 +34,6 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
         switch self {
         case .bloom, .grain: return .effect
         default: return .tone
-        }
-    }
-
-    /// Adjustments surfaced in Simple mode. Pro mode shows every case.
-    public var isEssential: Bool {
-        switch self {
-        case .brightness, .contrast, .saturation: return true
-        default: return false
         }
     }
 
@@ -139,11 +131,6 @@ extension AdjustmentKind {
         case .video: return allCases.filter(\.isServedForVideo)
         }
     }
-
-    /// Les RÉGLAGES seuls, sans les effets — ce que l'éditeur plein écran de
-    /// l'avatar offre en curseurs, ses effets restant un préréglage d'un
-    /// toucher (`ImageEffect`).
-    public static var toneCases: [AdjustmentKind] { allCases.filter { $0.family == .tone } }
 
     /// Les curseurs d'UN sous-outil qu'un média de ce genre offre et peint.
     public static func served(for kind: StoryMediaKind, in family: AdjustmentFamily) -> [AdjustmentKind] {

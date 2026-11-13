@@ -113,10 +113,10 @@ describe('ListHeader — la bande épinglée prend la place du titre', () => {
     expect(titleSlot?.className).toContain('relative');
   });
 
-  test('le lien Progression est rendu dans les DEUX états', () => {
+  test('le lien Ma Légende est rendu dans les DEUX états', () => {
     for (const pinned of [false, true]) {
       const el = mount(pinned);
-      expect(el.querySelector('a[aria-label^="Progression"]')).not.toBeNull();
+      expect(el.querySelector('a[aria-label^="Ma Légende"]')).not.toBeNull();
       act(() => {
         root!.unmount();
       });

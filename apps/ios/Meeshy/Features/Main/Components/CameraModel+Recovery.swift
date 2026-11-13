@@ -27,13 +27,26 @@ extension CameraModel {
                                               object: session, queue: .main) { [weak self] avis in
             let raison = (avis.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int) ?? -1
             Logger.media.notice("composer capture session interrupted: reason \(raison, privacy: .public)")
-            MainActor.assumeIsolated { self?.liveFeed.flush() }
+            MainActor.assumeIsolated { self?.handleInterruption(reason: raison) }
         }
         let reprise = centre.addObserver(forName: AVCaptureSession.interruptionEndedNotification,
                                          object: session, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.resumeStalledSession(reason: "interruption ended") }
+            MainActor.assumeIsolated {
+                self?.interruptionReason = nil
+                self?.resumeStalledSession(reason: "interruption ended")
+            }
         }
         sessionObservers = [erreur, interruption, reprise]
+    }
+
+    /// **L'interruption est publiée, puis traitée** (#17433) : sa raison nourrit l'état
+    /// « prête » ; un micro pris par un autre client sort pour rendre l'objectif.
+    func handleInterruption(reason: Int) {
+        interruptionReason = reason
+        liveFeed.flush()
+        guard CameraInterruptionResponse.response(reason: reason, isRecording: isRecordingVideo)
+            == .dropMicrophoneAndResume else { return }
+        dropMicrophoneAndResume()
     }
 
     /// La dernière trame retourne au pool, et la session repart si on la veut.

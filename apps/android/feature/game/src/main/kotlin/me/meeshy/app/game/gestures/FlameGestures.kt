@@ -76,6 +76,6 @@ internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFre
             }
             isOut -> GameNote(stringResource(R.string.game_flame_panel_relight_closed), tone = MeeshyPalette.Indigo500)
         }
-        if (!gestures.online) GameNote(stringResource(R.string.game_flame_panel_offline))
+        if (!gestures.online) GameNote(stringResource(R.string.game2_offline_action))
     }
 }

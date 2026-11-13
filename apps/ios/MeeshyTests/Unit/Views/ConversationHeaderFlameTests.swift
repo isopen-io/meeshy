@@ -265,6 +265,36 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertEqual(received, ["c42"])
     }
 
+    // MARK: - Le toucher ouvre la série (#17770)
+
+    func test_cardModel_runningStreak_carriesStreakTodayAndTotal() {
+        let model = HeaderFlameCardModel.make(engagement(total: 340, today: 40, streak: 12))
+        XCTAssertEqual(model, HeaderFlameCardModel(streakDays: 12, todayPoints: 40, totalPoints: 340))
+    }
+
+    func test_cardModel_withoutStreakOrSnapshot_isNil() {
+        XCTAssertNil(HeaderFlameCardModel.make(engagement(streak: 0)))
+        XCTAssertNil(HeaderFlameCardModel.make(nil))
+    }
+
+    func test_flameButton_opensTheCardInsteadOfDismissing() throws {
+        let source = AppSourceGuard.stripComments(try String(
+            contentsOf: Self.appFile("Meeshy/Features/Main/Views/ConversationHeaderFlame.swift"), encoding: .utf8))
+        let start = try XCTUnwrap(source.range(of: "private func flameButton("))
+        let body = String(source[start.upperBound...].prefix(700))
+        XCTAssertFalse(body.contains("Button(action: onDismiss)"), "le premier toucher ne masque plus la flamme")
+        XCTAssertTrue(body.contains("isCardOpen.toggle()"), "le toucher ouvre la carte de la série")
+        XCTAssertTrue(source.contains("HeaderFlameCard("), "la carte est rendue")
+    }
+
+    func test_header_wiresOpenGameToProgression() throws {
+        let header = AppSourceGuard.stripComments(try String(
+            contentsOf: Self.appFile("Meeshy/Features/Main/Views/ConversationView+Header.swift"), encoding: .utf8))
+        XCTAssertTrue(header.contains("onOpenGame: { router.push(.progression) }"),
+                      "« Voir le jeu » mène à la Progression, comme le Profil")
+        XCTAssertTrue(header.contains("onOpenGame: onOpenGame"))
+    }
+
     private static func appFile(_ relative: String) -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

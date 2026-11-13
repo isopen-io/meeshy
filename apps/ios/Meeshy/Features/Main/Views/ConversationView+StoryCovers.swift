@@ -16,13 +16,13 @@ struct ConversationStoryViewerCovers: ViewModifier {
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
     func body(content: Content) -> some View {
-        content.modifier(StoryReaderCover(
+        content.relayingMeeshyRouter(meeshyRouter) { content, router in content.modifier(StoryReaderCover(
             request: request,
             storyViewModel: storyViewModel,
             statusViewModel: statusViewModel,
@@ -34,7 +34,7 @@ struct ConversationStoryViewerCovers: ViewModifier {
             onReply: { replyContext in
                 router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
             }
-        ))
+        )) }
     }
 
     private var request: Binding<StoryViewerRequest?> {

@@ -7,6 +7,7 @@ import {
   ADMIN_DESTINATION,
   CONVERSATIONS_DESTINATION,
   FEED_DESTINATION,
+  GAME_DESTINATION,
   MENU_LADDER,
   PROFILE_DESTINATION,
   allFloatingDestinations,
@@ -26,7 +27,7 @@ import { showsFloatingMenus } from './floating-gate';
  * destination MÈNE QUELQUE PART.
  */
 
-describe('les six barreaux de l’échelle', () => {
+describe('les sept barreaux de l’échelle', () => {
   /**
    * L'ordre vient d'iOS et ne se renégocie pas au fil des lots. Un témoin
    * écrit sur l'ENSEMBLE (« les six sont là ») resterait vert si deux
@@ -35,6 +36,7 @@ describe('les six barreaux de l’échelle', () => {
    */
   test('sont exactement ceux d’iOS, dans l’ordre d’iOS', () => {
     expect(MENU_LADDER.map((e) => e.key)).toEqual([
+      'game',
       'links',
       'notifications',
       'calls',
@@ -163,8 +165,9 @@ describe('aucune destination flottante ne ment', () => {
    * absente de `MENU_LADDER`, elle échapperait sinon aux deux témoins qui
    * suivent — la route déclarée et le libellé unique dans sept langues.
    */
-  test('les dix destinations sont comptées', () => {
-    expect(allFloatingDestinations()).toHaveLength(10);
+  test('les onze destinations sont comptées', () => {
+    expect(allFloatingDestinations()).toHaveLength(11);
+    expect(allFloatingDestinations()).toContain(GAME_DESTINATION);
     expect(allFloatingDestinations()).toContain(FEED_DESTINATION);
     expect(allFloatingDestinations()).toContain(CONVERSATIONS_DESTINATION);
     expect(allFloatingDestinations()).toContain(PROFILE_DESTINATION);
@@ -205,5 +208,29 @@ describe('chaque destination se dit', () => {
   test('porte une teinte qui n’appartient qu’à elle', () => {
     const teintes = MENU_LADDER.map((e) => e.tint);
     expect(new Set(teintes).size).toBe(teintes.length);
+  });
+});
+
+describe('le barreau du jeu (#17769)', () => {
+  /**
+   * Le jeu s'ouvre en deux touchers depuis tout écran racine : en tête de
+   * l'échelle, au plus près du bouton, sous le mot et le trophée qu'il porte
+   * déjà dans les Réglages et le Profil (« même mot, même icône »).
+   */
+  test('ouvre la Progression, en tête, avec le trophée', () => {
+    expect(MENU_LADDER[0]).toBe(GAME_DESTINATION);
+    expect(GAME_DESTINATION.route).toBe('progression');
+    expect(GAME_DESTINATION.glyph).toEqual({ set: 'socle', name: 'trophy' });
+  });
+
+  /**
+   * « Jeu masqué » retire le barreau — jamais monté puis caché, sinon le lien
+   * resterait dans le parcours de tabulation.
+   */
+  test('quitte l’échelle quand le jeu est masqué', () => {
+    const keys = menuLadderFor({ canAccessAdmin: false, gameHidden: true }).map((e) => e.key);
+    expect(keys).not.toContain('game');
+    expect(keys).toEqual(MENU_LADDER.filter((e) => e !== GAME_DESTINATION).map((e) => e.key));
+    expect(menuLadderFor({ canAccessAdmin: false }).map((e) => e.key)[0]).toBe('game');
   });
 });

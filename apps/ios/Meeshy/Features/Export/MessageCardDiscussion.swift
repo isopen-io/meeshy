@@ -23,7 +23,7 @@ import MeeshySDK
 /// texte servi par le Prisme, sinon l'original.
 ///
 /// UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ ferme la discussion entière
-/// (décision porteur du 2026-10-08, #9573, comme le web) : si elle tombe dans
+/// (#9573, comme le web): si elle tombe dans
 /// la portée de la fenêtre, aucune carte — la sauter peindrait une discussion
 /// trouée à l'endroit de ce qu'elle citait.
 enum MessageCardDiscussion {

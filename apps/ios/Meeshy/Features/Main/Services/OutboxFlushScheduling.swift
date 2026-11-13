@@ -107,7 +107,7 @@ final class OutboxRetryScheduler {
             .removeDuplicates()
             .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
             .filter { $0 }          // uniquement offline→online
-            .sink { _ in Task { @MainActor in await flush() } }
+            .relay(through: OrderedEventLane()) { _ in await flush() }
     }
 
     /// outbox-04 — réveille le flusher juste après une mutation sociale
@@ -123,7 +123,7 @@ final class OutboxRetryScheduler {
     ) {
         mutationCancellable = mutationPublisher
             .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
-            .sink { _ in Task { @MainActor in await flush() } }
+            .relay(through: OrderedEventLane()) { _ in await flush() }
     }
 
     /// Réveille le flusher à chaque reprise du socket. Une reprise sans
@@ -138,7 +138,7 @@ final class OutboxRetryScheduler {
             .removeDuplicates()
             .dropFirst()
             .filter { $0 }
-            .sink { _ in Task { @MainActor in await flush() } }
+            .relay(through: OrderedEventLane()) { _ in await flush() }
     }
 
     /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
@@ -202,7 +202,7 @@ final class OutboxRetryScheduler {
 ///
 /// Elle s'appelait `serverKeyedCaptions` et ne servait qu'aux légendes. Le nom
 /// disait le premier appelant, jamais la règle — et le second appelant (le
-/// texte alternatif, 2026-09-05) aurait eu le choix entre appeler une fonction
+/// texte alternatif) aurait eu le choix entre appeler une fonction
 /// qui prétend faire autre chose, ou en écrire une jumelle. Les deux réponses
 /// sont mauvaises ; renommer coûte une ligne.
 ///

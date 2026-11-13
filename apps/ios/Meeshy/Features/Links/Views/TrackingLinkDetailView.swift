@@ -71,9 +71,9 @@ struct TrackingLinkDetailView: View {
                     .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
             }
             .accessibilityHidden(true)
-            Text(link.displayName).font(.headline.weight(.bold)).foregroundColor(theme.textPrimary)
+            Text(link.displayName).font(.headline.weight(.bold)).foregroundStyle(theme.textPrimary)
             Text(link.shortUrl).font(.system(.caption, design: .monospaced))
-                .foregroundColor(theme.textSecondary).lineLimit(1)
+                .foregroundStyle(theme.textSecondary).lineLimit(1)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 if let c = link.campaign { utmTag(c, color: MeeshyColors.trackingAccent) }
                 if let s = link.source { utmTag(s, color: MeeshyColors.brandPrimary) }
@@ -92,7 +92,7 @@ struct TrackingLinkDetailView: View {
 
     private func utmTag(_ value: String, color: Color) -> some View {
         Text(value).font(.caption2.weight(.medium))
-            .foregroundColor(color)
+            .foregroundStyle(color)
             .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
     }
@@ -149,10 +149,10 @@ struct TrackingLinkDetailView: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
                     .frame(width: 46, height: 46)
                 Image(systemName: icon).font(.body)
-                    .foregroundColor(color)
+                    .foregroundStyle(color)
             }
             .accessibilityHidden(true)
-            Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
+            Text(label).font(.caption2.weight(.medium)).foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -168,7 +168,7 @@ struct TrackingLinkDetailView: View {
             }
             if let last = link.lastClickedAt {
                 HStack {
-                    Image(systemName: "clock").foregroundColor(theme.textMuted)
+                    Image(systemName: "clock").foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                     Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
                         .font(.footnote).foregroundColor(theme.textMuted)
@@ -180,11 +180,11 @@ struct TrackingLinkDetailView: View {
 
     private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(.title2).foregroundStyle(Color(hex: color))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.caption).foregroundColor(theme.textSecondary)
+                Text(value).font(.title2.weight(.bold)).foregroundStyle(theme.textPrimary)
+                Text(label).font(.caption).foregroundStyle(theme.textSecondary)
             }
             Spacer()
         }
@@ -212,12 +212,12 @@ struct TrackingLinkDetailView: View {
     private func breakdownCard(title: String, icon: String, color: Color, items: [(String, Int)]) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
-                Image(systemName: icon).font(.footnote).foregroundColor(color)
+                Image(systemName: icon).font(.footnote).foregroundStyle(color)
                     .accessibilityHidden(true)
                 sectionTitle(title)
             }
             if items.isEmpty {
-                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.footnote).foregroundColor(theme.textMuted)
+                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.footnote).foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, MeeshySpacing.sm)
             } else {
                 VStack(spacing: MeeshySpacing.sm) {
@@ -236,7 +236,7 @@ struct TrackingLinkDetailView: View {
     private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
         let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
         return HStack(spacing: MeeshySpacing.sm) {
-            Text(label).font(.footnote).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
+            Text(label).font(.footnote).foregroundStyle(theme.textPrimary).frame(width: 80, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(MeeshyOpacity.light)).frame(height: 8)
@@ -245,7 +245,7 @@ struct TrackingLinkDetailView: View {
                 }
             }
             .frame(height: 8)
-            Text("\(count)").font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary)
+            Text("\(count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textSecondary)
                 .frame(width: 30, alignment: .trailing)
         }
         .accessibilityElement(children: .combine)
@@ -295,10 +295,10 @@ struct TrackingLinkDetailView: View {
                 }
                 HStack(spacing: MeeshySpacing.xs) {
                     if let browser = click.browser {
-                        Text(browser).font(.caption2).foregroundColor(theme.textMuted)
+                        Text(browser).font(.caption2).foregroundStyle(theme.textMuted)
                     }
                     if let os = click.os {
-                        Text("· \(os)").font(.caption2).foregroundColor(theme.textMuted)
+                        Text("· \(os)").font(.caption2).foregroundStyle(theme.textMuted)
                     }
                 }
             }
@@ -347,9 +347,9 @@ struct TrackingLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.footnote).foregroundColor(theme.textSecondary)
+            Text(label).font(.footnote).foregroundStyle(theme.textSecondary)
             Spacer()
-            Text(value).font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(.footnote.weight(.medium)).foregroundStyle(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)

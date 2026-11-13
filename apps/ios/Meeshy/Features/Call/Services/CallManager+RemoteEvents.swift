@@ -68,7 +68,7 @@ extension CallManager {
     func handleRemoteEnd(callId: String, rawReason: String? = nil) {
         // Dedup (idempotence testable — cf. CallReliabilityPolicy.shouldProcessRemoteEnd) :
         // le serveur peut émettre `call:ended` plusieurs fois (CXEndCallAction côté
-        // peer + cleanup serveur, et depuis 2026-07-12 le broadcast REST end/leave),
+        // peer + cleanup serveur),
         // tous routés vers ce handler via le publisher `callEnded`. On traite le
         // premier ; un doublon sur un état déjà `.ended`, ou un event d'un AUTRE
         // call, est ignoré.

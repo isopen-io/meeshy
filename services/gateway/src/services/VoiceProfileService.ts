@@ -39,7 +39,8 @@ import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences'
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { calculateAge, judgeDeclaredBirthDate, parseBirthDateDay } from '@meeshy/shared/utils/age';
+import { calculateAge } from '@meeshy/shared/utils/age';
+import { consentBirthDate } from './voice-cloning-gate';
 import { writeBirthDateOnce } from './auth/birth-date-write';
 import { EngagementService } from './engagement/EngagementService';
 import { guardedTimeout } from '../utils/guarded-timer';
@@ -318,18 +319,17 @@ export class VoiceProfileService extends EventEmitter {
       // Récupérer l'état actuel pour gérer les dépendances
       const existingUser = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          dataProcessingConsentAt: true,
-          voiceDataConsentAt: true,
-          voiceProfileConsentAt: true,
-          birthDate: true,
-        }
+        select: { dataProcessingConsentAt: true, voiceDataConsentAt: true, voiceProfileConsentAt: true, birthDate: true }
       });
       const { birthDate: existingBirthDate, ...existingConsents } = existingUser ?? { birthDate: null };
       logger.info('[VoiceProfileService] Existing user consents:', existingConsents);
 
-      // Les consentements vocaux sont maintenant dans User
-      // IMPORTANT: Respecter la chaîne de dépendances:
+      const { birthDateToWrite, cloningAgeAdmitted } = consentBirthDate(existingBirthDate, declaredBirthDateText, now);
+      if (consent.voiceCloningConsent === true && !cloningAgeAdmitted) {
+        return { success: false, error: 'Voice cloning requires being at least 18 years old', errorCode: 'VOICE_CLONING_AGE_REQUIRED' };
+      }
+
+      // Consentements vocaux dans User — chaîne de dépendances :
       // dataProcessingConsentAt → voiceDataConsentAt → voiceProfileConsentAt → voiceCloningEnabledAt
       if (consent.voiceRecordingConsent !== undefined) {
         if (consent.voiceRecordingConsent) {
@@ -367,10 +367,6 @@ export class VoiceProfileService extends EventEmitter {
         }
       }
 
-      // #9927 — déclarée UNE fois (écriture conditionnée en base), jamais une date que PUT /me/birth-date refuserait.
-      const declaredBirthDate = declaredBirthDateText ? parseBirthDateDay(declaredBirthDateText) : null;
-      const birthDateToWrite = declaredBirthDate && !existingBirthDate && judgeDeclaredBirthDate(declaredBirthDate, now) === 'admitted'
-        ? declaredBirthDate : null;
       if (birthDateToWrite) await writeBirthDateOnce(this.prisma, userId, { birthDate: birthDateToWrite, ageVerifiedAt: now });
       if (Object.keys(userData).length === 0 && declaredBirthDateText) {
         return { success: true, data: { consentUpdated: birthDateToWrite !== null } };

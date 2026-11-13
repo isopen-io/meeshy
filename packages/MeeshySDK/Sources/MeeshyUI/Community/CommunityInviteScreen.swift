@@ -36,7 +36,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
                     Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) {
                         if let onDone { onDone() } else { dismiss() }
                     }
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
         }
@@ -47,10 +47,10 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
     private var searchBar: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .textFieldStyle(.plain)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -94,7 +94,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .textCase(.uppercase)
                     .padding(.horizontal, MeeshySpacing.lg)
 
@@ -134,27 +134,27 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
 
             Spacer()
 
             if alreadyInvited {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: MeeshyIconSize.xl))
-                    .foregroundColor(MeeshyColors.success)
+                    .meeshyScaledFont(MeeshyIconSize.xl)
+                    .foregroundStyle(MeeshyColors.success)
             } else {
                 Button {
                     Task { await viewModel.inviteUser(userId: user.id) }
                 } label: {
                     Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(MeeshyColors.indigo500)

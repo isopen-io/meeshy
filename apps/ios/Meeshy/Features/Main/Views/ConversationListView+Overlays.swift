@@ -6,15 +6,16 @@ import MeeshyUI
 
 extension ConversationListView {
 
-    // MARK: - Menu d'appui long — deux chemins par version d'OS
+    // MARK: - Menu d'appui long — deux chemins
     //
-    // iOS 26+ : menu contextuel NATIF `.contextMenu(menuItems:preview:)`
-    // (rendu Liquid Glass système) — builder ci-dessous, attaché par
-    // `ConversationRowItem`. < iOS 26 : overlay custom
-    // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
-    // → `onLongPress`). Les DEUX chemins parcourent le MÊME catalogue
-    // (`rowMenuCatalog(for:)`, #11230) et appellent les MÊMES gestes ; la
-    // suppression arme toujours `sheetTargets.deleteTarget` (confirmation
+    // iPhone, toutes versions d'iOS (#17242) : l'aperçu personnalisé
+    // `ConversationLongPressPeek` — grande carte, menu compact qu'on tire vers
+    // le haut — déclenché par `RowPressBounceModifier` → `onLongPress`. iPad
+    // sous iOS 26 : le menu contextuel NATIF `.contextMenu(menuItems:preview:)`
+    // (builder ci-dessous), le seul qui coexiste avec le glisser système.
+    // `ConversationRowMenuRoute` tranche. Les DEUX chemins parcourent le MÊME
+    // catalogue (`rowMenuCatalog(for:)`, #11230) et appellent les MÊMES gestes ;
+    // la suppression arme toujours `sheetTargets.deleteTarget` (confirmation
     // système — invariants `ConversationMenuSystemDesignGuardTests`).
 
     // MARK: - Le catalogue de la rangée (#11230)
@@ -61,7 +62,7 @@ extension ConversationListView {
         sheetTargets.settings = conversation
     }
 
-    // MARK: - Native Context Menu (iOS 26 Liquid Glass)
+    // MARK: - Native Context Menu (iPad sous iOS 26, Liquid Glass)
 
     /// Box stable pour `ConversationRowItem.nativeContextMenu` : le menu est
     /// construit UNE fois par évaluation de `conversationRow` (pas à chaque
@@ -182,7 +183,7 @@ extension ConversationListView {
         }
     }
 
-    // MARK: - Custom Context Menu Overlay (fallback < iOS 26)
+    // MARK: - Aperçu d'appui long personnalisé (iPhone, toutes versions — #17242)
 
     func dismissContextMenu() {
         // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
@@ -199,7 +200,7 @@ extension ConversationListView {
         let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
         withAnimation(ConversationPreviewEntranceMotion.exit(reduceMotion: reduceMotion)) {
             previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
-            if !chipModeLatched && dragOffsetY <= 110 {
+            if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
                 // Fermeture normale : la carte revient en place en fondant.
                 // Fermeture depuis le morph drag (chip relâchée) : la carte
                 // fond SUR PLACE sous le doigt — la faire remonter au centre
@@ -227,7 +228,7 @@ extension ConversationListView {
     /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
     /// doigt remonte (pour viser un header de section au-dessus).
     var dragMorphProgress: CGFloat {
-        chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
+        chipModeLatched ? 1 : ConversationPeekPullDown.progress(translation: dragOffsetY)
     }
 
     /// Émergence de l'aperçu depuis la ligne pressée — tick 1 : la carte se
@@ -254,16 +255,6 @@ extension ConversationListView {
         }
     }
 
-    /// L'appel de l'en-tête de l'aperçu : le verdict ET le chemin de l'entrée
-    /// « Appeler » (ni soi-même, ni conversation terminée, ni invité).
-    func previewCallAction(for conversation: Conversation) -> (() -> Void)? {
-        guard rowMenuCatalog(for: conversation).reach.contains(.call) else { return nil }
-        return {
-            dismissContextMenu()
-            ConversationRowMenuActions.startCall(to: conversation, isVideo: false)
-        }
-    }
-
     /// Capture de la frame de REPOS de la carte — uniquement hors
     /// transformation (avant l'émergence : overlay invisible, scale 1,
     /// offsets nuls), sinon la mesure inclurait scale/offset en vol.
@@ -284,111 +275,22 @@ extension ConversationListView {
                     // Le voile commun de l'appui long (#11222) : il s'EFFACE
                     // pendant le morph drag, la liste réapparaît sous la carte
                     // devenue chip draggable.
-                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
-                                  onDismiss: { dismissContextMenu() })
-
-                    VStack(spacing: MeeshySpacing.lg) {
-                        // Aperçu d'appui long = la carte des DERNIERS MESSAGES
-                        // (bannière, avatar/logo, titre, icônes d'en-tête, fil
-                        // récent) — drapeau Lentille ON comme OFF (décision user
-                        // 2026-08-21 : le menu des modes n'a rien à faire dans
-                        // l'aperçu ; le choix de mode garde ses deux portes,
-                        // l'encoche de la carte de focus et le sous-menu « Mode
-                        // de lecture », monté plus haut dans ce fichier).
-                        ConversationPreviewView(
-                            conversation: conversation,
-                            previewLoader: conversationViewModel.previewLoader,
-                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
-                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                            storyState: storyRingState(for: conversation),
-                            moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
-                            presenceState: conversation.type == .direct
-                                ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                                : nil,
-                            isDirect: conversation.type == .direct,
-                            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
-                            onCall: previewCallAction(for: conversation),
-                            onSearch: { dismissContextMenu(); openConversation(conversation, searching: true) },
-                            onInfo: { dismissContextMenu(); presentInfo(of: conversation) },
-                            onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
-                        )
-                        // Preview STATIQUE (parité `.contextMenu` natif) : le
-                        // ScrollView interne des messages interceptait le pan et
-                        // volait le drag du geste de repli/morph ci-dessous — le
-                        // contenu défilait dans la carte au lieu de la déplacer
-                        // (vérifié frame par frame 2026-07-03).
-                        .scrollDisabled(true)
-                        // Toucher la carte ouvre la conversation, par la porte du verrou.
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            dismissContextMenu()
-                            openConversation(conversation)
-                        }
-                        // 340 pt au plus, et jamais plus large que la colonne (volet
-                        // gauche iPad étroit) : la carte débordait de ses bords.
-                        .frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum).padding(.horizontal, MeeshySpacing.md)
-                        // Frame de repos de la carte (mesurée overlay invisible,
-                        // hors transformation) — point d'arrivée de l'émergence.
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
-                                    .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
-                                        capturePreviewRestFrameIfIdle(frame)
-                                    }
-                            }
-                        )
-                        // Aperçu : émerge DEPUIS la ligne pressée (placement par
-                        // `runContextMenuEmergence` : scale ≈ hauteur ligne /
-                        // hauteur carte + offset vers la ligne) puis rejoint sa
-                        // position finale — départ lent, accélération, rebond.
-                        // Pendant le morph drag vers le bas, la carte rétrécit en
-                        // chip (multiplicateur dragMorphProgress) et suit le doigt.
-                        // Glisser vers le haut replie la carte (previewScale → 0,
-                        // ancre .bottom : elle se résorbe vers le menu) pour donner
-                        // toute la place au menu ; glisser vers le bas au-delà du
-                        // seuil ferme l'overlay (parité contextMenu natif). Ce
-                        // geste vit ICI et jamais sur les lignes de la liste : un
-                        // DragGesture plein-ligne entrait en contention avec le pan
-                        // du ScrollView et figeait le scroll (régression ff5d5649).
-                        .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
-                        .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
-                        .opacity(contextMenuAppeared ? 1 : 0)
-                        // Blur PROGRESSIF lié au scale (continu, sans saut au
-                        // franchissement d'un seuil) : net à 1.0, flouté au départ
-                        // de l'émergence, jusqu'à 3.0 carte repliée — la carte se
-                        // matérialise à l'ouverture et se dissout au repli/
-                        // fermeture. max(0,…) : l'overshoot du rebond dépasse 1.0,
-                        // le radius ne doit jamais être négatif.
-                        .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
-                        .gesture(previewCollapseGesture)
-
-                        ConversationContextMenuView(
-                            accentHex: conversation.accentColor,
-                            catalog: rowMenuCatalog(for: conversation),
-                            currentReaction: conversation.userState.reaction,
-                            categories: conversationViewModel.userCategories.map {
-                                ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
-                            },
-                            currentSectionId: conversation.userState.sectionId,
-                            actions: ConversationRowMenuActions.make(for: conversation, in: self),
-                            readingModeMenu: readingModeSubmenu(for: conversation, onSelected: { dismissContextMenu() }),
-                            onDismiss: { dismissContextMenu() }
-                        )
-                        // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
-                        // transaction que l'émergence de l'aperçu — le menu
-                        // remonte pendant que la carte rejoint sa place
-                        // (coordonné), et redescend en se dissolvant (blur) à la
-                        // fermeture. Pendant le morph drag, il glisse vers le bas
-                        // et se dissout (opacité + blur ∝ dragMorphProgress).
-                        // L'ancienne formule `70 * (1 - previewScale)` valait 0
-                        // au montage (previewScale démarrait à 1.0) : le slide-up
-                        // était inerte.
-                        .offset(y: contextMenuAppeared ? 40 * dragMorphProgress : ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: reduceMotion))
-                        .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
-                        .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : ConversationPreviewEntranceMotion.menuRestBlur(reduceMotion: reduceMotion))
-                    }
-                    .padding(.horizontal, MeeshySpacing.xl)
+                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0, weight: ConversationPeekVeil.weight,
+                                  onDismiss: { handlePeekTouch(.veil, on: conversation) })
+                    // L'aperçu d'appui long (#17242) : grande carte, menu
+                    // COMPACT qu'on tire vers le haut. La progression vit dans
+                    // `ConversationLongPressPeek` : le geste ne ré-évalue pas
+                    // la liste.
+                    ConversationLongPressPeek(
+                        isVisible: contextMenuAppeared,
+                        reduceMotion: reduceMotion,
+                        menuChrome: peekMenuChrome(reduceMotion: reduceMotion),
+                        card: { heights in peekCard(for: conversation, heights: heights, reduceMotion: reduceMotion) },
+                        menu: peekMenu(for: conversation),
+                        onChipDragChanged: { handleCardChipDrag($0) },
+                        onChipDragEnded: { endCardChipDrag($0) },
+                        onDismiss: { dismissContextMenu() }
+                    )
                 }
                 .onAppear {
                     // Émergence depuis la ligne pressée : placement invisible sur
@@ -403,72 +305,121 @@ extension ConversationListView {
         }
     }
 
-    /// Geste de repli / morph de l'aperçu (feature « shrink preview » de
-    /// a98b93a7, rebranchée au bon étage).
-    /// Vers le HAUT : repli progressif (100 pt = replié) qui donne toute la
-    /// place au menu ; au lâcher sous 0.45 la carte reste repliée jusqu'à la
-    /// fermeture (`dismissContextMenu` restaure 1.0).
-    /// Vers le BAS : morph drag-n-drop — la carte suit le doigt 1:1 (x et y),
-    /// rétrécit en chip, le blur du fond s'efface et le menu se dissout
-    /// (`dragMorphProgress`). Au lâcher au-delà de 110 pt le menu se ferme
-    /// (la chip fond sur place) ; en deçà, snap-back complet en 0.30 s.
-    /// Drop de la chip sur une section (déplacement) : Phase 2 — le
-    /// `SectionDropDelegate` dormant sera rebranché à ce geste.
-    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le
-    /// ScrollView est masqué par l'overlay, zéro contention de scroll
-    /// possible.
-    private var previewCollapseGesture: some Gesture {
-        DragGesture(coordinateSpace: .global)
-            .onChanged { value in
-                let translation = value.translation.height
-                if chipModeLatched {
-                    // Chip libre : suit le doigt sur les deux axes, y compris
-                    // vers le haut pour viser un header de section.
-                    dragOffsetY = translation
-                    dragOffsetX = value.translation.width
-                    updateChipDropTarget(at: value.location)
-                    chipAutoScrollDriver.update(fingerLocation: value.location)
-                } else if translation < 0 {
-                    previewScale = max(0, 1.0 + translation / 100)
-                    dragOffsetY = 0
-                    dragOffsetX = 0
-                } else {
-                    dragOffsetY = translation
-                    dragOffsetX = value.translation.width * dragMorphProgress
-                    if dragMorphProgress >= 1 {
-                        // Morph complet → verrouille le mode chip (drag n drop
-                        // engagé tant que le doigt reste posé). L'auto-scroll
-                        // de bord s'arme ici : stationner près d'un bord fait
-                        // défiler la liste vers les headers hors écran.
-                        chipModeLatched = true
-                        HapticFeedback.light()
-                        updateChipDropTarget(at: value.location)
-                        chipAutoScrollDriver.onScrollTick = { location in
-                            updateChipDropTarget(at: location)
-                        }
-                        chipAutoScrollDriver.update(fingerLocation: value.location)
+    /// La carte de l'aperçu d'appui long = la carte des DERNIERS MESSAGES
+    /// (bannière, avatar/logo, titre, icônes d'en-tête, fil récent) — drapeau
+    /// Lentille ON comme OFF (le choix de mode garde ses deux portes, l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
+    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
+        ConversationPreviewView(
+            conversation: conversation,
+            previewLoader: conversationViewModel.previewLoader,
+            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
+            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+            storyState: storyRingState(for: conversation),
+            moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+            presenceState: conversation.type == .direct
+                ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                : nil,
+            isDirect: conversation.type == .direct,
+            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+            peekHeights: heights
+        )
+        // Preview STATIQUE : le ScrollView interne des messages volerait le
+        // glissement qui tire le menu ou morphe la carte en pastille.
+        .scrollDisabled(true)
+        // Toucher la carte ouvre la conversation, par la porte du verrou.
+        .contentShape(Rectangle())
+        .onTapGesture { handlePeekTouch(.card, on: conversation) }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
+        // Frame de repos de la carte (mesurée overlay invisible, hors
+        // transformation) — point d'arrivée de l'émergence.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
+                    .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                        capturePreviewRestFrameIfIdle(frame)
                     }
-                }
             }
-            .onEnded { value in
-                if chipModeLatched {
-                    chipAutoScrollDriver.stop()
-                    handleChipDrop(at: value.location)
-                    return
-                }
-                if value.translation.height > 110 {
-                    dismissContextMenu()
-                    return
-                }
-                let collapsed = previewScale < 0.45
-                // Faster, bouncier snap-back: (0.35, 0.8) → (0.30, 0.72)
-                // Creates snappier feel when preview collapses or re-expands
-                withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
-                    previewScale = collapsed ? 0 : 1.0
-                    dragOffsetY = 0
-                    dragOffsetX = 0
-                }
-            }
+        )
+        // Émerge DEPUIS la ligne pressée (`runContextMenuEmergence`) puis
+        // rejoint sa place ; pendant le morph vers le bas, elle rétrécit en
+        // pastille et suit le doigt (`dragMorphProgress`).
+        .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
+        .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
+        .opacity(contextMenuAppeared ? 1 : 0)
+        .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
+    }
+
+    func handlePeekTouch(_ touch: ConversationPeekTouch, on conversation: Conversation) { dismissContextMenu(); if touch.effect == .dismissAndOpen { openConversation(conversation) } }
+    /// Le contenu du menu : le MÊME catalogue et les MÊMES gestes que le menu
+    /// natif de l'iPad sous iOS 26.
+    func peekMenu(for conversation: Conversation) -> ConversationContextMenuView {
+        ConversationContextMenuView(
+            accentHex: conversation.accentColor,
+            catalog: rowMenuCatalog(for: conversation),
+            currentReaction: conversation.userState.reaction,
+            categories: conversationViewModel.userCategories.map {
+                ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
+            },
+            currentSectionId: conversation.userState.sectionId,
+            actions: ConversationRowMenuActions.make(for: conversation, in: self),
+            readingModeMenu: readingModeSubmenu(for: conversation, onSelected: { dismissContextMenu() }),
+            onDismiss: { dismissContextMenu() }
+        )
+    }
+
+    /// Le menu remonte en se dé-floutant avec l'émergence de la carte, et
+    /// redescend en se dissolvant pendant le morph en pastille.
+    func peekMenuChrome(reduceMotion: Bool) -> ConversationPeekMenuChrome {
+        guard contextMenuAppeared else {
+            return ConversationPeekMenuChrome(
+                offset: ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: reduceMotion),
+                opacity: 0,
+                blur: ConversationPreviewEntranceMotion.menuRestBlur(reduceMotion: reduceMotion)
+            )
+        }
+        return ConversationPeekMenuChrome(offset: 40 * dragMorphProgress, opacity: Double(1 - dragMorphProgress), blur: 6 * dragMorphProgress)
+    }
+
+    /// Glisser la carte vers le BAS depuis le cran compact : morph drag-n-drop
+    /// — la carte suit le doigt (x et y), rétrécit en pastille, le voile
+    /// s'efface et le menu se dissout (`dragMorphProgress`). Une fois LATCHÉE,
+    /// la pastille suit le doigt partout pour viser un en-tête de section.
+    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le ScrollView
+    /// est masqué par l'overlay, zéro contention de scroll possible.
+    func handleCardChipDrag(_ value: DragGesture.Value) {
+        if chipModeLatched {
+            dragOffsetY = value.translation.height
+            dragOffsetX = value.translation.width
+            updateChipDropTarget(at: value.location)
+            chipAutoScrollDriver.update(fingerLocation: value.location)
+            return
+        }
+        dragOffsetY = max(0, value.translation.height)
+        dragOffsetX = value.translation.width * dragMorphProgress
+        guard dragMorphProgress >= 1 else { return }
+        // Morph complet → verrouille le mode pastille ; l'auto-scroll de bord
+        // s'arme ici pour viser les en-têtes hors écran.
+        chipModeLatched = true
+        HapticFeedback.light()
+        updateChipDropTarget(at: value.location)
+        chipAutoScrollDriver.onScrollTick = { location in
+            updateChipDropTarget(at: location)
+        }
+        chipAutoScrollDriver.update(fingerLocation: value.location)
+    }
+
+    /// Lâcher : la pastille se dépose, ou `ConversationPeekPullDown` ferme / remet en place (#17258).
+    func endCardChipDrag(_ value: DragGesture.Value) {
+        switch ConversationPeekPullDown.release(predictedEndTranslation: value.predictedEndTranslation.height, isLatched: chipModeLatched) {
+        case .drop:
+            chipAutoScrollDriver.stop()
+            handleChipDrop(at: value.location)
+        case .dismiss:
+            dismissContextMenu()
+        case .restore:
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) { dragOffsetY = 0; dragOffsetX = 0 }
+        }
     }
 
     /// Surligne le header de section sous le doigt pendant le drag de la chip
@@ -530,7 +481,7 @@ extension ConversationListView {
 
 /// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
 /// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
-/// appartient au long-press, pas au swipe des lignes — feedback 2026-07-03) et
+/// appartient au long-press) et
 /// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
 /// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
 /// par `MeeshyMotion.shouldReduce`.

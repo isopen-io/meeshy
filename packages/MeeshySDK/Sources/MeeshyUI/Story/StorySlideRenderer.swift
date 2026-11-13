@@ -40,7 +40,7 @@ public enum StorySlideRenderer {
 
             // 1. Background color — UNIQUEMENT sans fond visuel de fond. Avec un fond
             // média (image/vidéo via mediaObjects, ou legacy `bgImage`), pas de fond
-            // coloré (user 2026-06-03) : base neutre noire, le média est dessiné par
+            // coloré : base neutre noire, le média est dessiné par
             // dessus (étapes 2 / 2b). D'autant plus nécessaire qu'un fond zoomé/pané ne
             // remplit plus le rect (transform it.50) → la couleur fuirait en bandes.
             let hasVisualBg = (bgImage != nil) || slide.effects.hasVisualBackgroundMedia
@@ -171,7 +171,7 @@ public enum StorySlideRenderer {
             // fallback). Mirrors `StoryRenderer` where the drawing overlay sits at
             // zPosition 9999 above every item (text/media/stickers). Without this
             // the thumbHash placeholder ignored the drawing entirely (spec user
-            // 2026-06-01 : ThumbHash de TOUTE la story avec toutes les couches :
+            // ThumbHash de TOUTE la story avec toutes les couches :
             // image, texte ET dessin). Strokes are rasterised at design size
             // (1080x1920) then stretched into the composite rect — the same
             // design→bounds mapping the live `MeeshyStrokeCanvas` uses.
@@ -280,7 +280,7 @@ public enum StorySlideRenderer {
         // Fond du texte — dérivé de `resolvedBackgroundStyle` (et NON du seul champ
         // legacy `textBg`). Le contrôle « Fond du texte » écrit aujourd'hui
         // `backgroundStyle = .solid/.glass` avec `textBg = nil`, donc lire `textBg`
-        // seul ratait la boîte → thumbHash sans le fond du texte (bug 2026-06-01).
+        // seul ratait la boîte → thumbHash sans le fond du texte.
         if let bg = compositeBackgroundColor(for: textObj) {
             attrs[.backgroundColor] = bg
         }

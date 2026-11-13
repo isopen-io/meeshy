@@ -48,7 +48,7 @@ struct AffiliateView: View {
     // MARK: - Header Action
 
     /// Le (+) devient un disque de verre, du diamètre du retour qui lui fait
-    /// face (directive porteur 2026-09-14, #6481) — le glyphe plein cerclé
+    /// face (#6481) — le glyphe plein cerclé
     /// ne ressemblait à aucun autre chrome de la barre.
     private var createLinkButton: some View {
         Button {
@@ -56,10 +56,12 @@ struct AffiliateView: View {
             showCreateSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: MeeshyIconSize.lg, weight: .bold))
-                .foregroundColor(Color(hex: accentColor))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
+                .foregroundStyle(Color(hex: accentColor))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
@@ -106,16 +108,16 @@ struct AffiliateView: View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
                 .accessibilityHidden(true)
 
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
 
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -138,7 +140,7 @@ struct AffiliateView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "link.badge.plus")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .accessibilityHidden(true)
                 Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
@@ -179,17 +181,17 @@ struct AffiliateView: View {
             // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
             // déséquilibrer l'état vide.
             Image(systemName: "link")
-                .font(.system(size: 36))
-                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .font(MeeshyFont.fixedGlyph(36))
+                .foregroundStyle(Color(hex: accentColor).opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)
@@ -208,18 +210,18 @@ struct AffiliateView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(token.name)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.sm) {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     MetaSeparator()
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -234,7 +236,7 @@ struct AffiliateView: View {
             } label: {
                 Image(systemName: "doc.on.doc")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
@@ -245,7 +247,7 @@ struct AffiliateView: View {
             } label: {
                 Image(systemName: "trash")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
             .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
         }
@@ -282,7 +284,7 @@ struct AffiliateView: View {
     private var shareTokenGlyph: some View {
         Image(systemName: "square.and.arrow.up")
             .font(MeeshyFont.relative(MeeshyIconSize.md))
-            .foregroundColor(Color(hex: accentColor))
+            .foregroundStyle(Color(hex: accentColor))
     }
 }
 

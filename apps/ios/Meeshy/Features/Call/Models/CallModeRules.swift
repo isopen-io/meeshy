@@ -125,9 +125,24 @@ nonisolated struct CallModeCarouselMotion<Item: Equatable> {
     }
 }
 
-enum CallEffectsCategory: String, CaseIterable, Sendable {
+nonisolated enum CallEffectsCategory: String, CaseIterable, Sendable {
     case face
     case color
+
+    var kind: CallEffectKind {
+        switch self {
+        case .face: return .face
+        case .color: return .color
+        }
+    }
+
+    init?(kind: CallEffectKind) {
+        switch kind {
+        case .face: self = .face
+        case .color: self = .color
+        case .frame, .landscape, .voice: return nil
+        }
+    }
 }
 
 enum CallEffectsModeRule {
@@ -141,9 +156,33 @@ enum CallEffectsModeRule {
     static func applying(color preset: VideoFilterPreset, to config: VideoFilterConfig) -> VideoFilterConfig {
         config.applyingPreset(preset == .natural ? nil : preset)
     }
+}
 
-    static func exiting(validated: Bool, current: VideoFilterConfig, original: VideoFilterConfig) -> VideoFilterConfig {
-        validated ? current : original
+/// P8b.6 — Réglages ouvert, la bande de looks et les puces partent en fondu pendant que le
+/// panneau monte depuis la barre resserrée, ≈ 200 ms ; il y redescend au retour.
+/// « Réduire les animations » garde un fondu court, sans montée : l'écran ne change jamais d'un coup.
+nonisolated enum CallEffectsSettingsMotion {
+    static let rise: CGFloat = 20
+
+    static func duration(reduceMotion: Bool) -> Double {
+        reduceMotion ? 0.15 : 0.2
+    }
+
+    static func panelRise(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : rise
+    }
+}
+
+/// #17811 · C1.12 — la barre et le carrousel du Montage montent depuis le bas et y
+/// redescendent, sur la couche qui fond. Effets garde le seul fondu de la couche :
+/// la loi 17 l'excepte (« Effets emprunte au composer », loi 9). « Réduire les
+/// animations » ne laisse que ce fondu court.
+enum CallModeChromeMotion {
+    static func risesFromBottom(_ mode: CallScreenMode, reduceMotion: Bool) -> Bool {
+        switch mode {
+        case .montage: return !reduceMotion
+        case .effects: return false
+        }
     }
 }
 

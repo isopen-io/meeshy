@@ -1,4 +1,6 @@
 import Foundation
+import MeeshySDK
+import MeeshyUI
 
 /// Où l'on colle, dans le composer. Deux surfaces, deux intentions.
 nonisolated enum PasteSurface: Equatable {
@@ -75,5 +77,88 @@ nonisolated struct PasteDestination: Equatable {
         case .image: return surface == .stickers ? .sticker : .mediaObject
         case .video, .audio: return .mediaObject
         }
+    }
+}
+
+/// Où va ce que « Coller » apporte dans la vue principale du composer (#17434, #13640).
+nonisolated enum ComposerPasteTarget: Equatable, Sendable {
+    /// Un visuel devient le fond visuel, un son le son de fond, quand la scène n'en a pas.
+    case sceneBackground
+    /// Quand ce fond existe déjà, le média se pose sur la scène comme un objet.
+    case sceneObject
+    /// Un texte va au contenu d'un post (ou d'un statut).
+    case publicationContent
+    /// Un texte devient la légende de la slide d'une story ou d'un réel.
+    case slideLegend
+}
+
+/// Les fonds que la scène porte déjà, une famille à la fois : un visuel ne
+/// regarde que le fond visuel, un son que le son de fond.
+nonisolated struct ComposerPasteBackground: Equatable, Sendable {
+    let visual: Bool
+    let sound: Bool
+
+    init(visual: Bool, sound: Bool) {
+        self.visual = visual
+        self.sound = sound
+    }
+
+    /// Le fond visuel est un objet de fond ou une image de slide ; le son de
+    /// fond est l'audio résolu comme tel.
+    init(effects: StoryEffects, slideImage: Bool) {
+        self.init(visual: effects.hasVisualBackgroundMedia || slideImage,
+                  sound: effects.resolvedBackgroundAudio != nil)
+    }
+
+    /// Les fonds après qu'un média collé a pris celui de sa famille : le
+    /// suivant du même collage se pose alors sur la scène.
+    func posing(_ item: StoryPastedItem) -> ComposerPasteBackground {
+        switch item {
+        case .image, .video: return ComposerPasteBackground(visual: true, sound: sound)
+        case .audio: return ComposerPasteBackground(visual: visual, sound: true)
+        case .text: return self
+        }
+    }
+}
+
+/// **La loi du bouton « Coller »** (décision porteur, #13640) : un média
+/// fait le fond de sa famille (visuel ou son) s'il n'y en a pas et se pose
+/// sur la scène sinon ; un texte va au contenu d'un post, à la légende d'une
+/// story ou d'un réel. Jamais un objet texte sur la scène.
+nonisolated enum ComposerPasteRouting {
+    static func target(for item: StoryPastedItem, format: ComposerFormat,
+                       background: ComposerPasteBackground) -> ComposerPasteTarget {
+        switch item {
+        case .image, .video:
+            return background.visual ? .sceneObject : .sceneBackground
+        case .audio:
+            return background.sound ? .sceneObject : .sceneBackground
+        case .text:
+            switch format {
+            case .story, .reel: return .slideLegend
+            case .post, .status: return .publicationContent
+            }
+        }
+    }
+
+    /// Écrit le texte collé là où `target` l'envoie : la légende de la slide
+    /// courante, ou le contenu de la publication.
+    @MainActor
+    static func paste(_ pasted: String, format: ComposerFormat, documentText: inout String,
+                      scene: StoryComposerViewModel) {
+        switch target(for: .text(pasted), format: format, background: ComposerPasteBackground(visual: false, sound: false)) {
+        case .slideLegend:
+            scene.applyContentText(publicationText(current: scene.currentSlide.content ?? "", pasted: pasted))
+        default:
+            documentText = publicationText(current: documentText, pasted: pasted)
+        }
+    }
+
+    /// Le contenu après le collage : le texte collé, rogné, s'ajoute à la ligne
+    /// sous ce que l'auteur a déjà écrit ; un collage vide ne change rien.
+    static func publicationText(current: String, pasted: String) -> String {
+        let colle = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !colle.isEmpty else { return current }
+        return current.isEmpty ? colle : current + "\n" + colle
     }
 }

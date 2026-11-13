@@ -67,11 +67,11 @@ public struct SoundDetailView: View {
         VStack(spacing: MeeshySpacing.smPlus) {
             cover
             Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             if let author = sound.authorLabel {
-                Text(author).font(.system(size: MeeshyFont.subheadSize)).foregroundStyle(.secondary)
+                Text(author).font(MeeshyFont.relative(MeeshyFont.subheadSize)).foregroundStyle(.secondary)
             }
             counters
             Button {
@@ -148,7 +148,7 @@ public struct SoundDetailView: View {
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "square.stack")
-                .font(.system(size: 30, weight: .light))
+                .meeshyScaledFont(30, weight: .light)
                 .foregroundStyle(.secondary)
             Text(model.didFail
                  ? String(localized: "story.sound.detail.failed",
@@ -188,7 +188,7 @@ struct SoundPostTile: View {
 
             if post.viewCount > 0 {
                 Label(post.viewCount.formatted(.number.notation(.compactName)), systemImage: "play.fill")
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(radius: 2)
                     .padding(MeeshySpacing.xsPlus)

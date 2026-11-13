@@ -45,7 +45,7 @@ struct FeedComposerPlaceholder: View {
             HStack {
                 Text(String(localized: "feed.compose.subtitle", defaultValue: "Partager quelque chose avec le monde…"))
                     .font(.subheadline)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Spacer()
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -100,7 +100,7 @@ struct FeedComposerPlaceholder: View {
                 // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
                 // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
     }
 }

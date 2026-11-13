@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,10 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallAudioStageLayout
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-private val PAIR_AVATAR_SIZE = 120.dp
+private val PAIR_AVATAR_SIZE = CallAudioStageLayout.FULL_AVATAR_DP.dp
 private const val PILL_BACKGROUND_ALPHA = 0.15f
 private const val LOCAL_BADGE_RATIO = 0.4f
 private val LOCAL_BADGE_MIN = 44.dp
@@ -55,13 +55,20 @@ internal fun CallAudioStage(
     peer: CallPeerVisual,
     modifier: Modifier = Modifier,
     signalingDegraded: Boolean = false,
+    /** D'où vient « le pair parle » : l'anneau et le halo de sa couleur n'existent qu'à la parole (P9). */
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
-        CallAvatarPair(name = state.peerName, peer = peer, size = PAIR_AVATAR_SIZE)
+        CallAvatarPair(
+            name = state.peerName,
+            peer = peer,
+            size = PAIR_AVATAR_SIZE,
+            peerSpeech = peerSpeech,
+        )
         Text(
             text = callPeerTitle(state.peerName),
             style = MaterialTheme.typography.headlineMedium,
@@ -75,34 +82,60 @@ internal fun CallAudioStage(
 
 /** Le correspondant et, en pastille au coin bas-fin, soi : décoratif, le nom est lu par le texte voisin. */
 @Composable
-internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifier: Modifier = Modifier) {
+internal fun CallAvatarPair(
+    name: String,
+    peer: CallPeerVisual,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    /** Sa couleur d'auteur ([CallTileRim.peerFace]) et sa parole : l'anneau et le halo fondent à l'opacité ; au repos, rien. */
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
+) {
     val badge = maxOf(LOCAL_BADGE_MIN, size * LOCAL_BADGE_RATIO)
+    val reach = callSpeakingReach(compact = false)
     Box(modifier = modifier.clearAndSetSemantics { }) {
-        CallAvatarDisc(name = name, size = size, avatarUrl = peer.avatarUrl, ring = peer.ring)
+        CallSpeakingAvatar(
+            name = name,
+            size = size,
+            avatarUrl = peer.avatarUrl,
+            colorHex = CallTileRim.peerFace(peerSpeech.peerUserId),
+            speaking = rememberPeerSpeaking(peerSpeech),
+            reduceMotion = rememberCallReduceMotion(),
+            compact = false,
+            ring = peer.ring,
+        )
         CallAvatarDisc(
             name = peer.localBadgeName(stringResource(R.string.call_avatar_you)),
             size = badge,
             avatarUrl = peer.selfAvatarUrl,
-            modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f, y = badge * 0.12f),
+            modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f - reach, y = badge * 0.12f - reach),
         )
     }
 }
 
+/**
+ * La durée de l'appel, lue « Durée de l'appel » puis son temps parlé. [compact] : la ligne de l'en-tête compact
+ * (#17529, iOS `CallCompactAudioHeader`), sans capsule, en chiffres tabulaires.
+ */
 @Composable
-private fun CallStageDuration(fixedClock: String, fixedSeconds: Long, live: Boolean) {
+internal fun CallStageDuration(fixedClock: String, fixedSeconds: Long, live: Boolean, compact: Boolean = false) {
     val seconds = liveOrFixedSeconds(live, LocalCallLiveSeconds.current, fixedSeconds)
     val clock = if (live) clockLabel(seconds) else fixedClock
     val resources = LocalContext.current.resources
     val description = stringResource(R.string.call_duration_a11y)
     val spoken = remember(seconds, resources) { CallSpokenDuration.spoken(resources, seconds) }
-    Text(
-        text = clock,
-        style = MaterialTheme.typography.bodyLarge,
-        fontWeight = FontWeight.Medium,
-        color = CallPalette.Brand,
-        modifier = Modifier
+    val capsule = if (compact) {
+        Modifier
+    } else {
+        Modifier
             .background(CallPalette.Brand.copy(alpha = PILL_BACKGROUND_ALPHA), CircleShape)
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xsPlus)
+    }
+    Text(
+        text = clock,
+        style = if (compact) MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum") else MaterialTheme.typography.bodyLarge,
+        fontWeight = FontWeight.Medium,
+        color = CallPalette.Brand,
+        modifier = capsule
             .semantics {
                 contentDescription = description
                 stateDescription = spoken
@@ -111,10 +144,14 @@ private fun CallStageDuration(fixedClock: String, fixedSeconds: Long, live: Bool
 }
 
 @Composable
-private fun CallStagePills(state: CallUiState, signalingDegraded: Boolean) {
+internal fun CallStagePills(
+    state: CallUiState,
+    signalingDegraded: Boolean,
+    horizontalAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+) {
     val warning = MeeshyTheme.tokens.warning
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = horizontalAlignment,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         if (state.status == CallStatus.RECONNECTING) {
@@ -122,9 +159,6 @@ private fun CallStagePills(state: CallUiState, signalingDegraded: Boolean) {
         }
         if (state.isPeerMuted) {
             CallStatusPill(Icons.Filled.MicOff, stringResource(R.string.call_stage_peer_muted), CallPalette.InkSecondary)
-        }
-        if (state.isPeerQualityDegraded) {
-            CallStatusPill(Icons.Filled.WifiOff, stringResource(R.string.call_stage_peer_network), warning)
         }
         if (signalingDegraded) {
             CallStatusPill(Icons.Filled.CloudOff, stringResource(R.string.call_stage_signaling), warning)

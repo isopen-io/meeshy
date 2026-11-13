@@ -51,7 +51,7 @@ nonisolated enum StoryCanvasInlineEditTouchPolicy {
     /// - `touched` : `UITouch.view`, la vue que UIKit a élue par hit-test.
     /// - `inlineEditor` : le champ monté, ou `nil` quand aucune édition n'est en
     ///   cours — auquel cas rien n'est disputé et tout revient au canvas.
-    /// `yieldsManipulation` / `isManipulation` (retour porteur 2026-09-28) :
+    /// `yieldsManipulation` / `isManipulation` :
     /// quand l'hôte laisse la saisie céder au doigt, un geste qui TRANSFORME
     /// (glisser, pincer, tourner) reçoit aussi les touches posées sur le champ
     /// — c'est ainsi qu'on déplace le texte qu'on écrit. Un TAP, lui, reste au

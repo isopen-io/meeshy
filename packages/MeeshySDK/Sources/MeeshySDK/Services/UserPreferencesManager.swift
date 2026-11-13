@@ -52,6 +52,7 @@ public final class UserPreferencesManager: ObservableObject {
     /// Avance à chaque changement local d'une catégorie (`scheduleSyncToBackend`).
     private var syncGenerations: [PreferenceCategory: Int] = [:]
     private var cancellables = Set<AnyCancellable>()
+    private let refreshLane = OrderedEventLane()
 
     /// Test-only override for the authentication gate used by
     /// `fetchFromBackend`/`syncCategoryToBackend`/`resetCategory`.
@@ -559,24 +560,25 @@ public final class UserPreferencesManager: ObservableObject {
             .dropFirst()
             .removeDuplicates()
             .filter { $0 }
-            .sink { [weak self] _ in
-                Task { [weak self] in
-                    guard let self else { return }
-                    await self.resumeOrphanedPendingSyncs(self.pendingCategories)
-                    await self.fetchFromBackend()
-                }
-            }
+            .map { _ in () }
+            .relay(through: refreshLane) { [weak self] _ in await self?.refreshAfterSignIn() }
             .store(in: &cancellables)
+    }
+
+    private func refreshAfterSignIn() async {
+        await resumeOrphanedPendingSyncs(pendingCategories)
+        await fetchFromBackend()
+    }
+
+    private var foregroundRefreshDue: Bool {
+        -(lastSyncDate?.timeIntervalSinceNow ?? -Self.minSyncInterval - 1) > Self.minSyncInterval
     }
 
     private func observeForeground() {
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                let elapsed = -(self.lastSyncDate?.timeIntervalSinceNow ?? -Self.minSyncInterval - 1)
-                guard elapsed > Self.minSyncInterval else { return }
-                Task { [weak self] in await self?.fetchFromBackend() }
-            }
+            .filter { [weak self] _ in self?.foregroundRefreshDue ?? false }
+            .map { _ in () }
+            .relay(through: refreshLane) { [weak self] _ in await self?.fetchFromBackend() }
             .store(in: &cancellables)
     }
 
@@ -633,9 +635,8 @@ public final class UserPreferencesManager: ObservableObject {
             // relecture, et garantit en prime que le `GET` part APRÈS le dernier
             // événement de la rafale.
             .debounce(for: .seconds(Self.remoteRefreshCoalescingWindow), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { [weak self] in await self?.fetchFromBackend() }
-            }
+            .map { _ in () }
+            .relay(through: refreshLane) { [weak self] _ in await self?.fetchFromBackend() }
             .store(in: &cancellables)
     }
 
@@ -682,9 +683,7 @@ public final class UserPreferencesManager: ObservableObject {
             // on livre le sink sur le main, comme le fait `.debounce(scheduler:)`
             // du déclencheur de diffusion.
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { [weak self] in await self?.fetchFromBackend() }
-            }
+            .relay(through: refreshLane) { [weak self] _ in await self?.fetchFromBackend() }
             .store(in: &cancellables)
     }
 

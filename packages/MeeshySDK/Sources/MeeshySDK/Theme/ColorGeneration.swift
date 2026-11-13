@@ -192,7 +192,7 @@ public struct DynamicColorGenerator {
     // 40-color vibrant palette — all colors optimized for both light and dark modes.
     // Each color has high saturation (65%+) and mid-range brightness (50-85%)
     // so they remain legible as text and produce visible tints at low opacity.
-    private static let vibrantPalette = [
+    static let vibrantPalette = [
         // Reds & Roses (350°–10°)
         "E74C3C", "C0392B", "DC4A5A", "D94452", "F43F5E",
         // Oranges & Corals (15°–40°)

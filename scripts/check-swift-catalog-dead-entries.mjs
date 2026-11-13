@@ -102,6 +102,11 @@ const KNOWN_LIVE_VIA_OPAQUE_SERVER_URL = new Set([
   // `StaticEndpoint.byFilename`. Appelants réels (parmi d'autres) :
   // `StoryAudioSourceResolver.swift`, `StoryCanvasUIView+Audio.swift`.
   'StaticEndpoint.byFilename',
+  // `GET /api/v1/talkie/:talkieId/audio` : URL SIGNÉE rendue par le serveur
+  // dans le push de suivi (`attachmentUrl` / `audioUrl`, #17165), téléchargée
+  // telle quelle par la NSE (`NotificationService` → `NSEAdtsRemux`) — jamais
+  // reconstruite via `TalkieEndpoint.byTalkieIdAudio`.
+  'TalkieEndpoint.byTalkieIdAudio',
 ]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
@@ -584,6 +589,9 @@ const PENDING_CLIENT_ENTRIES = {
   'PublishersEndpoint.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web seulement' },
   // Le partage temporaire de position par personne (#16980) : le serveur sert le rattrapage par emprise avant la carte iOS.
   'RelationsEndpoint.locations': { issue: 16983, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte iOS' },
+  // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
+  // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
+  'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;

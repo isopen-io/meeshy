@@ -72,6 +72,9 @@ struct ConversationInfoSheet: View {
     private static let logger = MeeshyLog.logger(.conversationInfo)
 
     @State var showAllPinnedMessages = false
+    /// #17907 — le défilement de la fiche, lu par l'en-tête, la barre compacte et les onglets
+    /// seulement (`ScrollOffsetReader`) : la racine ne se re-rend pas à chaque image.
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     enum InfoTab: CaseIterable {
         case members, media, plus, preferences
@@ -112,21 +115,8 @@ struct ConversationInfoSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                headerBar
-                    .zIndex(1)
-                conversationHeader
-                if isDirect, otherUserId != nil {
-                    blockUserButton
-                }
-                actionButtons
-                securityRow
-                pinnedPreview
-                tabSelector
-                tabContent
-            }
-            .background(sheetBackground)
-            .navigationBarHidden(true)
+            collapsibleLayout
+                .navigationBarHidden(true)
             .navigationDestination(for: String.self) { destination in
                 if destination == "settings" {
                     ConversationSettingsView(
@@ -205,62 +195,148 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    // MARK: - Header Bar
+    // MARK: - Collapsible layout (#17907)
 
-    private var headerBar: some View {
-        HStack {
-            Text(String(localized: "conversation.info.header", defaultValue: "Conversation", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            if canManageMembers && !isDirect {
-                NavigationLink(value: "settings") {
-                    Image(systemName: "gearshape.fill")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+    /// Un seul défilement, comme la fiche profil (`UserProfileSheet.collapsibleLayout`) :
+    /// l'en-tête, les actions, la sécurité et les épinglés s'en vont avec le contenu, la
+    /// barre d'onglets s'épingle en haut et la barre compacte prend le relais de l'en-tête.
+    private var collapsibleLayout: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: geo.frame(in: .named(Self.scrollSpace)).minY
+                    )
                 }
-                .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Réglages de la conversation", bundle: .main))
-            }
+                .frame(height: 0)
 
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
-    }
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    ScrollOffsetReader(relay: scrollRelay) { offset in
+                        collapsibleHeader(offset: offset)
+                    }
+                    if isDirect, otherUserId != nil {
+                        blockUserButton
+                    }
+                    actionButtons
+                    securityRow
+                    pinnedPreview
 
-    // MARK: - Conversation Header
-
-    private var conversationHeader: some View {
-        Group {
-            if isDirect {
-                directConversationHeader
-            } else {
-                heroConversationHeader
+                    Section {
+                        tabContent
+                    } header: {
+                        ScrollOffsetReader(relay: scrollRelay) { offset in
+                            pinnedTabBar(offset: offset)
+                        }
+                    }
+                }
             }
         }
-        .opacity(appearAnimation ? 1 : 0)
-        .offset(y: appearAnimation ? 0 : 10)
+        .coordinateSpace(name: Self.scrollSpace)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }
+        .scrollDismissesKeyboard(.interactively)
+        .background(sheetBackground)
+        .ignoresSafeArea(edges: .top)
+        .overlay(alignment: .top) {
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                let progress = ProfileHeaderMetrics.progress(offset: offset)
+                compactPinnedBar
+                    .opacity(Double(progress))
+                    .allowsHitTesting(progress > 0.5)
+                    .accessibilityHidden(progress <= 0.5)
+            }
+        }
+        .overlay(alignment: .topLeading) { closeButton }
+        .overlay(alignment: .topTrailing) { settingsButton }
     }
 
-    // MARK: - Direct Conversation Header (unchanged)
+    private static let scrollSpace = "conversationInfoScroll"
 
-    private var directConversationHeader: some View {
-        VStack(spacing: MeeshySpacing.md) {
+    // MARK: - Floating controls (Liquid Glass, like the profile sheet)
+
+    private var closeButton: some View {
+        MeeshyGlassButton(
+            systemImage: "xmark",
+            label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+            size: .s36
+        ) {
+            dismiss()
+        }
+        .padding(floatingControlInsets(leading: true))
+    }
+
+    @ViewBuilder
+    private var settingsButton: some View {
+        if canManageMembers && !isDirect {
+            NavigationLink(value: "settings") {
+                MeeshyGlassButtonFace(systemImage: "gearshape.fill", size: .s36)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .meeshyTapTarget()
+            .padding(floatingControlInsets(leading: false))
+            .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Réglages de la conversation", bundle: .main))
+        }
+    }
+
+    private func floatingControlInsets(leading: Bool) -> EdgeInsets {
+        let side = MeeshySpacing.lg
+        return EdgeInsets(top: MeeshySpacing.mdPlus, leading: leading ? side : 0, bottom: 0, trailing: leading ? 0 : side)
+    }
+
+    // MARK: - Collapsible header
+
+    /// L'en-tête s'efface en défilant, comme celui du profil ; la barre compacte prend le relais.
+    private func collapsibleHeader(offset: CGFloat) -> some View {
+        let progress = ProfileHeaderMetrics.progress(offset: offset)
+        return heroConversationHeader
+            .scaleEffect(1 - 0.12 * progress, anchor: .top)
+            .opacity(appearAnimation ? 1 - Double(progress) : 0)
+            .offset(y: appearAnimation ? 0 : 10)
+            .accessibilityHidden(progress > 0.5)
+    }
+
+    // MARK: - Hero Conversation Header (every conversation type)
+
+    private var heroConversationHeader: some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: ProfileHeaderMetrics.expandedBanner)
+                .overlay { heroBannerImage.allowsHitTesting(false).accessibilityHidden(true) }
+                .clipped()
+                .contentShape(Rectangle())
+
+            // Avatar overlapping banner
+            headerAvatar
+                .padding(.top, -40)
+
+            Text(conversation.name)
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
+                .foregroundStyle(theme.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.top, MeeshySpacing.smPlus)
+                .padding(.horizontal, MeeshySpacing.xl)
+
+            conversationInfoRow
+                .padding(.top, MeeshySpacing.sm)
+
+            muteIndicator
+                .padding(.top, MeeshySpacing.xsPlus)
+
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .padding(.top, MeeshySpacing.xsPlus)
+        }
+        .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    /// L'avatar du pair (présence, humeur, anneau) en tête-à-tête, celui de l'entité ailleurs.
+    @ViewBuilder
+    private var headerAvatar: some View {
+        if isDirect {
             LivePresence { MeeshyAvatar(
                 name: conversation.name,
                 context: .profileSheet,
@@ -272,37 +348,7 @@ struct ConversationInfoSheet: View {
                 ring: conversation.participantRing,
                 onMoodTap: otherUserId.flatMap { moodTapResolver?($0) }
             ) }
-
-            Text(conversation.name)
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-
-            conversationInfoRow
-
-            muteIndicator
-
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.bottom, MeeshySpacing.lg)
-    }
-
-    // MARK: - Hero Conversation Header (group/public/global)
-
-    private var heroConversationHeader: some View {
-        VStack(spacing: 0) {
-            Color.clear
-                .frame(height: 140)
-                .overlay { heroBannerImage.allowsHitTesting(false).accessibilityHidden(true) }
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
-                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
-                .padding(.horizontal, MeeshySpacing.lg)
-
-            // Avatar overlapping banner
+        } else {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .profileBanner,
@@ -310,35 +356,62 @@ struct ConversationInfoSheet: View {
                 accentColor: accentColor,
                 avatarURL: conversation.avatar
             )
-            .overlay(
-                Circle()
-                    .stroke(theme.backgroundPrimary, lineWidth: 4)
-            )
-            .offset(y: -40)
-            .padding(.bottom, -40)
-
-            // Name
-            Text(conversation.name)
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.top, MeeshySpacing.smPlus)
-
-            // Info row
-            conversationInfoRow
-                .padding(.top, MeeshySpacing.sm)
-
-            muteIndicator
-                .padding(.top, MeeshySpacing.xsPlus)
-
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .padding(.top, MeeshySpacing.xsPlus)
+            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 4))
         }
-        .padding(.horizontal, MeeshySpacing.xs)
-        .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    // MARK: - Compact pinned bar (overlay, fades in when collapsed)
+    /// Le petit avatar de la barre compacte : le pair avec sa présence et son contour servis, ou l'entité.
+    @ViewBuilder
+    private var compactAvatar: some View {
+        if isDirect {
+            LivePresence { MeeshyAvatar(
+                name: conversation.name,
+                context: .custom(32),
+                accentColor: accentColor,
+                avatarURL: conversation.participantAvatarURL,
+                presenceState: otherUserId.map { presenceManager.presenceState(for: $0) },
+                ring: conversation.participantRing
+            ) }
+        } else {
+            MeeshyAvatar(
+                name: conversation.name,
+                context: .custom(32),
+                kind: .entity,
+                accentColor: accentColor,
+                avatarURL: conversation.avatar
+            )
+        }
+    }
+
+
+    private var compactPinnedBar: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            compactAvatar
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(conversation.name)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(1)
+                Text(conversation.type.displayName)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+        // Les insets dégagent Fermer (à gauche) et Réglages (à droite), posés par-dessus.
+        .padding(.leading, 56)
+        .padding(.trailing, canManageMembers && !isDirect ? 56 : MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
+        .frame(height: ProfileHeaderMetrics.collapsedBar)
+        .background(theme.backgroundPrimary)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(MeeshyOpacity.medium)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -384,17 +457,17 @@ struct ConversationInfoSheet: View {
 
             Text(conversation.type.displayName)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             if conversation.memberCount > 0 {
                 MetaSeparator()
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Image(systemName: "person.2.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text(conversation.memberCountDisplay)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
         }
     }
@@ -415,64 +488,66 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    // MARK: - Tab Selector
+    // MARK: - Pinned tab bar (section header — pins on scroll, like the profile sheet)
 
-    private var tabSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(InfoTab.allCases, id: \.self) { tab in
-                let isSelected = selectedTab == tab
-                let label = tabCountLabel(for: tab)
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        selectedTab = tab
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    VStack(spacing: MeeshySpacing.xsPlus) {
-                        HStack(spacing: MeeshySpacing.xs) {
-                            Text(tabLabel(for: tab))
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
-
-                            if let label {
-                                Text(label)
-                                    // Compteur numérique compact dans une pastille capsule — gardé
-                                    // hors Dynamic Type pour que la pill reste « tight » (cf. 53i).
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(isSelected ? .white : theme.textMuted)
-                                    .padding(.horizontal, MeeshySpacing.xs)
-                                    .padding(.vertical, 1)
-                                    .background(
-                                        Capsule().fill(isSelected ? accent : theme.textMuted.opacity(MeeshyOpacity.light))
-                                    )
-                            }
-                        }
-                        .foregroundColor(isSelected ? theme.textPrimary : theme.textMuted)
-
-                        Rectangle()
-                            .fill(isSelected ? accent : Color.clear)
-                            .frame(height: 2)
-                            .clipShape(RoundedRectangle(cornerRadius: 1))
-                    }
+    private func pinnedTabBar(offset: CGFloat) -> some View {
+        let progress = ProfileHeaderMetrics.progress(offset: offset)
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(InfoTab.allCases, id: \.self) { tab in
+                    tabButton(tab)
                 }
-                .frame(maxWidth: .infinity)
-                // Selected tab is otherwise signalled by weight/color + the
-                // underline bar alone — expose it to VoiceOver via the trait so
-                // non-sighted users know which tab is active (HIG: never rely on
-                // color to convey state; WCAG 1.4.1). Localised by iOS, 0 key.
-                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.md)
+
+            Divider()
+                .opacity(MeeshyOpacity.medium)
         }
-        .padding(.horizontal, MeeshySpacing.xl)
+        // Le fond AVANT le décalage : la bande de la barre compacte reste hors du toucher (cf. fiche profil).
+        .background(theme.backgroundPrimary)
+        .padding(.top, ProfileHeaderMetrics.collapsedBar * progress)
         .opacity(appearAnimation ? 1 : 0)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05), value: appearAnimation)
+    }
+
+    private func tabButton(_ tab: InfoTab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedTab = tab
+            }
+        } label: {
+            VStack(spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: tabIcon(for: tab))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    Text(tabLabel(for: tab))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .foregroundStyle(isSelected ? accent : theme.textMuted)
+                .padding(.vertical, MeeshySpacing.smPlus)
+
+                Rectangle()
+                    .fill(isSelected ? accent : Color.clear)
+                    .frame(height: 2)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tabLabel(for: tab))
+        // L'onglet actif ne se dit pas qu'à la couleur (WCAG 1.4.1).
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Tab Content
 
     @ViewBuilder
     private var tabContent: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        Group {
             switch selectedTab {
             case .members:
                 membersSection
@@ -488,6 +563,7 @@ struct ConversationInfoSheet: View {
                 ConversationPreferencesTab(conversation: conversation, accentColor: accentColor)
             }
         }
+        .padding(.top, MeeshySpacing.sm)
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
 
@@ -514,7 +590,7 @@ struct ConversationInfoSheet: View {
             HStack {
                 Text(MembersCountLabel.text(participants.count))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Spacer()
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -525,10 +601,10 @@ struct ConversationInfoSheet: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre…", bundle: .main), text: $memberSearchQuery)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                 if !memberSearchQuery.isEmpty {
@@ -537,7 +613,7 @@ struct ConversationInfoSheet: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
@@ -597,7 +673,7 @@ struct ConversationInfoSheet: View {
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .foregroundColor(accent)
             .padding(.horizontal, MeeshySpacing.lg)
@@ -618,11 +694,11 @@ struct ConversationInfoSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(32, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
 
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
@@ -743,16 +819,12 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func tabCountLabel(for tab: InfoTab) -> String? {
+    private func tabIcon(for tab: InfoTab) -> String {
         switch tab {
-        case .members:
-            return nil
-        case .media:
-            return nil
-        case .plus:
-            return nil
-        case .preferences:
-            return nil
+        case .members: return "person.2.fill"
+        case .media: return "photo.on.rectangle.angled"
+        case .plus: return "chart.bar.fill"
+        case .preferences: return "slider.horizontal.3"
         }
     }
 

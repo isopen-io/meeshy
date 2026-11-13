@@ -46,12 +46,4 @@ class ImageAdjustmentsTest {
         assertThat(a.blur).isEqualTo(1f)
         assertThat(a.vibrance).isWithin(1e-6f).of(0.3f)
     }
-
-    @Test
-    fun `Simple offre luminosite contraste saturation`() {
-        assertThat(AdjustmentKind.rail(ImageEditorMode.SIMPLE)).containsExactly(
-            AdjustmentKind.BRIGHTNESS, AdjustmentKind.CONTRAST, AdjustmentKind.SATURATION,
-        ).inOrder()
-        assertThat(AdjustmentKind.rail(ImageEditorMode.PRO)).hasSize(11)
-    }
 }

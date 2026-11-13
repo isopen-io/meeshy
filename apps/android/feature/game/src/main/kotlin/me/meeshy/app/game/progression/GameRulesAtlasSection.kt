@@ -116,7 +116,9 @@ private fun AtlasSpeaker(family: AtlasFamily) {
                 fontWeight = FontWeight.Bold,
                 color = tokens.textPrimary,
             )
-            Text(stringResource(copy.line), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = tokens.textMuted)
+            copy.line?.let { line ->
+                Text(stringResource(line), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = tokens.textMuted)
+            }
         }
     }
 }

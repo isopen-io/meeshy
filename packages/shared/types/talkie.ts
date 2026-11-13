@@ -11,6 +11,9 @@
  *    destinataire en `talkie:chunk` ({@link TalkieChunkEventData}), sans upload, sans
  *    normalisation, sans transcription, sans rien stocker.
  * 3. `talkie:end` → `talkie:ended` ({@link TalkieEndedEventData}).
+ * 4. (#17142) destinataire sans socket mais joignable par push : l'accusé dit `delivery: 'waking'`, un push de réveil
+ *    part, et le destinataire émet `talkie:join` {@link TalkieJoinPayload} — il reçoit alors `talkie:incoming`, tous les
+ *    fragments gardés dans l'ordre, puis le direct, puis `talkie:ended`.
  *
  * La copie en message vocal se fait APRÈS, par le chemin vocal existant, hors du
  * chemin critique : c'est elle qui sert de repli (`TALKIE_FALLBACK_VOICE`).
@@ -18,26 +21,62 @@
  * Règles que les clients ne recalculent pas : ouvert dès Proche (niveau effectif),
  * préférence de RÉCEPTION du destinataire (active par défaut, coupée par personne
  * — `talkieBlocked` — ou globalement — `notification.talkieEnabled`) ; jamais dans
- * une paire dont la conversation directe est chiffrée de bout en bout (hors E2EE
- * au MVP, l'interface le dit) ; coupé quand le destinataire est en appel ou en Ne
+ * une paire dont la conversation directe est chiffrée de bout en bout, SAUF voix
+ * scellée sur l'appareil (`sealed`, #13949 : fragments opaques pour le serveur) ; coupé quand le destinataire est en appel ou en Ne
  * pas déranger (repli : message vocal) ; un blocage coupe immédiatement.
  */
 import { z } from 'zod';
 
-import { TALKIE_CODECS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
+import {
+  TALKIE_CODECS,
+  TALKIE_SEAL_KEY_ID_CHARS,
+  TALKIE_SEALED_CODEC,
+  type TalkieDelivery,
+  type TalkieEndReason,
+  type TalkieErrorCode,
+  type TalkieWireCodec,
+} from './talkie-constants.js';
 
 /** Les bornes, encodages, codes et raisons : `./talkie-constants.ts`, sans Zod, lisibles par un client léger. */
 export * from './talkie-constants.js';
 
-export const talkieStartPayloadSchema = z.object({
-  toUserId: z.string().regex(/^[0-9a-fA-F]{24}$/),
-  codec: z.enum(TALKIE_CODECS),
+/**
+ * La voix SCELLÉE de bout en bout (#13949) : les fragments sont chiffrés sur l'appareil émetteur avec une clé
+ * propre à la prise de parole. Cette clé n'est PAS ici : l'émetteur la remet par le relais des signaux E2EE
+ * de la paire (`e2ee:send-signal`, une enveloppe libsignal par appareil, Sesame compris) ; `talkie:start` n'en
+ * porte que l'identifiant, que le destinataire rapproche de la clé déchiffrée. Le serveur ne transcrit ni ne
+ * normalise les fragments, et n'exige d'eux aucune forme (un fragment scellé n'est pas une trame ADTS lisible).
+ * Dans une paire dont la conversation directe est chiffrée, seule une voix scellée passe — et seulement quand la
+ * passerelle l'accepte (`TALKIE_SEALED_VOICE_ENABLED`, éteint tant qu'aucun client ne déchiffre). Une voix scellée
+ * porte l'encodage {@link TALKIE_SEALED_CODEC} : le sceau sans cet encodage, ou l'inverse, est illisible.
+ */
+export const talkieSealSchema = z.object({
+  keyId: z.string().min(TALKIE_SEAL_KEY_ID_CHARS.min).max(TALKIE_SEAL_KEY_ID_CHARS.max).regex(/^[A-Za-z0-9_-]+$/),
 });
+export type TalkieSeal = z.infer<typeof talkieSealSchema>;
+
+export const talkieStartPayloadSchema = z
+  .object({
+    toUserId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+    codec: z.enum([...TALKIE_CODECS, TALKIE_SEALED_CODEC]),
+    sealed: talkieSealSchema.optional(),
+  })
+  .refine((payload) => (payload.codec === TALKIE_SEALED_CODEC) === (payload.sealed !== undefined), {
+    message: 'Une voix scellée porte son sceau ET son encodage, une voix en clair ni l’un ni l’autre',
+  });
 export type TalkieStartPayload = z.infer<typeof talkieStartPayloadSchema>;
 
+/**
+ * `delivery` et `conversationId` sont OPTIONNELS (#17142) : un ancien client les ignore, un nouveau client lit
+ * l'absence de `delivery` comme `live`. `conversationId` n'accompagne que `TALKIE_FALLBACK_VOICE` : la conversation la
+ * plus récente que l'émetteur partage avec le destinataire, où partira la copie vocale (absent : aucune).
+ */
 export type TalkieStartAck =
-  | { readonly success: true; readonly data: { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number } }
-  | { readonly success: false; readonly error: string; readonly code: TalkieErrorCode };
+  | {
+      readonly success: true;
+      readonly data: { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number; readonly delivery?: TalkieDelivery };
+    }
+  | { readonly success: false; readonly error: string; readonly code: TalkieErrorCode; readonly conversationId?: string };
 
 /** `data` : un `Buffer` / `ArrayBuffer` Socket.IO (binaire natif), jamais du base64. */
 export const talkieChunkPayloadSchema = z.object({
@@ -45,6 +84,12 @@ export const talkieChunkPayloadSchema = z.object({
   seq: z.number().int().nonnegative(),
   /** Horloge de l'émetteur à la capture (ms epoch) — pour mesurer la latence émission → premier son. */
   capturedAt: z.number().int().nonnegative().optional(),
+  /**
+   * Le DERNIER fragment de la prise de parole (#13949). Pour une voix scellée, il entre dans les données associées
+   * de l'AEAD (`keyId || seq || dernier`) : le destinataire ne tient une prise de parole pour complète qu'au vu d'un
+   * dernier fragment authentifié, jamais sur le seul `talkie:ended` que le serveur dicte.
+   */
+  last: z.literal(true).optional(),
   data: z.custom<Uint8Array>((v) => v instanceof Uint8Array || v instanceof ArrayBuffer),
 });
 export type TalkieChunkPayload = z.infer<typeof talkieChunkPayloadSchema>;
@@ -52,12 +97,32 @@ export type TalkieChunkPayload = z.infer<typeof talkieChunkPayloadSchema>;
 export const talkieEndPayloadSchema = z.object({ talkieId: z.string().regex(/^[0-9a-f]{24}$/) });
 export type TalkieEndPayload = z.infer<typeof talkieEndPayloadSchema>;
 
+/** `talkie:join` (#17142) : le destinataire réveillé rejoint une prise de parole `waking`, pendant ou jusqu'à 60 s après. */
+export const talkieJoinPayloadSchema = z.object({ talkieId: z.string().regex(/^[0-9a-f]{24}$/) });
+export type TalkieJoinPayload = z.infer<typeof talkieJoinPayloadSchema>;
+
+/**
+ * Le push de réveil (#17142), mêmes clés sur les deux canaux : APNs `pushtotalk` (topic `<bundle>.voip-ptt`) quand un
+ * jeton PushToTalk est enregistré, sinon notification haute priorité. `fromName` est vide quand le destinataire masque le
+ * nom de l'expéditeur ; `title` et `body` sont localisés à sa langue (Prisme de cadrage).
+ */
+export type TalkieWakePushData = {
+  readonly type: 'talkie_incoming';
+  readonly talkieId: string;
+  readonly fromUserId: string;
+  readonly fromName: string;
+  readonly title: string;
+  readonly body: string;
+};
+
 export type TalkieIncomingEventData = {
   readonly talkieId: string;
   readonly fromUserId: string;
-  readonly codec: TalkieCodec;
+  readonly codec: TalkieWireCodec;
   readonly startedAt: string;
   readonly maxDurationMs: number;
+  /** Présent ⇔ la voix est scellée : l'identifiant de la clé, remise à part par le relais des signaux E2EE. */
+  readonly sealed?: TalkieSeal;
 };
 
 export type TalkieChunkEventData = {
@@ -66,6 +131,8 @@ export type TalkieChunkEventData = {
   readonly seq: number;
   readonly data: Uint8Array;
   readonly capturedAt?: number;
+  /** Le dernier fragment, tel que l'émetteur l'a déclaré (`talkieChunkPayloadSchema.last`). */
+  readonly last?: true;
   /** Horloge du serveur à la réception (ms epoch) : le client mesure capture → serveur → premier son. */
   readonly relayedAt: number;
 };
@@ -76,4 +143,10 @@ export type TalkieEndedEventData = {
   readonly toUserId: string;
   readonly reason: TalkieEndReason;
   readonly endedAt: string;
+  /**
+   * Une voix RÉVEILLÉE seulement (#17142) : le destinataire l'a-t-il rejointe avant sa fin ? `false` ⇒ le client
+   * émetteur crée la copie vocale (dans `conversationId` de son repli, ou la conversation la plus récente), comme pour
+   * un repli. Absent pour une voix en direct.
+   */
+  readonly joined?: boolean;
 };

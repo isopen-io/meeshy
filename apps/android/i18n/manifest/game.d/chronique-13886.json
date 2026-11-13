@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.notebook.empty",
-          "androidName": "game_notebook_empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.notebook.catch_up",
           "androidName": "game_notebook_catch_up",
           "status": "adopted"

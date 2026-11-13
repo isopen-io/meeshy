@@ -73,8 +73,8 @@ extension MeeshyComposerHost {
     /// La scène arme-t-elle un viseur ? Jamais pour une citation (#15628).
     var sceneServesCapture: Bool { ComposerQuoteScene.servesCapture(origin: intent.origin) }
 
-    /// **L'indication grise de la capture rapide** (#8653) — la question du
-    /// toucher (`handleSceneQuickTap`), après la relecture de l'ouverture (#13899).
+    /// **L'indication grise de la capture rapide** (#8653) — la
+    /// question de l'appui long (`sceneQuickCaptureIsOffered`), après la relecture de l'ouverture (#13899).
     var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
         guard autosave.didBind, sceneQuickCaptureIsOffered else { return nil }
         return ComposerSceneQuickCapture.hint(format: selectedFormat)

@@ -50,7 +50,7 @@ struct ConversationLinkCardBody: View, Equatable {
             if let description = card.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
                 Text(description)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -92,7 +92,7 @@ struct ConversationLinkCardBody: View, Equatable {
                 .padding(.top, -Self.avatarSide * 0.5)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .heavy, design: .rounded))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -172,7 +172,7 @@ struct ConversationInviteQuote: View {
                             .lineLimit(1)
                         Text(ConversationLinkCardCopy.invitesYou)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -188,8 +188,7 @@ struct ConversationInviteQuote: View {
         .accessibilityIdentifier("conversation-link-card-invite")
     }
 
-    /// Le message du lien en CITATION mise en valeur (correction porteur
-    /// 2026-09-29, #8726) : un grand guillemet décoratif, puis le texte. Absent,
+    /// Le message du lien en CITATION mise en valeur (#8726): un grand guillemet décoratif, puis le texte. Absent,
     /// rien ne se dessine — aucune place réservée.
     private func inviteMessage(_ text: String) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
@@ -201,7 +200,7 @@ struct ConversationInviteQuote: View {
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium).italic())
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, MeeshySpacing.xs)
         }
@@ -244,7 +243,7 @@ struct ConversationCardStatsRow: View {
             // Pas de `ForEach` : sa fermeture hérite de l'isolation @MainActor,
             // et iOS 26 la rappelle sur `com.apple.SwiftUI.AsyncRenderer` en
             // mesurant la bulle — le contrôle d'isolation de Swift 6 y trappe
-            // (`.ips` du 2026-09-29, `closure #1 in closure #1 in row`). Au plus
+            // (`closure #1 in closure #1 in row`). Au plus
             // quatre pastilles, posées sans fermeture.
             let shown = Array(stats.languages.prefix(visible))
             if shown.count > 0 { languagePill(shown[0]) }
@@ -254,7 +253,7 @@ struct ConversationCardStatsRow: View {
             if stats.languages.count > visible {
                 Text(verbatim: "+\(stats.languages.count - visible)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                     .fixedSize()
             }
         }

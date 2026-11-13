@@ -67,7 +67,7 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            // FIX 2026-05-12 — transition directe à `.connected` sur ICE
+            // FIX — transition directe à `.connected` sur ICE
             // connected, plus de gate RTP bloquant.
             //
             // Symptôme rapporté : "l'appelé se connecte mais pas l'appelant".

@@ -94,7 +94,7 @@ nonisolated enum LentilleModeLabels {
         from suggestedMode: ConversationBridge.SuggestedMode
     ) -> ReadingModeOrchestrator.ConversationReadingMode {
         switch suggestedMode {
-        // Focal de retour (2026-08-21) : le pont qui suggère le fil annonce
+        // Focal de retour: le pont qui suggère le fil annonce
         // Focal, ce que l'ouverture FERA.
         case .focal: return .focal
         case .resume: return .summary

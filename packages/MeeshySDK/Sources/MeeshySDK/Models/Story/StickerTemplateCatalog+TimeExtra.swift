@@ -8,7 +8,7 @@ import Foundation
 /// nombres — pour que le remplisseur et l'étiquette d'accessibilité sachent
 /// exactement ce qui est figé dans chaque décoration.
 ///
-/// **L'heure reste FIGÉE à la pose** (décision D1 du 2026-09-01) : aucun de
+/// **L'heure reste FIGÉE à la pose** : aucun de
 /// ces gabarits ne lit l'horloge, ils dessinent leurs emplacements.
 extension StickerTemplateCatalog.ID {
     public static let timeHourglass = "time.hourglass"

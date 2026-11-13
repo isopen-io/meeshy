@@ -98,7 +98,6 @@ extension ConversationMediaGalleryView {
     }
 
     /// **Le play/pause reste au centre du média, et devient plus transparent**
-    /// (directive porteur 2026-09-12).
     ///
     /// Il ne descend pas avec la progression, et la raison mérite d'être dite :
     /// la progression RAPPORTE (où en est-on), le play/pause COMMANDE. Une

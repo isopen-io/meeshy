@@ -191,7 +191,7 @@ extension ReelPageView {
                 )
             }
 
-            // Indicateur de position type sticker (constat user 2026-07-30) —
+            // Indicateur de position type sticker —
             // même pill que la story/le feed, cliquable → carte plein écran.
             if let place = reel.location {
                 FeedPostLocationSticker(place: place) {

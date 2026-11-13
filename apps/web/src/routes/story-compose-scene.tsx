@@ -9,6 +9,7 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { entityImageAspect, type EntityImageFormat } from '@/lib/profile/entity-image-format';
 import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
 import type { QuickCaptureHintLine } from '@/lib/stories/studio-quick-capture';
@@ -88,6 +89,20 @@ function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLan
   );
 }
 
+/** **LE ROND DE L'AVATAR** (#17256, jumelle d'`EntityImageRoundVeil` iOS) —
+ * ce qui tombe hors du cercle est voilé : on cadre son visage comme les autres
+ * le verront. Il ne se touche pas ; les gestes passent dessous. */
+function EntityImageRoundVeil() {
+  return (
+    <span
+      data-entity-image-veil="round"
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 block rounded-full"
+      style={{ zIndex: 1, border: '1.5px solid #ffffffd9', boxShadow: '0 0 0 100vmax #0000008c' }}
+    />
+  );
+}
+
 /**
  * **LA SCÈNE DU STUDIO** — la carte 9:16 et tout ce qui s'y TOUCHE : l'aperçu
  * par le moteur partagé, le son de fond, la saisie du texte, le calque des
@@ -109,6 +124,7 @@ export function StudioScene({
   writing,
   objects,
   capture = null,
+  format,
 }: {
   readonly lang: InterfaceLanguage;
   readonly stageRef: RefObject<HTMLDivElement | null>;
@@ -137,19 +153,24 @@ export function StudioScene({
   } & Omit<ComponentProps<typeof StudioStageGestures>, 'stageRef' | 'objects' | 'locked' | 'capture'>;
   /** LA CAPTURE RAPIDE (#8654) — `null` dès que la scène porte quelque chose. */
   readonly capture?: StudioSceneCapture | null;
+  /** UNE IMAGE D'IDENTITÉ (#17256) — la carte prend ses proportions. */
+  readonly format?: EntityImageFormat;
 }) {
+  const ratio = format === undefined ? 9 / 16 : entityImageAspect(format);
   return (
     <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
       <div
         data-scene-stage
         data-story-studio-current-page={pageId}
+        {...(format === undefined ? {} : { 'data-scene-format': format })}
         ref={stageRef}
         role="group"
         aria-label={translate(lang, 'story.studio.stage')}
         className="relative overflow-hidden"
         style={{
-          width: 'min(100cqw, 100cqh * 9 / 16)',
-          height: 'min(100cqh, 100cqw * 16 / 9)',
+          width: `min(100cqw, 100cqh * ${ratio})`,
+          height: `min(100cqh, 100cqw / ${ratio})`,
+          aspectRatio: `${ratio}`,
           containerType: 'inline-size',
           borderRadius: 22,
           backgroundColor: backgroundCss(STORY_PLAIN_BACKGROUND, 'var(--color-ios-card)'),
@@ -196,6 +217,7 @@ export function StudioScene({
             </button>
           </>
         ) : null}
+        {format === 'avatar' ? <EntityImageRoundVeil /> : null}
         {timeline.open || writing === null ? null : <StudioTextInput {...writing} />}
         {/* LA SÉLECTION SILENCIEUSE (lot 6) — toucher sélectionne sans
             entourer, glisser déplace, deux doigts pincent et tournent, appui

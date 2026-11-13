@@ -1,11 +1,6 @@
 package me.meeshy.app.profile
 
-import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.togetherWith
@@ -42,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,10 +70,10 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import androidx.compose.runtime.rememberCoroutineScope
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
 
 /** Durée d'affichage de la capsule d'erreur (iOS : 3 s). */
 private const val ERROR_CAPSULE_MILLIS = 3_000L
@@ -116,8 +110,8 @@ fun OwnProfileScreen(
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
-    val imageEditor = rememberProfileImageEditor(uploadViewModel::onImagePicked)
-    val pickImage = rememberOwnProfileImagePicker(imageEditor::offer)
+    val imageEditor = rememberEntityImageRetouch(uploadViewModel::onImagePicked)
+    val pickImage = rememberEntityImagePicker(imageEditor::offer)
     val capsule = rememberOwnProfileErrorCapsule(
         errorMessage = state.errorMessage,
     )
@@ -175,28 +169,13 @@ fun OwnProfileScreen(
         FeedbackToastHost(toasts = toasts)
     }
 
-    ProfileImageEditorHost(imageEditor)
+    EntityImageRetouchHost(imageEditor, state.user?.let { ComposerLookPerson.author(it.id, it.displayName, it.username) })
     pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)
     if (isSharing && share != null) ProfileShareSheet(share = share, onDismiss = { isSharing = false })
 }
 
-/** Le sélecteur de photo système, branché sur le téléversement de l'avatar ou de la bannière. */
-@Composable
-private fun rememberOwnProfileImagePicker(onPicked: (ImageUploadTarget, MediaUploadItem) -> Unit): (ImageUploadTarget) -> Unit {
-    val context = LocalContext.current
-    var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
-    val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { onPicked(target, it) } }
-    }
-    return { picked ->
-        target = picked
-        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-    }
-}
 
 /**
  * Les effets de l'enregistrement (iOS `HapticFeedback` + `FeedbackToastManager`) : haptique succès au

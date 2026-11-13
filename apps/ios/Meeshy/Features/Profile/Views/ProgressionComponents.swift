@@ -98,13 +98,13 @@ struct ProgressionStreakCard: View {
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.streak(streak.currentDays))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                 }
                 Text(ProgressionCopy.streakRecord(streak.longestDays))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 ProgressionBar(
                     progress: streak.scale.progress,
                     tint: tint,
@@ -113,7 +113,7 @@ struct ProgressionStreakCard: View {
                 .padding(.top, MeeshySpacing.xs)
                 Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -144,7 +144,7 @@ struct ProgressionAxisRow: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(ProgressionCopy.title(for: axis.axis))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: MeeshySpacing.sm)
                     Text("\(axis.scale.value)")
@@ -157,7 +157,7 @@ struct ProgressionAxisRow: View {
                     Spacer(minLength: MeeshySpacing.sm)
                     Text(ProgressionCopy.nextStep(for: axis.scale, kind: .badge))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -195,7 +195,7 @@ struct ProgressionAchievementRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(ProgressionCopy.title(for: achievement.key))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(achievement.unlocked ? theme.textPrimary : theme.textMuted)
+                    .foregroundStyle(achievement.unlocked ? theme.textPrimary : theme.textMuted)
                 Text(
                     achievement.unlocked
                         ? (ProgressionCopy.obtained(achievement.reachedAt)
@@ -270,7 +270,7 @@ struct ProgressionNotice: View {
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             if let retry {
@@ -310,7 +310,7 @@ struct ProgressionSkeleton: View {
         }
         .skeletonShimmer()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Progression en cours de chargement", bundle: .main))
+        .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Ma Légende se charge", bundle: .main))
     }
 }
 
@@ -340,11 +340,11 @@ struct ProgressionGeneratedAchievements: View {
                         HStack {
                             Text(AchievementCopy.sectionTitle(vue.section))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Spacer()
                             Text("\(vue.unlockedCount) / \(vue.attainableCount)")
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
 
                         // Une GRILLE qui passe à la ligne, plus un carrousel (#9564, amendement n° 3) : aucune rangée
@@ -374,18 +374,18 @@ private struct ProgressionAchievementChip: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Image(systemName: entry.unlocked ? "star.fill" : "medal")
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(entry.unlocked ? MeeshyColors.success : theme.textMuted)
+                .foregroundStyle(entry.unlocked ? MeeshyColors.success : theme.textMuted)
                 .accessibilityHidden(true)
             // Une famille hors catalogue rend `nil` : on montre alors RIEN
             // plutôt qu'une clé technique.
             Text(AchievementCopy.label(entry.family, tier: entry.tier) ?? "")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             if entry.unlocked {
                 Text(AchievementCopy.earned)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

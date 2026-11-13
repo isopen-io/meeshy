@@ -79,7 +79,8 @@ struct ConversationListModalPresentations: ViewModifier {
     let onSelect: (Conversation) -> Void
     let onNewConversation: (() -> Void)?
     @EnvironmentObject private var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -93,7 +94,7 @@ struct ConversationListModalPresentations: ViewModifier {
                     onSuccess: {
                         guard case .openConversation = lockSheetMode else { return }
                         if sheetTargets.infoAfterUnlock { return admitInfo(of: conversation) }
-                        if sheetTargets.searchAfterUnlock { router.pendingOpenSearch = true }
+                        if sheetTargets.searchAfterUnlock { routerCommands.armSearch() }
                         sheetTargets.searchAfterUnlock = false
                         onSelect(conversation)
                     }
@@ -101,7 +102,7 @@ struct ConversationListModalPresentations: ViewModifier {
                 .environmentObject(theme)
             }
             .alert(String(localized: "conversation.list.master_pin_required.title", bundle: .main), isPresented: $showNoMasterPinAlert) {
-                Button(String(localized: "conversation.list.master_pin_required.configure", bundle: .main), role: .none) { SettingsFocusRequest.shared.request(.masterPin); router.push(.settings) }
+                Button(String(localized: "conversation.list.master_pin_required.configure", bundle: .main), role: .none) { SettingsFocusRequest.shared.request(.masterPin); routerCommands.push(.settings) }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
             } message: {
                 Text(String(localized: "conversation.list.master_pin_required.message", bundle: .main))
@@ -153,14 +154,14 @@ struct ConversationListModalPresentations: ViewModifier {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showWidgetPreview) {
+            .relayingMeeshyRouter(meeshyRouter) { content, router in content.sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
                     .environmentObject(conversationViewModel)
                     .modifier(MeeshyRouterInjection(router: router))
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .modifier(GlobalSearchCoverHost(isPresented: $showGlobalSearch, conversationViewModel: conversationViewModel, router: router))
+            .modifier(GlobalSearchCoverHost(isPresented: $showGlobalSearch, conversationViewModel: conversationViewModel, router: router)) }
     }
 
     /// Le PIN accordé vaut UNE ouverture (#11386) : les détails la consomment,

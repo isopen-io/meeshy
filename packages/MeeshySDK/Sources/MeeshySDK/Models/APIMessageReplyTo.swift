@@ -49,12 +49,16 @@ public struct APIMessageReplyTo: Decodable, Sendable {
     /// passerelle n'en sert que quatre dans `attachments`. `nil` chez une
     /// passerelle antérieure, et pour un message protégé.
     public let visualAttachmentCount: Int?
+    /// #17441 — l'avis cité (appel, arrivée, départ annoncé), que la passerelle
+    /// sert sous `notice`. `nil` chez une passerelle antérieure et pour tout
+    /// message qui n'est pas un avis citable : la citation dit alors `content`.
+    public let notice: QuotedNotice?
 
     private enum CodingKeys: String, CodingKey {
         case id, content, senderId, sender, attachments
         case originalLanguage, translations
         case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
-        case attachmentReplyTo, deletedAt, visualAttachmentCount
+        case attachmentReplyTo, deletedAt, visualAttachmentCount, notice
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,6 +91,7 @@ public struct APIMessageReplyTo: Decodable, Sendable {
         // `try?` : une date illisible ne fait pas tomber la citation entière.
         deletedAt = (try? c.decodeIfPresent(Date.self, forKey: .deletedAt)) ?? nil
         visualAttachmentCount = (try? c.decodeIfPresent(Int.self, forKey: .visualAttachmentCount)) ?? nil
+        notice = (try? c.decodeIfPresent(QuotedNotice.self, forKey: .notice)) ?? nil
     }
 
     /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
@@ -179,12 +184,20 @@ public extension APIMessageReplyTo {
     /// `isMe` se résout sur l'UTILISATEUR (`sender.userId`, sinon `senderId`),
     /// jamais sur l'identifiant de participant seul : `replyTo.senderId` est
     /// l'appartenance à la conversation, pas la personne.
-    func toReplyReference(currentUserId: String?, preferredLanguages: [String]) -> ReplyReference {
-        let reference = composedReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages)
+    ///
+    /// Un AVIS cité (#17441) se dit dans la langue des libellés que l'app a
+    /// prêtés (`QuotedNotice.lend`), du point de vue du lecteur ; sans eux, le
+    /// repli français servi.
+    func toReplyReference(
+        currentUserId: String?, preferredLanguages: [String],
+        noticeStrings: ConversationPreviewStrings? = QuotedNotice.lentStrings
+    ) -> ReplyReference {
+        let noticeText = noticeStrings.flatMap { strings in notice?.text(viewerId: currentUserId, strings: strings) }
+        let reference = composedReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages, noticeText: noticeText)
         return deletedAt.map { reference.tombstoned(at: $0) } ?? reference
     }
 
-    private func composedReference(currentUserId: String?, preferredLanguages: [String]) -> ReplyReference {
+    private func composedReference(currentUserId: String?, preferredLanguages: [String], noticeText: String?) -> ReplyReference {
         // La pièce NOMMÉE l'emporte sur le représentatif (#6164) — et quand
         // elle est nommée mais ABSENTE (supprimée, hors fenêtre), on ne
         // retombe sur RIEN : emprunter la vignette de la première montrerait
@@ -197,7 +210,7 @@ public extension APIMessageReplyTo {
         var reference = ReplyReference(
             messageId: id,
             authorName: sender?.name ?? "?",
-            previewText: placeholder ?? servedPreviewText(preferredLanguages: preferredLanguages, representative: representative),
+            previewText: placeholder ?? noticeText ?? servedPreviewText(preferredLanguages: preferredLanguages, representative: representative),
             isMe: currentUserId.map { (sender?.resolvedUserId ?? senderId) == $0 } ?? false,
             authorAvatarUrl: sender?.resolvedAvatar,
             attachmentType: representative?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }

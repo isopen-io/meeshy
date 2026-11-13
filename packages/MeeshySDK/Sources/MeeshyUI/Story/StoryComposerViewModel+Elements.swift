@@ -18,7 +18,7 @@ extension StoryComposerViewModel {
     /// (`systemLanguage`/`regionalLanguage`, des préférences de CONSOMMATION)
     /// ne pilotent ce défaut : chacun de ces signaux a déjà mal étiqueté du
     /// contenu français. La pastille langue de l'éditeur de texte reste le
-    /// choix EXPLICITE de l'auteur (directive 2026-07-25) et prime toujours
+    /// choix EXPLICITE de l'auteur et prime toujours
     /// sur ce défaut via `updateElementLanguage`.
     nonisolated public static var defaultSourceLanguage: String { "fr" }
 
@@ -74,7 +74,7 @@ extension StoryComposerViewModel {
     /// Vrai si un média d'arrière-plan REMPLIT tout le canvas (aspectFill : mode
     /// `nil`/auto ou `"fill"`). Faux sans média visuel de fond, ou en mode
     /// `"fit"` (letterbox) : dans ces cas le fond ne couvre pas le canvas et on
-    /// matérialise ses contours (directive user 2026-07-14).
+    /// matérialise ses contours.
     var backgroundFillsCanvas: Bool {
         StorySceneFrame.backgroundFillsCanvas(for: currentEffects)
     }

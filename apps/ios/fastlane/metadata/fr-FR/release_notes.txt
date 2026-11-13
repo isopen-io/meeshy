@@ -1,9 +1,9 @@
-Meeshy 1.1.3 — tout se crée sur la scène
+Meeshy 1.1.8 — des appels plus beaux, plus clairs, dans ta langue.
 
-• Stickers : une seule feuille, dans tes conversations comme dans tes stories, posts et réels ; Mee et Meo s'animent, et une Boutique installe ou retire un pack d'un geste
-• Composeur : touche l'outil Texte pour créer ta scène, puis édite texte, images, stickers et fond directement dessus ; un pincement agrandit ton texte sans casser ses lignes
-• Tes photos et vidéos s'éditent dans la scène avant l'envoi : recadre une image (Original, 1:1, 4:5, 9:16), raccourcis une vidéo, et la caméra s'ouvre en plein écran
-• Barre de composition allégée : photothèque et caméra d'un geste, et des icônes aux couleurs de ton effet
-• Appels : vois quand ton correspondant coupe sa caméra ou son micro, reprends un appel interrompu au lieu de le perdre, et un appel de groupe continue quand quelqu'un part ; en vidéo, un teint naturel et une peau lissée à régler
-• Un lien Meeshy ouvert sans compte montre la publication et qui te l'a partagée ; un réel sans texte affiche sa légende, et modifier une publication garde son type
-• Corrections et gains de fluidité
+• Appels repensés : chaque bouton est en verre (Liquid Glass sous iOS 26), qui parle s'illumine de sa couleur, et en paysage jusqu'à quatre personnes tiennent sur une rangée.
+• Sous-titres : chaque phrase dit sa langue et déplie son original d'un toucher. Après l'appel, le journal se déplie sous sa bulle dans la conversation.
+• Enregistrement et partage d'écran : chacun voit qui demande et qui accepte, l'enregistrement se lance en Audio ou en Vidéo, et « Arrêter le partage » reste toujours à portée.
+• Création : coller une image pose le fond de la scène, coller un texte remplit la légende ; le viseur propose Texte, Fond, Galerie et Sticker en premier.
+• Plus simple partout : l'inscription, les réglages et le jeu disent chaque chose une seule fois, et les détails attendent derrière un (i).
+
+Et bien sûr, des corrections et plus de fluidité partout.

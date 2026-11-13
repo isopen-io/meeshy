@@ -15,6 +15,7 @@ import {
 import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
 import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
 import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
+import { eraseExternalPeerHandlesOpenedBy } from './external-conversation/erase-external-peers';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -54,6 +55,8 @@ export type AccountPurgeSummary = {
   readonly callTelemetryErased: number;
   /** Ses appareils chiffrés, leurs pré-clés publiques et les enveloppes qui lui restaient adressées (#12543). */
   readonly e2eeErased: { readonly devices: number; readonly preKeys: number; readonly envelopes: number };
+  /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
+  readonly externalPeerHandlesDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -132,7 +135,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
+  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
@@ -164,6 +167,7 @@ export async function purgeAccountIsolatedData(
       eraseReadingTelemetryOf(prisma, userId),
       eraseCallTelemetryOf(prisma, userId),
       eraseE2EEDataOfUser(prisma, userId),
+      eraseExternalPeerHandlesOpenedBy(prisma, userId),
       options.endSharedLocation?.(userId),
     ]);
 
@@ -185,6 +189,7 @@ export async function purgeAccountIsolatedData(
     readingTelemetry,
     callTelemetryErased: callTelemetry,
     e2eeErased: e2ee,
+    externalPeerHandlesDeleted: externalPeerHandles,
   };
 
   logger.info(
@@ -196,7 +201,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles}`
   );
 
   return summary;

@@ -4,7 +4,7 @@ import type { Message } from '@/lib/api/types';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { badgesOf, editedByModeratorOf, editedOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText } from './message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText, takesMessageGestures } from './message-badges';
 
 /* Les trois libellés de transfert viennent du catalogue (#7337) ; `translate()`
    LÈVE sur un catalogue non chargé, par contrat (`i18n-catalog.ts`). */
@@ -351,5 +351,21 @@ describe('les avis de vie du groupe se disent dans la langue du lecteur (#7673)'
       'Bob a rejoint la conversation',
     );
     expect(row === null ? null : systemRowText(row, 'en')).toBe('Bob joined the conversation');
+  });
+});
+
+describe('takesMessageGestures — #17441 : un avis citable prend l’appui long et le glissé', () => {
+  test('une prise de parole les prend ; un appel, une arrivée et un départ annoncé aussi', () => {
+    expect(takesMessageGestures({ messageType: 'text', messageSource: 'user' })).toBe(true);
+    for (const kind of ['call', 'call-live', 'member-joined', 'members-arrived', 'member-left']) {
+      expect(takesMessageGestures({ messageType: 'system', messageSource: 'system', metadata: { kind } })).toBe(true);
+    }
+  });
+
+  test('un avis non citable (capture, retrait, chiffrement) reste hors de la surface de gestes', () => {
+    for (const metadata of [{ kind: 'content-capture' }, { kind: 'member-removed' }]) {
+      expect(takesMessageGestures({ messageType: 'system', messageSource: 'system', metadata })).toBe(false);
+    }
+    expect(takesMessageGestures({ messageType: 'system', messageSource: 'system' })).toBe(false);
   });
 });

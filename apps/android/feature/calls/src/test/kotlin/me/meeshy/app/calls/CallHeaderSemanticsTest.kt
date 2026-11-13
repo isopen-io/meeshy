@@ -1,8 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
@@ -39,8 +41,14 @@ class CallHeaderSemanticsTest {
     }
 
     @Test
-    fun `le libelle de la puce compose la duree et le micro coupe du pair`() {
+    fun `le libelle de la capsule video compose le nom la duree et le micro coupe du pair`() {
         rule.setContent { MeeshyTheme { CallHeaderBar(connected(peerMuted = true), conversationId = "c1", showsMinimize = true, onMinimize = {}) } }
-        rule.onNodeWithContentDescription("Call duration, Contact muted").assertExists()
+        rule.onNodeWithContentDescription("Alice, Call duration, Contact muted").assertExists()
+    }
+
+    @Test
+    fun `la capsule de duree est une cible d'au moins 48 dp`() {
+        rule.setContent { MeeshyTheme { CallHeaderBar(connected(), conversationId = "c1", showsMinimize = true, onMinimize = {}) } }
+        rule.onNodeWithContentDescription("Call duration", substring = true).assertHeightIsAtLeast(48.dp)
     }
 }

@@ -137,6 +137,8 @@ nonisolated enum ComposerCaptureHaptic: Equatable {
     case recordingEnded
     case locked
     case zoomStep
+    /// Le niveau d'horizon devient droit (CAM-10).
+    case levelled
     case timerTick(secondsLeft: Int)
 
     enum Feedback: Equatable { case rigid, medium, doubleLightTick, success, selection, none }
@@ -151,7 +153,7 @@ nonisolated enum ComposerCaptureHaptic: Equatable {
         case .recordingStarted: .medium
         case .recordingEnded: .doubleLightTick
         case .locked: .success
-        case .zoomStep: .selection
+        case .zoomStep, .levelled: .selection
         case .timerTick(let reste): (1...Self.timerTickWindow).contains(reste) ? .selection : .none
         }
     }

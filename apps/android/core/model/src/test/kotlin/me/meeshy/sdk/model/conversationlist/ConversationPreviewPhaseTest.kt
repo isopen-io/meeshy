@@ -173,11 +173,11 @@ class ConversationPreviewPhaseTest {
     }
 
     @Test
-    fun `seuls les cinq derniers messages sont gardes, du plus ancien au plus recent`() {
-        val seven = (1..7).map { message(id = "m$it") }
+    fun `seuls les quinze derniers messages sont gardes, du plus ancien au plus recent`() {
+        val twenty = (1..20).map { message(id = "m$it") }
 
-        val snapshot = ConversationPreviewSnapshot.of(seven, prefs("en"))
+        val snapshot = ConversationPreviewSnapshot.of(twenty, prefs("en"))
 
-        assertThat(snapshot.messages.map { it.id }).containsExactly("m3", "m4", "m5", "m6", "m7").inOrder()
+        assertThat(snapshot.messages.map { it.id }).containsExactlyElementsIn((6..20).map { "m$it" }).inOrder()
     }
 }

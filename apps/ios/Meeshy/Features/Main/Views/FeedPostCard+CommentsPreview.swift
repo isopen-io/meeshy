@@ -64,7 +64,7 @@ extension FeedPostCard {
 
                         Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .accessibilityHidden(true)
                     }
                     .padding(.top, MeeshySpacing.xs)
@@ -117,7 +117,7 @@ extension FeedPostCard {
                             .foregroundColor(theme.accentText(comment.authorColor))
 
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
-                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                            MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
 
                             let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                             let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
@@ -135,7 +135,7 @@ extension FeedPostCard {
                                     .font(.caption2)
                                 Image(systemName: "translate")
                                     .font(.caption2.weight(.medium))
-                                    .foregroundColor(MeeshyColors.indigo400)
+                                    .foregroundStyle(MeeshyColors.indigo400)
                             }
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(
@@ -153,7 +153,7 @@ extension FeedPostCard {
                         if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(comment.displayContent)
                                 .font(.footnote)
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                                 .lineLimit(2)
                         }
 
@@ -194,11 +194,11 @@ extension FeedPostCard {
                         HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "heart.fill")
                                 .font(.caption)
-                                .foregroundColor(MeeshyColors.error)
+                                .foregroundStyle(MeeshyColors.error)
                                 .accessibilityHidden(true)
                             Text("\(comment.likes)")
                                 .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
 
                         // Replies
@@ -210,7 +210,7 @@ extension FeedPostCard {
                                     .accessibilityHidden(true)
                                 Text(PostStatAccessibility.repliesLabel(comment.replies))
                                     .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                             }
                         }
 
@@ -219,7 +219,7 @@ extension FeedPostCard {
                         // Timestamp
                         Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
                             .font(.caption2)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .padding(.top, MeeshySpacing.xxs)
                 }

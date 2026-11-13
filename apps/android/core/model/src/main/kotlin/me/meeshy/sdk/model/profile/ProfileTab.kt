@@ -1,10 +1,10 @@
 package me.meeshy.sdk.model.profile
 
-/** Les onglets de la fiche ; l'onglet initial est [DETAILS]. */
+/** Les onglets de la fiche, dans l'ordre de la barre : Détails, Conversations, Publications (#17203) ; l'onglet initial est [DETAILS]. */
 enum class ProfileTab {
-    POSTS,
+    DETAILS,
     CONVERSATIONS,
-    DETAILS;
+    POSTS;
 
     companion object {
         val DEFAULT: ProfileTab = DETAILS

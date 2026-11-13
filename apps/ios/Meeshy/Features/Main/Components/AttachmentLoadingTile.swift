@@ -33,7 +33,7 @@ struct AttachmentLoadingTile: View {
                         Image(systemName: "xmark")
                             // Doctrine 86i : glyphe d'annulation dans un cercle fixe 18×18 → figé.
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(width: 18, height: 18)
                             .background(
                                 Circle()
@@ -48,7 +48,7 @@ struct AttachmentLoadingTile: View {
 
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(ThemeManager.shared.textSecondary)
+                .foregroundStyle(ThemeManager.shared.textSecondary)
                 .lineLimit(1)
                 .frame(width: max(size, 60))
         }
@@ -137,7 +137,7 @@ struct AttachmentLoadingTile: View {
                     // Doctrine 86i : label d'étape borné par la tuile de dimension fixe
                     // `size`×`size` (≈56) → figé (déjà `minimumScaleFactor` pour rétrécir).
                     .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, MeeshySpacing.xs)
@@ -152,12 +152,12 @@ struct AttachmentLoadingTile: View {
                 // Doctrine 86i : glyphe d'erreur borné par la tuile fixe → figé ; décoratif
                 // (le libellé « Erreur » adjacent porte le sens).
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .accessibilityHidden(true)
             Text(String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main))
                 // Doctrine 86i : label borné par la tuile de dimension fixe → figé.
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
         .padding(MeeshySpacing.xsPlus)
         .background(

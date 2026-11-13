@@ -115,7 +115,7 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
     /// bannière du joueur (#9494) le pousse vers le bas, de sa hauteur, et cette
     /// hauteur change quand elle se replie. Mesurée dans le repère du conteneur,
     /// une position écrite bannière repliée revenait 69 à 80 pt plus bas
-    /// bannière dépliée (recette 2026-10-08). L'écran, lui, ne bouge pas : il va
+    /// bannière dépliée. L'écran, lui, ne bouge pas : il va
     /// du haut de la fenêtre (y = 0) au bas du conteneur, qui touche le bas de
     /// l'écran. Quand le conteneur ne touche pas le haut, l'encoche n'y est pas
     /// mesurable : on la majore (`FloatingButtonSafeZone.maxTopInset`), et le
