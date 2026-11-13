@@ -44,4 +44,16 @@ class CallJournalUnderBubbleGuardTest {
         assertThat(bubble).contains("CircularProgressIndicator")
         assertThat(bubble).contains("viewModel.release()")
     }
+
+    /** Rien n'apparaît ni ne disparaît d'un coup : l'attente, le vide et le journal passent en fondu, sans taille animée. */
+    @Test
+    fun `l'attente, le vide et le journal se relaient en fondu, sans animer la taille`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+
+        assertThat(bubble).contains("AnimatedContent(")
+        assertThat(bubble).contains("FocalCallJournalFace.of(")
+        assertThat(bubble).contains(".using(null)")
+        assertThat(bubble).contains("FocalCallJournalMotion.fadeMillis(")
+        assertThat(bubble).doesNotContain("animateContentSize")
+    }
 }
