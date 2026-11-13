@@ -182,6 +182,59 @@ describe('CallScreen — la scène d’un groupe (#17699)', () => {
     view.done();
   });
 
+  test('#17948 — toucher la vignette À LA UNE range les contrôles, capsule comprise, et le suivant les rend ; la grille ne revient que par « Revenir à la grille » (loi 11, loi 15, P14, U1 ; `onStageTap` d’iOS)', () => {
+    const view = mount({ members: peers, cameraOn: true });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    const spotlight = () => view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight') ?? null;
+    const featured = () => act(() => (view.find('[data-call-spotlight] [data-call-slot="u-b"] [data-call-tile="u-b"]') as HTMLElement | null)?.click());
+    view.press('[data-call-tile="u-b"]');
+    expect(spotlight()).toBe('u-b');
+    expect(view.find('[data-call-spotlight] [data-call-slot="u-b"] button[data-call-tile="u-b"]')).toBeNull();
+    featured();
+    expect(chrome()).toBe('hidden');
+    expect(spotlight()).toBe('u-b');
+    const capsule = view.find('[data-call-spotlight-capsule]')?.closest('[data-call-chrome-fade]');
+    expect(capsule?.hasAttribute('data-call-chrome-keep')).toBe(false);
+    featured();
+    expect(chrome()).toBe('shown');
+    expect(spotlight()).toBe('u-b');
+    view.press('[data-call-grid-back]');
+    expect(spotlight()).toBeNull();
+    view.done();
+  });
+
+  test('#17945 (extension du 2026-11-13) — en groupe SANS AUCUNE caméra, un toucher sur le fond range en-tête et pilule, un autre les rend ; une vignette touchée, commandes visibles, passe toujours à la une', () => {
+    const view = mount({ members: peers });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    expect(view.find('[data-call-header]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBe('true');
+    tapStage(view);
+    expect(chrome()).toBe('shown');
+    view.press('[data-call-tile="u-b"]');
+    expect(chrome()).toBe('shown');
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-b');
+    view.done();
+  });
+
+  test('#17949 — la grille s’arrête au-dessus de la pilule, au repos comme agrandie : deux étages du même flux, jamais l’un sur l’autre (P11, P12 ; la mesure est dans `check-calls-controls.mjs`)', async () => {
+    const view = mount({ members: peers });
+    const stage = view.find('[data-call-stage-surface]') as HTMLElement;
+    const plane = view.find('[data-call-controls]')?.closest('[data-call-plane]') as HTMLElement;
+    const inFlow = (node: Element | null | undefined) => node instanceof HTMLElement && !/(^|\s)(absolute|fixed)(\s|$)/.test(node.className);
+    expect(stage.className).toContain('flex-1');
+    expect(inFlow(stage) && inFlow(plane)).toBe(true);
+    expect(stage.parentElement).toBe(plane.parentElement);
+    expect(stage.compareDocumentPosition(plane) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    view.press('[data-call-more]');
+    await act(async () => {});
+    const pill = view.find('[data-call-control-pill="grown"]');
+    expect(pill?.closest('[data-call-plane]')).toBe(plane);
+    expect([pill, view.find('[data-call-deck]'), view.find('[data-call-controls]')].every(inFlow)).toBe(true);
+    view.done();
+  });
+
   test('en groupe, la grille suit l’ORDRE D’ARRIVÉE, ma vignette en dernier : un pair qui se reconnecte garde sa case (P11.3)', () => {
     const arrived = { 'u-z': member({ userId: 'u-z', name: 'Zoé' }), 'u-b': member({ userId: 'u-b', name: 'Bob' }), 'u-a': member({ userId: 'u-a', name: 'Ana' }) };
     const order = (view: View) => [...view.host.querySelectorAll('[data-call-slot]')].map((slot) => slot.getAttribute('data-call-slot'));

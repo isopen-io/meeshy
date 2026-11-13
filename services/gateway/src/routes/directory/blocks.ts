@@ -212,6 +212,12 @@ export async function debloquer(
 
   try { await getCacheStore().del(blockCacheKey(moi, cibleId)); } catch { /* best-effort */ }
 
+  // #16987 — la position partagée : si la loi rouvre l'accès, la dernière position revient
+  // sans attendre l'envoi suivant ; un autre blocage ou un lien sous Ami ne rendent rien.
+  const position = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after unblock', error) };
+  refreshSharedLocationAfter(position, { userA: moi, userB: cibleId })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after unblock', error));
+
   return { valeur: { message: 'User unblocked' } };
 }
 

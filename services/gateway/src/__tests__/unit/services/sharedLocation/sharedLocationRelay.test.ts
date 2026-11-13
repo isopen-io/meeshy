@@ -11,126 +11,20 @@
  * @jest-environment node
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { relationPairKey } from '@meeshy/shared/types/relation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SHARED_LOCATION_ERROR_CODES } from '@meeshy/shared/types/shared-location';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   captureSharedLocationAccess,
+  endSharedLocationOfAccount,
   projectSharedLocation,
   refreshSharedLocationBetween,
   sharedLocationSnapshotFor,
   startSharedLocation,
   stopSharedLocation,
   updateSharedLocation,
-  type SharedLocationRelayDeps,
 } from '../../../../services/sharedLocation/sharedLocationRelay';
 import { readSharedLocation } from '../../../../services/sharedLocation/sharedLocationStore';
-import { sharedLocationKvEnMemoire } from '../../../helpers/shared-location-kv';
-import { ADULT_BIRTH, messagingWorld, type CircleLink } from '../../../helpers/messaging-circle-world';
-
-const EMETTEUR = '6300000000000000000000e1';
-const AMI = '6300000000000000000000f1';
-const PROCHE = '6300000000000000000000c1';
-const SANG = '6300000000000000000000b1';
-const CONNAISSANCE = '6300000000000000000000a1';
-const NON_CHOISI = '6300000000000000000000f2';
-const BLOQUEUR = '6300000000000000000000d1';
-
-const T0 = Date.parse('2026-11-08T12:00:00.000Z');
-const HEURE = 3_600_000;
-const PARIS = { latitude: 48.8566, longitude: 2.3522, accuracy: 4 } as const;
-const PLUS_LOIN = { latitude: 48.8738, longitude: 2.295, accuracy: 12 } as const;
-
-type Emission = { readonly room: string; readonly event: string; readonly data: Record<string, unknown> };
-
-const LIENS: readonly CircleLink[] = [
-  [EMETTEUR, AMI, 'FRIEND'],
-  [EMETTEUR, PROCHE, 'CLOSE'],
-  [EMETTEUR, SANG, 'BLOOD'],
-  [EMETTEUR, CONNAISSANCE, 'ACQUAINTANCE'],
-  [EMETTEUR, NON_CHOISI, 'FRIEND'],
-  [EMETTEUR, BLOQUEUR, 'CLOSE'],
-];
-
-function monde() {
-  const world = messagingWorld({
-    links: LIENS,
-    users: [EMETTEUR, AMI, PROCHE, SANG, CONNAISSANCE, NON_CHOISI, BLOQUEUR].map((id) => ({
-      id,
-      birthDate: ADULT_BIRTH,
-      ...(id === BLOQUEUR ? { blockedUserIds: [EMETTEUR] } : {}),
-    })),
-  });
-  const emissions: Emission[] = [];
-  let now = T0;
-  const cache = sharedLocationKvEnMemoire({ horloge: () => now });
-  let pauseLecture: Promise<void> | null = null;
-  let lectureEnPanne = false;
-  let relacherLecture = (): void => undefined;
-  const users = world.prisma.user as unknown as { findMany: (args: unknown) => Promise<unknown> };
-  const prisma = new Proxy(world.prisma, {
-    get: (target, prop) =>
-      prop === 'user'
-        ? new Proxy(target.user, {
-            get: (userTarget, userProp) =>
-              userProp === 'findMany'
-                ? async (args: unknown) => {
-                    if (lectureEnPanne) {
-                      lectureEnPanne = false;
-                      throw new Error('base injoignable');
-                    }
-                    const attente = pauseLecture;
-                    pauseLecture = null;
-                    const rows = await users.findMany(args);
-                    if (attente) await attente;
-                    return rows;
-                  }
-                : Reflect.get(userTarget, userProp),
-          })
-        : Reflect.get(target, prop),
-  });
-  const deps: SharedLocationRelayDeps = {
-    prisma: prisma as unknown as PrismaClient,
-    cache,
-    io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as SharedLocationRelayDeps['io'],
-    now: () => now,
-  };
-  return {
-    deps,
-    cache,
-    emissions,
-    /** La prochaine lecture des comptes (l'accès d'un lecteur) attend `relacherLecture()`. */
-    suspendreProchaineLecture: () => {
-      pauseLecture = new Promise<void>((resolve) => {
-        relacherLecture = resolve;
-      });
-    },
-    relacherLecture: () => relacherLecture(),
-    /** La prochaine lecture des comptes lève (base injoignable). */
-    echouerProchaineLecture: () => {
-      lectureEnPanne = true;
-    },
-    avancer: (ms: number) => {
-      now += ms;
-    },
-    vers: (userId: string) => emissions.filter((e) => e.room === ROOMS.user(userId)),
-    lier: async (a: string, b: string, level: string) => {
-      await world.prisma.userRelation.updateMany({ where: relationPairKey(a, b), data: { grantedByLow: level, grantedByHigh: level } });
-    },
-  };
-}
-
-const TOUS = [
-  { userId: AMI, precision: 'exact' },
-  { userId: PROCHE, precision: 'neighborhood' },
-  { userId: SANG },
-  { userId: CONNAISSANCE, precision: 'exact' },
-  { userId: BLOQUEUR, precision: 'exact' },
-] as const;
-
-const demarrer = (m: ReturnType<typeof monde>, recipients: readonly object[] = TOUS, durationMinutes = 60) =>
-  startSharedLocation(m.deps, EMETTEUR, { recipients, durationMinutes, position: PARIS });
+import { AMI, BLOQUEUR, CONNAISSANCE, demarrer, EMETTEUR, HEURE, monde, NON_CHOISI, PARIS, PLUS_LOIN, PROCHE, SANG, T0, TOUS } from '../../../helpers/shared-location-relay-world';
 
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 afterEach(() => {
@@ -158,8 +52,8 @@ describe('la projection — la précision donnée, rien de plus riche à côté'
   });
 
   it('quartier et ville : le centre de la maille et le rayon du flou, ni la position ni la précision réelles', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 800 });
-    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 8000 });
+    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 1200 });
+    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 12000 });
     expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, 'city'))).not.toMatch(/8566|3522|accuracy|recipients/);
   });
 
@@ -226,7 +120,8 @@ describe('mettre à jour et arrêter', () => {
 
     expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
     expect(m.vers(AMI).map((e) => [e.data.latitude, e.data.radiusMeters, e.data.updatedAt])).toEqual([[48.8738, 12, new Date(T0 + 60_000).toISOString()]]);
-    expect(m.vers(SANG).map((e) => [e.data.latitude, e.data.longitude])).toEqual([[48.85, 2.25]]);
+    expect(m.vers(PROCHE).map((e) => [e.data.latitude, e.data.longitude])).toEqual([[48.875, 2.295]]);
+    expect(m.vers(SANG)).toEqual([]);
   });
 
   it('une mise à jour sans partage en cours, ou après son terme, est refusée et ne part nulle part', async () => {
@@ -486,7 +381,7 @@ describe('les rejeux en vol — un rejeu ou un rattrapage lus avant un geste ne 
     const m = monde();
     await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
 
-    m.suspendreProchaineLecture();
+    m.suspendreProchaineLecture(1);
     const enVol = demarrer(m, [{ userId: AMI, precision: 'exact' }]);
     await tick();
     expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'city' }])).toMatchObject({ success: true });
@@ -693,7 +588,7 @@ describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu
 
   it('F3 — un démarrage dont l\'éventail échoue après la prise est annoncé tel qu\'il est : courant', async () => {
     const m = monde();
-    m.echouerProchaineLecture();
+    m.echouerProchaineLecture(1);
 
     expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);
@@ -708,5 +603,234 @@ describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu
 
     expect(await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN)).toMatchObject({ success: true });
     expect((await readSharedLocation(m.cache, EMETTEUR, T0))?.position).toEqual(PLUS_LOIN);
+  });
+});
+
+const MODO = '6300000000000000000000e5';
+const ADMIN = '6300000000000000000000e6';
+const EQUIPE = [{ id: MODO, role: 'MODERATOR' }, { id: ADMIN, role: 'ADMIN' }] as const;
+
+describe('la ligne de maille — le bruit GPS près d\'une frontière ne la révèle pas (#16987)', () => {
+  const PRES_DE_LA_LIGNE = { latitude: 48.8601, longitude: 2.3529, accuracy: 4 } as const;
+  const AU_DELA = { latitude: 48.864, longitude: 2.3529, accuracy: 4 } as const;
+  const DE_RETOUR = { latitude: 48.8599, longitude: 2.3529, accuracy: 4 } as const;
+
+  it('franchir la ligne de peu garde la maille servie ; s\'en éloigner la change ; revenir de peu ne la rechange pas', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await updateSharedLocation(m.deps, EMETTEUR, PRES_DE_LA_LIGNE);
+    expect(m.vers(PROCHE)).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items).toEqual([expect.objectContaining({ latitude: 48.855 })]);
+
+    await updateSharedLocation(m.deps, EMETTEUR, AU_DELA);
+    expect(m.vers(PROCHE).map((e) => e.data.latitude)).toEqual([48.865]);
+
+    await updateSharedLocation(m.deps, EMETTEUR, DE_RETOUR);
+    expect(m.vers(PROCHE)).toHaveLength(1);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items).toEqual([expect.objectContaining({ latitude: 48.865 })]);
+  });
+
+  it('l\'exact suit chaque pas : la ligne de maille ne concerne pas qui voit le point', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+    await updateSharedLocation(m.deps, EMETTEUR, PRES_DE_LA_LIGNE);
+    expect(m.vers(AMI).map((e) => e.data.latitude)).toEqual([48.8601]);
+  });
+});
+
+describe('l\'heure servie à un lecteur flouté est arrondie (#16987)', () => {
+  it('le flou n\'a pas d\'horloge fine : updatedAt tombe sur le quart d\'heure, l\'exact garde la minute vraie', async () => {
+    const m = monde();
+    m.avancer(22 * 60_000 + 11_000);
+    await demarrer(m);
+
+    const exact = m.vers(AMI)[0]?.data;
+    const flou = m.vers(PROCHE)[0]?.data;
+    expect(exact?.updatedAt).toBe('2026-11-08T12:22:11.000Z');
+    expect(flou?.updatedAt).toBe('2026-11-08T12:15:00.000Z');
+    expect((await sharedLocationSnapshotFor(m.deps, SANG, {})).items[0]?.updatedAt).toBe('2026-11-08T12:15:00.000Z');
+  });
+});
+
+describe('le rattrapage groupé et la loi d\'équipe (#16987)', () => {
+  it('une paire de l\'équipe sans lien reçoit la position au rattrapage comme en direct', async () => {
+    const m = monde({ users: EQUIPE });
+    await startSharedLocation(m.deps, ADMIN, { recipients: [{ userId: MODO, precision: 'exact' }], durationMinutes: 60, position: PARIS });
+
+    expect(m.vers(MODO)).toHaveLength(1);
+    expect((await sharedLocationSnapshotFor(m.deps, MODO, {})).items).toEqual([expect.objectContaining({ userId: ADMIN, precision: 'exact' })]);
+  });
+
+  it('un utilisateur ordinaire sans lien ne reçoit rien au rattrapage, même désigné', async () => {
+    const m = monde({ users: [{ id: MODO, role: 'MODERATOR' }, { id: ADMIN }] });
+    await startSharedLocation(m.deps, ADMIN, { recipients: [{ userId: MODO, precision: 'exact' }], durationMinutes: 60, position: PARIS });
+    expect((await sharedLocationSnapshotFor(m.deps, MODO, {})).items).toEqual([]);
+  });
+
+  const emetteurs = (n: number) => Array.from({ length: n }, (_, i) => `63000000000000000000aa${String(i).padStart(2, '0')}`);
+  async function lecturesPour(n: number) {
+    const ids = emetteurs(n);
+    const m = monde({ users: ids.map((id) => ({ id })), links: ids.map((id) => [id, SANG, 'FRIEND'] as const) });
+    for (const id of ids) {
+      await startSharedLocation(m.deps, id, { recipients: [{ userId: SANG, precision: 'exact' }], durationMinutes: 60, position: PARIS });
+    }
+    m.lectures.cache = 0;
+    m.lectures.comptes = 0;
+    const { items } = await sharedLocationSnapshotFor(m.deps, SANG, {});
+    return { items: items.length, ...m.lectures };
+  }
+
+  it('le coût en lectures ne dépend pas du nombre d\'émetteurs : une lecture groupée du magasin, une lecture des comptes', async () => {
+    const un = await lecturesPour(1);
+    const douze = await lecturesPour(12);
+    expect(un.items).toBe(1);
+    expect(douze.items).toBe(12);
+    expect(douze.cache).toBe(un.cache);
+    expect(douze.comptes).toBe(un.comptes);
+  });
+});
+
+describe('un compte qui part ne partage plus (#16987)', () => {
+  it('terminer le partage d\'un compte désactivé le dit à qui le voyait, et le rejouer ne dit rien de plus', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    expect(await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: false })).toEqual({ success: true });
+    expect(m.vers(AMI).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_ENDED]);
+    expect(m.vers(NON_CHOISI)).toEqual([]);
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+
+    m.emissions.length = 0;
+    await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: false });
+    expect(m.emissions).toEqual([]);
+  });
+
+  it('la purge ne laisse aucune clé du compte sans terme, et plus aucune passé le plus long partage', async () => {
+    const m = monde();
+    await demarrer(m);
+    await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: true });
+
+    const restantes = [...m.cache.entries].filter(([key]) => key.includes(EMETTEUR));
+    expect(restantes.filter(([, entry]) => entry.until === undefined)).toEqual([]);
+    expect([...m.cache.sets.keys()].filter((key) => key.includes(EMETTEUR))).toEqual([]);
+
+    m.avancer(8 * HEURE);
+    expect(await m.cache.mget(restantes.map(([key]) => key))).toEqual(restantes.map(() => null));
+  });
+
+  it('un démarrage en vol pendant la purge d\'un compte qui n\'a jamais partagé ne prend pas : la génération ne repart pas de zéro', async () => {
+    const m = monde();
+    m.cache.suspendreProchaineEcriture('claim');
+    const enVol = demarrer(m);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: true })).toEqual({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect(m.cache.pointeurDe(EMETTEUR)).toBeNull();
+    expect(m.cache.etatsDe(EMETTEUR)).toEqual([]);
+  });
+
+  it('une panne du magasin ne dit pas « fini » et ne purge rien', async () => {
+    const m = monde();
+    await demarrer(m);
+    await stopSharedLocation(m.deps, EMETTEUR);
+    await demarrer(m);
+    m.cache.echouerProchaine('advance');
+
+    expect(await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: true })).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.UNAVAILABLE });
+    expect([...m.cache.entries.keys()].filter((key) => key.includes('shared-location-gen') && key.includes(EMETTEUR))).toHaveLength(1);
+    expect(m.cache.pointeurDe(EMETTEUR)).not.toBeNull();
+  });
+});
+
+describe('une position en vol pendant une baisse ne revient pas après la fin (#16987)', () => {
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('une mise à jour qui a lu l\'accès avant la baisse ne laisse pas le point chez qui a reçu la fin', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.suspendreProchaineLecture();
+    const enVol = updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    await tick();
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: AMI });
+    await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: AMI, before: avant });
+    m.relacherLecture();
+    expect(await enVol).toMatchObject({ success: true });
+
+    expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+  });
+
+  it('une mise à jour sans changement de lien sert chacun une fois, sans fin parasite', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+
+    expect(m.vers(AMI).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED]);
+    expect(m.emissions.filter((e) => e.event === SERVER_EVENTS.SHARED_LOCATION_ENDED)).toEqual([]);
+  });
+});
+
+describe('contre-audit a1e903a — le cercle de flou contient toujours la position vraie (#16987)', () => {
+  const metres = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number => {
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const dLat = rad(b.latitude - a.latitude);
+    const dLon = rad(b.longitude - a.longitude);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+  };
+
+  it('une maille retenue par la marge ne laisse pas la position vraie hors du rayon servi', async () => {
+    const m = monde();
+    await demarrer(m);
+    const DANS_LA_MARGE = { latitude: 48.8624, longitude: 2.3624, accuracy: 4 } as const;
+    await updateSharedLocation(m.deps, EMETTEUR, DANS_LA_MARGE);
+
+    const servi = (await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0];
+    expect(servi).toBeDefined();
+    const distance = metres({ latitude: servi!.latitude, longitude: servi!.longitude }, DANS_LA_MARGE);
+    expect(distance).toBeLessThanOrEqual(servi!.radiusMeters);
+  });
+
+  it('en précision ville aussi, la maille retenue reste dans le cercle servi', async () => {
+    const m = monde();
+    await demarrer(m);
+    const DANS_LA_MARGE = { latitude: 48.9249, longitude: 2.4249, accuracy: 4 } as const;
+    await updateSharedLocation(m.deps, EMETTEUR, DANS_LA_MARGE);
+
+    const servi = (await sharedLocationSnapshotFor(m.deps, SANG, {})).items[0];
+    expect(servi).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city' });
+    expect(metres({ latitude: servi!.latitude, longitude: servi!.longitude }, DANS_LA_MARGE)).toBeLessThanOrEqual(servi!.radiusMeters);
+  });
+
+  it('à l\'équateur, où le degré de longitude est le plus long, le coin de la retenue reste dans le cercle', () => {
+    const position = { latitude: 0.0124, longitude: 0.0124, accuracy: 4 };
+    const state = {
+      position,
+      updatedAt: new Date(T0).toISOString(),
+      expiresAt: new Date(T0 + HEURE).toISOString(),
+      recipients: [
+        { userId: PROCHE, precision: 'neighborhood' as const, cell: { latitude: 0.005, longitude: 0.005 } },
+        { userId: SANG, precision: 'city' as const, cell: { latitude: 0.05, longitude: 0.05 } },
+      ],
+    };
+    const coinVille = { ...position, latitude: 0.1249, longitude: 0.1249 };
+    const quartier = projectSharedLocation(EMETTEUR, state, 'neighborhood', PROCHE)!;
+    const ville = projectSharedLocation(EMETTEUR, { ...state, position: coinVille }, 'city', SANG)!;
+
+    expect(quartier).toMatchObject({ latitude: 0.005, longitude: 0.005 });
+    expect(metres(quartier, position)).toBeLessThanOrEqual(quartier.radiusMeters);
+    expect(ville).toMatchObject({ latitude: 0.05, longitude: 0.05 });
+    expect(metres(ville, coinVille)).toBeLessThanOrEqual(ville.radiusMeters);
   });
 });

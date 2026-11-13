@@ -10,6 +10,8 @@ import { cutTogetherWhere } from '../services/together/togetherDeps';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../services/AccountPurgeService';
 import { withdrawRitualSharesOfUser } from '../services/relations/ritualShareWithdrawal';
+import { endSharedLocationAfter } from '../services/sharedLocation/sharedLocationDeps';
+import { relationIoOf } from '../socketio/relationEvents';
 
 const logger = enhancedLogger.child({ module: 'AccountDeletionResolve' });
 
@@ -284,6 +286,8 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
             resolveIO: () => fastify.socketIOHandler?.getManager?.()?.getIO(),
             resolveManager: () => fastify.socketIOHandler?.getManager?.(),
           },
+          endSharedLocation: (id) =>
+            endSharedLocationAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logger.warn(`[Deletion] position partagée non éteinte user=${id}`, error) }, id, { forget: true }),
         }).catch((error) =>
           logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
         );

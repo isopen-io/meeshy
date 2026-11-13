@@ -1,6 +1,7 @@
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { isRepostable } from '@meeshy/shared/utils/repost-audience';
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { attachmentPictureSrcSets, attachmentSrc } from '@/lib/api/media-url';
@@ -269,6 +270,11 @@ export type FeedCardModel = {
   /** LES COMMENTAIRES FERMÉS PAR CETTE PUBLICATION (#16541) — son PROPRE réglage,
    * celui que le menu « ⋯ » bascule ; présent seulement quand il est posé. */
   readonly commentsDisabled?: true;
+  /** LA REPUBLICATION FERMÉE PAR L'AUDIENCE (#14501, RG-18) — un contenu de Sang
+   * ne se repartage jamais (`isRepostable`, loi partagée) : la carte et le rail
+   * n'offrent pas un geste que la passerelle refuserait. Présent seulement
+   * quand il est fermé ; audience non servie ⇒ ouvert, la passerelle tranche. */
+  readonly repostClosed?: true;
   /** Voir `FeedCardProtection` — absente : rien n'est déclaré. */
   readonly protection?: FeedCardProtection;
 };
@@ -607,6 +613,7 @@ export function resolveFeedCardModel(
     viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
     isReel,
     ...(post.commentsDisabled === true ? { commentsDisabled: true as const } : {}),
+    ...(post.visibility != null && !isRepostable(post.visibility) ? { repostClosed: true as const } : {}),
     author: {
       name: authorName,
       initials: initialsOf(authorName),
