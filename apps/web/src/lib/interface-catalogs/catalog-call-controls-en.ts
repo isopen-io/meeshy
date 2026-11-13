@@ -96,7 +96,6 @@ const en = {
   'callControls.mode.frames': 'Frames',
   'callControls.layers.title': 'Applied effects',
   'callControls.layers.undo': 'Undo {name}',
-  'callControls.layers.none': 'No effect applied',
   'callControls.layers.full': 'Three effects at most: remove one to add another',
   'callControls.layers.hint': 'Long press or Shift + Enter: applied effects',
   'callControls.layers.genre.frame': 'Frame',

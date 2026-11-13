@@ -96,7 +96,6 @@ const it = {
   'callControls.mode.frames': 'Cornici',
   'callControls.layers.title': 'Effetti applicati',
   'callControls.layers.undo': 'Annulla {name}',
-  'callControls.layers.none': 'Nessun effetto applicato',
   'callControls.layers.full': 'Al massimo tre effetti: rimuovine uno per aggiungerne un altro',
   'callControls.layers.hint': 'Pressione lunga o Maiusc + Invio: effetti applicati',
   'callControls.layers.genre.frame': 'Cornice',

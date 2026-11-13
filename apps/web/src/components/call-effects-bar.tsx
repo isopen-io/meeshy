@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
@@ -34,7 +34,6 @@ export type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: Transla
 export type LayersText = {
   readonly frames: string;
   readonly title: string;
-  readonly none: string;
   readonly full: string;
   readonly hint: string;
   readonly undo: (name: string) => string;
@@ -44,7 +43,6 @@ export type LayersText = {
 export const layersTextOf = (language: InterfaceLanguage): LayersText => ({
   frames: translateCallControls(language, 'callControls.mode.frames'),
   title: translateCallControls(language, 'callControls.layers.title'),
-  none: translateCallControls(language, 'callControls.layers.none'),
   full: translateCallControls(language, 'callControls.layers.full'),
   hint: translateCallControls(language, 'callControls.layers.hint'),
   undo: (name) => translateCallControls(language, 'callControls.layers.undo', { name }),
@@ -148,32 +146,56 @@ type ListProps = {
   readonly text: LayersText;
 };
 
-/** Les effets appliqués, du dessus au dessous : en annuler un le retire, et referme la liste. */
+/**
+ * Les effets appliqués, du dessus au dessous : en annuler un le retire, et referme la liste. Ouverte, elle prend le
+ * focus sur la couche du dessus — le clavier et le lecteur d'écran y entrent, comme dans un menu.
+ */
 function EffectLayersList({ open, stack, label, onUndo, text }: ListProps) {
   const presence = useSwapPresence<HTMLDivElement>(open);
+  const entered = presence.mounted && open;
+  useEffect(() => {
+    if (entered) presence.ref.current?.querySelector<HTMLElement>('[data-call-effect-layer-undo]')?.focus();
+  }, [entered]);
   if (!presence.mounted) return null;
-  const layers = listLayers(stack);
   return (
     <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`${PANEL} absolute bottom-full mb-2 p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
-      {layers.length === 0 ? (
-        <p className="flex min-h-11 items-center px-3 text-mini font-semibold text-on-media-3">{text.none}</p>
-      ) : (
-        <ul className="flex flex-col">
-          {layers.map((layer) => {
-            const name = label(layer);
-            return (
-              <li key={layer.genre} data-call-effect-layer={layer.genre}>
-                <button type="button" aria-label={text.undo(name)} onClick={() => onUndo(layer.genre)} className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-full px-3 text-mini font-semibold text-on-media" data-call-effect-layer-undo={layer.genre}>
-                  <span>{name}</span>
-                  {undo}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <ul className="flex flex-col">
+        {listLayers(stack).map((layer) => {
+          const name = label(layer);
+          return (
+            <li key={layer.genre} data-call-effect-layer={layer.genre}>
+              <button type="button" aria-label={text.undo(name)} onClick={() => onUndo(layer.genre)} className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-full px-3 text-mini font-semibold text-on-media" data-call-effect-layer-undo={layer.genre}>
+                <span>{name}</span>
+                {undo}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
+}
+
+/**
+ * La liste et la pile se tiennent (`CallEffectsBarRule` d'iOS et d'Android) : rien d'appliqué, rien à lister ; une
+ * liste qui perd sa dernière couche se referme ; refermée alors que le focus y était, elle le rend à (+).
+ */
+function useLayersListRule(bar: RefObject<HTMLDivElement | null>, list: BarProps['list'], hasLayers: boolean): boolean {
+  const shown = list.open && hasLayers;
+  const was = useRef(shown);
+  useEffect(() => {
+    if (list.open && !hasLayers) list.onClose();
+  }, [list.open, hasLayers]);
+  useEffect(() => {
+    const closed = was.current && !shown;
+    was.current = shown;
+    const host = bar.current;
+    if (!closed || host === null) return;
+    const active = document.activeElement;
+    const lost = active === null || active === document.body || (host.querySelector('[data-call-effect-layers]')?.contains(active) ?? false);
+    if (lost) host.querySelector<HTMLElement>('[data-call-effects-add-look]')?.focus();
+  }, [shown]);
+  return shown;
 }
 
 type AddProps = {
@@ -251,7 +273,7 @@ type BarProps = {
   readonly add: { readonly onAdd: () => void } | null;
   readonly stack: EffectStack;
   readonly full: boolean;
-  readonly list: { readonly open: boolean; readonly onOpen: () => void; readonly onUndo: (genre: EffectGenre) => void; readonly label: (layer: EffectLayer) => string };
+  readonly list: { readonly open: boolean; readonly onOpen: () => void; readonly onClose: () => void; readonly onUndo: (genre: EffectGenre) => void; readonly label: (layer: EffectLayer) => string };
   readonly onBack: () => void;
   /** Ce qui est posé sur la barre, hors de son verre : il suit son bord du haut pendant le morphisme. */
   readonly rider: RefObject<HTMLElement | null>;
@@ -263,9 +285,12 @@ type BarProps = {
 export function EffectsBar({ language, categories, settings, add, stack, full, list, onBack, rider, chips }: BarProps) {
   const t = textOf(language);
   const text = layersTextOf(language);
+  const bar = useRef<HTMLDivElement>(null);
+  const hasLayers = stack.length > 0;
+  const shown = useLayersListRule(bar, list, hasLayers);
   return (
-    <div className="relative flex w-full flex-col items-center">
-      <EffectLayersList open={list.open} stack={stack} label={list.label} onUndo={list.onUndo} text={text} />
+    <div ref={bar} className="relative flex w-full flex-col items-center">
+      <EffectLayersList open={shown} stack={stack} label={list.label} onUndo={list.onUndo} text={text} />
       <CallModeBar
         glass
         rider={rider}
@@ -278,7 +303,7 @@ export function EffectsBar({ language, categories, settings, add, stack, full, l
         }
         quit={{ label: t('callStudio.mode.backEffects'), glyph: chevron, onPress: onBack, data: { 'data-call-mode-quit': '' } }}
         center={settings === null ? null : <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={settings.open} onPress={settings.onToggle} data={{ 'data-call-effects-settings-toggle': '' }} />}
-        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={list.onOpen} />}
+        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={() => (hasLayers ? list.onOpen() : undefined)} />}
       />
     </div>
   );

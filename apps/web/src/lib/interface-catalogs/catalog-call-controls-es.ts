@@ -96,7 +96,6 @@ const es = {
   'callControls.mode.frames': 'Marcos',
   'callControls.layers.title': 'Efectos aplicados',
   'callControls.layers.undo': 'Deshacer {name}',
-  'callControls.layers.none': 'Ningún efecto aplicado',
   'callControls.layers.full': 'Tres efectos como máximo: quita uno para añadir otro',
   'callControls.layers.hint': 'Pulsación larga o Mayús + Intro: efectos aplicados',
   'callControls.layers.genre.frame': 'Marco',

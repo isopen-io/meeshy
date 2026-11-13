@@ -422,7 +422,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
           categories={{ entries: layers.sortEntries, pressed: 'frames', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : undefined) }}
           settings={colorAvailable || blurAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
           add={{ onAdd: layers.addLook }}
-          list={{ open: list.open, onOpen: list.show, onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
+          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
           onBack={onExit}
         />
       </div>

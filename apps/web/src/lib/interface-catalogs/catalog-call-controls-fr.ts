@@ -100,7 +100,6 @@ const fr = {
   'callControls.mode.frames': 'Cadres',
   'callControls.layers.title': 'Effets appliqués',
   'callControls.layers.undo': 'Annuler {name}',
-  'callControls.layers.none': 'Aucun effet appliqué',
   'callControls.layers.full': 'Trois effets au plus : retirez-en un pour en ajouter',
   'callControls.layers.hint': 'Appui long ou Maj + Entrée : effets appliqués',
   'callControls.layers.genre.frame': 'Cadre',

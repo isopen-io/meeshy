@@ -96,7 +96,6 @@ const ar = {
   'callControls.mode.frames': 'الإطارات',
   'callControls.layers.title': 'التأثيرات المطبّقة',
   'callControls.layers.undo': 'إلغاء {name}',
-  'callControls.layers.none': 'لا يوجد تأثير مطبّق',
   'callControls.layers.full': 'ثلاثة تأثيرات كحدّ أقصى: أزل واحدًا لإضافة آخر',
   'callControls.layers.hint': 'اضغط مطولًا أو Shift + Enter: التأثيرات المطبّقة',
   'callControls.layers.genre.frame': 'إطار',

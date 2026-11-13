@@ -95,11 +95,40 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     expect(view.find('[data-call-effect-layer="face"]')?.textContent).toContain('Crapaud');
     expect(view.find('[data-call-effect-layer="color"]')?.textContent).toContain('Doré');
     view.done();
+  });
+
+  test('rien d’appliqué : l’appui long sur (+) n’ouvre rien, comme iOS et Android (`CallEffectsBarRule.afterShowingApplied`)', async () => {
     const empty = mount();
     await empty.hold('[data-call-effects-add-look]');
-    expect(empty.genres()).toEqual([]);
-    expect(empty.find('[data-call-effect-layers]')?.textContent).toContain('Aucun effet appliqué');
+    expect(empty.find('[data-call-effect-layers]')).toBeNull();
+    await act(async () => void empty.find('[data-call-effects-add-look]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })));
+    expect(empty.find('[data-call-effect-layers]')).toBeNull();
     empty.done();
+  });
+
+  test('une liste qui perd sa dernière couche se referme (`CallEffectsBarRule.reconciled`)', async () => {
+    const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'toad' } });
+    await view.hold('[data-call-effects-add-look]');
+    expect(view.genres()).toEqual(['face']);
+    act(() => videoEffectsStore.setState({ effects: NO_EFFECTS }));
+    await later(260);
+    expect(view.find('[data-call-effect-layers]')).toBeNull();
+    act(() => videoEffectsStore.setState({ effects: { ...NO_EFFECTS, preset: 'golden' } }));
+    await later(260);
+    expect(view.find('[data-call-effect-layers]')).toBeNull();
+    view.done();
+  });
+
+  test('au clavier et au lecteur d’écran : Maj + Entrée porte le focus sur la couche du dessus ; l’annuler le rend à (+)', async () => {
+    const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'toad', preset: 'golden' } });
+    const add = view.find('[data-call-effects-add-look]');
+    act(() => add?.focus());
+    await act(async () => void add?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })));
+    expect(view.genres()).toEqual(['color', 'face']);
+    expect(document.activeElement?.getAttribute('data-call-effect-layer-undo')).toBe('color');
+    await view.press('[data-call-effect-layer-undo="color"]');
+    expect(document.activeElement).toBe(view.find('[data-call-effects-add-look]'));
+    view.done();
   });
 
   test('annuler un effet de visage le défait, referme la liste et rend le menu de base ; le filtre reste', async () => {

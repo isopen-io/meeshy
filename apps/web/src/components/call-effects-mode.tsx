@@ -374,7 +374,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
           categories={{ entries, pressed: category, onPick: pick }}
           settings={colorAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
           add={colorAvailable ? { onAdd: addLook } : null}
-          list={{ open: list.open, onOpen: list.show, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
+          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
           onBack={onExit}
         />
       </div>

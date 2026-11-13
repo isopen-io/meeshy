@@ -96,7 +96,6 @@ const pt = {
   'callControls.mode.frames': 'Molduras',
   'callControls.layers.title': 'Efeitos aplicados',
   'callControls.layers.undo': 'Desfazer {name}',
-  'callControls.layers.none': 'Nenhum efeito aplicado',
   'callControls.layers.full': 'No máximo três efeitos: remova um para adicionar outro',
   'callControls.layers.hint': 'Toque longo ou Shift + Enter: efeitos aplicados',
   'callControls.layers.genre.frame': 'Moldura',

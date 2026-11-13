@@ -96,7 +96,6 @@ const de = {
   'callControls.mode.frames': 'Rahmen',
   'callControls.layers.title': 'Angewendete Effekte',
   'callControls.layers.undo': '{name} rückgängig machen',
-  'callControls.layers.none': 'Kein Effekt angewendet',
   'callControls.layers.full': 'Höchstens drei Effekte: Entferne einen, um einen weiteren hinzuzufügen',
   'callControls.layers.hint': 'Lange drücken oder Umschalt + Eingabe: angewendete Effekte',
   'callControls.layers.genre.frame': 'Rahmen',
