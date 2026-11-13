@@ -849,3 +849,9 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 23 — 2026-11-13 (en cours)
+
+- **Base** : `origin/dev` @ `04a61d59`. Le lot du cycle 22 (#18042) y est fusionné.
+- **Branche** : `claude/determined-volta-xsbr3g`.
+- **Objectif** : #18063. Un `translationError` ne solde que la traduction texte qu'il vise, et ses champs relayés sont filtrés par type.
