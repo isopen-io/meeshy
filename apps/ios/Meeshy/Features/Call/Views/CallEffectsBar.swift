@@ -105,12 +105,7 @@ struct CallEffectsAddButton: View {
             .scaleEffect(CallPressFeedback.scale(isPressed: isPressed, reduceMotion: reduceMotion))
             .animation(CallPressFeedback.animation(isPressed: isPressed, reduceMotion: reduceMotion), value: isPressed)
             .onTapGesture(perform: onAdd)
-            .onLongPressGesture(
-                minimumDuration: CallModeGestureRule.longPressDuration,
-                maximumDistance: 24,
-                perform: showApplied,
-                onPressingChanged: pressing
-            )
+            .onLongPressGesture(minimumDuration: CallModeGestureRule.longPressDuration, maximumDistance: 24, perform: showApplied, onPressingChanged: pressing)
             .onDisappear {
                 guard isPressed else { return }
                 reportInteraction?(.touchEnded)
