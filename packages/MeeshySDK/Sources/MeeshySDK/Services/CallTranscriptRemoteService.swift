@@ -15,11 +15,15 @@ public struct APICallTranscript: Decodable, Sendable {
     public let segments: [APICallTranscriptSegment]
     /// #16665 — absent d'une passerelle antérieure.
     public var captures: [APICallTranscriptCapture]? = nil
+    /// A1.6 — la pagination de la passerelle (`offset`/`limit`) : absente d'une
+    /// passerelle antérieure, qui rendait alors tout d'une page.
+    public var total: Int? = nil
+    public var hasMore: Bool? = nil
 }
 
 extension APICallTranscript {
     private enum CodingKeys: String, CodingKey {
-        case callId, conversationId, callStartedAt, segments, captures
+        case callId, conversationId, callStartedAt, segments, captures, total, hasMore
     }
 
     /// Une capture malformée se laisse de côté : elle n'efface jamais les
@@ -31,7 +35,9 @@ extension APICallTranscript {
             conversationId: try container.decode(String.self, forKey: .conversationId),
             callStartedAt: try container.decode(Date.self, forKey: .callStartedAt),
             segments: try container.decode([APICallTranscriptSegment].self, forKey: .segments),
-            captures: try container.decodeIfPresent([LossyCallTranscriptCapture].self, forKey: .captures)?.compactMap(\.value)
+            captures: try container.decodeIfPresent([LossyCallTranscriptCapture].self, forKey: .captures)?.compactMap(\.value),
+            total: try container.decodeIfPresent(Int.self, forKey: .total),
+            hasMore: try container.decodeIfPresent(Bool.self, forKey: .hasMore)
         )
     }
 }
@@ -98,13 +104,50 @@ public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProvi
         self.api = api
     }
 
+    /// A1.6 — l'appel EN ENTIER : la passerelle sert `pageSize` phrases à la fois, on lit page après page
+    /// tant qu'elle dit `hasMore`. Une page qui échoue fait échouer la lecture : un appel à moitié lu
+    /// ne se range pas au cache comme s'il était complet. Les captures viennent de la première page
+    /// (la passerelle les rend à chaque page). Rien ne se lit avant l'appel de cette méthode : la
+    /// bascule fermée n'en déclenche aucune.
     public func transcript(callId: String) async throws -> APICallTranscript {
+        let first = try await fetchPage(callId: callId, offset: 0)
+        var segments = first.segments
+        var last = first
+        while CallTranscriptPaging.continues(after: last) {
+            last = try await fetchPage(callId: callId, offset: segments.count)
+            segments += last.segments
+        }
+        return APICallTranscript(
+            callId: first.callId,
+            conversationId: first.conversationId,
+            callStartedAt: first.callStartedAt,
+            segments: segments,
+            captures: first.captures,
+            total: first.total,
+            hasMore: false
+        )
+    }
+
+    private func fetchPage(callId: String, offset: Int) async throws -> APICallTranscript {
         let response: APIResponse<APICallTranscript> = try await api.request(
             CallsEndpoint.byCallIdTranscript(callId: callId),
             method: "GET",
             body: nil,
-            queryItems: nil
+            queryItems: [
+                URLQueryItem(name: "offset", value: String(offset)),
+                URLQueryItem(name: "limit", value: String(CallTranscriptPaging.pageSize))
+            ]
         )
         return response.data
+    }
+}
+
+/// La loi de la lecture page après page : on continue tant que la passerelle annonce une suite ET que la
+/// page lue a rapporté quelque chose (une page vide qui dit `hasMore` ne boucle jamais).
+enum CallTranscriptPaging {
+    static let pageSize = 100
+
+    static func continues(after page: APICallTranscript) -> Bool {
+        page.hasMore == true && !page.segments.isEmpty
     }
 }
