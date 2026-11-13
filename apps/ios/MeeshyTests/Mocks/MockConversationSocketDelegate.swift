@@ -42,6 +42,13 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         messageIndex(for: id) != nil
     }
 
+    /// #17938 — les combustions demandées par le gestionnaire socket.
+    var burnRequests: [String] = []
+
+    func expireEphemeralsIfNeeded(_ ids: [String]) {
+        burnRequests.append(contentsOf: ids)
+    }
+
     func invalidateIndex() {
         _messageIdIndex = nil
     }

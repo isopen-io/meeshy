@@ -640,6 +640,71 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertNil(expired?.content, "content must be blanked after socket expiry")
     }
 
+    /// #17938 — un éphémère ENCORE À L'ÉCRAN brûle avant de partir : l'annonce
+    /// du serveur demande la combustion à l'hôte et ne grave la mort qu'après
+    /// sa durée. Écrire tout de suite relisait le magasin et retirait la ligne
+    /// au milieu de son feu (mesuré : 0,5 s de combustion sur 1,2 s).
+    func test_messageExpired_onScreen_requestsTheBurnAndWritesAfterIt() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        try await actor.insertOptimistic(expiringRecord(id: "msg1"))
+        delegate.messages = [makeMessage(id: "msg1", content: "Will burn")]
+        delegate.invalidateIndex()
+
+        socket.simulateMessageExpired(MessageExpiredEvent(messageId: "msg1", conversationId: conversationId))
+        await drainEvents(of: sut)
+
+        XCTAssertEqual(delegate.burnRequests, ["msg1"], "l'annonce allume la combustion de la ligne à l'écran")
+        let duringBurn = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
+        XCTAssertNil(duringBurn?.deletedAt, "la mort n'est pas gravée pendant la combustion")
+
+        try await waitForRow("msg1", in: db, "l'expiration est écrite après la combustion") { $0?.deletedAt != nil }
+    }
+
+    func test_messageExpired_offScreen_writesAtOnceWithoutBurn() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        try await actor.insertOptimistic(expiringRecord(id: "msg1"))
+
+        socket.simulateMessageExpired(MessageExpiredEvent(messageId: "msg1", conversationId: conversationId))
+        try await waitForRow("msg1", in: db, "l'expiration est écrite") { $0?.deletedAt != nil }
+
+        XCTAssertTrue(delegate.burnRequests.isEmpty, "un message absent de l'écran ne brûle pas")
+    }
+
+    private func expiringRecord(id: String) -> MessageRecord {
+        MessageRecord(
+            localId: id, serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Will expire", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 1,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+    }
+
     func test_messageExpired_unknownMessage_noEffect() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
