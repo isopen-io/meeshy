@@ -466,3 +466,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 25 : une séance « ensemble » s'arrête dans une conversation close (#17147)
+
+- Reprise : aucune PR de la routine ouverte ; #17148 fusionnée le 2026-11-09. #17956 (carte des positions sur le web,
+  `claude/cercles-16984-web`) est tenue par un autre réveil, active : ce réveil ne la touche pas. Aucune branche n'écrit
+  `services/together/` : lot #17147 réservé sur `claude/cercles-ensemble-conversation-close`.
+- Lot : la porte `judgeTogether` lit désormais la conversation (ouverte : `isActive`, ni `closedAt`, ni `deletedAt`,
+  lue en JS car `closedAt: null` ne retient pas un champ absent sous MongoDB) ; une ligne absente refuse. La clôture
+  coupe : `announceConversationClosed`, point de convergence des cinq chemins de clôture, appelle
+  `cutTogetherWhere({ conversationId })` (détaché, `.catch` posé). Refus indistinct, fin dite `left` aux deux.
+- Gates locaux : témoins rouges prouvés (6 dans `togetherRelay.test.ts`, 1 dans `announceConversationClosed.test.ts`),
+  puis 443 suites voisines (together, socketio, conversations, relations, directory, attachments, admin, security,
+  balayage des promesses détachées) 6 806/6 806 vertes ; `tsc` passerelle vert.
+- Prochain lot recommandé : « ensemble » sur Android (#17100), sinon la préférence de réception d'« ensemble » (#17023),
+  puis la position temporaire iOS (#16983) et l'icône par cercle (#17013) quand #17956 aura fusionné.

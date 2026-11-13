@@ -114,6 +114,7 @@ function monde(options: { readonly participants?: readonly Row[] } = {}) {
       ...(id === BLOQUEUR ? { blockedUserIds: [HOTE] } : {}),
     })),
     participants: options.participants ?? [HOTE, PROCHE, SANG, AMI, BLOQUEUR].map((id) => membre(id)),
+    conversations: [CONV, AUTRE_CONV].map((id) => ({ id, isActive: true, closedAt: null, deletedAt: null })),
   });
   const messageAttachment = table([
     piece(VIDEO, 'video/mp4'),
@@ -794,5 +795,55 @@ describe('#17022 — une séance s\'arrête aussi dans le geste qui ferme sa por
     await leaveTogether(m.deps, SANG, { sessionId: SEANCE_SANG });
 
     expect(m.cache.entries.has(key)).toBe(false);
+  });
+});
+
+describe('une conversation close ne porte aucune séance (#17147)', () => {
+  const fermer = async (m: ReturnType<typeof monde>, data: Row = { isActive: false, closedAt: new Date(T0) }) => {
+    await m.world.conversation.updateMany({ where: { id: CONV }, data });
+  };
+  const fins = (m: ReturnType<typeof monde>) =>
+    m.emissions.filter((e) => e.event === SERVER_EVENTS.TOGETHER_ENDED).map((e) => [e.room, e.data.sessionId, e.data.reason]);
+
+  it.each([
+    ['close', { isActive: false, closedAt: new Date(T0) }],
+    ['supprimée', { isActive: false, closedAt: new Date(T0), deletedAt: new Date(T0) }],
+    ['inactive sans date de clôture', { isActive: false }],
+  ])('refuse une invitation dans une conversation %s, sous le même code, sans rien émettre', async (_cas, data) => {
+    const m = monde();
+    await fermer(m, data);
+    expect(await inviter(m)).toEqual(REFUS);
+    expect(m.emissions).toEqual([]);
+  });
+
+  it('une conversation dont la ligne manque refuse aussi', async () => {
+    const m = monde();
+    m.world.conversation.rows.length = 0;
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
+  it('la clôture coupe la séance en cours chez les deux (`left`), sans dire la clôture', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    m.emissions.length = 0;
+    await fermer(m);
+
+    await rejudgeTogetherWhere(m.deps, { conversationId: CONV });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(INTROUVABLE);
+  });
+
+  it('une séance dans une conversation close ne continue pas à la synchronisation suivante', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    await fermer(m);
+
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toMatchObject({ success: false });
   });
 });
