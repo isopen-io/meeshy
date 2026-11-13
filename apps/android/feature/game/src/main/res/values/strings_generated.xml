@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">The Light</string>
     <string name="game_concept_level_tip_1">Fulfill each night’s dream: its acts make lots of sparks fly.</string>
     <string name="game_concept_level_tip_2">Keep your Flame lit: it feeds your dreams.</string>
-    <string name="game_concept_level_use">Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial.</string>
+    <string name="game_concept_level_use">Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial. Once open, the joust and the alliance stay open, even when your level drops.</string>
     <string name="game_concept_link_atlas">See my stamps</string>
     <string name="game_concept_link_badges">All medals</string>
     <string name="game_concept_link_defis">All challenges</string>

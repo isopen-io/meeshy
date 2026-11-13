@@ -291,7 +291,7 @@ const en = {
   'game.detail.levelstep.progress': 'You’re at {progress} on this trial',
   'game.detail.fact.convertible': 'This is your light: the sparks that mint a Meesh.',
   'game.concept.level.what': 'Your level is the number at the centre of your ring. It is read from your light: 10,000 sparks for level 10, a million for level 100. As it grows, your light passes through twenty phases, from Spark to Singularity.',
-  'game.concept.level.use': 'Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial.',
+  'game.concept.level.use': 'Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial. Once open, the joust and the alliance stay open, even when your level drops.',
   'game.concept.points.what': 'Every real exchange makes sparks fly: together, they form your light. The more it grows, the brighter it shines, and how bright it shines is your level.',
   'game.concept.points.use': 'Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much.',
   'game.concept.meesh.what': 'A Meesh is your light bound into a numbered coin, which you mint yourself. One in a hundred is gold, one in a thousand is prism.',

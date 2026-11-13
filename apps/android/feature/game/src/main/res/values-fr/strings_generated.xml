@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">La Lumière</string>
     <string name="game_concept_level_tip_1">Réalise le rêve de chaque nuit : ses actes font jaillir beaucoup d’étincelles.</string>
     <string name="game_concept_level_tip_2">Garde ta Flamme allumée : elle nourrit tes rêves.</string>
-    <string name="game_concept_level_use">Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.</string>
+    <string name="game_concept_level_use">Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.</string>
     <string name="game_concept_link_atlas">Voir mes tampons</string>
     <string name="game_concept_link_badges">Toutes les médailles</string>
     <string name="game_concept_link_defis">Tous les défis</string>

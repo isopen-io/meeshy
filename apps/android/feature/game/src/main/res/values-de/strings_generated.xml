@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">Das Licht</string>
     <string name="game_concept_level_tip_1">Erfülle den Traum jeder Nacht: Seine Akte lassen viele Funken sprühen.</string>
     <string name="game_concept_level_tip_2">Halte deine Flamme am Brennen: Sie nährt deine Träume.</string>
-    <string name="game_concept_level_use">Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung.</string>
+    <string name="game_concept_level_use">Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung. Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt.</string>
     <string name="game_concept_link_atlas">Meine Stempel ansehen</string>
     <string name="game_concept_link_badges">Alle Medaillen</string>
     <string name="game_concept_link_defis">Alle Herausforderungen</string>

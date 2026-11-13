@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">La Luz</string>
     <string name="game_concept_level_tip_1">Haz realidad el sueño de cada noche: sus actos hacen brotar muchas chispas.</string>
     <string name="game_concept_level_tip_2">Mantén tu Llama encendida: alimenta tus sueños.</string>
-    <string name="game_concept_level_use">Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba.</string>
+    <string name="game_concept_level_use">Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba. Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje.</string>
     <string name="game_concept_link_atlas">Ver mis sellos</string>
     <string name="game_concept_link_badges">Todas las medallas</string>
     <string name="game_concept_link_defis">Todos los desafíos</string>

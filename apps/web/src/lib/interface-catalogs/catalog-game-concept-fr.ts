@@ -289,7 +289,7 @@ const fr = {
   'game.detail.levelstep.progress': 'Tu en es à {progress} pour cette épreuve',
   'game.detail.fact.convertible': 'C’est ta lumière : les étincelles qui frappent une Meesh.',
   'game.concept.level.what': 'Ton niveau est le chiffre au centre de ton anneau. Il se lit sur ta lumière : 10 000 étincelles pour le niveau 10, un million pour le niveau 100. En grandissant, ta lumière traverse vingt états, de l’Étincelle à la Singularité.',
-  'game.concept.level.use': 'Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.',
+  'game.concept.level.use': 'Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.',
   'game.concept.points.what': 'Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.',
   'game.concept.points.use': 'Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.',
   'game.concept.meesh.what': 'Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.',

@@ -291,7 +291,7 @@ const de = {
   'game.detail.levelstep.progress': 'Du stehst bei {progress} in dieser Prüfung',
   'game.detail.fact.convertible': 'Das ist dein Licht: die Funken, die eine Meesh prägen.',
   'game.concept.level.what': 'Dein Level ist die Zahl in der Mitte deines Rings. Es ergibt sich aus deinem Licht: 10.000 Funken für Level 10, eine Million für Level 100. Während es wächst, wandelt sich dein Licht durch zwanzig Gestalten, vom Funken bis zur Singularität.',
-  'game.concept.level.use': 'Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung.',
+  'game.concept.level.use': 'Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung. Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt.',
   'game.concept.points.what': 'Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht. Je mehr es wächst, desto heller strahlt es, und sein Glanz ist dein Level.',
   'game.concept.points.use': 'Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel.',
   'game.concept.meesh.what': 'Eine Meesh ist dein Licht, gebannt in eine nummerierte Münze, die du selbst prägst. Jede hundertste ist aus Gold, jede tausendste aus Prisma.',

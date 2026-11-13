@@ -148,8 +148,21 @@ final class GameEpureTests: XCTestCase {
         }
         XCTAssertFalse(try XCTUnwrap(catalog["game2.atlas.privacy"]?["fr"]).contains("Tu choisis qui le voit"), "le sélecteur « Qui voit ton Atlas » le dit")
         XCTAssertFalse(try XCTUnwrap(catalog["game2.showcase.visibility_hint"]?["fr"]).contains("Moi seul"), "le nom de l'option est sur l'option")
-        XCTAssertFalse(try XCTUnwrap(catalog["game.concept.level.use"]?["fr"]).contains("une fois ouvertes"), "level.what et les règles le disent déjà")
         XCTAssertFalse(try XCTUnwrap(catalog["game.concept.points.use"]?["fr"]).contains("Ce que tu as reçu reste reçu"), "level.what le dit déjà")
+    }
+
+    /// Frapper une Meesh fait baisser le niveau : seule la fiche du niveau dit que la joute et l'alliance déjà ouvertes ne se referment pas.
+    /// Ni `level.what` ni les règles ne le disent ; retirer la phrase la rendait introuvable.
+    func test_levelConcept_saysTheJoustAndAllianceStayOpen_whenTheLevelDrops_inEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        let use = try XCTUnwrap(catalog["game.concept.level.use"])
+        let stayOpen: [String: String] = ["fr": "le restent", "en": "stay open", "es": "siguen abiertas", "pt-BR": "continuam abertos",
+                                          "de": "bleiben Turnier und Bündnis offen", "it": "restano aperti", "ar": "مفتوحين"]
+        for (language, fragment) in stayOpen {
+            XCTAssertTrue((use[language] ?? "").contains(fragment), "\(language) : « \(use[language] ?? "") » ne dit plus que la joute et l'alliance restent ouvertes")
+        }
+        let copy = try code("Meeshy/Features/Game/ProgressionConceptCopy.swift")
+        XCTAssertTrue(copy.contains("la joute et l’alliance le restent"))
     }
 
     func test_catalog_theConsequences_andTheLandmarks_stayVisible() throws {

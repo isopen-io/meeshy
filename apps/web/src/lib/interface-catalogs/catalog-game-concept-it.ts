@@ -291,7 +291,7 @@ const it = {
   'game.detail.levelstep.progress': 'Sei a {progress} in questa prova',
   'game.detail.fact.convertible': 'È la tua luce: le scintille che coniano una Meesh.',
   'game.concept.level.what': 'Il tuo livello è il numero al centro del tuo anello. Si legge sulla tua luce: 10 000 scintille per il livello 10, un milione per il livello 100. Crescendo, la tua luce attraversa venti stati, dalla Scintilla alla Singolarità.',
-  'game.concept.level.use': 'La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova.',
+  'game.concept.level.use': 'La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova. Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende.',
   'game.concept.points.what': 'Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce. Più cresce, più brilla, e il suo splendore è il tuo livello.',
   'game.concept.points.use': 'La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto.',
   'game.concept.meesh.what': 'Una Meesh è la tua luce fissata in una moneta numerata, che coni tu stesso. Una su cento è d’oro, una su mille di prisma.',

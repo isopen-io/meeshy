@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">النور</string>
     <string name="game_concept_level_tip_1">حقّق حلم كل ليلة: فصوله تُطلق شرارات كثيرة.</string>
     <string name="game_concept_level_tip_2">أبقِ لهبك مشتعلًا: فهو يغذّي أحلامك.</string>
-    <string name="game_concept_level_use">نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا.</string>
+    <string name="game_concept_level_use">نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا. متى فُتحت المبارزة والتحالف بقيا مفتوحين، حتى إن انخفض مستواك.</string>
     <string name="game_concept_link_atlas">عرض أختامي</string>
     <string name="game_concept_link_badges">كل الأوسمة</string>
     <string name="game_concept_link_defis">كل التحديات</string>

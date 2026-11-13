@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">La Luce</string>
     <string name="game_concept_level_tip_1">Compi il sogno di ogni notte: i suoi atti fanno scaturire molte scintille.</string>
     <string name="game_concept_level_tip_2">Tieni accesa la tua Fiamma: nutre i tuoi sogni.</string>
-    <string name="game_concept_level_use">La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova.</string>
+    <string name="game_concept_level_use">La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova. Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende.</string>
     <string name="game_concept_link_atlas">Vedere i miei timbri</string>
     <string name="game_concept_link_badges">Tutte le medaglie</string>
     <string name="game_concept_link_defis">Tutte le sfide</string>

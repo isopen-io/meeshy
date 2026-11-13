@@ -291,7 +291,7 @@ const pt = {
   'game.detail.levelstep.progress': 'Você está em {progress} nesta prova',
   'game.detail.fact.convertible': 'É a sua luz: as faíscas que cunham uma Meesh.',
   'game.concept.level.what': 'Seu nível é o número no centro do seu anel. Ele se lê na sua luz: 10.000 faíscas para o nível 10, um milhão para o nível 100. Ao crescer, sua luz atravessa vinte estados, da Faísca à Singularidade.',
-  'game.concept.level.use': 'Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova.',
+  'game.concept.level.use': 'Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova. Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa.',
   'game.concept.points.what': 'Cada troca de verdade faz saltar faíscas: juntas, elas formam a sua luz. Quanto mais ela cresce, mais ela brilha, e o brilho dela é o seu nível.',
   'game.concept.points.use': 'Sua luz cunha as Meeshes da sua herança. Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida.',
   'game.concept.meesh.what': 'Uma Meesh é a sua luz cristalizada numa moeda numerada, que você mesmo cunha. Uma em cem é de ouro, uma em mil é de prisma.',

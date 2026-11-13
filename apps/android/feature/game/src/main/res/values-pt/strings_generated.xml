@@ -424,7 +424,7 @@
     <string name="game_concept_level_name">A Luz</string>
     <string name="game_concept_level_tip_1">Realize o sonho de cada noite: seus atos fazem saltar muitas faíscas.</string>
     <string name="game_concept_level_tip_2">Mantenha sua Chama acesa: ela alimenta seus sonhos.</string>
-    <string name="game_concept_level_use">Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova.</string>
+    <string name="game_concept_level_use">Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova. Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa.</string>
     <string name="game_concept_link_atlas">Ver meus carimbos</string>
     <string name="game_concept_link_badges">Todas as medalhas</string>
     <string name="game_concept_link_defis">Todos os desafios</string>

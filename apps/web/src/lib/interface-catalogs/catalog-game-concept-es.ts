@@ -291,7 +291,7 @@ const es = {
   'game.detail.levelstep.progress': 'Vas por {progress} en esta prueba',
   'game.detail.fact.convertible': 'Es tu luz: las chispas que acuñan una Meesh.',
   'game.concept.level.what': 'Tu nivel es la cifra del centro de tu anillo. Se lee en tu luz: 10.000 chispas para el nivel 10, un millón para el nivel 100. Al crecer, tu luz atraviesa veinte estados, de la Chispa a la Singularidad.',
-  'game.concept.level.use': 'Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba.',
+  'game.concept.level.use': 'Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba. Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje.',
   'game.concept.points.what': 'Cada intercambio de verdad hace brotar chispas: juntas forman tu luz. Cuanto más crece, más brilla, y su brillo es tu nivel.',
   'game.concept.points.use': 'Tu luz acuña las Meeshes de tu legado. Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto.',
   'game.concept.meesh.what': 'Una Meesh es tu luz fijada en una moneda numerada, que acuñas tú. Una de cada cien es de oro, una de cada mil de prisma.',

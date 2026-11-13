@@ -315448,43 +315448,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
+            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا. متى فُتحت المبارزة والتحالف بقيا مفتوحين، حتى إن انخفض مستواك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
+            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung. Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial."
+            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial. Once open, the joust and the alliance stay open, even when your level drops."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
+            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba. Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
+            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
+            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova. Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
+            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova. Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa."
           }
         }
       }

@@ -353,7 +353,7 @@ enum ConceptText {
     /// Comment s’en servir — la section « Comment m’en servir » de la fiche.
     static func use(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.", bundle: .main)
         case .points: String(localized: "game.concept.points.use", defaultValue: "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
