@@ -148,7 +148,7 @@ private fun CurrentContentCard(current: StoryCurrentContent) {
 }
 
 @Composable
-private fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
+internal fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
     val label = stringResource(R.string.story_language_original)
     val accent = if (selected) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textMuted
     Row(

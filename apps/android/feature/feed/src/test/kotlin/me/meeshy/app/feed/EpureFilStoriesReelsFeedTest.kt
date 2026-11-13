@@ -42,10 +42,11 @@ class FeedEpureStatesTest {
     }
 
     @Test
-    fun `the offline empty feed keeps its title, one short line and Retry`() {
+    fun `the offline empty feed is one short line and Retry, the band already says Offline`() {
         compose.setContent { MeeshyTheme { FeedOfflineEmptyState(onRetry = {}) } }
         compose.onNodeWithText("The feed will appear when the network is back.").assertExists()
-        compose.onAllNodes(textNodes).assertCountEquals(3)
+        compose.onAllNodesWithText("Offline").assertCountEquals(0)
+        compose.onAllNodes(textNodes).assertCountEquals(2)
     }
 
     @Test
@@ -103,6 +104,7 @@ class FeedEpureStringsContractTest {
         val gone = setOf(
             "feed_empty_subtitle", "profile_posts_empty_subtitle", "profile_posts_empty_filter_subtitle",
             "profile_posts_end_of_content", "nearby_permission_title", "nearby_denied_title",
+            "status_composer_placeholder",
         )
         folders.forEach { folder ->
             assertWithMessage(folder).that(names(folder).keys.intersect(gone)).isEmpty()
@@ -114,7 +116,7 @@ class FeedEpureStringsContractTest {
         val short = listOf(
             "feed_offline_banner", "feed_offline_empty_detail", "nearby_permission_message", "nearby_denied_detail",
             "nearby_location_unavailable", "nearby_empty", "post_comments_empty", "feed_composer_open_placeholder",
-            "status_composer_emoji_too_long",
+            "status_composer_emoji_too_long", "status_repost_audience_refused",
         )
         val french = names("values-fr")
         folders.filter { it != "values-fr" }.forEach { folder ->
@@ -138,5 +140,14 @@ class FeedEpureStringsContractTest {
         assertThat(french["post_comments_empty"]).isEqualTo("Aucun commentaire")
         assertThat(french["feed_composer_open_placeholder"]).isEqualTo("Partager quelque chose…")
         assertThat(french["status_composer_emoji_too_long"]).isEqualTo("Emoji trop long")
+    }
+
+    @Test
+    fun `the refusal to republish wider is one short line without the English typo`() {
+        val french = names("values-fr")
+        assertThat(french["status_repost_audience_refused"]).isEqualTo("Même audience ou plus restreinte.")
+        folders.forEach { folder ->
+            assertWithMessage(folder).that(names(folder)["status_repost_audience_refused"]).doesNotContain("can'")
+        }
     }
 }

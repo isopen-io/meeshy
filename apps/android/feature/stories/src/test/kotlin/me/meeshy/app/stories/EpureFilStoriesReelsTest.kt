@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
@@ -169,7 +170,7 @@ class StoriesEpureStringsContractTest {
 
     @Test
     fun `the shortened labels are translated, never copied from the French`() {
-        val short = listOf("stories_comments_empty_title", "stories_viewers_empty_title", "my_stories_queue_empty_title", "story_sentinel_body")
+        val short = listOf("stories_comments_empty_title", "stories_viewers_empty_title", "my_stories_queue_empty_title", "story_sentinel_body", "story_place_denied")
         val french = names("values-fr")
         folders.filter { it != "values-fr" }.forEach { folder ->
             val values = names(folder)
@@ -187,5 +188,26 @@ class StoriesEpureStringsContractTest {
         assertThat(french["stories_viewers_empty_title"]).isEqualTo("Aucune vue")
         assertThat(french["my_stories_queue_empty_title"]).isEqualTo("Aucune publication en cours ou en échec")
         assertThat(french["story_sentinel_body"]).isEqualTo("Mettez l'application à jour pour la voir.")
+        assertThat(french["story_place_denied"]).isEqualTo("Position désactivée. Cherchez un lieu par son nom.")
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], qualifiers = "w360dp-h900dp")
+class StoryLanguageOriginalHintTest {
+
+    @get:Rule
+    val compose = createComposeRule()
+
+    @Test
+    fun `the Prism sentence sits under Original, on the full width, never cut`() {
+        compose.setContent { MeeshyTheme { OriginalRow(selected = false, onClick = {}) } }
+        val label = compose.onNodeWithText("Original", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val hint = compose.onNodeWithText("Each text in its own language", useUnmergedTree = true).fetchSemanticsNode()
+        assertThat(hint.boundsInRoot.top).isAtLeast(label.bottom - 1f)
+        assertThat(hint.layoutInfo.width).isGreaterThan((150 * 1.0).toInt())
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        hint.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        assertThat(layouts.single().hasVisualOverflow).isFalse()
     }
 }
