@@ -25,6 +25,28 @@ final class ConversationInfoSheetAccessibilityTests: XCTestCase {
         return String(source[range.upperBound ..< end])
     }
 
+    // MARK: - #17907 — la fiche défile d'un bloc et épingle ses onglets, comme la fiche profil
+
+    func test_sheet_scrollsAsOneBlock_withPinnedTabBar() throws {
+        let source = try sheetSource()
+        let layout = try vicinity(after: "private var collapsibleLayout: some View {", in: source, span: 1_400)
+        XCTAssertTrue(layout.contains("LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders])"),
+                      "La fiche est UN défilement dont l'en-tête de section (les onglets) s'épingle, comme `UserProfileSheet`.")
+        XCTAssertTrue(layout.contains("pinnedTabBar(offset: offset)"),
+                      "Les onglets sont l'en-tête épinglé de la section, pas une rangée figée au-dessus du défilement.")
+        XCTAssertTrue(layout.contains("collapsibleHeader(offset: offset)"),
+                      "L'en-tête de la conversation défile avec le contenu et s'efface, comme celui du profil.")
+        XCTAssertTrue(source.contains("compactPinnedBar"),
+                      "Une barre compacte prend le relais de l'en-tête replié.")
+    }
+
+    func test_tabContent_hasNoNestedScrollView() throws {
+        let source = try sheetSource()
+        let content = try vicinity(after: "private var tabContent: some View {", in: source, span: 700)
+        XCTAssertFalse(content.contains("ScrollView("),
+                       "Le contenu d'onglet vit dans le défilement de la fiche : un ScrollView imbriqué le réduirait à la bande restante.")
+    }
+
     // MARK: - Member-search clear button
 
     func test_memberSearchClearButton_hasAccessibilityLabel() throws {

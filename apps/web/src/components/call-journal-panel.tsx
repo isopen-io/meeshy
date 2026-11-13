@@ -129,7 +129,7 @@ const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, lan
       ) : (
         content
       )}
-      <UnfoldedOriginal open={reveal.originalBelow} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-journal-original" />
+      <UnfoldedOriginal open={reveal.originalBelow} text={caption.original} from={caption.pair?.from} language={language} marker="data-call-journal-original" />
     </li>
   );
 });

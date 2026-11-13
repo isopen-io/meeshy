@@ -47,6 +47,8 @@ import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
+import me.meeshy.sdk.model.call.CallTranscriptSecondary
+import me.meeshy.sdk.model.call.CallTranscriptSecondaryKind
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -108,7 +110,7 @@ internal fun CallCaptionRow(
         } else {
             CallCaptionInlinePhrase(line, isWaiting = isWaiting, reduceMotion = reduceMotion)
         }
-        CallCaptionOriginalBelow(line.originalBelow, reduceMotion, ink = MeeshyMediaChromeColors.ChromeSecondary)
+        CallCaptionSecondaryBelow(line.originalBelow?.let { CallTranscriptSecondary(CallTranscriptSecondaryKind.ORIGINAL, it) }, reduceMotion, ink = MeeshyMediaChromeColors.ChromeSecondary)
     }
 }
 
@@ -205,20 +207,32 @@ private fun CallCaptionStackedPhrase(line: CallLiveCaptionLine) {
 }
 
 /**
- * « Original · … » under the translation, in secondary ink, indented: it unfolds from the sentence and folds back into it.
+ * « Original · … » (or « Traduit · … » once the journal shows the original, #17862) under the leading line, in secondary
+ * ink, indented: it unfolds from the sentence and folds back into it; a swap between the two only fades.
  * One piece for the live captions (chrome ink) and the journal after the call (the theme's secondary ink, [ink]).
  */
 @Composable
-internal fun CallCaptionOriginalBelow(original: String?, reduceMotion: Boolean, ink: Color) {
-    val word = stringResource(R.string.call_captions_original)
+internal fun CallCaptionSecondaryBelow(secondary: CallTranscriptSecondary?, reduceMotion: Boolean, ink: Color) {
+    val originalWord = stringResource(R.string.call_captions_original)
+    val translatedWord = stringResource(R.string.call_captions_translated)
     AnimatedContent(
-        targetState = original,
-        transitionSpec = { unfoldTransition(reduceMotion) },
-        label = "caption-original",
+        targetState = secondary,
+        transitionSpec = {
+            if (initialState != null && targetState != null) {
+                fadeIn(tween(fadeMillis(reduceMotion))) togetherWith fadeOut(tween(fadeMillis(reduceMotion)))
+            } else {
+                unfoldTransition(reduceMotion)
+            }
+        },
+        label = "caption-secondary",
     ) { shown ->
         if (shown != null) {
+            val word = when (shown.kind) {
+                CallTranscriptSecondaryKind.ORIGINAL -> originalWord
+                CallTranscriptSecondaryKind.TRANSLATED -> translatedWord
+            }
             Text(
-                text = "$word · $shown",
+                text = "$word · ${shown.text}",
                 style = MaterialTheme.typography.bodySmall,
                 color = ink,
                 modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.md, top = MeeshySpacing.xxs),
@@ -235,7 +249,7 @@ private fun unfoldTransition(reduceMotion: Boolean): ContentTransform {
     return enter togetherWith exit
 }
 
-private fun fadeMillis(reduceMotion: Boolean): Int = if (reduceMotion) FADE_REDUCED_MS else FADE_MS
+internal fun fadeMillis(reduceMotion: Boolean): Int = if (reduceMotion) FADE_REDUCED_MS else FADE_MS
 
 /** Only a TRANSLATED sentence takes its author's colour; an original stays in the ink of the call. */
 private fun captionInk(line: CallLiveCaptionLine): Color =
