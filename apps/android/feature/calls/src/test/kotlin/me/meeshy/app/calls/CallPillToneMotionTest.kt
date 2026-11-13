@@ -56,7 +56,7 @@ class CallPillToneMotionTest {
         assertThat(pill).contains("animateDpAsState(")
         assertThat(pill).contains("CallPillMotion.widthMillis(reduceMotion)")
         assertThat(pill).doesNotContain("widthIn(max = CallPillWidth")
-        assertThat(pill).contains("CallPillWidth.maxWidthDp(pillText)")
+        assertThat(pill).contains("CallPillWidth.maxWidthDp(pillText, isUnfolded = ")
     }
 
     @Test
