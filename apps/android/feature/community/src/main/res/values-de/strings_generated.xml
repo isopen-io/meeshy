@@ -75,6 +75,9 @@
     <string name="community_settings_leave_confirm_title">Community verlassen</string>
     <string name="community_settings_leave_label">Community verlassen</string>
     <string name="community_settings_privacy_by_invitation">Auf Einladung</string>
+    <string name="community_settings_privacy_confirm_button">Privat machen</string>
+    <string name="community_settings_privacy_confirm_message">Ehemalige Mitglieder und blockierte Konten verlassen ihre Chats endgültig.</string>
+    <string name="community_settings_privacy_confirm_title">Community privat machen?</string>
     <string name="community_settings_privacy_open_to_all">Offen für alle</string>
     <string name="community_settings_privacy_title">Private Community</string>
     <string name="community_settings_section_danger">Gefahrenzone</string>

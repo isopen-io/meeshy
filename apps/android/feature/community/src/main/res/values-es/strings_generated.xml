@@ -75,6 +75,9 @@
     <string name="community_settings_leave_confirm_title">Salir de la comunidad</string>
     <string name="community_settings_leave_label">Salir de la comunidad</string>
     <string name="community_settings_privacy_by_invitation">Por invitación</string>
+    <string name="community_settings_privacy_confirm_button">Hacer privada</string>
+    <string name="community_settings_privacy_confirm_message">Exmiembros y cuentas bloqueadas saldrán de sus conversaciones, sin vuelta atrás.</string>
+    <string name="community_settings_privacy_confirm_title">¿Hacer privada la comunidad?</string>
     <string name="community_settings_privacy_open_to_all">Abierta a todos</string>
     <string name="community_settings_privacy_title">Comunidad privada</string>
     <string name="community_settings_section_danger">Zona de peligro</string>

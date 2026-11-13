@@ -576,6 +576,24 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "community.settings.privacy.confirm.button",
+          "androidName": "community_settings_privacy_confirm_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.privacy.confirm.message",
+          "androidName": "community_settings_privacy_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.privacy.confirm.title",
+          "androidName": "community_settings_privacy_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "community.settings.privacy.openToAll",
           "androidName": "community_settings_privacy_open_to_all",
           "status": "adopted"
