@@ -92,7 +92,7 @@ const pt = {
   'onboarding.recap.streak.other': 'Chama: {days} dias',
   'onboarding.recap.badges': 'Medalhas: {count}',
   'onboarding.recap.friends': 'Pedidos a caminho: {count}',
-  'onboarding.recap.tomorrow': 'Amanhã, a Chama pode arder há {next} dias.',
+  'onboarding.recap.tomorrow': 'Amanhã, sua Chama vai arder há {next} dias.',
   'onboarding.recap.explore': 'Continuar a explorar',
   'onboarding.recap.game': 'Descobrir o jogo com Mee e Meo',
   'onboarding.recap.done': 'Chega por hoje',

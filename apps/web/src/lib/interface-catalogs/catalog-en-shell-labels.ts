@@ -150,7 +150,7 @@ const enShellLabels = {
   'list.quick.mood.hint': 'An emoji says how you’re doing, without writing a message.',
   'list.header.share': 'Create a share link',
   'list.header.new': 'New conversation',
-  'list.header.progression': 'Progress — badges, level and streak',
+  'list.header.progression': 'My Legend — badges, level and Flame',
   'list.footer.exhausted': 'All conversations are loaded',
   'list.footer.loadingMore': 'Loading more',
   'list.footer.failed': 'Couldn’t load more',

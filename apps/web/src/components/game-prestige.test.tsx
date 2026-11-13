@@ -44,7 +44,8 @@ describe('la proposition au niveau 100', () => {
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
     expect(t).toContain('ta lumière peut renaître, ou grandir encore');
-    expect(t).toContain('ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés');
+    expect(t).toContain('ton niveau repart à 1 et tes étincelles à 0');
+    expect(t).toContain('tes étincelles reçues depuis toujours, ta plus haute lumière');
     expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');

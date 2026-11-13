@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { followKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs } from './call-pill-motion';
+import { bannerCloseKeyframes, followKeyframes, inlineSlideKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * RIEN N'APPARAÎT NI NE DISPARAÎT D'UN COUP (#17406, #17536 ; `CallChromeStow` et
@@ -102,6 +102,41 @@ describe('la capsule de l’en-tête entre et sort par une mise à l’échelle 
   });
 });
 
+describe('ce qui sort par un bord y retourne par le même chemin : le bandeau des autres et la capsule de la une (U2.10, U1.12)', () => {
+  test('le bandeau du bas repart vers le bas de l’écran, et en revient : transformation et opacité seules', () => {
+    expect(swapKeyframes(false, false, 'bottom')).toEqual([
+      { opacity: 1, transform: 'translateY(0)' },
+      { opacity: 0, transform: 'translateY(100%)' },
+    ]);
+    expect(swapKeyframes(true, false, 'bottom')[0]).toEqual({ opacity: 0, transform: 'translateY(100%)' });
+  });
+
+  test('la colonne du bandeau repart par le bord de FIN : à droite en gauche à droite, à gauche en droite à gauche', () => {
+    expect(swapKeyframes(false, false, 'end')[1]).toEqual({ opacity: 0, transform: 'translateX(100%)' });
+    expect(swapKeyframes(false, false, 'end', true)[1]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
+    expect(swapKeyframes(true, false, 'end', true)[0]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
+  });
+
+  test('le bandeau « Vous partagez » repart vers le haut, par où l’en-tête se range, et en revient (P16.6)', () => {
+    expect(swapKeyframes(false, false, 'top')).toEqual([
+      { opacity: 1, transform: 'translateY(0)' },
+      { opacity: 0, transform: 'translateY(-100%)' },
+    ]);
+    expect(swapKeyframes(true, false, 'top')[0]).toEqual({ opacity: 0, transform: 'translateY(-100%)' });
+  });
+
+  test('la capsule repart en fondu, sans déplacement ni échelle', () => {
+    expect(swapKeyframes(false, false, 'fade')).toEqual([
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'none' },
+    ]);
+  });
+
+  test('« Réduire les animations » : un fondu court, sans déplacement, pour chacune', () => {
+    for (const shape of ['bottom', 'end', 'fade', 'top'] as const) expect(swapKeyframes(false, true, shape, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+  });
+});
+
 describe('ce qui est posé sur un verre qui se déforme suit son bord du haut (P8b.6, loi 17)', () => {
   test('le verre perd 56 px : ce qui le surmonte part de sa place d’avant, 56 px plus haut, et descend avec lui', () => {
     expect(followKeyframes({ width: 400, height: 120 }, { width: 400, height: 64 }, false)).toEqual([{ transform: 'translateY(-56px)' }]);
@@ -133,5 +168,69 @@ describe('#17529 — l’avatar du duo audio se réduit vers l’en-tête compac
   test('rien ne bouge quand rien n’a bougé, ni quand une taille manque', () => {
     expect(portraitMorphKeyframes(full, full, false)).toBeNull();
     expect(portraitMorphKeyframes({ ...full, width: 0 }, compact, false)).toBeNull();
+  });
+});
+
+describe('#17774 — l’écran d’appel et la capsule s’échangent en mouvement (S1.7, S2.1 ; iOS #17765, Android #17772)', () => {
+  test('l’arrivée dure 220 ms et le départ 180 ms ; « Réduire les animations » les ramène à un fondu de 120 ms', () => {
+    expect(viewSwapMs(true, false)).toBe(220);
+    expect(viewSwapMs(false, false)).toBe(180);
+    expect(viewSwapMs(true, true)).toBe(120);
+    expect(viewSwapMs(false, true)).toBe(120);
+  });
+
+  test('ce qui arrive grandit de 0,92 à 1 en fondu ; ce qui part fait le chemin inverse : transformation et opacité seules', () => {
+    expect(viewSwapKeyframes(true, false)).toEqual([
+      { opacity: 0, transform: 'scale(0.92)' },
+      { opacity: 1, transform: 'none' },
+    ]);
+    expect(viewSwapKeyframes(false, false)).toEqual([
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'scale(0.92)' },
+    ]);
+  });
+
+  test('sous « Réduire les animations » : un fondu seul, aucune échelle', () => {
+    expect(viewSwapKeyframes(true, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(viewSwapKeyframes(false, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+  });
+
+  test('ce qui repart d’où le doigt l’a laissé (le glissé vers le bas) s’y contracte : aucun saut vers le haut', () => {
+    const seen = 'matrix(1, 0, 0, 1, 0, 480)';
+    expect(viewSwapKeyframes(false, false, seen)).toEqual([
+      { opacity: 1, transform: seen },
+      { opacity: 0, transform: `${seen} scale(0.92)` },
+    ]);
+    expect(viewSwapKeyframes(false, false, 'none')).toEqual(viewSwapKeyframes(false, false));
+    expect(viewSwapKeyframes(false, true, seen)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    expect(viewSwapKeyframes(true, false, seen)).toEqual(viewSwapKeyframes(true, false));
+  });
+});
+
+describe('#17774 — la pile des bandeaux se referme en mouvement (S2.6)', () => {
+  test('un bandeau qui remonte part de sa place d’avant, vue comme une translation, et rejoint la sienne', () => {
+    expect(bannerCloseKeyframes(60, false)).toEqual([{ transform: 'translateY(60px)' }, { transform: 'none' }]);
+    expect(bannerCloseKeyframes(-60, false)).toEqual([{ transform: 'translateY(-60px)' }, { transform: 'none' }]);
+  });
+
+  test('rien ne bouge quand la place est la même (l’arrondi d’une mesure n’est pas un mouvement)', () => {
+    expect(bannerCloseKeyframes(0.2, false)).toBeNull();
+    expect(bannerCloseKeyframes(0.2, true)).toBeNull();
+  });
+
+  test('« Réduire les animations » : aucun déplacement, un fondu court', () => {
+    expect(bannerCloseKeyframes(60, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+  });
+});
+
+describe('ce qui se recentre quand la colonne du journal entre ou repart (W1.20)', () => {
+  test('le centre repart de celui d’avant par une translation, sans toucher la géométrie', () => {
+    expect(inlineSlideKeyframes(184, false)).toEqual([{ transform: 'translateX(184px)' }, { transform: 'none' }]);
+    expect(inlineSlideKeyframes(-184, false)).toEqual([{ transform: 'translateX(-184px)' }, { transform: 'none' }]);
+  });
+
+  test('sous « Réduire les animations », un fondu court sans déplacement ; un écart sous le demi-pixel ne joue rien', () => {
+    expect(inlineSlideKeyframes(184, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(inlineSlideKeyframes(0.2, false)).toBeNull();
   });
 });

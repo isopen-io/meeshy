@@ -47,14 +47,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import me.meeshy.sdk.model.SharedMapStyle
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.location.GeoPoint
 import me.meeshy.sdk.model.location.PlaceLabels
 import me.meeshy.sdk.model.location.SlippyMap
 import me.meeshy.ui.R
+import me.meeshy.ui.component.viewer.ViewerDialog
+import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -77,10 +77,7 @@ fun LocationFullscreen(
     modifier: Modifier = Modifier,
     initialStyle: SharedMapStyle = SharedMapStyle.STANDARD,
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
         LocationMapPanel(place, accentColor, senderName, onDismiss, modifier, initialStyle)
     }
 }

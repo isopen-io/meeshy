@@ -215,6 +215,34 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `#17935 on a wide window the group pill with its two rows stops at the 560 dp of the duo, never 440`() {
+        setPill(layer = CallScreenLayer.Menu)
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(560.dp)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `#17935 an option held in the pill takes the same 560 dp, duo as group`() {
+        setPill(layer = CallScreenLayer.Panel(CallScreenPanel.Record), disposition = CallControlsDisposition.Rails, panelContent = { Text("Audio") })
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(560.dp)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `#17935 a duo's open menu brings out the rails and leaves the pill at rest, 440 dp`() {
+        setPill(layer = CallScreenLayer.Menu, disposition = CallControlsDisposition.Rails)
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(440.dp)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w360dp-h780dp")
+    fun `#17935 on a phone in portrait nothing changes, the group pill fills the width as before`() {
+        setPill(layer = CallScreenLayer.Menu)
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(360.dp)
+    }
+
+    @Test
     fun `folding the open menu keeps its rows while they fade, never a panel closed before`() {
         val state = ui()
         val items = CallPillModel.items(state, offered)

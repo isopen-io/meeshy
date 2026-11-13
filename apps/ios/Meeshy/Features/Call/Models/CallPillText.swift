@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshyUI
 
 /// #17343 — ce que la pilule porte de TEXTE au-dessus de sa rangée de base. Les
 /// sous-titres et le journal vivent DANS son verre, en duo comme en groupe ; le
@@ -41,6 +42,12 @@ enum CallPillText: Equatable, Sendable {
         self == .captionsAlone
     }
 
+    /// U2.9 — en plein écran de groupe, la pilule est rangée avec les contrôles : seul son verre de
+    /// sous-titres, privé de sa rangée de base, reste sur la scène. Hors plein écran, elle y est toujours.
+    func isOnStage(isStageFullScreen: Bool) -> Bool {
+        !isStageFullScreen || staysWhenChromeStowed
+    }
+
     /// Le journal prend une part de la fenêtre (`CallJournalSizing`) : en audio,
     /// l'avatar se resserre alors en en-tête compact pour lui laisser la place.
     var compactsAudioLayout: Bool {
@@ -51,12 +58,22 @@ enum CallPillText: Equatable, Sendable {
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre
 /// des sous-titres rangés sont limités à 560 pt pour que l'œil ne balaie pas tout
 /// l'écran (paysage, tablette) ; la pilule au repos garde ses 440 pt.
+/// #17935 — UNE borne pour toute pilule agrandie, duo comme groupe : les rangées du
+/// groupe ou une option dépliées au-dessus de la rangée de base la prennent aussi.
+/// C'est la loi du verre partagée (K10, `MeeshyGlassPillRecipe.width`) : un dessus
+/// porte le plafond agrandi, une rangée seule le plafond réparti.
 enum CallPillWidth {
-    static let resting: CGFloat = 440
-    static let text: CGFloat = 560
+    static let resting: CGFloat = MeeshyGlassPillRecipe.spreadMaxWidth
+    static let text: CGFloat = MeeshyGlassPillRecipe.expandedMaxWidth
 
-    static func maxWidth(for content: CallPillText) -> CGFloat {
-        content == .none ? resting : text
+    static func maxWidth(for content: CallPillText, unfoldsAbove: Bool) -> CGFloat {
+        MeeshyGlassPillRecipe.width(
+            layout: .spread(maxWidth: resting),
+            hasAbove: content != .none || unfoldsAbove,
+            place: .greatestFiniteMagnitude,
+            naturalWidth: 0,
+            expandedMaxWidth: text
+        )
     }
 }
 

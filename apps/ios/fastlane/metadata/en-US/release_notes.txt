@@ -1,9 +1,9 @@
-Meeshy 1.1.7 — quicker to get started, nicer every day.
+Meeshy 1.1.8 — calls that look better, read clearer, in your language.
 
-• Conversation preview: a long press shows a conversation without opening it, and its menu pulls up; a short tap opens it.
-• Show yourself: right at sign-up, add your photo and banner, retouched with the same editor as the camera.
-• Camera: 3 s and 10 s timer, horizon level, volume buttons and Camera Control to shoot and zoom, stabilized video.
-• Calls: before you answer, pick your mic and camera and see what the other person will see, or answer without video.
-• Accessibility: every button speaks to VoiceOver, text follows your chosen size, and every control is easy to tap.
+• Redesigned calls: every button is glass (Liquid Glass on iOS 26), whoever speaks lights up in their colour, and in landscape up to four people fit on one row.
+• Captions: each sentence shows its language and unfolds its original with a tap. After the call, the transcript unfolds under its bubble in the conversation.
+• Recording and screen sharing: everyone sees who asks and who agrees, recording starts as Audio or Video, and "Stop sharing" is always within reach.
+• Creating: paste an image to set the scene background, paste text to fill the caption; the viewfinder offers Text, Background, Gallery and Sticker first.
+• Simpler everywhere: sign-up, settings and the game say each thing once, with the details waiting behind an (i).
 
-Plus fixes and smoother performance everywhere.
+And of course, fixes and smoother performance throughout.

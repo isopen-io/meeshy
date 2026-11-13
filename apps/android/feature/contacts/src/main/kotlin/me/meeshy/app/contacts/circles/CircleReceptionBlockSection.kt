@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.contacts.R
+import me.meeshy.sdk.model.relation.RelationPersonSwitch
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -42,7 +43,7 @@ fun ReceptionBlockSection(userId: String, settings: List<RelationReceptionSettin
         settings.forEach { setting ->
             CircleReceptionBlockToggle(
                 userId = userId,
-                setting = setting,
+                personSwitch = RelationPersonSwitch.Reception(setting),
                 title = stringResource(setting.titleRes()),
                 detail = setting.detailRes()?.let { stringResource(it) },
             )

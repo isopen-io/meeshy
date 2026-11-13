@@ -92,6 +92,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// Le sélecteur « Ambiance » du bouton Camera Control, relié au look (OPUS-9).
+    nonisolated let ambianceLink = CameraAmbianceLink()
     /// L'horizon de l'objectif en service, posé sur la photo au déclenchement.
     let horizon = ComposerCaptureHorizon()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
@@ -579,7 +581,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// photo, et les curseurs du bouton Camera Control (OPUS-9).
     nonisolated private func adoptLens(_ device: AVCaptureDevice) {
         CameraPhotoTuning.adopt(for: device, on: photoOutput)
-        CameraSystemControlsHost.install(in: session, for: device) { [weak self] facteur in
+        CameraSystemControlsHost.install(in: session, for: device, ambiance: ambianceLink) { [weak self] facteur in
             guard let self else { return }
             self.zoomFactor = self.zoomScale.displayed(facteur)
         }

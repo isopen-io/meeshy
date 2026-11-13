@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -166,6 +167,28 @@ class CallCaptionsBandSemanticsTest {
     }
 
     @Test
+    fun `#17933 in a group the band is the duo's, two sentences each with its author, the Journal a button`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(
+                        line("a", "On valide jeudi ?", speakerName = "Awa"),
+                        line("k", "J'envoie les écrans ce soir.", tag = "ES → FR", speakerName = "Karim"),
+                        line("l", "Je relis demain matin.", speakerName = "Lina"),
+                    ),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                )
+            }
+        }
+
+        rule.onNodeWithText("Awa · On valide jeudi ?", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Karim · J'envoie les écrans ce soir.", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Lina · Je relis demain matin.", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Transcript").assertHeightIsAtLeast(48.dp).assertHasClickAction()
+    }
+
+    @Test
     fun `the foot tells what the line says of its translation (#17343)`() {
         rule.setContent {
             MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = {}) }
@@ -190,7 +213,7 @@ class CallCaptionsBandSemanticsTest {
             MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = { opened++ }) }
         }
 
-        rule.onNodeWithText("Journal").assertHeightIsAtLeast(48.dp).performClick()
+        rule.onNodeWithText("Transcript").assertHeightIsAtLeast(48.dp).performClick()
 
         assertThat(opened).isEqualTo(1)
     }
@@ -233,8 +256,8 @@ class CallCaptionsBandSemanticsTest {
         }
 
         rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("Journal").assertDoesNotExist()
+        rule.onNodeWithText("Transcript").assertDoesNotExist()
         rule.runOnIdle { opens = true }
-        rule.onNodeWithText("Journal").assertIsDisplayed()
+        rule.onNodeWithText("Transcript").assertIsDisplayed()
     }
 }

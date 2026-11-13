@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,7 +67,8 @@ internal fun callGroupTileSpeech(tile: GroupCallStageTile, title: String?): Call
 
 /**
  * Une vignette d'appel de groupe — iOS `GroupCallTileView` : la vidéo du membre, ou son avatar caméra coupée teinté de
- * SA couleur ; sa plaque de verre (micro coupé, partage d'écran, reconnexion, nom ou « Écran de X » à la une) ; un
+ * SA couleur ; sa plaque de verre (micro coupé, partage d'écran, reconnexion, nom de la personne — « Écran de X » se
+ * lit sur la puce de la scène, U2.5) ; un
  * liseré à SA couleur, et, tant qu'il parle (moi compris), un halo de cette couleur et un liseré épaissi et plein
  * (#13751, P11.5). Le halo et le liseré fondent au rythme du fondu de l'image ([CallRemoteVideoFade]), plus court sous
  * « Réduire les animations » : jamais de bascule sèche.
@@ -80,7 +82,6 @@ internal fun CallGroupTile(
     mirror: Boolean,
     modifier: Modifier = Modifier,
     fit: Boolean = false,
-    title: String? = null,
     zoom: Float = 1f,
 ) {
     val accentHex = remember(tile.colorKey) { CallTileRim.groupTile(tile.colorKey) }
@@ -124,7 +125,7 @@ internal fun CallGroupTile(
                 faceHex = accentHex,
             )
         }
-        CallGroupTilePlate(tile, title, Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.sm))
+        CallGroupTilePlate(tile, Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.sm))
     }
 }
 
@@ -147,27 +148,39 @@ private fun Modifier.callTileHalo(color: Color, strength: State<Float>): Modifie
     }
 }
 
-/** P11.6 · P14.4 — la plaque du nom : une capsule de VERRE (l'atome de l'appel), jamais un voile noir. */
+/** P11.6 · P14.4 · U2.6 — la plaque du nom d'une tuile de groupe, et ses états avant le nom. */
 @Composable
-private fun CallGroupTilePlate(tile: GroupCallStageTile, title: String?, modifier: Modifier) {
-    val name = title ?: tile.displayName.ifBlank { stringResource(R.string.call_group_tile_unknown) }
+private fun CallGroupTilePlate(tile: GroupCallStageTile, modifier: Modifier) {
+    val name = tile.displayName.ifBlank { stringResource(R.string.call_group_tile_unknown) }
+    CallTileNameplate(text = name, modifier = modifier) {
+        if (tile.isMicMuted) {
+            Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(PLATE_ICON))
+        }
+        if (tile.isScreenSharing) {
+            Icon(MeeshyIcons.FlipToFront, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(PLATE_ICON))
+        }
+        if (tile.isReconnecting) {
+            Icon(MeeshyIcons.Sync, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(PLATE_ICON))
+        }
+    }
+}
+
+/**
+ * La plaque d'une vignette d'appel (iOS `CallTileNameplate`) : une capsule de VERRE (l'atome de l'appel) au ton de l'écran
+ * (loi 3), le nom et ce qui le précède. La tuile de groupe et ma vignette d'avant le décroché (P17.4) portent la MÊME.
+ */
+@Composable
+internal fun CallTileNameplate(text: String, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}) {
     CallGlassPlate(modifier = modifier, shape = CircleShape) {
+        CallToneScrim()
         Row(
             modifier = Modifier.padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         ) {
-            if (tile.isMicMuted) {
-                Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(PLATE_ICON))
-            }
-            if (tile.isScreenSharing) {
-                Icon(MeeshyIcons.FlipToFront, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(PLATE_ICON))
-            }
-            if (tile.isReconnecting) {
-                Icon(MeeshyIcons.Sync, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(PLATE_ICON))
-            }
+            leading()
             Text(
-                text = name,
+                text = text,
                 style = MaterialTheme.typography.labelMedium,
                 color = CallPalette.Ink,
                 maxLines = 1,

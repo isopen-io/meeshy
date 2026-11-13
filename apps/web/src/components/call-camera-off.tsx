@@ -26,15 +26,15 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
  * posé sur son disque : la scène noire de la caméra coupée ET le portrait du duo audio le montent,
  * jamais une seconde copie. Seule son OPACITÉ change, en fondu (`useOpacityFade`, Web Animations).
  */
-export function SpeechRing({ color, speaking }: { readonly color: string; readonly speaking: boolean }) {
+export function SpeechRing({ color, speaking, shape = 'disc' }: { readonly color: string; readonly speaking: boolean; readonly shape?: 'disc' | 'tile' }) {
   const ring = useRef<HTMLSpanElement>(null);
   useOpacityFade(ring, speaking, cameraOffFadeMs(prefersReducedMotion()));
-  return <span ref={ring} className="absolute inset-3 rounded-full" style={{ '--call-tint': color } as CSSProperties} data-call-camera-off-speech="" />;
+  return <span ref={ring} className={shape === 'tile' ? 'pointer-events-none absolute inset-0 rounded-card' : 'absolute inset-3 rounded-full'} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off-speech="" data-call-speech-shape={shape} />;
 }
 
-/** L'anneau du duo audio, allumé au niveau reçu du flux de l'autre (`usePeerSpeaking`) : un basculement ne rend que l'anneau, jamais l'écran d'appel. */
-export function PeerSpeechRing({ color, stream }: { readonly color: string; readonly stream: MediaStream | null }) {
-  return <SpeechRing color={color} speaking={usePeerSpeaking(stream)} />;
+/** L'anneau du duo audio, ou le halo d'une vignette de groupe (`shape="tile"`, P11.5), allumé au niveau reçu du flux de la personne (`usePeerSpeaking`, le mien compris) : un basculement ne rend que l'anneau, jamais l'écran d'appel ni la grille. */
+export function PeerSpeechRing({ color, stream, shape }: { readonly color: string; readonly stream: MediaStream | null; readonly shape?: 'disc' | 'tile' }) {
+  return <SpeechRing color={color} speaking={usePeerSpeaking(stream)} {...(shape === undefined ? {} : { shape })} />;
 }
 
 type CameraOffStageProps = {

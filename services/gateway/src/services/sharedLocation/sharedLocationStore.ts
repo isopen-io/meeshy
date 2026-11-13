@@ -18,11 +18,14 @@ import {
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
 import { createHmac } from 'node:crypto';
-import type { SharedLocationKv } from './sharedLocationKv';
+import { RETIRING_TTL_SECONDS, type SharedLocationKv } from './sharedLocationKv';
 import { readerKeySecret } from '../posts/readerKey';
 import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
-export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
+/** Le centre de la maille que le lecteur flouté voit : retenu tant que l'émetteur ne s'en éloigne pas d'une marge. */
+export type SharedLocationCell = { readonly latitude: number; readonly longitude: number };
+
+export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision; readonly cell?: SharedLocationCell };
 
 export type SharedLocationState = {
   /** Le partage auquel cet état appartient : chaque `start` en ouvre un nouveau, que seul le pointeur rend courant. */
@@ -38,7 +41,7 @@ export type SharedLocationCache = SharedLocationKv;
 const tagOf = (userId: string): string => `{${userId.toLowerCase()}}`;
 const keyOf = (userId: string, sessionId: string): string => `shared-location:${tagOf(userId)}:${sessionId}`;
 const pointerKeyOf = (userId: string): string => `shared-location-current:${tagOf(userId)}`;
-/** Sans durée de vie : une génération ne revient jamais en arrière (une par compte). */
+/** Sans durée de vie tant que le compte vit : une génération ne revient jamais en arrière (une par compte). */
 const generationKeyOf = (userId: string): string => `shared-location-gen:${tagOf(userId)}`;
 const retiringKeyOf = (userId: string): string => `shared-location-retiring:${tagOf(userId)}`;
 const seenKeyOf = (userId: string, sessionId: string): string => `shared-location-seen:${tagOf(userId)}:${sessionId}`;
@@ -60,10 +63,17 @@ const isPrecision = (value: unknown): value is SharedLocationPrecision =>
 const isCoordinate = (value: unknown, bound: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= bound;
 
+function parseCell(value: unknown): SharedLocationCell | null {
+  const position = parsePosition(value);
+  return position ? { latitude: position.latitude, longitude: position.longitude } : null;
+}
+
 function parseRecipient(value: unknown): SharedLocationRecipient | null {
   if (typeof value !== 'object' || value === null) return null;
   const row = value as Record<string, unknown>;
-  return typeof row.userId === 'string' && isPrecision(row.precision) ? { userId: row.userId, precision: row.precision } : null;
+  if (typeof row.userId !== 'string' || !isPrecision(row.precision)) return null;
+  const cell = parseCell(row.cell);
+  return { userId: row.userId, precision: row.precision, ...(cell ? { cell } : {}) };
 }
 
 function parsePosition(value: unknown): SharedLocationPosition | null {
@@ -160,14 +170,24 @@ export async function unmarkSharedLocationSeen(cache: SharedLocationCache, userI
   await cache.unmarkSeen(seenKeyOf(userId, sessionId), readerIds.map((id) => seenMemberOf(sessionId, id)));
 }
 
+/**
+ * La purge d'un compte : son ensemble « à retirer » part, et sa génération reçoit un terme
+ * au lieu d'être effacée. Effacée, elle se relirait « 0 » : un démarrage en vol qui a lu
+ * « 0 » avant l'arrêt reprendrait le pointeur (ABA). Elle vit donc encore le plus long
+ * partage, puis disparaît.
+ */
+export async function purgeSharedLocationKeys(cache: SharedLocationCache, userId: string): Promise<void> {
+  await cache.expire(generationKeyOf(userId), RETIRING_TTL_SECONDS);
+  await cache.del(retiringKeyOf(userId));
+}
+
 /** La session courante, ou `null`. */
 export async function currentSharedLocationSession(cache: SharedLocationCache, userId: string): Promise<string | null> {
   return validSession(await cache.get(pointerKeyOf(userId)));
 }
 
-/** L'état rangé de la session `sessionId`, courante ou non, ou `null` (absent, échu, illisible, scellé pour un autre compte). */
-export async function readSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string, now: number): Promise<SharedLocationState | null> {
-  const stored = await cache.get(keyOf(userId, sessionId));
+/** Ouvre une valeur rangée : `null` si absente, échue, illisible, en clair sous une clé de scellement, ou scellée pour un autre compte. */
+function openStored(userId: string, sessionId: string, stored: string | null, now: number): SharedLocationState | null {
   if (stored === null) return null;
   if (hasValidSecretsKey() && !isSealedSecret(stored)) return null;
   try {
@@ -176,6 +196,32 @@ export async function readSharedLocationSession(cache: SharedLocationCache, user
   } catch {
     return null;
   }
+}
+
+/** L'état rangé de la session `sessionId`, courante ou non, ou `null` (absent, échu, illisible, scellé pour un autre compte). */
+export async function readSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string, now: number): Promise<SharedLocationState | null> {
+  return openStored(userId, sessionId, await cache.get(keyOf(userId, sessionId)), now);
+}
+
+/** La session courante de chacun, en UNE lecture groupée. */
+export async function currentSharedLocationSessions(cache: SharedLocationCache, userIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  if (userIds.length === 0) return new Map();
+  const pointers = await cache.mget(userIds.map(pointerKeyOf));
+  return new Map(userIds.flatMap((id, index) => {
+    const session = validSession(pointers[index] ?? null);
+    return session === null ? [] : [[id, session] as const];
+  }));
+}
+
+/** Les partages en cours de `userIds`, en DEUX lectures groupées (pointeurs, puis états), jamais une par compte. */
+export async function readSharedLocations(cache: SharedLocationCache, userIds: readonly string[], now: number): Promise<ReadonlyMap<string, SharedLocationState>> {
+  const sessions = [...(await currentSharedLocationSessions(cache, userIds))];
+  if (sessions.length === 0) return new Map();
+  const stored = await cache.mget(sessions.map(([id, session]) => keyOf(id, session)));
+  return new Map(sessions.flatMap(([id, session], index) => {
+    const state = openStored(id, session, stored[index] ?? null, now);
+    return state ? [[id, state] as const] : [];
+  }));
 }
 
 /** Le partage en cours, ou `null` (absent, arrêté, échu, illisible, scellé pour un autre compte). */

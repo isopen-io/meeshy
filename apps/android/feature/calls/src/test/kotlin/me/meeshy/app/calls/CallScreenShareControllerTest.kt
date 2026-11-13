@@ -229,7 +229,13 @@ class CallScreenShareControllerTest {
         val sharing = handler.present(connectedState())
 
         assertThat(idle).isEqualTo(
-            CallActionPresentation(MeeshyIcons.FlipToFront, R.string.call_screen_share_start, false, R.string.call_screen_share_hint),
+            CallActionPresentation(
+                MeeshyIcons.FlipToFront,
+                R.string.call_screen_share_start,
+                false,
+                R.string.call_screen_share_hint,
+                captionRes = R.string.call_screen_share_caption,
+            ),
         )
         assertThat(sharing?.labelRes).isEqualTo(R.string.call_screen_share_stop)
         assertThat(sharing?.isActive).isTrue()

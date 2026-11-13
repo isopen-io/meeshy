@@ -13,6 +13,13 @@ const deEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'Dieser Beitrag hat {count} Funken für dich sprühen lassen',
   'engagement.post.points.other': 'Dieser Beitrag hat {count} Funken für dich sprühen lassen',
+  'engagement.card.streak.one': 'Tag in Folge hier',
+  'engagement.card.streak.other': 'Tage in Folge hier',
+  'engagement.card.today': 'Heute',
+  'engagement.card.total': 'Hier seit Beginn',
+  'engagement.card.open': 'Zum Spiel',
+  'engagement.card.hide': 'Flamme ausblenden',
+  'engagement.card.title': 'In dieser Unterhaltung',
 } as const;
 
 export default deEngagement;

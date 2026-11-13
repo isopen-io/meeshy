@@ -48,7 +48,11 @@ describe('CallJournalPanel', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[]; readonly startedAt?: number | null } = {}) => {
+  let mounts = 0;
+
+  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[]; readonly startedAt?: number | null; readonly callId?: string } = {}) => {
+    mounts += 1;
+    const callId = options.callId ?? `call-journal-${mounts}`;
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -59,6 +63,7 @@ describe('CallJournalPanel', () => {
           <CallJournalPanel
           Button={CallButton}
             id="call-journal-panel"
+            callId={callId}
             closeGlyph={null}
             language="fr"
             onClose={() => void events.push('close')}
@@ -117,7 +122,7 @@ describe('CallJournalPanel', () => {
     expect(who.textContent).toContain('Nadia');
     expect(who.textContent).toContain('EN → FR');
     expect(who.contains(clock)).toBe(false);
-    expect(clock.textContent).toBe('1:05');
+    expect(clock.textContent).toBe('01:05');
     expect(who.nextElementSibling).toBe(clock);
     expect(entry.textContent).not.toMatch(/\d{2}:\d{2}:\d{2}/);
     view.done();
@@ -211,9 +216,41 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('loi 7 — rien de traduit, pas de bascule : il n’y a qu’une version à lire', () => {
+  test('L3.9 — fermer le journal puis le rouvrir rend la phrase dépliée telle qu’on l’a laissée ; un autre appel repart de rien', () => {
+    const first = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    act(() => (first.find('[data-call-journal-line="a"]') as HTMLButtonElement).click());
+    expect(first.find('[data-call-journal-original]')).not.toBeNull();
+    first.done();
+    const back = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    expect(back.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(back.find('[data-call-journal-original]')?.textContent).toBe('Original · Hello everyone');
+    back.done();
+    const other = mount([caption({ id: 'a' })], { callId: 'call-journal-next' });
+    expect(other.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('false');
+    other.done();
+  });
+
+  test('L3.9 — vue « Original » : une phrase qui a une traduction reste touchable, la toucher montre sa traduction (EN → FR) à sa place, un second toucher rend l’original', () => {
+    const view = mount([caption({ id: 'a' }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null, at: 3_000 })]);
+    act(() => (view.all('[data-call-journal-view] button')[1] as HTMLButtonElement).click());
+    const line = () => view.find('[data-call-journal-line="a"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('false');
+    expect(line()?.hasAttribute('aria-expanded')).toBe(false);
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.getAttribute('aria-pressed')).toBe('true');
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Bonjour à tous');
+    expect(line()?.textContent).toContain('EN → FR');
+    expect(view.find('[data-call-journal-original]')).toBeNull();
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    expect(view.find('[data-call-journal-line="me"]')).toBeNull();
+    view.done();
+  });
+
+  test('loi 7 — la bascule Traduit · Original est toujours à droite de la tête, même quand rien n’est traduit (W1.9)', () => {
     const view = mount([caption({ id: 'raw', original: 'Same', translated: null, pair: null })]);
-    expect(view.find('[data-call-journal-view]')).toBeNull();
+    expect(view.find('[data-call-journal-view]')).not.toBeNull();
     view.done();
   });
 
@@ -267,7 +304,7 @@ describe('CallJournalPanel', () => {
     tie.done();
     const capture = view.find('[data-call-journal-note="screenshot"]') as HTMLElement;
     expect(capture.querySelector('time')?.getAttribute('dateTime')).toBe(new Date(1_500).toISOString());
-    expect(capture.querySelector('time')?.textContent).toBe('1:05');
+    expect(capture.querySelector('time')?.textContent).toBe('01:05');
     expect(capture.querySelector('[data-call-journal-note-text]')?.nextElementSibling).toBe(capture.querySelector('time'));
     const sentence = capture.querySelector('[data-call-journal-note-text]') as HTMLElement;
     expect(sentence.textContent).toBe('Karim a capturé l’écran');

@@ -164,6 +164,7 @@ private fun headerCapsule(
         displayName = state.peerName,
         groupName = names.groupName,
         participantCount = participantCount,
+        receivesScreen = state.isPeerScreenSharing,
     ),
 )
 
@@ -200,6 +201,7 @@ private fun CallDurationChip(
         reconnecting = stringResource(R.string.call_reconnecting),
     )
     val reconnecting = capsule.showsDuration && state.status == CallStatus.RECONNECTING
+    val spokenTitle = capsule.title?.let { if (capsule.isReceivedScreen) stringResource(R.string.call_screen_share_of, it) else it }
     val participants = capsule.participantCount?.let { "${stringResource(R.string.call_detail_participants)} $it" }
     val description = CallVideoBadgeAccessibility.label(
         phrases = phrases,
@@ -207,13 +209,12 @@ private fun CallDurationChip(
         peerMuted = capsule.showsDuration && state.isPeerMuted,
         peerNetworkWeak = state.isPeerQualityDegraded,
         reconnecting = reconnecting,
-        title = capsule.title,
+        title = spokenTitle,
         participants = participants,
         includesDuration = capsule.showsDuration,
     )
     val hint = stringResource(R.string.call_quality_open_hint)
     val warning = MeeshyTheme.tokens.warning
-    val glassTone = LocalCallGlassTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     CallGlassPlate(
@@ -230,16 +231,21 @@ private fun CallDurationChip(
         Row(
             modifier = Modifier
                 .fillMaxHeight()
-                .background(glassTone.veil(glassTone.chipScrimAlpha))
+                .callToneVeil(CallGlassTone::chipScrimAlpha)
                 .background(CallButtonFill.pressedHighlight(pressed))
                 .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
-            TransientCallSignalGlyph(strength)
-            ProvideTextStyle(MaterialTheme.typography.labelMedium.copy(color = CallPalette.Ink)) {
-                CallCapsuleIdentity(capsule)
+            if (capsule.isReceivedScreen) {
+                Icon(MeeshyIcons.FlipToFront, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(CHIP_ICON))
+            } else {
+                TransientCallSignalGlyph(strength)
             }
+            ProvideTextStyle(MaterialTheme.typography.labelMedium.copy(color = CallPalette.Ink)) {
+                CallCapsuleIdentity(capsule, spokenTitle)
+            }
+            if (capsule.isReceivedScreen && capsule.showsNetwork) CallSignalGlyph(strength)
             if (capsule.showsDuration) {
                 CallDurationClockText(
                     hasLiveClock = state.hasLiveClock,
@@ -261,12 +267,13 @@ private fun CallDurationChip(
 /**
  * Le nom, puis le nombre (glyphe de groupe), chacun suivi du séparateur partagé (iOS `chipIdentity`) : la loi ne les
  * donne qu'avec la durée, qui les suit, donc aucun séparateur ne reste orphelin. Le séparateur n'est jamais lu.
+ * Un écran reçu (P15.4) dit « Écran de X » seul : aucune durée ne le suit, donc aucun séparateur.
  */
 @Composable
-private fun CallCapsuleIdentity(capsule: CallHeaderCapsule) {
-    capsule.title?.let { title ->
+private fun CallCapsuleIdentity(capsule: CallHeaderCapsule, spokenTitle: String?) {
+    spokenTitle?.let { title ->
         Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = TITLE_MAX_WIDTH))
-        MetaSeparator()
+        if (!capsule.isReceivedScreen) MetaSeparator()
     }
     capsule.participantCount?.let { count ->
         Icon(MeeshyIcons.GroupFilled, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(CHIP_ICON))

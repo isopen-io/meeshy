@@ -67,13 +67,19 @@ export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
  * direct dont au moins une caméra tourne passe en vidéo plein cadre avec la
  * vignette locale ; le reste est le portrait audio d'iOS.
  */
-export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup'>): CallLayout {
+export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'cameraPreview' | 'remoteStreams' | 'isGroup'>): CallLayout {
   const members = Object.values(call.members);
   if (call.isGroup && members.length > 1) return 'grid';
   if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
-  return call.cameraOn || remoteVideo ? 'video-duo' : 'portrait';
+  return selfCameraShown(call) || remoteVideo ? 'video-duo' : 'portrait';
 }
+
+/** Ma caméra se montre : émise, ou gardée en aperçu local pendant mon partage (S2.8). */
+export const selfCameraShown = (call: Pick<ActiveCall, 'cameraOn' | 'cameraPreview'>): boolean => call.cameraOn || (call.cameraPreview ?? null) !== null;
+
+/** Le flux de ma vignette : l'aperçu de ma caméra pendant mon partage, sinon mon flux local. */
+export const selfCameraStream = (call: Pick<ActiveCall, 'cameraPreview' | 'localStream'>): MediaStream | null => call.cameraPreview ?? call.localStream;
 
 export function hasVideo(stream: MediaStream | undefined | null): boolean {
   return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');
@@ -97,24 +103,22 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
-  'screen-sharing': 'call.screen.sharing',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
   'video-frozen': 'call.video.frozen',
   'video-suspended': 'call.video.suspended',
 };
 
-/** Les pastilles de `CallView.swift` que le web sait dire. */
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`). */
 export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
   return [
     ...(call.micMuted ? (['mic-muted'] as const) : []),
-    ...(call.screenSharing ? (['screen-sharing'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
     ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),
@@ -144,9 +148,35 @@ export function spotlight(members: readonly CallMember[], featuredId: string | n
   return featured === undefined ? null : { featured, others: members.filter((member) => member !== featured) };
 }
 
-/** Colonnes d'une grille de `count` tuiles (soi compris). */
-export function gridColumns(count: number): number {
+/**
+ * Les membres d'une grille dans l'ORDRE D'ARRIVÉE (P11.3, `GroupCallStageLaw.tiles` d'Android) : celui
+ * de `call.members`, que l'état d'un lien ne remue pas — un pair qui se reconnecte garde sa case.
+ * Ma vignette, elle, est posée après eux par la grille. `orderedMembers` sert la feuille des
+ * personnes, l'enregistrement et le premier pair du duo, qui veulent les connectés d'abord.
+ */
+export const membersInArrival = (members: Readonly<Record<string, CallMember>>): readonly CallMember[] => Object.values(members);
+
+/**
+ * Colonnes d'une grille de `count` tuiles (soi compris) — `GroupCallGridLayout.layout` d'iOS et
+ * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois font 2 × 2, quatre
+ * font 2 × 2 sauf UNE rangée de quatre quand la scène est en paysage ET la FENÊTRE de hauteur compacte
+ * (L4.1 : téléphone couché ; W2.1 : une fenêtre de bureau ou un iPad gardent le 2 × 2 de W2), cinq et six
+ * font 2 × 3 en portrait et 3 × 2 en paysage. `compact` se lit sur la fenêtre (`isCompactHeight`), pas
+ * sur la scène, que la colonne du journal ou la pilule raccourcissent.
+ */
+export function gridColumns(count: number, landscape: boolean, compact: boolean): number {
   if (count <= 1) return 1;
-  if (count <= 4) return 2;
-  return 3;
+  if (count === 2) return landscape ? 2 : 1;
+  if (count === 3) return 2;
+  if (count === 4) return landscape && compact ? 4 : 2;
+  return landscape ? 3 : 2;
 }
+
+/**
+ * La grille d'un groupe garde 140 de haut au moins (P12.7, `CallGroupStageSizing` d'iOS) ; en hauteur compacte, les
+ * rangées de la pilule se replient en une ligne. Ici et non avec le bandeau : la pilule (l'écran) et la grille (son chunk) la lisent.
+ */
+export const GRID_MIN_HEIGHT = 140;
+export const COMPACT_HEIGHT = 500;
+
+export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;

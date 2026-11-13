@@ -12,9 +12,10 @@ internal data class IncomingChoiceLook(val icon: ImageVector, val fill: Color, v
  * Les trois boutons de la vue P17 (`docs/product/appels-vue-finale/planche.html`) : Refuser (disque rouge), Sans vidéo
  * (un combiné blanc sur un verre neutre, légende blanche), Répondre (disque vert, caméra ou combiné selon l'appel).
  * Les légendes de Refuser et Répondre gardent leur teinte déjà livrée ; la planche les dessine blanches (écart consigné).
+ * Le glyphe de Répondre annonce ce qui partira (P17.11) : [acceptsVideo] faux ⇒ un téléphone, la réponse part sans vidéo.
  */
 internal object IncomingChoiceLooks {
-    fun of(action: IncomingCallAction, isVideoCall: Boolean): IncomingChoiceLook = when (action) {
+    fun of(action: IncomingCallAction, acceptsVideo: Boolean): IncomingChoiceLook = when (action) {
         IncomingCallAction.Decline -> IncomingChoiceLook(
             icon = MeeshyIcons.CallEnd,
             fill = CallPalette.Decline,
@@ -28,7 +29,7 @@ internal object IncomingChoiceLooks {
             caption = CallPalette.Ink,
         )
         IncomingCallAction.Accept -> IncomingChoiceLook(
-            icon = if (isVideoCall) MeeshyIcons.Video else MeeshyIcons.Call,
+            icon = if (acceptsVideo) MeeshyIcons.Video else MeeshyIcons.Call,
             fill = CallPalette.Accept,
             glyph = CallPalette.Ink,
             caption = CallPalette.Accept,

@@ -149,7 +149,13 @@
     <string name="chat_forward_search_hint">ابحث عن محادثة...</string>
     <string name="chat_forward_sent">تمت إعادة التوجيه</string>
     <string name="chat_guest_bar_close">إغلاق المحادثة</string>
-    <string name="chat_header_flame_hint">يُخفي الشعلة حتى يُفتح الرأس مرة أخرى</string>
+    <string name="chat_header_flame_card_hide">إخفاء الشعلة</string>
+    <string name="chat_header_flame_card_hint">يفتح سلسلة المحادثة</string>
+    <string name="chat_header_flame_card_open">افتح اللعبة</string>
+    <string name="chat_header_flame_card_streak_one">يوم متتالٍ هنا</string>
+    <string name="chat_header_flame_card_streak_other">أيام متتالية هنا</string>
+    <string name="chat_header_flame_card_today">اليوم</string>
+    <string name="chat_header_flame_card_total">هنا منذ البداية</string>
     <plurals name="chat_header_members">
         <item quantity="zero">لا أعضاء</item>
         <item quantity="one">عضو واحد</item>

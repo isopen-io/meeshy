@@ -44,6 +44,8 @@ struct CallHeaderCapsuleInput: Equatable, Sendable {
     let displayName: String?
     let groupName: String?
     let participantCount: Int
+    /// P15.4 — l'écran du correspondant tient la scène du duo.
+    var receivesScreen: Bool = false
 }
 
 struct CallHeaderCapsule: Equatable, Sendable {
@@ -51,13 +53,16 @@ struct CallHeaderCapsule: Equatable, Sendable {
     let participantCount: Int?
     let showsDuration: Bool
     let showsNetwork: Bool
+    /// P15.4 — `title` est alors le NOM de qui partage : la capsule dit « Écran de X ».
+    var isReceivedScreen: Bool = false
 }
 
 enum CallHeaderCapsuleRule {
     /// Vidéo : le nom que j'ai donné à la personne (sinon son nom d'affichage) et la
     /// durée. Audio : le nom et la durée sont déjà sous l'avatar, la capsule n'existe
     /// que pour le réseau dégradé. Groupe : le nom du groupe, le nombre et la durée.
-    /// Le réseau n'apparaît jamais que dégradé.
+    /// Le réseau n'apparaît jamais que dégradé. P15.4 — en duo vidéo, un écran reçu prend
+    /// la place du nom et de la durée : la capsule annonce l'écran de la personne.
     static func resolve(_ input: CallHeaderCapsuleInput) -> CallHeaderCapsule? {
         guard input.isEstablished else { return nil }
         switch input.layout {
@@ -66,7 +71,13 @@ enum CallHeaderCapsuleRule {
             return CallHeaderCapsule(title: nil, participantCount: nil, showsDuration: false, showsNetwork: true)
         case .video:
             let title = CallFrameTextsRule.meaningful(input.givenName) ?? CallFrameTextsRule.meaningful(input.displayName)
-            return CallHeaderCapsule(title: title, participantCount: nil, showsDuration: true, showsNetwork: input.isNetworkDegraded)
+            return CallHeaderCapsule(
+                title: title,
+                participantCount: nil,
+                showsDuration: !input.receivesScreen,
+                showsNetwork: input.isNetworkDegraded,
+                isReceivedScreen: input.receivesScreen
+            )
         case .group:
             return CallHeaderCapsule(
                 title: CallFrameTextsRule.meaningful(input.groupName),

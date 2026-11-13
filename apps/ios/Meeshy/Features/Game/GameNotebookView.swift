@@ -9,6 +9,7 @@ struct GameNotebookPage: View {
     @StateObject private var viewModel = GameNotebookViewModel()
     @State private var taking: GamePhotoSession?
     @State private var sharing: UIImage?
+    @State private var openNoteID: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -53,19 +54,29 @@ struct GameNotebookPage: View {
             .accessibilityIdentifier("game.notebook.place")
     }
 
+    /// Les exemples de signes ne se lisent pas au repos : l'état vide tient en une ligne, le (i) répond à « quand ? ».
+    private var whenNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game.notebook.when", defaultValue: "Quand une photo est-elle proposée ?", bundle: .main),
+            text: String(localized: "game.notebook.when.note", defaultValue: "À chaque signe de tes aïeux : un rang, une première Meesh, une Flamme de 7 jours.", bundle: .main)
+        )
+    }
+
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.sm) {
             MeeStickerFilmView(filmID: "meo-selfie", animated: false, side: 96, animates: false, pixelCap: 240)
                 .frame(width: 96, height: 96)
                 .accessibilityHidden(true)
-            Text(String(
-                localized: "game.notebook.empty",
-                defaultValue: "Ta Chronique attend sa première page. À chaque signe de tes aïeux (un rang, une première Meesh, une Flamme de 7 jours), Mee et Meo t’invitent à immortaliser le moment, et la photo reste sur ton appareil.",
-                bundle: .main
-            ))
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-            .foregroundColor(theme.textMuted)
-            .multilineTextAlignment(.center)
+            MeeshyInfoNoted(note: whenNote, openNoteID: $openNoteID, tint: theme.textMuted) {
+                Text(String(
+                    localized: "game.notebook.empty",
+                    defaultValue: "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
+                    bundle: .main
+                ))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(MeeshySpacing.lg)

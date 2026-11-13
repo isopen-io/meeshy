@@ -198,13 +198,15 @@ extension EnvironmentValues {
 /// maison ; VoiceOver y accède aussi par une action nommée.
 struct CallOutputPillButton: View {
     let isSpeaker: Bool
+    let isVideoCall: Bool
     let caption: String?
     let diameter: CGFloat
     let onToggleSpeaker: () -> Void
     let model: CallAudioRouteViewModel?
 
-    init(isSpeaker: Bool, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
+    init(isSpeaker: Bool, isVideoCall: Bool = false, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
         self.isSpeaker = isSpeaker
+        self.isVideoCall = isVideoCall
         self.caption = caption
         self.diameter = diameter
         self.onToggleSpeaker = onToggleSpeaker
@@ -215,7 +217,7 @@ struct CallOutputPillButton: View {
         CallOutputMenu(isSpeaker: isSpeaker, onToggleSpeaker: onToggleSpeaker, model: model) { route in
             CallPillButtonLabel(
                 symbol: route.outputSymbol(isSpeaker: isSpeaker),
-                kind: isSpeaker || route.routesExternally ? .active : .normal,
+                kind: CallOutputButtonRule.kind(isSpeaker: isSpeaker, routesExternally: route.routesExternally, isVideoCall: isVideoCall),
                 caption: caption,
                 diameter: diameter
             )

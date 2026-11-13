@@ -77,7 +77,7 @@ class LoginTwoFactorStepTest {
         show(AuthUiState(twoFactorToken = "t"), onCancel = { cancelled++ })
 
         compose.onNodeWithText("Two-Factor").assertExists()
-        compose.onNodeWithText("Enter the 6-digit verification code from your authenticator app, or one of your backup codes.").assertExists()
+        compose.onNodeWithText("Enter the 6-digit code from your authenticator app, or a backup code.").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         org.junit.Assert.assertEquals(1, cancelled)
     }

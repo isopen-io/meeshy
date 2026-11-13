@@ -85,6 +85,7 @@ const preferences: AppPreferences = {
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  bringEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,

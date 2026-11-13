@@ -1,6 +1,5 @@
 package me.meeshy.app.calls
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,14 +24,16 @@ class CallRecordingConsentCardSemanticsTest {
 
     private fun showCard(name: String = "Ana", kind: CallRecordingKind = CallRecordingKind.AUDIO, onAnswer: (Boolean) -> Unit = {}) =
         rule.setContent {
-            MeeshyTheme { CallRecordingConsentCard(name, kind, accent = Color(0xFF6366F1), onAnswer = onAnswer) }
+            MeeshyTheme { CallRecordingConsentCard(name, kind, onAnswer = onAnswer) }
         }
 
     @Test
-    fun `the card names the requester and explains the consent`() {
+    fun `the card is the question then the two answers, with no line of its own in between (R2_2)`() {
         showCard()
         rule.onNodeWithText("Ana wants to record the call").assertIsDisplayed()
-        rule.onNodeWithText("Recording only starts if everyone agrees, and it is then added to the conversation.").assertIsDisplayed()
+        rule.onNodeWithText("Recording only starts if everyone agrees, and it is then added to the conversation.").assertDoesNotExist()
+        rule.onNodeWithText("Decline").assertIsDisplayed()
+        rule.onNodeWithText("Accept").assertIsDisplayed()
     }
 
     @Test
@@ -59,13 +60,16 @@ class CallRecordingConsentCardSemanticsTest {
     }
 
     @Test
-    fun `the status pill stops from a labelled button`() {
+    fun `the status pill stops from a button that says the word and keeps its full label (R3_3)`() {
         var stopped = 0
         rule.setContent {
-            MeeshyTheme { CallRecordingStatusPill("Recording in progress", "Stop recording", onStop = { stopped++ }) }
+            MeeshyTheme {
+                CallRecordingStatusPill("Recording in progress", stopWord = "Stop", stopLabel = "Stop recording", onStop = { stopped++ })
+            }
         }
         rule.onNodeWithText("Recording in progress").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Stop recording").performClick()
+        rule.onNodeWithText("Stop").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Stop recording").assertHeightIsAtLeast(48.dp).performClick()
         assertThat(stopped).isEqualTo(1)
     }
 

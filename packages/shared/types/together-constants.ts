@@ -11,6 +11,12 @@ export const TOGETHER_INVITE_TTL_SECONDS = 120;
  * la prolonge, jamais au-delà de ce plafond.
  */
 export const TOGETHER_SESSION_TTL_SECONDS = 4 * 60 * 60;
+/**
+ * La borne des invitations d'une PAIRE (#17023) : un hôte n'invite pas un même invité plus de
+ * cinq fois par dix minutes. Au-delà, le même refus qu'envers un inconnu (`NOT_ALLOWED`).
+ */
+export const TOGETHER_INVITES_PER_PAIR = 5;
+export const TOGETHER_INVITES_WINDOW_SECONDS = 10 * 60;
 /** Une position de lecture au-delà de 24 h n'est pas un média de conversation. */
 export const TOGETHER_MAX_POSITION_MS = 24 * 60 * 60 * 1000;
 

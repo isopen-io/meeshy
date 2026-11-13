@@ -2,11 +2,11 @@ import type { CallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 
 const de = {
   'callRecording.stop': 'Aufnahme beenden',
+  'callRecording.stopShort': 'Beenden',
   'callRecording.active': 'Aufnahme läuft',
   'callRecording.waiting': 'Warten auf die Zustimmung aller…',
   'callRecording.ask': '{name} möchte den Anruf aufnehmen',
   'callRecording.askVideo': '{name} möchte den Anruf als Video aufnehmen',
-  'callRecording.askDetail': 'Die Aufnahme beginnt nur, wenn alle zustimmen, und wird dann zur Unterhaltung hinzugefügt.',
   'callRecording.accept': 'Zustimmen',
   'callRecording.refuse': 'Ablehnen',
   'callRecording.cancel': 'Abbrechen',

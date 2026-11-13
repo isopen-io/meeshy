@@ -17,6 +17,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 import { dataExportRoutes } from '../../../../routes/me/export';
+import { sealPoint } from '../../../../services/bloodLocation/bloodLocationSeal';
 
 const ME = '507f1f77bcf86cd799439011';
 const OTHER = '507f1f77bcf86cd7994390ff';
@@ -27,6 +28,10 @@ const ROSE = new Date('2026-09-01T00:00:00.000Z');
 const OTHER_DROP = new Date('2026-10-01T00:00:00.000Z');
 const DAY = new Date('2026-10-20T00:00:00.000Z');
 const WITHDRAWN = new Date('2026-10-15T00:00:00.000Z');
+const GHOSTED = new Date('2026-10-18T00:00:00.000Z');
+const SEEN = new Date('2026-10-21T00:00:00.000Z');
+const RECORDED = new Date('2026-10-22T00:00:00.000Z');
+const LATER = new Date('2026-10-23T00:00:00.000Z');
 
 const zeroCounts = (side: 'Low' | 'High') =>
   Object.fromEntries(['Message', 'Reaction', 'PostView', 'Comment', 'Share', 'StoryReply', 'Mention', 'Call', 'Audio'].map((kind) => [`by${side}${kind}`, 0]));
@@ -69,8 +74,20 @@ function relationTables() {
       interactionDay({ userLowId: THIRD, userHighId: STRANGER, low: { byLowMessage: 555 } }),
     ]),
     relationFeatureSetting: table([
-      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE, locationWithdrawnAt: WITHDRAWN },
-      { ownerId: OTHER, otherId: ME, listeningTitleShared: false, locationShared: true, locationHistoryShared: true, proximityShared: false, consentedAt: OTHER_DROP },
+      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE, locationWithdrawnAt: WITHDRAWN, ghostAt: GHOSTED, proximityRadiusMeters: 250 },
+      { ownerId: OTHER, otherId: ME, listeningTitleShared: false, locationShared: true, locationHistoryShared: true, proximityShared: false, consentedAt: OTHER_DROP, ghostAt: OTHER_DROP, proximityRadiusMeters: 4321 },
+    ]),
+    user: {
+      findUnique: jest.fn<any>(async ({ where }: { where: { id: string } }) => (where.id === ME ? { locationGhostAt: GHOSTED } : { locationGhostAt: OTHER_DROP })),
+    },
+    bloodLocationPoint: table([
+      { ownerId: ME, sealed: sealPoint(ME, { latitude: 48.8566, longitude: 2.3522, accuracy: 6, hiddenFrom: [OTHER] }), recordedAt: RECORDED, expiresAt: LATER },
+      { ownerId: OTHER, sealed: sealPoint(OTHER, { latitude: 12.3456, longitude: 65.4321, hiddenFrom: [] }), recordedAt: RECORDED, expiresAt: LATER },
+    ]),
+    bloodLocationConsultation: table([
+      { observedId: THIRD, observerId: ME, consultedAt: RECORDED, expiresAt: LATER },
+      { observedId: ME, observerId: OTHER, consultedAt: SEEN, expiresAt: LATER },
+      { observedId: THIRD, observerId: STRANGER, consultedAt: RECORDED, expiresAt: LATER },
     ]),
   };
 }
@@ -124,11 +141,28 @@ describe('GET /export?types=relations', () => {
     expect(relations.consents).toEqual([
       {
         userId: OTHER, listeningCategoryShared: false, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true,
-        consentedAt: ROSE.toISOString(),
+        consentedAt: ROSE.toISOString(), ghostAt: GHOSTED.toISOString(), proximityRadiusMeters: 250,
         withdrawnAt: { listeningCategoryShared: null, listeningTitleShared: null, locationShared: WITHDRAWN.toISOString(), locationHistoryShared: null, proximityShared: null },
       },
     ]);
-    expect(relations.hasMore).toEqual({ links: false, interactionDays: false, consents: false });
+    expect(relations.hasMore).toEqual({ links: false, interactionDays: false, consents: false, bloodLocationPoints: false, bloodLocationConsultations: false });
+  });
+
+  it('sert ma position du Sang : mes points déchiffrés, mon fantôme, les lectures que j\'ai faites et celles dont j\'ai été l\'objet — jamais les points d\'un autre', async () => {
+    const app = await build();
+
+    const relations = (await app.inject({ method: 'GET', url: '/export?types=relations' })).json().data.relations;
+
+    expect(relations.bloodLocationGhostAt).toBe(GHOSTED.toISOString());
+    expect(relations.bloodLocationPoints).toEqual([
+      { latitude: 48.8566, longitude: 2.3522, accuracy: 6, recordedAt: RECORDED.toISOString(), expiresAt: LATER.toISOString(), hiddenFrom: [OTHER], excludedFromProximity: false },
+    ]);
+    expect(relations.bloodLocationConsultations).toEqual([
+      { observerId: ME, observedId: THIRD, consultedAt: RECORDED.toISOString() },
+      { observerId: OTHER, observedId: ME, consultedAt: SEEN.toISOString() },
+    ]);
+    const served = JSON.stringify(relations);
+    ['12.3456', '65.4321', '4321', STRANGER].forEach((leak) => expect(served).not.toContain(leak));
   });
 
   it('art. 15(4) — rien de ce que l’autre m’accorde, de ses baisses, de ses compteurs ni des liens d’autrui ne sort, même en CSV', async () => {
@@ -143,6 +177,8 @@ describe('GET /export?types=relations', () => {
       'userId,day,message,reaction,postView,comment,share,storyReply,mention,call,audio',
     );
     expect(data.csv['relations.consents']).toContain(OTHER);
+    expect(data.csv['relations.bloodLocationPoints'].split('\n')[0]).toBe('latitude,longitude,accuracy,recordedAt,expiresAt,hiddenFrom,excludedFromProximity');
+    expect(data.csv['relations.bloodLocationConsultations']).toContain(THIRD);
   });
 
   it('borne chaque liste par la page et dit ce qui reste', async () => {
@@ -151,6 +187,6 @@ describe('GET /export?types=relations', () => {
     const relations = (await app.inject({ method: 'GET', url: '/export?types=relations&limit=1' })).json().data.relations;
 
     expect(relations.links.map((link: { userId: string }) => link.userId)).toEqual([OTHER]);
-    expect(relations.hasMore).toEqual({ links: true, interactionDays: true, consents: false });
+    expect(relations.hasMore).toEqual({ links: true, interactionDays: true, consents: false, bloodLocationPoints: false, bloodLocationConsultations: true });
   });
 });

@@ -150,7 +150,7 @@ const deShellLabels = {
   'list.quick.mood.hint': 'Ein Emoji zeigt, wie es dir geht, ohne eine Nachricht zu schreiben.',
   'list.header.share': 'Freigabelink erstellen',
   'list.header.new': 'Neue Unterhaltung',
-  'list.header.progression': 'Fortschritt — Abzeichen, Stufe und Serie',
+  'list.header.progression': 'Meine Legende — Abzeichen, Stufe und Flamme',
   'list.footer.exhausted': 'Alle Unterhaltungen sind geladen',
   'list.footer.loadingMore': 'Weitere werden geladen',
   'list.footer.failed': 'Weitere konnten nicht geladen werden',

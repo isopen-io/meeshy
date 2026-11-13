@@ -80,7 +80,7 @@ class EpureEntreeStringsTest {
 
     @Test
     fun `the shortened French labels keep within 80 characters but the security sentences`() {
-        val securitySentences = setOf("link_switch_message", "link_switch_message_unknown_current", "link_signin_message", "link_signin_message_replacing")
+        val securitySentences = setOf("link_switch_message", "link_switch_message_unknown_current", "link_signin_message", "link_signin_message_replacing", "login_two_factor_description_with_backup")
         val long = epure("values-fr").filter { (key, text) -> key !in securitySentences && text.length > 80 }
         assertThat(long.keys).isEmpty()
     }

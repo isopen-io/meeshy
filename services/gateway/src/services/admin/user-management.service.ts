@@ -8,6 +8,7 @@ import {
   UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
+import { withdrawRitualSharesOfUser } from '../relations/ritualShareWithdrawal';
 import { hashPassword } from '../../utils/password-hash';
 import { normalizeEmail } from '../../utils/normalize';
 import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-identifier-taken';
@@ -88,6 +89,17 @@ export type UserManagementServiceDeps = {
    * caches (5 min).
    */
   readonly forgetTeamCircles?: (userId: string) => Promise<void>;
+  /**
+   * Éteint les partages accordés hors rituel entre collègues de l'équipe quand le compte
+   * cesse d'en être (#16814) : rôle retiré, compte désactivé ou supprimé.
+   */
+  readonly revokeTeamShares?: (userId: string) => Promise<void>;
+  /**
+   * Éteint le partage de position d'un compte désactivé ou supprimé et prévient ceux qui le
+   * voyaient (#16987) : sans lui, l'état scellé court jusqu'à son terme et les lecteurs
+   * gardent un point qui ne bougera plus.
+   */
+  readonly endSharedLocation?: (userId: string) => Promise<void>;
 };
 
 /**
@@ -453,6 +465,7 @@ export class UserManagementService {
     });
 
     await this.forgetTeamCirclesBestEffort(userId);
+    await this.revokeTeamSharesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
@@ -464,6 +477,7 @@ export class UserManagementService {
     userId: string,
     data: UpdateStatusDTO
   ): Promise<FullUser> {
+    if (data.isActive) await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -473,11 +487,27 @@ export class UserManagementService {
       },
     });
 
-    if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
-    if (!data.isActive) await cutTogetherWhere({ userId });
+    if (!data.isActive) {
+      await this.revokeSessionsBestEffort(userId, 'deactivation');
+      await this.withdrawRitualSharesBestEffort(userId, 'deactivation');
+      await cutTogetherWhere({ userId });
+      await this.endSharedLocationBestEffort(userId);
+    }
     await this.forgetTeamCirclesBestEffort(userId);
+    if (!data.isActive) await this.revokeTeamSharesBestEffort(userId);
 
     return user as unknown as FullUser;
+  }
+
+  /** Best-effort, après l'écriture : un partage qui ne s'éteint pas ne défait pas la désactivation. */
+  private async endSharedLocationBestEffort(userId: string): Promise<void> {
+    const end = this.deps.endSharedLocation;
+    if (!end) return;
+    try {
+      await end(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Shared location was not ended after the departure of user ${userId}`, error);
+    }
   }
 
   /** Best-effort, après l'écriture : un cache qui ne s'oublie pas ne rend pas l'opération. */
@@ -488,6 +518,17 @@ export class UserManagementService {
       await forget(userId);
     } catch (error) {
       logWarn(logger, `[UserManagement] Team circles were not forgotten after a change of user ${userId}`, error);
+    }
+  }
+
+  /** Best-effort, après l'écriture : la loi refuse déjà un compte sorti de l'équipe ; l'extinction empêche qu'un lien futur rallume l'accord. */
+  private async revokeTeamSharesBestEffort(userId: string): Promise<void> {
+    const revoke = this.deps.revokeTeamShares;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Team shares were not revoked after a change of user ${userId}`, error);
     }
   }
 
@@ -510,6 +551,30 @@ export class UserManagementService {
     } catch (error) {
       logWarn(logger, `[UserManagement] Session revocation failed after ${reason} of user ${userId}`, error);
     }
+  }
+
+  /** #14924 — un compte parti ne garde aucun partage du rituel ; un retrait qui échoue ne défait pas le geste. */
+  private async withdrawRitualSharesBestEffort(userId: string, reason: string): Promise<void> {
+    try {
+      await withdrawRitualSharesOfUser(this.prisma, { userId });
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Ritual shares not withdrawn after ${reason} of user ${userId}`, error);
+    }
+  }
+
+  /**
+   * #14924 — le retrait au départ est best-effort : un compte qui REVIENT (réactivation,
+   * restauration) le rejoue d'abord, et une panne refuse le retour plutôt que de rendre
+   * un compte aux partages encore allumés. Un compte déjà actif n'est pas touché.
+   */
+  private async withdrawLeftoverRitualSharesBeforeReturn(userId: string): Promise<void> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, deactivatedAt: true, deletedAt: true },
+    });
+    const away = current?.isActive === false || Boolean(current?.deactivatedAt) || Boolean(current?.deletedAt);
+    if (!away) return;
+    await withdrawRitualSharesOfUser(this.prisma, { userId });
   }
 
   /**
@@ -595,8 +660,11 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await this.withdrawRitualSharesBestEffort(userId, 'deletion');
     await cutTogetherWhere({ userId });
+    await this.endSharedLocationBestEffort(userId);
     await this.forgetTeamCirclesBestEffort(userId);
+    await this.revokeTeamSharesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
@@ -606,6 +674,7 @@ export class UserManagementService {
    * trois champs qu'elle pose sont effacés, pas seulement `isActive`.
    */
   async restoreUser(userId: string): Promise<FullUser> {
+    await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {

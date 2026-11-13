@@ -8,6 +8,5 @@
     <string name="call_control_video_paused">Vídeo en pausa (conexión débil)</string>
     <string name="call_control_video_paused_caption">En pausa</string>
     <string name="call_control_video_paused_hint">Toca para apagar la cámara. El vídeo se reanuda solo si la conexión mejora.</string>
-    <string name="call_control_video_caption">Vídeo</string>
     <string name="call_panel_close">Cerrar</string>
 </resources>

@@ -7,6 +7,8 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -20,7 +22,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,21 +30,26 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallControlsDisposition
+import me.meeshy.sdk.model.call.CallGroupStageSizing
+import me.meeshy.sdk.model.call.CallPillMotion
 import me.meeshy.sdk.model.call.CallPillRowContent
 import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallPillWidth
@@ -51,8 +57,21 @@ import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
 
-private const val UNFOLD_MILLIS = 250
-private val ROWS_MAX_HEIGHT = 340.dp
+internal val ROWS_MAX_HEIGHT = CallGroupStageSizing.MAXIMUM_ROWS_HEIGHT_DP.dp
+
+/** The captioned base row (glyph, legend, padding): what the stage holds under the rows. */
+private val BASE_ROW_HEIGHT = 96.dp
+
+/**
+ * How tall the unfolded rows may be on this stage. On a group they yield so the grid keeps its 140 dp (P12.7): the
+ * stage holds besides the rows its margins (four steps of [MeeshySpacing.xl]), the grid's own two [MeeshySpacing.md]
+ * and the base row. Without a grid there is nothing to protect.
+ */
+internal fun callPillRowsMaxHeight(stageHeight: Dp, hasGrid: Boolean): Dp =
+    if (!hasGrid) ROWS_MAX_HEIGHT
+    else CallGroupStageSizing.rowsCeilingDp(stageHeight.value, STAGE_RESERVED_HEIGHT.value).dp
+
+private val STAGE_RESERVED_HEIGHT = MeeshySpacing.xl * 4 + MeeshySpacing.md * 2 + BASE_ROW_HEIGHT
 
 /**
  * The pill at the bottom of the call, the same in audio, video and group: (…) · Mic · Output · End.
@@ -82,31 +101,36 @@ internal fun CallControlsPill(
     onClosePanel: () -> Unit,
     modifier: Modifier = Modifier,
     pillText: CallPillText = CallPillText.None,
+    rowsMaxHeight: Dp = ROWS_MAX_HEIGHT,
     captions: @Composable () -> Unit = {},
     panelContent: @Composable (CallScreenPanel) -> Unit = {},
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val expanded = disposition.unfoldsPill(layer) && pillText.hasBaseRow
-    val unfoldScale = if (reduceMotion) EnterTransition.None else
+    // Loi 17 : le verre ne change jamais de taille d'un coup ; Réduire les animations garde un fondu de 0,2 s.
+    val millis = CallPillMotion.millis(reduceMotion)
+    val unfoldScale = if (!CallPillMotion.scalesOnUnfold(reduceMotion)) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
-    val foldScale = if (reduceMotion) ExitTransition.None else
+    val foldScale = if (!CallPillMotion.scalesOnUnfold(reduceMotion)) ExitTransition.None else
         scaleOut(targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
-    val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
-    val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
+    val grow = expandVertically(tween(millis), expandFrom = Alignment.Bottom)
+    val shrink = shrinkVertically(tween(millis), shrinkTowards = Alignment.Bottom)
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
-    CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
+    val maxWidth = rememberCallPillMaxWidth(pillText, isUnfolded = expanded, reduceMotion = reduceMotion)
+    CallControlsGlass(modifier = modifier.animatedMaxWidth(maxWidth)) {
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
-            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
+            enter = fadeIn(tween(millis)) + unfoldScale + grow,
+            exit = fadeOut(tween(millis)) + shrink + foldScale,
         ) {
             // What is leaving (a panel, the rows) keeps its content until it has faded: it does not vanish at once.
             val shownLayer = if (expanded) layer else held.layer
             Column {
                 UnfoldedContent(
                     panel = shownLayer.pillPanel,
-                    reduceMotion = reduceMotion,
+                    millis = millis,
+                    rowsMaxHeight = rowsMaxHeight,
                     rows = rows,
                     items = items,
                     isOnHold = state.isOnHold,
@@ -120,19 +144,19 @@ internal fun CallControlsPill(
         }
         AnimatedVisibility(
             visible = pillText.showsCaptionsBand,
-            enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
-            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+            enter = fadeIn(tween(millis)) + grow,
+            exit = fadeOut(tween(millis)) + shrink,
         ) { captions() }
         // The line between the captions and the base row fades out with whichever of the two leaves, never at once.
         AnimatedVisibility(
             visible = pillText == CallPillText.Captions,
-            enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
-            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+            enter = fadeIn(tween(millis)) + grow,
+            exit = fadeOut(tween(millis)) + shrink,
         ) { CallPillHairline() }
         AnimatedVisibility(
             visible = pillText.hasBaseRow,
-            enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
-            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
+            enter = fadeIn(tween(millis)) + unfoldScale + grow,
+            exit = fadeOut(tween(millis)) + shrink + foldScale,
         ) {
             BaseRow(state, captioned = expanded && layer.captionsBaseRow, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
         }
@@ -140,14 +164,34 @@ internal fun CallControlsPill(
 }
 
 /**
+ * L3.3 — 440 → 560 dp sur la même courbe que la hauteur ; un State lu à la mise en page, la composition ne repasse pas par
+ * image. #17935 — la pilule agrandie (rangées du groupe, option tenue) prend la même borne que celle qui porte du texte.
+ */
+@Composable
+private fun rememberCallPillMaxWidth(pillText: CallPillText, isUnfolded: Boolean, reduceMotion: Boolean): State<Dp> {
+    val widthMillis = CallPillMotion.widthMillis(reduceMotion)
+    val widthSpec: AnimationSpec<Dp> = if (widthMillis == 0) snap() else tween(widthMillis)
+    return animateDpAsState(CallPillWidth.maxWidthDp(pillText, isUnfolded = isUnfolded).dp, widthSpec, label = "callPillWidth")
+}
+
+/** Le plafond de largeur de la pilule, animé : la pilule remplit la largeur offerte jusqu'à [maxWidth], lue à la mise en page. */
+private fun Modifier.animatedMaxWidth(maxWidth: State<Dp>): Modifier = layout { measurable, constraints ->
+    val width = maxWidth.value.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+}
+
+/**
  * G3.2 — what the unfolded pill holds above its base row: an option drawn in the pill, the journal, or (on a group) the
  * family rows. They swap in the SAME glass by a cross-fade while the glass resizes, never at once; « reduce animations »
- * keeps the fade only and the size follows at once. Mirrors iOS `callControlsPill` (`.animation(_, value: layer)`).
+ * keeps a 0.2 s fade and the glass follows over the same 0.2 s, never with a jump (P13.12). Mirrors iOS
+ * `callControlsPill` (`.animation(_, value: layer)`).
  */
 @Composable
 private fun UnfoldedContent(
     panel: CallScreenPanel?,
-    reduceMotion: Boolean,
+    millis: Int,
+    rowsMaxHeight: Dp,
     rows: List<CallPillRowContent>,
     items: Map<CallAction, CallPillItem>,
     isOnHold: Boolean,
@@ -159,13 +203,13 @@ private fun UnfoldedContent(
     AnimatedContent(
         targetState = panel,
         transitionSpec = {
-            val swap = fadeIn(tween(UNFOLD_MILLIS)) togetherWith fadeOut(tween(UNFOLD_MILLIS))
-            swap using SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap() else tween(UNFOLD_MILLIS) }
+            val swap = fadeIn(tween(millis)) togetherWith fadeOut(tween(millis))
+            swap using SizeTransform(clip = false) { _, _ -> tween(millis) }
         },
         label = "callPillContent",
     ) { shown ->
         when (shown) {
-            null -> FamilyRows(rows = rows, items = items, isOnHold = isOnHold, onAction = onAction)
+            null -> FamilyRows(rows, items, isOnHold = isOnHold, maxHeight = rowsMaxHeight, onAction = onAction)
             CallScreenPanel.Journal -> panelContent(CallScreenPanel.Journal)
             else -> CallPillPanel(
                 title = items[shown.action]?.let { stringResource(it.labelRes) }.orEmpty(),
@@ -176,18 +220,22 @@ private fun UnfoldedContent(
     }
 }
 
-/** On a group, one titled row per family, stacked above the base row; it scrolls past [ROWS_MAX_HEIGHT]. */
+/**
+ * On a group, one titled row per family, stacked above the base row; it scrolls past [maxHeight], which the stage
+ * lowers to keep the grid its 140 dp (P12.7). Each button keeps its 48 dp: the rows scroll, they never squeeze.
+ */
 @Composable
 private fun FamilyRows(
     rows: List<CallPillRowContent>,
     items: Map<CallAction, CallPillItem>,
     isOnHold: Boolean,
+    maxHeight: Dp,
     onAction: (CallAction) -> Unit,
 ) {
     val label = stringResource(R.string.call_actions_label)
     Column(
         Modifier
-            .heightIn(max = ROWS_MAX_HEIGHT)
+            .heightIn(max = maxHeight)
             .verticalScroll(rememberScrollState())
             .semantics { contentDescription = label },
     ) {

@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, jest, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, jest, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { callActions } from '@/lib/calls/call-actions';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
@@ -226,9 +228,9 @@ describe('CallScreen — partage d’écran (#8063)', () => {
     expect(expandedScreen({ phase: { kind: 'outgoing' } }, true)).not.toContain('data-call-screen-share');
   });
 
-  test('celui qui partage lit « Vous partagez votre écran » et peut arrêter', () => {
+  test('celui qui partage peut arrêter depuis les actions ; « Vous partagez » n’est plus une pastille mais un bandeau (P16.4)', () => {
     const html = expandedScreen({ screenSharing: true, members: { 'u-peer': member() } }, true);
-    expect(html).toContain('data-call-pill="screen-sharing"');
+    expect(html).not.toContain('data-call-pill="screen-sharing"');
     expect(html).toContain('aria-label="Arrêter le partage d’écran"');
     expect(html).toContain('aria-pressed="true"');
   });
@@ -482,6 +484,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     cameraOff.done();
   });
 
+  /* Ce qui repart (l'en-tête, la pilule, le Montage) reste monté le temps de son mouvement, joué par le moteur. */
+  const afterMotion = () => act(async () => new Promise((resolve) => setTimeout(resolve, 320)));
+
   const settle = async (chunk: () => Promise<unknown>) => {
     await act(async () => {
       await chunk();
@@ -497,6 +502,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     await frame();
     view.press('[data-call-rail="mine"] [data-call-control="effects"]');
     await settle(() => import('./call-effects-mode'));
+    await afterMotion();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
     expect(view.find('[data-call-header]')).toBeNull();
@@ -505,7 +511,10 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail]')).toBeNull();
     expect(view.find('[data-call-rails]')).toBeNull();
     expect(view.host.querySelectorAll('[data-call-mode-carousel]')).toHaveLength(1);
+    /* R3.6, #17551 : l'en-tête est masqué, la capsule d'enregistrement part avec lui ; la carte d'accord, jamais. */
+    expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
+    expect(callChromeStore.getState().stowed).toBe(false);
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
@@ -556,6 +565,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.press('[data-call-more]');
     view.press('[data-call-control="capture"]');
     await settle(() => import('./call-montage-mode'));
+    await afterMotion();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode-preview="montage"] [data-call-capture-preview]')?.tagName).toBe('CANVAS');
     expect(view.host.querySelectorAll('[data-call-capture-thumb]')).toHaveLength(13);
@@ -563,9 +573,141 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-carousel-item="grid"]')?.getAttribute('aria-describedby')).not.toBeNull();
     expect(view.find('[data-call-control-pill]')).toBeNull();
     act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await afterMotion();
     expect(view.find('[data-call-mode="montage"]')).toBeNull();
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
     view.done();
+  });
+
+  describe('le Montage monte du bas et y redescend (C1.12)', () => {
+    type Played = { readonly what: string; readonly keyframes: Keyframe[]; readonly duration: unknown };
+    const proto = (): { animate?: unknown } => HTMLElement.prototype as unknown as { animate?: unknown };
+    const played: Played[] = [];
+    const finishers: Array<() => void> = [];
+    let before: PropertyDescriptor | undefined;
+    let media: PropertyDescriptor | undefined;
+    const labelOf = (element: HTMLElement): string =>
+      element.closest('[data-call-mode="effects"]') !== null
+        ? 'effects'
+        : element.hasAttribute('data-call-montage-controls')
+          ? 'controls'
+          : element.hasAttribute('data-call-mode-preview')
+            ? 'preview'
+            : element.hasAttribute('data-call-header-slot')
+              ? 'header'
+              : element.hasAttribute('data-call-controls')
+                ? 'pill'
+                : 'other';
+
+    beforeAll(async () => {
+      await import('./call-montage-mode');
+    });
+    beforeEach(() => {
+      before = Object.getOwnPropertyDescriptor(proto(), 'animate');
+      media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+      played.length = 0;
+      finishers.length = 0;
+      Object.defineProperty(proto(), 'animate', {
+        configurable: true,
+        writable: true,
+        value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
+          played.push({ what: labelOf(this), keyframes, duration: options.duration });
+          const finished = new Promise<void>((resolve) => finishers.push(resolve));
+          return { cancel: () => undefined, finished, onfinish: null };
+        },
+      });
+    });
+    afterEach(() => {
+      if (before === undefined) Reflect.deleteProperty(proto(), 'animate');
+      else Object.defineProperty(proto(), 'animate', before);
+      if (media === undefined) Reflect.deleteProperty(window, 'matchMedia');
+      else Object.defineProperty(window, 'matchMedia', media);
+    });
+
+    const finish = () => act(async () => void finishers.splice(0).forEach((resolve) => resolve()));
+    const of = (what: string) => played.filter((entry) => entry.what === what);
+    const enter = async () => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+      view.press('[data-call-more]');
+      view.press('[data-call-control="capture"]');
+      await settle(() => import('./call-montage-mode'));
+      return view;
+    };
+
+    test('à l’entrée, la barre et le carrousel montent du bas, le fond se fond, l’en-tête et la pilule partent par leurs bords', async () => {
+      const view = await enter();
+      expect(of('controls').map((entry) => [entry.keyframes[0], entry.keyframes[1], entry.duration])).toEqual([[{ opacity: 0, transform: 'translateY(100%)' }, { opacity: 1, transform: 'translateY(0)' }, 200]]);
+      expect(of('preview').map((entry) => entry.keyframes.map((frame) => frame.opacity))).toEqual([[0, 1]]);
+      expect(of('header').map((entry) => entry.keyframes[1]?.transform)).toEqual(['translateY(-100%)']);
+      expect(of('pill').map((entry) => entry.keyframes[1]?.transform)).toEqual(['translateY(100%)']);
+      view.done();
+    });
+
+    test('à la sortie, le Montage redescend par le bas, reste monté le temps du mouvement sans prendre le doigt, et la pilule revient', async () => {
+      const view = await enter();
+      await finish();
+      played.length = 0;
+      act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      const leaving = view.find('[data-call-mode="montage"]');
+      expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+      expect(leaving?.hasAttribute('inert')).toBe(true);
+      expect(of('controls').map((entry) => entry.keyframes.map((frame) => frame.transform))).toEqual([['translateY(0)', 'translateY(100%)']]);
+      expect(of('preview').map((entry) => entry.keyframes.map((frame) => frame.opacity))).toEqual([[1, 0]]);
+      expect(view.find('[data-call-control-pill]')).not.toBeNull();
+      expect(view.find('[data-call-header-slot]')).not.toBeNull();
+      await finish();
+      expect(view.find('[data-call-mode="montage"]')).toBeNull();
+      view.done();
+    });
+
+    test('sous « Réduire les animations » : un fondu court, sans montée, à l’entrée comme à la sortie', async () => {
+      Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+      const view = await enter();
+      await finish();
+      act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      const mine = played.filter((entry) => ['controls', 'preview'].includes(entry.what));
+      expect(mine.map((entry) => entry.duration)).toEqual([150, 150, 150, 150]);
+      expect(mine.every((entry) => entry.keyframes.every((frame) => frame.transform === undefined || frame.transform === 'none'))).toBe(true);
+      view.done();
+    });
+
+    test('la feuille sort le Montage, l’en-tête et la pilule qui repartent de la mise en page, posés à leur place d’avant', () => {
+      const sheet = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
+      for (const selector of ['\\[data-call-mode\\]\\[data-leaving\\]', '\\[data-call-header-slot\\]\\[data-leaving\\]', '\\[data-call-controls\\]\\[data-leaving\\]']) expect(sheet).toMatch(new RegExp(`${selector}\\s*\\{[^}]*position:\\s*absolute`));
+    });
+
+    test('revenir au Montage pendant son départ le reprend sans le remonter', async () => {
+      const view = await enter();
+      await finish();
+      const root = view.find('[data-call-mode="montage"]');
+      act(() => root?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      expect(view.find('[data-call-mode="montage"]')?.hasAttribute('data-leaving')).toBe(true);
+      view.press('[data-call-more]');
+      view.press('[data-call-control="capture"]');
+      await act(async () => {});
+      expect(view.find('[data-call-mode="montage"]')).toBe(root);
+      expect(root?.hasAttribute('data-leaving')).toBe(false);
+      view.done();
+    });
+
+    /* La loi 17 excepte Effets, qui emprunte au composer (loi 9) : iOS borne la montée au Montage (`CallModeChromeMotion.risesFromBottom`, #17813). */
+    test('Effets ne monte pas du bas, et ne reste pas monté pour y redescendre : seuls l’en-tête et la pilule partent par leurs bords', async () => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+      view.press('[data-call-more]');
+      await frame();
+      view.press('[data-call-rail="mine"] [data-call-control="effects"]');
+      await settle(() => import('./call-effects-mode'));
+      expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
+      const rises = (entry: Played) => entry.keyframes.some((frame) => frame.transform === 'translateY(100%)');
+      expect(played.filter((entry) => entry.what === 'effects' && rises(entry))).toEqual([]);
+      expect(of('pill').map((entry) => entry.keyframes[1]?.transform)).toEqual(['translateY(100%)']);
+      await finish();
+      played.length = 0;
+      view.press('[data-call-mode-quit]');
+      expect(view.find('[data-call-mode="effects"]')).toBeNull();
+      expect(played.filter((entry) => entry.what === 'effects')).toEqual([]);
+      view.done();
+    });
   });
 
   /* Les plans de l'écran d'appel, du fond vers le lecteur : la scène, ma
@@ -615,7 +757,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.press('[data-panel-back]');
     expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
     view.done();
@@ -710,6 +852,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     });
     expect(chrome()).toBe('shown');
     expect(view.find('[data-call-corner]')?.hasAttribute('data-call-self-tile')).toBe(true);
+    view.done();
+  });
+
+  test('duo vidéo : ma vignette descend sous la capsule d’enregistrement, puis sous la carte d’accord à sa hauteur mesurée, et remonte quand tout est dit (R3.10)', () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
+    const top = () => Number(/\+ (\d+(?:\.\d+)?)px\)$/.exec((view.find('[data-call-corner-frame]') as HTMLElement).style.top)?.[1]);
+    const rest = top();
+    act(() => callRecordingStore.setState({ view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null }));
+    expect(top() - rest).toBe(60);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'pending', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-2', requesterId: 'u-peer', mine: false, mustAnswer: true }, notice: null });
+      callChromeStore.setState({ recordingCard: 132 });
+    });
+    expect(top() - rest).toBe(140);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
+      callChromeStore.setState({ recordingCard: 0 });
+    });
+    expect(top()).toBe(rest);
     view.done();
   });
 
@@ -967,8 +1128,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.done();
     }));
 
-  test('en audio, toucher ne cache rien', () => {
-    const view = mount({ members: { 'u-peer': member() } });
+  test('pendant la sonnerie d’un appel audio, toucher ne cache rien (un duo audio JOINT range, #17945)', () => {
+    const view = mount({ phase: { kind: 'outgoing' }, members: { 'u-peer': member() } });
     act(() => (view.find('[data-call-status]') as HTMLElement | null)?.click());
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
     view.done();
@@ -1177,11 +1338,44 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     view.done();
   });
 
-  test('le bouton de son se lit d’emblée, en toutes lettres, au-dessus de l’identité (#8627)', () => {
+  test('le bouton de son se lit d’emblée, en toutes lettres, en verre (#8627, P17.13)', () => {
     const view = mount(ringing('video', previewStream(['video', 'audio'])));
     const button = view.find('[data-call-preview-sound]');
     expect(button?.textContent).toContain('Activer le son');
     expect(button?.className).toContain('glass-call-prominent');
+    view.done();
+  });
+
+  test('l’en-tête d’un appel vidéo qui sonne : la puce de verre « Appel vidéo entrant », le nom, puis « Activer le son » (P17.2, P17.13)', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const chip = view.find('[data-call-status]');
+    expect(chip?.className.split(' ')).toContain('glass-call');
+    expect(chip?.querySelector('svg')).not.toBeNull();
+    expect(chip?.textContent).toBe('Appel vidéo entrant');
+    expect(chip?.className.split(' ')).toContain('text-mini');
+    const name = view.find('h2');
+    const sound = view.find('[data-call-preview-sound]');
+    const before = (a: Element | null, b: Element | null) => ((a?.compareDocumentPosition(b as Node) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(before(chip, name)).toBe(true);
+    expect(before(name, sound)).toBe(true);
+    view.done();
+  });
+
+  test('connecté, partager pose le bandeau sous l’en-tête, dans la pile et AVANT la capture (P16.4, P16.7)', async () => {
+    const view = mount({ phase: { kind: 'connected' }, connectedAt: Date.now(), screenSharing: true, members: { 'u-peer': member({ capturing: true }) } });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const stack = view.find('[data-call-banner-stack]');
+    expect(stack?.children[0]?.hasAttribute('data-call-screen-share-banner')).toBe(true);
+    expect(stack?.children[1]?.hasAttribute('data-call-capture-slot')).toBe(true);
+    expect(stack?.textContent).toContain('Vous partagez votre écran');
+    expect(view.find('[data-call-pill="screen-sharing"]')).toBeNull();
+    view.done();
+  });
+
+  test('un appel VOCAL qui sonne garde son bouton de son en haut et son statut sous le nom', () => {
+    const view = mount(ringing('audio', previewStream(['audio'])));
+    expect(view.find('[data-call-status]')?.className).not.toContain('glass-call');
+    expect(view.find('[data-call-preview-sound]')?.className).toContain('absolute');
     view.done();
   });
 

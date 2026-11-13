@@ -72,8 +72,7 @@ internal fun CallDetailSheet(
     networkViewModel: CallDetailNetworkJournalViewModel = hiltViewModel(),
 ) {
     val name = record.displayName(fallback = stringResource(R.string.call_unknown_peer))
-    val accentHex = DynamicColorGenerator.colorForName(name)
-    val accent = hexColor(accentHex, MeeshyPalette.Indigo500)
+    val accent = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500)
     val participantLabel = stringResource(R.string.call_transcript_participant)
     val participants = CallDetailParticipants.of(record, fallbackName = participantLabel)
     val transcriptRequest = CallTranscriptRequest(
@@ -116,7 +115,7 @@ internal fun CallDetailSheet(
             networkJournal?.let { CallDetailNetworkJournalSection(it, accent) }
             CallDetailTranscriptSection(
                 state = transcriptState,
-                accentHex = accentHex,
+                accent = accent,
                 onRetry = transcriptViewModel::retry,
                 onDelete = transcriptViewModel::delete,
             )

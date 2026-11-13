@@ -20,6 +20,10 @@ struct RootFloatingChrome: View {
     /// L'aperçu d'appui long ouvert : les bulles lui cèdent la place (#17260).
     let peekPresence: LongPressPeekPresence
     let onPush: (Route) -> Void
+    /// « Jeu masqué » : le barreau du jeu quitte l'échelle (#17769), comme le bandeau quitte l'écran.
+    @ObservedObject var gamePrefs: GameDevicePrefsStore = .current()
+
+    private var ladder: [RootMenuLadderEntry] { RootMenuLadderEntry.ladder(gameHidden: gamePrefs.prefs.hidden) }
 
     var body: some View {
         ZStack {
@@ -185,7 +189,7 @@ struct RootFloatingChrome: View {
             let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
-            let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
+            let ladderExtent = CGFloat(ladder.count) * (menuItemSize + menuSpacing)
             let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
             let menuX = menuCenter.x
             let menuStartY = expandDown
@@ -193,7 +197,7 @@ struct RootFloatingChrome: View {
                 : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
 
             // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
-            ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
+            ForEach(Array(ladder.enumerated()), id: \.offset) { index, entry in
                 let yOffset = expandDown
                     ? CGFloat(index) * (menuItemSize + menuSpacing)
                     : -CGFloat(index) * (menuItemSize + menuSpacing)

@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.engagement
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import org.junit.Test
 
 class HeaderFlameLawTest {
@@ -43,5 +44,32 @@ class HeaderFlameLawTest {
         assertThat(HeaderFlameLaw.glowHeadDegrees(0f)).isEqualTo(90f)
         assertThat(HeaderFlameLaw.glowHeadDegrees(0.45f)).isWithin(1e-3f).of(450f)
         assertThat(HeaderFlameLaw.glowHeadDegrees(2f)).isWithin(1e-3f).of(450f)
+    }
+
+    @Test
+    fun `touching the flame opens a card with the streak, today and the total (#17770)`() {
+        val running = ConversationEngagementSnapshot("c", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-12")
+        assertThat(HeaderFlameLaw.card(running)).isEqualTo(HeaderFlameCard(streakDays = 12, todayPoints = 40, totalPoints = 340))
+    }
+
+    @Test
+    fun `no running streak, no flame, so no card (#17770)`() {
+        assertThat(HeaderFlameLaw.card(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0))).isNull()
+        assertThat(HeaderFlameLaw.card(null)).isNull()
+    }
+
+    @Test
+    fun `the unfolded pill opens the same card as the folded flame while a streak runs (#17987)`() {
+        val running = ConversationEngagementSnapshot("c", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-13")
+        assertThat(HeaderFlameLaw.pillTap(running))
+            .isEqualTo(EngagementPillTap.FlameCard(HeaderFlameCard(streakDays = 12, todayPoints = 40, totalPoints = 340)))
+    }
+
+    @Test
+    fun `the total alone leads to My Legend, and no points means no gesture (#17987)`() {
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0)))
+            .isEqualTo(EngagementPillTap.Legend)
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 0, streakDays = 0))).isNull()
+        assertThat(HeaderFlameLaw.pillTap(null)).isNull()
     }
 }

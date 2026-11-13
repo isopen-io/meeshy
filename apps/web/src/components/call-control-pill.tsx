@@ -5,12 +5,14 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
-import { usePillGlass } from '@/lib/calls/use-pill-motion';
+import { PILL_TEXT_WIDTH_CLASS, pillTakesBound, type CallPillText } from '@/lib/calls/call-pill-text';
+import { useCallViewport } from '@/lib/calls/use-call-viewport';
+import { useGlassTone, usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { isCompactHeight } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -29,7 +31,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * vivent DANS son verre, au-dessus de sa rangée de base, en duo comme en groupe ;
  * le journal s'ouvre à leur place, et la rangée de base reste touchable ; `(…)`
  * les range tous deux et refermer les actions les rend. Le verre qui porte du
- * texte tient en 560 px, quelle que soit la fenêtre.
+ * texte tient en 560 px, quelle que soit la fenêtre — et celui qui a grandi aussi : une
+ * seule borne pour toute pilule, duo comme groupe (#17935, `pillTakesBound`).
  *
  * UN SEUL VERRE, QUI SE DÉFORME (#17536, loi 17) : le verre est un élément à lui
  * (`data-call-pill-skin`), seul mis à l'échelle (`use-pill-motion.ts`). Il s'allonge et
@@ -68,7 +71,7 @@ type PillProps = {
   readonly prominent: boolean;
   /** Ce que la pilule porte de texte au-dessus de sa rangée de base. */
   readonly text: CallPillText;
-  /** Les sous-titres allumés, posés dans le verre de la pilule au repos (`text === 'captions'`) ; ils y repartent en fondu d'eux-mêmes (#17406). */
+  /** Les sous-titres allumés, posés dans le verre de la pilule au repos (`text === 'captions'`), en tête, au-dessus de ce que la pilule déplie : quand (…) ou le journal les remplacent, en duo comme en groupe, ils y repartent en fondu d'eux-mêmes (#17406, #17700), jamais d'un coup. */
   readonly captions: ReactNode;
   readonly panels: CallPanels;
   /** Ce que les rangées, chargées à part, reçoivent de l'écran d'appel. */
@@ -84,23 +87,26 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
   const box = useRef<HTMLDivElement>(null);
   const skin = useRef<HTMLSpanElement>(null);
   usePillGlass(box, skin, stowed);
+  useGlassTone(skin, prominent);
+  /* P12.7 : en hauteur compacte, les rangées de la pilule d'un groupe se replient en UNE ligne sans légendes. */
+  const compact = isCompactHeight(useCallViewport().height);
   const away = { 'data-call-pill-rest': '', inert: stowed || undefined, 'aria-hidden': stowed || undefined };
   return (
     <>
       <div
         ref={box}
-        className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${pillTakesBound(text, grown) ? PILL_TEXT_WIDTH_CLASS : 'w-fit'}`}
         data-call-control-pill={grown ? 'grown' : 'pill'}
         data-call-pill-stowed={stowed ? '' : undefined}
         data-call-chrome-keep=""
       >
         <span ref={skin} aria-hidden="true" className={`${prominent ? 'glass-call-prominent' : 'glass-call'} absolute inset-0 -z-10 rounded-sheet`} data-call-pill-skin="" />
+        {captions}
         {grown ? (
           <Suspense fallback={null}>
-            <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} />
+            <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} compact={compact} />
           </Suspense>
         ) : null}
-        {grown && !stowed ? null : captions}
         <div className="flex items-center justify-center gap-2" {...away}>
           <CallButton
             label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}

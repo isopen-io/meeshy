@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import me.meeshy.sdk.call.CallRecordingController
@@ -28,6 +29,12 @@ class CallRecordingViewModel @Inject constructor(
     val state: StateFlow<CallRecordingUiState> = recording.state
         .map { CallRecordingUiState(it.phase) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CallRecordingUiState())
+
+    /** R1.5 — un bandeau d'enregistrement est dans la pile (carte, capsule, avis) : ma vignette lui fait place. */
+    val isBannerShown: StateFlow<Boolean> = recording.state
+        .map { it.isBannerShown }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun onEvent(event: CallRecordingUiEvent) {
         when (event) {

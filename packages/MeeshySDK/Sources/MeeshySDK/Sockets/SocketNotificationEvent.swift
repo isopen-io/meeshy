@@ -78,6 +78,7 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var senderAvatar: String? { actor?.avatar }
     public var senderId: String? { actor?.id }
     public var conversationId: String? { context?.conversationId }
+    public var communityId: String? { context?.communityId }
     public var messageId: String? { context?.messageId }
     public var postId: String? { context?.postId ?? metadata?.postId }
     public var commentId: String? { context?.commentId ?? metadata?.commentId }
@@ -133,6 +134,8 @@ public struct SocketNotificationContext: Decodable, Sendable {
     public let commentId: String?
     public let parentCommentId: String?
     public let friendRequestId: String?
+    /// #18052 — « Ajouté à la communauté Y » : le tap de la bannière ouvre la communauté.
+    public let communityId: String?
     /// URL du 1er attachment du message — la vignette de la bannière quand le
     /// mime est une image. **Absent quand le message est protégé** (éphémère,
     /// vue unique, flouté, chiffré) : la passerelle le retient en bloc derrière

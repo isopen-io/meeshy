@@ -26,6 +26,7 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import me.meeshy.app.R
 import me.meeshy.app.navigation.graph.CommunityRoutes
+import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.chrome.FloatingMenuLadder
@@ -61,12 +62,13 @@ internal fun MeeshyFloatingChrome(
     val currentUser by chromeViewModel.currentUser.collectAsStateWithLifecycle()
     val unread by chromeViewModel.unreadNotifications.collectAsStateWithLifecycle()
     val pendingFriendRequests by chromeViewModel.pendingFriendRequests.collectAsStateWithLifecycle()
+    val gameHidden by chromeViewModel.gameHidden.collectAsStateWithLifecycle()
     val leftStorage by floatingButtonPositions.leftStorage.collectAsStateWithLifecycle()
     val rightStorage by floatingButtonPositions.rightStorage.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val feedOpen = currentRoute == Routes.FEED
-    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests)
+    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests, gameHidden)
     val navigateToProfile: () -> Unit = {
         floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
@@ -161,6 +163,7 @@ private fun FeedButtonFace(feedOpen: Boolean) {
 @Composable
 private fun RootMenuLadderEntry.label(): String = stringResource(
     when (this) {
+        RootMenuLadderEntry.GAME -> R.string.menu_game
         RootMenuLadderEntry.LINKS -> R.string.menu_my_links
         RootMenuLadderEntry.NOTIFICATIONS -> R.string.menu_notifications
         RootMenuLadderEntry.CALLS -> R.string.tab_calls
@@ -173,6 +176,7 @@ private fun RootMenuLadderEntry.label(): String = stringResource(
 
 private fun NavController.openLadderEntry(entry: RootMenuLadderEntry) {
     when (entry) {
+        RootMenuLadderEntry.GAME -> navigate(GameRoutes.PROGRESSION) { launchSingleTop = true }
         RootMenuLadderEntry.LINKS -> navigate(LinksRoutes.HUB)
         RootMenuLadderEntry.NOTIFICATIONS -> navigateToTopLevel(Routes.NOTIFICATIONS)
         RootMenuLadderEntry.CALLS -> navigateToTopLevel(Routes.CALLS)
@@ -189,8 +193,9 @@ private fun rememberMenuLadderItems(
     navController: NavController,
     unreadNotifications: Int,
     pendingFriendRequests: Int,
+    gameHidden: Boolean,
 ): List<RadialMenuItem> {
-    val entries = remember { rootMenuLadderEntries() }
+    val entries = remember(gameHidden) { rootMenuLadderEntries(gameHidden = gameHidden) }
     val labels = entries.map { it.label() }
     return remember(labels, unreadNotifications, pendingFriendRequests) {
         entries.mapIndexed { index, entry ->

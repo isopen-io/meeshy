@@ -178,7 +178,7 @@ describe('hybride avec couche appareil : les DEUX couches sont admises', () => {
 
     const row = h.created[0].data;
     expect(row).toMatchObject({ content: '', isEncrypted: true, encryptionMode: 'hybrid' });
-    expect(JSON.stringify({ row, keys: [...h.keys.values()] })).not.toContain('4471');
+    expect(JSON.stringify({ row, keys: [...h.keys.values()] })).not.toContain('personne');
   });
 
   it('un autre membre relit le clair depuis la ligne persistée (traduction, recherche, édition continuent)', async () => {
@@ -200,7 +200,7 @@ describe('hybride avec couche appareil : les DEUX couches sont admises', () => {
       messageId: MSG_ID, conversationId: CONV_ID, recipientUserId: PEER_USER, recipientDeviceId: 1,
       recipientRegistrationId: 31, senderUserId: SENDER_USER, senderDeviceId: 1, body: SEALED_BODY_FOR_PEER,
     });
-    expect(JSON.stringify(rows)).not.toContain('4471');
+    expect(JSON.stringify(rows)).not.toContain('personne');
   });
 
   it('distribue chaque enveloppe à la room de SON appareil', async () => {
@@ -233,7 +233,7 @@ describe('hybride avec couche appareil : les DEUX couches sont admises', () => {
   it('aucun journal ne voit le texte', async () => {
     const h = harness({ regime: regimeOf('hybrid') });
     await h.processor.saveMessage(send({ deviceLayerRelay: deviceLayer() }));
-    expect(JSON.stringify(logged)).not.toContain('4471');
+    expect(JSON.stringify(logged)).not.toContain('personne');
   });
 });
 

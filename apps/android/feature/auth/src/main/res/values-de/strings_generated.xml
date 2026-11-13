@@ -284,7 +284,7 @@
     <string name="share_link_resume_anonymously">Anonym fortsetzen</string>
     <string name="signup_card_code_lead">Gib den 6-stelligen Code ein, der an %1$s gesendet wurde, oder öffne den erhaltenen Link.</string>
     <string name="signup_card_verified">Konto bestätigt!</string>
-    <string name="signup_card_verified_lead">Alles bereit: Deine Kontakte lesen dich in ihrer Sprache.</string>
+    <string name="signup_card_verified_lead">Deine Kontakte lesen dich in ihrer Sprache.</string>
     <string name="signup_close">Schließen</string>
     <string name="signup_country_search_hint">Land suchen</string>
     <string name="signup_email_forgot_password">Passwort vergessen?</string>

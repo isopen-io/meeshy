@@ -52,6 +52,7 @@ import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.sdk.model.call.CallLiveCaptionLines
 import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallPillWidth
+import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -73,7 +74,8 @@ internal fun CallCaptionsBandHost(
 ) {
     val captions by viewModel.state.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
-    val lines = rememberStableLines(remember(captions, labels) { viewModel.bandLines(captions, labels) })
+    val names = state.participantNames
+    val lines = rememberStableLines(remember(captions, labels, names) { viewModel.bandLines(captions, labels, names) })
     val toggle = remember(viewModel) { { key: String -> viewModel.toggleReveal(key) } }
     CallCaptionsBand(
         lines = lines,
@@ -85,6 +87,17 @@ internal fun CallCaptionsBandHost(
         hasOwnGlass = hasOwnGlass,
         opensJournal = opensJournal,
     )
+}
+
+/**
+ * #17946 (A) — the captions of a mode (Effects, Montage): the band in a glass of its own, with no « Journal » button (the
+ * pill that would hold the journal is gone), its foot kept (« EN → FR · touch = original »). ONE host for both modes,
+ * as iOS `captionsBand(hasOwnGlass: true, opensJournal: false)` in `CallView+Mode`. Absent while the captions are off.
+ */
+@Composable
+internal fun CallModeCaptions(state: CallUiState, modifier: Modifier = Modifier) {
+    if (state.captions.mode == CaptionsMode.Off) return
+    CallCaptionsBandHost(state = state, hasOwnGlass = true, opensJournal = false, modifier = modifier.padding(horizontal = MeeshySpacing.lg))
 }
 
 @Composable

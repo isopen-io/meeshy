@@ -14,6 +14,8 @@ import type {
   ZMQEvent,
   TranslationCompletedEvent,
   TranslationErrorEvent,
+  TranslationSkippedEvent,
+  TranslationSkippedPayload,
   AudioProcessCompletedEvent,
   AudioProcessErrorEvent,
   VoiceAPISuccessEvent,
@@ -126,6 +128,10 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'translation_error':
         this.handleTranslationError(event as TranslationErrorEvent);
+        break;
+
+      case 'translation_skipped':
+        this.handleTranslationSkipped(event as TranslationSkippedEvent);
         break;
 
       case 'audio_process_completed':
@@ -303,6 +309,23 @@ export class ZmqMessageHandler extends EventEmitter {
       ...(event.targetLanguage ? { targetLanguage: event.targetLanguage } : {}),
       metadata: event.metadata || {}
     });
+  }
+
+  /**
+   * Un texte que le translator ne traduira jamais (#17204). Ce n'est pas une
+   * erreur : le lecteur garde l'original.
+   */
+  private handleTranslationSkipped(event: TranslationSkippedEvent): void {
+    const payload: TranslationSkippedPayload = {
+      ...(typeof event.taskId === 'string' && event.taskId ? { taskId: event.taskId } : {}),
+      messageId: typeof event.messageId === 'string' ? event.messageId : '',
+      conversationId: typeof event.conversationId === 'string' ? event.conversationId : '',
+      reason: typeof event.reason === 'string' ? event.reason : 'unknown',
+      ...(typeof event.length === 'number' ? { length: event.length } : {}),
+      ...(typeof event.max_length === 'number' ? { maxLength: event.max_length } : {}),
+    };
+    logger.info(`⏭️ Traduction ignorée (${payload.reason}) pour ${payload.messageId}`);
+    this.emit('translationSkipped', payload);
   }
 
   /**

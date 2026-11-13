@@ -196,4 +196,26 @@ describe('Push data — clés de navigation commentId / friendRequestId', () => 
 
     expect(pushDataOfType('friend_request')!.commentId).toBe('');
   });
+
+  it('test_communityAdded_push_dataCarriesCommunityId_andIsEmptyElsewhere (#18052)', async () => {
+    const COMMUNITY_ID = 'dddddddddddddddddddddddd';
+    await service.createNotification({
+      userId: RECIPIENT_ID,
+      type: 'community_invite',
+      priority: 'normal',
+      content: 'Ajouté à la communauté Jardins',
+      actor: { id: ACTOR_ID, username: 'bob', displayName: 'Bob' },
+      context: { communityId: COMMUNITY_ID, communityName: 'Jardins' },
+      metadata: { action: 'view_community' },
+      lang: 'fr',
+    });
+    await service.createFriendRequestNotification({
+      recipientUserId: RECIPIENT_ID,
+      requesterId: ACTOR_ID,
+      friendRequestId: FRIEND_REQUEST_ID,
+    });
+
+    expect(pushDataOfType('community_invite')!.communityId).toBe(COMMUNITY_ID);
+    expect(pushDataOfType('friend_request')!.communityId).toBe('');
+  });
 });

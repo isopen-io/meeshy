@@ -103,6 +103,12 @@ nonisolated enum CallLiveFrameRule {
         showsVideo && participants == people
     }
 
+    /// #17815 (C2.10) — la proposition d'un cadre ne se montre qu'en duo vidéo : ni en groupe
+    /// (même à deux connectés), ni en audio.
+    static func mayShowProposal(participants: Int, showsVideo: Bool, isGroupStage: Bool) -> Bool {
+        !isGroupStage && mayOffer(participants: participants, showsVideo: showsVideo)
+    }
+
     /// La forme d'un identifiant du catalogue, celle que la passerelle exige.
     static func isFrameId(_ value: String) -> Bool {
         guard !value.isEmpty, value.count <= idMaxLength else { return false }
