@@ -241,3 +241,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Rouge étranger connu : `call_overlay` 21,01 Ko pour un plafond de 21 sur dev nu (#17930) ; la garde maison iOS rouge sur dev (#17968).
 - Prochain lot recommandé : #16741 (le nouveau membre d'une communauté devenue privée est prévenu), puis #16739 (décision) ; #14227 / #16696 demandent une session de staging.
 
+## 2026-11-13 — réveil 28 (14:34 UTC)
+
+- Début du run : quatre PR de la routine ouvertes depuis moins d'une heure par une autre session (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182), CI en file : cédées, non touchées.
+- Lot : #17104 (Android). Le détail d'une communauté dit POURQUOI il ne s'ouvre pas, comme iOS et le web (#7816). `CommunityLoadFailure` (`:core:model`) : refusée (403 = 404), réseau, serveur ; `CommunityFetchException` porte sa cause, classée par `ApiError.toContentFetchFailure()` (un hors-ligne n'a pas de statut). Un refus efface la fiche en cache et le dit avec « Retour aux communautés » (la fermeture silencieuse sur 404 disparaît) ; réseau et serveur gardent une fiche déjà peinte. Sept chaînes adoptées du catalogue SDK.
+- Pas de revue adversariale : ni authentification, ni permission serveur, ni migration.
+- Gotcha : `./apps/android/meeshy.sh jvm-check` échoue en conteneur (`build-artifacts.signal.org` refusé par le proxy) ; seule `android.yml` prouve, même pour `:core:model`.
+- PR #18006. CI des PR gelée (`PR_CI_GEL`) : preuve par `workflow_dispatch` d'`android.yml` sur la tête. Premier run rouge sur « Graphe des modules » : le cliquet de bavardage (`scripts/check-verbosity-native.mjs`) compte comme explication toute clé contenant `detail` ; les sept clés `community_detail_*` portaient la famille de 32 à 39. Renommées `community_load_*`, run suivant vert (assemble + tests unitaires).
+- Prochain lot recommandé : mener à la fusion les PR ouvertes (#17960 après #17972), puis #16879 (publications de la communauté sur Android) ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.

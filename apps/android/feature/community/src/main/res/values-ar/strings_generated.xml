@@ -51,6 +51,13 @@
     <string name="community_list_empty_title">لا توجد مجتمعات</string>
     <string name="community_list_search_placeholder">بحث...</string>
     <string name="community_list_title">المجتمعات</string>
+    <string name="community_load_network_body">تحقّق من اتصالك، ثم أعد المحاولة.</string>
+    <string name="community_load_network_title">تعذّر تحميل هذا المجتمع</string>
+    <string name="community_load_refused_back">العودة إلى المجتمعات</string>
+    <string name="community_load_refused_body">إنه غير موجود، أو خاص ولست عضوًا فيه.</string>
+    <string name="community_load_refused_title">المجتمع غير موجود</string>
+    <string name="community_load_server_body">المشكلة من جهتنا. أعد المحاولة بعد قليل.</string>
+    <string name="community_load_server_title">لم يتمكّن Meeshy من تحميل هذا المجتمع</string>
     <string name="community_members_section_creator">المنشئون</string>
     <string name="community_members_section_member">الأعضاء</string>
     <string name="community_members_section_moderator">المشرفون</string>

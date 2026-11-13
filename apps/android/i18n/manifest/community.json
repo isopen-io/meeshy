@@ -387,6 +387,48 @@
           "status": "adopted"
         },
         {
+          "catalog": "ui",
+          "iosKey": "community.detail.loadFailed.body",
+          "androidName": "community_load_network_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.loadFailed.title",
+          "androidName": "community_load_network_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.back",
+          "androidName": "community_load_refused_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.body",
+          "androidName": "community_load_refused_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.title",
+          "androidName": "community_load_refused_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.serverFailed.body",
+          "androidName": "community_load_server_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.serverFailed.title",
+          "androidName": "community_load_server_title",
+          "status": "adopted"
+        },
+        {
           "androidName": "community_member_options_a11y",
           "status": "android-only"
         },
