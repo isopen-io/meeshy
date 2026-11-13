@@ -1,5 +1,13 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_locations_footnote">Cada um escolhe a precisão e a duração; tudo some ao terminar.</string>
+    <string name="circles_locations_map">Mapa das localizações compartilhadas</string>
+    <string name="circles_locations_pin_until">até %1$s</string>
+    <string name="circles_locations_precision_city">No nível da cidade</string>
+    <string name="circles_locations_precision_exact">Localização exata</string>
+    <string name="circles_locations_precision_neighborhood">No nível do bairro</string>
+    <string name="circles_locations_someone">Alguém</string>
+    <string name="circles_locations_title">Localizações compartilhadas com você</string>
     <string name="circles_settings_block_talkie">Silenciar o talkie dessa pessoa</string>
     <string name="circles_settings_block_talkie_detail">A voz dela não vai mais tocar diretamente no seu aparelho: chegará como mensagem de voz. Essa pessoa não é avisada.</string>
     <string name="contacts_back">Voltar</string>

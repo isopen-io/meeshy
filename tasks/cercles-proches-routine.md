@@ -937,3 +937,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste de #16983 : l'émission (fiche d'un Ami : durée, précision, arrêt ; `location:share-start|update|stop`) et les
   chaînes `InfoPlist.strings` de la permission de position.
 - Prochain lot recommandé : la carte de réception Android (reste de #16985), puis l'émission iOS.
+
+## 2026-11-13 — réveil de minuit : la carte Android des positions qu'on me partage (#16985)
+
+- Reprise : aucune PR cercles ouverte ; #18068 (carte iOS) et #18060 (couche SDK Android) fusionnées. Aucune branche
+  n'écrit `feature/contacts/**/circles` côté position : lot réservé sur `claude/cercles-16985-android-carte`.
+- Lot : la carte de RÉCEPTION Android dans « Mes cercles », iso `SharedLocationsMapSection.swift` (#16983) et de l'onglet
+  Cercles du web (#16984). `:core:model` : `SharedLocationsMap` (projection PURE en épingles — position, rayon et précision
+  SERVIS, jamais plus fins ; nom par l'annuaire des cercles, sans nom ⇒ « Quelqu'un » ; emprise visible au format `bbox`,
+  `null` quand elle franchit l'antiméridien ; cadrage initial qui montre toutes les épingles ; rayon du cercle de flou en
+  mètres au sol). `feature/contacts` : `SharedLocationsMapViewModel` (projette `SharedLocationsGateway`, rattrapage du monde
+  à l'apparition puis de la dernière emprise après 300 ms de calme) et `SharedLocationsMapSection` posée sous la bannière,
+  sur `TileMapView` (la carte à tuiles du dépôt : aucune seconde carte), épingle aux initiales teintée par la présence
+  servie (indigo hors ligne), libellé TalkBack « nom, précision · jusqu'à HH:MM ». Huit chaînes adoptées du catalogue iOS.
+- Reste de #16985 : l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan de type position).
+- Prochain lot recommandé : l'émission iOS (reste de #16983, `location:share-start|update|stop` depuis la fiche d'un Ami).
