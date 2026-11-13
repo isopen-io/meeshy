@@ -323,6 +323,8 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("share.link.create.access.birthday_required.question"))
         XCTAssertTrue(view.contains("share.link.create.access.birthday_required.note"))
         XCTAssertTrue(view.contains("MeeshyInfoNoted(note: note, openNoteID: $openNoteID"))
+        XCTAssertFalse(view.contains("Toggle(isOn: isOn) {"), "un (i) posé DANS le libellé d'un Toggle se fond dans l'élément VoiceOver de l'interrupteur et n'est plus atteignable")
+        XCTAssertTrue(view.contains("Toggle(title, isOn: isOn)"), "l'interrupteur garde son nom accessible")
         let app = try Self.catalog(Self.appCatalogPath)
         for language in ["fr"] + Self.otherLanguages {
             let question = try XCTUnwrap(app["share.link.create.access.birthday_required.question"]?[language], language)
@@ -506,6 +508,7 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("note: ConversationSettingsNotes.announcement"))
         XCTAssertTrue(view.contains("conversation.settings.permissions.slowMode\", defaultValue: \"Mode lent\""), "la rangée garde « Mode lent »")
         XCTAssertTrue(view.contains("\"10s\""), "le sélecteur du mode lent reste atteignable")
+        XCTAssertFalse(view.contains("Toggle(\"\", isOn: $viewModel.isAnnouncementChannel)"), "l'interrupteur du mode annonce, détaché de son (i), garde son nom accessible")
     }
 
     private static func endsAsQuestion(_ text: String) -> Bool {

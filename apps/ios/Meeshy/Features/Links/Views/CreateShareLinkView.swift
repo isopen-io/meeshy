@@ -445,14 +445,16 @@ struct CreateShareLinkView: View {
     ) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             iconBadge(icon, color: iconColor)
-            Toggle(isOn: isOn) {
-                MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(theme.textPrimary)
-                }
+            MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .accessibilityHidden(true)
             }
-            .tint(accent)
+            Spacer(minLength: MeeshySpacing.sm)
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .tint(accent)
         }
         .padding(MeeshySpacing.mdPlus)
         .background(rowBackground)

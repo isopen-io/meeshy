@@ -306,7 +306,7 @@ public struct ConversationSettingsView: View {
                             .foregroundStyle(theme.textPrimary)
                     }
                     Spacer()
-                    Toggle("", isOn: $viewModel.isAnnouncementChannel)
+                    Toggle(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module), isOn: $viewModel.isAnnouncementChannel)
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
