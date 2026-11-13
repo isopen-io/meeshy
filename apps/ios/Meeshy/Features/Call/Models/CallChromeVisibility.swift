@@ -41,8 +41,11 @@ struct CallChromeVisibility: Equatable, Sendable {
         CallChromeVisibility(isRevealed: !isRevealed, isStageFullScreen: isStageFullScreen, isModeActive: isModeActive)
     }
 
-    static func mayToggleByTap(isVideoStage: Bool) -> Bool {
-        isVideoStage
+    /// Loi 11 (#16663, #17945) — un toucher sur la SCÈNE range tout, un autre rend tout : l'image
+    /// en vidéo, le fond derrière l'avatar en audio, en duo comme en groupe. Sous VoiceOver les
+    /// contrôles restent en place.
+    static func mayToggleByTap(isVoiceOverRunning: Bool) -> Bool {
+        !isVoiceOverRunning
     }
 
     static func isVideoStage(isGroup: Bool, isLocalVideoEnabled: Bool, isDuoVideoActive: Bool, remoteCamerasOn: Int) -> Bool {
