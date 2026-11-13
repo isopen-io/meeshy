@@ -163,4 +163,172 @@ final class CallTranscriptRemoteServiceTests: XCTestCase {
         XCTAssertEqual(transcript.captures?.map(\.id), ["cap-1"], "a malformed capture is skipped, never the whole transcript")
         XCTAssertNil(transcript.captures?.first?.participantId)
     }
+
+    // MARK: - A1.6 — le replay lit l'appel en entier, page après page
+
+    private func pageJSON(ids: [String], hasMore: Bool?, total: Int? = nil, capturesCount: Int = 0) -> String {
+        let rows = ids.enumerated().map { index, id in
+            #"{"id":"\#(id)","speakerId":"u2","speakerDisplayName":"Awa","text":"t-\#(id)","language":"fr","confidence":null,"capturedAtMs":\#(1_765_650_000_000 + index),"translations":[]}"#
+        }.joined(separator: ",")
+        let captures = (0..<capturesCount).map {
+            #"{"id":"cap-\#($0)","participantId":null,"userId":"u2","displayName":"Awa","kind":"screenshot","offsetMs":1,"at":"2026-11-07T12:12:40.000Z"}"#
+        }.joined(separator: ",")
+        let more = hasMore.map { #","hasMore":\#($0)"# } ?? ""
+        let count = total.map { #","total":\#($0)"# } ?? ""
+        return #"{"success":true,"data":{"callId":"call-1","conversationId":"conv-1","callStartedAt":"2026-11-07T12:00:00.000Z","segments":[\#(rows)],"captures":[\#(captures)]\#(count)\#(more)}}"#
+    }
+
+    private func offsets(_ mock: MockAPIClient) -> [String?] {
+        mock.requests.map { request in request.queryItems?.first(where: { $0.name == "offset" })?.value }
+    }
+
+    func test_transcript_hasMore_readsEveryPageUntilTheLastOne() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a", "b"], hasMore: true, total: 5),
+            pageJSON(ids: ["c", "d"], hasMore: true, total: 5),
+            pageJSON(ids: ["e"], hasMore: false, total: 5)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a", "b", "c", "d", "e"], "un long appel rejoué n'est plus tronqué à la première page")
+        XCTAssertEqual(offsets(mock), ["0", "2", "4"], "chaque page reprend là où la précédente s'est arrêtée")
+    }
+
+    func test_transcript_singlePage_readsOnePageOnly() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a"], hasMore: false, total: 1)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        _ = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(mock.requestCount, 1)
+    }
+
+    func test_transcript_gatewayWithoutHasMore_readsOnePageOnly() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a", "b"], hasMore: nil)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(mock.requestCount, 1, "une passerelle antérieure ne dit pas hasMore : une page, comme avant")
+        XCTAssertEqual(transcript.segments.count, 2)
+    }
+
+    func test_transcript_emptyPageWhileHasMore_stopsInsteadOfLooping() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a"], hasMore: true),
+            pageJSON(ids: [], hasMore: true)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a"])
+        XCTAssertEqual(mock.requestCount, 2, "une page vide met fin à la lecture, jamais une boucle sans fin")
+    }
+
+    func test_transcript_keepsTheCapturesOfTheFirstPageOnly() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a"], hasMore: true, capturesCount: 2),
+            pageJSON(ids: ["b"], hasMore: false, capturesCount: 2)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.captures?.map(\.id), ["cap-0", "cap-1"], "la passerelle rend toutes les captures à chaque page : on ne les double pas")
+    }
+
+    func test_transcript_overlappingPages_concatenateWithoutDuplicates() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a", "b"], hasMore: true, total: 3),
+            pageJSON(ids: ["b", "c"], hasMore: false, total: 3)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a", "b", "c"], "une phrase servie par deux pages ne se lit qu'une fois")
+        XCTAssertEqual(offsets(mock), ["0", "2"], "la page suivante reprend après ce que la passerelle a rendu, doublons compris")
+    }
+
+    func test_transcript_gatewayAlwaysSayingHasMoreWithTheSamePage_stopsAtTheFirstPageWithoutNews() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a", "b"], hasMore: true)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a", "b"])
+        XCTAssertEqual(mock.requestCount, 2, "une page qui n'apporte rien de neuf met fin à la lecture, jamais une boucle")
+    }
+
+    func test_transcript_gatewayAlwaysSayingHasMoreWithNewRows_stopsAtThePageCeiling() async throws {
+        let ceiling = CallTranscriptPaging.maxPages
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: (0..<(ceiling + 5)).map { pageJSON(ids: ["p\($0)"], hasMore: true) })
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(mock.requestCount, ceiling, "la lecture est bornée en nombre de pages")
+        XCTAssertEqual(transcript.segments.count, ceiling)
+        XCTAssertEqual(transcript.hasMore, true, "un appel coupé par la borne ne se dit pas complet")
+    }
+
+    func test_transcript_cancelledTask_readsNoPageAndThrowsCancellation() async {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a"], hasMore: true)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let outcome = await Task { () -> Error? in
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                _ = try await service.transcript(callId: "call-1")
+                return nil
+            } catch {
+                return error
+            }
+        }.value
+
+        XCTAssertTrue(outcome is CancellationError, "la cellule partie, la lecture s'arrête : reçu \(String(describing: outcome))")
+        XCTAssertEqual(mock.requestCount, 0, "aucune page ne se lit pour une cellule qui a disparu")
+    }
+
+    func test_transcript_completeRead_saysItHasNoMore() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a"], hasMore: true, total: 2),
+            pageJSON(ids: ["b"], hasMore: false, total: 2)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.hasMore, false)
+        XCTAssertEqual(transcript.total, 2)
+    }
+
+    func test_transcript_aFailingLaterPage_throwsInsteadOfServingATruncatedCall() async {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a"], hasMore: true),
+            #"{"success":false}"#
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        do {
+            _ = try await service.transcript(callId: "call-1")
+            XCTFail("un appel lu à moitié ne se range pas au cache comme s'il était entier")
+        } catch {
+            XCTAssertEqual(mock.requestCount, 2)
+        }
+    }
 }

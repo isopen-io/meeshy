@@ -54,36 +54,20 @@ struct DataStorageView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("folder.fill", color: accentColor)
 
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache média", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundStyle(theme.textPrimary)
+                    Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Chargé plus vite, vidé après 7 jours.", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                        .foregroundStyle(theme.textMuted)
 
-                            Spacer()
+                    Spacer()
 
-                            Text(MediaFormat.bytes(Int64(cacheSize)))
-                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                                .foregroundStyle(Color(hex: accentColor))
-                        }
-
-                        Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundStyle(theme.textMuted)
-                    }
+                    Text(MediaFormat.bytes(Int64(cacheSize)))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.smPlus)
-                .accessibilityElement(children: .combine)
-
-                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                    .foregroundStyle(theme.textMuted)
-                    .lineSpacing(3)
-                    .padding(.horizontal, MeeshySpacing.mdPlus)
-                    .padding(.bottom, MeeshySpacing.smPlus)
             }
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -113,15 +97,6 @@ struct DataStorageView: View {
                 .tracking(1.2)
         }
         .padding(.leading, MeeshySpacing.xs)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {

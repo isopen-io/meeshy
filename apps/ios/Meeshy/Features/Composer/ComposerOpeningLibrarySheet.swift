@@ -47,6 +47,7 @@ struct ComposerOpeningLibrarySheet: ViewModifier {
                 EmptyView()
             }
             .photosPickerStyle(.inline)
+            .photosPickerAccessoryVisibility(.visible, edges: .all)
             .ignoresSafeArea(.container, edges: .bottom)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)

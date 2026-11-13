@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { mineInMenu, selfControlsPlace, zoomControlIn } from './call-self-controls';
+import { selfZoomPlace, zoomControlIn } from './call-self-controls';
 import { LOCAL_ZOOM_RANGE, nextZoomStop, zoomStops } from './camera-zoom';
 import { acquireRearCamera, rearCameraOf, rearVideoConstraints, widestRearCamera } from './rear-camera';
 import { localZoomFor, selfZoomStore, setLocalZoom } from './self-zoom';
@@ -43,11 +43,10 @@ describe('les crans de ma vignette', () => {
 });
 
 describe('où vit le zoom', () => {
-  test('un cran dans ma vignette, la capsule quand mon image remplit l’écran, rien dans le (…)', () => {
-    expect(zoomControlIn(selfControlsPlace({ layout: 'video-duo', selfFull: false, selfTileShown: true }))).toBe('step');
-    expect(zoomControlIn(selfControlsPlace({ layout: 'video-duo', selfFull: true, selfTileShown: true }))).toBe('capsule');
-    expect(zoomControlIn(selfControlsPlace({ layout: 'grid', selfFull: false, selfTileShown: true }))).toBeNull();
-    expect(mineInMenu({ mine: ['flip'], call: [] }, 'tile').mine).toEqual([]);
+  test('un cran dans ma vignette, la capsule quand mon image remplit l’écran, rien sans vignette', () => {
+    expect(zoomControlIn(selfZoomPlace({ layout: 'video-duo', selfFull: false, selfTileShown: true }))).toBe('step');
+    expect(zoomControlIn(selfZoomPlace({ layout: 'video-duo', selfFull: true, selfTileShown: true }))).toBe('capsule');
+    expect(zoomControlIn(selfZoomPlace({ layout: 'grid', selfFull: false, selfTileShown: true }))).toBeNull();
   });
 });
 

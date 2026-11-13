@@ -252,7 +252,7 @@ nonisolated private struct PreviewProfileImageUploader: ProfileImageUploading {
         guard UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewProfile") != "failed" else {
             throw URLError(.notConnectedToInternet)
         }
-        return await OnboardingPreviewLaunch.fixtureUser
+        return OnboardingPreviewLaunch.fixtureUser
     }
 }
 

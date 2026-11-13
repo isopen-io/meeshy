@@ -81,6 +81,11 @@ nonisolated final class ComposerFrameGate: @unchecked Sendable {
 /// **Une image par trame, jamais deux** (spec § 5) : sans effet, la couche
 /// système seule ; avec effet, la vue Metal seule.
 nonisolated enum ComposerCaptureSurfaceRule {
+
+    /// Le viseur se peint-il ? Armé, et sans avoir cédé la scène à un outil (#17432).
+    static func showsViewfinder(stage: ComposerSceneCameraStage, yieldsToScene: Bool) -> Bool {
+        stage != .off && !yieldsToScene
+    }
     static func paintsWithMetal(look: ComposerPhotoLook, budget: ComposerThermalBudget, fixture: Bool) -> Bool {
         guard !budget.systemLayerOnly else { return false }
         return fixture || ComposerLiveLookRule.rendersLive(look)

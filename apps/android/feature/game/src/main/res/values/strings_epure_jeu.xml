@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">How do I use it?</string>
+    <string name="game2_showcase_empty">No trophy yet: cups, Rebirth and Flame trophies are kept here.</string>
+    <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date.</string>
+    <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
+    <string name="game2_atlas_privacy">Private by default: the game keeps the language and the date, never the other person or the conversation.</string>
+    <string name="game2_settings_visibility_body">Outside accepted friends, nobody sees whether you are online or when you play.</string>
+    <string name="game2_league_pseudonym_invalid">Not valid.</string>
+    <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100, and a trial every ten levels: until it is passed, your light waits. Twenty phases. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before.</string>
+    <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
+    <string name="game2_prestige_meo">Your level restarts at 1 and your sparks at 0; your rank, glory and Meeshes stay. Your ancestors offer you a numbered trophy and %1$s glory.</string>
+    <string name="game2_season_seal_body">Purely decorative: a collectible every %1$s stops.</string>
+    <string name="game2_settings_notifications_body">At most one a day, on all your devices.</string>
+    <string name="game2_settings_notifications_switch">Notifications</string>
+    <string name="game2_settings_friends_league_body">Accepted friends and you see each other in the weekly ranking; the switch removes both directions.</string>
+    <string name="game_rules_section_rules">Rules</string>
+    <string name="game_rules_section_concepts">Concepts</string>
+    <string name="game_rules_4_body">Your level drops by as much; your rank and medals don’t drop.</string>
+    <string name="game_rules_5_body">Mints, new levels and great deeds grow your glory, which gives your rank.</string>
+    <string name="game_rules_6_body">Keeping Meeshes grows your legacy; spending them watches over the Flame.</string>
+    <string name="game_rules_7_body">A dream each night, an Offering, a Flame that grows as you come back.</string>
+    <string name="game_detail_coin_what">The Meesh is your light bound into a numbered coin.</string>
+    <string name="game_detail_fact_mint_next">One in a hundred is gold, one in a thousand prism.</string>
+    <string name="game_flame_panel_freeze_full">All your Vigils are here.</string>
+    <string name="game_notebook_empty">Each sign from your ancestors can become a photo here.</string>
+    <string name="game_error_league_pseudonym_invalid">Not valid.</string>
+    <string name="game2_league_pseudonym_hint_change">3 to 20 characters (letters, digits, . - _). Not your name or your username.</string>
+    <string name="game_concept_level_what">Your level is the number at the centre of your ring: it is read from your light.</string>
+    <string name="game_concept_flame_use">A Vigil guards it for one day away.</string>
+    <string name="game_concept_missions_use">Open an act to see where you stand. You can change one a day with a Meesh.</string>
+    <string name="game2_prestige_confirm_access">Your joust and your alliance stay open.</string>
+    <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random and changes with every journey.</string>
+    <string name="game2_league_snapshot">Ranking set every day at 4 a.m.: nobody sees who is playing right now. Only your row is live.</string>
+    <string name="game2_season_how">Acts and alliances carry you a few strides. The whole journey is free.</string>
+    <string name="game2_settings_celebrations_switch">Ancestors’ signs</string>
+    <string name="game_guide_step_welcome_what">The game in seven cards</string>
+    <string name="game_guide_more">What does this moment mean?</string>
+    <string name="game_progression_empty">Your first medal lights up with your very first move.</string>
+    <string name="game_photo_camera_denied">The camera is denied: allow it in settings.</string>
+    <string name="game_photo_camera_unsupported">This device does not allow the camera here.</string>
+    <string name="game_photo_camera_unavailable">The camera is not available.</string>
+    <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it, then you can mint.</string>
+    <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
+</resources>

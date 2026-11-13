@@ -72,6 +72,48 @@
         },
         {
           "catalog": "app",
+          "iosKey": "video.filter.preset.golden",
+          "androidName": "retouch_filter_golden",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.film",
+          "androidName": "retouch_filter_film",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.softNight",
+          "androidName": "retouch_filter_softNight",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.bright",
+          "androidName": "retouch_filter_bright",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.velvet",
+          "androidName": "retouch_filter_velvet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.sky",
+          "androidName": "retouch_filter_sky",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.monochrome",
+          "androidName": "retouch_filter_monochrome",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "call.capture.style.screen",
           "androidName": "retouch_style_screen",
           "status": "adopted"

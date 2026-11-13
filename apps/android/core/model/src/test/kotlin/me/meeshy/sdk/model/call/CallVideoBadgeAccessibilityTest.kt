@@ -33,4 +33,12 @@ class CallVideoBadgeAccessibilityTest {
     fun `chaque element absent est omis sans virgule orpheline`() {
         assertThat(label(muted = true, reconnecting = true)).isEqualTo("Durée, Contact en sourdine, Reconnexion…")
     }
+
+    @Test
+    fun `le titre et le nombre de la capsule ouvrent la phrase, la duree peut manquer en audio`() {
+        assertThat(CallVideoBadgeAccessibility.label(phrases, null, false, false, false, title = "Les Copains", participants = "Participants 5"))
+            .isEqualTo("Les Copains, Participants 5, Durée")
+        assertThat(CallVideoBadgeAccessibility.label(phrases, "Signal faible", false, true, false, includesDuration = false))
+            .isEqualTo("Signal faible, Réseau faible (contact)")
+    }
 }

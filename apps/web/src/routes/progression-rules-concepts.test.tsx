@@ -68,7 +68,7 @@ describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #1
   test('le niveau se lit sur ta lumière, la frappe le fait baisser, le rang ne baisse pas', () => {
     const rules = gameRules('fr');
     expect(rules[1]?.body).toContain('ton niveau se lit sur elle');
-    expect(rules[1]?.body).toContain('Une frappe en fige une part et le fait baisser');
+    expect(rules[1]?.body).toContain('Une frappe en fige une part, donc le fait baisser');
     expect(rules[2]?.body).toContain('une part de ta lumière s’y fige');
     expect(rules[2]?.body).toContain('30 %');
     expect(rules[3]?.body).toContain('ton niveau baisse d’autant');
@@ -77,8 +77,8 @@ describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #1
 
   test('l’entrée Étincelles dit que ta lumière fait le niveau et que ce qui est reçu reste reçu', () => {
     const points = rulesGlossary('fr').find((entry) => entry.key === 'points')?.body ?? '';
-    expect(points).toContain('Ta lumière fait ton niveau et frappe les Meeshes');
-    expect(points).toContain('Les étincelles reçues depuis toujours restent reçues');
+    expect(points).toContain('elles forment ta lumière');
+    expect(gameRules('fr')[3]?.body).toContain('Ce que tu as reçu reste reçu');
   });
 });
 

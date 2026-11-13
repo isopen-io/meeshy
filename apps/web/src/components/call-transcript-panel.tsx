@@ -3,13 +3,17 @@ import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
+import { THREAD_SECONDARY_INK, UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { formatCallClock } from '@/lib/calls/call-store';
-import { callTranscriptQueryKey, loadCallTranscript, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
+import { formatCallJournalClock } from '@/lib/calls/call-journal-clock';
+import { transcriptReading } from '@/lib/calls/call-transcript-reading';
+import { useTranscriptSwapFade } from '@/lib/calls/use-transcript-swap-fade';
+import { callTranscriptQueryKey, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
+import { suspendForCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { authorInkStyle } from '@/lib/view/author-ink';
@@ -20,8 +24,10 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
  * bulle d'appel du fil (`system-notice.tsx`), chargée au toucher (chunk à part)
  * depuis `GET /calls/:callId/transcript`. Miroir de la section « Transcription »
  * de `CallSummaryDetailSheet` d'iOS : le locuteur, l'heure dans l'appel, la
- * ligne servie par le Prisme du lecteur, et « Voir l'original » qui rend ce
- * qui a été dit. Gardée en cache par sa clé : la rouvrir ne recharge rien.
+ * ligne servie par le Prisme du lecteur, et « Voir l'original » qui INVERSE les
+ * deux lignes de tout l'appel (#17897, loi 7, #17862) : l'original en tête et
+ * « Traduit · … » dessous, « Voir la traduction » rendant l'état par défaut
+ * (`transcriptReading`, `useTranscriptSwapFade`). Gardée en cache par sa clé : la rouvrir ne recharge rien.
  *
  * Le journal d'après l'appel est FIDÈLE au journal de l'appel (#16634,
  * `docs/product/appels-vue-finale.md` lois 4 et 7) : chaque ligne garde la
@@ -36,10 +42,19 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 
 const muted = { color: 'var(--color-ios-ink-2)' } as const;
 
-export function CallTranscriptPanel({ callId, language }: { readonly callId: string; readonly language: InterfaceLanguage }) {
+/**
+ * Le journal DANS sa bulle ou dans la fiche d'un appel : rend « Voir l'original » dans l'état que sa bulle a
+ * retenu (`original`, `onOriginalChange` : la mémoire `call-journal-memory.ts` est celle de la carte — A1.17).
+ */
+export function CallTranscriptPanel({ callId, language, original: initial = false, onOriginalChange }: { readonly callId: string; readonly language: InterfaceLanguage; readonly original?: boolean; readonly onOriginalChange?: (original: boolean) => void }) {
+  suspendForCallControlsCatalog(language);
   const session = useStore(sessionStore, (state) => state.session);
   const { languages } = useReaderLanguages();
-  const [original, setOriginal] = useState(false);
+  const [original, setOriginal] = useState(initial);
+  const toggleOriginal = () => {
+    onOriginalChange?.(!original);
+    setOriginal(!original);
+  };
   const transcript = useQuery(
     {
       queryKey: callTranscriptQueryKey(callId),
@@ -77,7 +92,7 @@ export function CallTranscriptPanel({ callId, language }: { readonly callId: str
       </p>
     );
   }
-  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={() => setOriginal((value) => !value)} />;
+  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={toggleOriginal} />;
 }
 
 type LinesProps = {
@@ -88,10 +103,6 @@ type LinesProps = {
   readonly onToggleOriginal?: () => void;
 };
 
-type Entry = { readonly type: 'line'; readonly line: TranscriptLine } | { readonly type: 'note'; readonly note: TranscriptNote };
-
-const offsetOf = (entry: Entry): number => (entry.type === 'line' ? entry.line.offsetSec : entry.note.offsetSec);
-
 function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly language: InterfaceLanguage }) {
   return (
     <li data-call-transcript-note={note.kind}>
@@ -99,41 +110,50 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
         <span>
           <JournalNoteSentence note={note} language={language} ink={{ className: 'author-ink', style: authorInkStyle({ authorId: note.userId ?? '', name: note.name ?? '' }) }} />
         </span>
-        <span className="text-mini font-semibold tabular-nums">{formatCallClock(note.offsetSec)}</span>
+        <span className="text-mini font-semibold tabular-nums">{formatCallJournalClock(note.offsetMs / 1000)}</span>
       </span>
+    </li>
+  );
+}
+
+const PRIMARY_SWAP = { 'data-call-transcript-swap': 'primary' } as const;
+
+const SECONDARY_SWAP = { 'data-call-transcript-swap': 'secondary' } as const;
+
+const SECONDARY_MARKER = { original: 'data-call-transcript-original-line', translated: 'data-call-transcript-translated-line' } as const;
+
+/**
+ * Une phrase : sa ligne EN TÊTE et, s'il y a une traduction, l'autre DESSOUS (`transcriptReading`).
+ * La traduction en tête prend la couleur d'auteur, l'original en tête l'encre du thème ; la ligne
+ * dessous, qu'elle dise « Original · » ou « Traduit · », est la même pièce à l'encre secondaire du fil.
+ */
+function SentenceItem({ line, language, inverted }: { readonly line: TranscriptLine; readonly language: InterfaceLanguage; readonly inverted: boolean }) {
+  const name = line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'));
+  const ink = authorInkStyle({ authorId: line.speakerId, name: line.speakerName ?? '' });
+  const { primary, secondary } = transcriptReading(line, inverted);
+  const primaryInk = primary.kind === 'translated' ? { className: 'author-ink block text-[13.5px]', style: ink } : { className: 'block text-[13.5px]', style: { color: 'var(--color-ios-ink)' } };
+  return (
+    <li data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
+      <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
+        <span className="author-ink" style={ink}>{name}</span>
+        <span className="tabular-nums">{formatCallJournalClock(line.offsetMs / 1000)}</span>
+      </span>
+      <span {...primaryInk} dir="auto" lang={primary.language} data-call-transcript-text={primary.kind} {...(secondary === null ? {} : PRIMARY_SWAP)}>
+        {primary.text}
+      </span>
+      {secondary === null ? null : <UnfoldedOriginal open text={secondary.text} from={secondary.language} language={language} label={secondary.kind} marker={SECONDARY_MARKER[secondary.kind]} ink={THREAD_SECONDARY_INK} attrs={SECONDARY_SWAP} />}
     </li>
   );
 }
 
 export function CallTranscriptLines({ lines, notes = [], language, original, onToggleOriginal }: LinesProps) {
   const translatedSome = lines.some((line) => line.translated);
-  const entries: readonly Entry[] = [...notes.map((note): Entry => ({ type: 'note', note })), ...lines.map((line): Entry => ({ type: 'line', line }))].sort((left, right) => offsetOf(left) - offsetOf(right));
+  const entries = transcriptEntries(lines, notes);
+  const section = useTranscriptSwapFade(original);
   return (
-    <section aria-label={translate(language, 'callTranscript.title')} className="flex w-full max-w-[560px] flex-col gap-2 rounded-card px-3 py-2 text-start" style={{ background: 'color-mix(in srgb, var(--color-ios-ink-2) 8%, transparent)' }} data-call-transcript="lines">
+    <section ref={section} aria-label={translate(language, 'callTranscript.title')} className="flex w-full flex-col gap-2 text-start" data-call-transcript="lines">
       <ol className="flex flex-col gap-2">
-        {entries.map((entry) => {
-          if (entry.type === 'note') return <NoteItem key={entry.note.id} note={entry.note} language={language} />;
-          const { line } = entry;
-          const name = line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'));
-          const ink = authorInkStyle({ authorId: line.speakerId, name: line.speakerName ?? '' });
-          return (
-            <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
-              <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
-                <span className="author-ink" style={ink}>{name}</span>
-                <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
-              </span>
-              {!original && line.translated ? (
-                <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
-                  {line.text}
-                </span>
-              ) : (
-                <span className="block text-[13.5px]" style={{ color: 'var(--color-ios-ink)' }} dir="auto" data-call-transcript-text="original">
-                  {line.original}
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {entries.map((entry) => (entry.type === 'note' ? <NoteItem key={entry.note.id} note={entry.note} language={language} /> : <SentenceItem key={entry.line.id} line={entry.line} language={language} inverted={original} />))}
       </ol>
       {translatedSome && onToggleOriginal !== undefined ? (
         <button type="button" aria-pressed={original} className="min-h-11 self-start rounded-chip px-3 text-[12.5px] font-semibold" style={{ color: 'var(--accent)' }} onClick={onToggleOriginal} data-call-transcript-original="">

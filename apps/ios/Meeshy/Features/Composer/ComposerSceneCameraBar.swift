@@ -19,7 +19,7 @@ import MeeshyUI
 /// **« Quitter » à GAUCHE, « ✓ Valider » à DROITE, le chrono au centre ; sous
 /// l'en-tête UNE capsule centrée Flash · Retardateur · Objectif · ⋯, et sous
 /// elle — flash allumé, 2 s après la dernière interaction — le curseur de son
-/// intensité ; en filmant, la barre en cases du maximum du format et le chrono
+/// intensité ; en filmant, la barre du maximum du format — une ligne, découpée à partir de deux prises — et le chrono
 /// seul** (vues A8–A9, #17109 — la disposition est la loi `ComposerCaptureTopRow`).
 struct ComposerSceneCameraBar: View {
 
@@ -54,6 +54,8 @@ struct ComposerSceneCameraBar: View {
     var holding = false
     var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     var onFlashIntensity: (Double) -> Void = { _ in }
+    /// L'objectif qui vise : la jauge du flash ne sert que l'avant (#17463).
+    var cameraPosition: AVCaptureDevice.Position = .back
     /// Une bascule d'objectif est en cours, ou la prise précédente se
     /// finalise : le bouton se tait (#9464, #9351).
     var flipping = false
@@ -82,6 +84,7 @@ struct ComposerSceneCameraBar: View {
         /// L'objectif bascule — la barre des zooms morphe (#9753).
         var switchingCamera = false
         var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
+        var cameraPosition: AVCaptureDevice.Position = .back
     }
 
     /// **Reduce Motion coupe le battement, jamais le témoin** : le point rouge
@@ -94,6 +97,8 @@ struct ComposerSceneCameraBar: View {
     @State private var recordingBlink: Double = 1
     /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
     @State private var sliderTimer = ComposerFlashSliderTimer()
+    /// Le centre du bouton flash dans la barre : la jauge se pose dessous (#17463).
+    @State private var flashMidX: CGFloat = .nan
 
     private var row: ComposerCaptureTopRow.Input {
         ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
@@ -105,7 +110,8 @@ struct ComposerSceneCameraBar: View {
     private var capsuleItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.capsule(row) }
 
     private var showsFlashSlider: Bool {
-        capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+        capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode, position: cameraPosition)
+            && sliderTimer.visible
     }
 
     /// La prise est-elle à l'écran ? Dès la tenue (#17268).
@@ -128,12 +134,8 @@ struct ComposerSceneCameraBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showsBudgetBar {
-                budgetBar
-            } else if !segments.isEmpty, !editing {
-                segmentBar
-            }
-            topControls
+            if showsProgressRow { progressRow }
+            if ComposerCaptureTopRow.showsHeader(row) { topControls }
             if !capsuleItems.isEmpty {
                 controlCapsule
                     .padding(.top, MeeshySpacing.sm)
@@ -142,17 +144,21 @@ struct ComposerSceneCameraBar: View {
             if showsFlashSlider {
                 ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
                                              onInteraction: { sliderTimer.hold($0) })
+                    .padding(.leading, ComposerFlashIntensity.sliderLeading(flashMidX: flashMidX,
+                                                                            sliderWidth: MeeshyControlSize.tapTarget))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, MeeshySpacing.sm)
                     .transition(.opacity)
             }
         }
+        .coordinateSpace(name: Self.barSpace)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.md)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsFlashSlider)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: trailingItems)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: capsuleItems)
         .adaptiveOnChange(of: flashMode) { _, mode in
-            guard ComposerFlashIntensity.showsSlider(flash: mode) else { return sliderTimer.hide() }
+            guard ComposerFlashIntensity.showsSlider(flash: mode, position: cameraPosition) else { return sliderTimer.hide() }
             sliderTimer.touch()
         }
         .task(id: sliderTimer.generation) { @MainActor in
@@ -162,22 +168,32 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
+    private var showsSegmentBar: Bool { !segments.isEmpty && !editing }
+
+    private var showsProgressRow: Bool {
+        ComposerCaptureTopRow.showsChrono(row) || showsBudgetBar || showsSegmentBar
+    }
+
+    /// **Le chrono et le nombre de segments, juste à GAUCHE de la barre** (#17469,
+    /// porteur) : une seule ligne porte la prise, l'en-tête ne la porte plus.
+    private var progressRow: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if ComposerCaptureTopRow.showsChrono(row) { chronoChip }
+            progressBar
+        }
+        .padding(.bottom, MeeshySpacing.xs)
+    }
+
     // MARK: - En tête de la carte
 
     /// **L'en-tête, disposé par sa loi** (A8, #17109) : « Quitter » à gauche,
-    /// « ✓ Valider » à droite, le chrono au centre dès qu'une vidéo se prend.
-    /// En filmant, l'en-tête se retire (`showsHeader`, A9) : le chrono reste
-    /// seul, centré, et la prise se clôt au déclencheur rouge.
+    /// « ✓ Valider » à droite. En filmant, il se retire (`showsHeader`, A9) et
+    /// la prise se clôt au déclencheur rouge.
     private var topControls: some View {
-        ZStack {
-            if ComposerCaptureTopRow.showsHeader(row) {
-                HStack(spacing: ComposerCaptureTopRow.spacing) {
-                    ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
-                    Spacer(minLength: 0)
-                    ForEach(trailingItems, id: \.self) { control($0) }
-                }
-            }
-            if ComposerCaptureTopRow.showsChrono(row) { chronoChip }
+        HStack(spacing: ComposerCaptureTopRow.spacing) {
+            ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
+            Spacer(minLength: 0)
+            ForEach(trailingItems, id: \.self) { control($0) }
         }
         .frame(minHeight: MeeshyControlSize.tapTarget)
     }
@@ -226,13 +242,17 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
-    /// **Le flash.** Le toucher change son mode et, allumé, fait paraître le
-    /// curseur d'intensité SOUS lui (#9566) pour 2 s (#9753).
+    private static let barSpace = "composer.camera.bar"
+
+    /// **Le flash.** Le toucher change son mode ; allumé, l'éclair joue DANS
+    /// l'icône (#17463) et, caméra avant, la jauge paraît SOUS lui pour 2 s (#9566, #9753).
     private var flashCluster: some View {
         capsuleControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
                        label: ComposerCameraFlash.label(for: flashMode),
                        tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
                        action: onCycleFlash)
+            .overlay { ComposerFlashIconStrike(flash: flashMode, recording: stage == .recording) }
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.barSpace)).midX } action: { flashMidX = $0 }
     }
 
     /// **Le retardateur, d'un toucher** (A8) : désactivé → 3 s → 10 s →
@@ -442,7 +462,19 @@ struct ComposerSceneCameraBar: View {
 
     // MARK: - La bande des segments (#4099, vue `4b`) et la puce du chrono (#9753)
 
-    /// La part de chaque segment, sous la rangée haute ; le dernier en rouge.
+    /// La barre de la ligne de progression : le maximum dès la prise, sinon les segments.
+    @ViewBuilder
+    private var progressBar: some View {
+        if showsBudgetBar {
+            budgetBar
+        } else if showsSegmentBar {
+            segmentBar
+        } else {
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// La part de chaque segment ; le dernier en rouge.
     private var segmentBar: some View {
         GeometryReader { geo in
             HStack(spacing: MeeshySpacing.xxs) {
@@ -456,46 +488,40 @@ struct ComposerSceneCameraBar: View {
             }
         }
         .frame(height: 3)
-        .padding(.top, MeeshySpacing.smPlus)
         .accessibilityHidden(true)
     }
 
-    /// **La barre du maximum** (A9, #17268) : le maximum du format en cases
-    /// égales, et par-dessus UNE capsule par segment déjà pris, placée à sa part
-    /// du maximum ; la prise en cours, en rouge, grandit au bout. Un segment se
-    /// LIT, là où un remplissage continu ne disait que la durée.
+    /// **La barre du maximum** (A9, #17268, #17433) : UNE piste continue du
+    /// maximum du format ; la prise en cours, en rouge, grandit dessus. Elle ne
+    /// se découpe qu'à partir de deux prises — une capsule par prise, placée à sa
+    /// part du maximum, séparée de la suivante par l'écart que la loi donne.
     private var budgetBar: some View {
-        ZStack(alignment: .leading) {
-            HStack(spacing: MeeshySpacing.xs) {
-                ForEach(0..<ComposerCaptureRecordingBudget.slots, id: \.self) { _ in
-                    Capsule().fill(Color.white.opacity(0.3))
-                }
-            }
+        let ecart = CGFloat(ComposerCaptureProgressDisplay.gap(budgetSpans))
+        return ZStack(alignment: .leading) {
+            Capsule().fill(Color.white.opacity(0.3))
             GeometryReader { piste in
                 ForEach(Array(budgetSpans.enumerated()), id: \.offset) { _, part in
                     Capsule()
                         .fill(part.live ? MeeshyColors.error : Color.white)
-                        .frame(width: max(Self.minimumSpanWidth, piste.size.width * part.length - Self.spanGap),
+                        .frame(width: max(Self.minimumSpanWidth, piste.size.width * part.length - ecart),
                                height: piste.size.height)
                         .offset(x: piste.size.width * part.start)
                 }
             }
         }
         .frame(height: 4)
-        .padding(.bottom, MeeshySpacing.sm)
         .animation(reduceMotion ? nil : .linear(duration: 0.2), value: budgetSpans)
         .accessibilityHidden(true)
     }
 
     private static let minimumSpanWidth: CGFloat = 4
-    private static let spanGap: CGFloat = 2
 
     private var elapsed: TimeInterval {
         ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)
     }
 
-    /// **La puce du chrono et de l'indicateur de segment, à DROITE de (x)**
-    /// (#9753). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
+    /// **La puce du chrono et de l'indicateur de segment, à GAUCHE de la barre**
+    /// (#9753, #17469). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
     /// distingue pas « ça tourne » de « il y a des segments ».
     private var chronoChip: some View {
         let compte = ComposerCaptureTopRow.segmentCount(pending: segments.count, recording: stage == .recording)
@@ -522,7 +548,7 @@ struct ComposerSceneCameraBar: View {
         .frame(height: 32)
         .adaptiveLiquidGlass(in: Capsule())
         .frame(minHeight: MeeshyControlSize.tapTarget)
-        // L'écran montre « 3 – » ; VoiceOver dit « 3 segments » (#10310), puis
+        // L'écran montre « 3 » ; VoiceOver dit « 3 segments » (#10310), puis
         // la minuterie EN MOTS — il lirait « 0:12 » comme une heure.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))

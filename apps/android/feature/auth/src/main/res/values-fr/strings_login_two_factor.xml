@@ -3,5 +3,4 @@
     <string name="login_two_factor_error_invalid_code">Ce code n\'est pas le bon. Vérifiez votre application d\'authentification et réessayez.</string>
     <string name="login_two_factor_error_too_many_attempts">Trop de tentatives. Réessayez dans quelques minutes.</string>
     <string name="login_two_factor_error_token_expired">Cette connexion a expiré. Saisissez de nouveau votre mot de passe.</string>
-    <string name="login_two_factor_description_with_backup">Entrez le code de vérification à 6 chiffres de votre application d\'authentification, ou l\'un de vos codes de secours.</string>
 </resources>

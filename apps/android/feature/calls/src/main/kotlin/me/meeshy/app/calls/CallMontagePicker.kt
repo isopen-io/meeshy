@@ -8,12 +8,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -33,10 +34,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -52,8 +56,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,6 +72,13 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.frames.CallFramePortrait
 import me.meeshy.sdk.call.frames.CallFrameThumbnailCache
 import me.meeshy.sdk.call.frames.CallFrameRenderer
+import me.meeshy.sdk.model.call.effects.CallEffectKind
+import me.meeshy.sdk.model.call.effects.CallEffectLayers
+import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
+import me.meeshy.sdk.model.call.effects.CallEffectsBarRule
+import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsGenreRule
+import me.meeshy.sdk.model.call.effects.category
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
@@ -92,11 +106,14 @@ private val THUMB_SPACING = 12.dp
 private val SIDE_DIAMETER = 48.dp
 
 /**
- * **LE CHOIX DU MODE MONTAGE** (#13690, #13732, #13733) — comme `CallMontageModeControls` d'iOS : les puces
- * (« Classiques », les ambiances mises en avant, puis « Plus d'ambiances »), le carrousel aimanté dont l'élément
- * centré est choisi et SE déclenche (deux tapes : photo ; appui long : film), chaque vignette peinte sur les
- * visages de l'appel ; puis la barre d'actions : Quitter, et « Cadre » qui garde le cadre affiché pendant l'appel
- * et le propose à l'autre. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
+ * **LE CHOIX DU MODE MONTAGE** (#13690, #13732, #13733, #16979) — la barre est celle d'Effets, `‹ · Réglages · (+)` (loi 14) :
+ * au-dessus d'elle, la rangée de genres de la famille (Visage · Couleur · Cadres, [CallEffectsGenreRule.row], la même
+ * qu'en Effets) dont « Cadres » est pressée, puis la bande des cadres — l'option « Cadre » (garder le cadre pour les deux
+ * et le proposer), les ambiances, le carrousel aimanté dont l'élément centré est choisi et SE déclenche (deux tapes :
+ * photo ; appui long : film). Ni Quitter ni Valider : ce qui est touché s'applique aussitôt, ‹ revient à l'appel, et après
+ * chaque choix la barre revient à son menu de base. « Réglages » porte « Chaque visage » ; Visage ou Couleur touchés, comme
+ * (+), ouvrent Effets sur ce genre (un genre absent de la pile, trois couches au plus) ; l'appui long de (+) liste les
+ * effets appliqués pour en annuler un. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
  */
 @Composable
 internal fun CallMontagePicker(
@@ -108,29 +125,29 @@ internal fun CallMontagePicker(
     reduceMotion: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    layers: CallEffectLayers = CallEffectLayers.EMPTY,
+    effectsOffered: Boolean = false,
+    onRemoveEffect: (CallEffectKind) -> Unit = {},
+    onOpenEffects: (CallEffectsCategory) -> Unit = {},
 ) {
     val held by live.state.collectAsState()
     val pick by capture.pick.collectAsStateWithLifecycle()
     val captureState by capture.state.collectAsStateWithLifecycle()
-    val previews by capture.previews.collectAsStateWithLifecycle()
-    val count = people.size
-    val chip = CallMontagePickRule.shownChip(pick, count)
-    val scope = CallMontagePickRule.scope(pick, count)
-    val selection = CallMontagePickRule.selection(pick, count)
-    val items = CallMontagePickRule.items(pick, count)
-    val hold = CallMontagePickRule.hold(pick, count, held.frameId, isLiveOffered)
     val hints = rememberCaptureHint()
     val shooter = rememberCallCaptureShooter(capture, scene, hints)
-    val haptics = LocalHapticFeedback.current
-    val classicNames = CallMontageStyle.entries.associateWith { stringResource(styleName(it)) }
-    val language = LocalConfiguration.current.locales[0]?.language
-    val nextDeclination = stringResource(R.string.call_live_frame_declination_next)
-    val previousDeclination = stringResource(R.string.call_live_frame_declination_previous)
-    fun stepDeclination(offset: Int): Boolean {
-        val current = CallMontagePickRule.choice(pick, count) as? CallMontageChoice.Frame ?: return false
-        val next = CallFrameStyleRule.neighbour(current.id, offset) ?: return false
-        capture.select(CallMontageChoice.Frame(next.id))
-        return true
+    var bar by remember { mutableStateOf(CallEffectsBarMode.Base) }
+    val shownBar = CallEffectsBarRule.reconciled(bar, hasLayers = !layers.isEmpty)
+    LaunchedEffect(shownBar) { bar = shownBar }
+    val chosenFrame = CallFrameLayer.chosen(pick, people.size)
+    val row = CallEffectsGenreRule.row(offersEffects = effectsOffered, offersFrames = true)
+    val added = CallEffectsGenreRule.adding(CallEffectKind.Frame, layers, row)
+    val faces: () -> Unit = {
+        shooter.faces()
+        bar = CallEffectsBarRule.afterChoice
+    }
+    val removeLayer: (CallEffectKind) -> Unit = { kind ->
+        if (kind == CallEffectKind.Frame) CallFrameLayer.remove(capture, live, held.frameId, chosenFrame) else onRemoveEffect(kind)
+        bar = CallEffectsBarRule.afterRemoval
     }
     Column(
         modifier = modifier
@@ -140,6 +157,61 @@ internal fun CallMontagePicker(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        EffectsBand(shownBar, reduceMotion) { shown ->
+            when (shown) {
+                CallEffectsBarMode.Base -> MontageLooksBand(live, capture, people, isLiveOffered, reduceMotion, layers, shooter, hints)
+                CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = faces)
+                CallEffectsBarMode.Applied -> EffectsAppliedPanel(layers, removeLayer)
+            }
+        }
+        EffectsBar(
+            chips = row,
+            selected = CallEffectKind.Frame,
+            bar = shownBar,
+            layers = layers,
+            reduceMotion = reduceMotion,
+            onBack = onClose,
+            onSettings = { bar = CallEffectsBarRule.afterSettings(shownBar) },
+            onAddLook = { added?.category?.let(onOpenEffects) },
+            onShowApplied = { bar = CallEffectsBarRule.afterShowingApplied(shownBar, hasLayers = !layers.isEmpty) },
+            onChip = { kind -> kind.category?.let(onOpenEffects) },
+            addsLook = added != null,
+            settingsHint = stringResource(R.string.call_montage_settings_hint),
+        )
+    }
+}
+
+/**
+ * La bande des cadres, sur le menu de base : l'option « Cadre » (pressée en blanc quand le cadre est gardé), les puces
+ * (« Classiques », les ambiances mises en avant, puis « Plus d'ambiances »), puis le carrousel, chaque vignette peinte sur
+ * les visages de l'appel. Trois couches déjà posées sans cadre : un cadre n'est pas choisi (un classique, si).
+ */
+@Composable
+private fun MontageLooksBand(
+    live: CallLiveFrameController,
+    capture: CallCaptureController,
+    people: List<CallFramePerson>,
+    isLiveOffered: Boolean,
+    reduceMotion: Boolean,
+    layers: CallEffectLayers,
+    shooter: CallCaptureShooter,
+    hints: CaptureHintMemory,
+) {
+    val held by live.state.collectAsState()
+    val pick by capture.pick.collectAsStateWithLifecycle()
+    val captureState by capture.state.collectAsStateWithLifecycle()
+    val count = people.size
+    val chip = CallMontagePickRule.shownChip(pick, count)
+    val hold = CallMontagePickRule.hold(pick, count, held.frameId, isLiveOffered)
+    val haptics = LocalHapticFeedback.current
+    val mayPickFrame = layers.allows(CallEffectKind.Frame)
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
+        hold?.let { option ->
+            FrameHoldChip(option, enabled = CallMontagePickRule.holdEnabled(captureState.isRecording)) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                live.apply(CallLiveFrameRule.toggledHold(held.frameId, option.frameId))
+            }
+        }
         MoodChips(
             chips = CallMontagePickRule.chips(pick, count),
             selected = chip,
@@ -147,110 +219,138 @@ internal fun CallMontagePicker(
             toggle = CallMontagePickRule.scopeToggle(pick, count),
             onScope = { showsAll -> capture.setScope(if (showsAll) CallFrameScope.SPOTLIGHT else CallFrameScope.ALL, count) },
         ) { tapped ->
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            capture.show(tapped, count)
-        }
-        key(chip, scope) {
-            CallModeCarousel(
-                items = items,
-                selection = selection,
-                title = stringResource(R.string.call_mode_montage_title),
-                name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames, language) },
-                reduceMotion = reduceMotion,
-                onSelect = { item -> if (item != selection) capture.select(item) },
-                nextLabel = stringResource(R.string.call_montage_next),
-                previousLabel = stringResource(R.string.call_montage_previous),
-                itemWidth = THUMB_WIDTH,
-                itemHeight = THUMB_HEIGHT,
-                spacing = THUMB_SPACING,
-                hint = stringResource(R.string.call_mode_gesture_hint)
-                    .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) },
-                shots = CallModeShots(captureState.isRecording, shooter.shoot, shooter.film),
-                extraActions = if (CallMontageFrameRule.declinations(selection).size > 1) {
-                    listOf(
-                        CustomAccessibilityAction(nextDeclination) { stepDeclination(1) },
-                        CustomAccessibilityAction(previousDeclination) { stepDeclination(-1) },
-                    )
-                } else {
-                    emptyList()
-                },
-            ) { item, isShown ->
-                MontageCell(
-                    item = item,
-                    posed = CallMontagePickRule.declined(pick, item, count),
-                    isSelected = isShown && item == selection,
-                    previews = previews,
-                    people = people,
-                    onDecline = { id -> capture.select(CallMontageChoice.Frame(id)) },
-                )
+            if (tapped !is CallMontageMoodChip.Mood || mayPickFrame) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                capture.show(tapped, count)
             }
         }
-        MontageActionBar(
-            hold = hold,
-            isRecording = captureState.isRecording,
-            facesEnabled = !captureState.isWorking && !captureState.isRecording,
-            onFaces = shooter.faces,
-            onQuit = onClose,
-            onHold = { id ->
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                live.apply(CallLiveFrameRule.toggledHold(held.frameId, id))
-            },
-        )
+        MontageFramesCarousel(capture, people, layers, shooter, hints, reduceMotion)
     }
 }
 
-
-
 /**
- * Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel, puis « Chaque visage »
- * (iOS `CallModeActionBar`, options `holdOptions + [faces]`), refusé pendant une prise ou un film.
+ * Le carrousel aimanté des cadres : l'élément centré est choisi et SE déclenche (deux tapes : photo ; appui long : film),
+ * chaque vignette peinte sur les visages de l'appel. Un cadre refusé par la pile pleine n'est pas choisi.
  */
 @Composable
-private fun MontageActionBar(
-    hold: CallMontageHold?,
-    isRecording: Boolean,
-    facesEnabled: Boolean,
-    onFaces: () -> Unit,
-    onQuit: () -> Unit,
-    onHold: (String) -> Unit,
+private fun MontageFramesCarousel(
+    capture: CallCaptureController,
+    people: List<CallFramePerson>,
+    layers: CallEffectLayers,
+    shooter: CallCaptureShooter,
+    hints: CaptureHintMemory,
+    reduceMotion: Boolean,
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        CallPillButton(
-            icon = MeeshyIcons.Close,
-            kind = CallPillKind.Normal,
-            label = stringResource(R.string.call_mode_quit),
-            caption = stringResource(R.string.call_mode_quit),
-            hint = stringResource(R.string.call_mode_quit_montage_hint),
-            diameter = SIDE_DIAMETER,
-            onClick = onQuit,
-        )
-        Spacer(Modifier.weight(1f))
-        hold?.let { option ->
-            CallPillButton(
-                icon = MeeshyIcons.Wallpaper,
-                kind = if (option.isOn) CallPillKind.Active else CallPillKind.Normal,
-                label = stringResource(R.string.call_live_frame_label),
-                caption = stringResource(R.string.call_live_frame_caption),
-                hint = stringResource(R.string.call_live_frame_hold_hint),
-                toggleState = option.isOn,
-                diameter = SIDE_DIAMETER,
-                onClick = { if (!isRecording) onHold(option.frameId) },
+    val pick by capture.pick.collectAsStateWithLifecycle()
+    val captureState by capture.state.collectAsStateWithLifecycle()
+    val previews by capture.previews.collectAsStateWithLifecycle()
+    val count = people.size
+    val chip = CallMontagePickRule.shownChip(pick, count)
+    val scope = CallMontagePickRule.scope(pick, count)
+    val selection = CallMontagePickRule.selection(pick, count)
+    val classicNames = CallMontageStyle.entries.associateWith { stringResource(styleName(it)) }
+    val language = LocalConfiguration.current.locales[0]?.language
+    val nextDeclination = stringResource(R.string.call_live_frame_declination_next)
+    val previousDeclination = stringResource(R.string.call_live_frame_declination_previous)
+    val mayPickFrame = layers.allows(CallEffectKind.Frame)
+    fun stepDeclination(offset: Int): Boolean {
+        val current = CallMontagePickRule.choice(pick, count) as? CallMontageChoice.Frame ?: return false
+        val next = CallFrameStyleRule.neighbour(current.id, offset) ?: return false
+        capture.select(CallMontageChoice.Frame(next.id))
+        return true
+    }
+    key(chip, scope) {
+        CallModeCarousel(
+            items = CallMontagePickRule.items(pick, count),
+            selection = selection,
+            title = stringResource(R.string.call_mode_montage_title),
+            name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames, language) },
+            reduceMotion = reduceMotion,
+            onSelect = { item -> if (item != selection && (item !is CallMontageChoice.Frame || mayPickFrame)) capture.select(item) },
+            nextLabel = stringResource(R.string.call_montage_next),
+            previousLabel = stringResource(R.string.call_montage_previous),
+            itemWidth = THUMB_WIDTH,
+            itemHeight = THUMB_HEIGHT,
+            spacing = THUMB_SPACING,
+            hint = stringResource(R.string.call_mode_gesture_hint)
+                .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) },
+            shots = CallModeShots(captureState.isRecording, shooter.shoot, shooter.film),
+            extraActions = if (CallMontageFrameRule.declinations(selection).size > 1) {
+                listOf(
+                    CustomAccessibilityAction(nextDeclination) { stepDeclination(1) },
+                    CustomAccessibilityAction(previousDeclination) { stepDeclination(-1) },
+                )
+            } else {
+                emptyList()
+            },
+        ) { item, isShown ->
+            MontageCell(
+                item = item,
+                posed = CallMontagePickRule.declined(pick, item, count),
+                isSelected = isShown && item == selection,
+                previews = previews,
+                people = people,
+                onDecline = { id -> capture.select(CallMontageChoice.Frame(id)) },
             )
         }
-        CallPillButton(
-            icon = MeeshyIcons.Account,
-            kind = CallPillKind.Normal,
-            label = stringResource(R.string.call_capture_faces),
-            caption = stringResource(R.string.call_capture_faces),
-            hint = stringResource(R.string.call_capture_faces_hint),
-            diameter = SIDE_DIAMETER,
-            enabled = facesEnabled,
-            onClick = onFaces,
-        )
+    }
+}
+
+/**
+ * « Réglages » au Montage : un verre séparé, posé au-dessus de la barre à la place de la bande de cadres. « Chaque
+ * visage » n'a pas de place dessinée sur C1 ; il se range ici (comme sur iOS), refusé pendant une prise ou un film, et
+ * le toucher rend le menu de base ([CallEffectsBarRule.afterChoice]).
+ */
+@Composable
+private fun MontageSettingsPanel(facesEnabled: Boolean, onFaces: () -> Unit) {
+    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+        Row(Modifier.fillMaxWidth().padding(MeeshySpacing.md), horizontalArrangement = Arrangement.Center) {
+            CallPillButton(
+                icon = MeeshyIcons.Account,
+                kind = CallPillKind.Normal,
+                label = stringResource(R.string.call_capture_faces),
+                caption = stringResource(R.string.call_capture_faces),
+                hint = stringResource(R.string.call_capture_faces_hint),
+                diameter = SIDE_DIAMETER,
+                enabled = facesEnabled,
+                onClick = onFaces,
+            )
+        }
+    }
+}
+
+/**
+ * L'option « Cadre » (C1) : une puce de verre au-dessus des ambiances, pressée en blanc quand le cadre affiché est GARDÉ
+ * pendant l'appel (et proposé à l'autre). Refusée pendant une prise ou un film, désactivée et non seulement sourde.
+ */
+@Composable
+internal fun FrameHoldChip(option: CallMontageHold, enabled: Boolean, onToggle: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val kind = if (option.isOn) CallPillKind.Active else CallPillKind.Normal
+    val label = stringResource(R.string.call_live_frame_label)
+    CallGlassButtonSurface(
+        role = kind.glassRole(),
+        shape = CircleShape,
+        isPressed = pressed,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(enabled = enabled, interactionSource = source, indication = null, onClickLabel = stringResource(R.string.call_live_frame_hold_hint), role = Role.Switch, onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                toggleableState = ToggleableState(option.isOn)
+            },
+    ) {
+        Row(Modifier.padding(horizontal = MeeshySpacing.lg), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+            Icon(MeeshyIcons.Wallpaper, contentDescription = null, tint = CallButtonFill.glyph(kind), modifier = Modifier.size(20.dp))
+            Text(
+                text = stringResource(R.string.call_live_frame_caption),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = CallButtonFill.glyph(kind),
+            )
+        }
     }
 }
 

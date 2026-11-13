@@ -97,7 +97,7 @@ describe('la carte du lien', () => {
     const html = renderToStaticMarkup(<InviteLinkCard language="fr" link={link()} url="https://meeshy.me/chat/mshy_l1" copied={false} onShare={noop} onCopy={noop} />);
     const text = plain(html);
     expect(text).toContain('Nova Club');
-    expect(text).toContain('Lien créé le 2 sept. 2026');
+    expect(text).toContain('Créé le 2 sept. 2026');
     expect(text).toContain('Actif');
     expect(text).toContain('meeshy.me/chat/mshy_l1');
     expect(text).not.toContain('https://');
@@ -115,7 +115,7 @@ describe('la carte du lien', () => {
 
   test('copié : le bouton le dit', () => {
     const html = renderToStaticMarkup(<InviteLinkCard language="fr" link={link()} url="https://meeshy.me/chat/mshy_l1" copied onShare={noop} onCopy={noop} />);
-    expect(plain(html)).toContain('Lien copié');
+    expect(plain(html)).toContain('Copié');
   });
 });
 
@@ -153,7 +153,7 @@ describe('arrivés récemment', () => {
 
   test('personne encore : l’état vide le dit', () => {
     const html = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={{ ...STATS, arrivals: 0, recentArrivals: [] }} now={NOW} />);
-    expect(plain(html)).toContain('Personne n’est encore arrivé par ce lien.');
+    expect(plain(html)).toContain('Aucune arrivée');
   });
 
   test('plus d’arrivées que les récentes : « Voir les N arrivées » mène à la liste complète', () => {
@@ -178,19 +178,20 @@ describe('la configuration, en lecture', () => {
     const html = renderToStaticMarkup(<ConfigurationCard language="fr" link={link()} policy={POLICY} />);
     const text = plain(html);
     expect(text).toContain('Compte Meeshy Facultatif');
-    expect(text).toContain('Demandé à l’arrivée Prénom');
+    expect(text).toContain('Demander aux invités Compte Meeshy Facultatif Pseudo Obligatoire');
     expect(text).toContain('Utilisations 412 / illimité');
     expect(text).toContain('En même temps 50 max');
     expect(text).toMatch(/Expire le 1 oct\. 2026/u);
     expect(text).toContain('Toutes les langues');
-    expect(text).toContain('Envoyer des fichiers non autorisé');
+    expect(text).toContain('Fichiers non autorisé');
     expect(html).toContain('href="#link-edit"');
   });
 
-  test('compte obligatoire : plus rien n’est « demandé à l’arrivée »', () => {
+  test('compte obligatoire : plus aucune rangée « demandée » ne s’ajoute au compte', () => {
     const text = plain(renderToStaticMarkup(<ConfigurationCard language="fr" link={link()} policy={{ ...POLICY, requireAccount: true }} />));
     expect(text).toContain('Compte Meeshy Obligatoire');
-    expect(text).toContain('Demandé à l’arrivée Rien');
+    expect(text).not.toContain('Pseudo');
+    expect(text).not.toContain('Rien');
   });
 
   test('sans politique lue : elle le dit, sans rien inventer', () => {

@@ -15,6 +15,8 @@
  * `X-Device-Locale`. Témoin : `client-capabilities-cors.test.ts`.
  */
 
+import { EXTERNAL_CONVERSATIONS_CAPABILITY } from '@meeshy/shared/types/external-conversation';
+
 export const CLIENT_CAPABILITIES_HEADER = 'x-meeshy-capabilities';
 
 export const CLIENT_CAPABILITIES = {
@@ -24,6 +26,8 @@ export const CLIENT_CAPABILITIES = {
   onboardingProfile: 'onboarding-profile',
   /** #10872/#10878 — ce binaire présente le secret de liaison et sait demander « Se connecter en tant que @x ? ». */
   linkDeviceBinding: 'link-device-binding',
+  /** #17117 — ce client sait lire une conversation `external` (un ami d'un réseau tiers) ; sans le jeton, la liste ne la sert pas. */
+  externalConversations: EXTERNAL_CONVERSATIONS_CAPABILITY,
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPABILITIES)[keyof typeof CLIENT_CAPABILITIES];
@@ -46,10 +50,10 @@ export function announcesCapability(
  * origine la réponse préparée pour une autre.
  */
 export function appendVary(
-  reply: { getHeader(name: string): unknown; header(name: string, value: string): unknown },
+  reply: { getHeader?(name: string): unknown; header(name: string, value: string): unknown },
   headerName: string
 ): void {
-  const current = reply.getHeader('vary');
+  const current = reply.getHeader?.('vary');
   const existing = (Array.isArray(current) ? current.join(',') : typeof current === 'string' ? current : '')
     .split(',')
     .map((name) => name.trim())

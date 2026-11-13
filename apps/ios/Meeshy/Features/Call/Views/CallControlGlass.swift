@@ -6,22 +6,91 @@ import MeeshySDK
 
 /// These are thin, app-side *styling* helpers: they encode Meeshy's product
 /// choices (circle diameter, active→tint, red hang-up) and delegate the version
-/// gating to the SDK `Compatibility/` layer (`adaptiveGlass` /
+/// gating to the SDK `Compatibility/` layer (`adaptiveLiquidGlass` /
 /// `adaptiveGlassProminent` / `AdaptiveGlassContainer`), which owns the real
 /// `#available(iOS 26.0, *)` and the pre-iOS-26 fallback.
+enum CallControlGlassMetrics {
+    /// La distance sous laquelle deux verres voisins se fondent (iOS 26). Les
+    /// boutons d'un appel sont espacés de plus : ils se composent ensemble sans
+    /// jamais se confondre.
+    static let containerSpacing: CGFloat = MeeshySpacing.sm
+}
+
+/// P15.5 — le ton du verre de l'appel. Un écran partagé par l'autre est un contenu clair :
+/// le verre de l'en-tête, de la capsule, des sous-titres et de la pilule s'assombrit pour garder
+/// le contraste (loi 3). La décision est pure ; la matière reste celle du SDK (`onLight`).
+enum CallGlassTone {
+    /// `nil` : le verre habituel. Un écran reçu tient la scène : la luminance de l'écran, quand
+    /// on la mesure, dit le ton par la loi du SDK ; non mesurée, un écran partagé est pris pour
+    /// clair (comme Android et le web), le seul pari qui garde l'encre blanche lisible.
+    static func resolve(showsReceivedScreen: Bool, luminance: Double? = nil, previous: MeeshyGlassTone? = nil) -> MeeshyGlassTone? {
+        guard showsReceivedScreen else { return nil }
+        guard let luminance else { return .onLight }
+        return MeeshyGlassTone.resolve(luminance: luminance, previous: previous)
+    }
+
+    /// Le voile sombre sous le verre : celui du repos, sauf sur un contenu clair, où il prend la
+    /// mesure du SDK pour ce ton (jamais un second chiffre).
+    static func veilOpacity(tone: MeeshyGlassTone?, resting: Double) -> Double {
+        tone.flatMap { MeeshyGlassRecipe.liquidWash(tone: $0) } ?? resting
+    }
+}
+
+private struct CallGlassToneKey: EnvironmentKey {
+    static let defaultValue: MeeshyGlassTone? = nil
+}
+
+extension EnvironmentValues {
+    /// Posé UNE fois, à la racine de l'appel : tout verre de l'écran d'appel le lit.
+    var callGlassTone: MeeshyGlassTone? {
+        get { self[CallGlassToneKey.self] }
+        set { self[CallGlassToneKey.self] = newValue }
+    }
+}
+
+/// Le voile sous un verre de l'appel, au ton de l'écran. Le passage de l'un à l'autre est un
+/// fondu court (opacité seule), que « Réduire les animations » garde tel quel.
+struct CallGlassVeil<S: Shape>: ViewModifier {
+    let shape: S
+    let resting: Double
+
+    @Environment(\.callGlassTone) private var tone
+
+    func body(content: Content) -> some View {
+        let opacity = CallGlassTone.veilOpacity(tone: tone, resting: resting)
+        return content
+            .background(shape.fill(Color.black.opacity(opacity)))
+            .animation(.easeInOut(duration: CallChromeVisibility.fadeDuration), value: opacity)
+    }
+}
+
+/// Loi 18 · R2.11 · R3.12 · #17815 — le verre d'un bandeau de la pile du haut (carte d'accord et
+/// capsule d'enregistrement, carte et capsule du cadre en direct) : `adaptiveLiquidGlass` par son
+/// entrée du kit (`meeshyGlass`, ton `theme`) — Liquid Glass sur iOS 26, verre dessiné avant, plein
+/// sous « Réduire la transparence » — sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
+struct CallBannerGlass<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
+            .meeshyGlass(in: shape, tone: .theme)
+    }
+}
+
 extension View {
-    /// Regular Liquid Glass circle for a neutral/secondary control. Active state
-    /// tints the glass; inactive renders plain glass (clear / material fallback).
+    /// #17323 — Liquid Glass interactif sous iOS 26, verre dessiné avant. Active
+    /// state tints the glass; inactive renders plain glass.
     func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {
         self
             .frame(width: diameter, height: diameter)
-            .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
+            .adaptiveLiquidGlass(in: Circle(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
     }
 
     /// #8742 — une puce d'ambiance du Montage : la même capsule de verre
     /// interactive, teintée quand elle est choisie.
     func callChipGlass(isActive: Bool, tint: Color) -> some View {
-        adaptiveGlass(in: Capsule(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
+        adaptiveLiquidGlass(in: Capsule(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
     }
 
     /// Prominent red Liquid Glass circle for the hang-up button.
@@ -37,19 +106,18 @@ extension View {
     /// (écran partagé, document filmé).
     func callChromeGlass<S: Shape>(in shape: S) -> some View {
         self
-            .background(shape.fill(Color.black.opacity(0.22)))
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
             .adaptiveGlass(in: shape)
     }
 
     /// #8459 — la pilule d'appel est UN bloc de verre réel (`glassEffect`
     /// sous iOS 26, matériau avant) : les boutons Plus · Micro · Sortie · Fin
-    /// ET les actions déployées du (…) vivent dedans. Ses boutons sont des
-    /// disques plats (`CallButtonFill`) — le verre ne sait pas échantillonner
-    /// le verre. Un voile sombre dessous garde les légendes lisibles sur une
-    /// image claire (écran partagé, document filmé).
+    /// ET les actions déployées du (…) vivent dedans. #17323 — chacun est lui-même
+    /// un verre (`CallButtonGlassModifier`). Un voile sombre dessous garde les
+    /// légendes lisibles sur une image claire (écran partagé, document filmé).
     func callControlsGlass<S: Shape>(in shape: S) -> some View {
         self
-            .background(shape.fill(Color.black.opacity(MeeshyOpacity.light)))
+            .modifier(CallGlassVeil(shape: shape, resting: MeeshyOpacity.light))
             .adaptiveGlass(in: shape)
     }
 
@@ -119,21 +187,96 @@ private struct CallChromeVisibilityModifier: ViewModifier {
     }
 }
 
-/// #8459 — le disque d'UN bouton du bloc de verre, selon son état : neutre
-/// translucide, blanc plein quand il est actif, rouge pour Fin. Aucun verre
-/// propre : le bouton est DANS le verre.
-enum CallButtonFill {
-    static func color(for kind: CallPillButtonKind) -> Color {
-        switch kind {
-        case .normal, .warning: return Color.white.opacity(0.16)
-        case .active: return .white
-        case .destructive: return MeeshyColors.error
+/// #17323 — le verre d'UN bouton : `CallButtonGlassRule` choisit son
+/// traitement. Fin garde son verre rouge (`endCallGlass`), tout autre bouton
+/// est un verre neutre (`callControlGlass`), adossé à un blanc plein quand il
+/// est actif. Aucun appel de verre n'est réécrit ici : les deux sites existent.
+struct CallButtonGlassModifier: ViewModifier {
+    let kind: CallPillButtonKind
+    let diameter: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let treatment = CallButtonGlassRule.treatment(for: kind, isLiquidGlassAvailable: Platform.isIOS26OrLater)
+        switch treatment.surface {
+        case .prominentRed:
+            content.endCallGlass(diameter: diameter)
+        case .liquidGlass:
+            content
+                .callControlGlass(diameter: diameter, isActive: false, tint: .white)
+                .background(treatment.hasSolidWhiteBacking ? Color.white : Color.clear, in: Circle())
         }
     }
+}
 
-    /// #8735 — sous le doigt, le disque s'éclaircit (0,16 → ~0,34 sur un
-    /// disque neutre) : l'enfoncement se voit, même sans rétrécissement.
+/// #17323 — une capsule d'en-tête qui s'ouvre au toucher (la qualité du
+/// lien) : le voile sombre de `callChromeGlass`, sous le verre interactif de
+/// la puce d'ambiance (`callChipGlass`).
+struct CallInteractiveChromeCapsule: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: Capsule(), resting: 0.22))
+            .callChipGlass(isActive: false, tint: .white)
+    }
+}
+
+/// #8735 — sous le doigt, le verre dessiné (avant iOS 26) s'éclaircit : le
+/// retour se voit, même sans rétrécissement. Sous iOS 26 le verre interactif
+/// réagit seul (`CallButtonGlassRule.drawsPressHighlight`).
+enum CallButtonFill {
     static func pressedHighlight(isPressed: Bool) -> Color {
         Color.white.opacity(isPressed ? 0.22 : 0)
+    }
+}
+
+/// G1.11 · G2.8 — rangé, un élément du chrome (l'en-tête, la pilule) sort par SON bord de l'écran
+/// et en revient (loi 17), de toute sa hauteur mesurée ; Réduire les animations : un fondu, rien
+/// ne se déplace. La mesure ne lit que la taille : la translation ne la change pas.
+struct CallEdgeStow: ViewModifier {
+    let edge: VerticalEdge
+    let margin: CGFloat
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    @State private var extent: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { extent = $0 }
+            .offset(y: CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion) ? CallChromeStow.travel(toward: edge, extent: extent, margin: margin) : 0)
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)
+    }
+}
+
+/// G1.11 — ma vignette se range par une transformation, ancrée à son coin : son cadre ne
+/// change pas. Réduire les animations : elle change de taille sans mouvement.
+struct CallSelfTileStow: ViewModifier {
+    let factor: CGFloat
+    let anchor: UnitPoint
+    let isChromeVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(factor, anchor: anchor)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)
+    }
+}
+
+/// P16.8 · R1.6 · R3.10 — ma vignette descend sous la pile des bandeaux (partage, enregistrement,
+/// capture) quand elle grandit et remonte quand elle rétrécit, dans le même mouvement qu'elle.
+/// L1.5 — quand la fenêtre change de forme, elle se couche ou se relève dans le même mouvement que sa place.
+/// Réduire les animations : elle se pose sans mouvement. Seule la pile anime la place : un glisser ou un coin choisi garde son ressort.
+struct CallSelfTilePlacement: ViewModifier {
+    let position: CGPoint
+    let isLandscape: Bool
+    let clearance: CGFloat
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .position(position)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: clearance)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)
     }
 }

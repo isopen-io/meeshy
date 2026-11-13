@@ -3,8 +3,8 @@ import XCTest
 
 /// #8394 — la pilule d'appel « C adapté » : ce que le (…) déploie, et quelles
 /// actions rejoignent le groupe « mon image » et le groupe « l'appel » selon le
-/// contexte de l'appel. #8550 — une rangée par famille, empilées au-dessus de
-/// la rangée de base, en duo comme en groupe. #8578 — l'état de l'écran vit
+/// contexte de l'appel. #8550 — une famille par ligne (rangée de la pilule en
+/// groupe, rail en duo : #17327). #8578 — l'état de l'écran vit
 /// dans `CallScreenLayer`. #8436 — la conversation n'a qu'une porte : l'en-tête.
 @MainActor
 final class CallControlsLayoutTests: XCTestCase {
@@ -15,7 +15,6 @@ final class CallControlsLayoutTests: XCTestCase {
         hasSelectableCameras: Bool = false,
         isConnected: Bool = true,
         mayRecord: Bool = false,
-        canPictureInPicture: Bool = false,
         showsVideo: Bool? = nil
     ) -> CallActionContext {
         CallActionContext(
@@ -24,7 +23,6 @@ final class CallControlsLayoutTests: XCTestCase {
             hasSelectableCameras: hasSelectableCameras,
             isConnected: isConnected,
             mayRecord: mayRecord,
-            canPictureInPicture: canPictureInPicture,
             showsVideo: showsVideo
         )
     }
@@ -59,15 +57,14 @@ final class CallControlsLayoutTests: XCTestCase {
     // MARK: - Groupe « l'appel »
 
     func test_theCall_minimal_offersCaptionsJournalAddPeopleAndReact() {
-        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .journal, .addPeople, .react])
+        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .addPeople, .journal, .react])
     }
 
     /// #8579 — le journal de l'appel a sa porte dans « L'appel », sous-titres
     /// affichés ou non.
-    func test_theCall_journal_isAlwaysOfferedRightAfterCaptions() {
+    func test_theCall_journal_isAlwaysOffered() {
         for isConnected in [true, false] {
-            let theCall = CallActionSet.resolve(context(isConnected: isConnected)).theCall
-            XCTAssertEqual(Array(theCall.prefix(2)), [.captions, .journal])
+            XCTAssertTrue(CallActionSet.resolve(context(isConnected: isConnected)).theCall.contains(.journal))
         }
     }
 
@@ -76,14 +73,20 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions, .journal])
     }
 
-    func test_theCall_everythingAvailable_ordersCaptionsJournalAddReactCaptureRecordPip() {
-        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .recording, .pictureInPicture])
+    /// #17329 — l'ordre tranché : Sous-titres · Enregistrer · Ajouter · Journal · Réagir ·
+    /// Capture. L'image dans l'image a quitté la liste : son bouton est dans l'en-tête.
+    func test_theCall_everythingAvailable_ordersCaptionsRecordAddJournalReactCapture() {
+        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
+        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .journal, .react, .capture])
     }
 
     func test_theCall_recordingNotAllowed_isAbsent() {
-        let actions = CallActionSet.resolve(context(canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .pictureInPicture])
+        let actions = CallActionSet.resolve(context())
+        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .journal, .react])
+    }
+
+    func test_actionCatalog_neverOffersPictureInPicture_itLivesInTheHeader() {
+        XCTAssertFalse(CallAction.allCases.map(\.rawValue).contains("pictureInPicture"))
     }
 
     /// #8552 — on ne capture que ce qu'on voit : un appel sans vidéo n'a rien
@@ -100,7 +103,7 @@ final class CallControlsLayoutTests: XCTestCase {
     /// #9287 — le cadre en direct se choisit DANS la capture : aucune entrée à part.
     func test_theCall_videoDuo_framesLiveThroughCaptureOnly() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
-        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .recording])
+        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .journal, .react, .capture])
     }
 
     func test_theCall_videoNotYetConnected_offersNoCapture() {
@@ -122,7 +125,7 @@ final class CallControlsLayoutTests: XCTestCase {
     }
 
     func test_familyRows_keepEveryActionOnItsRow_neverCutsIntoColumns() {
-        let all = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
+        let all = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
         XCTAssertEqual(all.familyRows.map(\.actions), [all.myImage, all.theCall])
     }
 
@@ -133,8 +136,18 @@ final class CallControlsLayoutTests: XCTestCase {
     }
 
     func test_familyRows_everyActionAppearsExactlyOnce() {
-        let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true, canPictureInPicture: true))
+        let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true))
         let flattened = all.familyRows.flatMap(\.actions)
         XCTAssertEqual(Set(flattened).count, flattened.count)
+    }
+
+    // MARK: - Légende du bouton Caméra de « Mon image » (#17459)
+
+    func test_cameraCaptionKey_cameraOn_isCameraNotVideo() {
+        XCTAssertEqual(CallControlsCopy.cameraCaptionKey(isPaused: false), "call.control.camera.caption")
+    }
+
+    func test_cameraCaptionKey_pausedVideo_isPausedCaption() {
+        XCTAssertEqual(CallControlsCopy.cameraCaptionKey(isPaused: true), "call.control.video.paused.caption")
     }
 }

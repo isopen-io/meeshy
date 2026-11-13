@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -115,5 +116,25 @@ class CallEffectsCarouselTest {
 
         assertThat(actions("Collage preview")).isEmpty()
         rule.onNodeWithText("Double tap: photo · Long press: video", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `la couleur propose les huit ambiances d'iOS, Naturel en tete, et TalkBack les parcourt toutes`() {
+        var mode by mutableStateOf(opening().showing(CallEffectsCategory.Color))
+        rule.setContent {
+            MeeshyTheme {
+                EffectsCarousel(mode = mode, reduceMotion = true, shots = null, hint = null, onChange = { mode = it })
+            }
+        }
+
+        val seen = mutableListOf(mode.color)
+        repeat(CallEffectsModeRule.colors.size) {
+            rule.runOnIdle { action("Colour", "Next effect")() }
+            rule.runOnIdle { seen += mode.color }
+        }
+
+        assertThat(seen.distinct()).containsExactlyElementsIn(CallEffectsModeRule.colors).inOrder()
+        assertThat(seen.distinct().map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
     }
 }

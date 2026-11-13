@@ -138,7 +138,13 @@
     <string name="chat_forward_search_hint">Buscar una conversación...</string>
     <string name="chat_forward_sent">Reenviado</string>
     <string name="chat_guest_bar_close">Cerrar conversación</string>
-    <string name="chat_header_flame_hint">Oculta la llama hasta que se vuelva a desplegar el encabezado</string>
+    <string name="chat_header_flame_card_hide">Ocultar la llama</string>
+    <string name="chat_header_flame_card_hint">Abre la racha de la conversación</string>
+    <string name="chat_header_flame_card_open">Ver el juego</string>
+    <string name="chat_header_flame_card_streak_one">día seguido aquí</string>
+    <string name="chat_header_flame_card_streak_other">días seguidos aquí</string>
+    <string name="chat_header_flame_card_today">Hoy</string>
+    <string name="chat_header_flame_card_total">Aquí desde el principio</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d miembro</item>
         <item quantity="many">%1$d miembros</item>

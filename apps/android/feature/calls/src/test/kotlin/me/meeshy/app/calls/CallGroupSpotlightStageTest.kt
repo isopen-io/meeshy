@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallState
@@ -62,6 +64,7 @@ class CallGroupSpotlightStageTest {
         speaking: Set<String> = emptySet(),
         isChromeVisible: Boolean = true,
         taps: Taps = Taps(),
+        capsule: MutableState<Boolean> = mutableStateOf(true),
     ): Taps {
         rule.setContent {
             var fullScreen by remember { mutableStateOf(false) }
@@ -73,6 +76,7 @@ class CallGroupSpotlightStageTest {
                     primaryTrack = null,
                     eglContext = noEgl,
                     isChromeVisible = isChromeVisible,
+                    isCapsuleVisible = capsule.value,
                     isFullScreen = fullScreen,
                     onFullScreenChange = {
                         taps.fullScreen += it
@@ -141,6 +145,41 @@ class CallGroupSpotlightStageTest {
         rule.onNodeWithContentDescription("Bob").assert(stateMentions("Speaking", expected = true))
         rule.onNodeWithContentDescription("Alice").assert(stateMentions("Speaking", expected = false))
         rule.onNodeWithContentDescription("You").assert(stateMentions("Speaking", expected = false))
+    }
+
+    @Test
+    fun `the capsule stows with the controls and comes back at the second touch (U1_10)`() {
+        val capsule = mutableStateOf(true)
+        stage(capsule = capsule)
+        rule.onNodeWithContentDescription("Bob").performClick()
+        rule.onNodeWithContentDescription("Back to grid").assertExists()
+        rule.runOnIdle { capsule.value = false }
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onNodeWithContentDescription("Back to grid").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Full screen").assertDoesNotExist()
+        rule.runOnIdle { capsule.value = true }
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onNodeWithContentDescription("Back to grid").assertExists()
+    }
+
+    @Test
+    fun `the capsule survives the full screen toggle and leaves with the spotlight (U1_12)`() {
+        stage()
+        rule.onNodeWithContentDescription("Bob").performClick()
+        rule.onNodeWithContentDescription("Full screen").performClick()
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onNodeWithContentDescription("Exit full screen").assertExists()
+        rule.onNodeWithContentDescription("Back to grid").performClick()
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onNodeWithContentDescription("Exit full screen").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Back to grid").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a shared screen is announced on a glass chip while its owner's plate keeps the name (U2_5)`() {
+        stage(roster = trio.applying(GroupCallMediaKind.Screen, enabled = true, userId = "bob"))
+        rule.onNodeWithText("Bob's screen", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("Bob", useUnmergedTree = true).assertExists()
     }
 
     private fun stateMentions(word: String, expected: Boolean) = SemanticsMatcher("state mentions $word = $expected") { node ->

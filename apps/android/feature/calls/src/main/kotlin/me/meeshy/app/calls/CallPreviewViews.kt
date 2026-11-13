@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallPreviewExposure
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.pressable
@@ -57,41 +62,51 @@ internal fun CallPreviewBackdrop(track: VideoTrack, eglContext: EglBase.Context,
 }
 
 /**
- * Chez l'appelé : entendre l'appelant avant de décrocher (iOS `CallPreviewSoundButton`). Plein et
- * blanc tant que le son est coupé — on ne peut pas le manquer —, de verre une fois activé ; le
- * libellé dit le geste suivant, TalkBack lit l'état « sélectionné » et l'indication.
+ * Chez l'appelé : entendre l'appelant avant de décrocher (iOS `CallPreviewSoundButton`). Une PUCE DE VERRE, comme celle
+ * du type d'appel au-dessus du nom (P17.2) : le glyphe dit l'état, le libellé dit le geste suivant, TalkBack lit l'état
+ * « sélectionné » et l'indication. L'activer coupe aussi la sonnerie (P17.3, #13816).
  */
 @Composable
 internal fun CallPreviewSoundButton(isAudible: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val label = stringResource(if (isAudible) R.string.call_preview_sound_off else R.string.call_preview_sound_on)
     val hint = stringResource(R.string.call_preview_sound_hint)
-    val ink = if (isAudible) Color.White else Color.Black
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = modifier
             .pressable()
-            .defaultMinSize(minHeight = 50.dp)
-            .clip(CircleShape)
-            .background(if (isAudible) Color.White.copy(alpha = 0.16f) else Color.White)
-            .clickable(onClickLabel = hint, role = Role.Button, onClick = onToggle)
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onToggle)
             .semantics {
                 contentDescription = label
                 selected = isAudible
-            }
-            .padding(horizontal = MeeshySpacing.xxl),
+            },
+    ) {
+        CallPreviewSoundLabel(isAudible = isAudible, label = label)
+    }
+}
+
+@Composable
+private fun CallPreviewSoundLabel(isAudible: Boolean, label: String) {
+    Row(
+        modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(
             imageVector = if (isAudible) MeeshyIcons.VolumeUp else MeeshyIcons.VolumeOff,
             contentDescription = null,
-            tint = ink,
-            modifier = Modifier.size(20.dp),
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = ink,
+            color = Color.White,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
@@ -142,7 +157,7 @@ internal fun CallPreviewOutgoingPanel(
                     isOn = preview.outgoingConsent.sendsVideo,
                     on = MeeshyIcons.Video,
                     off = MeeshyIcons.VideoOff,
-                    caption = stringResource(R.string.call_control_video_caption),
+                    caption = stringResource(R.string.call_action_camera),
                     label = stringResource(R.string.call_preview_camera_a11y),
                     hint = stringResource(R.string.call_preview_camera_hint, name),
                     onToggle = onToggleVideo,
@@ -190,22 +205,22 @@ private fun CallPreviewToggle(
     hint: String,
     onToggle: () -> Unit,
 ) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
     Column(
         modifier = Modifier
-            .toggleable(value = isOn, role = Role.Switch, onValueChange = { onToggle() })
+            .toggleable(value = isOn, interactionSource = source, indication = null, role = Role.Switch, onValueChange = { onToggle() })
             .semantics(mergeDescendants = true) {
                 contentDescription = "$label. $hint"
                 onClick(label = hint) { onToggle(); true }
             },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .pressable()
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(if (isOn) Color.White else Color.White.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center,
+        CallGlassButtonSurface(
+            role = if (isOn) CallButtonRole.Active else CallButtonRole.Neutral,
+            shape = CircleShape,
+            isPressed = pressed,
+            modifier = Modifier.pressable().size(64.dp),
         ) {
             Icon(
                 imageVector = if (isOn) on else off,

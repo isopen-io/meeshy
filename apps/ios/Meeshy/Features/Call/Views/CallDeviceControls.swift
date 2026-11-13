@@ -4,8 +4,9 @@ import UIKit
 import MeeshyUI
 
 // #8394 — les boutons de la vue d'appel « C adapté ». #8459 — ils vivent
-// DANS le bloc de verre de la pilule (`callControlsGlass`) : chacun est un
-// disque plat (`CallButtonFill`), jamais un verre posé sur le verre.
+// DANS le bloc de verre de la pilule (`callControlsGlass`). #17323 — chacun
+// est un verre à lui (`CallButtonGlassModifier`) : Liquid Glass interactif sous iOS 26,
+// verre dessiné avant, Fin rouge. Le traitement vient de `CallButtonGlassRule`.
 
 /// L'état visuel d'un bouton de la pilule : actif = disque blanc plein et
 /// glyphe sombre, Fin = disque rouge, pause automatique = glyphe ambre.
@@ -16,7 +17,7 @@ enum CallPillButtonKind: Equatable {
     case warning
 }
 
-/// Le glyphe rond d'un bouton de la pilule, sur son disque plat.
+/// Le glyphe rond d'un bouton de la pilule, sur son disque de verre.
 /// Doctrine 86i : un glyphe dans un cercle de taille fixe garde une taille
 /// figée ; c'est la légende, dessous, qui porte le Dynamic Type.
 struct CallPillGlyph: View {
@@ -27,12 +28,13 @@ struct CallPillGlyph: View {
     @Environment(\.callButtonIsPressed) private var isPressed
 
     var body: some View {
-        Image(systemName: symbol)
+        let treatment = CallButtonGlassRule.treatment(for: kind, isLiquidGlassAvailable: Platform.isIOS26OrLater)
+        return Image(systemName: symbol)
             .font(MeeshyFont.fixedGlyph(diameter * 0.4, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
-            .background(Circle().fill(CallButtonFill.color(for: kind)))
-            .background(Circle().fill(CallButtonFill.pressedHighlight(isPressed: isPressed)))
+            .background(Circle().fill(CallButtonFill.pressedHighlight(isPressed: isPressed && treatment.drawsPressHighlight)))
+            .modifier(CallButtonGlassModifier(kind: kind, diameter: diameter))
             .accessibilityHidden(true)
     }
 
@@ -84,7 +86,7 @@ struct CallPillButton: View {
         Button(action: action) {
             CallPillButtonLabel(symbol: symbol, kind: kind, caption: caption, diameter: diameter)
         }
-        .buttonStyle(CallPressButtonStyle())
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
         .toggleStateAccessibility(isToggle: toggleState != nil, isActive: toggleState ?? false)
@@ -92,8 +94,15 @@ struct CallPillButton: View {
 }
 
 struct CallPressButtonStyle: ButtonStyle {
+    /// Le bouton porte un verre interactif : sous iOS 26 c'est lui qui répond
+    /// au doigt, et l'étiquette ne rétrécit pas une seconde fois par-dessus.
+    var glassPressesItself = false
+
     func makeBody(configuration: Configuration) -> some View {
-        CallPressLabel(isPressed: configuration.isPressed) { configuration.label }
+        CallPressLabel(
+            isPressed: configuration.isPressed,
+            glassPressesItself: glassPressesItself && Platform.isIOS26OrLater
+        ) { configuration.label }
     }
 }
 
@@ -104,8 +113,8 @@ struct CallPressButtonStyle: ButtonStyle {
 enum CallPressFeedback {
     static let pressedScale: CGFloat = 0.88
 
-    static func scale(isPressed: Bool, reduceMotion: Bool) -> CGFloat {
-        isPressed && !reduceMotion ? pressedScale : 1
+    static func scale(isPressed: Bool, reduceMotion: Bool, glassPressesItself: Bool = false) -> CGFloat {
+        isPressed && !reduceMotion && !glassPressesItself ? pressedScale : 1
     }
 
     static func animation(isPressed: Bool, reduceMotion: Bool) -> Animation? {
@@ -120,6 +129,7 @@ enum CallPressFeedback {
 /// automatique, et ce qui l'empêche tant qu'un doigt est posé.
 private struct CallPressLabel<Content: View>: View {
     let isPressed: Bool
+    let glassPressesItself: Bool
     @ViewBuilder let label: () -> Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -128,7 +138,7 @@ private struct CallPressLabel<Content: View>: View {
     var body: some View {
         label()
             .environment(\.callButtonIsPressed, isPressed)
-            .scaleEffect(CallPressFeedback.scale(isPressed: isPressed, reduceMotion: reduceMotion))
+            .scaleEffect(CallPressFeedback.scale(isPressed: isPressed, reduceMotion: reduceMotion, glassPressesItself: glassPressesItself))
             .animation(CallPressFeedback.animation(isPressed: isPressed, reduceMotion: reduceMotion), value: isPressed)
             .modifier(CallPressHaptic(isPressed: isPressed))
             .adaptiveOnChange(of: isPressed) { _, pressed in
@@ -165,7 +175,7 @@ private struct CallChromeInteractionKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Vrai sous le doigt : le disque du bouton s'éclaircit (`CallPillGlyph`).
+    /// Vrai sous le doigt : le verre dessiné du bouton s'éclaircit (`CallPillGlyph`).
     var callButtonIsPressed: Bool {
         get { self[CallButtonIsPressedKey.self] }
         set { self[CallButtonIsPressedKey.self] = newValue }
@@ -188,13 +198,15 @@ extension EnvironmentValues {
 /// maison ; VoiceOver y accède aussi par une action nommée.
 struct CallOutputPillButton: View {
     let isSpeaker: Bool
+    let isVideoCall: Bool
     let caption: String?
     let diameter: CGFloat
     let onToggleSpeaker: () -> Void
     let model: CallAudioRouteViewModel?
 
-    init(isSpeaker: Bool, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
+    init(isSpeaker: Bool, isVideoCall: Bool = false, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
         self.isSpeaker = isSpeaker
+        self.isVideoCall = isVideoCall
         self.caption = caption
         self.diameter = diameter
         self.onToggleSpeaker = onToggleSpeaker
@@ -205,7 +217,7 @@ struct CallOutputPillButton: View {
         CallOutputMenu(isSpeaker: isSpeaker, onToggleSpeaker: onToggleSpeaker, model: model) { route in
             CallPillButtonLabel(
                 symbol: route.outputSymbol(isSpeaker: isSpeaker),
-                kind: isSpeaker || route.routesExternally ? .active : .normal,
+                kind: CallOutputButtonRule.kind(isSpeaker: isSpeaker, routesExternally: route.routesExternally, isVideoCall: isVideoCall),
                 caption: caption,
                 diameter: diameter
             )
@@ -282,7 +294,7 @@ struct CallOutputMenu<Face: View>: View {
         }
         .menuIndicator(.hidden)
         .background(routePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
-        .accessibilityLabel(String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main))
+        .accessibilityLabel(CallControlsCopy.outputAudioLabel)
         // UNE valeur : l'état du haut-parleur, puis la sortie courante — deux
         // `accessibilityValue` empilés se masqueraient l'un l'autre.
         .accessibilityValue(spokenValue)

@@ -14,9 +14,10 @@ import org.junit.Test
 class MeeshyAppMenuItemsTest {
 
     @Test
-    fun `the ladder offers exactly the six rungs, in order`() {
+    fun `the ladder offers exactly the seven rungs, in order`() {
         assertThat(menuLadderLabelKeys())
             .containsExactly(
+                "menu_game",
                 "menu_my_links",
                 "menu_notifications",
                 "tab_calls",
@@ -56,7 +57,7 @@ class MeeshyAppMenuItemsTest {
     @Test
     fun `each rung keeps the iOS colour`() {
         assertThat(rootMenuLadderEntries(communitiesAvailable = true).map { it.colorHex })
-            .containsExactly("#F8B500", "#FF6B6B", "#6366F1", "#8B5CF6", "#2ECC71", "#64748B")
+            .containsExactly("#F97316", "#F8B500", "#FF6B6B", "#6366F1", "#8B5CF6", "#2ECC71", "#64748B")
             .inOrder()
     }
 
@@ -66,7 +67,7 @@ class MeeshyAppMenuItemsTest {
         assertThat(badges[RootMenuLadderEntry.NOTIFICATIONS]).isEqualTo(4)
         assertThat(badges[RootMenuLadderEntry.DISCOVER]).isEqualTo(2)
         assertThat(badges.filterKeys { it != RootMenuLadderEntry.NOTIFICATIONS && it != RootMenuLadderEntry.DISCOVER }.values)
-            .containsExactly(0, 0, 0, 0)
+            .containsExactly(0, 0, 0, 0, 0)
     }
 
     @Test
@@ -77,7 +78,7 @@ class MeeshyAppMenuItemsTest {
     @Test
     fun `communities takes the contacts rung once it exists`() {
         assertThat(rootMenuLadderEntries(communitiesAvailable = true).map { it.labelKey })
-            .containsExactly("menu_my_links", "menu_notifications", "tab_calls", "menu_discover", "menu_communities", "menu_settings")
+            .containsExactly("menu_game", "menu_my_links", "menu_notifications", "tab_calls", "menu_discover", "menu_communities", "menu_settings")
             .inOrder()
         assertThat(rootMenuLadderEntries(communitiesAvailable = false)).contains(RootMenuLadderEntry.CONTACTS)
         assertThat(rootMenuLadderEntries(communitiesAvailable = false)).doesNotContain(RootMenuLadderEntry.COMMUNITIES)
@@ -97,5 +98,18 @@ class MeeshyAppMenuItemsTest {
     fun `the avatar opens my own page, never a third party route`() {
         assertThat(floatingAvatarProfileRoute("64b7f0a1c2d3e4f5a6b7c8d9")).isEqualTo(ProfileRoutes.OWN)
         assertThat(floatingAvatarProfileRoute(null)).isNull()
+    }
+
+    @Test
+    fun `the game opens from the first rung, closest to the button (#17769)`() {
+        assertThat(rootMenuLadderEntries().first()).isEqualTo(RootMenuLadderEntry.GAME)
+        assertThat(RootMenuLadderEntry.GAME.badge).isNull()
+    }
+
+    @Test
+    fun `hiding the game removes its rung and keeps the others in order (#17769)`() {
+        val hidden = rootMenuLadderEntries(communitiesAvailable = true, gameHidden = true)
+        assertThat(hidden).doesNotContain(RootMenuLadderEntry.GAME)
+        assertThat(hidden).isEqualTo(rootMenuLadderEntries(communitiesAvailable = true).drop(1))
     }
 }

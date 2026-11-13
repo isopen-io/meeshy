@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.call
 
+import me.meeshy.sdk.lang.LanguageCodeNormalizer
 import me.meeshy.sdk.lang.PrismCandidate
 import me.meeshy.sdk.lang.PrismTranslation
 import me.meeshy.sdk.lang.PrismTranslationResolver
@@ -15,10 +16,19 @@ data class CallCaptionReader(
 )
 
 /**
- * One caption line as the call screen draws it — iOS `CallCaptionLine`. The Prisme applies: a
- * peer's words are read in their translation when the reader's prism elects it, marked by a discreet
- * « EN → FR » tag; touching the line shows the original (and the reverse when the journal is set
- * to « Original »). My own words are never translated for me.
+ * How long the gateway has to render a translation: past it, the waiting dots fall and the line stays in its
+ * original language (the translation failed or will not come) — iOS `CallCaptionTranslationWait`.
+ */
+object CallCaptionTranslationWait {
+    const val TIMEOUT_MS: Long = 8_000L
+}
+
+/**
+ * One caption line as the call screen draws it — iOS `CallCaptionLine`. The Prisme applies: a peer's words
+ * leave at once in their original language, labelled « EN » (three dots while a translation is awaited), then the
+ * translation joins them, labelled « EN → FR ». Touching a translated sentence unfolds its original below it
+ * ([originalBelow]) without removing the translation (the reverse when the journal is set to « Original »: a touch
+ * shows the translation). My own words are never translated for me.
  */
 data class CallLiveCaptionLine(
     val key: String,
@@ -31,7 +41,24 @@ data class CallLiveCaptionLine(
     val capturedAtMs: Long,
     val isShowingOriginal: Boolean,
     val canRevealOriginal: Boolean,
+    /** The original unfolded under the translation the reader touched, in secondary ink. */
+    val originalBelow: String? = null,
+    /** Until this instant a translation is awaited: the FINAL line of a peer whose language lies outside the prism. */
+    val awaitingUntilMs: Long? = null,
+    val originLanguage: String? = null,
+    val servedLanguage: String? = null,
+    /** The hour IN the call (« 01:15 »), set by [dated] for the journal; `null` elsewhere. */
+    val timeLabel: String? = null,
 ) {
+    val isAwaitingTranslation: Boolean get() = awaitingUntilMs != null
+
+    /** The line at [nowMs]: the wait falls at its deadline, the origin label stays. */
+    fun settled(nowMs: Long): CallLiveCaptionLine =
+        if (awaitingUntilMs != null && nowMs >= awaitingUntilMs) copy(awaitingUntilMs = null) else this
+
+    /** The line dated by the time in the call (P6.4); without a start of the call, no hour rather than a wall clock. */
+    fun dated(startedAtMs: Long?): CallLiveCaptionLine = copy(timeLabel = CallJournalClock.label(capturedAtMs, startedAtMs))
+
     /** What TalkBack announces: the FINAL sentence of a peer only — a partial is replaced before it is read. */
     val announcement: String?
         get() = if (isFinal && !isLocal) "$speakerName : $text" else null
@@ -47,21 +74,30 @@ object CallLiveCaptionLines {
         prefersOriginal: Boolean,
         isRevealed: Boolean,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
     ): CallLiveCaptionLine {
         val isLocal = isLocal(segment, reader)
         val translation = if (isLocal) null else served(segment, reader.prism)
-        val showsOriginal = translation == null || (prefersOriginal != isRevealed)
+        val showsOriginal = translation == null || (prefersOriginal && !isRevealed)
+        val origin = segment.language?.takeIf { !isLocal && it.isNotBlank() }?.uppercase()
+        val outsidePrism = origin != null && !inPrism(segment.language, reader.prism)
+        val servedLanguage = translation?.takeUnless { showsOriginal }?.language?.uppercase()
+        val awaits = !isLocal && segment.isFinal && translation == null && outsidePrism && reader.prism.isNotEmpty()
         return CallLiveCaptionLine(
             key = segment.key,
             speakerId = segment.speakerId,
-            speakerName = speakerName(segment, isLocal, reader, peerName, labels),
+            speakerName = speakerName(segment, isLocal, peerName, labels, participantNames),
             isLocal = isLocal,
             text = if (showsOriginal || translation == null) segment.text else translation.text,
-            languageTag = translation?.takeUnless { showsOriginal }?.let { tag(segment.language, it.language) },
+            languageTag = tag(origin, servedLanguage, showsOriginal && outsidePrism),
             isFinal = segment.isFinal,
             capturedAtMs = segment.capturedAtMs,
             isShowingOriginal = showsOriginal,
             canRevealOriginal = translation != null,
+            originalBelow = segment.text.takeIf { translation != null && !prefersOriginal && isRevealed },
+            awaitingUntilMs = (segment.capturedAtMs + CallCaptionTranslationWait.TIMEOUT_MS).takeIf { awaits },
+            originLanguage = origin,
+            servedLanguage = servedLanguage,
         )
     }
 
@@ -72,12 +108,23 @@ object CallLiveCaptionLines {
         prefersOriginal: Boolean,
         revealed: Set<String>,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
     ): List<CallLiveCaptionLine> = segments.map {
-        line(it, reader, peerName, prefersOriginal, isRevealed = it.key in revealed, labels = labels)
+        line(it, reader, peerName, prefersOriginal, isRevealed = it.key in revealed, labels = labels, participantNames = participantNames)
     }
 
     /** The last FINAL line of a peer, the only one worth announcing. */
     fun latestAnnouncement(lines: List<CallLiveCaptionLine>): CallLiveCaptionLine? = lines.lastOrNull { it.announcement != null }
+
+    /** The next instant a wait falls after [nowMs], the only moment the screen has to redraw for it. */
+    fun nextDeadline(lines: List<CallLiveCaptionLine>, nowMs: Long): Long? =
+        lines.mapNotNull { it.awaitingUntilMs }.filter { it > nowMs }.minOrNull()
+
+    /** Compared as the Prisme compares (rule 4): an `en-US` sentence is already in the rank `en`. */
+    private fun inPrism(language: String?, prism: List<String>): Boolean {
+        val key = language?.let(LanguageCodeNormalizer::normalizeForDedup) ?: return false
+        return prism.any { LanguageCodeNormalizer.normalizeForDedup(it) == key }
+    }
 
     private fun isLocal(segment: CallJournalSegment, reader: CallCaptionReader): Boolean =
         reader.userId?.takeIf { it.isNotBlank() } == segment.speakerId
@@ -96,26 +143,34 @@ object CallLiveCaptionLines {
         )
     }
 
-    /** Mine, then the call's own peer (a roster is the trusted source), then what the wire says. */
+    /**
+     * Mine is « Me », never my name; then the author's own name in the call's roster by `speakerId` (the trusted
+     * source, iOS `speakerName(for:)`), then the call's peer, then what the wire says.
+     */
     private fun speakerName(
         segment: CallJournalSegment,
         isLocal: Boolean,
-        reader: CallCaptionReader,
         peerName: String?,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String>,
     ): String = when {
-        isLocal -> reader.name?.takeIf { it.isNotBlank() } ?: labels.you
-        else -> peerName?.takeIf { it.isNotBlank() } ?: segment.speakerDisplayName ?: labels.unknown
+        isLocal -> labels.me
+        else -> participantNames[segment.speakerId]?.takeIf { it.isNotBlank() }
+            ?: peerName?.takeIf { it.isNotBlank() }
+            ?: segment.speakerDisplayName
+            ?: labels.unknown
     }
 
-    private fun tag(source: String?, target: String): String {
-        val to = target.uppercase()
-        return source?.takeIf { it.isNotBlank() }?.let { "${it.uppercase()} → $to" } ?: to
+    /** « EN → FR » once translated, « EN » for an original outside the prism, nothing otherwise. */
+    private fun tag(origin: String?, served: String?, labelsOrigin: Boolean): String? = when {
+        served != null -> origin?.let { "$it → $served" } ?: served
+        labelsOrigin -> origin
+        else -> null
     }
 }
 
-/** The two words a line may need that the transport cannot give: « You », and an unknown speaker. */
-data class CallCaptionLabels(val you: String, val unknown: String)
+/** The two words a line may need that the transport cannot give: « Me » (my own lines), and an unknown speaker. */
+data class CallCaptionLabels(val me: String, val unknown: String)
 
 /**
  * Whether this call may carry live captions at all. Captions travel through the gateway in clear
@@ -171,6 +226,21 @@ data class CallCaptionListeners(val peers: Set<String> = emptySet()) {
 }
 
 /**
+ * What the journal alone remembers of how it is read (P13.5, law 7): its own Translated · Original switch and the
+ * sentences touched there. The band keeps its own, [CallCaptionsState.showsOriginal] and [CallCaptionsState.revealed]:
+ * one set per surface, so neither the switch nor a touch on one ever moves the other.
+ */
+data class CallJournalView(
+    val showsOriginal: Boolean = false,
+    val revealed: Set<String> = emptySet(),
+) {
+    fun showing(original: Boolean): CallJournalView = copy(showsOriginal = original)
+
+    fun togglingReveal(key: String): CallJournalView =
+        copy(revealed = if (key in revealed) revealed - key else revealed + key)
+}
+
+/**
  * The captions state of the call screen: the panel the reader opened (the pilot of [mode], never
  * the capture), the « Original » preference, the lines touched to flip, the journal, and whether
  * this device can caption MY words ([ownSpeech], #13718).
@@ -183,6 +253,8 @@ data class CallCaptionsState(
     val gate: CallCaptionsGate = CallCaptionsGate.Unresolved,
     val listeners: CallCaptionListeners = CallCaptionListeners(),
     val ownSpeech: OwnSpeechSupport = OwnSpeechSupport.Unknown,
+    /** The instant the media first flowed: the zero of the hour IN the call (P6.4); `null` until then. */
+    val callStartedAtMs: Long? = null,
 ) {
     val mode: CaptionsMode get() = CaptionsMode.from(isTranscribing = isPanelOpen, showOriginalText = showsOriginal)
 
@@ -204,19 +276,20 @@ data class CallCaptionsState(
         copy(revealed = if (key in revealed) revealed - key else revealed + key)
 
     /**
-     * Reception is tied to the panel, like iOS: a closed panel drops the segment instead of piling it
-     * up in silence; a closed gate drops everything.
+     * The journal keeps the whole call, my captions on or off (#17342): what was transcribed for the call is
+     * kept, and the gate stays on the CAPTURE side (nothing is transcribed when nobody listens, #13720). Only a
+     * closed gate drops everything: an end-to-end conversation keeps no plain text.
      */
     fun receiving(segment: CallJournalSegment): CallCaptionsState =
-        if (isPanelOpen && gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
+        if (gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
 
     /**
      * One of MY lines (#13718), iOS `appendSegment`: my capture may run for a peer while my panel is
-     * closed, and my finals still enter my journal; my partials only while I read. A closed gate
-     * keeps nothing.
+     * closed, and my words, partials included, still enter my journal (#17342) — the gate stays on the
+     * CAPTURE side. A closed gate keeps nothing.
      */
     fun receivingOwn(segment: CallJournalSegment): CallCaptionsState =
-        if (gate.allowsCaptions && (segment.isFinal || isPanelOpen)) copy(journal = journal.receive(segment)) else this
+        if (gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
 
     /** A gate that closes takes the panel down with it. */
     fun gated(gate: CallCaptionsGate): CallCaptionsState =

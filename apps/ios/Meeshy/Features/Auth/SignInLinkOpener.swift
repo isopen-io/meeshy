@@ -119,7 +119,7 @@ enum SignInLinkOpener {
             consentedAccountId = consented
         }
         guard let proven else {
-            toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
+            toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓", bundle: .main))
             return
         }
         if SignInLink.replacesSignedInAccount(provenUserId: proven.user.id, isAuthenticated: auth.isAuthenticated, currentUserId: auth.currentUser?.id) {
@@ -326,10 +326,11 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
     private static func message(signedIn current: MeeshyUser?, incoming: MeeshyUser) -> String {
         let incomingLabel = label(displayName: incoming.displayName, username: incoming.username)
         guard let current, !current.username.isEmpty else {
-            return String(localized: "signInLink.switchAccount.messageUnknownCurrent", defaultValue: "Ce lien ouvre un AUTRE compte que celui qui est ouvert : \(incomingLabel).\n\nN'ouvrez ce compte que s'il vous appartient.", bundle: .main)
+            return String(localized: "signInLink.switchAccount.messageUnknownCurrent", defaultValue: "Ce lien ouvre un AUTRE compte que celui qui est ouvert : \(incomingLabel). N'ouvrez que s'il vous appartient.", bundle: .main)
         }
         let currentLabel = label(displayName: current.displayName, username: current.username)
-        return String(localized: "signInLink.switchAccount.message", defaultValue: "Ce lien ouvre un AUTRE compte que le vôtre : \(incomingLabel).\n\nVous êtes connecté en tant que \(currentLabel). N'ouvrez ce compte que s'il vous appartient.", bundle: .main)
+        let format = String(localized: "signInLink.switchAccount.message", defaultValue: "Ce lien ouvre un AUTRE compte que %2$@ : %1$@. N'ouvrez que s'il vous appartient.", bundle: .main)
+        return String(format: format, incomingLabel, currentLabel)
     }
 
     private static func topMostController() -> UIViewController? {

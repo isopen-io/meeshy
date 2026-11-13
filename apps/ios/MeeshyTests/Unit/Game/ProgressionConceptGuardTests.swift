@@ -420,7 +420,8 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "%lld frappées depuis toujours")
         XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ta plus haute lumière : le plus haut niveau que tu as atteint.")
         XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "Ce sont toutes les Meeshes que tu as frappées depuis toujours.")
-        XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés"))
+        XCTAssertTrue((table["game2.prestige.confirm.keeps"]?["fr"] ?? "").contains("tes étincelles reçues depuis toujours, ta plus haute lumière"),
+                      "l'offre de Renaissance dit, au repos, ce qui reste : les records s'y nomment")
         XCTAssertTrue((table["game2.prestige.confirm.access"]?["fr"] ?? "").hasSuffix("car elles lisent ta plus haute lumière."))
         for key in ["game.sparks.record.line", "game.sparks.cumul.record", "game.sparks.levelRecord.line", "game.concept.fact.minted",
                     "progression.meesh.minted.one", "progression.meesh.minted.many", "game2.prestige.confirm.access"] {

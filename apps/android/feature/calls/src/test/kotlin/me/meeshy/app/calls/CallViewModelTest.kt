@@ -58,6 +58,7 @@ class CallViewModelTest {
     private val iceServersRefreshed = MutableSharedFlow<IceServersRefreshedPayload>(extraBufferCapacity = 8)
     private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
     private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
+    private val participantsLeft = MutableSharedFlow<me.meeshy.sdk.model.call.CallParticipantLeftPayload>(extraBufferCapacity = 16)
     private val translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(extraBufferCapacity = 64)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
     private val coordinator: WebRtcCallCoordinator = mockk(relaxed = true)
@@ -174,7 +175,7 @@ class CallViewModelTest {
         every { signalManager.translatedSegments } returns translatedSegments
         every { signalManager.mediaToggles } returns mediaToggles
         every { signalManager.participantArrivals } returns MutableSharedFlow()
-        every { signalManager.participantLeft } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns participantsLeft
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -1879,6 +1880,54 @@ class CallViewModelTest {
         screenCaptureAlerts.emit(captureAlert(callId = "call-77", capturing = true))
 
         assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    private fun recorderAlert(who: String, capturing: Boolean = true) =
+        CallScreenCaptureAlertPayload(callId = "call-9", userId = who, isCapturing = capturing, kind = "recording")
+
+    @Test
+    fun `one of two screen recorders stopping leaves the capsule for the other (R1_4)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+        screenCaptureAlerts.emit(recorderAlert("u-karim"))
+
+        screenCaptureAlerts.emit(recorderAlert("u-awa", capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        screenCaptureAlerts.emit(recorderAlert("u-karim", capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a recorder leaving the call puts the capsule out, without waiting for an end that never comes (R1_4)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+        screenCaptureAlerts.emit(recorderAlert("u-karim"))
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-awa"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-karim"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `someone who was not recording leaving never puts the capsule out, nor a departure from another call`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-karim"))
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-77", userId = "u-awa"))
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9"))
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+    }
+
+    @Test
+    fun `the call publishes who is who, so the consent card names the requester (R2_2)`() = runTest {
+        val vm = vm().connect()
+
+        assertThat(vm.state.value.participantNames[incomingAudio.peerId]).isEqualTo(incomingAudio.peerName)
     }
 
     @Test

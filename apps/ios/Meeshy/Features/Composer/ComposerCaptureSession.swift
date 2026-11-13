@@ -239,7 +239,7 @@ final class ComposerCaptureSession: ObservableObject {
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flipping: camera.isSwitchingCamera || camera.recordingIsPending,
             switchingCamera: camera.isSwitchingCamera,
-            flashIntensity: flashIntensity)
+            flashIntensity: flashIntensity, cameraPosition: controls.currentPosition)
     }
 
     // MARK: - L'armement et la sortie
@@ -369,7 +369,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
-            camera.startRecording()
+            await camera.startRecording(whileWanted: { [weak self] in self?.stage == .recording })
             bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }
@@ -479,7 +479,7 @@ final class ComposerCaptureSession: ObservableObject {
         // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
         // verrouillent pas la prise.
         guard holdPhase != .locked, !isPinching, !awaitsPreviousTake else { return }
-        lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
+        setIfChanged(\.lockProgress, ComposerShutterGesture.lockProgress(translationX: translation.x))
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
         lockProgress = 1
@@ -600,7 +600,7 @@ final class ComposerCaptureSession: ObservableObject {
             dismissDragSpoiled = pinchSpoilsGestures
         }
         if isPinching { dismissDragSpoiled = true }
-        dismissDrag = dismissDragSpoiled ? 0 : translationY
+        setIfChanged(\.dismissDrag, dismissDragSpoiled ? 0 : translationY)
     }
 
     /// La levée du glissé : `true` ⇒ le viseur se range. En édition le doigt

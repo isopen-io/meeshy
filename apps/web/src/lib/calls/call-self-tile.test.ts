@@ -1,17 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 
-import { selfRowBounds, selfRowsLayout, selfRowWidth } from './call-self-controls';
 import {
   cornerAfterArrow,
+  defaultSelfCorner,
   DEFAULT_SELF_CORNER,
   DEFAULT_SELF_TILE,
+  isLandscapeWindow,
   isTileDrag,
   nearestSelfCorner,
   scaleAfterPinch,
   scaleAfterWheel,
-  SELF_CORNERS,
   selfTileBox,
+  selfTileCornerInsets,
   selfTileCornerFor,
+  selfTileCounterScaled,
+  selfTileOrigin,
+  selfTileRestingFactor,
   selfTileScaleFor,
   selfTileSize,
   selfTileStore,
@@ -41,7 +45,7 @@ describe('selfTileSize', () => {
     expect(small.width).toBeLessThanOrEqual(144);
     expect(small.height).toBeLessThanOrEqual(227);
     expect(small).toEqual({ width: 144, height: 206 });
-    expect(selfTileSize(3, { width: 900, height: 400 })).toEqual({ width: 112, height: 160 });
+    expect(selfTileSize(3, { width: 300, height: 400 })).toEqual({ width: 112, height: 160 });
   });
 });
 
@@ -109,8 +113,10 @@ describe('selfTileBox — les quatre coins de repos', () => {
   });
 
   test('un écran trop court : le coin bas ne remonte jamais au-dessus du coin haut', () => {
-    const short = { width: 700, height: 360 };
+    const short = { width: 300, height: 360 };
     expect(selfTileBox({ corner: 'bottom-right', size, viewport: short }).y).toBe(128);
+    const landscapeShort = { width: 700, height: 200 };
+    expect(selfTileBox({ corner: 'bottom-right', size: selfTileSize(2, landscapeShort), viewport: landscapeShort }).y).toBe(60);
   });
 });
 
@@ -155,34 +161,6 @@ describe('cornerAfterArrow — au clavier, de coin en coin', () => {
   });
 });
 
-describe('les rangées de commandes suivent la vignette dans les quatre coins', () => {
-  const size = { width: 112, height: 160 };
-  const bounds = selfRowBounds(phone);
-  for (const corner of SELF_CORNERS) {
-    test(`${corner} : Effets au-dessus, la caméra en dessous, dans l’écran, hors de la vignette`, () => {
-      const tile = selfTileBox({ corner, size, viewport: phone });
-      const rows = selfRowsLayout({ tile, bounds, effectsWidth: selfRowWidth(2), cameraWidth: selfRowWidth(3) });
-      expect(rows.effects?.side).toBe('above');
-      expect(rows.camera?.side).toBe('below');
-      for (const row of [rows.effects, rows.camera]) {
-        if (row === null) throw new Error('rangée absente');
-        expect(row.x).toBeGreaterThanOrEqual(bounds.x);
-        expect(row.x + row.width).toBeLessThanOrEqual(bounds.x + bounds.width);
-        expect(row.y).toBeGreaterThanOrEqual(bounds.y);
-        expect(row.y + row.height).toBeLessThanOrEqual(bounds.y + bounds.height);
-      }
-    });
-  }
-
-  test('glissée tout en haut, la rangée Effets passe sous la caméra plutôt que sous l’en-tête', () => {
-    const tile = { x: 140, y: 40, width: 112, height: 160 };
-    const rows = selfRowsLayout({ tile, bounds, effectsWidth: selfRowWidth(2), cameraWidth: selfRowWidth(2) });
-    expect(rows.effects?.side).toBe('below');
-    expect(rows.camera?.side).toBe('below');
-    expect(rows.effects?.y).toBeGreaterThan(rows.camera?.y ?? 0);
-  });
-});
-
 describe('le coin retenu pour l’appel', () => {
   test('le coin choisi tient pour CET appel, avec la taille ; un autre appel repart du coin haut-droite', () => {
     selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
@@ -194,5 +172,107 @@ describe('le coin retenu pour l’appel', () => {
     setSelfTileCorner('call-2', 'top-left');
     expect(selfTileScaleFor(selfTileStore.getState(), 'call-2')).toBe(2);
     expect(selfTileCornerFor(selfTileStore.getState(), 'call-1')).toBe('top-right');
+  });
+});
+
+/**
+ * G1.11 (#17536, miroir de `CallSelfTileScale.restingFactor` / `counterScaled` / `anchor`
+ * d'iOS, #17534) — ranger ma vignette est une TRANSFORMATION : son cadre reste celui du
+ * palier choisi, elle est mise à l'échelle de sa petite taille depuis son coin, jamais
+ * relayoutée (largeur et hauteur ne s'animent pas).
+ */
+describe('ma vignette se range par une échelle ancrée à son coin (G1.11)', () => {
+  const screen = { width: 390, height: 844 };
+
+  test('commandes visibles, le facteur est 1 ; rangée, elle se ramène à la petite taille', () => {
+    for (const scale of [1, 2, 3] as const) expect(selfTileRestingFactor(scale, true, screen)).toBe(1);
+    expect(selfTileRestingFactor(3, false, screen)).toBeCloseTo(selfTileSize(1, screen).width / selfTileSize(3, screen).width, 5);
+    expect(selfTileRestingFactor(2, false, screen)).toBeCloseTo(selfTileSize(1, screen).width / selfTileSize(2, screen).width, 5);
+    expect(selfTileRestingFactor(1, false, screen)).toBe(1);
+  });
+
+  test('l’ancre est le coin où la vignette se tient : elle garde sa marge pendant la réduction', () => {
+    expect(selfTileOrigin('top-right')).toBe('top right');
+    expect(selfTileOrigin('bottom-left')).toBe('bottom left');
+  });
+
+  test('ce qui ne doit pas rapetisser (liseré, coins) est contre-mis à l’échelle', () => {
+    const factor = selfTileRestingFactor(3, false, screen);
+    expect(selfTileCounterScaled(2, factor) * factor).toBeCloseTo(2, 5);
+    expect(selfTileCounterScaled(12, 1)).toBe(12);
+    expect(selfTileCounterScaled(2, 0)).toBe(2);
+    expect(selfTileCounterScaled(2, Number.NaN)).toBe(2);
+  });
+});
+
+describe('L1.5 — dans une fenêtre plus large que haute, ma vignette se couche (130 × 96) à sa hauteur de coin', () => {
+  const landscape = { width: 844, height: 390 };
+
+  test('la fenêtre est couchée quand elle est plus large que haute — jamais carrée', () => {
+    expect(isLandscapeWindow(landscape)).toBe(true);
+    expect(isLandscapeWindow(phone)).toBe(false);
+    expect(isLandscapeWindow({ width: 600, height: 600 })).toBe(false);
+  });
+
+  test('x2 couché fait 130 × 96, x1 et x3 le suivent à la même proportion ; le portrait ne change pas', () => {
+    expect(selfTileSize(2, landscape)).toEqual({ width: 130, height: 96 });
+    expect(selfTileSize(1, landscape)).toEqual({ width: 93, height: 69 });
+    expect(selfTileSize(3, landscape)).toEqual({ width: 195, height: 144 });
+    expect(selfTileSize(2, phone)).toEqual({ width: 112, height: 160 });
+  });
+
+  test('couchée, elle ne dépasse toujours pas 40 % de la hauteur de l’écran', () => {
+    const short = selfTileSize(3, { width: 640, height: 300 });
+    expect(short.height).toBeLessThanOrEqual(120);
+    expect(short.width / short.height).toBeCloseTo(130 / 96, 1);
+  });
+
+  test('sa hauteur de coin : 60 sous le haut, 130 au-dessus du bas (iOS, Android) ; portrait 128 et 176', () => {
+    expect(selfTileCornerInsets(landscape)).toEqual({ top: 60, bottom: 130 });
+    expect(selfTileCornerInsets(phone)).toEqual({ top: 128, bottom: 176 });
+  });
+
+  test('les quatre coins couchés sont quatre places distinctes — les coins bas ne retombent plus sur les hauts', () => {
+    const size = selfTileSize(2, landscape);
+    expect(selfTileBox({ corner: 'top-right', size, viewport: landscape })).toEqual({ x: 844 - 16 - 130, y: 60, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'top-left', size, viewport: landscape, topInset: 56 })).toEqual({ x: 16, y: 116, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'bottom-left', size, viewport: landscape })).toEqual({ x: 16, y: 390 - 130 - 96, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'bottom-right', size, viewport: landscape }).y).toBeGreaterThan(60);
+  });
+});
+
+/**
+ * **W1.5 — MA VIGNETTE PREND LE COIN DE FIN DU SENS DE LECTURE** (`.topTrailing` d'iOS, `TopEnd` d'Android) : la colonne du
+ * journal se pose à la fin de la ligne, la vignette la longe — à droite en gauche à droite, à gauche en droite à gauche.
+ * Une vignette que j'ai posée ailleurs garde sa place.
+ */
+describe('W1.5 — le coin de fin du sens de lecture', () => {
+  test('le coin d’un appel neuf est le haut de la fin de ligne : haut-droite, haut-gauche en droite à gauche', () => {
+    expect(defaultSelfCorner(false)).toBe('top-right');
+    expect(defaultSelfCorner(true)).toBe('top-left');
+    selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
+    expect(selfTileCornerFor(selfTileStore.getState(), 'neuf', true)).toBe('top-left');
+    expect(selfTileCornerFor(selfTileStore.getState(), 'neuf', false)).toBe('top-right');
+  });
+
+  test('un coin choisi garde sa place, quel que soit le sens de lecture', () => {
+    selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
+    setSelfTileCorner('choisi', 'bottom-right');
+    expect(selfTileCornerFor(selfTileStore.getState(), 'choisi', true)).toBe('bottom-right');
+  });
+
+  test('colonne ouverte, le coin de fin se tient au bord de la scène réduite, pas de la fenêtre', () => {
+    const size = { width: 112, height: 160 };
+    const wide = { width: 1400, height: 800 };
+    expect(selfTileBox({ corner: 'top-right', size, viewport: wide, bleed: 360 }).x).toBe(1400 - 360 - 16 - 112);
+    expect(selfTileBox({ corner: 'top-left', size, viewport: wide, bleed: 360 }).x).toBe(16);
+  });
+
+  test('colonne ouverte, la dépose s’élit sur la largeur de la scène : à droite de son milieu, elle va au coin de fin', () => {
+    const size = { width: 112, height: 160 };
+    const wide = { width: 1400, height: 800 };
+    const drop = (bleed: number) => nearestSelfCorner({ center: { x: 600, y: 200 }, size, viewport: wide, bleed });
+    expect(drop(0)).toBe('top-left');
+    expect(drop(360)).toBe('top-right');
   });
 });

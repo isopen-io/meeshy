@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -9,21 +10,27 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.call.CallRemoteVideoFade
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.ui.appearance.AvatarRingLayer
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.hexColor
 
 private const val PULSE_PEAK = 1.15f
 private const val PULSE_MILLIS = 1_500
@@ -40,20 +47,23 @@ internal fun CallAvatarDisc(
     avatarUrl: String?,
     modifier: Modifier = Modifier,
     ring: AvatarRingDesign? = null,
+    /** La couleur d'auteur du visage (G4.2) : le disque la prend à la place de la marque ; `null` = la marque. */
+    faceHex: String? = null,
 ) {
     AvatarRingLayer(design = ring, footprint = size, modifier = modifier.size(size)) {
-        CallAvatarPhoto(name = name, size = size, avatarUrl = avatarUrl)
+        CallAvatarPhoto(name = name, size = size, avatarUrl = avatarUrl, faceHex = faceHex)
     }
 }
 
 /** Le disque nu : l'atome central, UN visage (photo OU initiales), sur le dégradé de l'appel. */
 @Composable
-private fun CallAvatarPhoto(name: String, size: Dp, avatarUrl: String?) {
+private fun CallAvatarPhoto(name: String, size: Dp, avatarUrl: String?, faceHex: String?) {
+    val face = faceHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified }
     MeeshyAvatar(
         name = name,
         size = size,
-        containerColor = CallPalette.BrandDeep,
-        secondaryColor = CallPalette.Brand,
+        containerColor = face ?: CallPalette.BrandDeep,
+        secondaryColor = face ?: CallPalette.Brand,
         contentColor = CallPalette.Ink,
         imageUrl = avatarUrl,
     )
@@ -116,4 +126,59 @@ private fun PulseRing(index: Int, avatarSize: Dp, reduceMotion: Boolean) {
                 CircleShape,
             ),
     )
+}
+
+private const val HALO_ALPHA = 0.5f
+internal const val CALL_SPEAKING_RING_TAG = "call-speaking-ring"
+
+/** La place réservée autour du disque pour l'anneau et son halo : l'hôte la retranche pour garder ses ancrages. */
+internal fun callSpeakingReach(compact: Boolean): Dp = if (compact) 6.dp else 14.dp
+private const val HALO_CORE_STOP = 0.72f
+
+/**
+ * G4.2 — le visage du pair caméra coupée : un disque à SA couleur d'auteur ([colorHex], celle de ses sous-titres),
+ * qui prend l'anneau (3 pt) et le halo de cette couleur À LA PAROLE seulement, rien au repos. La place de l'anneau
+ * et du halo est réservée en permanence (rien ne bouge quand il parle) ; seule leur opacité change, au rythme du
+ * fondu de l'image ([CallRemoteVideoFade]), plus court sous « Réduire les animations ». Décoratif : l'hôte le masque.
+ */
+@Composable
+internal fun CallSpeakingAvatar(
+    name: String,
+    size: Dp,
+    avatarUrl: String?,
+    colorHex: String?,
+    speaking: Boolean,
+    reduceMotion: Boolean,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    /** Le contour équipé par la personne (duo audio) ; `null` = disque nu. */
+    ring: AvatarRingDesign? = null,
+) {
+    val color = colorHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified } ?: CallPalette.Brand
+    val ringWidth = if (compact) 2.dp else 3.dp
+    val reach = callSpeakingReach(compact)
+    val strength by animateFloatAsState(
+        targetValue = if (speaking) 1f else 0f,
+        animationSpec = tween(CallRemoteVideoFade.durationMillis(reduceMotion), easing = LinearEasing),
+        label = "call-peer-speech",
+    )
+    Box(modifier.size(size + reach * 2), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = strength }
+                .background(
+                    Brush.radialGradient(HALO_CORE_STOP to color.copy(alpha = HALO_ALPHA), 1f to Color.Transparent),
+                    CircleShape,
+                ),
+        )
+        Box(
+            Modifier
+                .size(size + ringWidth * 2)
+                .graphicsLayer { alpha = strength }
+                .testTag(CALL_SPEAKING_RING_TAG)
+                .border(ringWidth, color, CircleShape),
+        )
+        CallAvatarDisc(name = name, size = size, avatarUrl = avatarUrl, ring = ring, faceHex = colorHex)
+    }
 }

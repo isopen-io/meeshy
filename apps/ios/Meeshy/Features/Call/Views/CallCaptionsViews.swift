@@ -43,6 +43,31 @@ enum CallCaptionsCopy {
         String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main)
     }
 
+    static var region: String {
+        String(localized: "call.captions.region", defaultValue: "Sous-titres de l'appel", bundle: .main)
+    }
+
+    static var translating: String {
+        String(localized: "call.captions.translating", defaultValue: "Traduction en cours", bundle: .main)
+    }
+
+    static var hideOriginalHint: String {
+        String(localized: "call.captions.hideOriginal.hint", defaultValue: "Masquer le texte original", bundle: .main)
+    }
+
+    static func footer(_ note: CallCaptionsFooter) -> String? {
+        switch note {
+        case .none:
+            return nil
+        case .translating(let language):
+            return String(format: String(localized: "call.captions.footer.translating", defaultValue: "%@ · traduction en cours", bundle: .main), language)
+        case .touchForOriginal(let pair):
+            return touchForOriginal(pair: pair)
+        case .translatedLanguages(let count):
+            return String.localizedStringWithFormat(String(localized: "call.captions.footer.translatedLanguages", defaultValue: "Traduit · %lld langues", bundle: .main), count)
+        }
+    }
+
     static var backToLive: String {
         String(localized: "call.captions.journal.live", defaultValue: "Revenir au direct", bundle: .main)
     }
@@ -54,17 +79,28 @@ enum CallCaptionsCopy {
     static var newLines: String {
         String(localized: "call.captions.journal.newLines", defaultValue: "Nouvelles phrases", bundle: .main)
     }
+
+    static func touchForOriginal(pair: String) -> String {
+        String(format: String(localized: "call.captions.footer.touchForOriginal", defaultValue: "%@ · toucher = original", bundle: .main), pair)
+    }
 }
 
-/// Une phrase : le nom du locuteur ET son texte dans SA couleur d'auteur (la
-/// même que le liseré de sa vignette, #16614), l'étiquette « EN → FR » quand
-/// la ligne est traduite. Toucher une phrase traduite montre son original, et inversement.
+/// Une phrase : « Moi · texte » d'une traite, le nom à la couleur de son auteur (la
+/// même que le liseré de sa vignette, #16614), le texte à la sienne quand il est
+/// traduit, l'étiquette « EN » / « EN → FR » et les trois points d'attente. Toucher
+/// une phrase traduite déplie « Original · … » dessous, en encre secondaire ; la
+/// retoucher le replie.
 struct CallCaptionRow: View {
     let line: CallCaptionLine
     var showsTime: Bool = false
+    var showsWaiting: Bool = false
     let onToggleOriginal: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var speakerColor: Color { Color(hex: line.speakerColorHex) }
+    private var ink: Color { line.textColorHex.map { Color(hex: $0) } ?? .white }
+    private var isWaiting: Bool { showsWaiting && line.isAwaitingTranslation }
 
     var body: some View {
         if line.isEvent {
@@ -95,74 +131,151 @@ struct CallCaptionRow: View {
             onToggleOriginal()
         } label: {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Text(speakerHeading)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(speakerColor)
-                        .lineLimit(1)
-                    if let tag = line.languageTag {
-                        Text(tag)
-                            .font(.caption2.weight(.semibold).monospaced())
-                            .foregroundColor(MeeshyColors.mediaChromeTertiary)
-                            .padding(.horizontal, MeeshySpacing.xs)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
-                    }
+                if showsTime {
+                    stackedPhrase
+                } else {
+                    inlinePhrase
                 }
-                // Seule une phrase TRADUITE prend la couleur de son auteur ;
-                // un original reste à l'encre de l'appel (vue finale, loi 4).
-                Text(line.text)
-                    .font(.callout.weight(line.isFinal ? .regular : .light))
-                    .foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)
-                    .opacity(line.isFinal ? 1 : 0.7)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let original = line.originalBelow {
+                    CallOriginalBelowText(text: original, ink: MeeshyColors.mediaChromeSecondary)
+                        .transition(unfoldTransition)
+                }
             }
+            .opacity(line.isFinal ? 1 : 0.7)
+            .animation(fade, value: line)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(line.speakerName) : \(line.text)")
+        .accessibilityLabel(spokenLabel)
         .optionalAccessibilityHint(accessibilityHint)
+        .accessibilityValue(showsTime ? (line.timeLabel ?? "") : "")
         // VoiceOver ne s'arrête que sur les phrases FINALES : une révision
         // partielle est remplacée avant d'avoir fini d'être lue.
         .accessibilityHidden(!line.isFinal)
     }
 
-    private var speakerHeading: String {
-        guard showsTime else { return line.speakerName }
-        return "\(line.speakerName) (\(line.capturedAt.formatted(date: .omitted, time: .shortened)))"
+    /// Une seule vue, que la traduction attendue soit là ou non : l'horloge des trois
+    /// points se met en pause au lieu de céder la place, et le texte se fond en place.
+    private var inlinePhrase: some View {
+        let pulses = isWaiting && !reduceMotion
+        return TimelineView(.animation(minimumInterval: 0.45, paused: !pulses)) { context in
+            sentence(phase: pulses ? Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3 : nil)
+        }
+    }
+
+    private func sentence(phase: Int?) -> some View {
+        CallCaptionSentence.text(line: line, nameColor: speakerColor, textColor: ink, showsWaiting: isWaiting, waitingPhase: phase)
+            .contentTransition(.opacity)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Le journal garde son en-tête : le nom et l'étiquette à gauche, l'heure DANS l'appel
+    /// (mm:ss depuis son début, comme les captures et le journal d'après l'appel) à
+    /// droite, puis la phrase.
+    private var stackedPhrase: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                Text(line.speakerName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(speakerColor)
+                    .lineLimit(1)
+                if let tag = line.languageTag {
+                    Text(tag)
+                        .font(.caption2.weight(.semibold).monospaced())
+                        .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
+                }
+                Spacer(minLength: 0)
+                if let time = line.timeLabel {
+                    Text(time)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+                }
+            }
+            Text(line.text)
+                .font(.callout.weight(line.isFinal ? .regular : .light))
+                .foregroundStyle(ink)
+                .contentTransition(.opacity)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var fade: Animation {
+        .easeInOut(duration: reduceMotion ? 0.12 : 0.22)
+    }
+
+    private var unfoldTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
+    }
+
+    private var spokenLabel: String {
+        var label = "\(line.speakerName) : \(line.text)"
+        if let original = line.originalBelow {
+            label += ". \(CallCaptionsCopy.original) : \(original)"
+        }
+        return isWaiting ? "\(label), \(CallCaptionsCopy.translating)" : label
     }
 
     private var accessibilityHint: String? {
         guard line.canRevealOriginal else { return nil }
+        if line.originalBelow != nil { return CallCaptionsCopy.hideOriginalHint }
         return line.isShowingOriginal ? CallCaptionsCopy.showTranslatedHint : CallCaptionsCopy.showOriginalHint
     }
 }
 
-/// Le bandeau : les deux dernières phrases, et le Journal. En duo il est son
-/// propre verre, juste au-dessus de la pilule ; en groupe il se pose en haut
-/// du cadre de verre de la pilule, qui le porte déjà (`hasOwnGlass: false`).
+/// Une phrase qui arrive ne redessine que sa ligne : les autres se comparent par ce
+/// qu'elles MONTRENT (la ligne résolue, l'heure), et leur couleur d'auteur ne se
+/// recalcule pas pendant le défilement. L'action ne compte pas : elle ne fait que
+/// relayer l'identifiant de la ligne.
+extension CallCaptionRow: Equatable {
+    static func == (lhs: CallCaptionRow, rhs: CallCaptionRow) -> Bool {
+        lhs.line == rhs.line && lhs.showsTime == rhs.showsTime && lhs.showsWaiting == rhs.showsWaiting
+    }
+}
+
+/// Les sous-titres : les deux dernières phrases, puis un pied (ce que les lignes disent de
+/// leur traduction) et le bouton Journal. Ils vivent DANS la pilule, au-dessus de sa
+/// rangée de base, dans le même verre (`hasOwnGlass: false`, #17343) ; ils ne
+/// prennent un verre à eux que rangés (la pilule est cachée) ou sous un mode
+/// (Effets, Montage), où il n'y a pas de pilule. La zone est une région vive
+/// « Sous-titres de l'appel ».
 struct CallCaptionsBand: View {
     let lines: [CallCaptionLine]
     let hasOwnGlass: Bool
     let onToggleOriginal: (UUID) -> Void
     let onOpenJournal: (() -> Void)?
 
+    @State private var now = Date()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var settledLines: [CallCaptionLine] {
+        lines.map { $0.settled(at: now) }
+    }
+
+    private var nextDeadline: Date? {
+        lines.compactMap(\.awaitingUntil).filter { $0 > now }.min()
+    }
+
     var body: some View {
         if hasOwnGlass {
             content
-                .padding(.leading, MeeshySpacing.mdPlus)
-                .padding(.trailing, MeeshySpacing.xs)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         } else {
             content
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.top, MeeshySpacing.xsPlus)
         }
     }
 
     private var content: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.xs) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 if lines.isEmpty {
                     Text(CallCaptionsCopy.waiting)
@@ -170,27 +283,73 @@ struct CallCaptionsBand: View {
                         .foregroundColor(MeeshyColors.mediaChromeTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    ForEach(lines) { line in
-                        CallCaptionRow(line: line) { onToggleOriginal(line.id) }
+                    ForEach(settledLines) { line in
+                        CallCaptionRow(line: line, showsWaiting: true) { onToggleOriginal(line.id) }
+                            .equatable()
                     }
                 }
             }
             .padding(.vertical, MeeshySpacing.xsPlus)
-            if let onOpenJournal {
-                Button(action: onOpenJournal) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(CallCaptionsCopy.journal)
-                .accessibilityHint(CallCaptionsCopy.journalHint)
-            }
+            footer
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(CallCaptionsCopy.title)
+        .accessibilityLabel(CallCaptionsCopy.region)
+        .accessibilityAddTraits(.updatesFrequently)
+        .task(id: nextDeadline) { await settleAtNextDeadline() }
+    }
+
+    /// L'attente d'une traduction tombe à son échéance : ni les trois points ni
+    /// « traduction en cours » ne restent affichés à vie.
+    private func settleAtNextDeadline() async {
+        guard let deadline = nextDeadline else { return }
+        let remaining = deadline.timeIntervalSinceNow
+        do {
+            try await Task.sleep(for: .seconds(max(remaining, 0)))
+        } catch {
+            return
+        }
+        now = max(Date(), deadline)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        let note = CallCaptionsCopy.footer(CallCaptionsFooter.resolve(lines: settledLines))
+        if note != nil || onOpenJournal != nil {
+            HStack(spacing: MeeshySpacing.sm) {
+                if let note {
+                    Text(note)
+                        .font(.footnote)
+                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .contentTransition(.opacity)
+                        .transition(.opacity)
+                }
+                Spacer(minLength: 0)
+                if let onOpenJournal {
+                    journalButton(onOpenJournal)
+                }
+            }
+            .animation(fade, value: note)
+        }
+    }
+
+    private var fade: Animation {
+        .easeInOut(duration: reduceMotion ? 0.12 : 0.22)
+    }
+
+    private func journalButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(CallCaptionsCopy.journal)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .frame(minHeight: 44)
+                .callChipGlass(isActive: false, tint: .white)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
+        .accessibilityHint(CallCaptionsCopy.journalHint)
     }
 }
 
@@ -220,6 +379,7 @@ struct CallJournalList: View {
                         ForEach(items) { item in
                             let resolved = line(item)
                             CallCaptionRow(line: resolved, showsTime: true) { onToggleOriginal(resolved.id) }
+                                .equatable()
                         }
                         Color.clear
                             .frame(height: 1)
@@ -302,7 +462,7 @@ struct CallJournalList: View {
                         .accessibilityHidden(true)
                 }
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
             .background(Capsule().fill(Color.black.opacity(MeeshyOpacity.heavy)))
@@ -348,37 +508,70 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
     }
 }
 
-/// Tout l'appel, Traduit ou Original — le réglage est celui du bouton
-/// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
-struct CallCaptionsJournalSheet: View {
+/// Tout l'appel, DANS la pilule, à la place des sous-titres (#17343) : un en-tête
+/// (« Journal » à gauche, la bascule Traduit / Original à droite — la planche P6 n'y
+/// dessine rien d'autre), puis la liste, qui défile et offre « Revenir au direct ».
+/// Le réglage Traduit / Original est celui du journal seul (#17678) : la bande des
+/// sous-titres ne le lit pas. Un toucher par phrase l'inverse. On le range par le (…) ou par le bouton Journal ;
+/// Échap (clavier, geste d'échappement de VoiceOver) le ferme aussi.
+struct CallJournalPanel: View {
     let items: [CallJournalItem<CallTranscriptionSegment>]
     let line: (CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine
     @Binding var showsOriginal: Bool
+    let height: CGFloat
     let onToggleOriginal: (UUID) -> Void
+    let onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @AccessibilityFocusState private var titleHasFocus: Bool
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            header
             CallJournalList(items: items, line: line, onToggleOriginal: onToggleOriginal)
-                .navigationTitle(CallCaptionsCopy.journalTitle)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
-                            Text(CallCaptionsCopy.translated).tag(false)
-                            Text(CallCaptionsCopy.original).tag(true)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 240)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                    }
-                }
+                .frame(height: height)
         }
-        .presentationDetents([.medium, .large])
-        .adaptiveSheetGlassBackground()
-        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(CallCaptionsCopy.journalTitle)
+        .dismissOnEscape(onClose)
+        .onAppear { titleHasFocus = true }
+    }
+
+    private var header: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(CallCaptionsCopy.journal)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleHasFocus)
+            Spacer(minLength: 0)
+            Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
+                Text(CallCaptionsCopy.translated).tag(false)
+                Text(CallCaptionsCopy.original).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 200)
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.xsPlus)
+    }
+}
+
+/// « Original · … » ou « Traduit · … » : la ligne posée sous la ligne principale d'une phrase, en retrait et en
+/// encre secondaire. Une seule pièce pour le journal vivant (encre du verre d'appel) et celui d'après l'appel
+/// (encre secondaire du thème du fil), pour l'état par défaut comme pour la bascule inversée : jamais un jumeau.
+struct CallOriginalBelowText: View {
+    let text: String
+    var kind: CallJournalLineKind = .original
+    let ink: Color
+
+    var body: some View {
+        Text(verbatim: "\(kind.label) · \(text)")
+            .font(.footnote)
+            .foregroundStyle(ink)
+            .multilineTextAlignment(.leading)
+            .contentTransition(.opacity)
+            .padding(.leading, MeeshySpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

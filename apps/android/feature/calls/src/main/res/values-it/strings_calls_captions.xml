@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">Traduzione</string>
     <string name="call_captions_state_original">Testo originale</string>
     <string name="call_captions_peer_active">Il tuo interlocutore ha attivato la trascrizione</string>
-    <string name="call_captions_journal">Registro</string>
     <string name="call_captions_journal_title">Registro della chiamata</string>
     <string name="call_captions_journal_hint">Apre tutte le frasi della chiamata</string>
     <string name="call_captions_waiting">I sottotitoli appariranno qui appena qualcuno parla.</string>
@@ -17,4 +16,14 @@
     <string name="call_captions_unavailable">I sottotitoli non sono ancora disponibili per questa chiamata.</string>
     <string name="call_captions_local_unsupported">Le tue parole non vengono sottotitolate su questo dispositivo: servono Android 13 e il riconoscimento vocale sul dispositivo. Continui a leggere i sottotitoli dell’altra persona.</string>
     <string name="call_captions_local_language_missing">Le tue parole non vengono sottotitolate: questo dispositivo non ha il modello vocale della tua lingua. Continui a leggere i sottotitoli dell’altra persona.</string>
+    <string name="call_captions_region">Sottotitoli della chiamata</string>
+    <string name="call_captions_translating">Traduzione in corso</string>
+    <string name="call_captions_hide_original_hint">Nascondi il testo originale</string>
+    <string name="call_captions_me">Io</string>
+    <string name="call_captions_footer_translating">%1$s · traduzione in corso</string>
+    <plurals name="call_captions_footer_translated_languages">
+        <item quantity="one">Tradotto · %1$d lingua</item>
+        <item quantity="many">Tradotto · %1$d di lingue</item>
+        <item quantity="other">Tradotto · %1$d lingue</item>
+    </plurals>
 </resources>

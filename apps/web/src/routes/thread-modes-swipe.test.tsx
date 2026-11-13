@@ -179,3 +179,47 @@ describe('l’icône « Répondre », montée sur ThreadModes (#8899)', () => {
     expect(journal).toEqual(['reply:m-1']);
   });
 });
+
+describe('#17441 — un avis citable se glisse pour y répondre, sur le chemin produit', () => {
+  const noticeOf = (id: string, metadata: Record<string, unknown>): Message =>
+    ({ ...messageOf(id, 2), senderId: 'u-other', sender: senderOf('u-other'), messageType: 'system', messageSource: 'system', content: 'Appel manqué', metadata }) as Message;
+  const CALL = noticeOf('m-appel', { kind: 'call', callId: 'c-1', initiatorId: 'u-other', callType: 'audio', outcome: 'missed', durationSeconds: 0, bytesTotal: null, bytesEstimated: false, networkQuality: null });
+  const CAPTURE = noticeOf('m-capture', { kind: 'content-capture' });
+
+  const monteAvis = async (mode: 'bubbles' | 'focal', journal: string[]) => {
+    const placed = [placeOf(CALL), placeOf(CAPTURE)];
+    return mounter.mount(
+      <ThreadModes
+        mode={mode}
+        viewer={VIEWER}
+        placed={placed}
+        virtualizer={virtualizerOf(placed.length)}
+        scene={SCENE}
+        readerLanguages={['fr']}
+        group={false}
+        highlightedId={null}
+        expiredIds={new Set()}
+        jumpToMessage={() => {}}
+        typists={[]}
+        unreadSeparatorMessageId={null}
+        unreadCount={0}
+        selection={null}
+        onRowTap={() => {}}
+        swipeActionsOf={() => ({ canReply: true, canForward: false })}
+        onSwipeAction={(id: string, outcome: SwipeOutcome) => journal.push(`${outcome}:${id}`)}
+      />,
+    );
+  };
+
+  for (const mode of ['bubbles', 'focal'] as const) {
+    test(`${mode} : glisser un appel manqué → répond ; un avis de capture reste hors des gestes`, async () => {
+      const journal: string[] = [];
+      const host = await monteAvis(mode, journal);
+      const surface = host.querySelector('[data-row="m-appel"] [data-message-swipe-content]') as HTMLElement | null;
+      expect(surface).not.toBeNull();
+      if (surface !== null) await glisser(surface, [100, 140, 180]);
+      expect(journal).toEqual(['reply:m-appel']);
+      expect(host.querySelector('[data-row="m-capture"]')).toBeNull();
+    });
+  }
+});

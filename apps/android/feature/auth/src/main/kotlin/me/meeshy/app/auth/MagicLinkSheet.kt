@@ -44,7 +44,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * La connexion par e-mail, présentée en feuille modale (iOS `MagicLinkView`) : la saisie de l'adresse, puis l'attente
- * « E-mail envoyé · Code et lien envoyés à … » — le code se saisit ICI ([EmailCodeEntry]) comme le lien s'ouvre, le
+ * « Code et lien envoyés », l'adresse dessous — le code se saisit ICI ([EmailCodeEntry]) comme le lien s'ouvre, le
  * compte à rebours est annoncé en durée parlée, et « Annuler » revient à l'adresse.
  *
  * [onSessionOpened] est appelé quand la session s'est ouverte, feuille refermée ; [onSecondFactor] quand le code a
@@ -97,10 +97,10 @@ fun MagicLinkSheet(
 
 @Composable
 private fun MagicLinkEmailInput(state: MagicLinkUiState, onEvent: (MagicLinkEvent) -> Unit) {
-    AuthInfoDisclosure(
-        title = stringResource(R.string.auth_magic_header),
-        label = stringResource(R.string.auth_magic_how_label),
+    Text(
         text = stringResource(R.string.auth_magic_subtitle),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MeeshyTheme.tokens.textSecondary,
     )
     AuthTextField(
         value = state.email,
@@ -152,12 +152,6 @@ private fun MagicLinkWaiting(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             modifier = Modifier.semantics(mergeDescendants = true) {},
         ) {
-            Text(
-                text = stringResource(R.string.auth_magic_sent_code_and_link),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.textMuted,
-                textAlign = TextAlign.Center,
-            )
             Text(
                 text = email,
                 style = MaterialTheme.typography.bodyLarge,

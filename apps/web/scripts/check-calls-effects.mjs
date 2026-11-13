@@ -13,17 +13,18 @@
  * sombre et aux deux gabarits (390 × 844, 320 × 568) :
  *
  *  1. un appel vocal se connecte, la caméra s'allume ;
- *  2. l'en-tête porte Réduire puis « Conversation » (verre isolé, 44 px), et
+ *  2. l'en-tête porte Réduire · Image dans l'image (là où elle est offerte) ·
+ *     « Conversation » (verre isolé, 44 px, #17329), et
  *     « Messages » a quitté les actions (#8436) ;
  *  3. les commandes de ma caméra, dans ma vignette : Caméra, (Retourner),
- *     Effets, Écran — chaque bouton fait 44, sans verre à lui, et le (…) ne
+ *     Effets, Écran — chaque bouton fait 44, porte son disque de verre sans flou à lui, et le (…) ne
  *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
- *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
- *     au-dessus d'UN carrousel centré en bas ; « Chaud » remplace la piste
+ *     ses rangées partent, ma vidéo prend tout l’écran ; « Visage · Couleur · Cadres » (#17915)
+ *     au-dessus d'UN carrousel centré en bas ; « Doré » remplace la piste
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
  *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
- *     photo · Appui long : vidéo » se montre, et deux tapes sur « Chaud »
+ *     photo · Appui long : vidéo » se montre, et deux tapes sur « Doré »
  *     téléchargent MON image (#8625) ; l'autre reste à l'écran, dans un
  *     bloc en haut, hors de l'aperçu capturé, qui ne couvre pas le carrousel
  *     et se glisse d'un coin du haut à l'autre (#8737) ;
@@ -100,6 +101,16 @@ const centered = (page, id) =>
   );
 const vanishes = (page, selector, timeout = 4000) => page.waitForSelector(selector, { state: 'detached', timeout }).then(() => true, () => false);
 
+/** L'appui long sur (+) : la liste des effets appliqués (#17903, #16979). */
+const holdAddLook = async (page) => {
+  const box = await page.locator('[data-call-effects-add-look]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  return appears(page, '[data-call-effect-layers] [data-call-effect-layer]');
+};
+
 const ARM_PEER = () => localStorage.setItem('meeshy.fixtures.callPeer', '1');
 
 /* Une caméra qui OFFRE le zoom (Chrome sur Android) : la capacité est injectée, le réglage retenu. */
@@ -138,11 +149,15 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 /**
@@ -261,21 +276,26 @@ try {
 
       // ------------------------------------------------ 2. l'en-tête
       const header = await page.$$eval('[data-call-header] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
-      check(header[0]?.label === 'Réduire l’appel' && header[1]?.label === 'Ouvrir la conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
-      check(header[1] !== undefined && header[1].glass && header[1].w >= TAP_FLOOR && header[1].h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
+      const conversationAt = header.findIndex((button) => button.label === 'Conversation');
+      const between = header.slice(1, Math.max(conversationAt, 1)).map((button) => button.label);
+      check(header[0]?.label === 'Réduire' && conversationAt > 0 && between.length <= 1 && between.every((name) => name === 'Image dans l’image'), `${label} : l'en-tête porte Réduire · (Image dans l’image, là où elle est offerte) · « Conversation » (${header.map((b) => b.label).join(' · ')})`);
+      const conversation = header[conversationAt];
+      check(conversation !== undefined && conversation.glass && conversation.w >= TAP_FLOOR && conversation.h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
       await openActions(page);
       check((await page.$('[data-call-control="messages"]')) === null, `${label} : « Messages » a quitté les actions`);
 
-      // ------------------------------------------------ 3. la rangée de mon image
-      check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
-      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      // ------------------------------------------------ 3. le rail de mon image
+      check((await page.$('[data-call-row="mine"]')) === null && (await page.$('[data-call-self-controls], [data-call-self-row]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra, et rien ne les pose autour de ma vignette`);
+      const mine = await page.$$eval('[data-call-rail="mine"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), blur: ['glass-call', 'glass-call-prominent'].some((token) => button.classList.contains(token)), disc: button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null, solid: (button.getAttribute('style') ?? '').includes('background'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Effets de ma vidéo', 'Partager l’écran', 'Couper la caméra', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
-      check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
+      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma caméra', 'Partager l’écran']), `${label} : le rail de mon image : Caméra · Effets · Écran — ${mine.map((b) => b.label).join(' · ')}`);
+      check(mine.every((button) => (button.disc || button.solid) && !button.blur && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons du rail font ${TAP_FLOOR}, portent leur disque de verre (ou leur plein, enclenchés) et n'ont pas de flou à eux (#17345)`);
+      const zoomStep = await page.$$eval('[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      check(zoomStep.length === 1 && zoomStep[0].label === 'Zoom de ma caméra, 1×' && zoomStep[0].w >= TAP_FLOOR && zoomStep[0].h >= TAP_FLOOR, `${label} : le cran du zoom (#8441) reste dans le coin de ma vignette, ${TAP_FLOOR} px (${JSON.stringify(zoomStep)})`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
       await page.click('[data-call-screen] button[aria-label="Couper le micro"]');
-      await appears(page, '[data-call-screen] button[aria-label="Activer le micro"]');
+      await appears(page, '[data-call-screen] button[aria-label="Réactiver le micro"]');
 
       // ------------------------------------------------ 4. le mode Effets
       const before = await sentVideo(page);
@@ -284,8 +304,10 @@ try {
       await openActions(page);
       await page.click('[data-call-control="effects"]');
       check(await appears(page, '[data-call-mode="effects"]'), `${label} : « Effets » entre dans le mode Effets`);
-      const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-row]'].filter((selector) => document.querySelector(selector) !== null));
-      check(left.length === 0, `${label} : l'en-tête, la pilule et les rangées partent (${JSON.stringify(left)})`);
+      // L'en-tête et la pilule repartent par leur bord (C1.12) : ils quittent le DOM à la FIN de leur mouvement.
+      await until(page, () => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]'].every((selector) => document.querySelector(selector) === null));
+      const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]'].filter((selector) => document.querySelector(selector) !== null));
+      check(left.length === 0, `${label} : l'en-tête, la pilule et les rails partent (${JSON.stringify(left)})`);
       check(await appears(page, '[data-call-mode-preview="effects"] video'), `${label} : ma vidéo prend tout l'écran`);
       check((await page.$('[data-call-capture-shoot], [data-call-mode-bar] .size-\\[72px\\]')) === null, `${label} : plus de déclencheur dans la barre`);
       check(await appears(page, '[data-call-capture-hint]', 2000) && (await page.textContent('[data-call-capture-hint]')) === 'Deux tapes : photo · Appui long : vidéo', `${label} : l'indice du geste se montre`);
@@ -309,7 +331,7 @@ try {
       await page.mouse.up();
       check(await until(page, (from) => document.querySelector('[data-call-effects-companions]')?.getAttribute('data-call-effects-companions-corner') !== from, startCorner), `${label} : glissé de l'autre côté, il y reste (${startCorner} → l'autre coin)`);
       const categories = await page.$$eval('[data-call-effects-category]', (tabs) => tabs.map((tab) => [tab.getAttribute('data-call-effects-category'), tab.getAttribute('aria-pressed'), tab.textContent]));
-      check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur']]), `${label} : « Visage · Couleur », Visage d'abord (${JSON.stringify(categories)})`);
+      check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur'], ['frames', 'false', 'Cadres']]), `${label} : la rangée commune « Visage · Couleur · Cadres », Visage d'abord (#17915) (${JSON.stringify(categories)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
         const box = element.getBoundingClientRect();
         return { center: Math.round(box.left + box.width / 2), bottom: Math.round(box.bottom), overflowX: getComputedStyle(element.querySelector('[data-call-row-scroll]')).overflowX };
@@ -320,14 +342,19 @@ try {
       check((await nestedGlass(page)) === 0, `${label} : aucun verre posé dans un verre, mode ouvert`);
       await page.click('[data-call-effects-category="color"]');
       const presets = await page.$$eval('[data-call-mode="effects"] [data-carousel-item]', (chips) => chips.map((chip) => chip.getAttribute('data-carousel-item')));
-      check(JSON.stringify(presets) === JSON.stringify(['natural', 'warm', 'cool', 'vivid', 'muted']), `${label} : « Couleur » : cinq préréglages (${presets.join(' · ')})`);
-      await page.click('[data-carousel-item="warm"]');
-      check((await page.getAttribute('[data-carousel-item="warm"]', 'aria-checked')) === 'true', `${label} : « Chaud » est coché`);
-      await centered(page, 'warm');
+      check(JSON.stringify(presets) === JSON.stringify(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']), `${label} : « Couleur » : huit ambiances (${presets.join(' · ')})`);
+      const edgeFade = await page.$eval('[data-call-mode="effects"] [data-call-mode-carousel] [data-call-row-scroll]', (row) => {
+        const computed = getComputedStyle(row);
+        return computed.maskImage || computed.webkitMaskImage || 'none';
+      });
+      check(/^linear-gradient\(/.test(edgeFade) && (edgeFade.match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length === 2, `${label} : le carrousel s'efface en fondu à ses deux bords (#17409) — ${edgeFade}`);
+      await page.click('[data-carousel-item="golden"]');
+      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Doré » est coché`);
+      await centered(page, 'golden');
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
-      await page.dblclick('[data-carousel-item="warm"]');
+      await page.dblclick('[data-carousel-item="golden"]');
       const selfDownload = await selfShot.catch(() => null);
-      check(selfDownload !== null && /^meeshy-appel-warm-\d{8}-\d{6}\.jpg$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Chaud » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
+      check(selfDownload !== null && /^meeshy-appel-golden-\d{8}-\d{6}\.jpg$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Doré » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
       check(await until(page, (id) => {
         const video = document.querySelector('[data-call-corner] video, [data-call-tile-self] video, [data-call-mode-preview] video');
         const track = video?.srcObject?.getVideoTracks?.()[0];
@@ -368,13 +395,39 @@ try {
       check(toggles.filter((t) => t.event === 'call:toggle-audio').at(-1)?.enabled === false, `${label} : le pair sait le micro coupé`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-effects-settings] input[type="range"]'), `${label} : « Réglages » ouvre la luminosité`);
-      check((await page.$('[data-call-mode="effects"] [data-carousel-item]')) === null, `${label} : à la place du carrousel`);
+      await until(page, () => document.querySelector('[data-call-effects-categories]') === null);
+      const settingsLayout = await page.evaluate(() => {
+        const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+        const panel = rect('[data-call-effects-settings]');
+        const bar = rect('[data-call-mode-bar]');
+        const titles = [...document.querySelectorAll('[data-call-effects-settings] label span, [data-call-effects-blur] > span:first-child')].map((node) => node.textContent);
+        const titleAbove = (rect('[data-call-effects-settings] label span')?.bottom ?? 1e9) <= (rect('[data-call-effects-settings] input[type="range"]')?.top ?? 0) + 1;
+        return { panel, bar, titles, titleAbove, glass: document.querySelector('[data-call-effects-settings]')?.className.includes('glass-call') === true, white: document.querySelector('[data-call-effects-settings-toggle] > span')?.className.includes('bg-on-media') === true };
+      });
+      check(settingsLayout.panel !== null && settingsLayout.bar !== null && settingsLayout.panel.bottom <= settingsLayout.bar.top + 1, `${label} : le panneau est un verre SÉPARÉ, posé au-dessus de la barre (P8b.2)`);
+      check(settingsLayout.glass && settingsLayout.white, `${label} : le panneau est de verre, et Réglages passe en disque blanc (P8b.4)`);
+      check((await page.$('[data-call-mode-bar] [data-call-effects-categories]')) === null, `${label} : la barre a perdu ses puces et se resserre sur ‹ · Réglages · (+)`);
+      check(settingsLayout.titles[0] === 'Luminosité' && settingsLayout.titleAbove, `${label} : « Luminosité » au-dessus de son curseur (P8b.3)`);
+      await capture(page, `effets-reglages-${slug}`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : à la place du carrousel, qui repart en fondu`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
 
-      // ------------------------------------------------ 6. valider, puis quitter sans garder
-      await page.click('[data-call-effects-validate]');
-      check(await vanishes(page, '[data-call-mode]'), `${label} : Valider quitte le mode`);
+      // ------------------------------------------------ 5 bis. la pile d'effets : l'appui long sur (+) liste ce qui est appliqué (#17903)
+      check(await holdAddLook(page), `${label} : l'appui long sur (+) liste les effets appliqués`);
+      const layers = await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')));
+      check(layers.length >= 1 && layers.length <= 3 && layers[0] === 'face' && layers.includes('color'), `${label} : du dessus au dessous, trois couches au plus — « Éruption », posée après « Doré », est au-dessus (${layers.join(' > ')})`);
+      const undoHeights = await page.$$eval('[data-call-effect-layer-undo]', (buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+      check(undoHeights.length > 0 && undoHeights.every((height) => height >= TAP_FLOOR - 0.5), `${label} : chaque ligne de la liste fait ${TAP_FLOOR} au moins`);
+      check((await page.getAttribute('[data-call-effects-add-look]', 'aria-keyshortcuts')) === 'Shift+Enter', `${label} : le clavier a sa voie : Maj + Entrée sur (+)`);
+      await capture(page, `effets-pile-${slug}`);
+      await page.keyboard.press('Escape');
+      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.$('[data-call-mode="effects"]')) !== null, `${label} : Échap referme la liste sans quitter le mode`);
+
+      // ------------------------------------------------ 6. ‹ garde le look et rend l'appel ; Échap aussi
+      check((await page.$('[data-call-effects-validate]')) === null, `${label} : ni Valider ni ✕ (P8b.5)`);
+      await page.click('[data-call-mode-quit]');
+      check(await vanishes(page, '[data-call-mode]'), `${label} : ‹ quitte le mode`);
       check(await appears(page, '[data-call-control-pill]'), `${label} : la pilule revient`);
       check(await until(page, () => document.activeElement?.hasAttribute('data-call-more') === true), `${label} : le focus revient au (…)`);
       await openActions(page);
@@ -382,8 +435,8 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : l'effet validé est gardé`);
       await page.click('[data-call-effects-category="color"]');
-      await page.click('[data-carousel-item="cool"]');
-      await page.focus('[data-carousel-item="cool"]');
+      await page.click('[data-carousel-item="sky"]');
+      await page.focus('[data-carousel-item="sky"]');
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]') && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : Échap quitte le mode sans réduire l'appel`);
       await openActions(page);
@@ -391,13 +444,13 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       await page.click('[data-call-effects-category="color"]');
       const restored = await page.getAttribute('[data-call-mode="effects"] [data-carousel-item][aria-checked="true"]', 'data-carousel-item');
-      check(restored === 'warm', `${label} : quitter rend les effets d'avant (« Chaud », pas « Froid » : ${restored})`);
+      check(restored === 'sky', `${label} : Échap garde le look posé (« Ciel » : ${restored}), rien n'est restauré (P8b.5)`);
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 
       // ------------------------------------------------ 7. pas de zoom de caméra : le zoom numérique recadre l'image ENVOYÉE
       check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
-      const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
+      const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
       check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette règle le zoom numérique (#8441)`);
       await page.$eval(step, (button) => button.click());
       check(await until(page, () => document.querySelector('[data-call-self-control="zoom"]')?.getAttribute('aria-label')?.endsWith('2×') === true), `${label} : un cran passe à 2×`);
@@ -409,10 +462,10 @@ try {
 
       // ------------------------------------------------ 8. le mode Montage
       await openActions(page);
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await page.click('[data-call-control="capture"]');
       check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
-      check((await page.$('[data-call-control-pill]')) === null, `${label} : la pilule part`);
+      check(await vanishes(page, '[data-call-control-pill]'), `${label} : la pilule part`);
       const order = await page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item')));
       check(JSON.stringify(order) === JSON.stringify(['screen', 'cover', 'gold', 'redcarpet', 'grid', 'strip', 'polaroid', 'magazine', 'film', 'neon', 'noir', 'comic', 'heart']), `${label} : treize montages, dans l'ordre (${order.join(' · ')})`);
       const paintedAll = (selector) =>
@@ -439,6 +492,27 @@ try {
       check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === 'cover', `${label} : l'aperçu passe en Couverture`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : la couverture se peint`);
       await capture(page, `montage-couverture-${slug}`);
+      // ------------------------------------------------ 8 ter. la barre du Montage est celle d'Effets (#17903, #16979)
+      const montageBar = await page.evaluate(() => {
+        const bar = document.querySelector('[data-call-mode="montage"] [data-call-mode-bar]');
+        const sizes = [...(bar?.querySelectorAll('[data-call-mode-quit], [data-call-effects-settings-toggle], [data-call-effects-add-look]') ?? [])].map((button) => button.getBoundingClientRect().height);
+        return {
+          glass: bar?.querySelector('[data-call-mode-bar-skin]')?.className.includes('glass-call') === true,
+          back: bar?.querySelector('[data-call-mode-quit]')?.getAttribute('aria-label') ?? null,
+          settings: bar?.querySelector('[data-call-effects-settings-toggle]') !== null,
+          add: bar?.querySelector('[data-call-effects-add-look]') !== null,
+          frames: bar?.querySelector('[data-call-effects-category="frames"]')?.getAttribute('aria-pressed') ?? null,
+          sizes,
+          validate: document.querySelector('[data-call-effects-validate]') !== null,
+          faces: document.querySelector('[data-call-capture-faces]') !== null,
+          keyboard: document.querySelector('[data-call-record-key]') !== null,
+        };
+      });
+      check(montageBar.glass && montageBar.back === 'Retour à l’appel' && montageBar.settings && montageBar.add && !montageBar.validate, `${label} : la barre du Montage est celle d'Effets — verre, ‹ · Réglages · (+), ni Quitter ni Valider (${JSON.stringify(montageBar.back)})`);
+      check(montageBar.frames === 'true', `${label} : sous la barre, la puce « Cadres » est pressée`);
+      check(montageBar.sizes.length === 3 && montageBar.sizes.every((size) => size >= TAP_FLOOR - 0.5), `${label} : les trois boutons de la barre font ${TAP_FLOOR} au moins`);
+      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » et la vidéo au clavier restent atteignables`);
+
       await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
@@ -494,6 +568,12 @@ try {
       check(await paintedAll('[data-call-frame-thumb]'), `${label} : les vignettes de cadre se peignent (${(await painted(page, '[data-call-frame-thumb]')).filter(Boolean).length})`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : l'aperçu du cadre se peint en direct`);
       await capture(page, `montage-cadre-${slug}`);
+      check(await holdAddLook(page), `${label} : l'appui long sur (+), au Montage, liste le cadre choisi`);
+      check((await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')))).includes('frame'), `${label} : le cadre est une couche de la pile`);
+      await capture(page, `montage-pile-${slug}`);
+      await page.click('[data-call-effect-layer-undo="frame"]');
+      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : annuler le cadre referme la liste et rend les classiques`);
+      await page.click(`[data-call-frame-mood="${mood}"]`);
       await centered(page, duoFrames[0]);
       const framed = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick(`[data-carousel-item="${duoFrames[0]}"]`);
@@ -519,7 +599,7 @@ try {
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
 
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await openActions(page);
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
     } catch (error) {

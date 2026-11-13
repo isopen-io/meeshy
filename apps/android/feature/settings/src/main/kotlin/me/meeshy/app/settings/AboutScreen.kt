@@ -159,14 +159,6 @@ fun AboutScreen(onBack: () -> Unit, viewModel: AboutViewModel = hiltViewModel())
                     }
                 }
 
-                SectionCard(title = stringResource(R.string.about_section_description)) {
-                    Text(
-                        text = stringResource(R.string.about_description_body),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MeeshyTheme.tokens.textPrimary,
-                    )
-                }
-
                 SectionCard(title = stringResource(R.string.about_section_features)) {
                     presentation.features.forEachIndexed { index, feature ->
                         if (index > 0) Spacer(Modifier.height(MeeshySpacing.sm))
@@ -223,6 +215,11 @@ private fun AppHeader(versionLabel: String) {
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.about_tagline),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
         )
         val versionText = stringResource(R.string.about_version_label, versionLabel)
         CopyableValue(value = versionText) {

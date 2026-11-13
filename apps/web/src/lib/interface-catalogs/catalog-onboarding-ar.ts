@@ -92,7 +92,7 @@ const ar = {
   'onboarding.recap.streak.other': 'أيام اللهب: \u2066{days}\u2069',
   'onboarding.recap.badges': 'الأوسمة: {count}',
   'onboarding.recap.friends': 'طلبات في الطريق: {count}',
-  'onboarding.recap.tomorrow': 'غدًا، يمكن أن يشتعل لهبك منذ {next} أيام.',
+  'onboarding.recap.tomorrow': 'غدًا، يشتعل لهبك منذ {next} أيام.',
   'onboarding.recap.explore': 'تابع الاستكشاف',
   'onboarding.recap.game': 'اكتشف اللعبة مع مي وميو',
   'onboarding.recap.done': 'يكفي لهذا اليوم',

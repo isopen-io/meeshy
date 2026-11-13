@@ -56,6 +56,7 @@ private struct KitCatalogSettings: Equatable {
 private struct KitCatalogDetail: View {
     let entry: MeeshyKitCatalogEntry
     @State private var settings = KitCatalogSettings()
+    @Environment(\.colorScheme) private var systemColorScheme
 
     /// Grande police : `accessibility3` imposé ; sinon la taille du système
     /// passe, au lieu d'être écrasée par une taille fixe.
@@ -75,12 +76,16 @@ private struct KitCatalogDetail: View {
             .padding(MeeshySpacing.lg)
         }
         .background(MeeshyColors.backgroundPrimary(isDark: settings.isDark))
+        .toolbarBackground(MeeshyColors.backgroundPrimary(isDark: settings.isDark), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(settings.isDark ? .dark : .light, for: .navigationBar)
         .environment(\.colorScheme, settings.isDark ? .dark : .light)
         .environment(\.layoutDirection, settings.isRightToLeft ? .rightToLeft : .leftToRight)
         .dynamicTypeSize(typeSizes)
         .navigationTitle(Text(verbatim: entry.accessibilityName))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { KitCatalogSettingsMenu(settings: $settings) }
+        .onAppear { settings.isDark = systemColorScheme == .dark }
     }
 }
 

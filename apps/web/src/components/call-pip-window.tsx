@@ -9,7 +9,7 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { armAutoPip, browserPipSupport, pipSource, registerPipOpener, shellPipStore, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
+import { armAutoPip, browserPipSupport, pipSource, pipOpenStore, registerPipCloser, registerPipOpener, shellPipStore, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -161,6 +161,25 @@ function CallPip({ call }: { readonly call: ActiveCall }) {
   useEffect(() => {
     if (!live) closeCallPip();
   }, [live]);
+  /* La vidéo seule flotte hors de notre arbre : ses deux événements disent quand. */
+  const [videoFloating, setVideoFloating] = useState(false);
+  useEffect(() => {
+    const element = hidden.current;
+    if (element === null) return undefined;
+    const enter = () => setVideoFloating(true);
+    const leave = () => setVideoFloating(false);
+    element.addEventListener('enterpictureinpicture', enter);
+    element.addEventListener('leavepictureinpicture', leave);
+    return () => {
+      element.removeEventListener('enterpictureinpicture', enter);
+      element.removeEventListener('leavepictureinpicture', leave);
+    };
+  }, [support, offered]);
+  const floating = pipWindow !== null || videoFloating;
+  useEffect(() => {
+    pipOpenStore.setState({ open: floating });
+    return () => pipOpenStore.setState({ open: false });
+  }, [floating]);
   useEffect(() => () => closeCallPip(), []);
 
   useEffect(() => {
@@ -190,5 +209,6 @@ function CallPip({ call }: { readonly call: ActiveCall }) {
 export function CallPipLayer() {
   const call = useStore(callStore, (state) => state.call);
   useEffect(() => registerPipOpener(openCallPip), []);
+  useEffect(() => registerPipCloser(closeCallPip), []);
   return call === null ? null : <CallPip call={call} />;
 }

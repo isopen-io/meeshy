@@ -11,6 +11,9 @@ struct AboutView: View {
 
     private let accentColor = "45B7D1"
 
+    /// Plateforme, Bundle ID, SDK et profil média : rangés derrière « Plus » ; la version et le build restent visibles sous le nom.
+    @State private var showsMoreInformation = false
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
@@ -64,7 +67,6 @@ struct AboutView: View {
         VStack(spacing: MeeshySpacing.xl) {
             appHeaderSection
             informationsSection
-            descriptionSection
             fonctionnalitesSection
             liensSection
             copyrightSection
@@ -90,6 +92,12 @@ struct AboutView: View {
                 .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
                 .foregroundStyle(theme.textPrimary)
 
+            Text(String(localized: "about.description.body", defaultValue: "Messagerie traduite dans votre langue, voix clonée, chiffrement au choix.", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.lg)
+
             Text(versionString)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundStyle(theme.textMuted)
@@ -104,41 +112,47 @@ struct AboutView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xl)
-        .background(sectionBackground(tint: accentColor))
+        .background(SettingsSectionBackground(tint: accentColor))
     }
 
     // MARK: - Informations
 
     private var informationsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "about.section.informations", defaultValue: "Informations", bundle: .main), icon: "info.circle.fill", color: accentColor)
+        VStack(spacing: 0) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.easeInOut(duration: 0.2)) { showsMoreInformation.toggle() }
+            } label: {
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("info.circle.fill", color: accentColor)
 
-            VStack(spacing: 0) {
+                    Text(String(localized: "common.more", defaultValue: "Plus", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: showsMoreInformation ? "chevron.up" : "chevron.down")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(Color(hex: accentColor))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm + 2)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(showsMoreInformation ? .isSelected : [])
+
+            if showsMoreInformation {
                 infoRow(icon: "apple.logo", title: String(localized: "about.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
                 infoRow(icon: "shippingbox.fill", title: String(localized: "about.info.bundleId", defaultValue: "Bundle ID", bundle: .main), value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
                 infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "Version du SDK", bundle: .main), value: "1.0.0", color: accentColor)
                 infoRow(icon: "gauge.with.dots.needle.67percent", title: String(localized: "about.info.mediaTier", defaultValue: "Profil média", bundle: .main), value: mediaTierLabel, color: accentColor)
             }
-            .background(sectionBackground(tint: accentColor))
         }
-    }
-
-    // MARK: - Description
-
-    private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo600Hex)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
-                    .foregroundColor(theme.textPrimary)
-                    .lineSpacing(4)
-                    .padding(.horizontal, MeeshySpacing.md + 2)
-                    .padding(.vertical, MeeshySpacing.md)
-            }
-            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
-        }
+        .background(SettingsSectionBackground(tint: accentColor))
     }
 
     // MARK: - Fonctionnalites
@@ -151,10 +165,8 @@ struct AboutView: View {
                 featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement bout en bout", bundle: .main), icon: "lock.shield.fill")
                 featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction en temps réel", bundle: .main), icon: "globe")
                 featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), icon: "waveform")
-                featureRow(title: String(localized: "about.feature.themes", defaultValue: "Thèmes personnalisables", bundle: .main), icon: "paintbrush.fill")
-                featureRow(title: String(localized: "about.feature.cloudSync", defaultValue: "Synchronisation cloud", bundle: .main), icon: "cloud.fill")
             }
-            .background(sectionBackground(tint: MeeshyColors.tileSaffronHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.tileSaffronHex))
         }
     }
 
@@ -182,7 +194,7 @@ struct AboutView: View {
                 linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
                 linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.infoHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.infoHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))
         }
     }
 
@@ -212,15 +224,6 @@ struct AboutView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isHeader)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {

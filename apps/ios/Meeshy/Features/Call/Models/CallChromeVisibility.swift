@@ -9,6 +9,8 @@ enum CallChromeElement: CaseIterable, Sendable {
     case screenShareBanner
     case captions
     case selfView
+    /// La capsule « Revenir à la grille · Plein écran » de la personne à la une.
+    case featuredCapsule
 }
 
 struct CallChromeVisibility: Equatable, Sendable {
@@ -30,6 +32,8 @@ struct CallChromeVisibility: Equatable, Sendable {
             return !isModeActive
         case .header, .controls, .openPanel, .recordingStatus, .screenShareBanner:
             return isRevealed && !isStageFullScreen && !isModeActive
+        case .featuredCapsule:
+            return isRevealed && !isModeActive
         }
     }
 

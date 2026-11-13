@@ -25,9 +25,6 @@ enum class CallOverlaySlot(val replacing: Boolean) {
     /** Over the peer block: what concerns the other side's picture. */
     Center(replacing = false),
 
-    /** Above the controls, below the peer block: live captions. */
-    Captions(replacing = false),
-
     /** Just above the controls: the returned word, the invitations that ring. */
     AboveControls(replacing = false),
 
@@ -49,6 +46,10 @@ data class CallOverlayContext(
     val chrome: CallChromeVisibility = CallChromeVisibility(),
     /** A touch on a fading chrome overlay relights the chrome. */
     val onChromeRevive: () -> Unit = {},
+    /** The call lives in the picture-in-picture window: what only suits the full screen (the capture capsule) stays out. */
+    val inPip: Boolean = false,
+    /** The group stage replaces the duo scene: what only a duo says (a live frame proposal) stays out. */
+    val isGroupStage: Boolean = false,
 )
 
 /**

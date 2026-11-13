@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">Tradução</string>
     <string name="call_captions_state_original">Texto original</string>
     <string name="call_captions_peer_active">O seu interlocutor ativou a transcrição</string>
-    <string name="call_captions_journal">Registo</string>
     <string name="call_captions_journal_title">Registo da chamada</string>
     <string name="call_captions_journal_hint">Abre todas as frases da chamada</string>
     <string name="call_captions_waiting">As legendas aparecerão aqui assim que alguém falar.</string>
@@ -17,4 +16,14 @@
     <string name="call_captions_unavailable">As legendas ainda não estão disponíveis para esta chamada.</string>
     <string name="call_captions_local_unsupported">As suas palavras não são legendadas neste dispositivo: é preciso Android 13 e reconhecimento de voz no dispositivo. Continua a ler as legendas da outra pessoa.</string>
     <string name="call_captions_local_language_missing">As suas palavras não são legendadas: este dispositivo não tem o modelo de voz do seu idioma. Continua a ler as legendas da outra pessoa.</string>
+    <string name="call_captions_region">Legendas da chamada</string>
+    <string name="call_captions_translating">Traduzindo</string>
+    <string name="call_captions_hide_original_hint">Ocultar o texto original</string>
+    <string name="call_captions_me">Eu</string>
+    <string name="call_captions_footer_translating">%1$s · traduzindo</string>
+    <plurals name="call_captions_footer_translated_languages">
+        <item quantity="one">Traduzido · %1$d idioma</item>
+        <item quantity="many">Traduzido · %1$d de idiomas</item>
+        <item quantity="other">Traduzido · %1$d idiomas</item>
+    </plurals>
 </resources>

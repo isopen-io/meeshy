@@ -29,9 +29,10 @@ internal class CallDuoStageHold(
 
 /**
  * La scène du duo (iOS `isMyImageFullScreen` + `showsMyImageTile`). La permutation vit ICI, pas dans la scène : la
- * pilule lit la même disposition pour ne pas répéter les commandes de mon image (iOS `CallCameraRail.placement`), et le
+ * disposition dit où vit le zoom de ma caméra (iOS `CallCameraRail.placement`), et le
  * verre adaptatif sait si MON image tient la scène (loi 3). Le cadre en direct est un habit du DUO : il tombe dès que
- * l'appel passe à trois (loi 16).
+ * l'appel passe à trois (loi 16). Un écran reçu garde la une : la permutation est refusée tant qu'il dure, et celle
+ * déjà faite revient avec la fin du partage (iOS `effectiveSwapStreams`).
  */
 @Composable
 internal fun rememberCallDuoStage(
@@ -71,6 +72,7 @@ internal fun rememberCallDuoStage(
             hasLocalTrack = localTrack != null,
             isCameraOn = state.isCameraOn,
             isVideoAutoPaused = state.isVideoAutoPaused,
+            isPeerScreenSharing = state.isPeerScreenSharing,
         ),
     )
     return CallDuoStageHold(
@@ -80,7 +82,9 @@ internal fun rememberCallDuoStage(
         callKey = callKey,
         localTrack = localTrack,
         layout = layout,
-        onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
+        onSwap = {
+            if (CallDuoStageLaw.acceptsSwap(state.isPeerScreenSharing, hasLocalTrack = localTrack != null, isCameraOn = state.isCameraOn)) swapped = !swapped
+        },
     )
 }
 

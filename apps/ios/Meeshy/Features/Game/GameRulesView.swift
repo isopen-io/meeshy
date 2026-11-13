@@ -30,6 +30,8 @@ struct GameRulesPage: View {
     var focusedSection: GameRulesSection?
 
     @State private var highlighted: Int?
+    /// Un seul (i) ouvert à la fois sur la page (« Pourquoi cette étape ? »).
+    @State private var openNoteID: String?
 
     var body: some View {
         // Le lecteur de défilement ENVELOPPE le gabarit : la règle visée se trouve dans SON défilement.
@@ -158,17 +160,23 @@ struct GameRulesPage: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .textCase(.uppercase)
                         .foregroundStyle(theme.textMuted)
-                        Text(card.copy.what).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold)).foregroundStyle(theme.textPrimary)
-                        Text(card.copy.means).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular)).foregroundStyle(theme.textPrimary)
+                        MeeshyInfoNoted(note: stepNote(step.index, means: card.copy.means), openNoteID: $openNoteID, tint: theme.textMuted) {
+                            Text(card.copy.what).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold)).foregroundStyle(theme.textPrimary)
+                        }
                         Text(card.copy.next).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold)).foregroundStyle(theme.textPrimary)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(MeeshySpacing.md)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
         }
+    }
+
+    /// La question porte le numéro de l'étape : sept (i) sur une page se distinguent à l'oreille, et un seul s'ouvre.
+    private func stepNote(_ index: Int, means: String) -> MeeshyInfoNote {
+        MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: GameCopy.formatCount(index)), text: means)
     }
 
     private func stepFigures(_ card: GuideCard) -> some View {
@@ -275,7 +283,6 @@ struct GameRulesBadgesSection: View {
             ForEach(GameRulesBadges.families) { group in
                 family(group)
             }
-            paragraph(GameBadgeGuideText.rulesSheet, muted: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)

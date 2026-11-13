@@ -8,11 +8,6 @@
           "catalog": "app",
           "iosKey": "settings.tools.progression",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.tools.progression.hint",
-          "status": "adopted"
         }
       ]
     }

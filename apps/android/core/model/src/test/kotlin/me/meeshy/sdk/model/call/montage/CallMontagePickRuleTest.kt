@@ -158,4 +158,10 @@ class CallMontagePickRuleTest {
         assertThat(CallMontageStageRule.stage(frame, live = live)).isEqualTo(CallMontageStage.Live(live))
         assertThat(CallMontageStageRule.stage(frame, live = null)).isEqualTo(CallMontageStage.Painted)
     }
+
+    @Test
+    fun `Cadre est desactive pendant une prise, comme sur iOS`() {
+        assertThat(CallMontagePickRule.holdEnabled(isRecording = true)).isFalse()
+        assertThat(CallMontagePickRule.holdEnabled(isRecording = false)).isTrue()
+    }
 }

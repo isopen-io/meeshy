@@ -53,7 +53,11 @@ final class ComposerPasteEntryGate: ObservableObject {
 }
 
 /// L'entrée de collage du compositeur, montée seulement quand elle a un effet.
+/// **Le glyphe seul, en bleu de marque** (#17434) : aucun libellé à l'écran,
+/// VoiceOver garde celui du système (« Coller »).
 struct ComposerPasteEntry: View {
+    static let accessibilityIdentifier = "composer.rest.paste"
+
     let canAddMedia: Bool
     let onItems: ([StoryPastedItem]) -> Void
 
@@ -68,6 +72,8 @@ struct ComposerPasteEntry: View {
                 // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le plancher de l'app
                 // est iOS 16. Sur une cible de 44 pt, la capsule EST un cercle.
                 .buttonBorderShape(.capsule)
+                .tint(MeeshyColors.brandPrimary)
+                .accessibilityIdentifier(ComposerPasteEntry.accessibilityIdentifier)
         }
     }
 }

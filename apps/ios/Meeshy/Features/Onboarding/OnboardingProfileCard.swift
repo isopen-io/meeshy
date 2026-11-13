@@ -33,7 +33,6 @@ struct OnboardingProfileCard: View {
             illustration: { EmptyView() },
             content: {
                 VStack(spacing: MeeshySpacing.lg) {
-                    OnboardingProfileBenefits(isDark: isDark)
                     preview
                     if !profile.failedSlots.isEmpty { failureNotice }
                 }
@@ -73,10 +72,17 @@ struct OnboardingProfileCard: View {
     /// Les deux sélecteurs sont FRÈRES, jamais l'un dans l'autre (#17251) :
     /// toucher l'avatar n'ouvre que le sien, et rien n'enchaîne sur la bannière.
     private var preview: some View {
-        VStack(spacing: MeeshySpacing.sm) {
+        let banner = profile.banner.shown
+        let bannerUploading = profile.banner.isUploading
+        let name = model.userDisplayName
+        let avatarURL = model.userAvatarURL
+        let avatar = profile.avatar.shown
+        let avatarUploading = profile.avatar.isUploading
+        let dark = isDark
+        return VStack(spacing: MeeshySpacing.sm) {
             ZStack(alignment: .bottom) {
                 PhotosPicker(selection: $bannerItem, matching: .images) {
-                    OnboardingProfileBannerTile(image: profile.banner.shown, isUploading: profile.banner.isUploading)
+                    OnboardingProfileBannerTile(image: banner, isUploading: bannerUploading)
                 }
                 .buttonStyle(.plain)
                 .disabled(profile.banner.isUploading)
@@ -84,9 +90,8 @@ struct OnboardingProfileCard: View {
                 .accessibilityIdentifier("onboarding.profile.banner")
                 .padding(.bottom, OnboardingProfileAvatarTile.size / 2)
                 PhotosPicker(selection: $avatarItem, matching: .images) {
-                    OnboardingProfileAvatarTile(name: model.userDisplayName, avatarURL: model.userAvatarURL,
-                                                image: profile.avatar.shown,
-                                                isUploading: profile.avatar.isUploading, isDark: isDark)
+                    OnboardingProfileAvatarTile(name: name, avatarURL: avatarURL, image: avatar,
+                                                isUploading: avatarUploading, isDark: dark)
                 }
                 .buttonStyle(.plain)
                 .disabled(profile.avatar.isUploading)
@@ -130,35 +135,6 @@ struct OnboardingProfileCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("onboarding.profile.retry")
         }
-    }
-}
-
-// MARK: - Les deux bénéfices
-
-private struct OnboardingProfileBenefits: View {
-    let isDark: Bool
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: MeeshySpacing.sm) { chips }
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) { chips }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private var chips: some View {
-        chip(String(localized: "onboarding.profile.benefit.visibility", bundle: .main), symbol: "eye.fill")
-        chip(String(localized: "onboarding.profile.benefit.contacts", bundle: .main), symbol: "person.2.fill")
-    }
-
-    private func chip(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundStyle(MeeshyColors.indigo500)
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(MeeshyColors.indigo500.opacity(isDark ? 0.18 : 0.1)))
     }
 }
 

@@ -1,7 +1,10 @@
 package me.meeshy.sdk.model.call
 
 import com.google.common.truth.Truth.assertThat
+import java.io.File
 import org.junit.Test
+
+private const val SHARED_RECORDING_TYPES = "packages/shared/types/call-recording.ts"
 
 class CallRecordingRulesTest {
     private val idle = CallRecordingState()
@@ -175,8 +178,22 @@ class CallRecordingRulesTest {
     }
 
     @Test
-    fun `the consent window of 30 seconds is the shared one`() {
-        assertThat(CallRecordingRules.CONSENT_TIMEOUT_MILLIS).isEqualTo(30_000L)
+    fun `android keeps no consent window of its own`() {
+        assertThat(CallRecordingRules::class.java.declaredFields.map { it.name })
+            .doesNotContain("CONSENT_TIMEOUT_MILLIS")
+    }
+
+    @Test
+    fun `the consent window is the one the shared kit declares`() {
+        assertThat(sharedConsentWindowMillis()).isEqualTo(30_000L)
+    }
+
+    private fun sharedConsentWindowMillis(): Long {
+        val source = generateSequence(File("").absoluteFile) { it.parentFile }
+            .map { File(it, SHARED_RECORDING_TYPES) }
+            .first { it.isFile }
+        val declared = Regex("""CALL_RECORDING_CONSENT_TIMEOUT_MS = ([\d_]+);""").find(source.readText())
+        return checkNotNull(declared).groupValues[1].replace("_", "").toLong()
     }
 
     @Test

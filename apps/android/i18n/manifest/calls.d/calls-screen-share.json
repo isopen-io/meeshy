@@ -6,6 +6,12 @@
       "entries": [
         {
           "catalog": "app",
+          "iosKey": "call.screenShare.caption",
+          "androidName": "call_screen_share_caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "call.screenShare.start",
           "androidName": "call_screen_share_start",
           "status": "adopted"

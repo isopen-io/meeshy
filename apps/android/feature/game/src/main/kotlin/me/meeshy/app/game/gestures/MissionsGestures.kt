@@ -153,7 +153,7 @@ internal fun MissionsGestures(
             }
         }
         GameErrorLine(gestureMessage(gestures.failures[GameGesture.Reroll]))
-        if (!gestures.online) GameNote(stringResource(R.string.game_missions_offline))
+        if (!gestures.online) GameNote(stringResource(R.string.game2_offline_action))
         ChestCard(
             chest = game.chest,
             served = gestures.chestReward,
