@@ -42,6 +42,17 @@ class CallJournalGuardTest {
     }
 
     @Test
+    fun `W2_6 - le journal nomme l'auteur par les noms que l'ecran lui remet, sans se fabriquer un second CallViewModel`() {
+        val panel = code("CallJournalPanel.kt")
+        val layout = code("CallConnectedLayout.kt")
+
+        assertThat(panel).doesNotContain("CallViewModel")
+        assertThat(panel).contains("participantNames: Map<String, String>")
+        assertThat(panel).contains("viewModel.journalLines(state, view, labels, participantNames)")
+        assertThat(layout).contains("participantNames = state.participantNames")
+    }
+
+    @Test
     fun `le journal d'apres l'appel et celui du direct datent par la meme loi`() {
         val replay = generateSequence(File("").absoluteFile) { it.parentFile }
             .map { File(it, "core/model/src/main/kotlin/me/meeshy/sdk/model/call/CallTranscriptReplay.kt") }

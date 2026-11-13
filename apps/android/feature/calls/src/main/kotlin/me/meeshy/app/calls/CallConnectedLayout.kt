@@ -297,7 +297,12 @@ internal fun CallConnectedColumn(
                                 },
                             )
                             CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
-                            CallScreenPanel.Journal -> CallJournalPanel(onClose = chrome::close, captures = state.liveCaptures, peerName = state.peerName)
+                            CallScreenPanel.Journal -> CallJournalPanel(
+                                onClose = chrome::close,
+                                captures = state.liveCaptures,
+                                peerName = state.peerName,
+                                participantNames = state.participantNames,
+                            )
                             else -> Unit
                         }
                     },

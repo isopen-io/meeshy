@@ -73,7 +73,8 @@ internal fun CallCaptionsBandHost(
 ) {
     val captions by viewModel.state.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
-    val lines = rememberStableLines(remember(captions, labels) { viewModel.bandLines(captions, labels) })
+    val names = state.participantNames
+    val lines = rememberStableLines(remember(captions, labels, names) { viewModel.bandLines(captions, labels, names) })
     val toggle = remember(viewModel) { { key: String -> viewModel.toggleReveal(key) } }
     CallCaptionsBand(
         lines = lines,
