@@ -76,7 +76,7 @@ internal fun rememberCallTouchExploration(): Boolean {
     return on
 }
 
-/** What the group stage shows of the others' cameras: the chrome hides to a tap only when one of them is on (G1.13). */
+/** What the group stage shows of the others' cameras: one of them on makes it a video stage (G1.13). */
 internal data class CallGroupVideoStage(val remoteCamerasOn: Int) {
     companion object {
         fun of(mesh: GroupCallMeshUi, isPrimaryVideoActive: Boolean): CallGroupVideoStage =
@@ -92,6 +92,30 @@ internal fun callIsVideoStage(state: CallUiState, group: CallGroupVideoStage? = 
     remoteCamerasOn = group?.remoteCamerasOn ?: 0,
 )
 
+/** Law 11 (#17945): the stage a tap stows — the image on video, the background of a call in progress, duo or group. */
+internal fun callIsTapStage(state: CallUiState, group: CallGroupVideoStage? = null): Boolean = CallChromeVisibility.isTapStage(
+    isVideoStage = callIsVideoStage(state, group),
+    isConnected = state.showsConnectedLayout,
+)
+
+/** Law 11 (#17945): the tap that stows the chrome, on the image or on the background of a call in progress; null where none stows. */
+@Composable
+internal fun rememberCallSceneTap(
+    chrome: CallChromeController,
+    state: CallUiState,
+    group: CallGroupVideoStage?,
+    isTouchExplorationOn: Boolean,
+): (() -> Unit)? {
+    val tapStage = callIsTapStage(state, group)
+    return remember(chrome, tapStage, isTouchExplorationOn) {
+        if (CallChromeVisibility.mayToggleByTap(tapStage, isTouchExplorationOn)) {
+            { chrome.onSceneTap(tapStage, isTouchExplorationOn) }
+        } else {
+            null
+        }
+    }
+}
+
 /** What the chrome shows now; reads the controller state so it recomposes on every change. */
 @Composable
 internal fun rememberCallChromeVisibility(
@@ -101,7 +125,7 @@ internal fun rememberCallChromeVisibility(
 ): CallChromeVisibility {
     val explore = rememberCallTouchExploration()
     chrome.state.collectAsState().value
-    return chrome.visibility(callIsVideoStage(state, group), explore)
+    return chrome.visibility(callIsTapStage(state, group), explore)
 }
 
 /**
@@ -179,8 +203,9 @@ internal fun CallChromeFade(
 
 /**
  * The connected layout (also kept during a reconnection with media established): the peer, the
- * captions, the capability slots and the pill. A tap on the video scene hides the header, the pill
- * and the panels in a fade; a tap lights them again; nothing hides in audio or under TalkBack.
+ * captions, the capability slots and the pill. A tap on the stage (the image on video, the background of a call with
+ * no image, duo or group — law 11, #17945) hides the header, the pill and the panels in a fade; a tap lights them again; nothing hides
+ * under TalkBack.
  */
 @Composable
 internal fun CallConnectedColumn(
@@ -204,7 +229,7 @@ internal fun CallConnectedColumn(
     val extensions = viewModel.extensions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
-    val visibility = chrome.visibility(callIsVideoStage(state, groupVideo), explore)
+    val visibility = chrome.visibility(callIsTapStage(state, groupVideo), explore)
     val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()

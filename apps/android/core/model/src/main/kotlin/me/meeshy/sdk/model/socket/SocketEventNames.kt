@@ -122,6 +122,10 @@ object SocketEventNames {
     const val LOCATION_LIVE_UPDATE = "location:live-update"
     const val LOCATION_LIVE_UPDATED = "location:live-updated"
 
+    // position partagée à des personnes (#14109, #16985) : serveur -> client, sur la room `user:<id>`, déjà tronquée
+    const val LOCATION_SHARE_CHANGED = "location:share-changed"
+    const val LOCATION_SHARE_ENDED = "location:share-ended"
+
     // media
     const val MEDIA_CAPTION_TRANSLATION_UPDATED = "media:caption-translation-updated"
 
@@ -373,6 +377,8 @@ object SocketEventNames {
         LOCATION_LIVE_STOPPED,
         LOCATION_LIVE_UPDATE,
         LOCATION_LIVE_UPDATED,
+        LOCATION_SHARE_CHANGED,
+        LOCATION_SHARE_ENDED,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
         MESSAGE_DELETED,

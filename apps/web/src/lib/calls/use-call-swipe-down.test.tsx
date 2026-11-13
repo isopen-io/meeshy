@@ -34,7 +34,7 @@ type Harness = { readonly allowed?: boolean; readonly canPip?: boolean; readonly
 function Screen({ allowed = true, canPip = false, reducedMotion = false, outcomes }: Harness & { readonly outcomes: SwipeDownOutcome[] }) {
   const root = useRef<HTMLDivElement>(null);
   const swipe = useCallSwipeDown({ root, allowed, canPip, reducedMotion, onOutcome: (outcome) => outcomes.push(outcome) });
-  const { visibility } = useCallChrome({ videoScene: true, root, swallowTap: swipe.swallowTap });
+  const { visibility } = useCallChrome({ scene: true, root, swallowTap: swipe.swallowTap });
   return (
     <div ref={root} data-visibility={visibility} data-offset={String(swipe.offset)}>
       <div data-stage="" />

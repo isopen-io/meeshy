@@ -9,6 +9,7 @@ import { runRitualPhase } from '../../services/relations/bloodRitual';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { errorResponses, otherUserOf, relationLimiter, sendCoded, userIdParams } from './shared';
 
 const corpsRituel = z.object({
@@ -93,6 +94,11 @@ export function registerRelationRitual(fastify: FastifyInstance): void {
         // #13934 — le Sang est scellé : le titre consenti au rituel remonte aussitôt.
         await refreshNowPlayingAfter(
           { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after ritual:', error) },
+          { userA: request.user!.userId, userB: otherId },
+        );
+        // #16987 — le lien monte au Sang : la dernière position partagée revient chez l'autre, à la précision choisie.
+        await refreshSharedLocationAfter(
+          { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Shared location not refreshed after ritual:', error) },
           { userA: request.user!.userId, userB: otherId },
         );
       }

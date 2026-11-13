@@ -25,7 +25,9 @@ import type {
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
   VoiceProfileRequest,
-  CacheForgetRequest
+  CacheForgetRequest,
+  TranslationSkippedPayload,
+  TranslationErrorPayload
 } from './types';
 import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -52,6 +54,7 @@ export interface ZMQClientStats {
   results_received: number;
   errors_received: number;
   pool_full_rejections: number;
+  translation_skipped: number;
   avg_response_time: number;
   uptime_seconds: number;
   memory_usage_mb: number;
@@ -126,6 +129,7 @@ export class ZmqTranslationClient extends EventEmitter {
     results_received: 0,
     errors_received: 0,
     pool_full_rejections: 0,
+    translation_skipped: 0,
     avg_response_time: 0,
     uptime_seconds: 0,
     memory_usage_mb: 0
@@ -250,6 +254,10 @@ export class ZmqTranslationClient extends EventEmitter {
     this.cbOpenedAt = null;
   }
 
+  private _isPendingNonTranslationRequest(taskId: string): boolean {
+    return this.requestSender.hasPendingRequest(taskId) && !this.requestSender.hasPendingTranslationRequest(taskId);
+  }
+
   private _cbRecordError(): void {
     this.cbConsecutiveErrors++;
     if (this.cbConsecutiveErrors >= CB_FAILURE_THRESHOLD && this.cbOpenedAt === null) {
@@ -325,14 +333,30 @@ export class ZmqTranslationClient extends EventEmitter {
       }
     });
 
-    this.messageHandler.on('translationError', (event) => {
+    this.messageHandler.on('translationError', (event: TranslationErrorPayload) => {
+      // Le translator ne publie `translation_error` que pour une traduction
+      // TEXTE. Sous le taskId d'une requête audio, transcription ou voix encore
+      // en attente, l'erreur est mal adressée (#18063) : la solder désarmait
+      // deadman et retry d'une requête qui ne revenait plus, la compter
+      // poussait le disjoncteur pour une panne qui n'en est pas une, et la
+      // relayer devenait un `translation:failed` diffusé pour le message audio —
+      // l'échec d'une traduction texte jamais demandée. Elle ne fait donc rien
+      // d'autre qu'une ligne de journal ; la requête garde son propre chemin
+      // d'échec (`audioProcessError`, `voiceAPIError`, deadman).
+      if (event.taskId && this._isPendingNonTranslationRequest(event.taskId)) {
+        logger.warn(`⚠️ translation_error ignoré : taskId=${event.taskId} vise une requête non texte encore en attente`);
+        return;
+      }
+
       // Une langue sans code NLLB-200 ne se servira JAMAIS : la relancer cinq
       // fois puis annoncer l'échec (`translation:failed`) était l'incident du
       // 2026-11-01. Seule SA langue se solde, sans compter d'échec au disjoncteur ;
       // son lecteur reçoit l'original.
       if (event.errorCode === UNSUPPORTED_LANGUAGE_ERROR_CODE && event.targetLanguage) {
-        const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
-        if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        if (event.taskId) {
+          const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
+          if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        }
         this.emit('translationUnsupported', event);
         return;
       }
@@ -365,12 +389,29 @@ export class ZmqTranslationClient extends EventEmitter {
       // sinon personne ne l'apprend jamais.
       if (event.error === 'translation pool full') {
         this.stats.pool_full_rejections++;
-        if (this.requestSender.hasPendingRequest(event.taskId)) return;
+        if (event.taskId && this.requestSender.hasPendingRequest(event.taskId)) return;
       }
 
-      this.retryCount.delete(event.taskId);
-      this.requestSender.removePendingRequest(event.taskId);
+      if (event.taskId) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
       this.emit('translationError', event);
+    });
+
+    // Un texte trop long ne sera JAMAIS traduit (#17204) : le laisser armé le
+    // faisait renvoyer jusqu'à ZMQ_MAX_RETRIES puis annoncer un échec. Il se
+    // solde sans rien compter au disjoncteur — ce n'est ni une panne ni un
+    // succès — et son lecteur garde l'original. Sans taskId (ancien
+    // translator), il n'y a rien à solder. Le refus ne vise que la traduction
+    // TEXTE : sous un taskId d'audio ou de voix, la requête reste armée (#18042).
+    this.messageHandler.on('translationSkipped', (event: TranslationSkippedPayload) => {
+      this.stats.translation_skipped++;
+      if (event.taskId && this.requestSender.hasPendingTranslationRequest(event.taskId)) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
+      this.emit('translationSkipped', event);
     });
 
     // Audio events

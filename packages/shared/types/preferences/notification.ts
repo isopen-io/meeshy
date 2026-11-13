@@ -73,6 +73,10 @@ export const NotificationPreferenceSchema = z.object({
   // « Recevoir le talkie » (#13935, #14407) — l'interrupteur GLOBAL de la réception directe
   // du talkie. Coupé : la voix d'un Proche arrive en message vocal. Absent ⇒ reçu.
   talkieEnabled: z.boolean().default(true),
+  // « Recevoir les invitations à regarder ou écouter ensemble » (#17023) — l'interrupteur GLOBAL,
+  // en plus de la coupure par personne. Coupé : personne ne peut m'inviter, et l'hôte lit le refus
+  // d'un inconnu ; une séance déjà rejointe continue. Absent ⇒ reçu.
+  togetherEnabled: z.boolean().default(true),
 
   ...circleAudienceShape,
 
@@ -151,6 +155,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   gamePhotoEnabled: true,
   bringEnabled: true,
   talkieEnabled: true,
+  togetherEnabled: true,
   ...CIRCLE_NOTIFY_DEFAULTS,
   dndEnabled: false,
   dndStartTime: '22:00',

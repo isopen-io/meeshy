@@ -22,6 +22,7 @@ import {
   refreshNowPlayingBetween,
   type NowPlayingRelayDeps,
 } from '../../../../services/nowPlaying/nowPlayingRelay';
+import { revokeTeamSharesOf } from '../../../../services/relations/teamShareGrant';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6200000000000000000000e1';
@@ -31,6 +32,8 @@ const PROCHE = '6200000000000000000000c1';
 const PROCHE_SANS_ACCORD = '6200000000000000000000c2';
 const AMI = '6200000000000000000000f1';
 const BLOQUEUR = '6200000000000000000000d1';
+const COLLEGUE = '6200000000000000000000a1';
+const ORDINAIRE = '6200000000000000000000a2';
 
 const T0 = Date.parse('2026-11-07T12:00:00.000Z');
 const ECOUTE = { category: 'music', title: 'Nuit blanche — Les Étoiles', source: 'Spotify' } as const;
@@ -64,12 +67,13 @@ const LIENS: readonly CircleLink[] = [
 
 const accord = (otherId: string, extra: Row = {}): Row => ({ ownerId: EMETTEUR, otherId, listeningCategoryShared: true, listeningTitleShared: false, ...extra });
 
-function monde(options: { readonly accords?: readonly Row[] } = {}) {
+function monde(options: { readonly accords?: readonly Row[]; readonly roles?: Readonly<Record<string, string>> } = {}) {
   const world = messagingWorld({
     links: LIENS,
-    users: [EMETTEUR, SANG, SANG_SANS_TITRE, PROCHE, PROCHE_SANS_ACCORD, AMI, BLOQUEUR].map((id) => ({
+    users: [EMETTEUR, SANG, SANG_SANS_TITRE, PROCHE, PROCHE_SANS_ACCORD, AMI, BLOQUEUR, COLLEGUE, ORDINAIRE].map((id) => ({
       id,
       birthDate: ADULT_BIRTH,
+      role: options.roles?.[id] ?? 'USER',
       ...(id === BLOQUEUR ? { blockedUserIds: [EMETTEUR] } : {}),
     })),
   });
@@ -309,5 +313,74 @@ describe('le rattrapage — `GET /relations/now-playing` sert l\'état tronqué 
     m.avancer(NOW_PLAYING_TTL_SECONDS * 1000 + 1);
 
     expect((await nowPlayingSnapshotFor(m.deps, SANG)).items).toEqual([]);
+  });
+});
+
+describe('#16642 — un collègue de l\'équipe à qui l\'écoute est consentie hors lien la reçoit comme un Sang', () => {
+  const EQUIPE = { [EMETTEUR]: 'MODERATOR', [COLLEGUE]: 'ADMIN' } as const;
+  const accordsEquipe = () => [accord(SANG, { listeningTitleShared: true }), accord(COLLEGUE, { listeningCategoryShared: false, listeningTitleShared: true })];
+
+  it('publier sert le titre au collègue sans lien, comme au Sang', async () => {
+    const m = monde({ roles: EQUIPE, accords: accordsEquipe() });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+
+    expect(m.vers(COLLEGUE).map((e) => [e.event, e.data.title, e.data.source])).toEqual([[SERVER_EVENTS.NOW_PLAYING_CHANGED, ECOUTE.title, ECOUTE.source]]);
+    expect(m.vers(SANG)).toHaveLength(1);
+  });
+
+  it('le collègue rattrape le titre à la connexion, et l\'effacement lui parvient', async () => {
+    const m = monde({ roles: EQUIPE, accords: accordsEquipe() });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    const rattrape = await nowPlayingSnapshotFor(m.deps, COLLEGUE);
+    m.emissions.length = 0;
+    await clearNowPlayingOf(m.deps, EMETTEUR);
+
+    expect(rattrape.items.map((i) => [i.userId, i.title])).toEqual([[EMETTEUR, ECOUTE.title]]);
+    expect(m.vers(COLLEGUE).map((e) => e.event)).toEqual([SERVER_EVENTS.NOW_PLAYING_CLEARED]);
+  });
+
+  it.each<[string, string]>([
+    ['l\'émetteur', EMETTEUR],
+    ['le lecteur', COLLEGUE],
+  ])('#16814 — %s quitte l\'équipe : l\'écoute s\'efface aussitôt chez le collègue qui la voyait, et ne lui revient plus', async (_label, partant) => {
+    const m = monde({ roles: EQUIPE, accords: accordsEquipe() });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    m.emissions.length = 0;
+    await m.world.prisma.user.updateMany({ where: { id: partant }, data: { role: 'USER' } });
+    await revokeTeamSharesOf(m.deps.prisma as never, { userId: partant, now: new Date(T0), nowPlaying: m.deps });
+    const rattrape = await nowPlayingSnapshotFor(m.deps, COLLEGUE);
+
+    expect(m.vers(COLLEGUE).map((e) => [e.event, e.data.userId])).toEqual([[SERVER_EVENTS.NOW_PLAYING_CLEARED, EMETTEUR]]);
+    expect(m.vers(SANG)).toEqual([]);
+    expect(rattrape.items).toEqual([]);
+  });
+
+  it('un consentement retiré ne sert plus rien au collègue', async () => {
+    const m = monde({ roles: EQUIPE, accords: [accord(COLLEGUE, { listeningCategoryShared: false, listeningTitleShared: false })] });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+
+    expect(m.vers(COLLEGUE)).toEqual([]);
+    expect((await nowPlayingSnapshotFor(m.deps, COLLEGUE)).items).toEqual([]);
+  });
+
+  it('hors de l\'équipe, une ligne de consentement sans lien n\'ouvre rien : ni l\'éventail, ni le rattrapage', async () => {
+    const ordinaire = monde({ accords: [accord(COLLEGUE, { listeningTitleShared: true }), accord(ORDINAIRE, { listeningTitleShared: true })] });
+    await publishNowPlaying(ordinaire.deps, EMETTEUR, ECOUTE);
+    const equipeVersOrdinaire = monde({ roles: { [EMETTEUR]: 'ADMIN' }, accords: [accord(ORDINAIRE, { listeningTitleShared: true })] });
+    await publishNowPlaying(equipeVersOrdinaire.deps, EMETTEUR, ECOUTE);
+
+    expect(ordinaire.vers(COLLEGUE)).toEqual([]);
+    expect(ordinaire.vers(ORDINAIRE)).toEqual([]);
+    expect((await nowPlayingSnapshotFor(ordinaire.deps, ORDINAIRE)).items).toEqual([]);
+    expect(equipeVersOrdinaire.vers(ORDINAIRE)).toEqual([]);
+    expect((await nowPlayingSnapshotFor(equipeVersOrdinaire.deps, ORDINAIRE)).items).toEqual([]);
+  });
+
+  it('un collègue désactivé ne reçoit plus rien, même consenti', async () => {
+    const m = monde({ roles: EQUIPE, accords: accordsEquipe() });
+    m.world.users.rows.filter((u) => u.id === COLLEGUE).forEach((u) => Object.assign(u, { deactivatedAt: new Date(T0) }));
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+
+    expect(m.vers(COLLEGUE)).toEqual([]);
   });
 });

@@ -119,6 +119,17 @@ public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
             LISTENING, LIVE_LOCATION -> null
         }
 
+    /**
+     * L'interrupteur que ce réglage pose, quand son lot est livré (iso `CirclePersonSetting.personSwitch`, iOS) ; `null`
+     * ⇒ montré désactivé derrière son drapeau.
+     */
+    public val personSwitch: RelationPersonSwitch?
+        get() = when (this) {
+            LISTENING -> RelationPersonSwitch.Share(RelationShareGrant.LISTENING_CATEGORY)
+            LIVE_LOCATION -> null
+            BLOCK_BRING, TALKIE -> reception?.let { RelationPersonSwitch.Reception(it) }
+        }
+
     public companion object {
         public fun offered(level: RelationLevel): List<CirclePersonSetting> = entries.filter { level >= it.opensAt }
 

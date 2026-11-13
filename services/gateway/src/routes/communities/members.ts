@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
 import { isAddableUser } from './addable-user';
+import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
@@ -371,6 +372,10 @@ const community = await fastify.prisma.community.findFirst({
             }
           }
         });
+      }
+
+      if (!existingMember?.isActive) {
+        scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [validatedData.userId] });
       }
 
       // Critère STRICT avec le viewer réel (l'admin qui vient d'ajouter le

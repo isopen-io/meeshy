@@ -4366,8 +4366,8 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
 // MARK: - CallView tap-to-toggle controls source guards
 
 /// #8978 — les contrôles de l'appel ne disparaissent plus seuls : un toucher sur la scène
-/// vidéo les cache, un autre les remet. La bascule reste réservée à une scène VIDÉO (#8550) :
-/// sur un appel vocal, rien ne permettrait de les rappeler.
+/// les cache, un autre les remet. #17945 — la scène est l'image en vidéo, le fond derrière
+/// l'avatar d'un duo audio établi : la bascule n'est plus réservée à la vidéo.
 @MainActor
 final class CallViewTapToggleControlsSourceGuardTests: XCTestCase {
 
@@ -4376,11 +4376,11 @@ final class CallViewTapToggleControlsSourceGuardTests: XCTestCase {
         try AppSourceGuard.callViewSource()
     }
 
-    func test_tapToggle_gatesOnTheVideoStage() throws {
+    func test_tapToggle_gatesOnTheTapStage_videoOrDuoAudio() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage)"),
-            "Un toucher ne bascule les contrôles que sur une scène vidéo (#8550)."
+            source.contains("CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)") && !source.contains("mayToggleByTap(isVideoStage:"),
+            "Un toucher bascule les contrôles sur la scène de la loi 11 : vidéo, ou duo audio établi (#17945)."
         )
         XCTAssertTrue(
             source.contains("isDuoVideoActive: callManager.isVideoUIActive"),

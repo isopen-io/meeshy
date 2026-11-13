@@ -34,6 +34,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationPoint: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationConsultation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
@@ -486,6 +488,15 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
     expect([...files.files]).toEqual([`stickers/${VOISIN}/b.webp`]);
     expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
     expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1, partnerProfilesDeleted: 0 });
+  });
+});
+
+describe('purgeAccountIsolatedData — la position partagée du compte (#16987)', () => {
+  it('éteint le partage du compte purgé, une fois, et rien sans l\'option', async () => {
+    const endSharedLocation = jest.fn(async (_userId: string) => undefined);
+    await purgeAccountIsolatedData(fakePrisma(), USER_ID, { ...NO_FILES, endSharedLocation });
+    expect(endSharedLocation.mock.calls).toEqual([[USER_ID]]);
+    await expect(purgeAccountIsolatedData(fakePrisma(), USER_ID, NO_FILES)).resolves.toBeDefined();
   });
 });
 

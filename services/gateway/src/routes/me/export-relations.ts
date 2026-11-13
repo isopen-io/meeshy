@@ -45,6 +45,8 @@ export const relationsExportSchema = {
           locationHistoryShared: { type: 'boolean' },
           proximityShared: { type: 'boolean' },
           consentedAt: { type: 'string' },
+          ghostAt: { type: 'string', nullable: true },
+          proximityRadiusMeters: { type: 'integer', nullable: true },
           withdrawnAt: {
             type: 'object',
             properties: {
@@ -58,9 +60,35 @@ export const relationsExportSchema = {
         },
       },
     },
+    bloodLocationGhostAt: { type: 'string', nullable: true },
+    bloodLocationPoints: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          latitude: { type: 'number', nullable: true },
+          longitude: { type: 'number', nullable: true },
+          accuracy: { type: 'number', nullable: true },
+          recordedAt: { type: 'string' },
+          expiresAt: { type: 'string' },
+          hiddenFrom: { type: 'array', items: { type: 'string' } },
+          excludedFromProximity: { type: 'boolean' },
+        },
+      },
+    },
+    bloodLocationConsultations: {
+      type: 'array',
+      items: { type: 'object', properties: { observerId: { type: 'string' }, observedId: { type: 'string' }, consultedAt: { type: 'string' } } },
+    },
     hasMore: {
       type: 'object',
-      properties: { links: { type: 'boolean' }, interactionDays: { type: 'boolean' }, consents: { type: 'boolean' } },
+      properties: {
+        links: { type: 'boolean' },
+        interactionDays: { type: 'boolean' },
+        consents: { type: 'boolean' },
+        bloodLocationPoints: { type: 'boolean' },
+        bloodLocationConsultations: { type: 'boolean' },
+      },
     },
   },
 } as const;
