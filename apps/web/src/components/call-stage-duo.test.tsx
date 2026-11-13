@@ -74,7 +74,7 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number }) {
+function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0, bleedEnd = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number; readonly bleedEnd?: number }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -86,7 +86,7 @@ function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = t
     column: () => null,
     topInset,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} bleedEnd={bleedEnd} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
@@ -124,16 +124,18 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   return played;
 }
 
-const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly chromeVisible?: boolean } = {}) => {
+const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0 }: { readonly chromeVisible?: boolean; readonly bleedEnd?: number } = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   const swaps = { count: 0 };
   const reveals = { count: 0 };
   let inset = 0;
-  const render = (visible: boolean, nextInset = inset) => {
+  let bleed = bleedEnd;
+  const render = (visible: boolean, nextInset = inset, nextBleed = bleed) => {
     inset = nextInset;
-    act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} />));
+    bleed = nextBleed;
+    act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} bleedEnd={bleed} />));
   };
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
@@ -266,6 +268,40 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     }, { reducedMotion: true });
     expect(played).toEqual([]);
+  });
+});
+
+describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
+  test('en droite à gauche, un appel neuf la pose en haut à gauche, contre la colonne', () => {
+    fresh();
+    document.documentElement.dir = 'rtl';
+    try {
+      const view = mount();
+      expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+      view.done();
+    } finally {
+      document.documentElement.dir = '';
+    }
+  });
+
+  test('colonne ouverte, la dépose s’élit sur la scène réduite : juste à gauche du milieu de la scène, elle va au coin de début', () => {
+    fresh();
+    const view = mount(call(), { bleedEnd: 360 });
+    view.drag(-300, 0);
+    expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+    view.done();
+  });
+
+  test('la colonne qui s’ouvre ou se ferme fait GLISSER la vignette — transformation seule, jamais un saut', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toHaveLength(2);
+    for (const frames of played) expect(Object.keys(frames[0] ?? {})).toEqual(['transform']);
   });
 });
 
