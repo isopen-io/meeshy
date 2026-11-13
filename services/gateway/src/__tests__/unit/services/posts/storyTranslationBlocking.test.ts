@@ -37,7 +37,7 @@ const makePrisma = (params: { visibility: Visibility; blockingFails?: boolean })
       ? ['only-ok', BLOCKED_BY_AUTHOR, BLOCKER_OF_AUTHOR]
       : params.visibility === 'EXCEPT' ? ['excluded-friend'] : [],
     communityId: params.visibility === 'COMMUNITY' ? 'community-1' : null,
-    content: null,
+    content: 'Bonjour',
     storyEffects: { textObjects: [{ id: 'mine', text: 'Bonjour' }] },
   };
   const friends = ['friend-ok', 'excluded-friend', BLOCKED_BY_AUTHOR, BLOCKER_OF_AUTHOR];
