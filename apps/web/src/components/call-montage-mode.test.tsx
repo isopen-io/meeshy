@@ -87,7 +87,6 @@ describe('CallMontageMode', () => {
       root.render(
         <CallMontageMode
           language="fr"
-          quitGlyph={null}
           onExit={() => void closed.push('close')}
           stage={() => stage}
           audio={() => [{ getAudioTracks: () => [{}] } as unknown as MediaStream]}
@@ -236,7 +235,7 @@ describe('CallMontageMode', () => {
     view.done();
   });
 
-  test('✕ quitte le mode ; Échap aussi', () => {
+  test('‹ quitte le mode (la barre d’Effets) ; Échap aussi', () => {
     const view = mount();
     act(() => (view.find('[data-call-mode-quit]') as HTMLElement).click());
     act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));

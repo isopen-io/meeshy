@@ -88,7 +88,6 @@ describe('CallMontageMode — les cadres', () => {
       root.render(
         <CallMontageMode
           language={options.language ?? 'fr'}
-          quitGlyph={null}
           onExit={() => undefined}
           stage={() => shown}
           env={env}

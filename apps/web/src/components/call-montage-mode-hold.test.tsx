@@ -75,7 +75,6 @@ describe('CallMontageMode — l’interrupteur du cadre en direct', () => {
       root.render(
         <CallMontageMode
           language="fr"
-          quitGlyph={null}
           onExit={() => undefined}
           stage={() => shown}
           env={env}
