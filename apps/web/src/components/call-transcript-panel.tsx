@@ -3,13 +3,15 @@ import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
+import { THREAD_SECONDARY_INK, UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { formatCallClock } from '@/lib/calls/call-store';
+import { formatCallJournalClock } from '@/lib/calls/call-journal-clock';
 import { callTranscriptQueryKey, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
+import { suspendForCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { authorInkStyle } from '@/lib/view/author-ink';
@@ -36,10 +38,19 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 
 const muted = { color: 'var(--color-ios-ink-2)' } as const;
 
-export function CallTranscriptPanel({ callId, language }: { readonly callId: string; readonly language: InterfaceLanguage }) {
+/**
+ * Le journal DANS sa bulle ou dans la fiche d'un appel : rend « Voir l'original » dans l'état que sa bulle a
+ * retenu (`original`, `onOriginalChange` : la mémoire `call-journal-memory.ts` est celle de la carte — A1.17).
+ */
+export function CallTranscriptPanel({ callId, language, original: initial = false, onOriginalChange }: { readonly callId: string; readonly language: InterfaceLanguage; readonly original?: boolean; readonly onOriginalChange?: (original: boolean) => void }) {
+  suspendForCallControlsCatalog(language);
   const session = useStore(sessionStore, (state) => state.session);
   const { languages } = useReaderLanguages();
-  const [original, setOriginal] = useState(false);
+  const [original, setOriginal] = useState(initial);
+  const toggleOriginal = () => {
+    onOriginalChange?.(!original);
+    setOriginal(!original);
+  };
   const transcript = useQuery(
     {
       queryKey: callTranscriptQueryKey(callId),
@@ -77,7 +88,7 @@ export function CallTranscriptPanel({ callId, language }: { readonly callId: str
       </p>
     );
   }
-  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={() => setOriginal((value) => !value)} />;
+  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={toggleOriginal} />;
 }
 
 type LinesProps = {
@@ -95,7 +106,7 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
         <span>
           <JournalNoteSentence note={note} language={language} ink={{ className: 'author-ink', style: authorInkStyle({ authorId: note.userId ?? '', name: note.name ?? '' }) }} />
         </span>
-        <span className="text-mini font-semibold tabular-nums">{formatCallClock(note.offsetMs / 1000)}</span>
+        <span className="text-mini font-semibold tabular-nums">{formatCallJournalClock(note.offsetMs / 1000)}</span>
       </span>
     </li>
   );
@@ -105,7 +116,7 @@ export function CallTranscriptLines({ lines, notes = [], language, original, onT
   const translatedSome = lines.some((line) => line.translated);
   const entries = transcriptEntries(lines, notes);
   return (
-    <section aria-label={translate(language, 'callTranscript.title')} className="flex w-full max-w-[560px] flex-col gap-2 rounded-card px-3 py-2 text-start" style={{ background: 'color-mix(in srgb, var(--color-ios-ink-2) 8%, transparent)' }} data-call-transcript="lines">
+    <section aria-label={translate(language, 'callTranscript.title')} className="flex w-full flex-col gap-2 text-start" data-call-transcript="lines">
       <ol className="flex flex-col gap-2">
         {entries.map((entry) => {
           if (entry.type === 'note') return <NoteItem key={entry.note.id} note={entry.note} language={language} />;
@@ -116,12 +127,15 @@ export function CallTranscriptLines({ lines, notes = [], language, original, onT
             <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
               <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
                 <span className="author-ink" style={ink}>{name}</span>
-                <span className="tabular-nums">{formatCallClock(line.offsetMs / 1000)}</span>
+                <span className="tabular-nums">{formatCallJournalClock(line.offsetMs / 1000)}</span>
               </span>
               {!original && line.translated ? (
-                <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
-                  {line.text}
-                </span>
+                <>
+                  <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
+                    {line.text}
+                  </span>
+                  <UnfoldedOriginal open original={line.original} from={undefined} language={language} marker="data-call-transcript-original-line" ink={THREAD_SECONDARY_INK} />
+                </>
               ) : (
                 <span className="block text-[13.5px]" style={{ color: 'var(--color-ios-ink)' }} dir="auto" data-call-transcript-text="original">
                   {line.original}

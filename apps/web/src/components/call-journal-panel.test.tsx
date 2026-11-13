@@ -122,7 +122,7 @@ describe('CallJournalPanel', () => {
     expect(who.textContent).toContain('Nadia');
     expect(who.textContent).toContain('EN → FR');
     expect(who.contains(clock)).toBe(false);
-    expect(clock.textContent).toBe('1:05');
+    expect(clock.textContent).toBe('01:05');
     expect(who.nextElementSibling).toBe(clock);
     expect(entry.textContent).not.toMatch(/\d{2}:\d{2}:\d{2}/);
     view.done();
@@ -304,7 +304,7 @@ describe('CallJournalPanel', () => {
     tie.done();
     const capture = view.find('[data-call-journal-note="screenshot"]') as HTMLElement;
     expect(capture.querySelector('time')?.getAttribute('dateTime')).toBe(new Date(1_500).toISOString());
-    expect(capture.querySelector('time')?.textContent).toBe('1:05');
+    expect(capture.querySelector('time')?.textContent).toBe('01:05');
     expect(capture.querySelector('[data-call-journal-note-text]')?.nextElementSibling).toBe(capture.querySelector('time'));
     const sentence = capture.querySelector('[data-call-journal-note-text]') as HTMLElement;
     expect(sentence.textContent).toBe('Karim a capturé l’écran');
