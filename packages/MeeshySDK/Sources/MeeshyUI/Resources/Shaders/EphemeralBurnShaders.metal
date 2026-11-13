@@ -64,21 +64,39 @@ static inline float burnFbm(float2 p) {
     return v / 0.875;
 }
 
-// La position du front dans l'axe de la brûlure : −0,25 avant l'ignition
-// (rien ne brûle), 1,35 à 85 % (tout est passé), puis les cendres.
+// La position du front dans l'axe de la brûlure, LINÉAIRE en `progress` :
+// −0,55 à l'allumage (rien ne brûle), 1,55 à 90 % (tout est passé), puis les
+// cendres. Avec la bande de bruit (± 0,4), la première lettre part vers 8 % et
+// la dernière vers 85 % : la phase où l'on VOIT les lettres partir dure près
+// d'une seconde sur les 1,2 s — une courbe accélérée la ramenait à 0,3 s.
 static inline float burnFront(float progress) {
-    return mix(-0.25, 1.35, smoothstep(0.0, 0.85, progress));
+    return mix(-0.55, 1.55, clamp((progress - 0.04) / 0.86, 0.0, 1.0));
 }
 
 // La valeur de brûlure d'un point du calque : > 0,08 parti, ]0, 0,08] charbon,
-// ]−0,10, 0] braise, sinon intact.
+// ]−0,16, 0] braise, sinon intact. Le bruit est à l'échelle d'une lettre et sa
+// bande est LARGE : c'est elle qui fait partir les lettres une à une plutôt
+// qu'en rideau.
 static inline float burnValue(float2 position, float2 contentOrigin, float2 contentSize,
                               float frontDirection, float front, float seed) {
     float2 c = (position - contentOrigin) / contentSize;
     float a = frontDirection > 0.0 ? c.x : 1.0 - c.x;
     const float cell = 14.0;
     float n = burnFbm(position / cell + seed * 37.0);
-    return front - a - (n - 0.5) * 0.45;
+    return front - a - (n - 0.5) * 0.8;
+}
+
+// La MATIÈRE autour d'un point : l'alpha le plus fort du calque à 5 pt à la
+// ronde. Une lettre est fine et un fond clair n'a pas de calque : sans ce
+// voisinage, la braise et les flammes ne naîtraient que sur l'encre des glyphes
+// et resteraient invisibles sur une rangée plate.
+static inline half burnMatter(SwiftUI::Layer layer, float2 position) {
+    half a = layer.sample(position).a;
+    a = max(a, layer.sample(position + float2(5.0, 0.0)).a);
+    a = max(a, layer.sample(position - float2(5.0, 0.0)).a);
+    a = max(a, layer.sample(position + float2(0.0, 5.0)).a);
+    a = max(a, layer.sample(position - float2(0.0, 5.0)).a);
+    return a;
 }
 
 [[ stitchable ]] half4 meeshyEphemeralBurn(float2 position, SwiftUI::Layer layer,
@@ -104,14 +122,18 @@ static inline float burnValue(float2 position, float2 contentOrigin, float2 cont
     if (b > 0.08) {
         color = half4(0.0h);
     } else if (b > 0.0) {
+        // Le charbon : ce qu'il y avait noircit et s'amincit jusqu'à partir.
         float k = b / 0.08;
-        half thinning = half(1.0 - k * 0.6);
-        color = half4(half3(0.08h, 0.04h, 0.02h) * src.a, src.a) * thinning;
-    } else if (b > -0.10) {
-        float k = (b + 0.10) / 0.10;
-        half3 ember = mix(half3(1.0h, 0.35h, 0.05h), half3(1.0h, 0.9h, 0.4h), half(k * k));
-        half glow = half(k) * src.a;
-        color = half4(min(src.rgb + ember * glow, half3(1.0h)), src.a);
+        half thinning = half(1.0 - k * 0.7);
+        color = half4(half3(0.10h, 0.05h, 0.02h) * src.a, src.a) * thinning;
+    } else if (b > -0.16) {
+        // La braise : une lueur qui a sa PROPRE alpha, posée sur la matière
+        // voisine — elle se voit donc aussi sur un fond clair, entre les lettres.
+        float k = (b + 0.16) / 0.16;
+        half matter = burnMatter(layer, position);
+        half3 ember = mix(half3(1.0h, 0.30h, 0.04h), half3(1.0h, 0.85h, 0.30h), half(k * k));
+        half glow = half(k * k) * matter * 0.9h;
+        color = half4(src.rgb * (1.0h - glow) + ember * glow, max(src.a, glow));
     }
 
     // 3. Les flammes : au-dessus d'une braise, un bruit qui monte et se couche.
@@ -120,16 +142,15 @@ static inline float burnValue(float2 position, float2 contentOrigin, float2 cont
     for (int s = 0; s < 3; s++) {
         float2 below = position + float2(-drift * steps[s] * 0.6, steps[s]);
         float bb = burnValue(below, contentOrigin, contentSize, frontDirection, front, seed);
-        half belowAlpha = layer.sample(below).a;
-        if (bb > -0.10 && bb < 0.06 && belowAlpha > 0.05h) {
+        if (bb > -0.16 && bb < 0.06 && burnMatter(layer, below) > 0.05h) {
             float lick = burnFbm(position / 10.0 + float2(-drift * 4.0, progress * 18.0 + seed * 11.0));
-            flame = max(flame, smoothstep(0.45, 0.8, lick) * (1.0 - steps[s] / 40.0));
+            flame = max(flame, smoothstep(0.35, 0.75, lick) * (1.0 - steps[s] / 44.0));
         }
     }
     if (flame > 0.0) {
-        float f = flame * (1.0 - ash);
-        half3 flameColor = mix(half3(1.0h, 0.3h, 0.05h), half3(1.0h, 0.85h, 0.35h), half(f));
-        color += half4(flameColor * half(f), half(f));
+        float f = min(flame * 1.2, 1.0) * (1.0 - ash);
+        half3 flameColor = mix(half3(1.0h, 0.28h, 0.04h), half3(1.0h, 0.82h, 0.30h), half(f));
+        color = half4(color.rgb * (1.0h - half(f)) + flameColor * half(f), max(color.a, half(f)));
     }
 
     // 4. Les étincelles : nées sur le front, emportées par le vent, freinées, éteintes.
