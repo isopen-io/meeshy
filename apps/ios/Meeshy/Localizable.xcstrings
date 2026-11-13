@@ -51928,53 +51928,6 @@
         }
       }
     },
-    "about.section.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الوصف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beschreibung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Description"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descripción"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Description"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descrizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descrição"
-          }
-        }
-      }
-    },
     "about.section.features": {
       "extractionState": "manual",
       "localizations": {
@@ -75247,49 +75200,98 @@
         }
       }
     },
-    "call.transcript.disclaimer": {
+    "call.transcript.disclaimer.endToEnd": {
+      "comment": "Mention du journal d'après l'appel dans une conversation chiffrée de bout en bout : rien ne quitte l'appareil (#17864).",
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النسخ النصي محلي على هذا الجهاز، ولا يُرسل أبدًا إلى خادم Meeshy — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+            "value": "النسخ النصي محفوظ على هذا الجهاز فقط: في محادثة مشفّرة من طرف إلى طرف لا يغادره شيء — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkription lokal auf diesem Gerät, niemals an den Meeshy-Server gesendet — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+            "value": "Transkription nur auf diesem Gerät gespeichert: In einer Ende-zu-Ende-verschlüsselten Unterhaltung verlässt nichts das Gerät — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription local to this device, never sent to the Meeshy server — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+            "value": "Transcript kept on this device only: in an end-to-end encrypted conversation, nothing leaves it — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcripción local en este dispositivo, nunca enviada al servidor de Meeshy — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+            "value": "Transcripción guardada solo en este dispositivo: en una conversación cifrada de extremo a extremo, nada sale de él — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+            "value": "Transcription gardée sur cet appareil seulement : dans une conversation chiffrée de bout en bout, rien ne le quitte — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrizione locale a questo dispositivo, mai inviata al server Meeshy — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+            "value": "Trascrizione conservata solo su questo dispositivo: in una conversazione cifrata end-to-end, nulla lo lascia — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrição local neste aparelho, nunca enviada ao servidor Meeshy — pode estar incluída em um backup iCloud/Finder deste aparelho. Inclui as palavras do seu interlocutor, conforme recebidas durante a chamada."
+            "value": "Transcrição guardada somente neste dispositivo: em uma conversa com criptografia de ponta a ponta, nada sai dele — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
+          }
+        }
+      }
+    },
+    "call.transcript.disclaimer.server": {
+      "comment": "Mention du journal d'après l'appel dans une conversation en clair : le serveur garde les phrases finales (#17864).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النسخ النصي محفوظ على هذا الجهاز، كما يحتفظ خادم Meeshy بالجمل النهائية للمكالمة من أجل هذا السجل — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transkription auf diesem Gerät gespeichert; der Meeshy-Server speichert für dieses Protokoll außerdem die endgültigen Sätze des Anrufs — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcript kept on this device; the Meeshy server also keeps the call's final sentences for this log — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcripción guardada en este dispositivo; el servidor de Meeshy también guarda las frases finales de la llamada para este registro — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription gardée sur cet appareil ; le serveur Meeshy garde aussi les phrases finales de l'appel pour ce journal — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascrizione conservata su questo dispositivo; il server Meeshy conserva anche le frasi finali della chiamata per questo registro — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcrição guardada neste dispositivo; o servidor do Meeshy também guarda as frases finais da chamada para este registro — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
           }
         }
       }
@@ -75384,6 +75386,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você"
+          }
+        }
+      }
+    },
+    "call.card.participants.you": {
+      "comment": "Dernier élément de la ligne des participants de la carte d'appel (« Awa, Karim, Lina et vous »), joint aux noms par ListFormatter (#17864, A1.2).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "du"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tú"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vous"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "você"
           }
         }
       }
@@ -106960,49 +107010,331 @@
         }
       }
     },
-    "conversation.header.flame.hint": {
+    "conversation.header.flame.card.hint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُخفي الشعلة حتى يُفتح الرأس مرة أخرى"
+            "value": "يفتح سلسلة المحادثة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Blendet die Flamme bis zum nächsten Aufklappen der Kopfzeile aus"
+            "value": "Öffnet die Serie der Unterhaltung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hides the flame until the header is expanded again"
+            "value": "Opens the conversation streak"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oculta la llama hasta que se vuelva a desplegar el encabezado"
+            "value": "Abre la racha de la conversación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Masque la flamme jusqu'au prochain dépliement de l'en-tête"
+            "value": "Ouvre la série de la conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nasconde la fiamma fino alla prossima apertura dell'intestazione"
+            "value": "Apre la serie della conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oculta a chama até o cabeçalho ser expandido novamente"
+            "value": "Abre a sequência da conversa"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.today": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اليوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aujourd'hui"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oggi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoje"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.total": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هنا منذ البداية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hier seit Beginn"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Here since the start"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aquí desde el principio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ici depuis le début"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui dall'inizio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aqui desde o início"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "افتح اللعبة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Spiel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the game"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir le jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri il gioco"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver o jogo"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخفاء الشعلة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flamme ausblenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide the flame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar la llama"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer la flamme"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nascondi la fiamma"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar a chama"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.streak.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يوم متتالٍ هنا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag in Folge hier"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "day in a row here"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "día seguido aquí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jour de suite ici"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "giorno di fila qui"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dia seguido aqui"
+          }
+        }
+      }
+    },
+    "conversation.header.flame.card.streak.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أيام متتالية هنا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tage in Folge hier"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "days in a row here"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "días seguidos aquí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jours de suite ici"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "giorni di fila qui"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dias seguidos aqui"
           }
         }
       }
@@ -161123,43 +161455,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التقدّم"
+            "value": "أسطورتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt"
+            "value": "Meine Legende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progress"
+            "value": "My Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progreso"
+            "value": "Mi Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression"
+            "value": "Ma Légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progressi"
+            "value": "La mia Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progresso"
+            "value": "Minha Lenda"
           }
         }
       }
@@ -165273,43 +165605,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جارٍ تحميل التقدّم"
+            "value": "جارٍ تحميل أسطورتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt wird geladen"
+            "value": "Meine Legende wird geladen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loading your progress"
+            "value": "Loading My Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cargando el progreso"
+            "value": "Cargando Mi Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression en cours de chargement"
+            "value": "Ma Légende se charge"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Caricamento dei progressi"
+            "value": "Caricamento della mia Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Carregando o progresso"
+            "value": "Carregando Minha Lenda"
           }
         }
       }
@@ -166668,43 +167000,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التقدّم"
+            "value": "أسطورتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt"
+            "value": "Meine Legende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progress"
+            "value": "My Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progreso"
+            "value": "Mi Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression"
+            "value": "Ma Légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progressi"
+            "value": "La mia Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progresso"
+            "value": "Minha Lenda"
           }
         }
       }
@@ -170690,6 +171022,53 @@
         }
       }
     },
+    "root.menu.game": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أسطورتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Legende"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My Legend"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mi Leyenda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ma Légende"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La mia Leggenda"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minha Lenda"
+          }
+        }
+      }
+    },
     "root.menu.links": {
       "extractionState": "manual",
       "localizations": {
@@ -171871,43 +172250,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التقدّم"
+            "value": "أسطورتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt"
+            "value": "Meine Legende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progress"
+            "value": "My Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progreso"
+            "value": "Mi Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression"
+            "value": "Ma Légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progressi"
+            "value": "La mia Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progresso"
+            "value": "Minha Lenda"
           }
         }
       }
@@ -173601,53 +173980,6 @@
         }
       }
     },
-    "sessions_empty_subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا أجهزتك المتصلة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine angemeldeten Geräte erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your signed-in devices will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aquí aparecerán tus dispositivos con sesión iniciada."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos appareils connectés apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qui appariranno i tuoi dispositivi connessi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus dispositivos conectados aparecerão aqui."
-          }
-        }
-      }
-    },
     "sessions_error_ok": {
       "extractionState": "manual",
       "localizations": {
@@ -174913,53 +175245,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Os locais são aproximados: são deduzidos do endereço IP."
-          }
-        }
-      }
-    },
-    "sessions.place.approximate": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (تقريبي)"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (ungefähr)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approximate)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (aproximado)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approximatif)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approssimativo)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (aproximado)"
           }
         }
       }
@@ -176750,53 +177035,6 @@
         }
       }
     },
-    "settings.data.export.info.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بياناتك، تحت سيطرتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Daten, deine Kontrolle"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your data, your control"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus datos, tu control"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos données, votre contrôle"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi dati, il tuo controllo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus dados, seu controle"
-          }
-        }
-      }
-    },
     "settings.data.export.section.content": {
       "extractionState": "manual",
       "localizations": {
@@ -176981,100 +177219,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Carrega mais rápido, limpo após 7 dias."
-          }
-        }
-      }
-    },
-    "settings.data.storage.cache.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصور والصوت والفيديو المخزّنة مؤقتًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zwischengespeicherte Bilder, Audios und Videos"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cached images, audio and videos"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imágenes, audio y vídeos en caché"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images, audio et vidéos mis en cache"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Immagini, audio e video nella cache"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imagens, áudios e vídeos em cache"
-          }
-        }
-      }
-    },
-    "settings.data.storage.cache.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ذاكرة الوسائط المؤقتة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medien-Cache"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Media cache"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Caché multimedia"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache média"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache media"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache de mídia"
           }
         }
       }
@@ -179382,53 +179526,6 @@
         }
       }
     },
-    "settings.media.download.auto_subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اختر متى يتم تنزيل كل نوع من الوسائط تلقائيًا حسب اتصالك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lege fest, wann welcher Medientyp je nach Verbindung automatisch geladen wird."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose when each media type downloads automatically, based on your connection."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elige cuándo se descarga automáticamente cada tipo de archivo según tu conexión."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scegli quando scaricare automaticamente ogni tipo di contenuto in base alla tua connessione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Escolha quando cada tipo de mídia é baixado automaticamente, conforme a sua conexão."
-          }
-        }
-      }
-    },
     "settings.media.download.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -180036,6 +180133,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Selos"
+          }
+        }
+      }
+    },
+    "settings.notifications.bring": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقي Bring"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring empfangen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receive Brings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recibir Bring"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recevoir des Bring"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ricevere Bring"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receber Bring"
+          }
+        }
+      }
+    },
+    "settings.notifications.bring.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صوت إجباري للحالات الطارئة القصوى، حتى في الوضع الصامت. عند إيقافه، لن يتمكن أحد من جعل هاتفك يرن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein erzwungener Ton für echte Notfälle, auch im Lautlos-Modus. Ausgeschaltet kann niemand mehr dein Telefon klingeln lassen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A forced sound for real emergencies, even on silent. Turned off, no one can make your phone ring anymore."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un sonido forzado para urgencias extremas, incluso en silencio. Desactivado, nadie podrá hacer sonar tu teléfono."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un son forcé pour l’urgence extrême, même en silencieux. Coupé, personne ne peut plus faire sonner votre téléphone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un suono forzato per le urgenze estreme, anche in silenzioso. Disattivato, nessuno potrà più far squillare il tuo telefono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um som forçado para urgências extremas, mesmo no silencioso. Desativado, ninguém mais poderá fazer seu telefone tocar."
           }
         }
       }
@@ -182860,53 +183051,6 @@
         }
       }
     },
-    "settings.privacy.encryption.coming_soon": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قريبًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demnächst verfügbar"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coming soon"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Próximamente"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bientôt disponible"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presto disponibile"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Em breve"
-          }
-        }
-      }
-    },
     "settings.privacy.encryption.coming_soon.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -183185,53 +183329,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Status online"
-          }
-        }
-      }
-    },
-    "settings.privacy.online_status.info": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade."
           }
         }
       }
@@ -186391,43 +186488,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التقدّم"
+            "value": "أسطورتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt"
+            "value": "Meine Legende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progress"
+            "value": "My Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progreso"
+            "value": "Mi Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression"
+            "value": "Ma Légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progressi"
+            "value": "La mia Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progresso"
+            "value": "Minha Lenda"
           }
         }
       }
@@ -232274,53 +232371,6 @@
         }
       }
     },
-    "call.recording.askDetail.video": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا تُسجَّل شاشة المكالمة وكل صوتها إلا إذا وافق الجميع، ثم تُضاف إلى المحادثة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Anrufbildschirm und sein gesamter Ton werden nur aufgenommen, wenn alle zustimmen, und dann zur Unterhaltung hinzugefügt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The call screen and all its sound are recorded only if everyone agrees, then added to the conversation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La pantalla de la llamada y todo su sonido solo se graban si todos aceptan, y luego se añaden a la conversación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’écran de l’appel et tout son son ne sont enregistrés que si tout le monde accepte, puis ils sont ajoutés à la conversation."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo schermo della chiamata e tutto il suo audio vengono registrati solo se tutti accettano, poi vengono aggiunti alla conversazione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A tela da chamada e todo o seu som só são gravados se todos aceitarem e, depois, são adicionados à conversa."
-          }
-        }
-      }
-    },
     "call.recording.kind.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -232364,53 +232414,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Escolha o que será gravado; depois, cada participante precisa aceitar"
-          }
-        }
-      }
-    },
-    "call.recording.askDetail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يبدأ التسجيل إلا إذا وافق الجميع، ثم يُضاف إلى المحادثة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Aufnahme beginnt nur, wenn alle zustimmen, und wird dann zur Unterhaltung hinzugefügt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recording only starts if everyone agrees, and it is then added to the conversation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La grabación solo empieza si todos aceptan, y luego se añade a la conversación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La registrazione inizia solo se tutti accettano, poi viene aggiunta alla conversazione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A gravação só começa se todos aceitarem e depois é adicionada à conversa."
           }
         }
       }
@@ -232881,6 +232884,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Parar a gravação"
+          }
+        }
+      }
+    },
+    "call.recording.stop.word": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parar"
           }
         }
       }
@@ -236171,53 +236221,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "الإعلان عن عودتي"
-          }
-        }
-      }
-    },
-    "settings.privacy.notify_contacts_on_return.info": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si tu estado en línea está oculto."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
           }
         }
       }
@@ -246515,6 +246518,288 @@
         }
       }
     },
+    "call.mode.effects.addLook.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ثلاثة تأثيرات كحد أقصى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchstens drei Effekte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Three effects at most"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tres efectos como máximo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trois effets au plus"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al massimo tre effetti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No máximo três efeitos"
+          }
+        }
+      }
+    },
+    "call.mode.effects.addLook.full.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ألغِ تأثيرًا لإضافة آخر؛ اضغط مطولًا لعرضها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entferne einen Effekt, um einen weiteren hinzuzufügen; lange drücken, um sie zu sehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel an effect to add another; long press to see them"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancela un efecto para añadir otro; mantén pulsado para verlos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulez un effet pour en ajouter un autre ; appui long pour les voir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulla un effetto per aggiungerne un altro; tieni premuto per vederli"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancele um efeito para adicionar outro; mantenha pressionado para vê-los"
+          }
+        }
+      }
+    },
+    "call.mode.effects.category.frame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإطارات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadres"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cornici"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Molduras"
+          }
+        }
+      }
+    },
+    "call.mode.montage.settings.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض «كل وجه» بدلًا من الإطارات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt „Jedes Gesicht“ statt der Rahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows “Each face” instead of the frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra «Cada rostro» en lugar de los marcos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche « Chaque visage » à la place des cadres"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra «Ogni volto» al posto delle cornici"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra “Cada rosto” no lugar das molduras"
+          }
+        }
+      }
+    },
+    "call.mode.effects.applied.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التأثيرات المطبّقة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angewendete Effekte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applied effects"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efectos aplicados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effets appliqués"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effetti applicati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efeitos aplicados"
+          }
+        }
+      }
+    },
+    "call.mode.effects.applied.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulla %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar %@"
+          }
+        }
+      }
+    },
     "call.mode.effects.category.face": {
       "extractionState": "manual",
       "localizations": {
@@ -256475,53 +256760,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "As vinte medalhas, por família"
-          }
-        }
-      }
-    },
-    "game.rules.badges.sheet": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المس وسامًا: بطاقته تقول ما يتبعه، ومادته ولماذا، وما ينقص للنجمة التالية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tippe auf eine Medaille: Ihr Blatt sagt, was sie verfolgt, ihr Material und warum, und was bis zum nächsten Stern fehlt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap a medal: its card says what it follows, its material and why, and what’s missing for the next star."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca una medalla: su ficha dice lo que sigue, su material y por qué, y lo que falta para la próxima estrella."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca una medaglia: la sua scheda dice che cosa segue, la sua materia e perché, e che cosa manca per la prossima stella."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque numa medalha: a ficha dela diz o que ela acompanha, o seu material e por quê, e o que falta para a próxima estrela."
           }
         }
       }
@@ -278766,53 +279004,6 @@
         }
       }
     },
-    "game.atlas.medals.line": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سبع مواد، من النحاس إلى المنشور: كلما كرّرت حركة أكثر، لمعت الميدالية أكثر."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sieben Materialien, von Kupfer bis Prisma: Je öfter Du eine Geste wiederholst, desto heller glänzt die Medaille."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seven materials, from copper to prism: the more you repeat a gesture, the brighter the medal."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siete materiales, del cobre al prisma: cuanto más repites un gesto, más brilla la medalla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sept matières, du cuivre au prisme : plus tu répètes un geste, plus la médaille brille."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sette materiali, dal rame al prisma: più ripeti un gesto, più la medaglia brilla."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sete materiais, do cobre ao prisma: quanto mais você repete um gesto, mais a medalha brilha."
-          }
-        }
-      }
-    },
     "game.atlas.medals.accumulation": {
       "extractionState": "manual",
       "localizations": {
@@ -279890,53 +280081,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aceite primeiro entrar no torneio público."
-          }
-        }
-      }
-    },
-    "game.error.league_pseudonym_invalid": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اسم غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ungültiger Name: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invalid name: letters, digits, dot, dash, underscore."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nombre no válido: letras, números, punto, guion, guion bajo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom non valable : lettres, chiffres, point, tiret, tiret bas."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome non valido: lettere, cifre, punto, trattino, trattino basso."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome inválido: letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -315210,43 +315354,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لماذا الخطوة ⁦%@⁩؟"
+            "value": "لماذا البطاقة ⁦%@⁩؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Warum Schritt %@?"
+            "value": "Warum Karte %@?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Why step %@?"
+            "value": "Why card %@?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Por qué el paso %@?"
+            "value": "¿Por qué la tarjeta %@?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pourquoi l’étape %@ ?"
+            "value": "Pourquoi la carte %@ ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Perché il passo %@?"
+            "value": "Perché la carta %@?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por que a etapa %@?"
+            "value": "Por que o cartão %@?"
           }
         }
       }
@@ -337296,6 +337440,805 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adicione 3 pessoas com a sua vibe."
+          }
+        }
+      }
+    },
+    "call.transcript.toggle.showOriginal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الأصل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show original"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el original"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir l'original"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi l'originale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver o original"
+          }
+        }
+      }
+    },
+    "call.transcript.toggle.showTranslation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الترجمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersetzung anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show translation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver la traducción"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la traduction"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi la traduzione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver a tradução"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.control": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأجواء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ambiance"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ambiente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ambiance"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atmosfera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ambiente"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.tune": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ضبط الأجواء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung anpassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjust the look"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar el ambiente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Régler l'ambiance"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regola l'atmosfera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar o ambiente"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.intensity": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشدة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensität"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidade"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.warmth": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wärme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warmth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calidez"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaleur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calor"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.contrast": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التباين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontrast"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrast"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraste"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrasto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraste"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.pad": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفء والتباين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wärme und Kontrast"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warmth and contrast"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calidez y contraste"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaleur et contraste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calore e contrasto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calor e contraste"
+          }
+        }
+      }
+    },
+    "composer.capture.ambiance.reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة الضبط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurücksetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir au neutre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ripristina"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redefinir"
+          }
+        }
+      }
+    },
+    "circles.locations.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مواقع تمت مشاركتها معك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit dir geteilte Standorte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locations shared with you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicaciones compartidas contigo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Positions partagées avec toi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posizioni condivise con te"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localizações compartilhadas com você"
+          }
+        }
+      }
+    },
+    "circles.locations.map": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خريطة المواقع المشتركة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Karte der geteilten Standorte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map of shared locations"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa de ubicaciones compartidas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carte des positions partagées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappa delle posizioni condivise"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa das localizações compartilhadas"
+          }
+        }
+      }
+    },
+    "circles.locations.footnote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يختار كل شخص الدقة والمدة؛ ويُمحى كل شيء عند انتهائها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Person wählt Genauigkeit und Dauer; alles verschwindet am Ende."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyone chooses their precision and duration; everything disappears when it ends."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada uno elige su precisión y su duración; todo se borra al terminar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chacun choisit sa précision et sa durée ; tout s'efface à l'échéance."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ognuno sceglie precisione e durata; tutto sparisce alla scadenza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada um escolhe a precisão e a duração; tudo some ao terminar."
+          }
+        }
+      }
+    },
+    "circles.locations.someone": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شخص ما"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemand"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Someone"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alguien"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelqu'un"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualcuno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alguém"
+          }
+        }
+      }
+    },
+    "circles.locations.precision.exact": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقع دقيق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genauer Standort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exact location"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicación exacta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position exacte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posizione esatta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localização exata"
+          }
+        }
+      }
+    },
+    "circles.locations.precision.neighborhood": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على مستوى الحي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf das Viertel genau"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To the neighborhood"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al barrio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au quartier près"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al quartiere"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No nível do bairro"
+          }
+        }
+      }
+    },
+    "circles.locations.precision.city": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على مستوى المدينة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf die Stadt genau"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To the city"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A la ciudad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À la ville près"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alla città"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No nível da cidade"
+          }
+        }
+      }
+    },
+    "circles.locations.pin.until": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bis %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "until %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hasta las %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jusqu'à %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fino alle %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "até %@"
           }
         }
       }

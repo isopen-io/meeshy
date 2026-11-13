@@ -15,6 +15,11 @@
  * La règle est celle du fil, à l'identique : seule la date d'expiration ferme ;
  * un lien INTROUVABLE (supprimé depuis la jointure) ne ferme rien — c'est un
  * autre chemin qui retire l'accès des invités d'un lien retiré (#3734).
+ *
+ * **Ne pas lire cette phrase comme « un lien introuvable n'a aucun effet ».**
+ * Depuis #17140 il BORNE la lecture (`historyFloor.historyFloorFor` rend
+ * `joinedAt`) : ce module décide d'une PORTE, celui-là d'une FENÊTRE, et les
+ * deux ne se déduisent pas l'un de l'autre.
  * `maxUses` n'y entre pas (#4827) : il compte des ADMISSIONS, pas un droit de
  * lire.
  */

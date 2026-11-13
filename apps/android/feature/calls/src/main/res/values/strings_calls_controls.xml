@@ -8,6 +8,5 @@
     <string name="call_control_video_paused">Video paused (weak connection)</string>
     <string name="call_control_video_paused_caption">Paused</string>
     <string name="call_control_video_paused_hint">Tap to turn the camera off. Video resumes automatically if the connection improves.</string>
-    <string name="call_control_video_caption">Video</string>
     <string name="call_panel_close">Close</string>
 </resources>

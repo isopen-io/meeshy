@@ -37,3 +37,14 @@ enum CallButtonGlassRule {
         )
     }
 }
+
+/// L1.3 — l'état de « Sortie » dans la pilule. En appel vidéo le haut-parleur
+/// démarre allumé d'office : c'est l'état de repos, la planche ne l'allume pas
+/// (disque blanc = un choix de l'utilisateur, jamais le défaut). Un appareil
+/// externe (AirPods, Bluetooth) reste un choix, donc actif.
+enum CallOutputButtonRule {
+    static func kind(isSpeaker: Bool, routesExternally: Bool, isVideoCall: Bool) -> CallPillButtonKind {
+        guard !routesExternally else { return .active }
+        return isSpeaker && !isVideoCall ? .active : .normal
+    }
+}

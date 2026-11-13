@@ -190,11 +190,11 @@ export function CaptureStatus({ status }: { readonly status: StudioStatus | null
   );
 }
 
-/** Le bouton stop, rond, au centre du gabarit, sous un chrono discret. */
+/** Le bouton stop, rond, au centre du gabarit, sous un chrono discret — AU-DESSUS des commandes du mode (`z-20` contre `z-10`) : sur un petit écran (320 × 568), la barre et le carrousel montent jusqu’au centre, et le stop ne se laisse jamais recouvrir. */
 export function RecordingStop({ language, elapsedMs, onStop }: { readonly language: InterfaceLanguage; readonly elapsedMs: number; readonly onStop: () => void }) {
   const clock = clipClock(elapsedMs);
   return (
-    <div className="pointer-events-none fixed inset-0 z-10 grid place-items-center" data-call-recording="">
+    <div className="pointer-events-none fixed inset-0 z-20 grid place-items-center" data-call-recording="">
       <div className="flex flex-col items-center gap-3">
         <span className="glass-call flex items-center gap-2 rounded-full px-3 py-1 text-mini font-semibold tabular-nums text-on-media" data-call-record-clock="">
           <span aria-hidden className="size-2 rounded-full motion-safe:animate-pulse" style={{ background: 'var(--ios-error-strong)' }} />

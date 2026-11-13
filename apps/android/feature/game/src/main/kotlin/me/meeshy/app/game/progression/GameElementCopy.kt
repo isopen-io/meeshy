@@ -104,7 +104,7 @@ internal data class GameElementTexts(
                     name = GameCopy.resolve(res, detail.label, locale),
                     status = status,
                     whatTitle = res.getString(R.string.game_fiche_what),
-                    what = res.getString(detail.key?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.why(detail.concept)),
+                    what = res.getString(detail.key?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.what(detail.concept)),
                     howTitle = res.getString(R.string.game_detail_obtain_label),
                     how = null,
                     reason = null,

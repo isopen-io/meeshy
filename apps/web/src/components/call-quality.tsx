@@ -1,9 +1,11 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
+import { useGlassToneRef } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -28,6 +30,15 @@ const LEVEL_KEY = {
   fair: 'call.quality.level.fair',
   poor: 'call.quality.level.poor',
 } as const;
+
+/** Le « · » entre le nom, le nombre et la durée (iOS `chipSeparator`, Android `MetaSeparator`) : dessiné, jamais lu — le nom accessible le porte déjà. */
+function Separator() {
+  return (
+    <span className="shrink-0 opacity-70" aria-hidden="true" data-call-chip-sep="">
+      ·
+    </span>
+  );
+}
 
 function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   return (
@@ -61,25 +72,43 @@ type CallQualityChipProps = {
  */
 export function CallQualityChip({ capsule, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
+  const glassRef = useGlassToneRef(prominent);
   const count = capsule.participantCount === null ? null : translate(language, 'call.members', { count: String(capsule.participantCount) });
-  const spoken = [capsule.title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
+  const title = capsule.receivedScreen === true && capsule.title !== null ? translate(language, 'call.screen.of', { name: capsule.title }) : capsule.title;
+  const spoken = [title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
+  const identity = [
+    title === null ? null : (
+      <span key="title" className="truncate">
+        {title}
+      </span>
+    ),
+    capsule.participantCount === null ? null : (
+      <span key="count" className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
+        <Glyph name="users" size={16} />
+        {capsule.participantCount}
+      </span>
+    ),
+    capsule.duration && clock !== null ? (
+      <span key="clock" className="shrink-0">
+        {clock}
+      </span>
+    ) : null,
+  ].filter((part) => part !== null);
   const content = (
     <>
-      {capsule.title === null ? null : <span className="truncate">{capsule.title}</span>}
-      {capsule.participantCount === null ? null : (
-        <span className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
-          <Glyph name="users" size={16} />
-          {capsule.participantCount}
+      {capsule.receivedScreen === true ? (
+        <span className="inline-flex shrink-0 items-center" aria-hidden="true" data-call-chip-screen="">
+          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={16} />
         </span>
-      )}
-      {capsule.duration && clock !== null ? <span className="shrink-0">{clock}</span> : null}
+      ) : null}
+      {identity.flatMap((part, index) => (index === 0 ? [part] : [<Separator key={`sep-${part.key}`} />, part]))}
       {capsule.network && quality !== null ? <SignalBars level={quality.level} /> : null}
     </>
   );
   if (quality === null) {
     return (
-      <span className={glass} data-call-chip="">
+      <span ref={glassRef} className={glass} data-call-chip="">
         {content}
       </span>
     );
@@ -88,7 +117,7 @@ export function CallQualityChip({ capsule, clock, quality, language, prominent }
   const label = spoken === '' ? level : `${spoken} — ${level}`;
   return (
     <div className="relative min-w-0">
-      <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
+      <button ref={glassRef} type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
         {content}
       </button>
       {open ? (
@@ -100,29 +129,7 @@ export function CallQualityChip({ capsule, clock, quality, language, prominent }
   );
 }
 
-/**
- * La capsule de capture (R1, loi 13) : rouge, 44 px, posée UNE fois sous
- * l'en-tête, en audio comme en vidéo. Elle ne suit pas le chrome : une capture
- * ne se cache pas (iOS `CallCaptureAlertLayer`).
- */
-export function CallCaptureAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
-  return (
-    <div className="pointer-events-none flex max-w-full flex-col items-center gap-1 px-4" aria-live="assertive" data-call-capture-row="">
-      {Object.values(members)
-        .filter((member) => member.capturing)
-        .map((member) => (
-          <span key={`capture-${member.userId}`} role="alert" className="inline-flex h-11 max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold leading-none" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
-            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full border-2 border-current" data-call-alert-dot=""></span>
-            <span className="truncate">{translate(language, 'call.alert.capturing', { name: member.name })}</span>
-          </span>
-        ))}
-    </div>
-  );
-}
-
-/** La place que la capsule prend sous l'en-tête (44 px et sa marge) : la vignette et ses commandes descendent d'autant. */
-export const CALL_CAPTURE_ROW_CLEARANCE = 56;
-
+/** Quelqu'un capture l'écran : la capsule de capture (R1, loi 13) prend sa place dans la pile des bandeaux ; elle vit avec le bandeau de partage (`call-share-banner.tsx`, chunk `call_top_banners`). */
 export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);
 
 export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {

@@ -51,6 +51,7 @@ export type NotificationTarget =
   | { readonly route: 'story' | 'post' | 'mood'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
+  | { readonly route: 'community'; readonly params: { readonly community: string } }
   | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
   | { readonly route: 'progressionLigue' | 'progressionSaison' | 'progressionCarnet' | 'settings' };
 
@@ -80,6 +81,8 @@ export type NotificationTargetInput = {
   readonly postType?: string | undefined;
   readonly contentType?: string | undefined;
   readonly friendRequestId?: string | undefined;
+  /** #18052 — la communauté où le destinataire vient d'être ajouté : son détail s'ouvre. */
+  readonly communityId?: string | undefined;
   /**
    * Le pseudonyme de l'ACTEUR — `senderUsername` est la clé que la passerelle
    * pose sur la carte `data` (`NotificationService.createNotification`) ; la
@@ -253,6 +256,9 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
   const conversationId = present(input.conversationId);
   if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId } };
 
+  const communityId = present(input.communityId);
+  if (communityId !== '') return { route: 'community', params: { community: communityId } };
+
   const type = present(input.type);
   if (present(input.friendRequestId) !== '' || REQUEST_TYPES.has(type)) return DISCOVER_REQUESTS;
 
@@ -285,6 +291,7 @@ export function notificationTarget(notification: NotificationRecord): Notificati
     postType: notification.metadata.postType,
     contentType: notification.metadata.contentType,
     friendRequestId: notification.context.friendRequestId,
+    communityId: notification.context.communityId,
     senderUsername: notification.actor?.username,
   });
   /* La cloche ne construit jamais l'indice `route` (`NotificationRecord` ne le

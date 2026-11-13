@@ -1,13 +1,17 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
-import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
+import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { useRailFade } from '@/lib/calls/use-mode-motion';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -20,7 +24,9 @@ import '@/styles/call-captions.css';
  * lignes dites (`CallTranscriptionOverlay` d'iOS), puis un PIED : à gauche la
  * paire de langues de la dernière phrase traduite et comment voir l'original
  * (« EN → FR · toucher = original »), à droite le bouton « Journal » (#17346),
- * qui ouvre tout l'appel à leur place. Ils vivent DANS la pilule, au-dessus de
+ * qui ouvre tout l'appel à leur place — ou, sur grand écran, la colonne : il y
+ * reste ACTIF, disque blanc plein, et le retoucher la referme (#17932). En duo
+ * comme en groupe, la même bande : deux phrases, un filet, ce bouton (#17933). Ils vivent DANS la pilule, au-dessus de
  * sa rangée de base, dans le même verre (`surface="inset"` : le verre est celui
  * de la pilule, jamais un verre sur du verre) ; `(…)` les range, refermer les
  * actions les rend. Ils ne prennent un verre à eux (`surface="glass"`) que
@@ -93,6 +99,9 @@ const INK = 'var(--color-on-media)';
 
 const INK_2 = 'var(--color-on-media-3)';
 
+/** « Journal » actif : la tenue `active` du bouton d'appel (`call-glass-button.tsx`), un disque blanc plein à encre sombre (loi 1). */
+const JOURNAL_ON = { background: INK, color: 'var(--ios-indigo-950)' };
+
 const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied', sealed: 'callCaptions.sealed' } as const;
 
 export type CaptionsSurface = 'glass' | 'inset';
@@ -137,13 +146,14 @@ const CaptionLine = memo(function CaptionLine({
   readonly language: InterfaceLanguage;
   readonly onToggle: (id: string) => void;
 }) {
-  const shown = captionText(caption, mode);
-  const languages = captionLanguageLabel(caption, mode);
-  const unfoldable = shown !== caption.original;
+  const reveal = captionReveal(caption, mode, open);
+  const shown = captionText(caption, reveal.mode);
+  const languages = captionLanguageLabel(caption, reveal.mode);
+  const unfoldable = reveal.canReveal;
   const content = (
     <>
       <strong style={{ color }}>{speaker} · </strong>
-      <span dir="auto" style={{ color: unfoldable ? color : INK }}>
+      <span key={reveal.mode} dir="auto" style={{ color: shown !== caption.original ? color : INK }}>
         {shown}
       </span>
       {languages === null ? null : (
@@ -157,7 +167,7 @@ const CaptionLine = memo(function CaptionLine({
   return (
     <div aria-hidden={caption.isFinal ? undefined : true} style={caption.isFinal ? undefined : { opacity: 0.7 }} data-call-caption={caption.mine ? 'mine' : 'peer'}>
       {unfoldable ? (
-        <button type="button" aria-expanded={open} onClick={() => onToggle(caption.id)} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
+        <button type="button" {...revealState(mode, open)} onClick={() => onToggle(caption.id)} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
           {content}
         </button>
       ) : (
@@ -165,7 +175,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
+      <UnfoldedOriginal open={reveal.originalBelow} text={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
     </div>
   );
 });
@@ -184,35 +194,38 @@ export type CaptionsSlot = 'captions' | 'captionsAlone';
 
 /**
  * Les sous-titres à leur place, et leur sortie : `shown` faux, ils restent le temps
- * du fondu (`PILL_TEXT_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
- * ce sont les mêmes, aussitôt.
+ * du fondu (`CAPTIONS_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
+ * ce sont les mêmes, aussitôt. Sous « Réduire les animations », le moteur joue
+ * l'arrivée et le départ en fondu court (`useRailFade`), là où la feuille ne peut plus.
  */
 export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'surface'> & { readonly slot: CaptionsSlot; readonly shown: boolean }) {
-  const present = useRailPresence(shown, PILL_TEXT_EXIT).mounted;
+  const present = useRailPresence(shown, CAPTIONS_EXIT).mounted;
+  const fade = useRailFade<HTMLDivElement>(shown);
   if (!present) return null;
   const leaving = shown ? {} : PILL_TEXT_LEAVING;
   return slot === 'captions' ? (
-    <div className="pt-1" data-call-pill-text="captions" {...leaving}>
+    <div ref={fade} className="pt-1" data-call-pill-text="captions" {...leaving}>
       <CallCaptionsPanel {...panel} surface="inset" />
       <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
     </div>
   ) : (
-    <div data-call-pill-text="captionsAlone" {...leaving}>
+    <div ref={fade} data-call-pill-text="captionsAlone" {...leaving}>
       <CallCaptionsPanel {...panel} surface="glass" />
     </div>
   );
 }
 
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
-  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
+  /* La colonne du journal est ouverte (W1) quand l'écran lui réserve le bord de fin : « Journal » est alors actif, et le retoucher la referme (#17932). */
+  const journalOpen = useStore(callChromeStore, (chrome) => chrome.journalReserve > 0);
+  const { revealed, toggle } = useCaptionReveals(call.callId ?? '', 'band');
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
   const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
-  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, mode, now))));
+  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, now))));
   const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
   return (
@@ -231,7 +244,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
             ),
           )
         )}
@@ -247,7 +260,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
           </div>
           {onOpenJournal === undefined ? null : (
-            <button type="button" onClick={onOpenJournal} className="glass-call-disc min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none" style={{ color: INK }} data-call-captions-journal="">
+            <button type="button" aria-pressed={journalOpen} onClick={onOpenJournal} className={`${journalOpen ? '' : 'glass-call-disc '}min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none`} style={journalOpen ? JOURNAL_ON : { color: INK }} data-call-captions-journal="">
               {translateCallControls(language, 'callControls.journal')}
             </button>
           )}

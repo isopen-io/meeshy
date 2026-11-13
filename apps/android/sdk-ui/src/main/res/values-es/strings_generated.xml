@@ -237,6 +237,8 @@
     <string name="focal_call_join_a11y_hint_double_tap">Toca dos veces para unirte a la llamada</string>
     <string name="focal_call_join_action">Unirse a la llamada</string>
     <string name="focal_call_join_hint">Toca para unirte</string>
+    <string name="focal_call_journal_hide">Ocultar la transcripción</string>
+    <string name="focal_call_journal_show">Mostrar la transcripción</string>
     <string name="focal_call_outgoing">Saliente</string>
     <string name="focal_call_outgoing_suffix">saliente</string>
     <string name="focal_call_rejected_received">Llamada rechazada</string>

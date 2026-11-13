@@ -36,8 +36,9 @@ const ar = {
   'callControls.someone': 'أحد المشاركين',
   'callControls.incomingInvite': 'يدعوك {name} إلى مكالمة جماعية',
   'callControls.incoming.seenBy': 'سيراك {name} عند الرد',
-  'callControls.incoming.heardBy': 'سيسمعك {name} عند الرد',
-  'callControls.incoming.silent': 'الميكروفون والكاميرا مغلقان عند الرد',
+  'callControls.incoming.heardBy': 'سيسمعك {name} دون أن يراك',
+  'callControls.incoming.seenMuted': 'سيراك {name} والميكروفون مغلق',
+  'callControls.incoming.silent': 'لن يراك {name} ولن يسمعك',
   'callControls.incoming.noVideo': 'بدون فيديو',
   'callControls.incoming.answer': 'رد',
   'callControls.incoming.me': 'أنا',
@@ -92,6 +93,16 @@ const ar = {
   'callControls.liveFrame.answer.declined.anonymous': 'يحتفظ الطرف الآخر بعرضه',
   'callControls.liveFrame.notProposed': 'تم تطبيق الإطار لديك، لكن تعذّر اقتراحه',
   'callControls.liveFrame.surface': 'إطار {frame} حول الفيديوهين',
+  'callControls.mode.frames': 'الإطارات',
+  'callControls.layers.title': 'التأثيرات المطبّقة',
+  'callControls.layers.undo': 'إلغاء {name}',
+  'callControls.layers.full': 'ثلاثة تأثيرات كحدّ أقصى: أزل واحدًا لإضافة آخر',
+  'callControls.layers.hint': 'اضغط مطولًا أو Shift + Enter: التأثيرات المطبّقة',
+  'callControls.layers.genre.frame': 'إطار',
+  'callControls.layers.genre.color': 'لون',
+  'callControls.layers.genre.face': 'وجه',
+  'callControls.layers.genre.landscape': 'منظر طبيعي',
+  'callControls.layers.genre.voice': 'صوت',
 } satisfies CallControlsCatalog;
 
 export default ar;

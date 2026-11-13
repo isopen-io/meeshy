@@ -800,6 +800,17 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.callNotice?.summary.isLive, true)
     }
 
+    func test_callNotice_carriesTheViewer_soTheCardNamesTheOthersThenYou() {
+        let msg = makeMessage(
+            content: "Appel vidéo · 12:40",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "u2", callType: .video, outcome: .completed, durationSeconds: 760)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.callNotice?.viewerId, "u1")
+    }
+
     // MARK: - Helpers
 
     // MARK: - Avis d'arrivée enrichi (pseudo, nom donné, règles du lien)

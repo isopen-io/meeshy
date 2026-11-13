@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.effects.CallEffectsStackRule
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
@@ -78,26 +81,55 @@ private val STOP_SQUARE = 24.dp
  * Choisir un cadre ne le pose pas sur l'appel (#13732) : il ne sert que la capture, et l'option « Cadre » le
  * garde pendant l'appel. La scène suit `CallMontageFrameStage` d'iOS : le cadre posé sur le flux s'il est servi
  * en direct — le cadre gardé compris, dont la surface d'appel s'arrête sous le mode (#13738) —, sinon l'aperçu
- * peint. La prise se déclenche sur l'élément centré du carrousel (#13733).
+ * peint. La prise se déclenche sur l'élément centré du carrousel (#13733). La couche fond et la barre avec le carrousel
+ * montent du bas, par [CallModeLayer] (#17814).
  */
 @Composable
 internal fun CallMontageMode(
+    visible: Boolean,
     state: CallUiState,
     localTrack: VideoTrack?,
     remoteTrack: VideoTrack?,
     eglContext: EglBase.Context?,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    onOpenEffects: () -> Unit = {},
+) {
+    CallModeLayer(visible = visible, mode = CallScreenMode.Montage, reduceMotion = reduceMotion) { chrome ->
+        CallMontageContent(
+            state, localTrack, remoteTrack, eglContext, reduceMotion, onClose, onOpenEffects,
+            pickerModifier = Modifier.align(Alignment.BottomCenter).then(chrome).systemBarsPadding(),
+        )
+    }
+}
+
+@Composable
+private fun CallMontageContent(
+    state: CallUiState,
+    localTrack: VideoTrack?,
+    remoteTrack: VideoTrack?,
+    eglContext: EglBase.Context?,
+    reduceMotion: Boolean,
+    onClose: () -> Unit,
+    onOpenEffects: () -> Unit,
     pickerModifier: Modifier,
 ) {
     val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
+    val effects = hiltViewModel<CallEffectsViewModel>().effects
     val capture = captureViewModel.controller
+    val layers by effects.layers.collectAsStateWithLifecycle()
+    val config by effects.config.collectAsStateWithLifecycle()
     val frame by frameViewModel.controller.state.collectAsStateWithLifecycle()
     val pick by capture.pick.collectAsStateWithLifecycle()
     val constrained = rememberCallDeviceConstrained()
     val people = remember(state.peerName, frame.remoteSharedName) { frameViewModel.controller.people(state.peerName, frame.remoteSharedName) }
     LaunchedEffect(capture) { capture.open(frame.frameId) }
+    // La pile de trois couches suit ce qui est appliqué : le cadre choisi ici, le filtre et le visage posés par Effets.
+    val frameLayer = CallFrameLayer.chosen(pick, people.size)
+    LaunchedEffect(frameLayer, config) {
+        effects.setLayers(CallEffectsStackRule.layers(effects.layers.value, frameLayer, config))
+    }
     val scene = remember(people, pick, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
         CallCaptureScene(
             look = CallMontagePickRule.look(pick, people.size),
@@ -127,6 +159,14 @@ internal fun CallMontageMode(
         reduceMotion = reduceMotion,
         onClose = onClose,
         modifier = pickerModifier,
+        layers = layers,
+        effectsOffered = state.offersEffectsMode(),
+        onRemoveEffect = effects::removeLayer,
+        onOpenEffects = { category ->
+            effects.requestEffectsCategory(category)
+            onOpenEffects()
+        },
+        captions = { CallModeCaptions(state) },
     )
 }
 

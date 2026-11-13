@@ -9,6 +9,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -82,7 +83,7 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `stays loading, drawing nothing, until the replay answers`() = runTest {
         val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
-        coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -94,7 +95,7 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `a served journal is projected in the reader's prism`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -106,13 +107,13 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `a refusal hides the section, a transient failure offers a retry that reloads`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns
+        coEvery { records.fullTranscript("call-1") } returns
             NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
         val viewModel = viewModel()
         viewModel.load(request())
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
 
-        coEvery { records.transcript("call-2", any(), any()) } returnsMany listOf(
+        coEvery { records.fullTranscript("call-2") } returnsMany listOf(
             NetworkResult.Failure(ApiError(message = "offline")),
             NetworkResult.Success(page(peerSegment())),
         )
@@ -125,18 +126,18 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `reopening the same call does not refetch`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
 
         viewModel.load(request())
         viewModel.load(request())
 
-        coVerify(exactly = 1) { records.transcript("call-1", any(), any()) }
+        coVerify(exactly = 1) { records.fullTranscript("call-1") }
     }
 
     @Test
     fun `reopening a call whose replay failed tries again`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returnsMany listOf(
+        coEvery { records.fullTranscript("call-1") } returnsMany listOf(
             NetworkResult.Failure(ApiError(message = "offline")),
             NetworkResult.Success(page(peerSegment())),
         )
@@ -150,11 +151,11 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `another call's lines are never served to the sheet opened next`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
         viewModel.load(request())
 
-        assertThat(viewModel.state.value.stateFor("call-2")).isEqualTo(CallTranscriptState.Loading)
+        assertThat(viewModel.state.value.stateFor("call-2")).isEqualTo(CallTranscriptState.ReadingCopy)
         assertThat(viewModel.state.value.stateFor("call-1")).isInstanceOf(CallTranscriptState.Ready::class.java)
     }
 
@@ -165,14 +166,14 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request(callId = ""))
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
     }
 
     @Test
     fun `the encrypted copy is drawn at once and stays when offline`() = runTest {
         coEvery { cache.cached("call-1") } returns CachedCallTranscript.Copy(page(peerSegment()))
         val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
-        coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -186,8 +187,8 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `a served replay revalidates the copy, a refusal removes it`() = runTest {
         val served = page(peerSegment())
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(served)
-        coEvery { records.transcript("call-2", any(), any()) } returns NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(served)
+        coEvery { records.fullTranscript("call-2") } returns NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -205,12 +206,12 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request())
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
     }
 
     @Test
     fun `deleting hides the transcript at once and dismisses it on the device`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
         viewModel.load(request())
 
@@ -228,7 +229,120 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request())
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
         coVerify { cache.drop("call-1") }
+    }
+
+    /** A1.6 — la bulle qui quitte l'écran annule la lecture des pages ; la rouvrir relit au lieu de rester sur « Loading ». */
+    @Test
+    fun `a bubble that leaves the screen cancels the page reading and reopening reads again`() = runTest {
+        val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.release()
+        pending.complete(NetworkResult.Success(page(peerSegment())))
+
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Loading)
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+    }
+
+    /** A1.6 — un appel que la lecture n'a pas pu finir se montre, mais n'est pas rangé au cache comme s'il était complet. */
+    @Test
+    fun `a call the reading could not finish is shown but not stored in the cache`() = runTest {
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()).copy(hasMore = true))
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+        coVerify(exactly = 0) { cache.store(any(), any()) }
+    }
+
+    /** A1.14 — avant toute lecture, rien n'est su de l'appel : la bulle montée n'attend pas encore le réseau. */
+    @Test
+    fun `a journal not yet read is not waiting on the network`() {
+        assertThat(viewModel().state.value.stateFor("call-1")).isEqualTo(CallTranscriptState.ReadingCopy)
+    }
+
+    /**
+     * A1.14 — Cache d'abord : pendant la lecture de la copie chiffrée, le journal n'est pas en attente du réseau, et une
+     * copie trouvée se dessine sans être jamais passée par l'attente — l'indicateur ne peut pas clignoter sur un cache plein.
+     */
+    @Test
+    fun `while the encrypted copy is read nothing waits on the network and a found copy never shows the waiting`() = runTest {
+        val reading = CompletableDeferred<CachedCallTranscript>()
+        coEvery { cache.cached("call-1") } coAnswers { reading.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { CompletableDeferred<NetworkResult<CallTranscriptPage>>().await() }
+        val viewModel = viewModel()
+        val seen = mutableListOf<CallTranscriptState>()
+        backgroundScope.launch(dispatcher) { viewModel.state.collect { seen += it.state } }
+
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.ReadingCopy)
+
+        reading.complete(CachedCallTranscript.Copy(page(peerSegment())))
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+        assertThat(seen).doesNotContain(CallTranscriptState.Loading)
+    }
+
+    /** A1.14 — l'attente ne commence qu'au cache vide : la copie lue n'existe pas, le replay du serveur s'attend. */
+    @Test
+    fun `an empty cache turns the reading into a wait on the replay`() = runTest {
+        val reading = CompletableDeferred<CachedCallTranscript>()
+        coEvery { cache.cached("call-1") } coAnswers { reading.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { CompletableDeferred<NetworkResult<CallTranscriptPage>>().await() }
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.ReadingCopy)
+
+        reading.complete(CachedCallTranscript.None)
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Loading)
+    }
+
+    /**
+     * A1.6 — rendre la main quand la bulle quitte l'écran arrête la LECTURE, jamais une suppression confirmée : le journal
+     * supprimé puis replié aussitôt est bien effacé de l'appareil, et le rouvrir ne le fait pas revenir.
+     */
+    @Test
+    fun `leaving the screen right after deleting still dismisses the transcript and reopening keeps it gone`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var dismissed = false
+        coEvery { cache.dismiss("call-1") } coAnswers {
+            gate.await()
+            dismissed = true
+        }
+        coEvery { cache.cached("call-1") } coAnswers {
+            if (dismissed) CachedCallTranscript.Dismissed else CachedCallTranscript.Copy(page(peerSegment()))
+        }
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.delete()
+        viewModel.release()
+        viewModel.load(request())
+        gate.complete(Unit)
+
+        assertThat(dismissed).isTrue()
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
+    }
+
+    /** A1.6 — un journal lu jusqu'au bout ne se relit pas quand sa bulle revient : seule une lecture interrompue reprend. */
+    @Test
+    fun `a journal read to the end is not read again when its bubble comes back`() = runTest {
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.release()
+        viewModel.load(request())
+
+        coVerify(exactly = 1) { records.fullTranscript("call-1") }
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
     }
 }

@@ -45,7 +45,8 @@ final class CallHeaderRuleTests: XCTestCase {
         givenName: String? = nil,
         displayName: String? = nil,
         groupName: String? = nil,
-        participantCount: Int = 0
+        participantCount: Int = 0,
+        receivesScreen: Bool = false
     ) -> CallHeaderCapsuleInput {
         CallHeaderCapsuleInput(
             layout: layout,
@@ -54,7 +55,8 @@ final class CallHeaderRuleTests: XCTestCase {
             givenName: givenName,
             displayName: displayName,
             groupName: groupName,
-            participantCount: participantCount
+            participantCount: participantCount,
+            receivesScreen: receivesScreen
         )
     }
 
@@ -99,6 +101,45 @@ final class CallHeaderRuleTests: XCTestCase {
         }
     }
 
+    // MARK: - P15.4 — l'écran reçu en duo s'annonce dans la capsule
+
+    func test_capsule_videoDuo_receivedScreen_namesTheScreenInsteadOfNameAndDuration() {
+        let capsule = CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim", displayName: "Karim Diallo", receivesScreen: true))
+        XCTAssertEqual(capsule, CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: false, showsNetwork: false, isReceivedScreen: true))
+    }
+
+    func test_capsule_videoDuo_receivedScreen_withoutGivenName_fallsBackToTheDisplayName() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: " ", displayName: "Karim Diallo", receivesScreen: true))?.title, "Karim Diallo")
+    }
+
+    func test_capsule_videoDuo_receivedScreen_keepsTheNetworkOnlyWhenDegraded() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim", receivesScreen: true))?.showsNetwork, false)
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, isNetworkDegraded: true, givenName: "Karim", receivesScreen: true))?.showsNetwork, true)
+    }
+
+    func test_capsule_noReceivedScreen_isNeverMarkedAsScreen() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim"))?.isReceivedScreen, false)
+    }
+
+    func test_capsule_groupAndAudio_ignoreTheReceivedScreen() {
+        XCTAssertEqual(
+            CallHeaderCapsuleRule.resolve(input(layout: .group, groupName: "Équipe", participantCount: 4, receivesScreen: true)),
+            CallHeaderCapsuleRule.resolve(input(layout: .group, groupName: "Équipe", participantCount: 4))
+        )
+        XCTAssertNil(CallHeaderCapsuleRule.resolve(input(layout: .audio, givenName: "Karim", receivesScreen: true)))
+    }
+
+    func test_capsule_receivedScreen_beforeTheCallIsEstablished_neverShows() {
+        XCTAssertNil(CallHeaderCapsuleRule.resolve(input(layout: .video, isEstablished: false, givenName: "Karim", receivesScreen: true)))
+    }
+
+    func test_capsule_spokenTitle_namesTheScreenOnlyWhenItIsTheReceivedScreen() {
+        let screen = CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: false, showsNetwork: false, isReceivedScreen: true)
+        XCTAssertEqual(screen.spokenTitle, CallScreenShareCopy.screenOf(name: "Karim"))
+        let video = CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: true, showsNetwork: false)
+        XCTAssertEqual(video.spokenTitle, "Karim")
+    }
+
     // MARK: - Les noms lus dans la conversation en cache
 
     private func conversation(type: MeeshyConversation.ConversationType, title: String?, customName: String? = nil) -> MeeshyConversation {
@@ -131,5 +172,109 @@ final class CallHeaderRuleTests: XCTestCase {
 
     func test_names_noConversationAndNoTitle_isEmpty() {
         XCTAssertEqual(CallHeaderNames.resolve(conversation: nil, knownGroupTitle: nil), CallHeaderNames(givenName: nil, groupName: nil))
+    }
+}
+
+// MARK: - L'appel réduit (P18.4 · P18.5 · P18.10, #17738) — ses noms sont ceux de l'en-tête
+
+/// P18.4 · P18.5 · P18.10 — l'appel réduit (planche `appels-vue-finale`, vues P18 et S1) :
+/// le liseré et l'avatar de la bulle portent la couleur de l'autre, la bulle porte
+/// l'étiquette de verre « nom · durée », et pendant mon partage la bannière dit l'écran
+/// et « nom · durée » à côté d'« Arrêter ». La loi est pure ; les vues la dessinent.
+@MainActor
+final class CallReducedRuleTests: XCTestCase {
+
+    // MARK: - Le nom
+
+    func test_title_duo_prefersTheNameIGaveThePerson() {
+        XCTAssertEqual(CallReducedRule.title(givenName: "Maman", groupName: nil, displayName: "Awa"), "Maman")
+    }
+
+    func test_title_duo_fallsBackToTheDisplayName() {
+        XCTAssertEqual(CallReducedRule.title(givenName: nil, groupName: nil, displayName: "Awa"), "Awa")
+        XCTAssertEqual(CallReducedRule.title(givenName: "  ", groupName: nil, displayName: "Awa"), "Awa")
+    }
+
+    func test_title_group_isTheGroupName() {
+        XCTAssertEqual(CallReducedRule.title(givenName: nil, groupName: "Famille", displayName: "Awa"), "Famille")
+    }
+
+    func test_title_unknown_isNil() {
+        XCTAssertNil(CallReducedRule.title(givenName: nil, groupName: nil, displayName: nil))
+        XCTAssertNil(CallReducedRule.title(givenName: " ", groupName: "", displayName: "\n"))
+    }
+
+    // MARK: - « nom · durée »
+
+    func test_caption_joinsNameAndDuration() {
+        XCTAssertEqual(CallReducedRule.caption(title: "Awa", duration: "04:12"), "Awa · 04:12")
+    }
+
+    func test_caption_withoutName_isTheDurationAlone() {
+        XCTAssertEqual(CallReducedRule.caption(title: nil, duration: "04:12"), "04:12")
+    }
+
+    // MARK: - La couleur de l'autre (fonction partagée)
+
+    func test_peerColor_isTheSharedSpeakerColor_andIsStablePerPerson() {
+        XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: "u-awa"), CallSpeakerColor.hex(for: "u-awa"))
+        XCTAssertNotEqual(CallSpeakerColor.hex(for: "u-awa"), CallSpeakerColor.hex(for: "u-moussa"))
+    }
+
+    func test_peerColor_withoutIdentity_fallsBackToTheBrand() {
+        XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: nil), MeeshyColors.brandPrimaryHex)
+    }
+}
+
+/// Le câblage : les vues lisent la loi et la couleur partagées, jamais une teinte locale.
+@MainActor
+final class CallReducedWiringTests: XCTestCase {
+    private func code(_ path: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/\(path)"))
+    }
+
+    func test_participantVisual_ringAndAvatarTakeThePeerColor_fromTheSharedFunction() throws {
+        let source = try code("CallParticipantVisual.swift")
+        XCTAssertTrue(source.contains("CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId)"))
+        XCTAssertTrue(source.contains("accentColor: ringsInPeerColor ? peerColorHex"))
+        XCTAssertTrue(source.contains("CallSelfTileStroke.color(forKey: callManager.remoteUserId)"), "le liseré des vignettes, pas une teinte de plus")
+        XCTAssertTrue(source.contains("lineWidth: ringsInPeerColor ? CallSelfTileStroke.lineWidth : 1"))
+    }
+
+    func test_bubble_asksForThePeerRing_andCarriesTheGlassNameplate() throws {
+        let source = try code("CallBubbleView.swift")
+        XCTAssertTrue(source.contains("ringsInPeerColor: true"))
+        XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .glass)"))
+        XCTAssertTrue(source.contains(".opacity(isCircleRegion && isMenuRevealed ? 0 : 1)"), "sous le cercle, l'étiquette laisse la place à Raccrocher")
+        XCTAssertTrue(source.contains("value: isCircleRegion)"), "elle change de place en mouvement, jamais d'un coup")
+    }
+
+    func test_caption_glassIsTheSharedNameplate_andReadsTheHeaderNamesUnderTheClock() throws {
+        let source = try code("CallReducedCaption.swift")
+        XCTAssertTrue(source.contains("CallTileNameplate(title: text)"), "le verre est la plaque partagée, pas un verre de plus")
+        XCTAssertTrue(source.contains("CallDurationClock"))
+        XCTAssertTrue(source.contains("CallHeaderNames.resolve("))
+        XCTAssertTrue(source.contains("CallReducedRule.caption("))
+    }
+
+    func test_pill_whileSharing_showsTheScreenCaption_onItsStatusLine() throws {
+        let source = try code("FloatingCallPillView.swift")
+        XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .screenShare)"))
+        let identity = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var identitySection", in: source))
+        XCTAssertTrue(identity.contains("if callManager.screenShare.isSharing {\n            statusEntry"),
+                      "pendant le partage, la ligne d'état garde le signal dégradé et la feuille « Qualité »")
+        let line = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var statusLine", in: source))
+        XCTAssertTrue(line.contains("durationLabel"))
+    }
+
+    /// #17731 — la forme de l'appel réduit est en décision et ne change pas : hors
+    /// partage, la bannière se replie en bulle par le glissé comme avant. Pendant
+    /// MON partage (#17763, P18.10), elle reste la capsule de S1, comme sur le web
+    /// (#17760) : le repli s'arrête là, la règle vit dans `CallReturnPoint`.
+    func test_pill_collapseToBubble_isKeptOutsideTheShare_andGatedDuringIt() throws {
+        let source = try code("FloatingCallPillView.swift")
+        XCTAssertTrue(source.contains("if CallBubbleGestureResolver.shouldCollapse("))
+        XCTAssertTrue(source.contains("CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)"))
+        XCTAssertFalse(source.contains("allowsCollapse"), "Une seule règle de repli : CallReturnPoint.mayCollapseToBubble")
     }
 }

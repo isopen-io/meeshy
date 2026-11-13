@@ -138,8 +138,6 @@ final class EmailSignInWordingTests: XCTestCase {
     private static let imposedVocabulary: [(key: String, fr: String, en: String)] = [
         ("auth.login.passwordless", "Se connecter par e-mail", "Sign in with email"),
         ("auth.magiclink.title", "Connexion par e-mail", "Email sign-in"),
-        ("auth.magiclink.email.title", "Votre adresse e-mail", "Your email address"),
-        ("auth.magiclink.email.hintLabel", "Comment ça marche", "How it works"),
         ("auth.magiclink.email.subtitle",
          "Pas de mot de passe : nous envoyons un lien par e-mail.",
          "No password: we email you a link."),

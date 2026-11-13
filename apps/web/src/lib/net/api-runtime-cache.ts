@@ -128,8 +128,20 @@
  * sans cette exclusion, le seau `api` gardait la fiche sept jours sur le poste
  * du modérateur. Son cache vit en mémoire (`api/world-participant-card.ts`).
  */
+/**
+ * ## LES POSITIONS QUE MES LIENS ME PARTAGENT EN SORTENT (#16984)
+ *
+ * `GET /relations/locations?bbox=` porte la position d'un proche à la précision
+ * qu'il a choisie. Le seau `api` est en NetworkFirst sans délai réseau : une
+ * passerelle injoignable alors que `navigator.onLine` reste vrai (portail
+ * captif, passerelle tombée) lui fait rejouer la copie avec un `200`, que le
+ * rattrapage date de l'instant présent — la position revenait, après un
+ * blocage, une baisse sous Ami ou la fin du partage, jusqu'à son échéance.
+ * L'exclusion de la déshydratation de TanStack ne couvrait pas ce second
+ * chemin. Son cache vit en mémoire (`api/shared-locations.ts`).
+ */
 export const API_RESPONSE_CACHE_PATTERN =
-  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))(?!v1\/world\/participants(?:[/?#]|$))/;
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))(?!v1\/world\/participants(?:[/?#]|$))(?!v1\/relations\/locations(?:[/?#]|$))/;
 
 /**
  * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.

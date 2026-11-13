@@ -92,6 +92,8 @@ struct CallView: View {
     @State var isSelfFeatured = false
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
+    /// #17791 — la hauteur réelle de chaque bandeau du haut, rendue par les bandeaux eux-mêmes.
+    @State var topBannerHeights: [CallTopBanner: CGFloat] = [:]
     /// #8626 — le bouton caméra d'une petite vignette a déployé sa grille.
     @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
@@ -164,6 +166,7 @@ struct CallView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea()
+        .onPreferenceChange(CallTopBannerHeightsKey.self) { topBannerHeights = $0 }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 
@@ -193,25 +196,10 @@ struct CallView: View {
             surfaceBackdrop
             surfaceContent
 
-            // Bandeau top — les bannières émergent de la Dynamic Island
-            // (IslandEmergingBanner) et se posent SOUS elle, dans la safe area.
-            // `.padding(.horizontal, 56)` garde la capsule à droite du chevron
-            // minimize (leading, 40 pt + marges) — le texte long wrappe sur 2
-            // lignes au lieu de passer dessous.
-            //
-            // §4.3 — l'ancien bandeau plein-écran "Reconnexion…" (IslandEmergingBanner
-            // + ProgressView) a été retiré. L'état `.reconnecting` est maintenant
-            // porté UNIQUEMENT par une pill compacte dans la même "queue" que les
-            // autres indicateurs de statut (statusPill dans audioCallLayout, glyphe
-            // inline dans le badge durée de videoCallLayout) — jamais par un overlay
-            // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
-
-            // §4.4 — la dégradation réseau du pair (`call:quality-alert`) et la
-            // perte du signaling (`isSignalingDegraded`) ne sont plus surfacées
-            // par une bannière pop-up : l'état persiste dans les indicateurs
-            // discrets de la vue (glyphe signal + status pills « Réseau faible
-            // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
-            // onChange plus bas.
+            // §4.3 / §4.4 — la reconnexion et la dégradation réseau (`call:quality-alert`,
+            // `isSignalingDegraded`) ne sont portées par aucun bandeau plein écran : les
+            // pills de statut (audioCallLayout) et le glyphe du badge durée (videoCallLayout)
+            // les montrent, et VoiceOver est notifié par les annonces des onChange plus bas.
 
             // OPUS-4 — le mode « Effets de ma caméra » avant la connexion ;
             // l'appel établi le monte dans `connectedView`.
@@ -257,21 +245,17 @@ struct CallView: View {
         // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
         // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
         .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
+        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: !isGroupStage && callManager.screenShare.isRemoteSharing))
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()
-            // Expansion depuis la bannière PiP : le contenu démarre contracté
-            // vers le haut (là où vivait la bannière) puis s'étire en plein
-            // écran — mouvement inverse de collapseIntoPip(), même ressort.
-            if callManager.consumePendingPipExpansion(), !reduceMotion {
-                pipMorphProgress = 1
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    pipMorphProgress = 0
-                }
-            }
+            if callManager.consumePendingPipExpansion() { CallPipMorph.playExpansion(reduceMotion: reduceMotion, progress: $pipMorphProgress) }
         }
         .onDisappear {
             stopPulseAnimation()
+        }
+        .onReceive(CallPipMorph.collapseRequests) {
+            if CallPipMorph.consumePendingCollapse() { collapseIntoPip() }
         }
         .task(id: callManager.remoteUserId) {
             await resolveRemoteProfile(userId: callManager.remoteUserId)

@@ -1,14 +1,19 @@
 package me.meeshy.sdk.model.call.group
 
-/** La grille d'un appel de groupe : colonnes × rangées — iOS `GroupCallGridLayout`. */
+/**
+ * La grille d'un appel de groupe : colonnes × rangées — iOS `GroupCallGridLayout`. À quatre, la rangée unique ne se pose
+ * que si la scène est plus large que haute ET que la hauteur de la fenêtre est compacte (L4.1, `CallGroupStageSizing`) ;
+ * sinon 2 × 2 (W2) : une tablette en paysage a la hauteur d'un 2 × 2.
+ */
 data class GroupCallGridLayout(val columns: Int, val rows: Int) {
     val capacity: Int get() = columns * rows
 
     companion object {
-        fun layout(tileCount: Int, isLandscape: Boolean): GroupCallGridLayout = when (maxOf(1, tileCount)) {
+        fun layout(tileCount: Int, isLandscape: Boolean, isCompactHeight: Boolean): GroupCallGridLayout = when (maxOf(1, tileCount)) {
             1 -> GroupCallGridLayout(1, 1)
             2 -> if (isLandscape) GroupCallGridLayout(2, 1) else GroupCallGridLayout(1, 2)
-            3, 4 -> GroupCallGridLayout(2, 2)
+            3 -> GroupCallGridLayout(2, 2)
+            4 -> if (isLandscape && isCompactHeight) GroupCallGridLayout(4, 1) else GroupCallGridLayout(2, 2)
             else -> if (isLandscape) GroupCallGridLayout(3, 2) else GroupCallGridLayout(2, 3)
         }
     }

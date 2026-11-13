@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// L'épure des écrans d'entrée (#17584, lot iOS 1/3, #17671) : connexion,

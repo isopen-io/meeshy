@@ -20,7 +20,7 @@ describe('keepUnnamedKeys — notification.bringEnabled', () => {
 
   it('nommé dans le corps : le corps gagne, sans lecture', async () => {
     const prisma = prismaWith({ bringEnabled: false });
-    const out = await keepUnnamedKeys(prisma, 'u', 'notification', { bringEnabled: true, talkieEnabled: true }, { bringEnabled: true, talkieEnabled: true });
+    const out = await keepUnnamedKeys(prisma, 'u', 'notification', { bringEnabled: true, talkieEnabled: true, togetherEnabled: true }, { bringEnabled: true, talkieEnabled: true, togetherEnabled: true });
     expect(out.bringEnabled).toBe(true);
     expect((prisma as unknown as { userPreferences: { findUnique: jest.Mock } }).userPreferences.findUnique).not.toHaveBeenCalled();
   });
@@ -28,6 +28,11 @@ describe('keepUnnamedKeys — notification.bringEnabled', () => {
   it('talkieEnabled, coupé au stockage et absent du corps : reste coupé', async () => {
     const out = await keepUnnamedKeys(prismaWith({ talkieEnabled: false }), 'u', 'notification', {}, { talkieEnabled: true });
     expect(out.talkieEnabled).toBe(false);
+  });
+
+  it('togetherEnabled (#17023), coupé au stockage et absent du corps : reste coupé', async () => {
+    const out = await keepUnnamedKeys(prismaWith({ togetherEnabled: false }), 'u', 'notification', {}, { togetherEnabled: true });
+    expect(out.togetherEnabled).toBe(false);
   });
 
   it('rien de stocké : le document est rendu tel quel', async () => {

@@ -143,7 +143,7 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertTrue(code.contains("CallJournalList(items: items"), "Le panneau du journal, dans la pilule, monte la liste commune")
         XCTAssertFalse(code.contains("CallCaptionsJournalSheet"), "Le journal n'est plus une feuille modale (#17343)")
         XCTAssertFalse(code.contains("transcriptPanel"), "Plus de panneau audio hors de la pilule (#17343)")
-        XCTAssertTrue(code.contains("journal.items.suffix(2).map(journal.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises")
+        XCTAssertTrue(code.contains("band.items.suffix(2).map(band.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises ; sa surface est la sienne (#17678)")
         let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertFalse(service.contains("segmentRetentionLimit"), "Plus de plafond de 50 phrases sur le journal")
     }

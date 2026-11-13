@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -222,6 +223,22 @@ class OnboardingCardsTest {
         val state = compose.onNodeWithTag("onboarding.age.picker").fetchSemanticsNode().config
             .getOrNull(SemanticsProperties.StateDescription)
         assertThat(state).isEqualTo(gesture)
+    }
+
+    @Test
+    fun `la carte age ne repete pas son titre en legende, le lecteur d'ecran garde le nom du champ`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.AGE)))
+
+        compose.onAllNodesWithText("Date of birth").assertCountEquals(0)
+        compose.onNode(hasContentDescription("Date of birth", substring = true)).assertExists()
+    }
+
+    @Test
+    fun `la carte story porte son propre titre, distinct de la carte profil`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.STORY)))
+
+        compose.onNodeWithText("Your story").assertExists()
+        compose.onAllNodesWithText("Show yourself").assertCountEquals(0)
     }
 
     @Test

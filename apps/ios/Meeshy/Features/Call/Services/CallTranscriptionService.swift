@@ -96,10 +96,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// par `wireId`.
     var sendPeerEntry: ((DataChannelTranscriptEntry) -> Void)?
     private var allSegments: [CallTranscriptionSegment] = []
-    /// Full-call accumulator for local persistence at call end — append-only,
-    /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
-    /// the live UI and must stay cheap to re-render), and never truncated: the
-    /// transcript kept after the call holds every sentence (#17342).
+    /// Full-call accumulator for local persistence at call end — rangé à l'heure
+    /// de DÉBUT de chaque phrase (A1.6, jamais à sa finalisation), and never
+    /// truncated: the transcript kept after the call holds every sentence (#17342).
     private var persistedSegments: [CallTranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
@@ -876,14 +875,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         allSegments = CallTranscriptJournal.inserting(merged, into: others)
         segments = allSegments
         guard merged.isFinal else { return }
-        if let persistedIndex = persistedSegments.firstIndex(where: { $0.wireId == wireId }) {
-            persistedSegments[persistedIndex] = merged
-        } else {
-            // L'énoncé est entré dans le journal comme révision partielle
-            // (jamais persistée) et vient d'être finalisé par fusion — c'est
-            // ICI qu'il gagne sa place dans l'accumulateur de persistance.
-            persistedSegments.append(merged)
-        }
+        // L'énoncé est entré dans le journal comme révision partielle (jamais
+        // persistée) puis finalisé par fusion : c'est ICI qu'il gagne sa place,
+        // à l'heure où il a COMMENCÉ ; une ligne déjà persistée est reprise à
+        // la même règle, sa fusion ayant pu avancer son début.
+        let remaining = persistedSegments.filter { $0.wireId != wireId }
+        persistedSegments = CallTranscriptJournal.inserting(merged, into: remaining)
     }
 
     // MARK: - Private — Result Handling
@@ -894,7 +891,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         segments = allSegments
 
         if segment.isFinal {
-            persistedSegments.append(segment)
+            persistedSegments = CallTranscriptJournal.inserting(segment, into: persistedSegments)
         }
     }
 

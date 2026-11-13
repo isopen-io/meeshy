@@ -3,7 +3,7 @@
     <string name="activation_email_sent">Code sent to %1$s.</string>
     <string name="activation_invite_days_left">%1$d days left: after that, signing in will require a code.</string>
     <string name="activation_invite_days_left_one">1 day left: after that, signing in will require a code.</string>
-    <string name="activation_invite_lead">To use it without interruption.</string>
+    <string name="activation_invite_lead">Verify your email to sign in without a code.</string>
     <string name="auth_forgot_sent_title">Link sent</string>
     <string name="auth_magic_sent_title">Code and link sent</string>
     <string name="auth_magic_subtitle">No password: we email you a link.</string>
@@ -38,6 +38,7 @@
     <string name="onboarding_story_audience_friends">Visible to your friends</string>
     <string name="onboarding_story_audience_public">Visible to everyone</string>
     <string name="onboarding_story_body">One pic, one line: a story.</string>
+    <string name="onboarding_story_title">Your story</string>
     <string name="onboarding_story_verify">Confirm your email to post your story</string>
     <string name="session_closed_activation_message">Sign in again, then enter the code you received by email.</string>
     <string name="session_closed_admin_message">To protect your account.</string>

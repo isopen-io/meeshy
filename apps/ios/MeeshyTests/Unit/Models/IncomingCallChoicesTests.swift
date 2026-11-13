@@ -160,4 +160,20 @@ final class IncomingCallChoicesTests: XCTestCase {
         XCTAssertFalse(choice.cameraFilms(isVideoCall: true, hasLocalVideoTrack: false))
         XCTAssertEqual(choice.exposure(isVideoCall: true, hasLocalVideoTrack: false), .heardOnly)
     }
+
+    // MARK: - #17732 P17.5 — ma vignette se fond aussi sous « Réduire les animations »
+
+    func test_selfPreviewFade_isQuarterSecond_andShorterUnderReduceMotion() {
+        XCTAssertEqual(IncomingCallChoices.selfPreviewFadeDuration(reduceMotion: false), 0.25)
+        XCTAssertEqual(IncomingCallChoices.selfPreviewFadeDuration(reduceMotion: true), CallChromeStow.reducedFadeDuration)
+        XCTAssertGreaterThan(IncomingCallChoices.selfPreviewFadeDuration(reduceMotion: true), 0, "jamais de coupure nette")
+    }
+
+    func test_selfPreview_fadesInBothModes_neverCutsWithANilAnimation() throws {
+        let view = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/IncomingCallView.swift")
+        )
+        XCTAssertTrue(view.contains("IncomingCallChoices.selfPreviewFadeDuration(reduceMotion: reduceMotion)"))
+        XCTAssertFalse(view.contains(".animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: shows)"))
+    }
 }

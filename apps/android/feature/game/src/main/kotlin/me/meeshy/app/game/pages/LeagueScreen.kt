@@ -187,7 +187,7 @@ private fun LazyListScope.mineSection(
 ) {
     when (league.access) {
         LeagueAccess.Locked -> item(key = "locked") {
-            GameCard(title = stringResource(R.string.game2_league_title)) {
+            GameCard {
                 GameNote(
                     stringResource(
                         R.string.game2_league_locked,
@@ -198,7 +198,7 @@ private fun LazyListScope.mineSection(
             }
         }
         LeagueAccess.Minor -> item(key = "minor") {
-            GameCard(title = stringResource(R.string.game2_league_title)) { GameNote(stringResource(R.string.game2_league_minor)) }
+            GameCard { GameNote(stringResource(R.string.game2_league_minor)) }
         }
         LeagueAccess.ConsentRequired -> item(key = "consent") {
             ConsentCard(state, offline, onAccept = { viewModel.setConsent(true) })
@@ -537,7 +537,10 @@ private fun DuoRunning(duo: GameDuoBlock, partner: String) {
             tone = if (reward.doubled) MeeshyPalette.Success else null,
         )
     }
-    GameNote(stringResource(if (duo.status == DuoBlockStatus.Completed) R.string.game2_duo_completed else R.string.game2_duo_reward_hint))
+    when {
+        duo.status == DuoBlockStatus.Completed -> GameNote(stringResource(R.string.game2_duo_completed))
+        duo.reward?.doubled != true -> GameNote(stringResource(R.string.game2_duo_reward_hint))
+    }
 }
 
 private const val TAB_ALPHA = 0.14f

@@ -5,6 +5,7 @@ import { CallCameraPicker } from '@/components/call-camera-picker';
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
+import { selfCameraShown } from '@/lib/calls/call-view';
 import type { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, MineAction } from '@/lib/calls/call-controls';
@@ -12,7 +13,7 @@ import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
-import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
+import { edgeFadeMask, onRowKeyDown, onRowWheel, ROW_EDGE_FADE, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -87,7 +88,7 @@ const badged = (base: ReactNode, badge: ReactNode) => (
  * pose `video.badge.plus`, la caméra et son « + » (#9095).
  */
 function cameraGlyph(call: ActiveCall, kit: CallRowsKit): ReactNode {
-  const state = call.cameraOn ? 'on' : call.media === 'audio' ? 'add' : 'off';
+  const state = selfCameraShown(call) ? 'on' : call.media === 'audio' ? 'add' : 'off';
   const glyph = state === 'on' ? screenGlyph('videoCamera') : state === 'off' ? screenGlyph('videoCameraSlash') : badged(screenGlyph('videoCamera'), <GlyphSvg glyph={kit.glyphs.plus} size={10} />);
   return <span className="contents" data-call-camera-glyph={state}>{glyph}</span>;
 }
@@ -123,18 +124,20 @@ const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
 
 function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, language, panels, kit, effectsActive }: ActionContext): ActionView {
   switch (action) {
-    case 'camera':
+    case 'camera': {
+      const shown = selfCameraShown(call);
       return {
         key: action,
-        label: translate(language, call.cameraOn ? 'call.camera.off' : 'call.camera.on'),
+        label: translate(language, shown ? 'call.camera.off' : 'call.camera.on'),
         caption: translate(language, 'call.devices.camera'),
         glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
-        tone: call.cameraOn ? 'active' : 'disc',
-        pressed: call.cameraOn,
+        tone: shown ? 'active' : 'disc',
+        pressed: shown,
         disabled: call.screenSharing,
         data: { 'data-call-control': 'camera' },
       };
+    }
     case 'flip':
       return {
         key: action,
@@ -273,9 +276,9 @@ function RecordButton({ language, panels, kit, variant }: { readonly language: I
   return (
     <kit.Button
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
-      glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
+      glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px] bg-current'} />}
       onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
-      tone={kind === 'recording' || choosing ? 'active' : 'disc'}
+      tone={idle ? (choosing ? 'active' : 'disc') : 'danger'}
       {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: translate(language, 'call.record.short') })}
@@ -314,15 +317,15 @@ function Family({ actions, context, variant }: { readonly actions: readonly (Min
  * rangée courte, le bout est atteint à chaque glissé, et la fin du rebond
  * local qu'autorisait `contain` terminait le glissé suivant (#8619).
  */
-export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-2 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
 const FAMILY_LEGEND = { mine: 'call.section.mine', call: 'call.section.call' } as const;
 
-/** Ce qui défile dans un rail s'efface en fondu à ses deux bords, sur les 8 px de son bord : au repos, aucun bouton n'est estompé. */
-const RAIL_FADE = { maskImage: 'linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)' } as const;
+/** Ce qui défile dans un rail s'efface en fondu à ses deux bords (masque de `call-row-keys`, axe vertical) : au repos, aucun bouton n'est estompé. */
+const RAIL_FADE = { maskImage: edgeFadeMask('to bottom') } as const;
 
 /**
  * UN RAIL (#17327) — une famille en colonne de verre sur le bord de l'écran :
@@ -361,7 +364,7 @@ export function CallActionRows({ call, rows, language, panels, kit }: { readonly
           <span id={`call-row-${family}`} className={ROW_TITLE} data-call-row-title="">
             {translate(language, FAMILY_LEGEND[family])}
           </span>
-          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
+          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} style={ROW_EDGE_FADE} data-call-row-scroll="">
             <Family actions={actions} context={context} variant="row" />
           </div>
         </div>

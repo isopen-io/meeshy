@@ -57,6 +57,10 @@ object CallLiveFrameRule {
     /** Le cadre en direct n'existe qu'en vidéo, à deux. */
     fun mayOffer(participants: Int, showsVideo: Boolean): Boolean = showsVideo && participants == PEOPLE
 
+    /** La proposition d'un cadre ne se montre qu'en duo vidéo (#17820, iOS `mayShowProposal`) : ni en groupe, même à deux connectés, ni en audio. */
+    fun mayShowProposal(participants: Int, showsVideo: Boolean, isGroupStage: Boolean): Boolean =
+        !isGroupStage && mayOffer(participants, showsVideo)
+
     /** Le cadre choisi devient-il visible ? Duo seulement, et seulement un cadre du catalogue servi en direct. */
     fun displayed(frameId: String?, participants: Int, among: List<CallFrameDesign> = CallFrameCatalogue.all): CallFrameDesign? {
         if (participants != PEOPLE || frameId == null) return null

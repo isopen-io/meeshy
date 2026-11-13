@@ -1,25 +1,29 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { callActions } from '@/lib/calls/call-actions';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { callAudioOf, hasVideo } from '@/lib/calls/call-view';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
-import { addingLook, type EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
+import { addingGenre, canAdd, genreRow, isFull, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
+import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
+import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
+import { useEffectLayers } from '@/lib/calls/use-effect-layers';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
-import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
-import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
-import { translate } from '@/lib/i18n-catalog';
+import { FACE_EFFECTS, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
-import { CallModeBar, GLASS_WIDTH, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
+import type { LiveFrameHold } from './call-live-frame-hold-option';
+import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
 /**
  * **LE MODE EFFETS** (#8442, #8551, #8578) — « Effets » (rangée Mon image, ou
@@ -50,7 +54,7 @@ import { CallModeBar, GLASS_WIDTH, ModeCarousel, ModeOption, type CarouselItem }
  * d'appel ; son catalogue se charge avec lui (`loadEffectsModeText`).
  */
 
-export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language)]);
 
 /**
  * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
@@ -98,6 +102,12 @@ type ModeProps = {
   readonly grab?: FrameGrab;
   readonly save?: (files: readonly CaptureFile[]) => Promise<SaveOutcome>;
   readonly clipEnv?: () => ClipEnv;
+  /** Le genre ouvert à l'entrée : celui que le Montage demande en touchant (+) ou une puce. */
+  readonly startOn?: EffectsCategory;
+  /** Le cadre gardé en direct (loi 16) : annuler la couche « cadre » le rend, comme décocher « Cadre » au Montage. */
+  readonly hold?: LiveFrameHold | undefined;
+  /** La puce « Cadres » ouvre le Montage : sans lui, la rangée ne propose que Visage et Couleur. */
+  readonly onOpenFrames?: (() => void) | undefined;
 };
 
 /** Ce qu'on tire de ma vidéo affichée : une image, ou une piste à filmer. */
@@ -113,11 +123,6 @@ const VIDEO_GRAB: FrameGrab = {
   film: (video) => filmedTrack(video, EFFECTS_RECORD_FPS),
 };
 
-
-const applyNow = (patch: Partial<VideoEffects>): void => {
-  setVideoEffects(patch);
-  callActions.refreshEffects();
-};
 
 const FACE_GLYPH: Readonly<Record<FaceEffect, ReactNode>> = {
   none: (
@@ -231,109 +236,23 @@ const faceVisual = (effect: FaceEffect): ReactNode => (
 
 const swatch = (preset: VideoPreset): ReactNode => <span aria-hidden className="size-full" style={{ background: SWATCH[preset] }} />;
 
-const chevron = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m15 5-7 7 7 7" />
-  </svg>
-);
+/** Les genres que ce mode possède : il en lit la valeur dans les effets appliqués, et le cadre dans celui qu'on garde en direct (loi 16). */
+const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
 
-const plus = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
+const layerChoice = (id: string): string => (id === 'none' || id === 'natural' ? NO_CHOICE : id);
 
-const gear = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-    <path d="m12 2.5 1.6 2.2 2.7-.6 1 2.6 2.6 1-.6 2.7 2.2 1.6-2.2 1.6.6 2.7-2.6 1-1 2.6-2.7-.6L12 21.5l-1.6-2.2-2.7.6-1-2.6-2.6-1 .6-2.7L2.5 12l2.2-1.6-.6-2.7 2.6-1 1-2.6 2.7.6z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
-
-/** Les deux moitiés d'un remplacement se posent l'une sur l'autre, au même endroit : rien ne saute pendant le fondu. */
-const STACKED = { gridArea: '1 / 1' } as const;
-
-/**
- * Les puces qui repartent quittent la mise en page AUSSITÔT, posées à leur place au-dessus de la
- * rangée de base (le liseré `p-2` du verre) : la barre se resserre PENDANT qu'elles s'effacent — un
- * morphisme, pas un fondu suivi d'un saut (P8b.6, loi 17).
- */
-const LEAVING_ROW = { position: 'absolute', insetInline: '0.5rem', bottom: 'calc(100% - 0.5rem)' } as const;
-
-type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
-
-type SettingsProps = {
-  readonly language: InterfaceLanguage;
-  readonly effects: VideoEffects;
-  readonly colorAvailable: boolean;
-  readonly blurAvailable: boolean;
-  readonly apply: (patch: Partial<VideoEffects>) => void;
-};
-
-/**
- * Le panneau Réglages (P8b) : un verre SÉPARÉ, posé au-dessus de la barre — « Luminosité » au-dessus
- * de son curseur, « Flou du fond » et son interrupteur en dessous (là où la caméra l'offre).
- */
-function EffectsSettings({ language, effects, colorAvailable, blurAvailable, apply }: SettingsProps) {
-  const percent = Math.round(effects.brightness * 100);
-  return (
-    <>
-      {colorAvailable ? (
-        <label className="flex flex-col gap-1 text-mini font-semibold text-on-media">
-          <span>{translate(language, 'call.effects.brightness')}</span>
-          <input
-            type="range"
-            min="-50"
-            max="50"
-            step="5"
-            value={percent}
-            aria-label={translate(language, 'call.effects.brightness')}
-            aria-valuetext={`${percent > 0 ? '+' : ''}${percent} %`}
-            onInput={(event) => apply({ brightness: Number((event.target as HTMLInputElement).value) / 100 })}
-            onChange={() => undefined}
-            className="h-11 w-full accent-on-media"
-          />
-        </label>
-      ) : null}
-      {blurAvailable ? (
-        <button type="button" role="switch" aria-checked={effects.blur} onClick={() => apply({ blur: !effects.blur })} className="flex min-h-11 w-full items-center justify-between gap-3 text-mini font-semibold text-on-media" data-call-effects-blur="">
-          <span>{translate(language, 'call.effects.blur')}</span>
-          <span aria-hidden className="relative h-6 w-10 shrink-0 rounded-full transition-colors motion-reduce:transition-none" style={{ background: effects.blur ? 'var(--ios-success)' : 'var(--color-media-hairline)' }}>
-            <span className={`absolute top-0.5 size-5 rounded-full bg-on-media transition-transform motion-reduce:transition-none ${effects.blur ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
-          </span>
-        </button>
-      ) : null}
-    </>
-  );
-}
-
-/** Les puces « Visage · Couleur » : la rangée du haut de la barre, que Réglages ouvert fait partir. */
-function EffectsCategories({ category, onPick, t }: { readonly category: EffectsCategory; readonly onPick: (entry: EffectsCategory) => void; readonly t: TextOf }) {
-  return (
-    <>
-      <div role="group" aria-label={t('callStudio.mode.categories')} className="flex items-center justify-center text-on-media [text-shadow:0_1px_2px_var(--color-scrim)]" data-call-effects-categories="">
-        {(['face', 'color'] as const).map((entry, index) => (
-          <span key={entry} className="flex items-center">
-            {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
-            <button type="button" aria-pressed={category === entry} onClick={() => onPick(entry)} className={`${TEXT_TAB} ${category === entry ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry}>
-              {entry === 'face' ? t('callStudio.mode.face') : t('callStudio.effects.color')}
-            </button>
-          </span>
-        ))}
-      </div>
-      <span aria-hidden className="h-px w-full" style={{ background: 'var(--color-media-hairline)' }} />
-    </>
-  );
-}
-
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const root = useRef<HTMLDivElement>(null);
-  const [category, setCategory] = useState<EffectsCategory>('face');
+  const [category, setCategory] = useState<EffectsCategory>(startOn);
   const [settings, setSettings] = useState(!colorAvailable);
-  const t: TextOf = (key, ...params) => translateCallStudio(language, key, ...params);
+  const t = textOf(language);
+  const words = layersTextOf(language);
+  const heldFrame = hold?.heldFrameId ?? null;
+  const stack = useEffectLayers([...effectsApplied(effects), ...(heldFrame === null ? [] : [{ genre: 'frame' as const, choice: heldFrame }])], OWNED);
+  const full = isFull(stack);
+  const row = genreRow(true, onOpenFrames !== undefined);
+  const list = useLayersList();
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
   const style = useRef('none');
@@ -363,7 +282,8 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    onExit();
+    if (list.open) list.hide();
+    else onExit();
   };
 
   const items: readonly CarouselItem[] =
@@ -372,15 +292,48 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       : VIDEO_PRESET_CATALOG.map((preset) => ({ id: preset, label: t(`callStudio.preset.${preset}`), visual: swatch(preset) }));
   const selected = category === 'face' ? effects.faceEffect : effects.preset;
   style.current = selected;
+  /** À trois couches, un genre absent n'entre plus : le choix est refusé et dit ; remplacer un genre présent reste permis. */
+  const refuses = (genre: EffectGenre, id: string): boolean => layerChoice(id) !== NO_CHOICE && !canAdd(stack, genre);
+  const refuse = (): void => studio.setStatus({ text: words.full, tone: 'error' });
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
     const preset = VIDEO_PRESET_CATALOG.find((entry) => entry === id);
-    if (category === 'face' && face !== undefined && face !== effects.faceEffect) apply({ faceEffect: face });
-    if (category === 'color' && preset !== undefined && preset !== effects.preset) apply({ preset });
+    list.hide();
+    if (category === 'face' && face !== undefined && face !== effects.faceEffect) {
+      if (refuses('face', face)) refuse();
+      else apply({ faceEffect: face });
+    }
+    if (category === 'color' && preset !== undefined && preset !== effects.preset) {
+      if (refuses('color', preset)) refuse();
+      else apply({ preset });
+    }
   };
   const addLook = (): void => {
     setSettings(false);
-    setCategory(addingLook(category));
+    list.hide();
+    if (full) {
+      refuse();
+      return;
+    }
+    const target = addingGenre(category, stack, row);
+    if (target === 'frame') onOpenFrames?.();
+    else if (target === 'face' || target === 'color') setCategory(target);
+  };
+  const undo = (genre: EffectGenre): void => {
+    list.hide();
+    if (genre === 'face') apply({ faceEffect: 'none' });
+    else if (genre === 'color') apply({ preset: 'natural' });
+    else {
+      if (genre === 'frame' && hold !== undefined && heldFrame !== null) hold.toggle(heldFrame);
+      setEffectLayers(removeLayer(stack, genre));
+    }
+  };
+  const labelOf = (genre: EffectGenre): string => (genre === 'face' ? t('callStudio.mode.face') : genre === 'color' ? t('callStudio.effects.color') : words.frames);
+  const entries = row.map((genre) => ({ id: genre === 'frame' ? 'frames' : genre, label: labelOf(genre) }));
+  const pick = (id: string): void => {
+    list.hide();
+    if (id === 'frames') onOpenFrames?.();
+    else if (id === 'face' || id === 'color') setCategory(id);
   };
 
   return (
@@ -408,27 +361,21 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
                 />
               </div>
             ) : null}
-            {panel.mounted ? (
-              <div ref={panel.ref} role="group" aria-label={t('callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${settings ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
-                <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
-              </div>
-            ) : null}
+            {panel.mounted ? <SettingsGlass presence={panel} open={settings} language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} /> : null}
           </div>
           <KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />
         </div>
-        <CallModeBar
-          glass
+        <EffectsBar
+          language={language}
           rider={rider}
-          above={
-            puces.mounted ? (
-              <div ref={puces.ref} className={`flex w-full flex-col items-center ${settings ? 'pointer-events-none' : ''}`} style={settings ? LEAVING_ROW : undefined} data-call-effects-categories-row="">
-                <EffectsCategories category={category} onPick={setCategory} t={t} />
-              </div>
-            ) : null
-          }
-          quit={{ label: t('callStudio.mode.backEffects'), glyph: chevron, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
-          center={colorAvailable ? <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={settings} onPress={() => setSettings((open) => !open)} data={{ 'data-call-effects-settings-toggle': '' }} /> : null}
-          options={colorAvailable ? <ModeOption label={t('callStudio.mode.addLook')} glyph={plus} onPress={addLook} data={{ 'data-call-effects-add-look': '' }} /> : null}
+          stack={stack}
+          full={full}
+          chips={{ mounted: puces.mounted, ref: puces.ref, leaving: settings }}
+          categories={{ entries, pressed: category, onPick: pick }}
+          settings={colorAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
+          add={colorAvailable ? { onAdd: addLook } : null}
+          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
+          onBack={onExit}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

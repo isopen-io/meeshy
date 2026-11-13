@@ -25,19 +25,19 @@ import me.meeshy.sdk.model.game.rules.AtlasTrophyPlate
 internal data class AtlasLegend(val name: String, val detail: String?)
 
 /** Le titre d'une famille et la ligne que Mee ou Meo y dit. */
-internal data class AtlasFamilyCopy(@StringRes val title: Int, @StringRes val line: Int)
+internal data class AtlasFamilyCopy(@StringRes val title: Int, @StringRes val line: Int? = null)
 
 /** Ce que l'atlas DIT (iOS `GameAtlasCopy`) : titres et lignes des familles, légendes des objets, règle des niveaux. */
 internal object AtlasCopy {
 
     fun family(family: AtlasFamily): AtlasFamilyCopy = when (family) {
         AtlasFamily.Tiers -> AtlasFamilyCopy(R.string.game_atlas_tiers_title, R.string.game_atlas_tiers_line)
-        AtlasFamily.Coin -> AtlasFamilyCopy(R.string.game_atlas_coin_title, R.string.game_atlas_coin_line)
+        AtlasFamily.Coin -> AtlasFamilyCopy(R.string.game_atlas_coin_title)
         AtlasFamily.Treasury -> AtlasFamilyCopy(R.string.game_atlas_treasury_title, R.string.game_atlas_treasury_line)
-        AtlasFamily.Ranks -> AtlasFamilyCopy(R.string.game_atlas_ranks_title, R.string.game_atlas_ranks_line)
+        AtlasFamily.Ranks -> AtlasFamilyCopy(R.string.game_atlas_ranks_title)
         AtlasFamily.Flames -> AtlasFamilyCopy(R.string.game_atlas_flames_title, R.string.game_atlas_flames_line)
         AtlasFamily.Leagues -> AtlasFamilyCopy(R.string.game_atlas_leagues_title, R.string.game_atlas_leagues_line)
-        AtlasFamily.Medals -> AtlasFamilyCopy(R.string.game_atlas_medals_title, R.string.game_atlas_medals_line)
+        AtlasFamily.Medals -> AtlasFamilyCopy(R.string.game_atlas_medals_title)
         AtlasFamily.Trophies -> AtlasFamilyCopy(R.string.game_atlas_trophies_title, R.string.game_atlas_trophies_line)
         AtlasFamily.Rarities -> AtlasFamilyCopy(R.string.game_atlas_rarities_title, R.string.game_atlas_rarities_line)
     }

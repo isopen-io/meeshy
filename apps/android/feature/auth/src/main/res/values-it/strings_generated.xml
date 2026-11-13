@@ -277,7 +277,6 @@
         <item quantity="other">+%1$d scintille · prima storia</item>
     </plurals>
     <string name="onboarding_story_sending">La tua storia sta partendo…</string>
-    <string name="onboarding_story_title">Fatti vedere</string>
     <string name="registration_back">Indietro</string>
     <string name="session_closed_activation_title">Conferma il tuo indirizzo e-mail</string>
     <string name="session_closed_contact">Scrivi al team Meeshy</string>

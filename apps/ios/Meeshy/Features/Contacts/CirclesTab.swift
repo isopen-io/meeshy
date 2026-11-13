@@ -13,6 +13,7 @@ struct CirclesTab: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var openedRow: CirclesViewModel.Row?
+    @StateObject private var sharedLocations = SharedLocationsMapViewModel()
 
     var body: some View {
         Group {
@@ -49,6 +50,9 @@ struct CirclesTab: View {
         .task(id: isActive) {
             if isActive { await viewModel.load() }
         }
+        .task(id: isActive) {
+            if isActive { await sharedLocations.appeared() }
+        }
         .adaptiveOnChange(of: viewModel.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
@@ -72,6 +76,7 @@ struct CirclesTab: View {
             ContactsScrollSentinel()
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 banner
+                SharedLocationsMapSection(viewModel: sharedLocations)
                 requestsBlock
                 ForEach(viewModel.sections) { section in
                     sectionHeader(section)

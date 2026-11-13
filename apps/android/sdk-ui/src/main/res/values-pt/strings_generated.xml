@@ -237,6 +237,8 @@
     <string name="focal_call_join_a11y_hint_double_tap">Toque duas vezes para entrar na chamada</string>
     <string name="focal_call_join_action">Entrar na chamada</string>
     <string name="focal_call_join_hint">Toque para entrar</string>
+    <string name="focal_call_journal_hide">Ocultar a transcrição</string>
+    <string name="focal_call_journal_show">Mostrar a transcrição</string>
     <string name="focal_call_outgoing">Efetuada</string>
     <string name="focal_call_outgoing_suffix">efetuada</string>
     <string name="focal_call_rejected_received">Chamada rejeitada</string>

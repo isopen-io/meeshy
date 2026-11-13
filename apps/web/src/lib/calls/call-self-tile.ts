@@ -23,12 +23,26 @@ const SIZES: Readonly<Record<SelfTileScale, TileSize>> = {
   3: { width: 168, height: 240 },
 };
 
+/**
+ * **L1.5 — DANS UNE FENÊTRE PLUS LARGE QUE HAUTE, MA VIGNETTE SE COUCHE** (`CallSelfTileScale.isLandscape` d'iOS,
+ * `CallSelfTileLaw.isLandscape` d'Android) : 130 × 96 au palier x2, les deux autres à la même proportion (x1.3 en
+ * largeur, ratio 96/130). La forme se lit sur la fenêtre, jamais sur l'appareil : redimensionner un navigateur la couche
+ * comme tourner un téléphone.
+ */
+const LANDSCAPE_SIZES: Readonly<Record<SelfTileScale, TileSize>> = {
+  1: { width: 93, height: 69 },
+  2: { width: 130, height: 96 },
+  3: { width: 195, height: 144 },
+};
+
+export const isLandscapeWindow = (viewport: TileSize): boolean => viewport.width > viewport.height;
+
 const MAX_WIDTH = 0.45;
 
 const MAX_HEIGHT = 0.4;
 
 export function selfTileSize(scale: SelfTileScale, viewport: TileSize): TileSize {
-  const size = SIZES[scale];
+  const size = (isLandscapeWindow(viewport) ? LANDSCAPE_SIZES : SIZES)[scale];
   const fit = Math.min(1, (viewport.width * MAX_WIDTH) / size.width, (viewport.height * MAX_HEIGHT) / size.height);
   return { width: Math.round(size.width * fit), height: Math.round(size.height * fit) };
 }
@@ -74,11 +88,27 @@ export const SELF_CORNERS: readonly SelfTileCorner[] = ['top-left', 'top-right',
 
 export const DEFAULT_SELF_CORNER: SelfTileCorner = 'top-right';
 
+/**
+ * **W1.5 — LE COIN DE FIN DU SENS DE LECTURE** (`.topTrailing` d'iOS, `TopEnd` d'Android) : un appel neuf pose ma vignette
+ * en haut, côté fin de ligne — là où la colonne du journal (W1) se pose aussi. Haut-droite en gauche à droite,
+ * haut-gauche en droite à gauche. Un coin que j'ai choisi, lui, est physique et ne bouge plus.
+ */
+export const defaultSelfCorner = (rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'): SelfTileCorner => (rtl ? 'top-left' : DEFAULT_SELF_CORNER);
+
 export const SELF_TILE_MARGIN = 16;
 
 export const SELF_TILE_TOP = 128;
 
 export const SELF_TILE_BOTTOM = 176;
+
+/** Couchée, les coins se tiennent à la hauteur d'iOS et d'Android (`TOP_CLEARANCE_DP` 60, `BOTTOM_CLEARANCE_DP` 130) : l'écran manque de hauteur, et les coins bas ne retombent plus sur les hauts. */
+export const SELF_TILE_TOP_LANDSCAPE = 60;
+
+export const SELF_TILE_BOTTOM_LANDSCAPE = 130;
+
+/** Ce que ma vignette laisse libre sous la zone sûre, en haut et en bas, selon la forme de la fenêtre — ce que la pile des bandeaux AJOUTE au-dessus est `selfTileClearance` (`call-top-banners.ts`). */
+export const selfTileCornerInsets = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
+  isLandscapeWindow(viewport) ? { top: SELF_TILE_TOP_LANDSCAPE, bottom: SELF_TILE_BOTTOM_LANDSCAPE } : { top: SELF_TILE_TOP, bottom: SELF_TILE_BOTTOM };
 
 const DRAG_THRESHOLD = 8;
 
@@ -87,7 +117,7 @@ export type TileBox = TileSize & { readonly x: number; readonly y: number };
 /** Ma vignette quand l'autre partage son écran : en haut à droite, 4,5 rem sous la zone sûre, à la taille x2. */
 export const SCREEN_SELF_TILE = { y: 72, width: 112, height: 160 } as const;
 
-/** Ma vignette en coin et son coin, dans les mesures de l'écran sous sa zone sûre. */
+/** Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte). */
 export type TileFootprint = TileBox & { readonly corner: SelfTileCorner };
 
 /** Ce que l'écran d'appel sait de ma vignette ; son coin et sa taille sont ceux que je lui ai choisis (`selfTileStore`). */
@@ -105,13 +135,15 @@ type FootprintInput = {
   readonly viewport: TileSize;
   /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette descend d'autant. */
   readonly topInset: number;
+  /** Ce que la colonne du journal retire à la scène (W1) : ma vignette se mesure dans la scène qui reste. */
+  readonly bleed?: number;
 };
 
 /** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429). */
-export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset }: FootprintInput): TileFootprint | null {
-  if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
+export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0 }: FootprintInput): TileFootprint | null {
+  if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - bleed - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
   if (layout !== 'video-duo' || !(swapped || cameraOn) || (framed && !swapped)) return null;
-  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset }) };
+  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed }) };
 }
 
 /** L'écran de l'appel ; hors navigateur, celui de la planche. */
@@ -121,20 +153,22 @@ const onTop = (corner: SelfTileCorner): boolean => corner.startsWith('top');
 
 const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
 
-type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
+/** `bleed` : la largeur que la colonne du journal retire à la scène (W1) — la vignette se tient dans la scène réduite, la forme de la fenêtre (`viewport`) restant celle qui décide de sa taille et de ses hauteurs. */
+type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number; readonly bleed?: number };
 
-export function selfTileBox({ corner, size, viewport, topInset = 0 }: BoxInput): TileBox {
-  const top = SELF_TILE_TOP + topInset;
-  const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
-  const y = onTop(corner) ? top : Math.max(top, viewport.height - SELF_TILE_BOTTOM - size.height);
+export function selfTileBox({ corner, size, viewport, topInset = 0, bleed = 0 }: BoxInput): TileBox {
+  const clearance = selfTileCornerInsets(viewport);
+  const top = clearance.top + topInset;
+  const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - bleed - SELF_TILE_MARGIN - size.width;
+  const y = onTop(corner) ? top : Math.max(top, viewport.height - clearance.bottom - size.height);
   return { x, y, width: size.width, height: size.height };
 }
 
-type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
+type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number; readonly bleed?: number };
 
-export function nearestSelfCorner({ center, size, viewport, topInset = 0 }: NearestInput): SelfTileCorner {
+export function nearestSelfCorner({ center, size, viewport, topInset = 0, bleed = 0 }: NearestInput): SelfTileCorner {
   const away = (corner: SelfTileCorner): number => {
-    const box = selfTileBox({ corner, size, viewport, topInset });
+    const box = selfTileBox({ corner, size, viewport, topInset, bleed });
     return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
   };
   return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);
@@ -157,7 +191,7 @@ export const selfTileStore = createStore<SelfTileState>(() => ({ callId: null, s
 
 export const selfTileScaleFor = (state: SelfTileState, callId: string): SelfTileScale => (state.callId === callId ? state.scale : DEFAULT_SELF_TILE);
 
-export const selfTileCornerFor = (state: SelfTileState, callId: string): SelfTileCorner => (state.callId === callId ? state.corner : DEFAULT_SELF_CORNER);
+export const selfTileCornerFor = (state: SelfTileState, callId: string, rtl?: boolean): SelfTileCorner => (state.callId === callId ? state.corner : defaultSelfCorner(rtl));
 
 export const setSelfTileScale = (callId: string, scale: SelfTileScale): void => selfTileStore.setState((state) => ({ callId, scale, corner: selfTileCornerFor(state, callId) }));
 

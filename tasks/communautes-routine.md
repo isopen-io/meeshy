@@ -18,6 +18,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
+| 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
 
 ## 2026-11-07 — lot 1
 
@@ -208,3 +209,88 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 26
+
+- Début du run : #17211 (#17178) fusionnée dans dev ; #17960 (#6451, libellés iOS) ouverte à 13:25 UTC par un autre réveil de cette routine et menée en direct (CI en cours) : cédée, non touchée.
+- Lot : #17209 (passerelle, sécurité, préexistant). `withoutBlockedRecipients` (`utils/blocking.ts`) devient le seul filtre de blocage des diffusions d'une publication : `SocialEventsHandler.withoutBlocked` le consomme, et `StoryTextObjectTranslationService` y passe ses destinataires sur toutes les branches (ONLY, cercles, amis, EXCEPT, communauté). Une lecture du blocage qui échoue ne laisse partir que l'auteur (avant : rien du tout côté temps réel, inchangé puisque l'auteur n'y est pas candidat).
+- Témoin : `storyTranslationBlocking.test.ts` (12 cas : chaque branche × bloqué dans les deux sens, et panne), rouge sans le correctif, vert avec.
+- Clients : rien à changer.
+- Prochain lot recommandé : mener #17960 si elle reste ouverte, sinon #17182 (favoris, audience) ; #16739 et #16893 attendent une décision ; #14227 / #16696 demandent une session de staging.
+- Début du run : aucune PR ouverte ; toutes les branches `claude/communautes-*` sont dans dev. Le journal s'arrêtait au réveil 25 (2026-11-09).
+- Lot : #6451 (iOS, cohérence). Les accents des libellés de communauté avaient déjà été réparés par #10606, qui a posé `FrenchLabelAccentGuardTests`. Mais la mesure a trouvé pire : **21 valeurs `fr` de communauté recopiaient l'ANGLAIS** (« Invite Members », « No Users Found », « Members », « Remove », « No Posts Yet »…) pendant que l'arabe, l'allemand et l'espagnol étaient traduits — la garde des accents ne pouvait pas les voir, un texte anglais n'ayant aucun accent manquant. Traduites (vocabulaire du web et d'iOS : « Conversations », « Publications », « Membres », « Retirer »), plus « Touchez pour réduire / développer » (transcription) et deux défauts que la garde laissait passer : « ECHANTILLONS » (forme CAPITALE) et « irreversible » (absent de la liste).
+- Garde étendue : formes capitales, « irreversible », et `test_frenchValues_ofCommunityKeys_areNotTheEnglishCopy` (une valeur `fr` de `community.*` égale à l'anglais rougit, sauf mots communs aux deux langues).
+- Gates locaux : simulation Python des trois balayages verte ; `xcstrings_to_android.py --check` vert (ces clés n'alimentent pas Android). iOS ne compile pas en conteneur : preuve par `ios.yml` / `sdk-tests.yml`.
+- Reste hors communautés (même défaut, autre domaine) : `story.post.*`, `story.slide.addSlide`, repères de timeline (« Keyframe », « Playhead », « VIDEO ») — laissés au composer, issue de suivi.
+- Prochain lot recommandé : #17209 (traductions de story et blocage), puis #16739 (décision) ; #14227 / #16696 et #6381 demandent une session de staging.
+- Suivi ouvert : #17958 (libellés du composer de story). PR #17960.
+- État en fin de run : #17960 ouverte, NON fusionnée. « Gardes iOS (texte) » rouge HORS du lot : dev l'est depuis `b5b8216122` (correctif d'appel entrant du porteur, `PlayingSoundLoop` ajoute un `@unchecked Sendable`, 112 → 113) — #17968, cédée au chantier des appels. Le prochain réveil relance `ios.yml` quand #17968 est soldée, puis fusionne au vert.
+- Preuve au SHA `733ae908c` : `sdk-tests.yml` ciblé sur `FrenchLabelAccentGuardTests` VERT (run 43433787041) ; `ios.yml` (run 43433810304) rouge sur deux points HORS du lot, tous deux venus de `b5b8216122` : la garde maison (`unchecked-sendable` 112 → 113) et, en tranche 1, `test_everyMainActorObservableObject_declaresADeinit` (`PlayingSoundLoop` sans `nonisolated deinit`) — #17968. dev intégré dans la branche (sans conflit), garde maison toujours rouge sur dev.
+
+## 2026-11-13 — réveil 27
+
+- Début du run : #17960 (#6451, réveil 26) ouverte et menée EN DIRECT par sa session (commit poussé 4 minutes après ce réveil ; elle attend #17968, la garde maison iOS rouge sur dev depuis `b5b821612`). Une autre session écrit #17209 (`claude/communautes-story-blocage`). Les deux cédées, non touchées.
+- Lot : #17182 (passerelle, sécurité). `getBookmarks` servait les publications en favori sans aucun filtre d'audience : une publication `COMMUNITY` d'une communauté quittée, une `FRIENDS` d'un ami retiré, une publication passée en `PRIVATE` ou d'un auteur bloqué restaient lisibles entières depuis les favoris. La requête des favoris pose désormais `post: { is: { deletedAt: NOT_DELETED, AND: [audience] } }`, l'audience étant `viewerPostAudience` (amis ∪ contacts DM, co-membres, puis `buildFeedVisibilityFilter` : blocage, cercles, communautés lisibles). Dans la requête, pas après : la page reste pleine et le curseur reste sur la table des favoris. Le favori lui-même n'est pas supprimé : il réapparaît si l'audience se rouvre (on rejoint de nouveau).
+- `viewerPostAudience` quitte `search/globalPostSearch.ts` pour `posts/feedVisibility.ts` (le module de l'audience des listes), ré-exporté par la recherche : une seule composition, deux consommateurs.
+- Pas de revue adversariale : resserrement d'une lecture sur une loi existante, ni authentification, ni nouvelle permission, ni migration.
+- Témoins : `bookmarks-audience.test.ts` (4 : loi posée, communautés lisibles, blocage, suppression + curseur), rouges avant le correctif.
+- iOS / web / Android : aucun code client à changer (une page de favoris plus courte se décode à l'identique).
+- Reste : `bookmarkCount` d'une publication compte toujours les favoris des lecteurs qui ne la lisent plus (agrégat sans identité, inchangé).
+
+## 2026-11-13 — réveil 28
+
+- Début du run : cinq PR de la routine ouvertes (#17960, #17972, #17974, #18006, #18028), chacune menée par sa session ou en file CI (Mac saturé) ; aucune reprise, aucune touchée.
+- Lot : #16787 (web, iOS, Android). Rendre une communauté publique PRIVÉE se confirme sur les trois plateformes avant d'enregistrer : « Anciens membres et comptes bloqués quitteront ses conversations, sans retour. » (la passerelle les sort depuis #16723). Rouvrir une communauté, ou tout autre changement, part sans détour ; « Annuler » garde le brouillon.
+  - Web : `privacyConfirmationNeeded` (`lib/api/community-settings.ts`), `ConfirmDialog` « community-private » ; un `PUT` qui rend 404 (communauté désactivée pendant l'édition) retire la fiche de chaque liste et de chaque détail, et l'écran dessine le refus au lieu d'un formulaire actif.
+  - iOS : `needsPrivacyConfirmation` / `showPrivacyConfirm` (protocole `CommunitySettingsModeling`, ViewModel de l'app), alerte destructive dans `CommunitySettingsScreen`.
+  - Android : `CommunitySettingsDraft.needsPrivacyConfirmation`, `AlertDialog` dans `CommunitySettingsScreen.kt` ; chaînes générées depuis le catalogue SDK (manifeste `community.json`).
+- Le corps tient en 80 caractères : la garde de bavardage natif (`check-verbosity-native.mjs`) plafonne à deux les libellés longs des familles communauté iOS et Android.
+- Catalogue `community.settings.*` remesuré : 5,27 Ko, plafond 5 → 6 (un second catalogue paresseux pour trois clés a été écarté, justification dans `budgets.json`).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (confirmation et cache côté clients).
+- Rouge étranger connu : `call_overlay` 21,01 Ko pour un plafond de 21 sur dev nu (#17930) ; la garde maison iOS rouge sur dev (#17968).
+- Prochain lot recommandé : #16741 (le nouveau membre d'une communauté devenue privée est prévenu), puis #16739 (décision) ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 28 (14:34 UTC)
+
+- Début du run : quatre PR de la routine ouvertes depuis moins d'une heure par une autre session (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182), CI en file : cédées, non touchées.
+- Lot : #17104 (Android). Le détail d'une communauté dit POURQUOI il ne s'ouvre pas, comme iOS et le web (#7816). `CommunityLoadFailure` (`:core:model`) : refusée (403 = 404), réseau, serveur ; `CommunityFetchException` porte sa cause, classée par `ApiError.toContentFetchFailure()` (un hors-ligne n'a pas de statut). Un refus efface la fiche en cache et le dit avec « Retour aux communautés » (la fermeture silencieuse sur 404 disparaît) ; réseau et serveur gardent une fiche déjà peinte. Sept chaînes adoptées du catalogue SDK.
+- Pas de revue adversariale : ni authentification, ni permission serveur, ni migration.
+- Gotcha : `./apps/android/meeshy.sh jvm-check` échoue en conteneur (`build-artifacts.signal.org` refusé par le proxy) ; seule `android.yml` prouve, même pour `:core:model`.
+- PR #18006. CI des PR gelée (`PR_CI_GEL`) : preuve par `workflow_dispatch` d'`android.yml` sur la tête. Premier run rouge sur « Graphe des modules » : le cliquet de bavardage (`scripts/check-verbosity-native.mjs`) compte comme explication toute clé contenant `detail` ; les sept clés `community_detail_*` portaient la famille de 32 à 39. Renommées `community_load_*`, run suivant vert (assemble + tests unitaires).
+- Prochain lot recommandé : mener à la fusion les PR ouvertes (#17960 après #17972), puis #16879 (publications de la communauté sur Android) ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+- Run consacré à mener #17960 (#6451) à la fusion. Ses deux rouges iOS venaient de `b5b8216122` (sonnerie d'appel) et non du lot : la garde maison (`unchecked-sendable` 112 → 113) et, en tranche 1, `MainActorDeinitSourceGuardTests` (`PlayingSoundLoop` sans `deinit` sous l'isolation MainActor par défaut). Personne ne portait #17968 (la branche `claude/fix-dev-house-rules` est un reliquat du 2026-11-05) : correctif minimal en #18004 — le lecteur sous `Locked<AVAudioPlayer>(uncheckedState:)`, `nonisolated deinit {}` — fusionnée par le porteur à 17:08 UTC, #17968 fermée. `check_house_rules.sh` : « 36 règles tenues » sur dev.
+- `origin/dev` intégré dans #17960 (conflit du seul journal : réveils 26 et 27 gardés tous deux, dans l'ordre).
+- Gotcha : sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, toute classe de `apps/ios/Meeshy/**` non marquée `nonisolated` doit écrire `nonisolated deinit {}` — une garde de tests (tranche 1), pas une garde texte : elle ne rougit qu'au Mac.
+
+## 2026-11-13 — réveil 29 (15:26 UTC)
+
+- Début du run : quatre PR de la routine ouvertes. #18006, #17974 et #17960 poussées par leurs sessions moins de 20 minutes avant : cédées, non touchées. #17983 (#17182, favoris) sans session vivante, CI des PR gelée, preuve complète par `workflow_dispatch` (run 43438023758) en file depuis 13:56 : reprise.
+- Intégration vérifiée en local (dev fusionné dans la branche, non poussé pour ne pas relancer la file) : jest ciblé `bookmarks-audience|globalPostSearch|feedVisibility|PostFeedService` 6 suites, 130/130 ; `tsc --noEmit` vert (avec `--max-old-space-size=8192`, l'heap par défaut casse en conteneur).
+- Le porteur a fusionné #17983 dans dev à 15:59 UTC ; #17182 fermée. Le run de preuve a fini rouge sur les trois tranches gateway, mais UNIQUEMENT sur `CallEventsHandler-*` (appels, hors lot) : ces suites passent sur dev à 17:20 UTC (14/14 relancés), rouge passager de dev à l'heure du run.
+- Aucun lot nouveau : le run a été consacré à la PR orpheline, comme le veut la routine.
+- Prochain lot recommandé : mener #17960, #17974, #18006 à la fusion s'ils restent ouverts, puis #16741 ou #16879 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 30 (17:40 UTC)
+
+- Lot : #18052. La personne qu'on fait entrer dans une communauté l'apprend (« Ajouté à la communauté Y »), dans SA langue (Prisme de cadrage, rang 4 témoigné), et le tap ouvre la communauté. Trois portes : invitation (`POST /communities/:id/invite`), ajout administrateur (`POST /communities/:id/members`, pas sur une réactivation déjà active), bascule en privée (#16723, au nom du créateur, seulement pour qui est réellement admis). Site unique `services/notifications/community-added.ts`, après la réponse.
+- La charge ne porte que `communityId` / `communityName` et l'acteur ; le nom part tel qu'écrit (#16786). Push : clé `communityId` sur la carte `data` (`''` = absent).
+- Web : destination `community` dans `target.ts` + son jumeau `sw-push.js` (parité 13 destinations), décodage `communityId`/`communityName` dans `record.ts`, `TargetLink`. iOS : `communityId` sur `NotificationContext`, `SocketNotificationEvent`, `NotificationPayload` et `NotificationNavContext` ; les deux aiguillages ouvrent le détail (iPhone `router.push`, iPad `rightPanelRoute`), repli conversation inchangé. Un ancien client ignore la clé et garde son comportement.
+- #16669 (invitation à accepter ou ajout direct) reste ouverte : l'annonce sert les deux réponses.
+- Gotcha : `NotificationService.ts` est à 3710/3761 lignes sous cliquet ; la clé push a été ajoutée à solde nul de lignes.
+
+## 2026-11-13 — réveil 31 (19:40 UTC)
+
+- Début du run : deux PR de la routine ouvertes. #18028 (« N en ligne », #18014) retenue par le porteur (relecture bloquante : le compte révèle la connexion d'une personne précise) : non touchée, décision au porteur. #18054 (#18052, réveil 30) sans session depuis 17:57 : reprise.
+- CI des branches coupée depuis 18:16 (`CI_DEV_SEUL`, #18048 : seuls `dev`, `main` et `ci/promotion-*` tournent ; consigne du porteur : fusionner les PR ouvertes et corriger `dev` en continu). La preuve d'une branche est donc LOCALE, puis la CI de `dev` qui suit la fusion.
+- `origin/dev` intégré dans #18054 sans conflit. Gates sur la branche intégrée : passerelle `src/__tests__/unit/routes` 877/877 suites (13 697 tests), communautés + conversations + notifications 150/150 suites (2 379 tests), `tsc --noEmit` vert ; web `bun test src/lib/notifications src/components` 6 626/6 628 — les deux rouges (`focal-row.test.tsx`, `lens-row.test.tsx`, pastille de présence) passent seuls (105/105) : pollution entre suites, hors lot ; `check-push-target-parity.mjs` vert ; `tsc` web : une erreur dans `src/lib/push/shell-push-runtime.ts`, identique sur dev, hors lot. iOS : aucun runner (gel) — à surveiller sur la CI iOS de dev après fusion.
+- Prochain lot recommandé : suivi Android de #18052 (la notification « ajouté à la communauté » ouvre le détail), puis #16741 ou #16879 ; #16739 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 32 (21:38 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne », #18014), retenue par le porteur pour une décision (le compte révèle la connexion d'une personne précise) : non touchée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev` après fusion. Le suivi Android #18061 a été écarté pour cette raison (aucun compilateur Android joignable hors CI).
+- Lot : #16724 (passerelle, sécurité, préexistant). Le pont `ensureParticipantFromMember` (`services/messaging/MessagingService.ts`), qui recrée une participation ACTIVE depuis un `ConversationMember` hérité quand aucune ligne `Participant` n'existe, entre désormais sous `mayReturnToSalon` : dans le salon d'une communauté privée (ou désactivée), seuls le créateur et les membres actifs sont recréés ; conversation illisible ou lecture qui échoue ⇒ rien n'est créé (le `catch` du pont rend `null`, donc refus d'écrire). Salon hors communauté et communauté publique vivante : inchangés.
+- Témoins : `MessagingService.legacyMemberCommunityLaw.test.ts` (8), quatre rouges avant le correctif (ancien membre, publique désactivée, panne, conversation illisible).
+- Rouge de dev soldé au passage, venu du réveil 30 : `recipient-language-projection-sweep` ne savait pas remonter le paramètre d'un rappel `async` (`recipients.map(async (recipient) => …)` dans `community-added.ts`). Le balayage l'accepte désormais ; preuve qu'il mord : `community-added.ts` muté en `select: { id, systemLanguage }` ⇒ nommé « sans regionalLanguage, customDestinationLanguage, deviceLocale ».
+- Rouge de dev laissé à son lot : `gateway-test-file-size-budget` (`ZmqTranslationClient.test.ts` 2476 → 2477, #18042).
+- Pas de revue adversariale : resserrement d'une porte sur une loi existante (`mayReturnToSalon`, revue avec #16703), ni nouvelle permission ni migration.
+- Prochain lot recommandé : #16712 (salon sans créateur, décision à prendre sur la lecture la plus probable) ou #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.

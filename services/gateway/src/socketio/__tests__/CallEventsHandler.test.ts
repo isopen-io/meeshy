@@ -94,7 +94,7 @@ const mockCheckSocketRateLimit = jest.fn() as jest.Mock<any>;
 const mockGetSocketRateLimiter = jest.fn() as jest.Mock<any>;
 jest.mock('../../utils/socket-rate-limiter', () => ({
   checkSocketRateLimit: (...a: unknown[]) => mockCheckSocketRateLimit(...a),
-  getSocketRateLimiter: (...a: unknown[]) => mockGetSocketRateLimiter(...a),
+  getSocketRateLimiter: (...a: unknown[]) => mockGetSocketRateLimiter(...a), callSignalBudgetId: (u: string, s: string) => `${u}:${s}`,
   SOCKET_RATE_LIMITS: {
     CALL_INITIATE: { max: 5, window: 60 },
     CALL_JOIN: { max: 20, window: 60 },

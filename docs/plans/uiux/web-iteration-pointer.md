@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-y94b4f` |
+| Branche de travail de la session courante | `claude/practical-fermat-u8t5dq` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -48,7 +48,45 @@ normal.
 | **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ✅ mergé |
 | **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ✅ mergé |
 | **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ✅ mergé |
-| **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ⏳ ouverte |
+| **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ✅ mergé |
+| **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
+| **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ⏳ ouverte |
+
+**86w** — cohérence de positionnement / maintenabilité : le bouton d'envoi de marque
+était recopié en **trois jumelles divergentes** — `composer.tsx` (envoi),
+`composer-tray.tsx` (envoi vocal) et `message-edit-composer.tsx` (soumission d'édition) :
+même fond `linear-gradient(135deg, var(--accent), color-mix(…, white))` et même encre
+`text-white`. Les deux premiers sont hors périmètre du gate (`composer*`), le troisième
+est scanné (2 des 10 violations). Source unique désormais : le jeton composé
+`--send-accent-fill` (`styles/app.css`, `:root`, dérivé de `var(--accent)`, voisin des
+`--recording-*`), consommé par `background: var(--send-accent-fill)` ; l'encre passée à
+`text-ios-on-brand` (= `--ios-on-brand` = `#fff`, byte-identique, nommée par son rôle).
+Le CSS n'étant pas scanné, le littéral `white` quitte entièrement la surface au lieu
+d'être exempté. Témoins : `check-design-harmony.test.ts` (describe « le bouton d'envoi »,
+33→36) + `message-edit-composer`/`composer`/`composer-tray`/`-heif`/`declared-tokens`
+(52/52, non-régression). Gate **10 → 8 violations** (−2, exactement
+`message-edit-composer`), **8 → 7 fichiers** ; `tsc` 0. Housekeeping : 85w confirmée
+mergée (`edgeFadeMask` sur `dev`, gate mesuré 10/8 à l'ouverture) ; appariement
+analyses↔plans 1:1 revérifié (45w→85w). Analyse :
+`docs/analyses/uiux/2026-11-13-iteration-86w.md`.
+
+**85w** — cohérence / maintenabilité (famille appel) : le même fondu de bord
+(`linear-gradient(…, #000 8px, #000 calc(100% - 8px), transparent)`, masque de
+LUMINANCE) était écrit en **trois jumelles divergentes** — `RAIL_FADE`
+(`call-control-actions.tsx`), `ROW_EDGE_FADE` (`call-row-keys.ts`), `fade` de
+`stripBox` (`call-grid.tsx`) — 6 des 17 violations du gate. Source unique désormais :
+`edgeFadeMask(axis)` dans `call-row-keys.ts`, exemptée UNE fois à la ligne
+(luminance, hors couleur) ; les trois sites en dérivent, sortie **byte-identique**
+(témoin `call-rails.test.tsx:171` inchangé). Et le verre de la pastille d'appel
+(`call-floating-pill.tsx`, `color-mix(in srgb, white 22%, transparent)`) ramené à
+`var(--color-media-hairline)` — filet blanc 20 %, parité talkie 84w. Témoins :
+`check-design-harmony.test.ts` (describe « la famille appel », 29→33) +
+`call-rails/bubble/row-keys` (31/31). Gate **17 → 10 violations** (−7, exactement
+la famille appel), **12 → 8 fichiers** ; `tsc` 0. Housekeeping : 84w confirmée
+mergée (`talkie-header-band` porte `var(--ios-error-strong)` sur `dev`) ; mesure
+d'ouverture **remontée 13/10 → 17/12** (poche appel neuve sur `dev`) ; appariement
+analyses↔plans 1:1 revérifié (45w→84w). Analyse :
+`docs/analyses/uiux/2026-11-12-iteration-85w.md`.
 
 **84w** — cohérence de thème / maintenabilité : le talkie élargi sur la barre
 d'en-tête (`components/talkie-header-band.tsx`, transposition de
@@ -179,13 +217,14 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **85w**
-Revue fraîche `apps/web` — voir les pistes 85w+ en pied de
-`docs/analyses/uiux/2026-11-11-iteration-84w.md` (gate d'harmonie à **13/10** après
-84w : `call-control-actions.tsx` (`#000` ×2), `message-menu`/`message-edit-composer`
-(encre sur accent/scrim), `thread-header-bring`/`thread-header-talkie` (`#fff` encre
-sur média), `comment-compose-bar.tsx` (▶ sur vignette), letterbox admin (`#000`,
-exempt motivé), `call-overlay`/`conversation-backdrop`/`rank-blason` ; + axe
-épuration, toujours non entamé).
+## Prochaine itération : **87w**
+Revue fraîche `apps/web` — voir les pistes 87w+ en pied de
+`docs/analyses/uiux/2026-11-13-iteration-86w.md` (gate d'harmonie à **8/7** après
+86w : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt motivé ou
+helper de fondu partagé, cf. `edgeFadeMask` 85w), `thread-header-bring`/`thread-header-talkie`
+(`#fff` encre sur média), `comment-compose-bar.tsx` (▶ sur vignette),
+`admin-post-preview` (letterbox `#000`, candidat exempt motivé), `conversation-backdrop`
+(`rgba(`), `rank-blason` (`hsl(`) ; + axe épuration, toujours non entamé).
 **Toujours REMESURER le gate à l'ouverture** : il peut remonter si `dev` reçoit une
-poche neuve entre deux tours (c'est ce qui a fait passer 9/7 → 28/11 entre 83w et 84w).
+poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10 → 17/12 entre
+84w et 85w ; 10/8 stable entre 85w et 86w).

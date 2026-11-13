@@ -5,9 +5,11 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallRecordingSocketEvent
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
+import me.meeshy.sdk.model.call.CallScreenCaptureLedger
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
@@ -20,12 +22,11 @@ import javax.inject.Inject
 data class PeerIndicators(
     /** The peer's sustained bad network (`call:quality-alert`). */
     val qualityDegraded: Boolean = false,
-    /** The peer's live screen RECORDING (`call:screen-capture-alert`, kind `recording`). */
-    val screenCapturing: Boolean = false,
-    /** #16665 — a peer SCREENSHOT, shown on the capsule for a short window (no end on the wire). */
-    val screenshotFlashing: Boolean = false,
-    /** #16665 — who captured last, so the capsule names them in a group. */
-    val capturerId: String = "",
+    /**
+     * R1.4 — who captures the call's screen, PER PERSON (`call:screen-capture-alert`): each live RECORDING, and the short window of a
+     * SCREENSHOT (no end on the wire). The capsule shows while it holds anyone, and names [CallScreenCaptureLedger.capturerId].
+     */
+    val screenCapture: CallScreenCaptureLedger = CallScreenCaptureLedger(),
     /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band. */
     val liveCaptures: List<CallLiveCapture> = emptyList(),
     /**
@@ -94,6 +95,7 @@ class CallPeerIndicatorsController @Inject constructor(
         this.host = host
         host.scope.launch { signals.qualityAlerts.collect(::onQualityAlert) }
         host.scope.launch { signals.screenCaptureAlerts.collect(::onScreenCaptureAlert) }
+        host.scope.launch { signals.participantLeft.collect(::onParticipantLeft) }
         host.scope.launch { signals.mediaToggles.collect(::onMediaToggle) }
         host.scope.launch { recordingMoments.events.collect(::onRecordingMoment) }
     }
@@ -137,20 +139,25 @@ class CallPeerIndicatorsController @Inject constructor(
         val host = host ?: return
         if (host.callId.isBlank() || alert.callId != host.callId) return
         val kind = alert.captureKind
-        if (kind == CallCaptureKind.RECORDING) {
-            indicators = indicators.copy(screenCapturing = alert.isCapturing)
-        } else if (alert.isCapturing) {
-            indicators = indicators.copy(screenshotFlashing = true)
-            restartScreenshotResetWindow(host)
-        } else {
-            return
-        }
-        if (alert.isCapturing) {
-            val capturer = alert.userId?.takeIf { it.isNotBlank() } ?: alert.participantId.orEmpty()
-            indicators = indicators.copy(capturerId = capturer)
-            journal(host, "capture:$capturer:${kind.wire}:${captureSequence++}", kind, capturer)
-        }
-        host.publish()
+        val capturer = alert.userId?.takeIf { it.isNotBlank() } ?: alert.participantId.orEmpty()
+        val before = indicators.screenCapture
+        indicators = indicators.copy(screenCapture = before.applying(kind, alert.isCapturing, capturer))
+        if (kind == CallCaptureKind.SCREENSHOT && alert.isCapturing) restartScreenshotResetWindow(host)
+        if (alert.isCapturing) journal(host, "capture:$capturer:${kind.wire}:${captureSequence++}", kind, capturer)
+        if (indicators.screenCapture != before || alert.isCapturing) host.publish()
+    }
+
+    /**
+     * R1.4 — a participant left: they will never send the end of their screen recording, so their departure puts it out
+     * (iOS `CallCaptureSignal.participantLeft`), with no line in the journal. Gated on the active call's id.
+     */
+    private fun onParticipantLeft(left: CallParticipantLeftPayload) {
+        val host = host ?: return
+        if (host.callId.isBlank() || left.callId != host.callId) return
+        val leaver = left.userId?.takeIf { it.isNotBlank() } ?: left.participantId?.takeIf { it.isNotBlank() } ?: return
+        val before = indicators.screenCapture
+        indicators = indicators.copy(screenCapture = before.participantLeft(leaver))
+        if (indicators.screenCapture != before) host.publish()
     }
 
     /** #16665 — the bounds of the consented call recording enter the live journal. */
@@ -178,7 +185,7 @@ class CallPeerIndicatorsController @Inject constructor(
         screenshotResetJob = host.scope.launch {
             screenshotResetTimer.countdown().collect {
                 screenshotResetJob = null
-                indicators = indicators.copy(screenshotFlashing = false)
+                indicators = indicators.copy(screenCapture = indicators.screenCapture.screenshotCleared())
                 host.publish()
             }
         }

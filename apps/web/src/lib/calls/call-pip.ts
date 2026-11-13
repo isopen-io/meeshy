@@ -82,8 +82,12 @@ export type PipSource = { readonly stream: MediaStream; readonly mirrored: boole
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'>;
 
-/** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
-export function pipSource(call: PipCall): PipSource | null {
+/**
+ * Ce que l'AUTRE envoie : son écran partagé d'abord (#8063), puis la vidéo du premier pair qui en
+ * envoie. C'est l'élection PROPRE de la bulle d'appel réduit (P18.3) : sa caméra coupée, la bulle
+ * montre son avatar, jamais ma vidéo.
+ */
+export function remoteSource(call: PipCall): PipSource | null {
   const members = Object.values(call.members);
   const shown = (userId: string): MediaStream | undefined => {
     const stream = call.remoteStreams[userId];
@@ -92,7 +96,13 @@ export function pipSource(call: PipCall): PipSource | null {
   const screen = members.filter((member) => member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
   if (screen !== undefined) return { stream: screen, mirrored: false, fit: 'contain' };
   const camera = members.filter((member) => member.cameraOn && !member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
-  if (camera !== undefined) return { stream: camera, mirrored: false, fit: 'cover' };
+  return camera === undefined ? null : { stream: camera, mirrored: false, fit: 'cover' };
+}
+
+/** Ce qui flotte dans la fenêtre PiP : ce que l'autre envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
+export function pipSource(call: PipCall): PipSource | null {
+  const remote = remoteSource(call);
+  if (remote !== null) return remote;
   if (!call.cameraOn || call.localStream === null || !hasVideo(call.localStream)) return null;
   return { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }), fit: call.screenSharing ? 'contain' : 'cover' };
 }

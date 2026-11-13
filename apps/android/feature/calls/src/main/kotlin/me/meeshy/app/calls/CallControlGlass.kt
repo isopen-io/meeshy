@@ -1,8 +1,6 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,7 +9,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -44,9 +44,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -60,6 +62,7 @@ import me.meeshy.sdk.model.call.CallButtonGlassSurface
 import me.meeshy.sdk.model.call.CallButtonGlassTreatment
 import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallPillMotion
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
@@ -134,16 +137,17 @@ internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, 
     }
 }
 
-private const val CAPTION_MILLIS = 250
-
 /** Un bouton refusé pendant une prise ou un film se lit atténué (SwiftUI `.disabled`). */
 private const val DISABLED_ALPHA = 0.4f
 
 /**
  * One button of the pill: glyph + optional caption. The target stays at least 48 dp, the press
  * shrinks the disc to 0.88 (a plain lightening with « reduce animations »), a light haptic marks
- * the finger down, and the label / hint / toggle state are announced as one element.
+ * the finger down, and the label / hint / toggle state are announced as one element. A button may carry a long press
+ * ([onLongClick]) and the same thing as named actions for a screen reader ([customActions]), which has no long press ;
+ * [dimmed] reads it as unavailable while it keeps answering (the long press of a full stack's « + »).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun CallPillButton(
     icon: ImageVector,
@@ -156,12 +160,16 @@ internal fun CallPillButton(
     toggleState: Boolean? = null,
     diameter: Dp = 48.dp,
     enabled: Boolean = true,
-    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4). */
+    onLongClick: (() -> Unit)? = null,
+    customActions: List<CustomAccessibilityAction> = emptyList(),
+    dimmed: Boolean = false,
+    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4), reduced motion included. */
     captionShown: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val reduceMotion = rememberCallReduceMotion()
+    val captionMillis = CallPillMotion.millis(reduceMotion)
     val scale by animateFloatAsState(
         targetValue = CallButtonFill.pressScale(pressed, reduceMotion),
         animationSpec = if (pressed) tween(0) else spring(dampingRatio = 0.7f, stiffness = 400f),
@@ -177,11 +185,18 @@ internal fun CallPillButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .defaultMinSize(minWidth = CallButtonFill.MIN_TARGET_DP.dp, minHeight = CallButtonFill.MIN_TARGET_DP.dp)
-            .alpha(if (enabled) 1f else DISABLED_ALPHA)
-            .clickable(enabled = enabled, interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .alpha(if (enabled && !dimmed) 1f else DISABLED_ALPHA)
+            .then(
+                if (onLongClick == null) {
+                    Modifier.clickable(enabled = enabled, interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier.combinedClickable(enabled = enabled, interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
+                },
+            )
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 toggleState?.let { toggleableState = ToggleableState(it) }
+                if (customActions.isNotEmpty()) this.customActions = customActions
             },
     ) {
         Box(Modifier.scale(scale).clearAndSetSemantics { }) {
@@ -190,8 +205,8 @@ internal fun CallPillButton(
         if (caption != null) {
             AnimatedVisibility(
                 visible = captionShown,
-                enter = fadeIn(tween(CAPTION_MILLIS)) + if (reduceMotion) EnterTransition.None else expandVertically(tween(CAPTION_MILLIS)),
-                exit = fadeOut(tween(CAPTION_MILLIS)) + if (reduceMotion) ExitTransition.None else shrinkVertically(tween(CAPTION_MILLIS)),
+                enter = fadeIn(tween(captionMillis)) + expandVertically(tween(captionMillis)),
+                exit = fadeOut(tween(captionMillis)) + shrinkVertically(tween(captionMillis)),
             ) {
                 Text(
                     text = caption,
@@ -268,8 +283,12 @@ internal fun CallControlsGlass(
 ) {
     CallGlassPlate(modifier = modifier, shape = shape) {
         val tone = LocalCallGlassTone.current
-        CompositionLocalProvider(LocalCallGlassTone provides tone.withinVeiledBlock) {
-            Column(Modifier.fillMaxWidth().background(tone.veil(tone.veilAlpha), shape).clip(shape), content = content)
+        val veiled = Modifier.fillMaxWidth().callToneVeil(CallGlassTone::veilAlpha, shape)
+        CompositionLocalProvider(
+            LocalCallGlassTone provides tone.withinVeiledBlock,
+            LocalCallGlassToneProgress provides CallRestingToneFade,
+        ) {
+            Column(veiled.clip(shape), content = content)
         }
     }
 }

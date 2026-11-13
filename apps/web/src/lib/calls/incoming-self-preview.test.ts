@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { incomingAcceptOptions, incomingConsentKey, startSelfPreview } from './incoming-self-preview';
+import { hasLiveVideo, incomingAcceptOptions, incomingConsentKey, startSelfPreview } from './incoming-self-preview';
 
 /**
  * MA CAMÉRA PENDANT QU'UN APPEL VIDÉO SONNE (#16944, vue P17) — l'aperçu ne
@@ -89,11 +89,24 @@ describe('startSelfPreview', () => {
 });
 
 describe('ce que l’on promet en décrochant', () => {
-  test('caméra allumée : « vous verra » ; coupée : « vous entendra » ; tout coupé : ni l’un ni l’autre', () => {
-    expect(incomingConsentKey({ micOn: true, cameraOn: true })).toBe('callControls.incoming.seenBy');
-    expect(incomingConsentKey({ micOn: false, cameraOn: true })).toBe('callControls.incoming.seenBy');
-    expect(incomingConsentKey({ micOn: true, cameraOn: false })).toBe('callControls.incoming.heardBy');
-    expect(incomingConsentKey({ micOn: false, cameraOn: false })).toBe('callControls.incoming.silent');
+  test('quatre phrases : vu et entendu, entendu sans être vu, vu micro coupé, ni vu ni entendu (P17.7)', () => {
+    expect(incomingConsentKey({ micOn: true, cameraOn: true }, true)).toBe('callControls.incoming.seenBy');
+    expect(incomingConsentKey({ micOn: false, cameraOn: true }, true)).toBe('callControls.incoming.seenMuted');
+    expect(incomingConsentKey({ micOn: true, cameraOn: false }, false)).toBe('callControls.incoming.heardBy');
+    expect(incomingConsentKey({ micOn: false, cameraOn: false }, false)).toBe('callControls.incoming.silent');
+  });
+
+  test('« vous verra » n’est promis que si une caméra tourne vraiment : choisie ne suffit pas', () => {
+    expect(incomingConsentKey({ micOn: true, cameraOn: true }, false)).toBe('callControls.incoming.heardBy');
+    expect(incomingConsentKey({ micOn: false, cameraOn: true }, false)).toBe('callControls.incoming.silent');
+  });
+
+  test('une caméra tourne quand une piste vidéo VIVANTE est ouverte', () => {
+    const stream = (states: readonly string[]) => ({ getVideoTracks: () => states.map((readyState) => ({ readyState })) });
+    expect(hasLiveVideo(stream(['live']))).toBe(true);
+    expect(hasLiveVideo(stream(['ended']))).toBe(false);
+    expect(hasLiveVideo(stream([]))).toBe(false);
+    expect(hasLiveVideo(null)).toBe(false);
   });
 
   test('décrocher tient parole : sans caméra, l’appel part sans vidéo ; micro coupé, il part coupé', () => {

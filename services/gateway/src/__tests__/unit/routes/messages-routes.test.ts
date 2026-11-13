@@ -3442,14 +3442,18 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: joinedAt });
   });
 
-  it('shareLink INTROUVABLE: aucun plancher, et pas de 403', async () => {
-    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt: new Date('2024-03-01'), shareLinkId: 'link-gone' });
+  // #17140 — le témoin gelait « aucun plancher » ; c'est ICI que le fil se
+  // servait ENTIER. Sa SECONDE moitié est inchangée : ce module borne une
+  // LECTURE, il ne ferme pas une PORTE.
+  it('shareLink INTROUVABLE: plancher à l’arrivée (#17140), et toujours pas de 403', async () => {
+    const joinedAt = new Date('2024-03-01');
+    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt, shareLinkId: 'link-gone' });
     prisma.conversationShareLink.findFirst.mockResolvedValue(null);
     prisma.message.findMany.mockResolvedValue([]);
     prisma.message.count.mockResolvedValue(0);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toBeUndefined();
+    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: joinedAt });
     expect(reply.status).not.toHaveBeenCalledWith(403);
   });
 

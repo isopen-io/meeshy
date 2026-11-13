@@ -87,7 +87,7 @@ class CallGroupSceneGuardTest {
     }
 
     @Test
-    fun `the featured speaker keeps her halo: only a zoomable shared screen is clipped to its bounds`() {
+    fun `the featured speaker keeps her halo, only a zoomable shared screen is clipped to its bounds`() {
         assertThat(code("CallGroupSpotlight.kt")).contains(".then(if (isScreenShare) Modifier.clipToBounds() else Modifier)")
     }
 

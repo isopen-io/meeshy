@@ -154,6 +154,7 @@ const f = {
   'admin.people.pref.notification.gamePhotoEnabled': 'Momentos para eternizar (push do jogo)',
   'admin.people.pref.notification.bringEnabled': 'Receber Brings (som forçado)',
   'admin.people.pref.notification.talkieEnabled': 'Receber o walkie-talkie ao vivo',
+  'admin.people.pref.notification.togetherEnabled': 'Receber convites «juntos»',
   'admin.people.pref.notification.circlePublicationPost': 'Avisar meu círculo — minhas publicações',
   'admin.people.pref.notification.circlePublicationReel': 'Avisar meu círculo — meus reels',
   'admin.people.pref.notification.circlePublicationStory': 'Avisar meu círculo — meus stories',

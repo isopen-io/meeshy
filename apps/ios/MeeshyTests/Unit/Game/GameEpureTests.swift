@@ -66,7 +66,6 @@ final class GameEpureTests: XCTestCase {
         "game2.atlas.empty": "Pas encore de tampon : écris dans une autre langue.",
         "game2.showcase.visibility_hint": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte.",
         "game2.showcase.empty": "Tes trophées t’attendent : coupes de joute et de voyage, Renaissance, Flamme.",
-        "game.notebook.empty": "Ta Chronique attend sa première page. À chaque signe de tes aïeux, une photo avec Mee et Meo, gardée sur cet appareil.",
         "game.flame_panel.freeze_full": "Tes Veilleuses sont au complet.",
         "game.photo.camera.unavailable": "Caméra indisponible. Choisis une photo dans ta galerie, ou garde la carte seule.",
         "game.rules.concepts_intro": "Chaque élément du jeu, en clair.",
@@ -169,8 +168,9 @@ final class GameEpureTests: XCTestCase {
 
     func test_pseudonymInvalid_isOneSentence_readByOneKey() throws {
         let catalog = try Self.catalog()
-        XCTAssertEqual(catalog["game.error.league_pseudonym_invalid"], catalog["game2.league.pseudonym.invalid"],
-                       "la clé que seul Android lit encore dit la même chose, dans les sept langues")
+        XCTAssertNil(catalog["game.error.league_pseudonym_invalid"],
+                     "plus aucun code iOS ne la lit ; Android porte sa propre ligne (strings_epure_jeu.xml)")
+        XCTAssertNotNil(catalog["game2.league.pseudonym.invalid"])
         let copy = try code("Meeshy/Features/Game/GameCopy.swift")
         XCTAssertFalse(copy.contains("game.error.league_pseudonym_invalid"), "iOS ne lit plus que la clé game2")
         XCTAssertTrue(copy.contains("GameText.leaguePseudonymInvalid"))

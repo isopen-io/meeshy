@@ -149,6 +149,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "onboarding_story_title",
+          "status": "android-only"
+        },
+        {
           "androidName": "onboarding_story_verify",
           "status": "android-only"
         },

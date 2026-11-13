@@ -15,15 +15,14 @@ enum CallTranscriptLoader {
     /// `CallTranscript`. La traduction affichée est résolue AU PRISME
     /// (langue préférée du lecteur) — si aucune traduction ne matche,
     /// l'original s'affiche (`nil`), jamais `translations.first` (règle
-    /// critique n°1 du Prisme). Le transcript récupéré est ré-ensemencé
-    /// dans le cache local chiffré.
+    /// critique n°1 du Prisme). Le transcript récupéré en entier est
+    /// ré-ensemencé dans le cache local chiffré.
     private static func fetchRemote(callId: String) async -> CallTranscript? {
         guard let remote = try? await CallTranscriptRemoteService.shared.transcript(callId: callId),
               !remote.segments.isEmpty || !(remote.captures ?? []).isEmpty else { return nil }
         let localUser = AuthManager.shared.currentUser
         let localUserId = localUser?.id ?? ""
-        let localName = localUser?.displayName ?? localUser?.username
-            ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let localName = CallJournalAfterCall.youLabel
         let preferredLanguage = CallLanguagePreference.preferredCallLanguage(for: localUser)
         let fetched = CallTranscript(
             callId: remote.callId,
@@ -50,8 +49,124 @@ enum CallTranscriptLoader {
             },
             captures: CallTranscriptCaptureMapping.captures(remote.captures ?? [], localUserId: localUserId, localName: localName)
         )
-        await CallTranscriptStore.shared.saveMerging(fetched)
+        if cachesReplay(hasMore: remote.hasMore) {
+            await CallTranscriptStore.shared.saveMerging(fetched)
+        }
         return fetched
+    }
+
+    /// A1.6 — un replay lu jusqu'au bout se range au cache, en une écriture ; celui que la borne de pages
+    /// a coupé s'affiche sans s'y ranger, pour que la prochaine ouverture relise la suite.
+    static func cachesReplay(hasMore: Bool?) -> Bool {
+        hasMore != true
+    }
+}
+
+/// Les décisions pures du journal d'après l'appel (A1.8 · A1.11 · A1.15 · A2.3, #17864) : l'original
+/// sous chaque traduction, la bascule seulement quand une phrase est traduite, mes lignes sous « Vous »,
+/// et la mention de conservation qui dit vrai selon le régime de la conversation.
+enum CallJournalAfterCall {
+    static var youLabel: String {
+        String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+    }
+
+    /// Mes lignes disent « Vous », quel que soit le nom gravé à la fin de l'appel ou au replay ; celles des
+    /// autres gardent le leur.
+    static func authorName(speakerName: String, isMine: Bool, you: String) -> String {
+        isMine ? you : speakerName
+    }
+
+    static func isMine(userId: String, localUserId: String) -> Bool {
+        !localUserId.isEmpty && userId == localUserId
+    }
+
+    /// Les deux lignes d'une phrase après l'appel (loi 7, #17862). Par défaut la traduction en tête et
+    /// « Original · … » dessous (#17340) ; « Voir l'original » INVERSE : l'original en tête, « Traduit · … »
+    /// dessous. Rien ne disparaît. Ma phrase et une phrase sans traduction restent seules dans les deux états.
+    static func lines(for segment: CallTranscriptSegment, showsOriginal: Bool) -> CallJournalLines {
+        guard servesTranslation(segment), let translated = segment.translatedText else {
+            return CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: nil)
+        }
+        return showsOriginal
+            ? CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: CallJournalLines.Below(kind: .translated, text: translated))
+            : CallJournalLines(primary: translated, primaryIsTranslation: true, below: CallJournalLines.Below(kind: .original, text: segment.text))
+    }
+
+    /// Le pied du journal : « Voir l'original », puis « Voir la traduction » une fois la bascule posée.
+    static func toggleLabel(showsOriginal: Bool) -> String {
+        showsOriginal
+            ? String(localized: "call.transcript.toggle.showTranslation", defaultValue: "Voir la traduction", bundle: .main)
+            : String(localized: "call.transcript.toggle.showOriginal", defaultValue: "Voir l'original", bundle: .main)
+    }
+
+    /// Le lecteur d'écran lit la ligne principale, puis « Traduit : … » ou « Original : … ».
+    static func spokenLabel(name: String, elapsed: String, lines: CallJournalLines) -> String {
+        let spoken = "\(name), \(elapsed) : \(lines.primary)"
+        guard let below = lines.below else { return spoken }
+        return "\(spoken). \(below.kind.label) : \(below.text)"
+    }
+
+    /// La bascule « Voir l'original » n'a de sens que si au moins une phrase sert une traduction.
+    static func offersOriginalToggle(_ segments: [CallTranscriptSegment]) -> Bool {
+        segments.contains(where: servesTranslation)
+    }
+
+    static func servesTranslation(_ segment: CallTranscriptSegment) -> Bool {
+        guard !segment.isLocal, let translated = segment.translatedText else { return false }
+        return !translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Ce que l'appareil et le serveur gardent d'un appel : chiffré de bout en bout, rien ne quitte
+    /// l'appareil ; en clair, le serveur garde les phrases finales pour le journal ; régime inconnu,
+    /// la mention n'affirme rien.
+    static func retentionNotice(for gate: CallCaptionsGate) -> CallTranscriptRetentionNotice {
+        switch gate {
+        case .endToEnd: return .deviceOnly
+        case .open: return .serverKeepsFinalSentences
+        case .unresolved: return .hidden
+        }
+    }
+}
+
+/// Ce que la ligne dessous d'une phrase contient : son original ou sa traduction.
+enum CallJournalLineKind: Equatable {
+    case original
+    case translated
+
+    var label: String {
+        switch self {
+        case .original: return CallCaptionsCopy.original
+        case .translated: return CallCaptionsCopy.translated
+        }
+    }
+}
+
+/// La ligne principale d'une phrase et, quand elle en a une, la ligne dessous.
+struct CallJournalLines: Equatable {
+    struct Below: Equatable {
+        let kind: CallJournalLineKind
+        let text: String
+    }
+
+    let primary: String
+    let primaryIsTranslation: Bool
+    let below: Below?
+}
+
+enum CallTranscriptRetentionNotice: Equatable {
+    case deviceOnly
+    case serverKeepsFinalSentences
+    case hidden
+
+    var text: String? {
+        switch self {
+        case .deviceOnly:
+            return String(localized: "call.transcript.disclaimer.endToEnd", defaultValue: "Transcription gardée sur cet appareil seulement : dans une conversation chiffrée de bout en bout, rien ne le quitte — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main)
+        case .serverKeepsFinalSentences:
+            return String(localized: "call.transcript.disclaimer.server", defaultValue: "Transcription gardée sur cet appareil ; le serveur Meeshy garde aussi les phrases finales de l'appel pour ce journal — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main)
+        case .hidden:
+            return nil
+        }
     }
 }
 
@@ -66,25 +181,21 @@ struct CallTranscriptSection: View {
 
     @State private var showOriginalText = false
     @State private var showDeleteConfirmation = false
-    private var theme: ThemeManager { ThemeManager.shared }
+    @State private var retentionNotice: CallTranscriptRetentionNotice = .hidden
+    private let localUserId = AuthManager.shared.currentUser?.id ?? ""
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @ResolvedThemePalette private var theme
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack {
-                Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                Spacer()
-                Button {
-                    withAnimation { showOriginalText.toggle() }
-                } label: {
-                    Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
-                        .foregroundStyle(Color(hex: accentHex))
-                }
-                .accessibilityLabel(showOriginalText
-                    ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
-                    : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main))
-            }
+            Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
@@ -102,13 +213,20 @@ struct CallTranscriptSection: View {
             .padding(MeeshySpacing.md)
             .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(MeeshyOpacity.subtle))
 
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "info.circle")
-                    .font(.caption2)
-                Text(String(localized: "call.transcript.disclaimer", defaultValue: "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main))
-                    .font(.caption2)
+            if CallJournalAfterCall.offersOriginalToggle(transcript.segments) {
+                originalToggle
             }
-            .foregroundStyle(theme.textMuted)
+
+            if let notice = retentionNotice.text {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    Image(systemName: "info.circle")
+                        .font(.caption2)
+                    Text(notice)
+                        .font(.caption2)
+                }
+                .foregroundStyle(theme.textMuted)
+                .transition(.opacity)
+            }
 
             Button(role: .destructive) {
                 showDeleteConfirmation = true
@@ -128,6 +246,27 @@ struct CallTranscriptSection: View {
                 Text(String(localized: "call.transcript.delete.confirm.message", defaultValue: "Cette action est définitive.", bundle: .main))
             }
         }
+        .animation(.easeOut(duration: 0.2), value: retentionNotice)
+        .task(id: transcript.conversationId) {
+            let gate = await CallCaptionsGateResolver().gate(conversationId: transcript.conversationId)
+            retentionNotice = CallJournalAfterCall.retentionNotice(for: gate)
+        }
+    }
+
+    /// « Voir l'original » au pied du journal : une bascule pour tout l'appel qui inverse les deux lignes de
+    /// chaque phrase traduite, en fondu (#17862, #17895). « Voir la traduction » rend l'état par défaut.
+    private var originalToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: reduceMotion ? 0.12 : 0.2)) { showOriginalText.toggle() }
+        } label: {
+            Text(CallJournalAfterCall.toggleLabel(showsOriginal: showOriginalText))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                .foregroundStyle(Color(hex: accentHex))
+                .meeshyTapTarget()
+                .padding(.vertical, -MeeshyTapTarget.inset(forVisualSide: 17))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(showOriginalText ? .isSelected : [])
     }
 
     /// #16665 — les captures à leur heure parmi les phrases, comme pendant l'appel.
@@ -139,7 +278,12 @@ struct CallTranscriptSection: View {
     /// secondaire, jamais colorée ; une borne d'enregistrement ne nomme personne.
     private func captureRow(_ capture: CallTranscriptCapture, callStartedAt: Date) -> some View {
         let elapsedLabel = CallManager.formatDuration(max(0, capture.capturedAt.timeIntervalSince(callStartedAt)))
-        let name = capture.kind.namesCapturer ? CallCaptureJournalCopy.who(capture.displayName) : ""
+        let capturer = CallJournalAfterCall.authorName(
+            speakerName: capture.displayName,
+            isMine: CallJournalAfterCall.isMine(userId: capture.userId, localUserId: localUserId),
+            you: CallJournalAfterCall.youLabel
+        )
+        let name = capture.kind.namesCapturer ? CallCaptureJournalCopy.who(capturer) : ""
         let phrase = CallCaptureJournalCopy.phrase(capture.kind)
         return HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
             CallCaptureSentence.text(name: name, nameColor: authorColor(capture.userId), tail: phrase, tailColor: theme.textSecondary)
@@ -156,11 +300,11 @@ struct CallTranscriptSection: View {
         let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
         let speakerColor = authorColor(segment.speakerId)
-        let servesTranslation = !segment.isLocal && !showOriginalText && segment.translatedText != nil
-        let displayText = servesTranslation ? (segment.translatedText ?? segment.text) : segment.text
+        let lines = CallJournalAfterCall.lines(for: segment, showsOriginal: showOriginalText)
+        let name = CallJournalAfterCall.authorName(speakerName: segment.speakerName, isMine: segment.isLocal, you: CallJournalAfterCall.youLabel)
         return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
-                Text(segment.speakerName)
+                Text(name)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(speakerColor)
                 Spacer()
@@ -168,12 +312,16 @@ struct CallTranscriptSection: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(theme.textMuted)
             }
-            Text(displayText)
+            Text(lines.primary)
                 .font(.callout)
-                .foregroundStyle(servesTranslation ? speakerColor : theme.textPrimary)
+                .foregroundStyle(lines.primaryIsTranslation ? speakerColor : theme.textPrimary)
+                .contentTransition(.opacity)
+            if let below = lines.below {
+                CallOriginalBelowText(text: below.text, kind: below.kind, ink: theme.textSecondary)
+            }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")
+        .accessibilityLabel(CallJournalAfterCall.spokenLabel(name: name, elapsed: elapsedLabel, lines: lines))
     }
 
     /// La couleur d'une personne, la même avant et après la fin de l'appel,
