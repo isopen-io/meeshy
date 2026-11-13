@@ -101,7 +101,7 @@ struct StarredMessagesView: View {
         AdaptiveContentUnavailableView(
             String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
             systemImage: "star.circle",
-            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici.", bundle: .main))
+            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appui long sur un message, puis « Ajouter aux favoris ».", bundle: .main))
         )
     }
 

@@ -489,7 +489,6 @@ struct ProfileUserPostsList: View {
         EmptyStateView(
             icon: "square.text.square",
             title: String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main),
-            subtitle: String(localized: "profile.posts.empty.subtitle", defaultValue: "Les publications apparaîtront ici", bundle: .main),
             compact: true
         )
         .padding(.top, 40)

@@ -86,8 +86,7 @@ struct RequestsTab: View {
             if viewModel.receivedRequests.isEmpty {
                 emptyState(
                     icon: "person.2.slash",
-                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact reçues apparaîtront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main)
                 )
             } else {
                 receivedList
@@ -96,8 +95,7 @@ struct RequestsTab: View {
             if viewModel.sentRequests.isEmpty {
                 emptyState(
                     icon: "paperplane",
-                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaîtront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main)
                 )
             } else {
                 sentList
@@ -284,17 +282,12 @@ struct RequestsTab: View {
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.sentRequests.count)
     }
 
-    /// Le message de l'expéditeur ; sans message personnalisé, l'intention est explicitée pour que la ligne se
-    /// suffise à elle-même (parité avec le sheet profil).
+    /// Le message de l'expéditeur, quand il en a écrit un : sans message, la ligne n'a rien à redire, le filtre
+    /// « Reçues » dit déjà d'où vient la demande (épure #18088).
     @ViewBuilder
     private func receivedIntent(_ request: FriendRequest) -> some View {
         if let message = request.message, !message.isEmpty {
             Text(message)
-                .font(.footnote)
-                .foregroundStyle(theme.textSecondary)
-                .lineLimit(2)
-        } else {
-            Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
                 .font(.footnote)
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(2)
@@ -321,12 +314,8 @@ struct RequestsTab: View {
     // one VoiceOver element and adds a guidance subtitle the bespoke version
     // lacked. maxHeight fill keeps it vertically centred like the former Spacer
     // sandwich.
-    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
-        AdaptiveContentUnavailableView(
-            title,
-            systemImage: icon,
-            description: Text(subtitle)
-        )
+    private func emptyState(icon: String, title: String) -> some View {
+        AdaptiveContentUnavailableView(title, systemImage: icon)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

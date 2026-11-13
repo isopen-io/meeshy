@@ -180,14 +180,12 @@ struct ConversationSearchNoResultsState: View {
                     EmptyStateView(
                         icon: "magnifyingglass",
                         title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms"),
                         compact: true
                     )
                 } else {
                     EmptyStateView(
                         icon: "magnifyingglass",
-                        title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms")
+                        title: String(localized: "search.no_results")
                     )
                 }
             }

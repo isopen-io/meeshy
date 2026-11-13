@@ -98,7 +98,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         EmptyStateView(
             icon: failure.symbolName,
             title: failure.title,
-            subtitle: failure.message,
+            subtitle: failure.message ?? "",
             actionLabel: failure.actionLabel,
             onAction: {
                 if failure.offersRetry {
@@ -447,7 +447,6 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
                     title: String(localized: "community.detail.channels.empty.title", defaultValue: "No Channels Yet", bundle: .module),
-                    subtitle: String(localized: "community.detail.channels.empty.subtitle", defaultValue: "Conversations will appear here", bundle: .module),
                     actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer un Channel", bundle: .module),
                     onAction: { showAddChannel = true }
                 )

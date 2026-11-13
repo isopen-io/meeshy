@@ -80,7 +80,7 @@ struct ProfileCircleSection: View {
             .accessibilityLabel(levelAccessibility(level))
             Spacer(minLength: MeeshySpacing.sm)
             if let waiting = viewModel.pendingLevel {
-                Text(String(format: String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main), CircleLevelNames.title(of: waiting)))
+                Text(String(format: String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main), CircleLevelNames.title(of: waiting)))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.trailing)

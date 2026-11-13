@@ -138,11 +138,6 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                 .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                 .foregroundStyle(theme.textPrimary)
 
-            Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
-                .meeshyScaledFont(MeeshyFont.labelSize, design: .rounded)
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-
             Button { onCreateCommunity?() } label: {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "plus.circle.fill")

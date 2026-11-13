@@ -125,8 +125,7 @@ struct FriendRequestListView: View {
     private var emptyState: some View {
         AdaptiveContentUnavailableView(
             String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
-            systemImage: "person.2.slash",
-            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaîtront ici", bundle: .main))
+            systemImage: "person.2.slash"
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -163,13 +162,6 @@ struct FriendRequestListView: View {
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(2)
-                } else {
-                    // Sans message personnalisé, expliciter l'intention pour que la
-                    // ligne se suffise à elle-même (parité avec le sheet profil).
-                    Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
                         .font(.footnote)
                         .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)

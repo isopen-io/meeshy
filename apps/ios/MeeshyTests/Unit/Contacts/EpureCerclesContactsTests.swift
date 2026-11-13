@@ -70,17 +70,17 @@ final class EpureCerclesContactsTests: XCTestCase {
         "circles.intro": "Tes liens, classés par proximité : plus le cercle est proche, plus la personne voit de toi.",
         "circles.empty.title": "Tes cercles se remplissent à mesure que tu échanges",
         "circles.offline.banner": "Hors ligne",
-        "circles.level.blood.opens": "Ta présence, le talkie, ce que tu écoutes avec son titre et ta position en direct, si tu l'accordes.",
+        "circles.level.blood.opens": "Présence, talkie, écoute avec titre et position en direct, selon ton accord.",
         "circles.level.close.opens": "Ta présence complète, le talkie et la catégorie de ce que tu écoutes.",
-        "circles.level.friend.opens": "Ta présence « en ligne », sans l'heure, et le Bring.",
-        "circles.level.acquaintance.opens": "Vous pouvez vous écrire en privé ; cette personne voit tes stories « Connaissances ».",
+        "circles.level.friend.opens": "Ta présence « en ligne », sans l'heure, et le Bring.",
+        "circles.level.acquaintance.opens": "Vous pouvez vous écrire ; cette personne voit tes stories « Connaissances ».",
         "circles.level.community.opens": "Ce que voient les membres de tes communautés.",
         "circles.level.public.opens": "Ce que tout le monde voit de toi.",
         "circles.settings.shareListening.detail": "Cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang.",
         "circles.settings.shareListening.question": "Quand cette personne voit-elle ce que j'écoute ?",
-        "circles.settings.shareListening.note": "Quand Apple Music joue sur cet iPhone et que Meeshy est ouvert. Vos messages vocaux ne sont jamais partagés.",
+        "circles.settings.shareListening.note": "Apple Music joué sur cet iPhone, Meeshy ouvert. Messages vocaux jamais partagés.",
         "feed.empty.title": "Aucune publication de vos contacts",
-        "starred.messages.empty.subtitle": "Appui long sur un message, puis « Ajouter aux favoris ».",
+        "starred.messages.empty.subtitle": "Appui long sur un message, puis « Ajouter aux favoris ».",
         "profile.language.intro": "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.",
         "profile.language.regional.rank": "2e choix",
         "profile.language.custom.rank": "3e choix",
@@ -263,7 +263,7 @@ final class EpureCerclesContactsTests: XCTestCase {
         let detail = try XCTUnwrap(catalog["circles.settings.shareListening.detail"]?["fr"])
         XCTAssertTrue(detail.contains("rituel du Sang"), "le consentement au titre reste visible")
         XCTAssertFalse(detail.contains("Apple Music"), "le cas limite est derrière le (i)")
-        XCTAssertTrue(try XCTUnwrap(catalog["circles.settings.shareListening.note"]?["fr"]).contains("messages vocaux ne sont jamais partagés"))
+        XCTAssertTrue(try XCTUnwrap(catalog["circles.settings.shareListening.note"]?["fr"]).contains("Messages vocaux jamais partagés"))
     }
 
     // MARK: - Les demandes de contact : les boutons disent le reste

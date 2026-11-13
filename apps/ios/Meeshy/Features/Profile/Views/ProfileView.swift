@@ -419,24 +419,29 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.errorHex)
 
+            Text(String(localized: "profile.language.intro", defaultValue: "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
             VStack(spacing: 0) {
                 languagePickerRow(
                     title: String(localized: "profile.language.primary", bundle: .main),
-                    subtitle: String(localized: "profile.language.primary.subtitle", bundle: .main),
+                    subtitle: nil,
                     code: systemLanguage,
                     required: true,
                     showPicker: $showSystemLanguagePicker
                 )
                 languagePickerRow(
                     title: String(localized: "profile.language.regional", bundle: .main),
-                    subtitle: nil,
+                    subtitle: String(localized: "profile.language.regional.rank", defaultValue: "2e choix", bundle: .main),
                     code: regionalLanguage,
                     required: false,
                     showPicker: $showRegionalLanguagePicker
                 )
                 languagePickerRow(
                     title: String(localized: "profile.language.custom", bundle: .main),
-                    subtitle: nil,
+                    subtitle: String(localized: "profile.language.custom.rank", defaultValue: "3e choix", bundle: .main),
                     code: customDestinationLanguage,
                     required: false,
                     showPicker: $showCustomLanguagePicker

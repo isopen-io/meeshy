@@ -411,9 +411,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "arrow.triangle.2.circlepath",
-                title: String(localized: "story.mine.queue.empty.title", defaultValue: "Rien en file"),
-                subtitle: String(localized: "story.mine.queue.empty.subtitle",
-                                 defaultValue: "Vos publications en cours ou en échec apparaîtront ici.")
+                title: String(localized: "story.mine.queue.empty.title", defaultValue: "Rien en file")
             )
         } else {
             queueContent
@@ -536,9 +534,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "clock.arrow.circlepath",
-                title: String(localized: "story.mine.archive.empty.title", defaultValue: "Aucune archive"),
-                subtitle: String(localized: "story.mine.archive.empty.subtitle",
-                                 defaultValue: "Vos stories expirées rejoindront cette archive.")
+                title: String(localized: "story.mine.archive.empty.title", defaultValue: "Aucune archive")
             )
         } else {
             archiveGrid

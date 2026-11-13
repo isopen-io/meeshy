@@ -373,12 +373,11 @@ struct GlobalSearchView: View {
     private var emptyResultsView: some View {
         EmptyStateView(
             icon: "magnifyingglass",
-            title: String(localized: "search.no_results", defaultValue: "Aucun résultat"),
-            subtitle: String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche")
+            title: String(localized: "search.no_results", defaultValue: "Aucun résultat")
         )
         .padding(.top, 40)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun résultat") + ". " + String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
+        .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun résultat"))
     }
 
     // MARK: - Recent Searches

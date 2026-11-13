@@ -22,8 +22,7 @@ struct CirclesTab: View {
             } else if viewModel.isEmptyState {
                 emptyState(
                     icon: "circle.circle.fill",
-                    title: String(localized: "circles.empty.title", defaultValue: "Tes liens apparaîtront ici", bundle: .main),
-                    subtitle: String(localized: "circles.empty.subtitle", defaultValue: "À mesure que tu échanges avec des personnes, elles rejoignent tes cercles", bundle: .main),
+                    title: String(localized: "circles.empty.title", defaultValue: "Tes cercles se remplissent à mesure que tu échanges", bundle: .main),
                     actionTitle: String(localized: "circles.empty.action", defaultValue: "Trouver des contacts", bundle: .main),
                     action: onFindContacts
                 )
@@ -31,7 +30,6 @@ struct CirclesTab: View {
                 emptyState(
                     icon: "exclamationmark.triangle",
                     title: message,
-                    subtitle: "",
                     actionTitle: String(localized: "circles.error.retry", defaultValue: "Réessayer", bundle: .main),
                     action: { Task { await viewModel.load(forceNetwork: true) } }
                 )
@@ -39,7 +37,6 @@ struct CirclesTab: View {
                 emptyState(
                     icon: "wifi.slash",
                     title: String(localized: "circles.offline.empty", defaultValue: "Hors ligne — tes cercles s'afficheront dès le retour du réseau", bundle: .main),
-                    subtitle: "",
                     actionTitle: nil,
                     action: {}
                 )
@@ -76,6 +73,7 @@ struct CirclesTab: View {
             ContactsScrollSentinel()
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 banner
+                intro
                 SharedLocationsMapSection(viewModel: sharedLocations)
                 requestsBlock
                 ForEach(viewModel.sections) { section in
@@ -110,7 +108,7 @@ struct CirclesTab: View {
         } else if viewModel.isOffline {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "wifi.slash").foregroundStyle(theme.textMuted)
-                Text(String(localized: "circles.offline.banner", defaultValue: "Hors ligne — voici tes derniers cercles connus", bundle: .main))
+                Text(String(localized: "circles.offline.banner", defaultValue: "Hors ligne", bundle: .main))
                     .font(.footnote)
                     .foregroundStyle(theme.textSecondary)
                 Spacer()
@@ -119,6 +117,16 @@ struct CirclesTab: View {
             .padding(.vertical, MeeshySpacing.sm)
             .accessibilityElement(children: .combine)
         }
+    }
+
+    /// Ce qu'est un cercle, dit au repos sous la barre d'onglets : la phrase est propre à Meeshy, elle n'a pas de (i).
+    private var intro: some View {
+        Text(String(localized: "circles.intro", defaultValue: "Tes liens, classés par proximité : plus le cercle est proche, plus la personne voit de toi.", bundle: .main))
+            .font(.footnote)
+            .foregroundStyle(theme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.xs)
     }
 
     private func sectionHeader(_ section: CirclesViewModel.Section) -> some View {
@@ -160,13 +168,9 @@ struct CirclesTab: View {
 
     // MARK: - États
 
-    private func emptyState(icon: String, title: String, subtitle: String, actionTitle: String?, action: @escaping () -> Void) -> some View {
+    private func emptyState(icon: String, title: String, actionTitle: String?, action: @escaping () -> Void) -> some View {
         VStack(spacing: MeeshySpacing.lg) {
-            AdaptiveContentUnavailableView(
-                title,
-                systemImage: icon,
-                description: subtitle.isEmpty ? nil : Text(subtitle)
-            )
+            AdaptiveContentUnavailableView(title, systemImage: icon)
             if let actionTitle {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)

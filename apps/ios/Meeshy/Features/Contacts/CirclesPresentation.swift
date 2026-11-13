@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // « Mes cercles » (#13938) — les types PURS de l'écran : la personne que le serveur ne nomme jamais, ce que la
 // ligne d'un lien dit de sa progression, la cible du rituel. Sans état, sans I/O, jouables sans écran.
@@ -34,6 +35,12 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
         allCases.filter { level >= $0.opensAt }
     }
 
+    /// Les réglages que la fiche rend : ceux dont le serveur sert l'état. Un réglage sans effet n'est pas rendu (un
+    /// interrupteur désactivé qui s'excuse est du texte en trop) ; sa place revient avec son lot.
+    static func shown(at level: RelationLevel) -> [CirclePersonSetting] {
+        offered(at: level).filter { $0.personSwitch != nil }
+    }
+
     private var opensAt: RelationLevel {
         switch self {
         case .blockBring: return .friend
@@ -66,6 +73,15 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
             return ListeningShareCopy.detail
         case .blockBring, .liveLocation:
             return nil
+        }
+    }
+
+    /// Le détail SECONDAIRE d'un réglage, derrière un (i) dont le nom est la question. La phrase qui dit ce que fait le
+    /// réglage reste au repos (`detail`) ; ici, seulement le cas limite.
+    var infoNote: MeeshyInfoNote? {
+        switch self {
+        case .listening: return ListeningShareCopy.note
+        case .blockBring, .talkie, .liveLocation: return nil
         }
     }
 
@@ -152,6 +168,19 @@ nonisolated enum CircleLevelNames {
         case .acquaintance: return String(localized: "circles.level.acquaintance", defaultValue: "Connaissance", bundle: .main)
         case .community: return String(localized: "circles.level.community", defaultValue: "Communauté", bundle: .main)
         case .public: return String(localized: "circles.level.public", defaultValue: "Public", bundle: .main)
+        }
+    }
+
+    /// Ce que ce niveau OUVRE à la personne, dit sous le nom du niveau sur la fiche du lien : le niveau est nommé, la
+    /// phrase dit ce qu'il change (règle 7 : repère propre à Meeshy, lisible au repos).
+    static func opens(of level: RelationLevel) -> String {
+        switch level {
+        case .blood: return String(localized: "circles.level.blood.opens", defaultValue: "Présence, talkie, écoute avec titre et position en direct, selon ton accord.", bundle: .main)
+        case .close: return String(localized: "circles.level.close.opens", defaultValue: "Ta présence complète, le talkie et la catégorie de ce que tu écoutes.", bundle: .main)
+        case .friend: return String(localized: "circles.level.friend.opens", defaultValue: "Ta présence « en ligne », sans l'heure, et le Bring.", bundle: .main)
+        case .acquaintance: return String(localized: "circles.level.acquaintance.opens", defaultValue: "Vous pouvez vous écrire ; cette personne voit tes stories « Connaissances ».", bundle: .main)
+        case .community: return String(localized: "circles.level.community.opens", defaultValue: "Ce que voient les membres de tes communautés.", bundle: .main)
+        case .public: return String(localized: "circles.level.public.opens", defaultValue: "Ce que tout le monde voit de toi.", bundle: .main)
         }
     }
 

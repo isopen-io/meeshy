@@ -61,7 +61,7 @@ struct CircleRowView: View {
     @ViewBuilder
     private var trailing: some View {
         if let waiting = viewModel.pendingLevel(for: row.id) {
-            Text(String(format: String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main), viewModel.title(of: waiting)))
+            Text(String(format: String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main), viewModel.title(of: waiting)))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.trailing)

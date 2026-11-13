@@ -134,17 +134,6 @@ struct NotificationListErrorState: View {
             .foregroundStyle(theme.textPrimary)
             .multilineTextAlignment(.center)
 
-            Text(
-                String(
-                    localized: "notifications.error.subtitle",
-                    defaultValue: "Vérifiez votre connexion, puis réessayez.",
-                    bundle: .module
-                )
-            )
-            .font(MeeshyFont.relative(13))
-            .foregroundStyle(theme.textMuted)
-            .multilineTextAlignment(.center)
-
             Button(action: retry) {
                 Text(
                     String(

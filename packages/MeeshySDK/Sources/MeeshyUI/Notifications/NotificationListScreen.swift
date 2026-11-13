@@ -284,10 +284,6 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
             Text(emptyMessage)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
-
-            Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaîtront ici", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(theme.textMuted)
             Spacer()
         }
     }

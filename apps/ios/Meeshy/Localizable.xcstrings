@@ -6818,96 +6818,49 @@
         }
       }
     },
-    "circles.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كلما تبادلت مع الأشخاص، انضموا إلى دوائرك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wenn du dich mit Leuten austauschst, kommen sie in deine Kreise"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As you exchange with people, they join your circles"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A medida que interactúas con personas, se unen a tus círculos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À mesure que tu échanges avec des personnes, elles rejoignent tes cercles"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Man mano che scambi con le persone, entrano nei tuoi cerchi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À medida que você troca com pessoas, elas entram nos seus círculos"
-          }
-        }
-      }
-    },
     "circles.empty.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستظهر روابطك هنا"
+            "value": "تمتلئ دوائرك كلما تبادلت الرسائل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Verbindungen erscheinen hier"
+            "value": "Deine Kreise füllen sich, wenn du dich austauschst"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your links will show up here"
+            "value": "Your circles fill up as you chat"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus vínculos aparecerán aquí"
+            "value": "Tus círculos se llenan a medida que interactúas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes liens apparaîtront ici"
+            "value": "Tes cercles se remplissent à mesure que tu échanges"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi legami appariranno qui"
+            "value": "I tuoi cerchi si riempiono man mano che scambi messaggi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus vínculos aparecerão aqui"
+            "value": "Seus círculos se enchem à medida que você troca mensagens"
           }
         }
       }
@@ -7670,43 +7623,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "غير متصل — هذه آخر دوائرك المعروفة"
+            "value": "غير متصل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline – hier sind deine zuletzt bekannten Kreise"
+            "value": "Offline"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline — here are your last known circles"
+            "value": "Offline"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin conexión: estos son tus últimos círculos conocidos"
+            "value": "Sin conexión"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors ligne — voici tes derniers cercles connus"
+            "value": "Hors ligne"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline: ecco gli ultimi cerchi noti"
+            "value": "Offline"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline — estes são seus últimos círculos conhecidos"
+            "value": "Offline"
           }
         }
       }
@@ -7754,53 +7707,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Offline — seus círculos aparecerão quando a rede voltar"
-          }
-        }
-      }
-    },
-    "circles.pending": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم إرسال الطلب · %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anfrage gesendet · %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Request sent · %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solicitud enviada · %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demande envoyée · %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Richiesta inviata · %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pedido enviado · %@"
           }
         }
       }
@@ -9738,43 +9644,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عندما يعمل Apple Music على هذا الـ iPhone ويكون Meeshy مفتوحًا، يرى هذا الشخص أنك تستمع إلى الموسيقى؛ والعنوان فقط إذا منحته إياه في طقس الدم. لا تتم مشاركة رسائلك الصوتية أبدًا."
+            "value": "يرى هذا الشخص أنك تستمع إلى الموسيقى؛ والعنوان فقط إذا منحته إياه في طقس الدم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn Apple Music auf diesem iPhone läuft und Meeshy geöffnet ist, sieht diese Person, dass du Musik hörst; den Titel nur, wenn du ihn ihr im Blut-Ritual gewährt hast. Deine Sprachnachrichten werden nie geteilt."
+            "value": "Diese Person sieht, dass du Musik hörst; den Titel nur, wenn du ihn ihr im Blut-Ritual gewährt hast."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When Apple Music is playing on this iPhone and Meeshy is open, this person sees that you’re listening to music; the title only if you granted it to them in the Blood ritual. Your voice messages are never shared."
+            "value": "This person sees that you’re listening to music; the title, only if you granted it to them in the Blood ritual."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cuando Apple Music suena en este iPhone y Meeshy está abierto, esta persona ve que escuchas música; el título, solo si se lo concediste en el ritual de Sangre. Tus mensajes de voz nunca se comparten."
+            "value": "Esta persona ve que escuchas música; el título, solo si se lo concediste en el ritual de Sangre."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quand Apple Music joue sur cet iPhone et que Meeshy est ouvert, cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang. Vos messages vocaux ne sont jamais partagés."
+            "value": "Cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando Apple Music è in riproduzione su questo iPhone e Meeshy è aperta, questa persona vede che stai ascoltando musica; il titolo solo se gliel’hai concesso nel rituale del Sangue. I tuoi messaggi vocali non vengono mai condivisi."
+            "value": "Questa persona vede che stai ascoltando musica; il titolo solo se gliel’hai concesso nel rituale del Sangue."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando o Apple Music está tocando neste iPhone e o Meeshy está aberto, essa pessoa vê que você está ouvindo música; o título, só se você concedeu no ritual de Sangue. Suas mensagens de voz nunca são compartilhadas."
+            "value": "Essa pessoa vê que você está ouvindo música; o título, só se você concedeu no ritual de Sangue."
           }
         }
       }
@@ -9869,53 +9775,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajustes para esta pessoa"
-          }
-        }
-      }
-    },
-    "circles.sheet.settings.unavailable": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستصل هذه الإعدادات مع الخطوة التالية من Meeshy. وهي معطّلة حاليًا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Einstellungen kommen mit dem nächsten Meeshy-Schritt. Vorerst sind sie deaktiviert."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "These settings arrive with Meeshy's next step. They are turned off for now."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estos ajustes llegarán con la próxima etapa de Meeshy. Por ahora están desactivados."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ces réglages arrivent avec la prochaine étape de Meeshy. Ils sont désactivés pour l'instant."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Queste impostazioni arriveranno con la prossima fase di Meeshy. Per ora sono disattivate."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esses ajustes chegam com a próxima etapa do Meeshy. Por enquanto estão desativados."
           }
         }
       }
@@ -11123,53 +10982,6 @@
         }
       }
     },
-    "community.posts.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر منشورات المجتمع هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Beiträge der Community erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The community's posts will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las publicaciones de la comunidad aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les publications de la communauté apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I post della community appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As publicações da comunidade aparecerão aqui"
-          }
-        }
-      }
-    },
     "community.posts.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -11213,53 +11025,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma publicação"
-          }
-        }
-      }
-    },
-    "community.posts.failed.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذّر تحميلها."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie konnten nicht geladen werden."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "They couldn't be loaded."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudieron cargar."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elles n'ont pas pu être chargées."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non è stato possibile caricarli."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível carregá-las."
           }
         }
       }
@@ -11354,53 +11119,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Carregando publicações"
-          }
-        }
-      }
-    },
-    "community.posts.offline.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر المنشورات عند عودة الشبكة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Beiträge erscheinen, sobald das Netz zurück ist."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Posts will appear when you're back online."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las publicaciones aparecerán cuando vuelva la red."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les publications s'afficheront au retour du réseau."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I post appariranno al ritorno della rete."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As publicações aparecerão quando a rede voltar."
           }
         }
       }
@@ -77177,53 +76895,6 @@
         }
       }
     },
-    "calls.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا مكالماتك الواردة والفائتة والملغاة والصادرة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine eingegangenen, verpassten, abgebrochenen und ausgehenden Anrufe erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your received, missed, cancelled and outgoing calls will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aquí aparecerán tus llamadas recibidas, perdidas, canceladas y realizadas."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos appels reçus, manqués, annulés et émis apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qui appariranno le tue chiamate ricevute, perse, annullate ed effettuate."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suas chamadas recebidas, perdidas, canceladas e feitas aparecerão aqui."
-          }
-        }
-      }
-    },
     "calls.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -81323,53 +80994,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criar uma comunidade"
-          }
-        }
-      }
-    },
-    "community.links.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا المجتمعات التي تديرها مع روابط مشاركتها"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Von dir verwaltete Communities erscheinen hier mit ihrem Freigabelink"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Communities you manage will appear here with their share link"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las comunidades que administras aparecerán aquí con su enlace para compartir"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les communautés que vous gérez apparaîtront ici avec leur lien de partage"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le community che gestisci appariranno qui con il loro link di condivisione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As comunidades que você administra aparecerão aqui com o link de compartilhamento"
           }
         }
       }
@@ -100157,53 +99781,6 @@
         }
       }
     },
-    "contacts.blocked.empty-subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيظهر هنا الأشخاص الذين تحظرهم."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Von dir blockierte Personen erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "People you block will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las personas que bloquees aparecerán aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les personnes que vous bloquez apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le persone che blocchi appariranno qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As pessoas que você bloquear aparecerão aqui."
-          }
-        }
-      }
-    },
     "contacts.blocked.unblock": {
       "extractionState": "manual",
       "localizations": {
@@ -103447,53 +103024,6 @@
         }
       }
     },
-    "contacts.requests.empty.received.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا طلبات التواصل الواردة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erhaltene Kontaktanfragen erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contact requests you receive will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las solicitudes de contacto recibidas aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les demandes de contact reçues apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le richieste di contatto ricevute appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os pedidos de contato recebidos aparecerão aqui"
-          }
-        }
-      }
-    },
     "contacts.requests.empty.sent": {
       "extractionState": "manual",
       "localizations": {
@@ -103537,53 +103067,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum pedido enviado"
-          }
-        }
-      }
-    },
-    "contacts.requests.empty.sent.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا الطلبات التي ترسلها"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anfragen, die du sendest, erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Requests you send will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las solicitudes que envíes aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les demandes que vous envoyez apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le richieste che invii appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os pedidos que você enviar aparecerão aqui"
           }
         }
       }
@@ -103772,53 +103255,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pendente"
-          }
-        }
-      }
-    },
-    "contacts.requests.received.intent": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يرغب في التواصل معك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Möchte sich mit dir verbinden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wants to connect with you"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quiere conectar contigo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Souhaite entrer en contact avec vous"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desidera mettersi in contatto con te"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quer se conectar com você"
           }
         }
       }
@@ -125699,96 +125135,49 @@
         }
       }
     },
-    "feed.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر منشورات جهات اتصالك هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beiträge deiner Kontakte erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Posts from your contacts will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las publicaciones de tus contactos aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les publications de vos contacts apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I post dei tuoi contatti appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As publicações dos seus contatos aparecerão aqui"
-          }
-        }
-      }
-    },
     "feed.empty.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد منشورات"
+            "value": "لا توجد منشورات من جهات اتصالك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Beiträge"
+            "value": "Noch keine Beiträge deiner Kontakte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No posts yet"
+            "value": "No posts from your contacts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ninguna publicación"
+            "value": "Ninguna publicación de tus contactos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune publication"
+            "value": "Aucune publication de vos contacts"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun post"
+            "value": "Nessun post dei tuoi contatti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma publicação"
+            "value": "Nenhuma publicação dos seus contatos"
           }
         }
       }
@@ -136514,53 +135903,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recusar solicitação"
-          }
-        }
-      }
-    },
-    "friends.requests.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا طلبات الصداقة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Freundschaftsanfragen erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Friend requests will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las solicitudes de amistad aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les demandes d'amis apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le richieste di amicizia appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os pedidos de amizade aparecerão aqui"
           }
         }
       }
@@ -158631,53 +157973,6 @@
         }
       }
     },
-    "profile.language.primary.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستُترجَم المحتويات إلى هذه اللغة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inhalte werden in diese Sprache übersetzt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Content will be translated into this language"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El contenido se traducirá a este idioma"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le contenu sera traduit dans cette langue"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I contenuti saranno tradotti in questa lingua"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O conteúdo será traduzido para este idioma"
-          }
-        }
-      }
-    },
     "profile.language.regional": {
       "extractionState": "manual",
       "localizations": {
@@ -159050,53 +158345,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum reel"
-          }
-        }
-      }
-    },
-    "profile.posts.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر المنشورات هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beiträge werden hier angezeigt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Posts will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las publicaciones aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les publications apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I post appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As publicações aparecerão aqui"
           }
         }
       }
@@ -172946,53 +172194,6 @@
         }
       }
     },
-    "search.try_other_terms": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جرّب مصطلحات بحث أخرى"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Versuchen Sie andere Suchbegriffe"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try different search terms"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prueba con otros términos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essayez avec d'autres termes de recherche"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prova con altri termini di ricerca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tente com outros termos de busca"
-          }
-        }
-      }
-    },
     "security.verify.description": {
       "extractionState": "manual",
       "localizations": {
@@ -174681,100 +173882,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você está off-line"
-          }
-        }
-      }
-    },
-    "sessions.offline.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر جلساتك عند عودة الاتصال."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Sitzungen erscheinen, sobald du wieder online bist."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your sessions will appear once you are back online."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus sesiones aparecerán cuando vuelvas a tener conexión."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos sessions s'afficheront au retour du réseau."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le tue sessioni appariranno quando tornerai online."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suas sessões aparecerão quando a conexão voltar."
-          }
-        }
-      }
-    },
-    "sessions.error.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحقّق من اتصالك ثم أعد المحاولة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prüfe deine Verbindung und versuche es erneut."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Check your connection, then try again."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comprueba tu conexión y vuelve a intentarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vérifiez votre connexion, puis réessayez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Controlla la connessione e riprova."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifique sua conexão e tente novamente."
           }
         }
       }
@@ -190579,43 +189686,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطوّلًا على رسالة واختر «إضافة إلى المفضّلة» لتجدها هنا."
+            "value": "اضغط مطوّلًا على رسالة، ثم «إضافة إلى المفضّلة»."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Halte eine Nachricht gedrückt und wähle „Zu Favoriten hinzufügen“, um sie hier wiederzufinden."
+            "value": "Nachricht gedrückt halten, dann „Zu Favoriten hinzufügen“."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold a message and choose “Add to favourites” to find it here."
+            "value": "Press and hold a message, then “Add to favourites”."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén pulsado un mensaje y elige «Añadir a favoritos» para encontrarlo aquí."
+            "value": "Mantén pulsado un mensaje y elige «Añadir a favoritos»."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici."
+            "value": "Appui long sur un message, puis « Ajouter aux favoris »."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto un messaggio e scegli «Aggiungi ai preferiti» per ritrovarlo qui."
+            "value": "Tieni premuto un messaggio, poi «Aggiungi ai preferiti»."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantenha uma mensagem pressionada e escolha “Adicionar aos favoritos” para encontrá-la aqui."
+            "value": "Mantenha uma mensagem pressionada e escolha “Adicionar aos favoritos”."
           }
         }
       }
@@ -193640,53 +192747,6 @@
         }
       }
     },
-    "story.mine.archive.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستنضم قصصك المنتهية الصلاحية إلى هذا الأرشيف."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ihre abgelaufenen Storys landen in diesem Archiv."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your expired stories will join this archive."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus historias caducadas se unirán a este archivo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos stories expirées rejoindront cette archive."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le tue storie scadute confluiranno in questo archivio."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suas stories expiradas entrarão neste arquivo."
-          }
-        }
-      }
-    },
     "story.mine.archive.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -195328,53 +194388,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir"
-          }
-        }
-      }
-    },
-    "story.mine.queue.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر منشوراتك قيد التقدم أو الفاشلة هنا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Laufende oder fehlgeschlagene Veröffentlichungen erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your in-progress or failed publishes will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus publicaciones en curso o fallidas aparecerán aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos publications en cours ou en échec apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le pubblicazioni in corso o non riuscite appariranno qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suas publicações em andamento ou com falha aparecerão aqui."
           }
         }
       }
@@ -200401,53 +199414,6 @@
         }
       }
     },
-    "story.viewer.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيظهر هنا الأشخاص الذين يشاهدون قصتك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personen, die deine Story ansehen, erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "People who watch your story will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las personas que vean tu historia aparecerán aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les personnes qui regardent votre story apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le persone che guardano la tua storia appariranno qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As pessoas que assistirem ao seu story aparecerão aqui."
-          }
-        }
-      }
-    },
     "story.viewer.navigation.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -204014,53 +202980,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Neste conteúdo"
-          }
-        }
-      }
-    },
-    "viewer.engagement.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيظهر هنا الأشخاص الذين يشاهدون هذا المنشور."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personen, die diesen Beitrag ansehen, erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "People who see this post will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las personas que vean esta publicación aparecerán aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les personnes qui verront cette publication apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le persone che vedranno questo post appariranno qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As pessoas que virem esta publicação aparecerão aqui."
           }
         }
       }
@@ -330694,53 +329613,6 @@
         }
       }
     },
-    "circles.sheet.settings.none": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لضبطه في هذا المستوى."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf dieser Stufe gibt es nichts einzustellen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nothing to set at this level."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nada que ajustar en este nivel."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rien à régler à ce niveau."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Niente da impostare a questo livello."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nada para ajustar neste nível."
-          }
-        }
-      }
-    },
     "circles.ritual.consent.folding.title": {
       "extractionState": "manual",
       "localizations": {
@@ -337966,6 +336838,570 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sua cópia também desaparece e não é encaminhada de novo."
+          }
+        }
+      }
+    },
+    "circles.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes liens, classés par proximité : plus le cercle est proche, plus la personne voit de toi."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your links, sorted by closeness: the closer the circle, the more that person sees of you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus vínculos, ordenados por cercanía: cuanto más cerca el círculo, más ve de ti esa persona."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus vínculos, ordenados por proximidade: quanto mais próximo o círculo, mais a pessoa vê de você."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Verbindungen, nach Nähe geordnet: Je näher der Kreis, desto mehr sieht die Person von dir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi legami, ordinati per vicinanza: più il cerchio è vicino, più la persona vede di te."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "روابطك مرتّبة حسب القرب: كلما اقتربت الدائرة، رأى الشخص منك أكثر."
+          }
+        }
+      }
+    },
+    "circles.level.blood.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Présence, talkie, écoute avec titre et position en direct, selon ton accord."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presence, talkie, listening with title and live location, if you agree."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presencia, talkie, escucha con título y ubicación en directo, si lo permites."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presença, talkie, o que você ouve com título e localização ao vivo, se permitir."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsenz, Talkie, Hören samt Titel und Live-Standort, wenn du zustimmst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presenza, talkie, ascolto con titolo e posizione in diretta, se acconsenti."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحضور والتوكي والاستماع مع العنوان والموقع المباشر، بموافقتك."
+          }
+        }
+      }
+    },
+    "circles.level.close.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta présence complète, le talkie et la catégorie de ce que tu écoutes."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your full presence, talkie and the category of what you listen to."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu presencia completa, el talkie y la categoría de lo que escuchas."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua presença completa, o talkie e a categoria do que você ouve."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine volle Präsenz, das Talkie und die Kategorie dessen, was du hörst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua presenza completa, il talkie e la categoria di ciò che ascolti."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حضورك الكامل والتوكي وفئة ما تستمع إليه."
+          }
+        }
+      }
+    },
+    "circles.level.friend.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta présence « en ligne », sans l'heure, et le Bring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your “online” presence, without the time, and Bring."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu presencia «en línea», sin la hora, y el Bring."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua presença “online”, sem o horário, e o Bring."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Präsenz „online“, ohne Uhrzeit, und Bring."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua presenza «online», senza l’orario, e il Bring."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حضورك «متصل» دون الوقت، ونداء Bring."
+          }
+        }
+      }
+    },
+    "circles.level.acquaintance.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez vous écrire ; cette personne voit tes stories « Connaissances »."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can message each other; this person sees your “Acquaintances” stories."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podéis escribiros; esta persona ve tus stories para «Conocidos»."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vocês podem conversar; essa pessoa vê seus stories para “Conhecidos”."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ihr könnt euch schreiben; diese Person sieht deine Stories für „Bekannte“."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potete scrivervi; questa persona vede le tue storie per «Conoscenti»."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنكما المراسلة؛ ويرى هذا الشخص قصصك الموجّهة إلى «المعارف»."
+          }
+        }
+      }
+    },
+    "circles.level.community.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que voient les membres de tes communautés."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What members of your communities see."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que ven los miembros de tus comunidades."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que os membros das suas comunidades veem."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was die Mitglieder deiner Communities sehen."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciò che vedono i membri delle tue comunità."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما يراه أعضاء مجتمعاتك."
+          }
+        }
+      }
+    },
+    "circles.level.public.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que tout le monde voit de toi."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What everyone sees of you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que todo el mundo ve de ti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que todo mundo vê de você."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was alle von dir sehen."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciò che tutti vedono di te."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما يراه الجميع منك."
+          }
+        }
+      }
+    },
+    "circles.settings.shareListening.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand cette personne voit-elle ce que j'écoute ?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When does this person see what I’m listening to?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo ve esta persona lo que escucho?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando essa pessoa vê o que eu escuto?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann sieht diese Person, was ich höre?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando questa persona vede cosa ascolto?"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى يرى هذا الشخص ما أستمع إليه؟"
+          }
+        }
+      }
+    },
+    "circles.settings.shareListening.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music joué sur cet iPhone, Meeshy ouvert. Messages vocaux jamais partagés."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music playing on this iPhone, Meeshy open. Voice messages are never shared."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music sonando en este iPhone, Meeshy abierto. Los mensajes de voz nunca se comparten."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music tocando neste iPhone, Meeshy aberto. Mensagens de voz nunca são compartilhadas."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music läuft auf diesem iPhone, Meeshy ist geöffnet. Sprachnachrichten werden nie geteilt."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music in riproduzione su questo iPhone, Meeshy aperta. I messaggi vocali non vengono mai condivisi."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music يعمل على هذا الـ iPhone وMeeshy مفتوح. لا تتم مشاركة الرسائل الصوتية أبدًا."
+          }
+        }
+      }
+    },
+    "profile.language.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy te montre tout dans ta langue principale, sinon dans la suivante."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy shows you everything in your main language, otherwise in the next one."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy te muestra todo en tu idioma principal y, si no, en el siguiente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Meeshy mostra tudo no seu idioma principal; se não der, no seguinte."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy zeigt dir alles in deiner Hauptsprache, sonst in der nächsten."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy ti mostra tutto nella tua lingua principale, altrimenti nella successiva."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض لك Meeshy كل شيء بلغتك الرئيسية، وإن لم تتوفّر ففي اللغة التالية."
+          }
+        }
+      }
+    },
+    "profile.language.regional.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2e choix"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2nd choice"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2.ª opción"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2ª opção"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Wahl"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2ª scelta"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الخيار الثاني"
+          }
+        }
+      }
+    },
+    "profile.language.custom.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3e choix"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3rd choice"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.ª opción"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3ª opção"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Wahl"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3ª scelta"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الخيار الثالث"
           }
         }
       }
