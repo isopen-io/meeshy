@@ -44,11 +44,11 @@ final class CallKitAnswerActionHold: CallKitAnswerActionHoldProviding {
 
     func hold(_ action: SettleableCallAction) {
         // CallKit's contract requires every CX*Action to eventually be
-        // completed — settle any still-pending action instead of silently
-        // dropping its reference, or an uncompleted action can get the app
-        // killed by the system.
+        // completed. Both actions answer the SAME call (the provider only holds
+        // the active call's UUID): the superseded one is FULFILLED — failing an
+        // answer makes CallKit end the call the user just picked up (#17954).
         if pending != nil {
-            settle(fulfilled: false, reason: "superseded by a new CXAnswerCallAction")
+            settle(fulfilled: true, reason: "superseded by a new CXAnswerCallAction")
         }
         pending = action
         safetyTask?.cancel()
