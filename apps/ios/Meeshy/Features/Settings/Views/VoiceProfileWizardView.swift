@@ -131,7 +131,7 @@ struct VoiceProfileWizardView: View {
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
 
-                Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal.", bundle: .main))
+                Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(theme.textSecondary)

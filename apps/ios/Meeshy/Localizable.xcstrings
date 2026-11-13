@@ -216084,43 +216084,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سجّل صوتك لتفعيل استنساخ الصوت."
+            "value": "سجّل صوتك لتفعيل استنساخ الصوت المخصّص. ستحتفظ رسائلك الصوتية المترجمة بصوتك الطبيعي."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nimm deine Stimme auf, um das Klonen der Stimme zu aktivieren."
+            "value": "Nimm deine Stimme auf, um das persönliche Voice-Cloning zu aktivieren. Deine übersetzten Sprachnachrichten behalten deine natürliche Stimme."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record your voice to enable voice cloning."
+            "value": "Record your voice to enable personal voice cloning. Your translated voice messages will keep your natural voice."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Graba tu voz para activar la clonación de voz."
+            "value": "Graba tu voz para activar la clonación de voz personalizada. Tus mensajes de voz traducidos conservarán tu voz natural."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrez votre voix pour activer le clonage vocal."
+            "value": "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Registra la tua voce per attivare la clonazione vocale."
+            "value": "Registra la tua voce per attivare la clonazione vocale personalizzata. I tuoi messaggi vocali tradotti manterranno la tua voce naturale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grave sua voz para ativar a clonagem de voz."
+            "value": "Grave sua voz para ativar a clonagem de voz personalizada. Suas mensagens de voz traduzidas manterão sua voz natural."
           }
         }
       }
