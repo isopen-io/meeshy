@@ -916,3 +916,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste de #16985 : la carte de réception (`TileMapView.kt`, épingles, cercle de flou, TalkBack) câblée sur
   `SharedLocationsGateway`, puis l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan).
 - Prochain lot recommandé : la carte de réception Android, ou la carte de réception iOS (reste de #16983).
+
+## 2026-11-13 — réveil de la nuit : la carte iOS des positions qu'on me partage (#16983)
+
+- Reprise : aucune PR cercles ouverte ; aucune branche n'écrit `Features/Contacts` côté position. Lot réservé sur
+  `claude/cercles-16983-ios-carte` (en cours).
