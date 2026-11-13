@@ -594,3 +594,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   se prouve par `android.yml` sur la PR.
 - Reste pour fermer #17100 : lecteur Media3 piloté par la loi, bandeau d'invitation, ligne de la fiche d'un Proche,
   libellés `together.*`.
+## 2026-11-13 — réveil suivant : la copie vocale du talkie sur le web (#16698)
+
+- Reprise : toutes les PR ouvertes de la routine sont tenues par des réveils vivants, et #17100 (Android) a un brouillon
+  (#17998) : ce réveil les cède. #16698 n'avait aucune branche : c'est le lot.
+- Fait : un talkie refusé en voix (repli ou blocage, indiscernables) garde le micro ouvert, l'en-tête dit « Enregistré »
+  et la fiche « Le talkie ne passe pas : votre voix part en message vocal » ; au relâcher (ou à 30 s), la voix part en
+  message vocal. Une voix réveillée que personne n'a rejointe (`joined: false`) part aussi en copie ; un verdict arrivé
+  pendant que le micro s'arrête attend la voix. Destination iso iOS et #17141 : la conversation nommée par la passerelle,
+  sinon la partagée la plus récente qui peut la porter, sinon le direct EN CLAIR — jamais une conversation chiffrée.
+- Sites : `apps/web/src/lib/talkie/talkie-sender.ts` (mode copie, `ended(…, joined)`), `talkie-voice-copy.ts` (choix
+  de la destination, fichier `audio/aac`, envoi), `talkie-live.ts` (`joined` décodé), `useTalkieSender`.
+- Prochain lot recommandé : « ensemble » sur Android (#17100) si son brouillon s'arrête, sinon l'icône de position par
+  cercle (#17013).

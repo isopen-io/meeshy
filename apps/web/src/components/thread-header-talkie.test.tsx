@@ -12,7 +12,7 @@ import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTalkieLevelMeter } from '@/lib/talkie/talkie-header-law';
 import { createTalkieStore } from '@/lib/talkie/talkie-live';
-import type { TalkieCaptureFactory } from '@/lib/talkie/talkie-sender';
+import type { TalkieCaptureFactory, TalkieVoiceCopy } from '@/lib/talkie/talkie-sender';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -71,7 +71,11 @@ function harness(ack: unknown, { supported = true }: { readonly supported?: bool
     },
   };
   const watch: WatchRealtime = (watcher) => watcher(socket);
-  const capture: TalkieCaptureFactory = async () => ({ stop: async () => undefined });
+  const capture: TalkieCaptureFactory = async ({ onFrame }) => {
+    onFrame(new Uint8Array([0xff, 0xf1, 7]), 21);
+    return { stop: async () => undefined };
+  };
+  const copies: TalkieVoiceCopy[] = [];
   const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
   transport.request = (async () => ({ ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] })) as HttpTransport['request'];
   const lives: ThreadTalkieLive[] = [];
@@ -88,9 +92,13 @@ function harness(ack: unknown, { supported = true }: { readonly supported?: bool
       capture={capture}
       supported={async () => supported}
       store={store}
+      copier={async (copy) => {
+        copies.push(copy);
+        return true;
+      }}
     />
   );
-  return { slot, emitted, lives, store };
+  return { slot, emitted, lives, store, copies };
 }
 
 const settle = async () => {
@@ -174,11 +182,19 @@ describe('le bouton talkie de l’en-tête', () => {
     expect(document.querySelector('[data-thread-talkie-notice]')).toBeNull();
   });
 
-  test('un repli se dit comme une information sous l’en-tête', async () => {
+  test('un repli enregistre la voix (« Enregistré »), l’envoie en message vocal au relâcher, et se dit comme une information', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
-    const node = await mount(harness({ success: false, error: 'x', code: 'TALKIE_FALLBACK_VOICE' }).slot);
+    const { slot, lives, copies } = harness({ success: false, error: 'x', code: 'TALKIE_FALLBACK_VOICE' });
+    const node = await mount(slot);
     await settle();
     await hold(node);
+    expect(lives.at(-1)).toEqual({ voice: 'outgoing', delivery: 'recorded' });
+    await act(async () => {
+      node.querySelector('[data-thread-talkie]')?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    });
+    await settle();
+    await settle();
+    expect(copies).toHaveLength(1);
     expect(document.querySelector('[data-thread-talkie-notice]')?.textContent).toContain('n’est pas disponible pour un accès d’urgence');
   });
 
