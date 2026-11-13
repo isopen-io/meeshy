@@ -49,9 +49,8 @@ class CallTranscriptReplayTest {
 
     private fun reader(
         userId: String? = "me",
-        name: String? = "Ada",
         prism: List<String> = listOf("fr"),
-    ) = CallTranscriptReader(userId = userId, name = name, prism = prism)
+    ) = CallTranscriptReader(userId = userId, prism = prism)
 
     private fun lines(
         page: CallTranscriptPage,
@@ -88,8 +87,8 @@ class CallTranscriptReplayTest {
     }
 
     @Test
-    fun `the reader without a name reads Vous too`() {
-        val line = lines(page(segment(speakerId = "me")), reader = reader(name = " ")).single()
+    fun `my sentence reads Vous even when the server served my display name`() {
+        val line = lines(page(segment(speakerId = "me", speakerDisplayName = "Ada"))).single()
 
         assertThat(line.speakerName).isEqualTo("Vous")
     }
@@ -272,5 +271,40 @@ class CallTranscriptReplayTest {
 
         assertThat(line.servesTranslation).isFalse()
         assertThat(CallTranscriptState.of(listOf(line)).let { (it as CallTranscriptState.Ready).canShowOriginal }).isFalse()
+    }
+
+    // --- the translation ink goes only to a translation actually served (#17869) ----------
+
+    @Test
+    fun `a served translation takes the translation ink only while it is shown`() {
+        val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
+
+        assertThat(line.showsTranslation(showOriginal = false)).isTrue()
+        assertThat(line.showsTranslation(showOriginal = true)).isFalse()
+    }
+
+    @Test
+    fun `a translated line that is not served never takes the translation ink nor its text`() {
+        val mine = CallTranscriptLine(
+            speakerName = "Vous", isLocal = true, elapsedLabel = null, original = "Salut", translated = "Hola", translatedLanguage = "es",
+        )
+        val capture = CallTranscriptLine(
+            speakerName = "Zoé", isLocal = false, elapsedLabel = null, original = "", translated = "x", translatedLanguage = "fr",
+            captureKind = CallCaptureKind.SCREENSHOT,
+        )
+
+        assertThat(mine.showsTranslation(showOriginal = false)).isFalse()
+        assertThat(mine.text(showOriginal = false)).isEqualTo("Salut")
+        assertThat(capture.showsTranslation(showOriginal = false)).isFalse()
+    }
+
+    @Test
+    fun `a blank translation leaves the original in place`() {
+        val line = CallTranscriptLine(
+            speakerName = "Zoé", isLocal = false, elapsedLabel = null, original = "Hi", translated = "  ", translatedLanguage = "fr",
+        )
+
+        assertThat(line.showsTranslation(showOriginal = false)).isFalse()
+        assertThat(line.text(showOriginal = false)).isEqualTo("Hi")
     }
 }

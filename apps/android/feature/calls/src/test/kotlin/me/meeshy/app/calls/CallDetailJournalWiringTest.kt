@@ -52,4 +52,12 @@ class CallDetailJournalWiringTest {
         assertThat(sections.indexOf("OriginalToggle(showOriginal, accent)")).isGreaterThan(sections.indexOf("TranscriptRow(line, showOriginal)"))
         assertThat(sections.indexOf("OriginalToggle(showOriginal, accent)")).isLessThan(sections.indexOf("TranscriptDisclaimer()\n"))
     }
+
+    @Test
+    fun `l'encre de traduction ne va qu'a une traduction servie, jamais a une ligne non servie traduite`() {
+        val sections = code("CallDetailSections.kt")
+
+        assertThat(sections).contains("servesTranslation = line.showsTranslation(showOriginal)")
+        assertThat(sections).doesNotContain("line.translated != null")
+    }
 }
