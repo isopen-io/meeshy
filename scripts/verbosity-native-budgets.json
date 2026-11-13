@@ -356,9 +356,9 @@
     },
     "ios:Meeshy/conversation": {
       "labels": 338,
-      "words": 2168,
-      "long": 47,
-      "explanations": 83
+      "words": 1892,
+      "long": 23,
+      "explanations": 80
     },
     "ios:Meeshy/conversationCard": {
       "labels": 23,
@@ -650,8 +650,8 @@
     },
     "ios:Meeshy/message": {
       "labels": 34,
-      "words": 144,
-      "long": 3,
+      "words": 141,
+      "long": 2,
       "explanations": 1
     },
     "ios:Meeshy/Message": {
@@ -895,10 +895,10 @@
       "explanations": 45
     },
     "ios:Meeshy/share": {
-      "labels": 157,
-      "words": 751,
-      "long": 8,
-      "explanations": 25
+      "labels": 151,
+      "words": 663,
+      "long": 4,
+      "explanations": 15
     },
     "ios:Meeshy/shareLink": {
       "labels": 61,
@@ -997,9 +997,9 @@
       "explanations": 0
     },
     "ios:Meeshy/talkie": {
-      "labels": 29,
-      "words": 214,
-      "long": 3,
+      "labels": 28,
+      "words": 182,
+      "long": 1,
       "explanations": 4
     },
     "ios:Meeshy/thread": {
@@ -1087,10 +1087,10 @@
       "explanations": 0
     },
     "ios:Meeshy/voice": {
-      "labels": 62,
-      "words": 301,
-      "long": 3,
-      "explanations": 12
+      "labels": 61,
+      "words": 278,
+      "long": 1,
+      "explanations": 11
     },
     "ios:Meeshy/welcome": {
       "labels": 5,
@@ -1191,8 +1191,8 @@
     "ios:MeeshyUI/conversation": {
       "labels": 64,
       "words": 170,
-      "long": 2,
-      "explanations": 4
+      "long": 1,
+      "explanations": 5
     },
     "ios:MeeshyUI/emailSent": {
       "labels": 1,
