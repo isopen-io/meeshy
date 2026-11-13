@@ -124,7 +124,9 @@ export async function withoutBlockedRecipients(
     const blocked = await getBlockedUserIdsAmong(prisma, authorId, [...recipientIds]);
     return recipientIds.filter((id) => !blocked.has(id));
   } catch (error) {
-    enhancedLogger.error('broadcast — block resolution failed, audience closed', { authorId, error });
+    enhancedLogger
+      .child({ module: 'blocking' })
+      .error('broadcast — block resolution failed, audience closed', { authorId, error });
     return recipientIds.filter((id) => id === authorId);
   }
 }
