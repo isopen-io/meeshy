@@ -2,10 +2,14 @@ package me.meeshy.sdk.call
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.CallRecordingLink
 import me.meeshy.sdk.model.call.CallRecordingLinkRequest
 import me.meeshy.sdk.model.call.CallTranscriptPage
+import me.meeshy.sdk.model.call.CallTranscriptPaging
+import me.meeshy.sdk.model.call.CallTranscriptReading
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CallApi
@@ -35,6 +39,32 @@ class CallRecordsRepository @Inject constructor(
     ): NetworkResult<CallTranscriptPage> =
         ifPresent(callId) { apiCall { callApi.transcript(callId, offset.coerceAtLeast(0), limit.coerceIn(1, TRANSCRIPT_PAGE_SIZE)) } }
 
+    /**
+     * A1.6 — l'appel EN ENTIER : la passerelle sert [CallTranscriptPaging.PAGE_SIZE] phrases à la fois, on lit page après
+     * page tant qu'elle dit `hasMore` (loi de [CallTranscriptReading]). Une page qui échoue fait échouer la lecture : un
+     * appel à moitié lu ne se range pas au cache comme s'il était complet. Une lecture annulée (la bulle a quitté l'écran)
+     * ne demande plus aucune page. Un `hasMore` encore vrai au rendu dit que la lecture s'est arrêtée avant la fin.
+     */
+    suspend fun fullTranscript(callId: String): NetworkResult<CallTranscriptPage> = ifPresent(callId) {
+        currentCoroutineContext().ensureActive()
+        when (val first = transcript(callId, offset = 0)) {
+            is NetworkResult.Failure -> first
+            is NetworkResult.Success -> readRemaining(callId, CallTranscriptReading.first(first.data))
+        }
+    }
+
+    private suspend fun readRemaining(callId: String, from: CallTranscriptReading): NetworkResult<CallTranscriptPage> {
+        var reading = from
+        while (reading.continues) {
+            currentCoroutineContext().ensureActive()
+            when (val next = transcript(callId, offset = reading.offset)) {
+                is NetworkResult.Failure -> return next
+                is NetworkResult.Success -> reading = reading.absorbing(next.data)
+            }
+        }
+        return NetworkResult.Success(reading.transcript)
+    }
+
     /** Rattache le fichier téléversé d'un enregistrement consenti à la bulle d'appel — une fois, par celui qui a enregistré. */
     suspend fun linkRecording(
         callId: String,
@@ -56,7 +86,7 @@ class CallRecordsRepository @Inject constructor(
         NetworkResult.Failure(ApiError(message = message, code = INVALID_ARGUMENT))
 
     companion object {
-        const val TRANSCRIPT_PAGE_SIZE = 100
+        const val TRANSCRIPT_PAGE_SIZE = CallTranscriptPaging.PAGE_SIZE
         const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
     }
 }

@@ -6,9 +6,10 @@ import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallCaptureAlerts, CallPeerAlerts, CallQualityChip } from './call-quality';
+import { CallPeerAlerts, CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen, loadColdCallViews } from './call-screen';
+import { CallCaptureAlerts } from './call-share-banner';
 
 /**
  * **LA QUALITÉ SE VOIT** (#8047) — l'indicateur de l'en-tête (quatre barres,
@@ -96,11 +97,47 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(html).toContain('aria-label="Famille · 4 participants · 1:23 — Qualité de l’appel : bonne"');
   });
 
+  test('la capsule montre ses « · » entre le nom, le nombre et la durée — lus une seule fois, par le nom accessible (L1.2, L4.5)', () => {
+    const duo = chip({ level: 'good' }, { ...video, network: false });
+    expect(duo).toMatch(/Awa<\/span><span[^>]*aria-hidden="true"[^>]*data-call-chip-sep=""[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
+    expect((duo.match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+    const group = chip({ level: 'good' }, { title: 'Équipe', participantCount: 4, duration: true, network: false });
+    expect((group.match(/data-call-chip-sep/g) ?? []).length).toBe(2);
+    expect(group).toMatch(/Équipe<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span[^>]*data-call-chip-count[^>]*>.*4<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
+    expect(group).toContain('aria-label="Équipe · 4 participants · 1:23 — Qualité de l’appel : bonne"');
+    expect((chip(null, { title: 'Awa', participantCount: null, duration: true, network: false }).match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+  });
+
+  test('aucun « · » orphelin : un nom seul, une durée seule, l’audio et l’écran reçu n’en dessinent pas', () => {
+    const none = [
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false }),
+      chip({ level: 'good' }, { title: null, participantCount: null, duration: true, network: false }),
+      chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true }),
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true }),
+    ];
+    for (const html of none) expect(html).not.toContain('data-call-chip-sep');
+  });
+
   test('en audio : la capsule n’existe que pour le réseau dégradé — ni nom, ni durée, les barres seules', () => {
     const html = chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true });
     expect(barsLit(html)).toBe(1);
     expect(html).not.toContain('1:23');
     expect(html).toContain('aria-label="Qualité de l’appel : faible"');
+  });
+
+  test('un écran reçu (P15.4) : la capsule dit « Écran de X » avec l’icône d’écran, sans durée, et son nom accessible le dit', async () => {
+    await loadInterfaceCatalog('fr');
+    const screen: CallHeaderCapsule = { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true };
+    const html = chip({ level: 'good' }, screen);
+    expect(html).toContain('Écran de Awa');
+    expect(html).toContain('data-call-chip-screen');
+    expect(html).not.toContain('1:23');
+    expect(html).toMatch(/aria-label="Écran de Awa — Qualité de l’appel : bonne"/);
+    expect(chip(null, screen)).toContain('Écran de Awa');
+  });
+
+  test('une capsule sans écran reçu ne porte pas l’icône d’écran', () => {
+    expect(chip({ level: 'good' }, { ...video, network: false })).not.toContain('data-call-chip-screen');
   });
 
   test('sans relevé de qualité, la capsule ne promet aucun détail : pas de bouton', () => {

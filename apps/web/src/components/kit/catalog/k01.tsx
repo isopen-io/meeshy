@@ -64,7 +64,7 @@ function Pill({ state, isPressed }: { readonly state: MeeshyKitCatalogState; rea
   );
 }
 
-function Scene({ state, children }: { readonly state: MeeshyKitCatalogState; readonly children: ReactNode }) {
+export function Scene({ state, children }: { readonly state: MeeshyKitCatalogState; readonly children: ReactNode }) {
   return (
     <div style={{ ...SCENES[state.backdrop], padding: 'var(--ios-space-lg)', borderRadius: 'var(--ios-radius-md)' }}>
       {children}

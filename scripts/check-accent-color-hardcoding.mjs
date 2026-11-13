@@ -445,7 +445,12 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // chaque action de l'encre que `ConversationMenuInk.hex(base:isDark:isEnabled:)` DÉRIVE de la couleur d'accent de la
 // conversation (assombrie ou éclaircie jusqu'à 4,5:1 sur le verre). C'est l'accent lui-même, porté à AA, pas une
 // couleur en dur. Valeur MESURÉE le 2026-11-09 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 468;
+// 468 -> 470 (2026-11-12, #17802, le journal d'après l'appel sous la carte du fil) :
+// `BubbleCallJournalUnderCard.swift` (2) teinte la ligne d'ouverture et la transcription dépliée par `accentHex`,
+// l'accent de la CONVERSATION que `BubbleCallNoticeView` reçoit de la bulle (`contactColor`, `colorHex`) et relaie
+// déjà à `CallRecordingPlayback`. Même convention `accentHex` que l'entrée #6793 : la chaîne, par opposition à la
+// couleur. Valeur MESURÉE le 2026-11-12 en local sur f74d006819.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 470;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

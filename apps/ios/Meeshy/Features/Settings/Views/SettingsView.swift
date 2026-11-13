@@ -798,13 +798,13 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 router.push(.progression)
             } label: {
-                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main), color: MeeshyColors.warningHex) {
+                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundStyle(theme.textMuted)
                 }
             }
-            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main))
+            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main))
             SettingsRowSentence(text: SettingsOrientation.progression)
 
             Button {

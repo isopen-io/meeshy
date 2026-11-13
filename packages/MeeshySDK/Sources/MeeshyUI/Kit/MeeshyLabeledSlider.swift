@@ -387,6 +387,7 @@ private struct MeeshyLabeledSliderValueReset: ViewModifier {
             content
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2, perform: reset)
+                .accessibilityHidden(true)
         } else {
             content
         }

@@ -2,7 +2,10 @@ import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type React
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
-import { CameraOffStage } from '@/components/call-camera-off';
+import { Arrives } from '@/components/call-arrives';
+import { HeldSwap } from '@/lib/calls/use-pill-motion';
+import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
+import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import type { CallGridKit } from '@/components/call-grid';
 import { Portrait } from '@/components/call-portrait';
@@ -16,12 +19,13 @@ import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import {
   cornerAfterArrow,
+  isLandscapeWindow,
+  isTileDrag,
   nearestSelfCorner,
   SCREEN_SELF_TILE,
-  SELF_TILE_BOTTOM,
   SELF_TILE_MARGIN,
-  SELF_TILE_TOP,
   selfTileBox,
+  selfTileCornerInsets,
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
@@ -39,8 +43,11 @@ import type { ZoomControl } from '@/lib/calls/call-self-controls';
 import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
+import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
+import { hasVideo, isCompactHeight, membersInArrival, orderedMembers, screenSharer, selfCameraShown, selfCameraStream, type CallLayout } from '@/lib/calls/call-view';
+import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
+import { useStageFlip } from '@/lib/calls/use-stage-flip';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -108,7 +115,19 @@ export const CALL_GRID_KIT: CallGridKit = {
   colorOf: (userId) => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId)),
   resolveSpotlight,
   autoSharer,
+  SpeechRing: PeerSpeechRing,
+  usePressedChrome,
+  useStageFlip,
+  Arrives,
+  HeldSwap,
 };
+
+/**
+ * LA SURFACE QUI ZOOME L'ÉCRAN REÇU EN DUO (P15.11), CHARGÉE À PART : le crochet du zoom et ses lois ne pèsent plus sur
+ * `call_overlay`. L'écran la précharge avec l'appel (`PREFETCH`) ; pas encore là, l'écran reçu se montre entier.
+ */
+export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.ScreenZoomSurface));
+const ScreenZoomSurface = screenZoomSurfaceView.View;
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
 const ZOOM_STEP_ROOM = 52;
@@ -120,7 +139,7 @@ const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 
 };
 
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
-export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
+export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing' | 'cameraPreview'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing && (call.cameraPreview ?? null) === null });
 
 
 type StageProps = {
@@ -153,10 +172,11 @@ const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.c
 };
 
 /** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): { readonly left: string; readonly top: string } {
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, viewport: TileSize): { readonly left: string; readonly top: string } {
+  const clearance = selfTileCornerInsets(viewport);
   const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
-  const tileTop = SELF_TILE_TOP + topInset;
-  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  const tileTop = clearance.top + topInset;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${clearance.bottom + size.height}px))`;
   return { left, top };
 }
 
@@ -187,9 +207,15 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   const sharer = screenSharer(call.members);
   const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
+  const screen = <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />;
   return (
     <div className="absolute inset-0" data-call-shared-screen="">
-      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
+      {/* L'écran reçu se zoome (P15.11) : la surface des gestes et son calque GPU ne portent QUE l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais. */}
+      <Suspense fallback={screen}>
+        <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isTileDrag}>
+          {screen}
+        </ScreenZoomSurface>
+      </Suspense>
       {call.cameraOn && !immersive ? (
         <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
           <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
@@ -238,25 +264,27 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const selfMirrored = selfPreviewMirrored(call);
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
-  const main = swapped ? call.localStream : remoteStream;
-  const cornerStream = swapped ? remoteStream : call.localStream;
-  const mainOn = swapped ? call.cameraOn : remoteVideoOn;
-  const cornerShown = swapped || call.cameraOn;
+  const selfStream = selfCameraStream(call);
+  const selfOn = selfCameraShown(call);
+  const main = swapped ? selfStream : remoteStream;
+  const cornerStream = swapped ? remoteStream : selfStream;
+  const mainOn = swapped ? selfOn : remoteVideoOn;
+  const cornerShown = swapped || selfOn;
   /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
   const composed = self.tileHidden === true && !swapped;
-  const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
+  const cornerVideo = swapped ? remoteVideoOn : selfOn;
   const screen = useCallViewport();
   const compact = !chromeVisible;
   /* G1.11 : le cadre garde la taille du palier choisi ; rangée, la vignette s'y met à l'échelle de sa petite taille depuis son coin — une transformation, jamais une mise en page. */
   const size = selfTileSize(scale, screen);
   const restFactor = selfTileRestingFactor(scale, chromeVisible, screen);
   const topInset = self.topInset ?? 0;
-  const rest = selfTileBox({ corner, size, viewport: screen, topInset });
+  const rest = selfTileBox({ corner, size, viewport: screen, topInset, bleed: bleedEnd });
   const seen = { width: size.width * restFactor, height: size.height * restFactor };
   const seenX = corner.endsWith('left') ? rest.x : rest.x + rest.width - seen.width;
   const seenY = corner.startsWith('top') ? rest.y : rest.y + rest.height - seen.height;
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset });
+    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -271,18 +299,21 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   };
   const cornerFrame = useRef<HTMLDivElement>(null);
   /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
-  const pressedHidden = useRef<boolean | null>(null);
+  const pressed = usePressedChrome(chromeVisible);
   const tap = (): void => {
-    const hidden = pressedHidden.current ?? !chromeVisible;
-    pressedHidden.current = null;
-    if (hidden) onRevealChrome();
+    if (pressed.release()) onRevealChrome();
     else self.onToggle();
   };
+  /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${size.width}x${size.height}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${offset === null}` : null,
+    origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
+    reducedDuration: STOW_REDUCED_MS,
     easing: 'ease-out',
+    /* W1.20 : la colonne qui entre ou repart fait glisser la scène vers son nouveau centre (`useFollowInline`, `call-screen.tsx`) ; elle porte ma vignette d'une part du chemin, le FLIP n'en joue que le reste. */
+    carrier: '[data-call-stage-surface]',
   });
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);
@@ -317,7 +348,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
         <div
           ref={cornerFrame}
           className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset, screen), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
           data-call-self-tile-composed={composed ? '' : undefined}
@@ -329,10 +360,10 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
             type="button"
             aria-label={translate(language, 'call.video.swap')}
             aria-describedby={swapped ? undefined : hint}
-            onPointerDownCapture={() => (pressedHidden.current = !chromeVisible)}
+            onPointerDownCapture={pressed.press}
             onClick={tap}
             onKeyDown={(event) => {
-              pressedHidden.current = null;
+              pressed.clear();
               onArrow(event);
             }}
             className={`relative z-10 grid size-full place-items-center overflow-hidden border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
@@ -363,16 +394,26 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+/**
+ * LA SCÈNE D'UN GROUPE LIT SON ORIENTATION SUR ELLE-MÊME (P11.1, `GroupCallStageView` d'iOS, qui la lit dans sa
+ * géométrie) : la colonne du journal ouverte (W1), une fenêtre large porte une scène plus haute que large. Le cadre
+ * mesuré tient sa taille de l'écran (`flex-1` dans la surface de la scène, sa réserve exclue), jamais de la grille
+ * qu'il contient : passer de 2 × 3 à 3 × 2 ne le redimensionne pas, aucune boucle. Avant sa première mesure
+ * (rendu serveur, scène encore sans taille), la fenêtre.
+ */
+function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
-  if (layout === 'grid') {
-    return (
+  const viewport = useCallViewport();
+  const [frame, measured] = useElementSize();
+  const scene = measured.width > 0 && measured.height > 0 ? measured : viewport;
+  return (
+    <div ref={frame} className="flex min-h-0 flex-1 flex-col" data-call-grid-frame="">
       <Suspense fallback={null}>
         <CallGrid
           kit={CALL_GRID_KIT}
-          members={orderedMembers(call.members)}
+          members={membersInArrival(call.members)}
           remoteStreams={call.remoteStreams}
-          self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
+          self={{ id: me?.id ?? null, stream: selfCameraStream(call), cameraOn: selfCameraShown(call), mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
           onChoose={onChoose}
           immersive={immersive}
@@ -381,11 +422,17 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
           language={language}
           chromeVisible={chromeVisible}
           onRevealChrome={onRevealChrome}
+          landscape={scene.width > scene.height}
+          compact={isCompactHeight(viewport.height)}
           selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
         />
       </Suspense>
-    );
-  }
+    </div>
+  );
+}
+
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} immersive={immersive} onToggleImmersive={onToggleImmersive} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
   if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;

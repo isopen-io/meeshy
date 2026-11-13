@@ -487,6 +487,22 @@
   --recording-fill: color-mix(in srgb, var(--recording-ink) 12%, transparent);
 }
 
+/*
+ * LE FOND DU BOUTON D'ENVOI — un rôle, pas une valeur recopiée. Le bouton
+ * d'envoi (composer), d'envoi d'un vocal (composer-tray) et de soumission
+ * d'une édition (message-edit-composer) portent le MÊME dégradé de marque,
+ * dérivé de l'accent de la conversation (`--accent`, posé au runtime par
+ * scope). Il s'éclaircit vers le haut-gauche d'un voile de blanc — l'aplat de
+ * marque d'iOS. Jeton composé, comme `--onb-brand` et les `--recording-*`
+ * ci-dessus : `var(--accent)` s'y résout paresseusement au site d'usage, donc
+ * identique en clair et en sombre. Son encre est `text-ios-on-brand`
+ * (= `--ios-on-brand`, #fff). Avant 86w, le dégradé était recopié en trois
+ * jumelles divergentes.
+ */
+:root {
+  --send-accent-fill: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white));
+}
+
 /**
  * #5668 — une taille de plus, le même calcul ((44 − visuel) / 2 par bord) :
  * les boutons de la barre d'enregistrement (32 px, `+Recording.swift:162-278`).

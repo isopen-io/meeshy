@@ -92,7 +92,7 @@ const es = {
   'onboarding.recap.streak.other': 'Llama: {days} días',
   'onboarding.recap.badges': 'Medallas: {count}',
   'onboarding.recap.friends': 'Solicitudes en camino: {count}',
-  'onboarding.recap.tomorrow': 'Mañana, tu Llama puede arder desde hace {next} días.',
+  'onboarding.recap.tomorrow': 'Mañana, tu Llama arderá desde hace {next} días.',
   'onboarding.recap.explore': 'Seguir explorando',
   'onboarding.recap.game': 'Descubrir el juego con Mee y Meo',
   'onboarding.recap.done': 'Suficiente por hoy',

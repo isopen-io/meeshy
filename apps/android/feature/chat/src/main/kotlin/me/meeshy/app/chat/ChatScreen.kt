@@ -65,6 +65,8 @@ fun ChatScreen(
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
     onOpenConversation: (conversationId: String) -> Unit = {},
+    /** Ouvre la Progression : « Voir le jeu » dans la carte de la Flamme (#17770). */
+    onOpenProgression: () -> Unit = {},
     /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
     locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
@@ -144,6 +146,7 @@ fun ChatScreen(
             localCall = localCall,
             onOpenCitedPost = onOpenCitedPost,
             onOpenConversation = onOpenConversation,
+            onOpenProgression = onOpenProgression,
             callEntry = callEntry,
             mayInviteFriends = mayInviteFriends,
             locationSettingsSheet = locationSettingsSheet,

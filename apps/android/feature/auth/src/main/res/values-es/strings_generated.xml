@@ -277,7 +277,6 @@
         <item quantity="other">+%1$d chispas · primera story</item>
     </plurals>
     <string name="onboarding_story_sending">Tu story se está enviando…</string>
-    <string name="onboarding_story_title">Muéstrate</string>
     <string name="registration_back">Atrás</string>
     <string name="session_closed_activation_title">Confirma tu dirección de correo</string>
     <string name="session_closed_contact">Escribir al equipo de Meeshy</string>
@@ -290,7 +289,7 @@
     <string name="share_link_resume_anonymously">Retomar de forma anónima</string>
     <string name="signup_card_code_lead">Introduce el código de 6 cifras enviado a %1$s o abre el enlace recibido.</string>
     <string name="signup_card_verified">¡Cuenta validada!</string>
-    <string name="signup_card_verified_lead">Todo listo: tus contactos te leen en su idioma.</string>
+    <string name="signup_card_verified_lead">Tus contactos te leen en su idioma.</string>
     <string name="signup_close">Cerrar</string>
     <string name="signup_country_search_hint">Buscar un país</string>
     <string name="signup_email_forgot_password">¿Olvidaste tu contraseña?</string>

@@ -14,7 +14,7 @@ const ptCallDevices = {
   'call.pip.exit': 'Sair de imagem em imagem',
   'call.devices.open': 'Saída de áudio',
   'call.devices.title': 'Dispositivos',
-  'call.devices.camera': 'Câmara',
+  'call.devices.camera': 'Câmera',
   'call.devices.microphone': 'Microfone',
   'call.devices.default': 'Predefinido',
   'call.devices.none': 'Nenhum dispositivo detetado',

@@ -137,12 +137,7 @@ struct CallCaptionRow: View {
                     inlinePhrase
                 }
                 if let original = line.originalBelow {
-                    Text(verbatim: "\(CallCaptionsCopy.original) · \(original)")
-                        .font(.footnote)
-                        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-                        .multilineTextAlignment(.leading)
-                        .padding(.leading, MeeshySpacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    CallOriginalBelowText(text: original, ink: MeeshyColors.mediaChromeSecondary)
                         .transition(unfoldTransition)
                 }
             }
@@ -559,5 +554,24 @@ struct CallJournalPanel: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.xsPlus)
+    }
+}
+
+/// « Original · … » ou « Traduit · … » : la ligne posée sous la ligne principale d'une phrase, en retrait et en
+/// encre secondaire. Une seule pièce pour le journal vivant (encre du verre d'appel) et celui d'après l'appel
+/// (encre secondaire du thème du fil), pour l'état par défaut comme pour la bascule inversée : jamais un jumeau.
+struct CallOriginalBelowText: View {
+    let text: String
+    var kind: CallJournalLineKind = .original
+    let ink: Color
+
+    var body: some View {
+        Text(verbatim: "\(kind.label) · \(text)")
+            .font(.footnote)
+            .foregroundStyle(ink)
+            .multilineTextAlignment(.leading)
+            .contentTransition(.opacity)
+            .padding(.leading, MeeshySpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

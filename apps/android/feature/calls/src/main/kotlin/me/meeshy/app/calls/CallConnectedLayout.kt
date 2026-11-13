@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -75,7 +76,7 @@ internal fun rememberCallTouchExploration(): Boolean {
     return on
 }
 
-/** What the group stage shows of the others' cameras: the chrome hides to a tap only when one of them is on (G1.13). */
+/** What the group stage shows of the others' cameras: one of them on makes it a video stage (G1.13). */
 internal data class CallGroupVideoStage(val remoteCamerasOn: Int) {
     companion object {
         fun of(mesh: GroupCallMeshUi, isPrimaryVideoActive: Boolean): CallGroupVideoStage =
@@ -91,6 +92,30 @@ internal fun callIsVideoStage(state: CallUiState, group: CallGroupVideoStage? = 
     remoteCamerasOn = group?.remoteCamerasOn ?: 0,
 )
 
+/** Law 11 (#17945): the stage a tap stows — the image on video, the background of a call in progress, duo or group. */
+internal fun callIsTapStage(state: CallUiState, group: CallGroupVideoStage? = null): Boolean = CallChromeVisibility.isTapStage(
+    isVideoStage = callIsVideoStage(state, group),
+    isConnected = state.showsConnectedLayout,
+)
+
+/** Law 11 (#17945): the tap that stows the chrome, on the image or on the background of a call in progress; null where none stows. */
+@Composable
+internal fun rememberCallSceneTap(
+    chrome: CallChromeController,
+    state: CallUiState,
+    group: CallGroupVideoStage?,
+    isTouchExplorationOn: Boolean,
+): (() -> Unit)? {
+    val tapStage = callIsTapStage(state, group)
+    return remember(chrome, tapStage, isTouchExplorationOn) {
+        if (CallChromeVisibility.mayToggleByTap(tapStage, isTouchExplorationOn)) {
+            { chrome.onSceneTap(tapStage, isTouchExplorationOn) }
+        } else {
+            null
+        }
+    }
+}
+
 /** What the chrome shows now; reads the controller state so it recomposes on every change. */
 @Composable
 internal fun rememberCallChromeVisibility(
@@ -100,7 +125,7 @@ internal fun rememberCallChromeVisibility(
 ): CallChromeVisibility {
     val explore = rememberCallTouchExploration()
     chrome.state.collectAsState().value
-    return chrome.visibility(callIsVideoStage(state, group), explore)
+    return chrome.visibility(callIsTapStage(state, group), explore)
 }
 
 /**
@@ -131,6 +156,8 @@ internal fun CallChromeFade(
     modifier: Modifier = Modifier,
     stowsToward: CallVerticalEdge? = null,
     edgeMargin: Dp = 0.dp,
+    /** U2.10 : stowed, it also gives back the room it took, in step with its exit (the group full screen). */
+    releasesRoom: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val reduceMotion = rememberCallReduceMotion()
@@ -149,6 +176,7 @@ internal fun CallChromeFade(
     val travelsAway = stowsToward != null && CallChromeStow.leavesByItsEdge(isVisible, reduceMotion)
     val travel = if (travelsAway && stowsToward != null) CallChromeStow.travel(stowsToward, heightPx.toFloat(), marginPx) else 0f
     val stowOffset = animateFloatAsState(travel, tween(fade), label = "callChromeStow")
+    val room = animateFloatAsState(if (releasesRoom && !isVisible) 0f else 1f, tween(fade), label = "callChromeRoom")
     LaunchedEffect(isVisible, fade) {
         if (isVisible) {
             settledHidden = false
@@ -158,11 +186,12 @@ internal fun CallChromeFade(
         }
     }
     if (!isVisible && settledHidden) {
-        Spacer(modifier.height(with(LocalDensity.current) { heightPx.toDp() }))
+        Spacer(modifier.callRoom(room).height(with(LocalDensity.current) { heightPx.toDp() }))
         return
     }
     Box(
         modifier
+            .callRoom(room)
             .onSizeChanged { if (it.height > 0) heightPx = it.height }
             .graphicsLayer {
                 alpha = fadeAlpha.value
@@ -174,8 +203,9 @@ internal fun CallChromeFade(
 
 /**
  * The connected layout (also kept during a reconnection with media established): the peer, the
- * captions, the capability slots and the pill. A tap on the video scene hides the header, the pill
- * and the panels in a fade; a tap lights them again; nothing hides in audio or under TalkBack.
+ * captions, the capability slots and the pill. A tap on the stage (the image on video, the background of a call with
+ * no image, duo or group — law 11, #17945) hides the header, the pill and the panels in a fade; a tap lights them again; nothing hides
+ * under TalkBack.
  */
 @Composable
 internal fun CallConnectedColumn(
@@ -192,14 +222,14 @@ internal fun CallConnectedColumn(
     /** What the group stage shows of the others' cameras (G1.13); `null` on a duo. */
     groupVideo: CallGroupVideoStage? = null,
     /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
-    groupStage: (@Composable (Modifier) -> Unit)? = null,
+    groupStage: (@Composable (Modifier, Boolean) -> Unit)? = null,
     /** La parole du pair, pour l'anneau de la scène audio. */
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     val extensions = viewModel.extensions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
-    val visibility = chrome.visibility(callIsVideoStage(state, groupVideo), explore)
+    val visibility = chrome.visibility(callIsTapStage(state, groupVideo), explore)
     val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
@@ -221,16 +251,22 @@ internal fun CallConnectedColumn(
         )
         // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
         val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
-        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
+        val stageMaxHeight = maxHeight
+        val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
+        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Spacer(Modifier.height(MeeshySpacing.xl))
+            val gridClearance = LocalCallGroupGridClearance.current.takeIf { groupStage != null }
+            CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = gridClearance)
 
-            if (groupStage != null) {
-                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
+            if (groupStage != null && gridClearance != null) {
+                groupStage(
+                    Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance),
+                    isCompactHeight,
+                )
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
@@ -250,13 +286,15 @@ internal fun CallConnectedColumn(
             state.captionText?.let { caption -> CallCaption(caption) }
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
-            // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
-            if (!chromeState.isStageFullScreen) CallControlsBlock(
+            // U2.9 · U2.10 : la une en plein écran (#13750) rend toute la place — la pilule sort par le bas et la rend —, sauf
+            // son verre de sous-titres, qui reste (CallPillText.isOnStage).
+            CallControlsBlock(
                 pillText = pillText,
                 controlsVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 onInteraction = chrome::onInteraction,
-                modifier = Modifier.padding(bottom = MeeshySpacing.xl),
+                releasesRoom = !pillText.isOnStage(chromeState.isStageFullScreen),
+                bottomPadding = MeeshySpacing.xl,
             ) {
                 CallControlsPill(
                     state = state,
@@ -273,6 +311,7 @@ internal fun CallConnectedColumn(
                     onBackToMenu = chrome::backToMenu,
                     onClosePanel = chrome::close,
                     pillText = pillText,
+                    rowsMaxHeight = callPillRowsMaxHeight(stageMaxHeight, hasGrid = groupStage != null),
                     captions = { CallCaptionsBandHost(state = state, hasOwnGlass = false) },
                     panelContent = { panel ->
                         when (panel) {
@@ -283,7 +322,12 @@ internal fun CallConnectedColumn(
                                 },
                             )
                             CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
-                            CallScreenPanel.Journal -> CallJournalPanel(onClose = chrome::close, captures = state.liveCaptures, peerName = state.peerName)
+                            CallScreenPanel.Journal -> CallJournalPanel(
+                                onClose = chrome::close,
+                                captures = state.liveCaptures,
+                                peerName = state.peerName,
+                                participantNames = state.participantNames,
+                            )
                             else -> Unit
                         }
                     },
@@ -298,14 +342,6 @@ internal fun CallConnectedColumn(
                 onAction = pill.onAction,
                 bottomClearance = callRailsBottomClearance(maxWidth.value),
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
-            )
-        }
-        // #16665 — R1 : la capsule de capture, UNE fois sous l'en-tête, en audio comme en vidéo, en duo
-        // comme en groupe ; hors du fondu du chrome : une capture ne se cache pas.
-        if (state.isPeerScreenCapturing && !inPip) {
-            CallCaptureCapsule(
-                name = state.peerScreenCapturerName.ifBlank { state.peerName },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = CALL_CAPTURE_CAPSULE_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg),
             )
         }
     }
@@ -333,3 +369,19 @@ internal fun CallConnectedColumn(
         )
     }
 }
+
+/**
+ * L4.11 — la réserve haute de la scène : la marge fixe d'avant, plus, en groupe, la place que la pile des bandeaux prend sous
+ * l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que la grille lui cède sa place au
+ * lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
+ * qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne se recompose ni la colonne ne se remesure à
+ * chaque image. En duo ([clearance] nul), la pile ne pousse rien.
+ */
+@Composable
+private fun CallGroupStageTopReserve(base: Dp, clearance: CallGroupGridClearance?) {
+    Spacer(Modifier.layout { _, _ -> layout(0, (base + (clearance?.layout ?: 0.dp)).roundToPx()) {} })
+}
+
+/** L4.11 — la grille suit la pile des bandeaux par sa seule translation, lue au dessin : ni remesure ni recomposition par image. */
+private fun Modifier.glidesUnderTheBannerStack(clearance: CallGroupGridClearance): Modifier =
+    graphicsLayer { translationY = clearance.shift.toPx() }

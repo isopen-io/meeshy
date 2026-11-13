@@ -259,13 +259,13 @@ function RecordingBar({
           aria-disabled={canSend ? undefined : true}
           className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
           style={{
-            background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))',
+            background: 'var(--send-accent-fill)',
             opacity: canSend ? 1 : 0.4,
           }}
           aria-label={translate(language, 'composer.recording.send')}
           title={canSend ? translate(language, 'composer.recording.send.hint') : holdOn}
         >
-          <Glyph name="arrowUp" size={16} className="text-white" />
+          <Glyph name="arrowUp" size={16} className="text-ios-on-brand" />
         </button>
       </div>
     </div>

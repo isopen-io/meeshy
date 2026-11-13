@@ -404,7 +404,7 @@ final class EmailVerificationLeadTests: XCTestCase {
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(root["strings"] as? [String: Any])
         let expected: [String: [String: String]] = [
-            "emailVerification.subtitle.activationRequired": ["fr": "mot de passe est bon", "en": "password is correct"],
+            "emailVerification.subtitle.activationRequired": ["fr": "Activez votre compte", "en": "Activate your account"],
         ]
         for (key, needles) in expected {
             let entry = try XCTUnwrap(strings[key] as? [String: Any], key)

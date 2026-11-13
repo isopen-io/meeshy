@@ -289,7 +289,7 @@ extension SignupView {
     var passwordWhyDetail: String {
         String(
             localized: "auth.signup.password.why.detail",
-            defaultValue: "Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous connecterez toujours à partir d’un e-mail reçu dans votre boîte.",
+            defaultValue: "Sans mot de passe, vous vous connectez toujours par un lien reçu par e-mail.",
             bundle: .main
         )
     }
@@ -427,7 +427,7 @@ extension SignupView {
             Text(String(localized: "auth.signup.card.verified", defaultValue: "Compte validé !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Tout est prêt : vos proches vous lisent dans votre langue.", bundle: .main))
+            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Vos proches vous lisent dans leur langue.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)

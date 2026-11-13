@@ -13,6 +13,10 @@ public struct NotificationContext: Codable, Sendable, Equatable {
     public let originalMessageId: String?
     public let callSessionId: String?
     public let friendRequestId: String?
+    /// #18052 — la communauté où le destinataire vient d'être ajouté : le tap ouvre son détail.
+    public let communityId: String?
+    /// #18052 — son nom tel qu'écrit, pour la ligne de la liste.
+    public let communityName: String?
     public let reactionId: String?
     public let postId: String?
     public let commentId: String?
@@ -42,6 +46,8 @@ public struct NotificationContext: Codable, Sendable, Equatable {
         originalMessageId: String? = nil,
         callSessionId: String? = nil,
         friendRequestId: String? = nil,
+        communityId: String? = nil,
+        communityName: String? = nil,
         reactionId: String? = nil,
         postId: String? = nil,
         commentId: String? = nil,
@@ -60,6 +66,8 @@ public struct NotificationContext: Codable, Sendable, Equatable {
         self.originalMessageId = originalMessageId
         self.callSessionId = callSessionId
         self.friendRequestId = friendRequestId
+        self.communityId = communityId
+        self.communityName = communityName
         self.reactionId = reactionId
         self.postId = postId
         self.commentId = commentId

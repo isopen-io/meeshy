@@ -116,6 +116,13 @@ class CallRailsGuardTest {
     }
 
     @Test
+    fun `ma vignette se couche par une transformation lue au dessin, et une rotation reprise repart de la taille montree (L1_5)`() {
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("CallSelfTileLaw.rotationScale(")
+        assertThat(tile).contains("CallSelfTileLaw.shownDuringRotation(")
+    }
+
+    @Test
     fun `un bouton de rail touche pendant la sortie rend d'abord les contrôles (G2_7)`() {
         assertThat(code("CallActionRails.kt")).contains("callReviveOnTouch(")
         assertThat(code("CallConnectedLayout.kt")).contains("onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) }")

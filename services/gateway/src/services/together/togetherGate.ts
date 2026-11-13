@@ -7,7 +7,10 @@
  *    l'autre, le privilège d'équipe et le bouclier des mineurs selon la matrice ;
  * 3. le média est une pièce jointe AUDIO ou VIDÉO d'un message non supprimé, ni à vue
  *    unique (pièce ou message), ni éphémère, de la conversation nommée ;
- * 4. les deux sont membres ACTIFS de cette conversation.
+ * 4. les deux sont membres ACTIFS de cette conversation ;
+ * 5. la conversation est OUVERTE : ni close (`isActive: false`, `closedAt`), ni supprimée
+ *    (#17147). Une clôture garde messages et participants actifs : sans cette lecture, une
+ *    séance y continuait, rejugée ou non.
  *
  * Tout refus rend le même verdict : un inconnu n'apprend ni l'existence d'un média, ni
  * l'appartenance de quelqu'un à une conversation. Une lecture qui échoue LÈVE : le relais
@@ -18,7 +21,7 @@ import type { TogetherMediaKind } from '@meeshy/shared/types/together';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../relations/usableAccount';
 
-export type TogetherGateDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'messageAttachment'>;
+export type TogetherGateDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'messageAttachment' | 'conversation'>;
 
 export type TogetherSubject = {
   readonly hostId: string;
@@ -70,6 +73,15 @@ async function bothActiveMembers(prisma: TogetherGateDb, subject: TogetherSubjec
   return members.has(subject.hostId) && members.has(subject.guestId);
 }
 
+/** Lue en JS plutôt qu'en `where` : sous MongoDB, `closedAt: null` ne retient pas un champ ABSENT. */
+async function openConversation(prisma: TogetherGateDb, subject: TogetherSubject): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: subject.conversationId },
+    select: { isActive: true, closedAt: true, deletedAt: true },
+  });
+  return Boolean(conversation && conversation.isActive !== false && !conversation.closedAt && !conversation.deletedAt);
+}
+
 async function bothUsable(prisma: TogetherGateDb, subject: TogetherSubject): Promise<boolean> {
   const rows = await prisma.user.findMany({
     where: { id: { in: [subject.hostId, subject.guestId] } },
@@ -84,11 +96,12 @@ export async function judgeTogether(
   subject: TogetherSubject,
 ): Promise<TogetherVerdict> {
   if (!subject.hostId || !subject.guestId || subject.hostId === subject.guestId) return REFUSED;
-  const [usable, access, media, members] = await Promise.all([
+  const [usable, access, media, members, open] = await Promise.all([
     bothUsable(deps.prisma, subject),
     pairAccess(deps.prisma, { feature: 'together', viewerId: subject.hostId, targetId: subject.guestId, now: deps.now }),
     playableMedia(deps.prisma, subject),
     bothActiveMembers(deps.prisma, subject),
+    openConversation(deps.prisma, subject),
   ]);
-  return usable && access.allowed && media && members ? { ok: true, media } : REFUSED;
+  return usable && access.allowed && media && members && open ? { ok: true, media } : REFUSED;
 }

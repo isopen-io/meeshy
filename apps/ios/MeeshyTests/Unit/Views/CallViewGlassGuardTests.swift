@@ -65,7 +65,8 @@ final class CallViewGlassGuardTests: XCTestCase {
         let families = try XCTUnwrap(pill.range(of: "familyRows(disposition.pillRows(actions, layer: layer))"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
-        XCTAssertTrue(pill.contains("if text.hasBaseRow, disposition.unfoldsPill(for: layer) {"), "La pilule se déplie par la loi, pas par l'état seul du (…)")
+        XCTAssertTrue(pill.contains("let unfoldsAbove = text.hasBaseRow && disposition.unfoldsPill(for: layer)"), "La pilule se déplie par la loi, pas par l'état seul du (…)")
+        XCTAssertTrue(pill.contains("if unfoldsAbove {"), "Le même prédicat dessine les rangées et donne la borne (#17935)")
         XCTAssertTrue(pill.contains("let disposition = controlsDisposition"))
         XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
         let alternative = String(pill[panel.upperBound ..< families.lowerBound])
@@ -115,7 +116,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         for removed in ["selfTileControlRows", "selfTileControlRow(", "CallSelfTileControlsPlacement", "CallSelfTileControlButton", "CallSelfTileControlGlyph", "menuRows(", "selfTileRows(", "selfTileControlsBounds"] {
             XCTAssertFalse(code.contains(removed), "\(removed) : une seconde forme des commandes de ma caméra")
         }
-        let handler = try block(".adaptiveOnChange(of: isGroupStage) { _, isGroup in", until: ".adaptiveOnChange(of: isVideoStage)", in: code)
+        let handler = try block(".adaptiveOnChange(of: isGroupStage) { _, isGroup in", until: ".adaptiveOnChange(of: isTapStage)", in: code)
         XCTAssertFalse(handler.contains("layer"), "De deux à trois, l'état du (…) ne bouge pas : seule la forme change")
     }
 
@@ -280,7 +281,7 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
-        XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE la bande de looks (P8b)")
+        XCTAssertTrue(effects.contains("case .settings:"), "Réglages REMPLACE la bande de looks (P8b)")
         XCTAssertTrue(effects.contains("settingsPanel"), "Le panneau prend la place de la bande, au-dessus de la barre")
         XCTAssertTrue(effects.contains("switch category {"), "Un seul carrousel, Visage OU Couleur")
         XCTAssertEqual(effects.components(separatedBy: "CallEffectsBar(").count - 1, 1, "Une seule barre de verre : ‹ · Réglages · (+)")
@@ -288,13 +289,18 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(effects.contains("validate"), "Le look touché s'applique tout de suite : aucun « Valider »")
         let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
         XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
-        XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        XCTAssertEqual(montage.components(separatedBy: "CallEffectsBar(").count - 1, 1, "Le Montage prend la barre d'Effets : ‹ · Réglages · (+) (#16979, #17901)")
+        XCTAssertFalse(montage.contains("CallModeActionBar("), "Le Montage ne porte plus Quitter · Cadre · Valider")
+        XCTAssertFalse(montage.contains("CallModeCopy.quit"), "Aucun « Quitter » : ‹ revient à l'appel")
+        XCTAssertFalse(montage.contains("validate"), "Ce qui est touché s'applique aussitôt : aucun « Valider »")
         let carousel = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift")
         )
         XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
+        XCTAssertFalse(carousel.contains("struct CallModeActionBar"), "La barre Quitter est sortie : sans appelant, elle ne reste pas (#17901)")
+        XCTAssertFalse(carousel.contains("struct CallModeOption"), "Le cadre gardé est une puce, plus une option de la barre Quitter")
     }
 
     /// P8b.4 · P8b.6 · P8b.8 — la barre d'Effets est UN verre d'une pièce (l'atome partagé) :
@@ -303,32 +309,101 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// d'elle, à la place de la bande de looks, qui monte depuis la barre en fondu et y
     /// redescend. « Réduire les animations » en fait un fondu court, jamais un retrait net.
     func test_effectsBar_isOneGlassPiece_andSettingsRiseInTheirOwnGlassAboveIt() throws {
-        let bar = try block(
-            "struct CallEffectsBar<Looks: View>: View {",
-            until: "private struct CallModeShotActions",
-            in: AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift"))
-        )
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let bar = try block("struct CallEffectsBar<Looks: View>: View {", until: "struct CallEffectsAddButton", in: barFile)
         XCTAssertTrue(bar.contains(".callControlsGlass(in:"), "Le verre est l'atome partagé, d'une pièce")
         XCTAssertTrue(bar.contains("AdaptiveGlassContainer("))
         XCTAssertTrue(bar.contains("symbol: \"chevron.backward\""), "‹ Retour à l'appel")
         XCTAssertTrue(bar.contains("symbol: \"gearshape\""), "Réglages porte l'engrenage, pas le glyphe d'Effets")
-        XCTAssertTrue(bar.contains("symbol: \"plus\""), "(+) Ajouter un autre look")
-        XCTAssertTrue(bar.contains("showsSettings ? .active : .normal"), "Réglages ouvert = disque blanc")
-        XCTAssertTrue(bar.contains("if !showsSettings {"), "Réglages ouvert, la barre perd sa rangée de puces et se resserre")
+        XCTAssertTrue(bar.contains("CallEffectsAddButton("), "(+) Ajouter un autre look, qui porte aussi l'appui long")
+        XCTAssertTrue(bar.contains("mode == .settings ? .active : .normal"), "Réglages ouvert = disque blanc")
+        XCTAssertTrue(bar.contains("if CallEffectsBarRule.showsLooks(mode) {"), "Réglages ouvert, la barre perd sa rangée de puces et se resserre")
         XCTAssertTrue(bar.contains(".transition(.opacity)"), "Les puces partent en fondu")
         XCTAssertFalse(bar.contains("settings()"), "Le panneau n'est plus DANS la barre : c'est un verre séparé")
         XCTAssertFalse(bar.contains("slider.horizontal.3"))
+        XCTAssertTrue(barFile.contains("struct CallEffectsPanel<Content: View>: View {"), "Un seul verre séparé, pour les réglages et pour la liste")
+        let panel = try block("struct CallEffectsPanel<Content: View>: View {", until: "struct CallEffectsAppliedPanel", in: barFile)
+        XCTAssertTrue(panel.contains(".callChromeGlass(in:"), "Le panneau est son propre verre, l'atome partagé d'un groupe sans bouton de verre")
         let controls = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
         XCTAssertFalse(effects.contains("settings: {"), "La barre ne reçoit plus le panneau")
-        XCTAssertTrue(effects.contains(".callChromeGlass(in:"), "Le panneau est son propre verre, l'atome partagé d'un groupe sans bouton de verre")
+        XCTAssertTrue(effects.contains("CallEffectsPanel {"), "Le panneau de réglages est le verre séparé partagé")
         XCTAssertTrue(effects.contains(".combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))"), "Le panneau monte depuis la barre, en fondu")
         XCTAssertTrue(effects.contains("CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion)"), "Réduire les animations = fondu court")
         XCTAssertFalse(effects.contains("reduceMotion ? nil"), "Réduire les animations ne supprime plus l'animation")
         XCTAssertTrue(effects.contains("Text(CallEffectsCopy.brightness)"), "« Luminosité » est un titre visible")
         XCTAssertTrue(effects.contains("Toggle(isOn: blurBinding)"), "« Flou du fond » est une ligne titrée à interrupteur")
+    }
+
+    /// #16979 · #17901 — (+) porte l'appui long qui liste les effets appliqués ; VoiceOver, qui ne
+    /// voit pas l'appui long, a la même liste par une action nommée. Pile pleine, (+) le dit à son
+    /// étiquette et garde l'appui long. Annuler un effet referme la liste et rend le menu de base.
+    func test_plusButton_listsTheAppliedEffects_byLongPress_andByANamedAction() throws {
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let add = try block("struct CallEffectsAddButton: View {", until: "struct CallEffectsPanel<Content: View>: View {", in: barFile)
+        XCTAssertTrue(add.contains(".onLongPressGesture(minimumDuration: CallModeGestureRule.longPressDuration"), "L'appui long sur (+) liste les effets")
+        XCTAssertTrue(add.contains(".accessibilityActions {"), "VoiceOver : la liste par une action nommée")
+        XCTAssertTrue(add.contains("Button(CallEffectsCopy.appliedTitle, action: onShowApplied)"), "L'action porte le titre de la liste")
+        XCTAssertTrue(add.contains("CallModeCopy.addLookFull"), "Pile pleine : l'étiquette le dit")
+        XCTAssertTrue(add.contains("MeeshyControlSize.tapTarget"), "Cible de 44 pt")
+        let list = try block("struct CallEffectsAppliedPanel: View {", until: "private struct CallEffectsAppliedRow", in: barFile)
+        XCTAssertTrue(list.contains("layers.listed"), "La liste va de la couche du dessus à celle du dessous")
+        XCTAssertTrue(list.contains("CallEffectsPanel {"), "La liste est le verre séparé, comme les réglages")
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        for host in ["struct CallEffectsModeControls: View {", "struct CallMontageModeControls: View {"] {
+            let end = host.contains("Effects") ? "struct CallMontageModeControls: View {" : "struct CallMontageStage: View {"
+            let code = try block(host, until: end, in: controls)
+            XCTAssertTrue(code.contains("CallEffectLayers"), "\(host) consomme la loi pure : une règle, pas deux")
+            XCTAssertTrue(code.contains("CallEffectsAppliedPanel("), "\(host) montre la liste des effets appliqués")
+            XCTAssertTrue(code.contains("CallEffectsBarRule.afterRemoval"), "\(host) : annuler referme la liste et rend le menu de base")
+        }
+    }
+
+    /// #17901 — « Chaque visage » n'a pas de place dessinée sur C1 : il reste atteignable, dans ce
+    /// que « Réglages » ouvre en Montage. Le cadre gardé reste une option, pressée en blanc.
+    func test_montage_keepsEveryFace_underSettings_andTheFrameHoldAsAnOption() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        XCTAssertTrue(montage.contains("capture.captureFaces()"), "« Chaque visage » reste atteignable")
+        XCTAssertTrue(montage.contains("CallCaptureCopy.faces"))
+        XCTAssertTrue(montage.contains("CallFrameHoldChip("), "L'option « Cadre » reste, au-dessus des ambiances")
+        XCTAssertTrue(montage.contains("hold.toggle("), "Retirer la couche cadre gardée passe par le même chemin que décocher « Cadre »")
+        XCTAssertTrue(montage.contains("onCapturePhoto: shoot"), "La photo du Montage reste à deux tapes sur le cadre choisi")
+        XCTAssertTrue(montage.contains("onStartRecording: film"), "Le film du Montage reste à l'appui long sur le cadre choisi")
+        XCTAssertTrue(montage.contains("settingsHint: CallModeCopy.montageSettingsHint"), "En Montage, Réglages annonce « Chaque visage », pas la luminosité")
+    }
+
+    /// #16979 — « effets, filtres et cadres font partie d'une même famille d'outils » : UNE rangée de
+    /// genres (Visage · Couleur · Cadres), tirée de la loi pure, la même en Effets et en Montage.
+    /// Toucher le genre de l'autre mode y passe, sur ce genre ; l'hôte de la famille, posé au-dessus
+    /// des deux modes, retient le genre demandé pendant que le mode change.
+    func test_effectsAndMontage_shareOneGenreRow_andCrossToTheOtherModeOnItsGenre() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        for (name, code) in [("Effets", effects), ("Montage", montage)] {
+            XCTAssertEqual(code.components(separatedBy: "CallEffectsGenreChips(").count - 1, 1, "\(name) pose LA rangée de genres de la famille")
+            XCTAssertTrue(code.contains("CallEffectsGenreRule.adding(from:"), "\(name) : (+) ouvre un genre absent de la même famille")
+        }
+        XCTAssertFalse(effects.contains("CallEffectsCategory.allCases"), "Effets ne refait plus sa rangée Visage · Couleur à part")
+        XCTAssertFalse(montage.contains("Text(CallModeCopy.framesChip)"), "Le Montage ne pose plus une puce « Cadres » seule")
+        XCTAssertTrue(effects.contains("onOpenFrames()"), "« Cadres » touché en Effets ouvre le Montage")
+        XCTAssertTrue(montage.contains("onOpenEffects(look)"), "« Visage » ou « Couleur » touché en Montage ouvre Effets sur ce genre")
+        let bar = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let host = try block("struct CallEffectsFamilyHost<Effects: View, Montage: View>: View {", until: "struct CallEffectsGenreChips: View {", in: bar)
+        XCTAssertTrue(host.contains("@State private var entry"), "L'hôte retient le genre demandé d'un mode à l'autre")
+        XCTAssertTrue(host.contains("CallEffectsGenreRule.row("), "La rangée se lit dans la loi pure")
+        let chips = try block("struct CallEffectsGenreChips: View {", until: "struct CallEffectsBar<Looks: View>: View {", in: bar)
+        XCTAssertTrue(chips.contains("MeeshyControlSize.tapTarget"), "Cible de 44 pt")
+        XCTAssertTrue(chips.contains(".isSelected"), "VoiceOver dit quel genre est pressé")
+        XCTAssertTrue(chips.contains("ViewThatFits(in: .horizontal)"), "Grand texte : la rangée défile plutôt que de se couper")
+        XCTAssertTrue(chips.contains("ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true)"), "Une rangée qui défile s'efface en fondu à ses deux bords")
+        let route = try block("private func modeControls(_ mode: CallScreenMode) -> some View {", until: "func enterMode(", in: try callViewCode())
+        XCTAssertTrue(route.contains("CallEffectsFamilyHost(mode: mode"), "Les deux modes passent par l'hôte de la famille")
+        XCTAssertTrue(route.contains("offersFrames: currentActionSet.contains(.capture)"), "« Cadres » n'est offert que là où le Montage l'est")
+        XCTAssertTrue(route.contains("offersEffects: currentActionSet.contains(.effects)"), "« Visage » et « Couleur » ne sont offerts que là où Effets l'est")
     }
 
     /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la
@@ -444,5 +519,266 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(header.contains(".frame(maxWidth: .infinity)"))
         let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
         XCTAssertTrue(pill.contains("layer.captionsBaseRow"), "La rangée de base n'est pas légendée sous une option")
+    }
+
+    // MARK: - U1.7 · U1.10 · U2.9 · U2.10 — la une et le plein écran de groupe
+
+    private func stageSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+    }
+
+    /// U1.7 — la plaque de nom est posée sur l'atome de verre adaptatif : sur un contenu clair
+    /// elle s'assombrit comme le reste du chrome (loi 3), au lieu d'un matériau système.
+    func test_tileNameplate_isOnTheAdaptiveGlass_notASystemMaterial() throws {
+        let chrome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTileChrome.swift"))
+        let plate = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallTileNameplate: View", in: chrome))
+        XCTAssertTrue(plate.contains(".callChromeGlass(in: Capsule())"))
+        XCTAssertFalse(chrome.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+    }
+
+    /// U1.10 · #8550 — la capsule de la une se range avec les contrôles, par son bord, et ne prend
+    /// plus de toucher une fois rangée.
+    func test_featuredCapsule_isStowedWithTheControls_byItsTopEdge() throws {
+        let stage = try stageSource()
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".callChromeVisibility(isCapsuleVisible)"))
+        XCTAssertTrue(featured.contains("CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach"))
+        XCTAssertTrue(featured.contains("isVisible: isCapsuleVisible, reduceMotion: reduceMotion"))
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("chrome: chromeVisibility"), "la visibilité vient de la loi pure, remise telle quelle à la scène")
+        XCTAssertTrue(stage.contains("private var isCapsuleVisible: Bool { chrome.isVisible(.featuredCapsule) }"))
+    }
+
+    /// U2.9 — en plein écran de groupe, les sous-titres allumés restent (verre sans rangée) ;
+    /// c'est la loi pure qui dit si la pilule est sur la scène.
+    func test_fullScreenGroupStage_keepsTheCaptionsPill() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("if pillText.isOnStage(isStageFullScreen: isStageFullScreen) {"))
+        XCTAssertFalse(layout.contains("if !isStageFullScreen {"), "le plein écran ne retire plus la pilule d'un bloc")
+    }
+
+    /// U2.10 — Réduire les animations remplace le mouvement par un fondu court, jamais une bascule
+    /// sèche ; le bandeau des autres sort par SON bord (bas en portrait, côté en paysage).
+    func test_fullScreen_underReduceMotion_isAShortFade_andTheStripLeavesByItsEdge() throws {
+        let stage = try stageSource()
+        XCTAssertFalse(stage.contains("reduceMotion ? nil"), "une bascule sèche n'est pas un fondu court")
+        let controls = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
+        XCTAssertTrue(controls.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }"))
+        let spotlight = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func spotlight(", in: stage))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .bottom, extent: Self.rowStripHeight, stage: stageFrame))"))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .trailing, extent: Self.columnStripWidth, stage: stageFrame))"))
+        XCTAssertFalse(spotlight.contains("if isFullScreen {"), "le bandeau quitte la scène par une transition, pas par un changement de branche")
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var body: some View", in: stage))
+        XCTAssertTrue(body.contains("stageFrame: proxy.frame(in: .global)"), "le bord se MESURE : le cadre de la scène dans la fenêtre")
+        let exit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stripExit(", in: stage))
+        XCTAssertTrue(exit.contains("GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)"))
+        XCTAssertTrue(exit.contains("GroupCallStageMotion.stripTravel(toward: edge, stage: stage, window: DeviceLayout.windowSize"), "#17726 — jusqu'au bord de l'écran, pas de sa propre taille")
+        XCTAssertTrue(exit.contains("isRightToLeft: layoutDirection == .rightToLeft"))
+        XCTAssertTrue(exit.contains(".modifier(active: GroupCallStripSlide(travel: travel), identity: GroupCallStripSlide(travel: .zero))"))
+        XCTAssertFalse(exit.contains(".move(edge:"), "`.move(edge:)` ne déplace que de la taille du bandeau : il s'arrêtait à la place de la pilule")
+        XCTAssertTrue(exit.contains(".opacity"), "Réduire les animations : un fondu")
+
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isStageFullScreen)"))
+        XCTAssertTrue(layout.contains(".transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))"))
+        XCTAssertFalse(layout.contains("reduceMotion ? nil"))
+    }
+
+    /// #17726 — l'appel connecté n'a plus de bascule sèche sous « Réduire les animations » : les
+    /// sous-titres du duo, le micro coupé du correspondant et le cadre en direct passent par un
+    /// fondu court.
+    func test_connectedCall_underReduceMotion_neverSnaps() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertFalse(connected.contains("reduceMotion ? nil"), "une bascule sèche n'est pas un fondu court")
+        XCTAssertTrue(connected.contains(".animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showTranscript)"))
+        XCTAssertTrue(connected.contains(".animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showsPeerMutedBadge)"))
+        XCTAssertTrue(connected.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isLiveFrameShown)"))
+    }
+
+    // MARK: - #17790 R2.2 · R2.11 · R3.3 · R3.12 — la carte d'accord et la capsule d'enregistrement
+
+    private func recordingControls() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+    }
+
+    /// Le verre des bandeaux de la pile du haut : UNE recette, posée avec les autres verres de l'appel.
+    private func bannerGlass() throws -> String {
+        let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
+        return try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallBannerGlass<S: Shape>: ViewModifier", in: glass))
+    }
+
+    /// Loi 18 : la carte, la capsule et l'avis sont le verre d'`adaptiveLiquidGlass` (Liquid Glass
+    /// sur iOS 26, verre dessiné avant, plein sous « Réduire la transparence ») sous le voile
+    /// d'appel qui l'assombrit sur un contenu clair (loi 3) ; jamais un matériau système.
+    func test_recordingCardAndCapsules_areTheAdaptiveLiquidGlass_underTheCallVeil() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        XCTAssertFalse(controls.contains(".callChromeGlass(in:"), "callChromeGlass retombe sur un matériau avant iOS 26")
+        let glass = try bannerGlass()
+        XCTAssertTrue(glass.contains("CallGlassVeil(shape: shape"))
+        XCTAssertTrue(glass.contains(".meeshyGlass(in: shape, tone: .theme)"), "la recette d'adaptiveLiquidGlass, par l'entrée du kit")
+        let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingOverlay: View, Equatable", in: controls))
+        XCTAssertEqual(overlay.components(separatedBy: ".modifier(CallBannerGlass(shape:").count - 1, 3, "carte, capsule et avis")
+    }
+
+    /// R2.2 — la planche dessine la question puis les deux boutons : aucune phrase d'appoint.
+    func test_consentCard_isTheQuestionThenTwoGlassAndWhiteButtons_withoutAnExtraLine() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("askDetail"), "aucun extra entre la question et les boutons")
+        let card = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var consentCard: some View", in: controls))
+        XCTAssertTrue(card.contains("answerButton(CallRecordingCopy.refuse, accepted: false)"))
+        XCTAssertTrue(card.contains("answerButton(CallRecordingCopy.accept, accepted: true)"))
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func answerButton(", in: controls))
+        XCTAssertTrue(button.contains(".callChipGlass(isActive: false, tint: .white)"), "Refuser est un verre")
+        XCTAssertTrue(button.contains("Color.white, in: Capsule()"), "Accepter est un blanc plein")
+        XCTAssertFalse(button.contains("indigo500"))
+        XCTAssertTrue(button.contains("minHeight: 44"))
+    }
+
+    /// R3.3 — « Arrêter » est un bouton qui porte le mot : blanc plein, texte rouge.
+    func test_stopButton_carriesTheWord_whiteFill_redText() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("\"stop.fill\""), "Plus d'icône seule")
+        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stopButton(", in: controls))
+        XCTAssertTrue(stop.contains("Text(word)"))
+        XCTAssertTrue(stop.contains("MeeshyColors.error"))
+        XCTAssertTrue(stop.contains("Color.white, in: Capsule()"))
+        XCTAssertTrue(stop.contains("minHeight: 44"))
+        XCTAssertTrue(stop.contains(".accessibilityLabel(label)"), "le libellé accessible garde la phrase entière")
+        XCTAssertTrue(controls.contains("call.recording.stop.word"))
+    }
+
+    func test_stopWord_isTranslatedInTheSevenLanguages() throws {
+        let catalog = try AppSourceGuard.unit("Meeshy/Localizable.xcstrings")
+        let entry = try XCTUnwrap(catalog.range(of: "\"call.recording.stop.word\": {"))
+        let tail = String(catalog[entry.upperBound...])
+        let body = String(tail[..<(tail.range(of: "\n    },")?.lowerBound ?? tail.endIndex)])
+        for language in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+            XCTAssertTrue(body.contains("\"\(language)\""), "\(language) manque pour « Arrêter »")
+        }
+        XCTAssertTrue(body.contains("\"value\": \"Arrêter\""))
+    }
+
+    // MARK: - #17815 C2.1 · C3.4 — la carte de proposition et la capsule de réponse du cadre en direct
+
+    /// Loi 18 : la carte et la capsule sont le verre des bandeaux de la pile (celui de la carte
+    /// d'accord), sous le voile d'appel ; jamais un matériau système forcé en sombre, et aucune
+    /// recette recopiée dans la vue.
+    func test_liveFrameCardAndNotice_areTheBannerGlass_notASystemMaterial() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallLiveFrameProposal.swift"))
+        XCTAssertFalse(source.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        let card = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameProposalCard: View", in: source))
+        XCTAssertTrue(card.contains(".modifier(CallBannerGlass(shape:"))
+        let notice = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameNotice: View", in: source))
+        XCTAssertTrue(notice.contains(".modifier(CallBannerGlass(shape:"))
+        _ = try bannerGlass()
+        for unit in [source, try recordingControls()] {
+            XCTAssertFalse(unit.contains("CallGlassVeil("), "le verre sous le voile se réutilise, il ne se recopie pas")
+            XCTAssertFalse(unit.contains(".meeshyGlass("), "le verre sous le voile se réutilise, il ne se recopie pas")
+        }
+    }
+
+    /// L1.3 — le bouton « Sortie » de la pilule demande son état à la loi pure,
+    /// avec la nature de l'appel ; la vue ne recompose plus `isSpeaker ? .active`.
+    func test_outputPillButton_takesItsKindFromThePureRule() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallDeviceControls.swift"))
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallOutputPillButton: View", in: controls))
+        XCTAssertTrue(button.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(button.contains("isVideoCall"))
+        XCTAssertFalse(button.contains("isSpeaker || route.routesExternally ? .active : .normal"))
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
+    /// L2.7 — un rail trop long pour la hauteur défile ET s'efface en fondu à ses
+    /// deux bords (le masque de l'appel, axe vertical), au lieu d'être coupé net.
+    func test_actionRail_thatScrolls_fadesAtItsTwoEdges() throws {
+        let rails = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Rails.swift"))
+        let rail = try block("private func actionRail(", until: "private struct CallRailStow", in: rails)
+        XCTAssertTrue(rail.contains("ScrollView(.vertical, showsIndicators: false)"))
+        XCTAssertTrue(rail.contains(".mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }"))
+    }
+
+    // MARK: - Décisions porteur de l'audit final (2026-11-13)
+
+    /// #17946 — en mode Effets ou Montage, le verre des sous-titres n'a pas de « Journal » : la
+    /// pilule n'y est pas, rien n'y ouvrirait le journal. Son pied garde « EN → FR · toucher =
+    /// original » (`CallCaptionsFooter`, indépendant du bouton). iOS le tenait déjà : témoin.
+    func test_modeCaptions_haveNoJournalButton_butKeepTheirFooter() throws {
+        let mode = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Mode.swift"))
+        XCTAssertTrue(mode.contains("captionsBand(hasOwnGlass: true, opensJournal: false)"))
+        XCTAssertFalse(mode.contains("togglePanel(.journal)"), "aucun chemin vers le journal depuis un mode")
+        let unit = try callViewCode()
+        XCTAssertEqual(unit.components(separatedBy: "opensJournal: false").count - 1, 1, "seul le verre d'un mode retire « Journal »")
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        XCTAssertTrue(transcript.contains("onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil"))
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptionsViews.swift"))
+        let footer = try block("private var footer: some View {", until: "private var fade: Animation {", in: views)
+        XCTAssertTrue(footer.contains("CallCaptionsFooter.resolve(lines: settledLines)"), "le pied se compose sans le bouton")
+        XCTAssertTrue(footer.contains("if note != nil || onOpenJournal != nil {"))
+        XCTAssertTrue(footer.contains("if let onOpenJournal {"), "« Journal » n'est posé que si un journal peut s'ouvrir")
+    }
+
+    /// #17947 — le panneau Luminosité · Flou du fond reste ouvert tant qu'on règle : ni le curseur,
+    /// ni l'interrupteur, ni la pile qu'ils changent n'écrivent la barre. Il se referme par
+    /// « Réglages » (`afterSettings`) ou par ‹ (`afterBack`), dans les deux modes de la famille ;
+    /// ‹ dit alors qu'il ferme, et non qu'il revient à l'appel.
+    func test_settingsPanel_staysOpenWhileAdjusting_andClosesByReglagesOrBack() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        for binding in ["private var brightnessBinding: Binding<Double> {", "private var smoothingBinding: Binding<Double> {", "private var blurBinding: Binding<Bool> {"] {
+            let body = try block(binding, until: "\n    }\n", in: effects)
+            XCTAssertFalse(body.contains("barMode"), "\(binding) : un réglage continu ne referme pas le panneau")
+        }
+        let onConfig = try block(".adaptiveOnChange(of: config) { _, newConfig in", until: "\n        }\n", in: effects)
+        XCTAssertFalse(onConfig.contains("barMode"), "la pile qui change pendant le réglage ne touche pas la barre")
+        for host in [effects, montage] {
+            XCTAssertTrue(host.contains("barMode = CallEffectsBarRule.afterSettings(from: barMode)"), "« Réglages » le referme")
+            let back = try block("private func goBack() {", until: "\n    }\n", in: host)
+            XCTAssertTrue(back.contains("guard let closed = CallEffectsBarRule.afterBack(from: barMode) else { return onExit() }"), "‹ le referme, sinon revient à l'appel")
+            XCTAssertTrue(back.contains("withAnimation(settingsAnimation) { barMode = closed }"), "par le chemin inverse, fondu sous Réduire les animations")
+        }
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let bar = try block("struct CallEffectsBar<Looks: View>: View {", until: "struct CallEffectsAddButton", in: barFile)
+        XCTAssertTrue(bar.contains("label: CallEffectsBarRule.afterBack(from: mode) == nil ? CallModeCopy.backToCall : CallControlsCopy.closePanel"), "VoiceOver : ‹ dit ce qu'il fait")
+    }
+
+    /// #17948 — en groupe, toucher la vignette à la une range les contrôles (loi 11), comme toucher
+    /// l'image ; le retour à la grille passe par la capsule « Revenir à la grille ». iOS le tenait
+    /// déjà : témoin.
+    func test_featuredTile_tapStowsTheControls_andTheCapsuleGivesTheGridBack() throws {
+        let stage = try stageSource()
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".onTapGesture { onStageTap() }"), "le toucher à la une est le toucher de la scène")
+        XCTAssertFalse(featured.contains("choose(.grid)"), "le toucher à la une ne rend pas la grille")
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
+        XCTAssertTrue(capsule.contains("choose(.grid)"), "la capsule rend la grille")
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: try callViewCode()))
+        XCTAssertTrue(layout.contains("onStageTap: toggleControls"))
+    }
+
+    /// #17949 — en groupe, la grille se resserre au-dessus de la pilule agrandie (rangées, option,
+    /// sous-titres, journal) : elles sont dans le MÊME flux, la grille d'abord, jamais l'une
+    /// par-dessus l'autre ; les vignettes se partagent la hauteur laissée, donc leurs plaques du bas
+    /// restent visibles au-dessus de la pilule. Sous le minimum de la grille, ce sont les rangées
+    /// qui défilent. iOS le tenait déjà : témoin.
+    func test_groupGrid_tightensAboveTheGrownPill_neverUnderIt() throws {
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: try callViewCode()))
+        XCTAssertTrue(layout.contains("VStack(spacing: MeeshySpacing.sm) {"))
+        XCTAssertFalse(layout.contains("ZStack"), "la pilule ne se pose pas sur la grille")
+        XCTAssertFalse(layout.contains(".overlay(alignment: .bottom)"))
+        let grid = try XCTUnwrap(layout.range(of: "GroupCallStageView("))
+        let pill = try XCTUnwrap(layout.range(of: "callControlsBlock"))
+        XCTAssertLessThan(grid.lowerBound, pill.lowerBound, "la grille au-dessus de la pilule")
+        XCTAssertTrue(layout.contains(".frame(minHeight: CallGroupStageSizing.minimumGridHeight)"))
+        let tiles = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func grid(", in: try stageSource()))
+        XCTAssertTrue(tiles.contains("(size.height - Self.spacing * CGFloat(layout.rows - 1)) / CGFloat(layout.rows)"), "les vignettes tiennent dans la hauteur laissée par la pilule")
+        let pillSource = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        let rows = try block("private func unfoldedRows<Content: View>(", until: "private var baseRow: some View {", in: pillSource)
+        XCTAssertTrue(rows.contains("ScrollView(.vertical, showsIndicators: false) { rows }"), "au minimum de la grille, les rangées défilent")
     }
 }

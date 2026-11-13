@@ -1,5 +1,9 @@
 package me.meeshy.sdk.model.call.group
 
+import java.util.Locale
+import me.meeshy.sdk.model.call.CallChromeStow
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
+
 /** Ce que la scène d'un appel de groupe montre : la grille, ou une vignette « à la une » — iOS `GroupCallStageFocus`. */
 sealed interface GroupCallStageFocus {
     data object Grid : GroupCallStageFocus
@@ -34,6 +38,7 @@ enum class GroupCallFilmstrip {
  */
 object GroupCallSpotlight {
     const val MAX_ZOOM: Float = 4f
+    private const val RECEIVED_SCREEN_RESET_MILLIS: Int = 200
 
     fun focus(tiles: List<GroupCallStageTile>, choice: GroupCallSpotlightChoice?): GroupCallStageFocus = when (choice) {
         GroupCallSpotlightChoice.Grid -> GroupCallStageFocus.Grid
@@ -65,6 +70,38 @@ object GroupCallSpotlight {
 
     /** Le zoom d'un écran partagé : jamais sous 1, jamais au-delà de [MAX_ZOOM]. */
     fun clampedZoom(scale: Float): Float = scale.coerceIn(1f, MAX_ZOOM)
+
+    /**
+     * P15.11 — le zoom de l'écran reçu en duo : la même loi (1× à 4×) que la une du groupe, le pincement en cours
+     * s'appliquant à la valeur acquise. Sans écran reçu, 1× : un zoom ne survit pas au partage qui l'a fait naître.
+     */
+    fun receivedScreenZoom(committed: Float, pinch: Float, isReceivingScreen: Boolean): Float =
+        if (isReceivingScreen) clampedZoom(committed * pinch) else 1f
+
+    /**
+     * P15.11 — le retour à 1× de l'écran reçu : 0,2 s, et le fondu court du chrome sous « Réduire les animations »
+     * (iOS `CallReceivedScreenZoom.resetTap`, `CallChromeStow.reducedFadeDuration`).
+     */
+    fun receivedScreenResetMillis(reduceMotion: Boolean): Int =
+        if (reduceMotion) CallChromeStow.REDUCED_FADE_MILLIS else RECEIVED_SCREEN_RESET_MILLIS
+
+    /**
+     * U2.5 — le facteur que la puce de l'écran à la une annonce : arrondi au dixième, jamais au-delà du plafond ;
+     * `null` à 1× (la puce ne porte alors que « Écran de X »).
+     */
+    fun displayedZoom(zoom: Float): Float? {
+        val tenths = Math.round(clampedZoom(zoom) * 10f) / 10f
+        return tenths.takeIf { it > 1f }
+    }
+
+    /**
+     * « Écran de Karim · 2,5× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un, écrit par l'unique
+     * libellé de zoom de l'appel ([CameraZoomPolicy.label]) — iOS `CameraZoomPolicy.label(forDisplay:locale:)`.
+     */
+    fun featuredChipText(title: String, zoom: Float, locale: Locale): String {
+        val factor = displayedZoom(zoom) ?: return title
+        return "$title · ${CameraZoomPolicy.label(factor, locale)}"
+    }
 
     /** La pellicule des autres : aucune en plein écran, en colonne à droite en paysage, en rangée dessous sinon. */
     fun filmstrip(isFullScreen: Boolean, isLandscape: Boolean): GroupCallFilmstrip = when {

@@ -56,6 +56,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  bringEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -496,6 +497,34 @@ describe('les notifications', () => {
     }
   });
 
+  /* #16588 — l'interrupteur GLOBAL du Bring : coupé, personne ne peut plus
+     faire sonner ce compte (« Bring indisponible » chez l'émetteur). */
+  const BRING = 'Recevoir des Bring';
+
+  test('« Recevoir des Bring » se bascule, écrit SA clé et dit ce qu’il coupe', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ bringEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, BRING);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('bringEnabled');
+    expect(host.textContent).toContain('même en silencieux');
+  });
+
+  test('« Recevoir des Bring » est activé par défaut', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, BRING)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Recevoir des Bring » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="bringEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(BRING);
+      expect(label).not.toBe('');
+    }
+  });
+
   /* Le legacy est décommissionné (#6702) : les options fines de notification
      n'ont plus d'adresse où mener. MASQUÉES — ni lien, ni rangée inerte. */
   test('les options fines, non portées, ne sont pas offertes', () => {
@@ -556,7 +585,7 @@ describe('les réglages ne mènent plus au legacy', () => {
 
 describe('les outils', () => {
   test('la progression mène à son écran', () => {
-    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Progression');
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Ma Légende');
   });
 
   test('les réglages du jeu (#9481) ont leur rangée, juste sous Progression', () => {

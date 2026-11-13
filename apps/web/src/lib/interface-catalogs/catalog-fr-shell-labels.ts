@@ -155,7 +155,7 @@ const frShellLabels = {
   'list.quick.mood.hint': 'Un emoji dit où vous en êtes, sans écrire un message.',
   'list.header.share': 'Créer un lien de partage',
   'list.header.new': 'Nouvelle conversation',
-  'list.header.progression': 'Progression — badges, niveau et série',
+  'list.header.progression': 'Ma Légende — badges, niveau et Flamme',
   'list.footer.exhausted': 'Toutes les conversations sont chargées',
   'list.footer.loadingMore': 'Chargement de la suite',
   'list.footer.failed': 'Impossible de charger plus',

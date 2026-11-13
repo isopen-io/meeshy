@@ -40,6 +40,7 @@ class EpureEntreeStringsTest {
         "guest_join_username_optional", "guest_join_email_optional", "guest_join_optional_section",
         "onboarding_email_waiting", "onboarding_friends_pending", "onboarding_global_hint", "onboarding_story_sending_detail",
         "signup_card_title", "signup_password_why", "onboarding_story_verify_detail",
+        "onboarding_profile_benefit_visibility", "onboarding_profile_benefit_contacts",
         "login_welcome_back", "signup_choose_country", "signup_submit", "auth_magic_countdown",
         "auth_login_two_factor_description", "email_verification_nav_title", "onboarding_languages_failed", "signup_back",
         "signup_display_name_label", "signup_email_label", "signup_error_generic", "signup_password_hide",
@@ -79,7 +80,7 @@ class EpureEntreeStringsTest {
 
     @Test
     fun `the shortened French labels keep within 80 characters but the security sentences`() {
-        val securitySentences = setOf("link_switch_message", "link_switch_message_unknown_current", "link_signin_message", "link_signin_message_replacing")
+        val securitySentences = setOf("link_switch_message", "link_switch_message_unknown_current", "link_signin_message", "link_signin_message_replacing", "login_two_factor_description_with_backup")
         val long = epure("values-fr").filter { (key, text) -> key !in securitySentences && text.length > 80 }
         assertThat(long.keys).isEmpty()
     }
@@ -131,10 +132,39 @@ class EpureEntreeStringsTest {
         assertThat(fr["onboarding_contacts_offer_promise"]).isEqualTo("Personne n'est contacté à ta place.")
         assertThat(fr["onboarding_friends_badge"]).isEqualTo("+%1\$d chacun")
         assertThat(fr["onboarding_story_badge"]).isEqualTo("24 h")
-        assertThat(fr["onboarding_profile_benefit_visibility"]).isEqualTo("Plus de visibilité")
-        assertThat(fr["onboarding_profile_benefit_contacts"]).isEqualTo("Plus de contacts")
         assertThat(fr["onboarding_age_picker_hint"]).isNotEmpty()
         assertThat(fr["signup_language_pill"]).isNotEmpty()
+    }
+
+    @Test
+    fun `two consecutive onboarding cards no longer share a title and the story one is translated`() {
+        folders.forEach { folder ->
+            val strings = all(folder)
+            assertThat(strings.getValue("onboarding_story_title")).isNotEqualTo(strings.getValue("onboarding_profile_title"))
+        }
+        assertThat(all("values")["onboarding_story_title"]).isEqualTo("Your story")
+        assertThat(all("values-fr")["onboarding_story_title"]).isEqualTo("Ta story")
+        assertThat(all("values-pt")["onboarding_story_title"]).isEqualTo("Seu story")
+        val english = all("values").getValue("onboarding_story_title")
+        folders.drop(1).filterNot { it == "values-fr" }.forEach { folder ->
+            assertWithMessage(folder).that(all(folder).getValue("onboarding_story_title")).isNotEqualTo(english)
+        }
+    }
+
+    @Test
+    fun `the activation invitation lead names the email, the only proof that ends the code requirement`() {
+        assertThat(all("values")["activation_invite_lead"]).isEqualTo("Verify your email to sign in without a code.")
+        assertThat(all("values-fr")["activation_invite_lead"]).isEqualTo("Validez votre e-mail pour vous connecter sans code.")
+        folders.forEach { folder ->
+            val lead = all(folder).getValue("activation_invite_lead")
+            assertWithMessage(folder).that(lead).doesNotContainMatch("(?i)phone|téléphone|teléfono|telefon|هاتف")
+        }
+        val english = all("values").getValue("activation_invite_lead")
+        folders.drop(1).forEach { folder ->
+            val lead = all(folder).getValue("activation_invite_lead")
+            assertWithMessage(folder).that(lead).isNotEqualTo(english)
+            assertWithMessage(folder).that(lead.length).isGreaterThan(30)
+        }
     }
 
     @Test

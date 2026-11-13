@@ -9,7 +9,10 @@
  *    J'AI fait envers l'autre, nature par nature ;
  *  - `consents` : les partages que J'AI consentis au rituel du Sang
  *    (`RelationFeatureSetting`, `ownerId` = moi), et la date à laquelle j'ai
- *    retiré chacun (#14401).
+ *    retiré chacun (#14401), avec le fantôme ciblé et le rayon de proximité
+ *    que j'ai réglés pour l'autre ;
+ *  - la position du Sang (`bloodLocationExport.ts`, #13937) : mon fantôme
+ *    global, mes points et le journal des consultations qui me concernent.
  *
  * Jamais ce qui décrit l'AUTRE (art. 15(4)) : ni ce qu'il m'accorde, ni ses
  * passages (ses baisses comprises), ni le niveau effectif qui en dérive, ni le
@@ -24,6 +27,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ExportPage } from '../../routes/me/export-sections';
+import { exportBloodLocation } from '../bloodLocation/bloodLocationExport';
 
 export const INTERACTION_KINDS = ['Message', 'Reaction', 'PostView', 'Comment', 'Share', 'StoryReply', 'Mention', 'Call', 'Audio'] as const;
 
@@ -56,6 +60,8 @@ type ConsentRow = {
   readonly locationWithdrawnAt?: Date | null;
   readonly locationHistoryWithdrawnAt?: Date | null;
   readonly proximityWithdrawnAt?: Date | null;
+  readonly ghostAt?: Date | null;
+  readonly proximityRadiusMeters?: number | null;
 };
 
 type FindMany<Row> = { readonly findMany: (args: never) => Promise<readonly Row[]> };
@@ -96,6 +102,8 @@ const consentOf = (row: ConsentRow) => ({
   locationHistoryShared: row.locationHistoryShared,
   proximityShared: row.proximityShared,
   consentedAt: row.consentedAt.toISOString(),
+  ghostAt: row.ghostAt?.toISOString() ?? null,
+  proximityRadiusMeters: row.proximityRadiusMeters ?? null,
   withdrawnAt: {
     listeningCategoryShared: row.listeningCategoryWithdrawnAt?.toISOString() ?? null,
     listeningTitleShared: row.listeningTitleWithdrawnAt?.toISOString() ?? null,
@@ -115,7 +123,7 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
   const skip = page.offset;
   const ofMyPairs = { OR: [{ userLowId: userId }, { userHighId: userId }] };
 
-  const [links, interactionDays, consents] = await Promise.all([
+  const [links, interactionDays, consents, bloodLocation] = await Promise.all([
     db.userRelation.findMany({
       where: ofMyPairs,
       select: { userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true, origin: true, createdAt: true, transitions: true },
@@ -133,11 +141,13 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
     db.relationFeatureSetting.findMany({
       where: { ownerId: userId },
       select: { otherId: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true,
-        listeningCategoryWithdrawnAt: true, listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true },
+        listeningCategoryWithdrawnAt: true, listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true,
+        ghostAt: true, proximityRadiusMeters: true },
       orderBy: { consentedAt: 'asc' },
       take,
       skip,
     } as never),
+    exportBloodLocation(prisma as unknown as PrismaClient, userId, page),
   ]);
 
   const clip = <Row>(rows: readonly Row[]) => rows.slice(0, page.limit);
@@ -145,10 +155,14 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
     links: clip(links).map((row) => linkOf(row, userId)),
     interactionDays: clip(interactionDays).map((row) => interactionDayOf(row, userId)),
     consents: clip(consents).map(consentOf),
+    bloodLocationGhostAt: bloodLocation.bloodLocationGhostAt,
+    bloodLocationPoints: bloodLocation.bloodLocationPoints,
+    bloodLocationConsultations: bloodLocation.bloodLocationConsultations,
     hasMore: {
       links: links.length > page.limit,
       interactionDays: interactionDays.length > page.limit,
       consents: consents.length > page.limit,
+      ...bloodLocation.hasMore,
     },
   };
 }

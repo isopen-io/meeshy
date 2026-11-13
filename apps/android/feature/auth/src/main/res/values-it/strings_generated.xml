@@ -277,7 +277,6 @@
         <item quantity="other">+%1$d scintille · prima storia</item>
     </plurals>
     <string name="onboarding_story_sending">La tua storia sta partendo…</string>
-    <string name="onboarding_story_title">Fatti vedere</string>
     <string name="registration_back">Indietro</string>
     <string name="session_closed_activation_title">Conferma il tuo indirizzo e-mail</string>
     <string name="session_closed_contact">Scrivi al team Meeshy</string>
@@ -290,7 +289,7 @@
     <string name="share_link_resume_anonymously">Riprendi in forma anonima</string>
     <string name="signup_card_code_lead">Inserisci il codice a 6 cifre inviato a %1$s o apri il link ricevuto.</string>
     <string name="signup_card_verified">Account convalidato!</string>
-    <string name="signup_card_verified_lead">Tutto pronto: i tuoi contatti ti leggono nella loro lingua.</string>
+    <string name="signup_card_verified_lead">I tuoi contatti ti leggono nella loro lingua.</string>
     <string name="signup_close">Chiudi</string>
     <string name="signup_country_search_hint">Cerca un paese</string>
     <string name="signup_email_forgot_password">Password dimenticata?</string>

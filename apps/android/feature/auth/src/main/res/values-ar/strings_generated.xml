@@ -292,7 +292,6 @@
         <item quantity="other">+%1$d شرارة · أول قصة</item>
     </plurals>
     <string name="onboarding_story_sending">قصتك في الطريق…</string>
-    <string name="onboarding_story_title">أظهِر نفسك</string>
     <string name="registration_back">رجوع</string>
     <string name="session_closed_activation_title">أكّد عنوان بريدك الإلكتروني</string>
     <string name="session_closed_contact">راسل فريق Meeshy</string>
@@ -305,7 +304,7 @@
     <string name="share_link_resume_anonymously">الاستئناف دون الكشف عن هويتي</string>
     <string name="signup_card_code_lead">أدخل الرمز المكوّن من 6 أرقام المرسل إلى %1$s، أو افتح الرابط الذي وصلك.</string>
     <string name="signup_card_verified">تم تأكيد الحساب!</string>
-    <string name="signup_card_verified_lead">كل شيء جاهز: يقرأك الآخرون بلغتهم.</string>
+    <string name="signup_card_verified_lead">يقرأك الآخرون بلغتهم.</string>
     <string name="signup_close">إغلاق</string>
     <string name="signup_country_search_hint">ابحث عن بلد</string>
     <string name="signup_email_forgot_password">نسيت كلمة المرور؟</string>

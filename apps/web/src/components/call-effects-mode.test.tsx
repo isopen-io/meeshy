@@ -9,6 +9,7 @@ import type { CallMember } from '@/lib/calls/call-store';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import type { EffectsCompanion } from './call-effects-companions';
@@ -29,6 +30,7 @@ describe('CallEffectsMode', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
@@ -227,6 +229,33 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
+  test('#17947 — le panneau reste ouvert tant qu’on règle : un réglage continu n’est pas un choix ; « Réglages » le referme, ‹ rend l’appel (P8b, loi 14)', async () => {
+    const view = mount({ blur: true });
+    view.press('[data-call-effects-settings-toggle]');
+    const slider = view.find('input[type="range"]') as HTMLInputElement;
+    for (const value of ['-10', '-20', '15']) {
+      act(() => {
+        slider.value = value;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      act(() => void slider.dispatchEvent(new Event('change', { bubbles: true })));
+    }
+    view.press('[data-call-effects-blur]');
+    await later(260);
+    expect(view.applied).toEqual([{ brightness: -0.1 }, { brightness: -0.2 }, { brightness: 0.15 }, { blur: true }]);
+    expect(view.find('[data-call-effects-settings]')).not.toBeNull();
+    expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
+    view.press('[data-call-effects-settings-toggle]');
+    await later(260);
+    expect(view.find('[data-call-effects-settings]')).toBeNull();
+    expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
+    view.press('[data-call-effects-settings-toggle]');
+    view.press('[data-call-mode-quit]');
+    expect(view.exits).toEqual(['exit']);
+    view.done();
+  });
+
   test('sans traitement d’images, seul le flou reste — ni carrousel, ni Réglages, ni (+), ni puces', () => {
     const view = mount({ color: false, blur: true });
     expect(view.find('[data-call-mode-carousel]')).toBeNull();
@@ -400,6 +429,18 @@ describe('CallEffectsMode', () => {
     expect(view.released).toEqual(['video']);
     view.done();
   });
+  test('pendant une vidéo, le stop passe AU-DESSUS de la barre et du carrousel, qui peuvent monter jusqu’au centre (#17903)', async () => {
+    const view = mount();
+    await view.settle('[data-call-record-key]');
+    const layer = (element: Element | null | undefined): number => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.className ?? '')?.[1] ?? 0);
+    const stop = view.find('[data-call-recording]');
+    expect(stop).not.toBeNull();
+    expect(layer(stop)).toBeGreaterThan(layer(view.find('[data-call-mode-rider]')?.parentElement));
+    await view.settle('[data-call-record-stop]');
+    await act(async () => {});
+    view.done();
+  });
+
   test('les autres restent visibles : un bloc nommé, en haut, HORS de l’aperçu capturé, qu’on touche (#8737)', () => {
     const view = mount({ companions: [companion('amina')] });
     const block = view.find('[data-call-effects-companions]');

@@ -36,8 +36,9 @@ const en = {
   'callControls.someone': 'A participant',
   'callControls.incomingInvite': '{name} is inviting you to a group call',
   'callControls.incoming.seenBy': '{name} will see you when you answer',
-  'callControls.incoming.heardBy': '{name} will hear you when you answer',
-  'callControls.incoming.silent': 'Mic and camera off when you answer',
+  'callControls.incoming.heardBy': '{name} will hear you without seeing you',
+  'callControls.incoming.seenMuted': '{name} will see you, mic off',
+  'callControls.incoming.silent': '{name} won’t see or hear you',
   'callControls.incoming.noVideo': 'No video',
   'callControls.incoming.answer': 'Answer',
   'callControls.incoming.me': 'me',
@@ -92,6 +93,16 @@ const en = {
   'callControls.liveFrame.answer.declined.anonymous': 'The other person keeps their own view',
   'callControls.liveFrame.notProposed': 'The frame is applied on your side but couldn\'t be offered',
   'callControls.liveFrame.surface': '{frame} frame around both videos',
+  'callControls.mode.frames': 'Frames',
+  'callControls.layers.title': 'Applied effects',
+  'callControls.layers.undo': 'Undo {name}',
+  'callControls.layers.full': 'Three effects at most: remove one to add another',
+  'callControls.layers.hint': 'Long press or Shift + Enter: applied effects',
+  'callControls.layers.genre.frame': 'Frame',
+  'callControls.layers.genre.color': 'Color',
+  'callControls.layers.genre.face': 'Face',
+  'callControls.layers.genre.landscape': 'Scenery',
+  'callControls.layers.genre.voice': 'Voice',
 } satisfies CallControlsCatalog;
 
 export default en;

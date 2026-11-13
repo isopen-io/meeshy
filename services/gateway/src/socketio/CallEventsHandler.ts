@@ -89,7 +89,7 @@ import {
   socketTranscriptionActiveSchema,
   socketRequestIceServersSchema,
 } from '../validation/call-schemas';
-import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
+import { getSocketRateLimiter, checkSocketRateLimit, callSignalBudgetId, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
 import type {
   CallInitiateEvent,
@@ -2788,10 +2788,12 @@ export class CallEventsHandler {
           return;
         }
 
-        // CVE-002: Rate limiting check (strict for signals to prevent spam)
+        // CVE-002: Rate limiting check (strict for signals to prevent spam).
+        // #17952 — budgeted PER SOCKET: one device of the account flooding
+        // signals must never refuse another device's SDP answer.
         const rateLimitPassed = await checkSocketRateLimit(
           socket,
-          userId,
+          callSignalBudgetId(userId, socket.id),
           SOCKET_RATE_LIMITS.CALL_SIGNAL,
           this.rateLimiter,
           CALL_EVENTS.ERROR

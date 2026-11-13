@@ -114,7 +114,6 @@ private fun BirthDateField(state: OnboardingUiState, onPick: (LocalDate) -> Unit
     val gesture = stringResource(R.string.onboarding_age_picker_hint)
     val shown = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).format(state.ageBirthDate)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SectionLabel(label)
         Row(
             modifier = Modifier
                 .testTag("onboarding.age.picker")

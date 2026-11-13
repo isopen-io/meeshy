@@ -1,6 +1,6 @@
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { AuthenticatedSession } from '@/lib/api/session';
@@ -74,7 +74,7 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean }) {
+function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0, bleedEnd = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number; readonly bleedEnd?: number }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -84,8 +84,9 @@ function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = t
     },
     zoom: 'step' as const,
     column: () => null,
+    topInset,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} bleedEnd={bleedEnd} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
@@ -100,10 +101,17 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     return { cancel: () => undefined };
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
+    if (this.hasAttribute('data-call-stage-surface')) {
+      const width = window.innerWidth - Number(this.getAttribute('data-bleed') ?? 0);
+      return { left: 0, top: 0, right: width, bottom: 800, width, height: 800, x: 0, y: 0, toJSON: () => ({}) };
+    }
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
-    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
-    const top = 80 + Number(moved?.[2] ?? 0);
-    return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - Number(this.closest('[data-bleed]')?.getAttribute('data-bleed') ?? 0) + Number(moved?.[1] ?? 0);
+    const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
+    const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
+    const width = Number.parseFloat(this.style.width) || 0;
+    const height = Number.parseFloat(this.style.height) || 0;
+    return { left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => ({}) };
   };
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
   try {
@@ -120,13 +128,30 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   return played;
 }
 
-const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly chromeVisible?: boolean } = {}) => {
+const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0, surface = false }: { readonly chromeVisible?: boolean; readonly bleedEnd?: number; readonly surface?: boolean } = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   const swaps = { count: 0 };
   const reveals = { count: 0 };
-  const render = (visible: boolean) => act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} />));
+  let inset = 0;
+  let bleed = bleedEnd;
+  const render = (visible: boolean, nextInset = inset, nextBleed = bleed) => {
+    inset = nextInset;
+    bleed = nextBleed;
+    const stage = <Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} bleedEnd={bleed} />;
+    act(() =>
+      root.render(
+        surface ? (
+          <div data-call-stage-surface="" data-bleed={bleed}>
+            {stage}
+          </div>
+        ) : (
+          <div data-bleed={bleed}>{stage}</div>
+        ),
+      ),
+    );
+  };
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const tile = () => find('[data-call-corner]') as HTMLElement;
@@ -236,6 +261,20 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     expect(played).toEqual([[{ transform: 'translate(-40px, 60px)' }, { transform: 'none' }]]);
   });
 
+  test('un bandeau qui arrive sous l’en-tête fait GLISSER ma vignette de sa hauteur — transformation seule, jamais un saut (R1.6)', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.render(true, 56);
+      view.render(true, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(0px, -56px)' }, { transform: 'none' }],
+      [{ transform: 'translate(0px, 56px)' }, { transform: 'none' }],
+    ]);
+  });
+
   test('mouvement réduit : le retour au coin est sec', () => {
     fresh();
     const played = withFlipProbe(() => {
@@ -244,6 +283,152 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     }, { reducedMotion: true });
     expect(played).toEqual([]);
+  });
+});
+
+describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
+  test('en droite à gauche, un appel neuf la pose en haut à gauche, contre la colonne', () => {
+    fresh();
+    document.documentElement.dir = 'rtl';
+    try {
+      const view = mount();
+      expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+      view.done();
+    } finally {
+      document.documentElement.dir = '';
+    }
+  });
+
+  test('colonne ouverte, la dépose s’élit sur la scène réduite : juste à gauche du milieu de la scène, elle va au coin de début', () => {
+    fresh();
+    const view = mount(call(), { bleedEnd: 360 });
+    view.drag(-300, 0);
+    expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+    view.done();
+  });
+
+  test('la colonne qui s’ouvre ou se ferme fait GLISSER la vignette — transformation seule, jamais un saut', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(360px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-360px, 0px)' }, { transform: 'none' }],
+    ]);
+  });
+});
+
+describe('W1.5 — la scène qui glisse vers son nouveau centre (W1.20) porte ma vignette : son propre glissé n’en joue que le reste', () => {
+  test('la colonne s’ouvre puis se ferme : la vignette part de sa place vue, la scène qui la porte ayant déjà fait la moitié du chemin', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true });
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(180px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-180px, 0px)' }, { transform: 'none' }],
+    ]);
+  });
+
+  test('un changement de coin, colonne ouverte, ne retire rien : la scène ne bouge pas', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true, bleedEnd: 360 });
+      view.key('ArrowLeft');
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+  });
+});
+
+describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur de coin', () => {
+  const turn = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+    act(() => window.dispatchEvent(new Event('resize')));
+  };
+  const upright = { width: 390, height: 844 };
+  const real = { width: 0, height: 0 };
+  beforeEach(() => {
+    real.width = window.innerWidth;
+    real.height = window.innerHeight;
+  });
+  afterEach(() => turn(real.width, real.height));
+
+  test('fenêtre couchée : le cadre fait 130 × 96, à 60 sous la zone sûre ; debout, il garde 112 × 160 à 128', () => {
+    fresh();
+    turn(844, 390);
+    const view = mount();
+    expect(view.frame().style.width).toBe('130px');
+    expect(view.frame().style.height).toBe('96px');
+    expect(view.frame().style.top).toBe('calc(env(safe-area-inset-top) + 60px)');
+    view.done();
+    turn(upright.width, upright.height);
+    const standing = mount();
+    expect(standing.frame().style.width).toBe('112px');
+    expect(standing.frame().style.top).toBe('calc(env(safe-area-inset-top) + 128px)');
+    standing.done();
+  });
+
+  test('tourner l’écran joue le changement de taille en transform (translation + échelle autour du coin), sans saut', () => {
+    fresh();
+    turn(upright.width, upright.height);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    });
+    const [first] = played;
+    expect(first).toHaveLength(2);
+    expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
+    expect(first?.[1]).toEqual({ transform: 'none' });
+    expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
+  });
+
+  test('la scène qui suit la fenêtre qu’on tourne ne glisse pas : ma vignette joue tout son mouvement, rien ne s’en retire (W1.20)', () => {
+    const rotate = (surface: boolean) => {
+      fresh();
+      turn(upright.width, upright.height);
+      return withFlipProbe(() => {
+        const view = mount(call(), { surface });
+        turn(844, 390);
+        view.done();
+      });
+    };
+    const alone = rotate(false);
+    expect(alone).toHaveLength(1);
+    expect(rotate(true)).toEqual(alone);
+  });
+
+  test('redimensionner la fenêtre sans changer de forme ne rejoue rien : la vignette suit la fenêtre, aucune mesure ni animation à chaque image', () => {
+    fresh();
+    turn(568, 200);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      const before = view.frame().style.width;
+      turn(568, 220);
+      expect(view.frame().style.width).not.toBe(before);
+      view.done();
+    });
+    expect(played).toEqual([]);
+  });
+
+  test('mouvement réduit : la rotation se remplace par un fondu court, opacité seule', () => {
+    fresh();
+    turn(upright.width, upright.height);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    }, { reducedMotion: true });
+    expect(played).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   });
 });
 
@@ -374,6 +559,25 @@ describe('toucher ma vignette contrôles cachés rend d’abord les contrôles (
     const view = mount(call(), { chromeVisible: true });
     act(() => view.tile().click());
     expect(view.swaps.count).toBe(1);
+    view.done();
+  });
+
+  test('pendant MON partage, ma caméra reste en vignette « moi » au liseré de ma couleur, sans le flux d’écran (S2.8)', () => {
+    fresh();
+    const screen = stream();
+    const mine = stream();
+    const view = mount(call({ cameraOn: false, screenSharing: true, localStream: screen, cameraPreview: mine, remoteStreams: {}, members: { 'u-peer': member({ cameraOn: false }) } }));
+    const video = view.tile().querySelector('video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.srcObject).toBe(mine);
+    expect(view.tile().style.borderColor).not.toBe('');
+    view.done();
+  });
+
+  test('pendant mon partage sans caméra avant, aucune vignette « moi »', () => {
+    fresh();
+    const view = mount(call({ cameraOn: false, screenSharing: true, remoteStreams: {}, members: { 'u-peer': member({ cameraOn: false }) } }));
+    expect(view.frame()).toBeNull();
     view.done();
   });
 });

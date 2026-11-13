@@ -3,6 +3,9 @@ package me.meeshy.sdk.model.call.group
 /** Un rectangle de la scène, en dp, l'origine au coin haut-gauche de l'écran (même en droite-à-gauche). */
 data class CallStageRect(val left: Float, val top: Float, val width: Float, val height: Float)
 
+/** Le déplacement physique d'un élément qui sort de l'écran (px ou dp, selon l'appelant). */
+data class CallStripTravel(val dx: Float, val dy: Float)
+
 /**
  * Où se pose chaque vignette de la scène de groupe, dans la grille et à la une (P14.10) : la même géométrie que
  * l'écran dessine (espace de 8 dp, pellicule des autres), dite en pur pour que le mouvement grille ↔ à la une parte
@@ -27,10 +30,11 @@ object GroupCallStageGeometry {
         height: Float,
         isFullScreen: Boolean,
         isRtl: Boolean,
+        isCompactHeight: Boolean,
     ): Map<String, CallStageRect> {
         if (tileIds.isEmpty() || width <= 0f || height <= 0f) return emptyMap()
         val leftToRight = when (focus) {
-            GroupCallStageFocus.Grid -> grid(tileIds, width, height)
+            GroupCallStageFocus.Grid -> grid(tileIds, width, height, isCompactHeight)
             is GroupCallStageFocus.Spotlight -> spotlight(tileIds, focus.tileId, width, height, isFullScreen)
         }
         return if (isRtl) leftToRight.mapValues { (_, rect) -> rect.copy(left = width - rect.left - rect.width) } else leftToRight
@@ -46,8 +50,36 @@ object GroupCallStageGeometry {
         return CallStageRect(mix(from.left, to.left), mix(from.top, to.top), mix(from.width, to.width), mix(from.height, to.height))
     }
 
-    private fun grid(tileIds: List<String>, width: Float, height: Float): Map<String, CallStageRect> {
-        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height)
+    /**
+     * U2.10 — la translation (même unité que [stage] et la fenêtre, physique : x vers la droite) qui fait sortir le
+     * bandeau des autres par SON bord de l'écran : la distance MESURÉE du bord de la scène à celui de la fenêtre (la
+     * pilule, la zone sûre), plus l'épaisseur [stripExtent] du bandeau. Une scène pas encore mesurée ([stage] `null`)
+     * ne retient pas le bandeau à l'écran. En droite-à-gauche la colonne est à gauche et sort par le bord gauche.
+     */
+    fun stripTravel(
+        edge: GroupCallFilmstrip,
+        stage: CallStageRect?,
+        windowWidth: Float,
+        windowHeight: Float,
+        stripExtent: Float,
+        isRtl: Boolean,
+    ): CallStripTravel {
+        val measured = stage ?: CallStageRect(0f, 0f, 0f, 0f)
+        return when (edge) {
+            GroupCallFilmstrip.None -> CallStripTravel(0f, 0f)
+            GroupCallFilmstrip.Bottom ->
+                CallStripTravel(0f, (windowHeight - (measured.top + measured.height)).coerceAtLeast(0f) + stripExtent)
+            GroupCallFilmstrip.Trailing ->
+                if (isRtl) {
+                    CallStripTravel(-(measured.left.coerceAtLeast(0f) + stripExtent), 0f)
+                } else {
+                    CallStripTravel((windowWidth - (measured.left + measured.width)).coerceAtLeast(0f) + stripExtent, 0f)
+                }
+        }
+    }
+
+    private fun grid(tileIds: List<String>, width: Float, height: Float, isCompactHeight: Boolean): Map<String, CallStageRect> {
+        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height, isCompactHeight = isCompactHeight)
         val rows = tileIds.chunked(layout.columns)
         val cellWidth = (width - SPACING * (layout.columns - 1)) / layout.columns
         val cellHeight = (height - SPACING * (rows.size - 1)) / rows.size

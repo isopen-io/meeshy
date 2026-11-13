@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, test } from 'bun:test';
 
-import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded } from './call-header';
+import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, reducedCaption, reducedTitle } from './call-header';
 
 /**
  * L'EN-TÊTE DE L'APPEL (#17329, #17341) — Réduire · Image dans l'image ·
@@ -55,6 +55,24 @@ describe('la capsule de droite (#17341)', () => {
     expect(callHeaderCapsule({ ...input, layout: 'audio', degraded: true })).toEqual({ title: null, participantCount: null, duration: false, network: true });
   });
 
+  test('vidéo, écran reçu (P15.4) : la capsule annonce l’écran de la personne — son nom, sans durée, l’icône d’écran', () => {
+    const screen = { ...input, receivesScreen: true };
+    expect(callHeaderCapsule({ ...screen, givenName: 'Awa' })).toEqual({ title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true });
+    expect(callHeaderCapsule(screen)?.title).toBe('Amina Diallo');
+    expect(callHeaderCapsule({ ...screen, givenName: '  ' })?.title).toBe('Amina Diallo');
+  });
+
+  test('vidéo, écran reçu : le réseau ne paraît que dégradé, et la capsule n’existe qu’une fois l’appel établi', () => {
+    expect(callHeaderCapsule({ ...input, receivesScreen: true, degraded: true })?.network).toBe(true);
+    expect(callHeaderCapsule({ ...input, receivesScreen: true, established: false })).toBeNull();
+  });
+
+  test('sans écran reçu la capsule n’est jamais marquée écran ; audio et groupe ignorent l’écran reçu', () => {
+    expect(callHeaderCapsule(input)?.receivedScreen).toBeUndefined();
+    expect(callHeaderCapsule({ ...input, layout: 'audio', receivesScreen: true })).toBeNull();
+    expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4, receivesScreen: true })).toEqual({ title: 'Famille', participantCount: 4, duration: true, network: false });
+  });
+
   test('groupe : le nom du groupe, le nombre et la durée', () => {
     expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4 })).toEqual({ title: 'Famille', participantCount: 4, duration: true, network: false });
     expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4, degraded: true })?.network).toBe(true);
@@ -103,5 +121,20 @@ describe('ce qui paraît dans l’en-tête arrive, jamais d’un coup (#17406, c
     expect(motion).toContain('transform:');
     expect(reduced).toContain('opacity: 0');
     expect(reduced).not.toContain('transform');
+  });
+});
+
+describe('l’appel réduit dit « nom · durée » (P18.5, miroir de CallReducedRule)', () => {
+  test('le nom du groupe en groupe, sinon le nom que j’ai donné, sinon le nom d’affichage', () => {
+    expect(reducedTitle({ givenName: 'Awa', groupName: null, displayName: 'Amina Diallo' })).toBe('Awa');
+    expect(reducedTitle({ givenName: null, groupName: null, displayName: 'Amina Diallo' })).toBe('Amina Diallo');
+    expect(reducedTitle({ givenName: ' ', groupName: 'Famille', displayName: 'Amina Diallo' })).toBe('Famille');
+    expect(reducedTitle({ givenName: 'Awa', groupName: 'Famille', displayName: null })).toBe('Famille');
+  });
+
+  test('aucun nom connu : la durée seule', () => {
+    expect(reducedTitle({ givenName: null, groupName: null, displayName: '  ' })).toBeNull();
+    expect(reducedCaption(null, '4:12')).toBe('4:12');
+    expect(reducedCaption('Awa', '4:12')).toBe('Awa · 4:12');
   });
 });

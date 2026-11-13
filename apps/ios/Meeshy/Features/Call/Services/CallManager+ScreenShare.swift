@@ -32,7 +32,7 @@ extension CallManager: CallScreenShareHosting {
             .info("screen share renegotiation offer sent (callId=\(callId))")
     }
 
-    func screenShareDidStart() { displayMode = .pip }
+    func screenShareDidStart() { CallPipMorph.begin(on: self) }
 
     func makeScreenShareController() -> CallScreenShareController {
         let controller = CallScreenShareController()

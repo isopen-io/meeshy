@@ -88,6 +88,60 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.fitted(CallSelfTileScale.x3.size, in: CGSize(width: 400, height: 900)), CallSelfTileScale.x3.size)
     }
 
+    // MARK: - L1.5 — dans une fenêtre plus large que haute, ma vignette se couche
+
+    func test_size_inALandscapeWindow_isTheLyingTile_130By96() {
+        XCTAssertEqual(CallSelfTileScale.x2.size(isLandscape: true), CGSize(width: 130, height: 96))
+    }
+
+    func test_size_inAPortraitWindow_staysTheStandingTile() {
+        XCTAssertEqual(CallSelfTileScale.x2.size(isLandscape: false), CGSize(width: 100, height: 140))
+        XCTAssertEqual(CallSelfTileScale.x2.size(isLandscape: false), CallSelfTileScale.x2.size)
+    }
+
+    func test_size_landscape_growsWithTheStep_andStaysWiderThanHigh() {
+        let sizes = CallSelfTileScale.allCases.map { $0.size(isLandscape: true) }
+        XCTAssertLessThan(sizes[0].width, sizes[1].width)
+        XCTAssertLessThan(sizes[1].width, sizes[2].width)
+        sizes.forEach { XCTAssertGreaterThan($0.width, $0.height) }
+    }
+
+    func test_isLandscape_isTheShapeOfTheWindow_notTheDevice() {
+        XCTAssertTrue(CallSelfTileScale.isLandscape(CGSize(width: 1024, height: 700)))
+        XCTAssertFalse(CallSelfTileScale.isLandscape(CGSize(width: 700, height: 1024)))
+        XCTAssertFalse(CallSelfTileScale.isLandscape(CGSize(width: 800, height: 800)))
+    }
+
+    func test_liveSize_landscape_followsTheFingers_withinTheLyingSteps() {
+        XCTAssertEqual(CallSelfTileScale.liveSize(pinch: 1.2, from: .x2, isLandscape: true).width, 156, accuracy: 0.001)
+        XCTAssertEqual(CallSelfTileScale.liveSize(pinch: 4, from: .x2, isLandscape: true), CallSelfTileScale.x3.size(isLandscape: true))
+        XCTAssertEqual(CallSelfTileScale.liveSize(pinch: 0.2, from: .x2, isLandscape: true), CallSelfTileScale.x1.size(isLandscape: true))
+    }
+
+    func test_liveSize_landscape_keepsTheLyingProportions() {
+        let size = CallSelfTileScale.liveSize(pinch: 1.3, from: .x2, isLandscape: true)
+        XCTAssertEqual(size.height / size.width, 96.0 / 130.0, accuracy: 0.001)
+    }
+
+    func test_tile_sizeFollowsTheWindowShape() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        XCTAssertTrue(code.contains("CallSelfTileScale.isLandscape(container)"))
+        XCTAssertTrue(code.contains("isLandscape: CallSelfTileScale.isLandscape(container)"))
+    }
+
+    /// L1.5 — quand la fenêtre tourne, ma vignette se couche (ou se relève) dans le même mouvement
+    /// que sa place, sans saut ; Réduire les animations : elle se pose sans mouvement.
+    func test_tile_turnsWithTheWindow_inOneMovement() throws {
+        let selfView = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift"))
+        XCTAssertEqual(
+            selfView.components(separatedBy: "isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))").count - 1,
+            2,
+            "la vignette vivante ET la tuile « vidéo en pause » suivent la forme de la fenêtre"
+        )
+        let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
+        XCTAssertTrue(glass.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)"))
+    }
+
     // MARK: - Mémoire de l'appel
 
     func test_memory_sameCall_givesBackTheStep() {

@@ -4,14 +4,6 @@ import MeeshyUI
 import MeeshySDK
 
 enum CallModeCopy {
-    static var quit: String {
-        String(localized: "call.mode.quit", defaultValue: "Quitter", bundle: .main)
-    }
-
-    static var quitMontageHint: String {
-        String(localized: "call.mode.quit.montage.hint", defaultValue: "Revient à l'appel", bundle: .main)
-    }
-
     static var carouselHint: String {
         String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour choisir", bundle: .main)
     }
@@ -66,6 +58,22 @@ enum CallModeCopy {
         String(localized: "call.mode.effects.addLook.hint", defaultValue: "Passe aux looks d'un autre genre, à cumuler avec le vôtre", bundle: .main)
     }
 
+    static var addLookFull: String {
+        String(localized: "call.mode.effects.addLook.full", defaultValue: "Trois effets au plus", bundle: .main)
+    }
+
+    static var addLookFullHint: String {
+        String(localized: "call.mode.effects.addLook.full.hint", defaultValue: "Annulez un effet pour en ajouter un autre ; appui long pour les voir", bundle: .main)
+    }
+
+    static var framesChip: String {
+        String(localized: "call.mode.effects.category.frame", defaultValue: "Cadres", bundle: .main)
+    }
+
+    static var montageSettingsHint: String {
+        String(localized: "call.mode.montage.settings.hint", defaultValue: "Affiche « Chaque visage » à la place des cadres", bundle: .main)
+    }
+
     static var settings: String {
         String(localized: "call.mode.effects.settings", defaultValue: "Réglages", bundle: .main)
     }
@@ -79,6 +87,12 @@ enum CallModeCopy {
         case .face: return String(localized: "call.mode.effects.category.face", defaultValue: "Visage", bundle: .main)
         case .color: return String(localized: "call.mode.effects.category.color", defaultValue: "Couleur", bundle: .main)
         }
+    }
+
+    /// #16979 — le mot d'un genre dans LA rangée de la famille : celui d'Effets, « Cadres » au Montage.
+    static func genreName(_ genre: CallEffectKind) -> String {
+        if let category = CallEffectsCategory(kind: genre) { return categoryName(category) }
+        return genre == .frame ? framesChip : CallEffectsCopy.layerKindName(genre)
     }
 
     static func title(_ mode: CallScreenMode) -> String {
@@ -528,139 +542,11 @@ struct CallModeThumbnail: View {
     }
 }
 
-struct CallModeOption: Identifiable {
-    let id: String
-    let symbol: String
-    let label: String
-    let caption: String
-    var hint: String? = nil
-    var isOn: Bool? = nil
-    var isEnabled = true
-    let action: () -> Void
-}
-
-struct CallModeActionBar: View {
-    let exitHint: String
-    let onExit: () -> Void
-    let options: [CallModeOption]
-
-    private static let sideDiameter: CGFloat = 44
-
-    var body: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            CallPillButton(
-                symbol: "xmark",
-                kind: .normal,
-                label: CallModeCopy.quit,
-                caption: CallModeCopy.quit,
-                hint: exitHint,
-                diameter: Self.sideDiameter,
-                action: onExit
-            )
-            Spacer(minLength: 0)
-            ForEach(options) { option in
-                CallPillButton(
-                    symbol: option.symbol,
-                    kind: option.isOn == true ? .active : .normal,
-                    label: option.label,
-                    caption: option.caption,
-                    hint: option.hint,
-                    toggleState: option.isOn,
-                    diameter: Self.sideDiameter,
-                    action: option.action
-                )
-                .disabled(!option.isEnabled)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.xxl)
-    }
-}
-
 /// VoiceOver ne voit pas les deux tapes ni l'appui long d'un carrousel
 /// ajustable : la photo et le film lui sont offerts en actions nommées.
 /// Les prises offertes à la voix — seulement celles que l'hôte sert : un
 /// carrousel qui ne prend rien (la prise d'une photo du composeur, #9295)
 /// n'annonce pas d'action sans effet.
-/// P8 · P8b — la barre du mode Effets : UN verre d'une pièce (l'atome partagé de la pilule),
-/// qui parle la langue du composer. En haut, la rangée de puces des looks et son filet ; en
-/// bas, la rangée de base ‹ · Réglages · (+). Réglages ouvert, la MÊME barre perd sa rangée
-/// de puces, en fondu, et se resserre par morphisme sur ‹ · Réglages · (+) ; le panneau de
-/// réglages vit au-dessus d'elle, dans son propre verre. Retoucher Réglages (disque blanc)
-/// rend les puces par le chemin inverse.
-struct CallEffectsBar<Looks: View>: View {
-    let showsSettings: Bool
-    let onBack: () -> Void
-    let onSettings: () -> Void
-    let onAddLook: () -> Void
-    @ViewBuilder let looks: () -> Looks
-
-    private static var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-    }
-
-    var body: some View {
-        AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
-            VStack(spacing: MeeshySpacing.sm) {
-                if !showsSettings {
-                    lookChips
-                        .transition(.opacity)
-                }
-                baseRow
-            }
-            .padding(MeeshySpacing.sm)
-        }
-        .clipShape(Self.shape)
-        .callControlsGlass(in: Self.shape)
-        .accessibilityElement(children: .contain)
-    }
-
-    private var lookChips: some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            looks()
-            Rectangle()
-                .fill(Color.white.opacity(MeeshyOpacity.light))
-                .frame(height: 1)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var baseRow: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            CallPillButton(
-                symbol: "chevron.backward",
-                kind: .normal,
-                label: CallModeCopy.backToCall,
-                hint: CallModeCopy.backToCallHint,
-                diameter: Self.diameter,
-                action: onBack
-            )
-            Spacer(minLength: 0)
-            CallPillButton(
-                symbol: "gearshape",
-                kind: showsSettings ? .active : .normal,
-                label: CallModeCopy.settings,
-                caption: CallModeCopy.settings,
-                hint: CallModeCopy.settingsHint,
-                toggleState: showsSettings,
-                diameter: Self.diameter,
-                action: onSettings
-            )
-            Spacer(minLength: 0)
-            CallPillButton(
-                symbol: "plus",
-                kind: .normal,
-                label: CallModeCopy.addLook,
-                hint: CallModeCopy.addLookHint,
-                diameter: Self.diameter,
-                action: onAddLook
-            )
-        }
-        .padding(.horizontal, MeeshySpacing.xs)
-    }
-
-    private static var diameter: CGFloat { 44 }
-}
-
 private struct CallModeShotActions: ViewModifier {
     let isEnabled: Bool
     let onCapturePhoto: (() -> Void)?

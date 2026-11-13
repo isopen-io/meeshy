@@ -175,6 +175,20 @@ describe('un appel vocal propose d’ajouter la vidéo (#9095, `video.badge.plus
     expect(video.find('[data-call-control="camera"] [data-call-camera-glyph]')?.getAttribute('data-call-camera-glyph')).toBe('off');
     video.done();
   });
+
+  test('pendant MON partage, Caméra dit la caméra gardée en aperçu comme iOS : allumée, pressée, inactive, et son libellé est celui d’une caméra allumée (S2.8)', async () => {
+    withDevices([]);
+    const filming = await mount({ media: 'video', cameraOn: true, localStream: videoOf('cam-1') });
+    const label = filming.find('[data-call-control="camera"]')?.getAttribute('aria-label');
+    filming.done();
+    const sharing = await mount({ media: 'video', cameraOn: false, screenSharing: true, localStream: videoOf('screen'), cameraPreview: videoOf('cam-1') });
+    const camera = sharing.find('[data-call-control="camera"]');
+    expect(camera?.querySelector('[data-call-camera-glyph]')?.getAttribute('data-call-camera-glyph')).toBe('on');
+    expect(camera?.getAttribute('aria-pressed')).toBe('true');
+    expect(camera?.hasAttribute('disabled') === true || camera?.getAttribute('aria-disabled') === 'true').toBe(true);
+    expect(camera?.getAttribute('aria-label')).toBe(label ?? '');
+    sharing.done();
+  });
 });
 
 describe('l’image dans l’image vit dans l’en-tête, entre Réduire et Conversation (#17329)', () => {

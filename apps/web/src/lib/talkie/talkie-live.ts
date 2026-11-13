@@ -132,7 +132,7 @@ export function decodeTalkieEnded(raw: unknown): TalkieEndedEventData | null {
   const [talkieId, fromUserId, toUserId, endedAt] = [wire?.talkieId, wire?.fromUserId, wire?.toUserId, wire?.endedAt].map(textOf);
   const reason = TALKIE_END_REASONS.find((candidate): candidate is TalkieEndReason => candidate === wire?.reason);
   if (talkieId == null || fromUserId == null || toUserId == null || endedAt == null || reason === undefined) return null;
-  return { talkieId, fromUserId, toUserId, reason, endedAt };
+  return { talkieId, fromUserId, toUserId, reason, endedAt, ...(typeof wire?.joined === 'boolean' ? { joined: wire.joined } : {}) };
 }
 
 export const talkieStore: TalkieStoreApi = createTalkieStore();

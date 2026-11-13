@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
-import type { ActiveCall } from '@/lib/calls/call-store';
+import { callStore, type ActiveCall } from '@/lib/calls/call-store';
+import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -238,10 +239,95 @@ describe('les gestes', () => {
     host.remove();
   });
 
-  test('une ligne qui EST l’original ne promet rien à déplier', () => {
-    const view = mount({ captionsMode: 'original' });
-    expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.hasAttribute('aria-expanded')).toBe(false);
+  test('en réglage « Original », une phrase qui a une traduction reste touchable : la toucher montre sa traduction, un second toucher rend l’original (L3.9)', () => {
+    const view = mount({ callId: 'call-original', captionsMode: 'original' });
+    const line = () => view.host.querySelector('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('false');
+    expect(line()?.textContent).toContain('Hello everyone');
+    view.press('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('true');
+    expect(line()?.textContent).toContain('Bonjour à tous');
+    expect(line()?.textContent).toContain('EN → FR');
+    expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('false');
+    expect(line()?.textContent).toContain('Hello everyone');
     view.done();
+  });
+
+  test('en réglage « Original », la phrase touchée CHANGE de texte sans rien déplier : le lecteur d’écran entend un bouton pressé, jamais « développé »', () => {
+    const view = mount({ callId: 'call-original-a11y', captionsMode: 'original' });
+    const line = () => view.host.querySelector('[data-call-caption-line="w-1"]');
+    expect(line()?.hasAttribute('aria-expanded')).toBe(false);
+    view.press('[data-call-caption-line="w-1"]');
+    expect(line()?.hasAttribute('aria-expanded')).toBe(false);
+    view.press('[data-call-caption-line="w-1"]');
+    view.done();
+    const translated = mount({ callId: 'call-translated-a11y' });
+    expect(translated.host.querySelector('[data-call-caption-line="w-1"]')?.hasAttribute('aria-pressed')).toBe(false);
+    translated.done();
+  });
+
+  test('rien n’apparaît d’un coup : la traduction révélée en réglage « Original » arrive en fondu (son texte est un NOUVEAU nœud, `call-caption-in` rejoue)', () => {
+    const view = mount({ callId: 'call-original-fade', captionsMode: 'original' });
+    const text = () => view.host.querySelector('[data-call-caption-line="w-1"] > span[dir="auto"]');
+    const before = text();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(text()?.textContent).toBe('Bonjour à tous');
+    expect(text()).not.toBe(before);
+    const revealed = text();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(text()?.textContent).toBe('Hello everyone');
+    expect(text()).not.toBe(revealed);
+    view.done();
+  });
+
+  test('en réglage « Original », ma parole et une phrase sans traduction ne promettent rien à révéler', () => {
+    const view = mount({ callId: 'call-original-bare', captionsMode: 'original', captions: [caption({ id: 'bare', translated: null, pair: null }), caption({ id: 'me', mine: true })] });
+    expect(view.host.querySelector('[data-call-caption-line="bare"]')?.hasAttribute('aria-expanded')).toBe(false);
+    expect(view.host.querySelector('[data-call-caption-line="me"]')?.hasAttribute('aria-expanded')).toBe(false);
+    view.done();
+  });
+
+  test('l’original déplié survit au rangement : le panneau se démonte, revient, et la phrase est restée dépliée (L3.9)', () => {
+    const first = mount({ callId: 'call-stowed' });
+    first.press('[data-call-caption-line="w-1"]');
+    expect(first.host.querySelector('[data-call-caption-original]')).not.toBeNull();
+    first.done();
+    const back = mount({ callId: 'call-stowed' });
+    expect(back.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(back.host.querySelector('[data-call-caption-original]')?.textContent).toBe('Original · Hello everyone');
+    back.done();
+    const other = mount({ callId: 'call-next' });
+    expect(other.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('false');
+    other.done();
+  });
+
+  test('la fin de l’appel libère les phrases révélées : le magasin ne garde rien de l’appel parti', () => {
+    const first = mount({ callId: 'call-ending' });
+    first.press('[data-call-caption-line="w-1"]');
+    first.done();
+    const kept = callStore.getState();
+    act(() => callStore.setState({ call: null }));
+    const back = mount({ callId: 'call-ending' });
+    expect(back.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('false');
+    back.done();
+    act(() => callStore.setState(kept, true));
+  });
+
+  test('le toucher garde son identité d’un rendu à l’autre : une phrase qui arrive ne redessine pas les lignes déjà là (CaptionLine est mémoïsée)', () => {
+    const seen: ((id: string) => void)[] = [];
+    function Probe({ tick }: { readonly tick: number }) {
+      seen.push(useCaptionReveals('call-probe', 'band').toggle);
+      return <i>{tick}</i>;
+    }
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    act(() => root.render(<Probe tick={0} />));
+    act(() => root.render(<Probe tick={1} />));
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toBe(seen[0]);
+    act(() => root.unmount());
   });
 
   test('le bandeau ne montre que le direct : le Journal vit dans son panneau (#8579)', () => {

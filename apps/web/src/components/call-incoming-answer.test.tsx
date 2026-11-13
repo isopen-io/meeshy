@@ -105,26 +105,57 @@ const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = ne
 };
 
 describe('la barre de ce qui part en décrochant', () => {
-  test('« Awa Diallo vous verra en décrochant », micro et caméra allumés', () => {
-    const view = answer(ringing());
-    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa vous verra en décrochant');
+  /* Une doublure qui PASSE pour un MediaStream (`srcObject` de happy-dom le vérifie). */
+  const filming = (): SelfPreviewDeps<MediaStream> => {
+    const tracks = [track('video')];
+    return { granted: async () => true, open: async () => Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getTracks: () => tracks, getVideoTracks: () => tracks, getAudioTracks: () => [] }) };
+  };
+  const text = (view: ReturnType<typeof answer>) => view.find('[data-call-incoming-consent] p')?.textContent;
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  test('« Awa vous verra en décrochant » : la caméra choisie tourne, le micro est allumé ; la barre est un verre, avec mes deux bascules', async () => {
+    const view = answer(ringing(), filming());
+    await settle();
+    expect(text(view)).toBe('Awa vous verra en décrochant');
     expect(view.find('[data-call-incoming-consent]')?.className.split(' ')).toContain('glass-call-prominent');
-    expect(view.find('[data-call-incoming-mic]')?.getAttribute('aria-pressed')).toBe('true');
     expect(view.find('[data-call-incoming-mic]')?.getAttribute('aria-label')).toBe('Couper le micro');
     expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-pressed')).toBe('true');
     expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-label')).toBe('Couper la caméra');
     view.done();
   });
 
-  test('caméra coupée : « vous entendra », et Accepter décroche sans vidéo ; tout coupé, la barre le dit', () => {
+  test('« vous verra » n’est pas promis sans piste vivante : caméra choisie mais pas ouverte, l’autre n’entend que moi (P17.7)', () => {
     const view = answer(ringing());
+    expect(text(view)).toBe('Awa vous entendra sans vous voir');
+    view.done();
+  });
+
+  test('les quatre phrases : micro coupé, caméra qui filme ; caméra coupée ; tout coupé, avec le prénom (P17.7)', async () => {
+    const view = answer(ringing(), filming());
+    await settle();
+    view.press('[data-call-incoming-mic]');
+    expect(text(view)).toBe('Awa vous verra, micro coupé');
     view.press('[data-call-incoming-camera]');
-    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa vous entendra en décrochant');
+    expect(text(view)).toBe('Awa ne vous verra ni ne vous entendra');
+    view.press('[data-call-incoming-mic]');
+    expect(text(view)).toBe('Awa vous entendra sans vous voir');
     expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-label')).toBe('Activer la caméra');
     view.press('[data-call-incoming-accept]');
     expect(view.accepted).toEqual([{ audioOnly: true, micMuted: false }]);
+    view.done();
+  });
+
+  test('micro COUPÉ : un disque blanc plein, icône sombre, et aria-pressed dit qu’il est actif (P17.8)', () => {
+    const view = answer(ringing());
+    const mic = () => view.find('[data-call-incoming-mic]');
+    expect(mic()?.getAttribute('aria-pressed')).toBe('false');
+    expect(mic()?.className).toContain('bg-media-fill');
     view.press('[data-call-incoming-mic]');
-    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Micro et caméra coupés en décrochant');
+    expect(mic()?.getAttribute('aria-pressed')).toBe('true');
+    expect(mic()?.className).not.toContain('bg-media-fill');
+    expect(mic()?.style.background).toBe('var(--color-on-media)');
+    expect(mic()?.style.color).toBe('var(--ios-indigo-950)');
+    expect(mic()?.getAttribute('aria-label')).toBe('Réactiver le micro');
     view.done();
   });
 
@@ -142,7 +173,7 @@ describe('la barre de ce qui part en décrochant', () => {
 
   test('la barre nomme l’appelant par son prénom : elle tient sur une ligne', () => {
     const view = answer(ringing({ title: '  Awa   Diallo ' }));
-    expect(view.find('[data-call-incoming-consent] p')?.textContent).toBe('Awa vous verra en décrochant');
+    expect(view.find('[data-call-incoming-consent] p')?.textContent).toBe('Awa vous entendra sans vous voir');
     view.done();
   });
 
@@ -194,8 +225,28 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(tile?.style.borderColor).not.toBe('');
     expect(tile?.querySelector('[data-call-incoming-self-label]')?.textContent).toBe('moi');
     view.press('[data-call-incoming-camera]');
-    expect(view.find('[data-call-incoming-self]')).toBeNull();
     expect(camera.readyState).toBe('ended');
+    view.done();
+  });
+
+  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, sans prendre le doigt', async () => {
+    const view = answer(ringing(), granted());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const slot = () => view.find('[data-call-incoming-self-slot]');
+    expect(slot()).not.toBeNull();
+    expect(slot()?.hasAttribute('data-leaving')).toBe(false);
+    view.press('[data-call-incoming-camera]');
+    expect(slot()?.hasAttribute('data-leaving')).toBe(true);
+    expect(slot()?.hasAttribute('inert')).toBe(true);
+    view.done();
+  });
+
+  test('un flux sans piste vivante ne fait pas de vignette : la condition est la piste, pas la présence du flux (P17.5)', async () => {
+    const ended = track('video');
+    ended.stop();
+    const view = answer(ringing(), granted(ended));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(view.find('[data-call-incoming-self-slot]')).toBeNull();
     view.done();
   });
 

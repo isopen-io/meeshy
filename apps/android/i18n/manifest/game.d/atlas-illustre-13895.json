@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.atlas.coin.line",
-          "androidName": "game_atlas_coin_line",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.atlas.coin.obverse",
           "androidName": "game_atlas_coin_obverse",
           "status": "adopted"
@@ -84,12 +78,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.atlas.medals.line",
-          "androidName": "game_atlas_medals_line",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.atlas.medals.record",
           "androidName": "game_atlas_medals_record",
           "status": "adopted"
@@ -98,12 +86,6 @@
           "catalog": "app",
           "iosKey": "game.atlas.medals.title",
           "androidName": "game_atlas_medals_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.ranks.line",
-          "androidName": "game_atlas_ranks_line",
           "status": "adopted"
         },
         {

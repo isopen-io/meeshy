@@ -44,7 +44,7 @@ struct ProgressionView: View {
         // grand titre au repos, barre compacte en défilant, retour en verre, dans les trois contextes de
         // présentation (pile iPhone, panneau droit iPad, feuille).
         GamePageScaffold(
-            title: String(localized: "progression.title", defaultValue: "Progression", bundle: .main),
+            title: String(localized: "progression.title", defaultValue: "Ma Légende", bundle: .main),
             enablesEdgePop: false,
             onRefresh: { await viewModel.load(forceNetwork: true) },
             // Les précisions du rang, ouvertes depuis l'en-tête, offrent « Voir la fiche ».

@@ -47,6 +47,8 @@ public extension View {
 /// ni le contenu de l'hôte ni celui de la feuille ne sont réévalués à chaque image du doigt.
 final class MeeshyAnchoredSheetDragModel: ObservableObject {
     @Published var offset: CGFloat = 0
+
+    nonisolated deinit {}
 }
 
 private struct MeeshyAnchoredSheetOffset: ViewModifier {
