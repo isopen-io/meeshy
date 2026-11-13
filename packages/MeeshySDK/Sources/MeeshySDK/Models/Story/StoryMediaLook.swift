@@ -37,6 +37,9 @@ public struct StoryMediaFraming: Codable, Hashable, Sendable {
 /// | `frameId` | `classic:<style>` ou `frame:<id du catalogue>` | `nil` = aucun cadre |
 /// | `faceEffect` | identifiant de l'effet de visage (`smoothing`, `angel`…) | `nil` = aucun |
 /// | `framing` | `{centerX, centerY, scale}` | `nil` = identité |
+/// | `filterIntensity` | dose du filtre, 0…1 | `nil` = pleine |
+/// | `warmth` | chaleur, −1 (frais) … 1 (chaud) | `nil` = 0 |
+/// | `contrast` | contraste, −1 (doux) … 1 (contrasté) | `nil` = 0 |
 ///
 /// Le look vit au BROUILLON et dans l'historique ; il ne part JAMAIS au fil :
 /// la publication le cuit dans les octets téléversés et le retire de la charge
@@ -47,18 +50,26 @@ public struct StoryMediaLook: Codable, Hashable, Sendable {
     public var frameId: String?
     public var faceEffect: String?
     public var framing: StoryMediaFraming?
+    public var filterIntensity: Double?
+    public var warmth: Double?
+    public var contrast: Double?
 
     public init(filterPreset: String? = nil, frameId: String? = nil,
-                faceEffect: String? = nil, framing: StoryMediaFraming? = nil) {
+                faceEffect: String? = nil, framing: StoryMediaFraming? = nil,
+                filterIntensity: Double? = nil, warmth: Double? = nil, contrast: Double? = nil) {
         self.filterPreset = filterPreset
         self.frameId = frameId
         self.faceEffect = faceEffect
         self.framing = framing
+        self.filterIntensity = filterIntensity
+        self.warmth = warmth
+        self.contrast = contrast
     }
 
-    /// Rien à peindre : la source telle quelle.
+    /// Rien à peindre : la source telle quelle. Une dose sans filtre ne peint rien.
     public var isNeutral: Bool {
         filterPreset == nil && frameId == nil && faceEffect == nil && (framing?.isIdentity ?? true)
+            && (warmth ?? 0) == 0 && (contrast ?? 0) == 0
     }
 
     /// Le look, ou `nil` s'il ne peint rien — la forme qu'un objet stocke.
@@ -67,11 +78,15 @@ public struct StoryMediaLook: Codable, Hashable, Sendable {
     /// Une clé DÉTERMINISTE pour les caches de rendu.
     public var signature: String {
         let cadrage = framing.map { String(format: "%.3f,%.3f,%.3f", $0.centerX, $0.centerY, $0.scale) } ?? "-"
-        return [filterPreset ?? "-", frameId ?? "-", faceEffect ?? "-", cadrage].joined(separator: "|")
+        let base = [filterPreset ?? "-", frameId ?? "-", faceEffect ?? "-", cadrage]
+        guard filterIntensity != nil || warmth != nil || contrast != nil else { return base.joined(separator: "|") }
+        let reglage = [filterIntensity, warmth, contrast]
+            .map { $0.map { String(format: "%.3f", $0) } ?? "-" }.joined(separator: ",")
+        return (base + [reglage]).joined(separator: "|")
     }
 
     private enum CodingKeys: String, CodingKey {
-        case filterPreset, frameId, faceEffect, framing
+        case filterPreset, frameId, faceEffect, framing, filterIntensity, warmth, contrast
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +95,9 @@ public struct StoryMediaLook: Codable, Hashable, Sendable {
         frameId = try? c.decodeIfPresent(String.self, forKey: .frameId)
         faceEffect = try? c.decodeIfPresent(String.self, forKey: .faceEffect)
         framing = try? c.decodeIfPresent(StoryMediaFraming.self, forKey: .framing)
+        filterIntensity = try? c.decodeIfPresent(Double.self, forKey: .filterIntensity)
+        warmth = try? c.decodeIfPresent(Double.self, forKey: .warmth)
+        contrast = try? c.decodeIfPresent(Double.self, forKey: .contrast)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -88,6 +106,9 @@ public struct StoryMediaLook: Codable, Hashable, Sendable {
         try c.encodeIfPresent(frameId, forKey: .frameId)
         try c.encodeIfPresent(faceEffect, forKey: .faceEffect)
         if let framing, !framing.isIdentity { try c.encode(framing, forKey: .framing) }
+        try c.encodeIfPresent(filterIntensity, forKey: .filterIntensity)
+        try c.encodeIfPresent(warmth, forKey: .warmth)
+        try c.encodeIfPresent(contrast, forKey: .contrast)
     }
 }
 
@@ -129,6 +150,9 @@ extension StoryMediaLook {
             entrees["framing"] = .object(["centerX": .number(framing.centerX), "centerY": .number(framing.centerY),
                                           "scale": .number(framing.scale)])
         }
+        if let filterIntensity { entrees["filterIntensity"] = .number(filterIntensity) }
+        if let warmth { entrees["warmth"] = .number(warmth) }
+        if let contrast { entrees["contrast"] = .number(contrast) }
         return .object(entrees)
     }
 
@@ -139,13 +163,19 @@ extension StoryMediaLook {
             if case .string(let valeur)? = entrees[cle], !valeur.isEmpty { return valeur }
             return nil
         }
+        func nombre(_ cle: String) -> Double? {
+            if case .number(let valeur)? = entrees[cle] { return valeur }
+            return nil
+        }
         var cadrage: StoryMediaFraming?
         if case .object(let c)? = entrees["framing"], case .number(let x)? = c["centerX"],
            case .number(let y)? = c["centerY"], case .number(let s)? = c["scale"] {
             cadrage = StoryMediaFraming(centerX: x, centerY: y, scale: s)
         }
         let look = StoryMediaLook(filterPreset: chaine("filterPreset"), frameId: chaine("frameId"),
-                                  faceEffect: chaine("faceEffect"), framing: cadrage)
+                                  faceEffect: chaine("faceEffect"), framing: cadrage,
+                                  filterIntensity: nombre("filterIntensity"), warmth: nombre("warmth"),
+                                  contrast: nombre("contrast"))
         guard !look.isNeutral else { return nil }
         self = look
     }
