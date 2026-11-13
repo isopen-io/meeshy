@@ -88,8 +88,8 @@ enum CallJournalAfterCall {
             return CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: nil)
         }
         return showsOriginal
-            ? CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: .init(kind: .translated, text: translated))
-            : CallJournalLines(primary: translated, primaryIsTranslation: true, below: .init(kind: .original, text: segment.text))
+            ? CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: CallJournalLines.Below(kind: .translated, text: translated))
+            : CallJournalLines(primary: translated, primaryIsTranslation: true, below: CallJournalLines.Below(kind: .original, text: segment.text))
     }
 
     /// Le pied du journal : « Voir l'original », puis « Voir la traduction » une fois la bascule posée.
