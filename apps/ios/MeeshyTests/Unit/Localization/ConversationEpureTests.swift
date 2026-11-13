@@ -523,11 +523,35 @@ final class ConversationEpureTests: XCTestCase {
         let manage = try code("Meeshy/Features/Settings/Views/VoiceProfileManageView.swift")
         XCTAssertTrue(manage.contains("case .ready: return nil"))
         XCTAssertFalse(manage.contains("voice.profile.status.ready.description"))
-        for kept in ["pending", "processing", "failed", "expired"] {
-            XCTAssertTrue(manage.contains("voice.profile.status.\(kept).description"), kept)
+        for dropped in ["pending", "processing"] {
+            XCTAssertTrue(manage.contains("case .\(dropped): return nil"), "le sous-titre redisait « \(dropped) »")
+            XCTAssertFalse(manage.contains("voice.profile.status.\(dropped).description"), dropped)
         }
+        for kept in ["failed", "expired"] {
+            XCTAssertTrue(manage.contains("voice.profile.status.\(kept).description"), "dit quoi faire : \(kept)")
+        }
+        let app = try Self.catalog(Self.appCatalogPath)
+        XCTAssertNil(app["voice.profile.status.pending.description"])
+        XCTAssertNil(app["voice.profile.status.processing.description"])
         let wizard = try code("Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift")
         XCTAssertTrue(wizard.contains("voice.profile.wizard.intro"), "le consentement et ses quatre lignes restent")
+    }
+
+    func test_shareSheet_emptyState_isOneLine_theSearchFieldAboveSaysWhatToDo() throws {
+        let view = try code("Meeshy/Features/Share/ShareSheetView.swift")
+        XCTAssertTrue(view.contains("ShareSheetCopy.emptyTitle"))
+        XCTAssertFalse(view.contains("emptyBody"))
+        XCTAssertFalse(try code("Meeshy/Features/Share/ShareSheetCopy.swift").contains("emptyBody"))
+        XCTAssertNil(try Self.catalog(Self.appCatalogPath)["share.sheet.empty.body"])
+    }
+
+    func test_blockedComposerZone_saysTheStateAndTheAction_notASentenceThatRepeatsBoth() throws {
+        let banners = try code("Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift")
+        XCTAssertTrue(banners.contains("conversation.composer.blocked.title"))
+        XCTAssertTrue(banners.contains("conversation.composer.blocked.unblock"))
+        XCTAssertFalse(banners.contains("conversation.composer.blocked.subtitle"))
+        XCTAssertNil(try Self.catalog(Self.appCatalogPath)["conversation.composer.blocked.subtitle"])
+        XCTAssertNotNil(try Self.catalog(Self.appCatalogPath)["conversation.info.block.message"], "la conséquence reste dite au geste")
     }
 
     func test_shareSheet_everyProtectionStaysSaid_inOneSentence() throws {
