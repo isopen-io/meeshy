@@ -18,7 +18,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringBlockBody
+import me.meeshy.sdk.model.relation.ListeningCategoryShareBody
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.BringStoppedEvent
@@ -84,6 +86,12 @@ interface BringGateway {
      * réglages servis après l'écriture, ou `null` sur un refus : l'appelant rend l'état d'avant.
      */
     suspend fun setReceptionBlocked(userId: String, setting: RelationReceptionSetting, blocked: Boolean): RelationPersonSettings?
+
+    /**
+     * Accorde (ou retire) un partage de MON activité à cette personne (#16836). Rend les réglages servis après l'écriture,
+     * ou `null` sur un refus : l'appelant rend l'état d'avant.
+     */
+    suspend fun setShareGranted(userId: String, grant: RelationShareGrant, granted: Boolean): RelationPersonSettings?
 }
 
 @Singleton
@@ -138,6 +146,19 @@ class BringRepository internal constructor(
             when (setting) {
                 RelationReceptionSetting.BRING -> relations.setBringBlocked(userId, BringBlockBody(blocked))
                 RelationReceptionSetting.TALKIE -> relations.setTalkieBlocked(userId, TalkieBlockBody(blocked))
+            }
+        } as? NetworkResult.Success
+        )?.data
+
+    override suspend fun setShareGranted(
+        userId: String,
+        grant: RelationShareGrant,
+        granted: Boolean,
+    ): RelationPersonSettings? = (
+        apiCall {
+            when (grant) {
+                RelationShareGrant.LISTENING_CATEGORY ->
+                    relations.setListeningCategoryShared(userId, ListeningCategoryShareBody(granted))
             }
         } as? NetworkResult.Success
         )?.data

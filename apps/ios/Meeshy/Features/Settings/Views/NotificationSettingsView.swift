@@ -86,6 +86,14 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "phone.fill", title: String(localized: "settings.notifications.incoming_calls", defaultValue: "Appels entrants", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.callsEnabled)
 
+            VStack(alignment: .leading, spacing: 0) {
+                notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Recevoir des Bring", bundle: .main), color: MeeshyColors.warningHex,
+                            keyPath: \.receivesBrings)
+                SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux. Coupé, personne ne peut plus faire sonner votre téléphone.", bundle: .main))
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.bottom, MeeshySpacing.sm + 2)
+            }
+
             notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.missedCallEnabled)
 

@@ -9,6 +9,7 @@ import { revokeDeletedAccountSessions } from '../socketio/revokeDeletedAccountSe
 import { cutTogetherWhere } from '../services/together/togetherDeps';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../services/AccountPurgeService';
+import { withdrawRitualSharesOfUser } from '../services/relations/ritualShareWithdrawal';
 import { endSharedLocationAfter } from '../services/sharedLocation/sharedLocationDeps';
 import { relationIoOf } from '../socketio/relationEvents';
 
@@ -245,6 +246,9 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           });
 
           if (compte && !compte.isActive) {
+            // #14924 — une purge de fin de grâce en panne aurait laissé des partages du rituel allumés :
+            // ils s'éteignent AVANT le retour, et une panne ici refuse le retour plutôt que de les rendre.
+            await withdrawRitualSharesOfUser(fastify.prisma, { userId: demande.userId });
             await fastify.prisma.user.update({
               where: { id: demande.userId },
               data: { isActive: true, deletedAt: null },
