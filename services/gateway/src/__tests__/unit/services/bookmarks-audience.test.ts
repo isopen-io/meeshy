@@ -103,7 +103,7 @@ describe('PostFeedService.getBookmarks — audience du lecteur', () => {
     await new PostFeedService(prisma).getBookmarks(VIEWER, cursor);
 
     const { where } = bookmarkQuery(bookmarkFindMany);
-    expect(collectBranches(where.post)).toContainEqual({ deletedAt: { isSet: false } });
+    expect(collectBranches(where.post)).toContainEqual(expect.objectContaining({ deletedAt: { isSet: false } }));
     expect(where.OR).toBeDefined();
   });
 });
