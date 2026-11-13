@@ -81,6 +81,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
 
   test('l’appui long sur (+) liste les effets appliqués, du dessus au dessous ; rien d’appliqué, rien à lister', async () => {
     const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'toad', preset: 'golden' } });
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     await view.hold('[data-call-effects-add-look]');
     expect(view.find('[data-call-effect-layers]')?.getAttribute('aria-label')).toBe('Effets appliqués');
@@ -100,6 +101,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await view.hold('[data-call-effects-add-look]');
     await view.press('[data-call-effect-layer-undo="face"]');
     expect(view.applied).toEqual([{ faceEffect: 'none' }]);
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('false');
     expect(view.find('[data-call-effects-categories]')).not.toBeNull();
@@ -118,6 +120,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await act(async () => void add.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
     expect(view.genres()).toEqual(['face']);
     await act(async () => void add.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     await act(async () => void add.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })));
     expect(view.genres()).toEqual(['face']);
@@ -129,6 +132,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await view.hold('[data-call-effects-add-look]');
     expect(view.find('[data-call-effect-layers]')).not.toBeNull();
     await view.press('[data-carousel-item="demon"]');
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     expect(view.applied).toEqual([{ faceEffect: 'demon' }]);
     view.done();

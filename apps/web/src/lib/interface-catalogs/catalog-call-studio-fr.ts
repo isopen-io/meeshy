@@ -98,6 +98,17 @@ const fr = {
   'callStudio.liveFrame.hold': 'Cadre en direct',
   'callStudio.liveFrame.short': 'Cadre',
   'callStudio.liveFrame.hint': 'Garde ce cadre autour des deux vidéos pendant tout l\'appel, et le propose à votre correspondant',
+  'callStudio.mode.frames': 'Cadres',
+  'callStudio.layers.title': 'Effets appliqués',
+  'callStudio.layers.undo': 'Annuler {name}',
+  'callStudio.layers.none': 'Aucun effet appliqué',
+  'callStudio.layers.full': 'Trois effets au plus : retirez-en un pour en ajouter',
+  'callStudio.layers.hint': 'Appui long ou Maj + Entrée : effets appliqués',
+  'callStudio.layers.genre.frame': 'Cadre',
+  'callStudio.layers.genre.color': 'Couleur',
+  'callStudio.layers.genre.face': 'Visage',
+  'callStudio.layers.genre.landscape': 'Paysage',
+  'callStudio.layers.genre.voice': 'Voix',
 } as const;
 
 export default fr;

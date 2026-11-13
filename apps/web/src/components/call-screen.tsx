@@ -16,6 +16,8 @@ import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
+import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
+import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { once, preloadedView } from '@/lib/calls/preloaded-view';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
@@ -382,6 +384,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const t = (key: PlainCallKey): string => translate(language, key);
   const [layer, setLayer] = useState<CallScreenLayer>(initiallyExpanded ? { kind: 'menu' } : IDLE);
   const [selfFull, setSelfFull] = useState(false);
+  const [looksStart, setLooksStart] = useState<EffectsCategory>('face');
+  /* La pile d'effets (#17903) est celle de CET appel : elle part avec l'écran. */
+  useEffect(() => () => setEffectLayers([]), []);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [audible, setAudible] = useState(false);
   const focusNext = useRef<string | null>(null);
@@ -656,7 +661,15 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         return <CallPeopleSheet {...base} onClose={base.back.onPress} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }
   };
-  const exitMode = () => send({ type: 'exit-mode' });
+  const exitMode = () => {
+    setLooksStart('face');
+    send({ type: 'exit-mode' });
+  };
+  /* (+) ou une puce du Montage ouvre Effets sur le genre demandé : la barre et la pile d'effets sont les mêmes (#17903). */
+  const openEffectsOn = (genre: EffectsCategory) => {
+    setLooksStart(genre);
+    send({ type: 'enter-mode', mode: 'effects' });
+  };
   const mode =
     held.mode === 'effects' ? (
       <CallEffectsMode
@@ -668,9 +681,12 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         others={{ ...call, Portrait, colorOf: speakerColor }}
         captions={call.captions}
         onExit={exitMode}
+        startOn={looksStart}
+        hold={liveFrameHold(call, liveFrame)}
+        onOpenFrames={offer.montage ? () => send({ type: 'enter-mode', mode: 'montage' }) : undefined}
       />
     ) : held.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} leaving={held.leaving} onGone={held.gone} />
+      <CallMontageMode language={language} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} leaving={held.leaving} onGone={held.gone} colorAvailable={support.color} blurAvailable={support.blur} onAddLook={offer.effects ? openEffectsOn : undefined} />
     ) : null;
   /* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8, #17406) : l'en-tête par le haut, la pilule par le bas, les bandeaux en fondu (`data-call-stow`, `call-motion.css`). Il ne retire JAMAIS le doigt à un bouton encore visible (#8735) : rangés d'un toucher, ils deviennent `invisible` à la FIN du mouvement, et reviennent d'un coup. Sous « Réduire les animations » : un fondu court, sans déplacement (`useStowFade`). */
   useStowFade(root, hidden);

@@ -417,7 +417,7 @@ type BarProps = {
 
 const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
 
-const SIDE = `${SIDE_SHAPE} text-on-media`;
+export const SIDE = `${SIDE_SHAPE} text-on-media`;
 
 /** La largeur de la barre de verre, et du panneau qui la surmonte : celle de la pilule de l'appel, un liseré de chaque côté. */
 export const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';

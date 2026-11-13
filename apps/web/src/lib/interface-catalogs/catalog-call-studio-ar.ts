@@ -93,6 +93,17 @@ const ar = {
   'callStudio.liveFrame.hold': 'إطار مباشر',
   'callStudio.liveFrame.short': 'إطار',
   'callStudio.liveFrame.hint': 'يُبقي هذا الإطار حول الفيديوهين طوال المكالمة ويقترحه على الطرف الآخر',
+  'callStudio.mode.frames': 'الإطارات',
+  'callStudio.layers.title': 'التأثيرات المطبّقة',
+  'callStudio.layers.undo': 'إلغاء {name}',
+  'callStudio.layers.none': 'لا يوجد تأثير مطبّق',
+  'callStudio.layers.full': 'ثلاثة تأثيرات كحدّ أقصى: أزل واحدًا لإضافة آخر',
+  'callStudio.layers.hint': 'اضغط مطولًا أو Shift + Enter: التأثيرات المطبّقة',
+  'callStudio.layers.genre.frame': 'إطار',
+  'callStudio.layers.genre.color': 'لون',
+  'callStudio.layers.genre.face': 'وجه',
+  'callStudio.layers.genre.landscape': 'منظر طبيعي',
+  'callStudio.layers.genre.voice': 'صوت',
 } satisfies CallStudioCatalog;
 
 export default ar;

@@ -192,6 +192,7 @@ describe('CallMontageMode — la barre d’Effets', () => {
   test('choisir un cadre le pose dans la pile : l’appui long sur (+) liste l’effet, annuler le retire, referme la liste et rend le menu de base', async () => {
     const view = await mount();
     await view.pickFrame();
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     await view.hold('[data-call-effects-add-look]');
     const list = view.find('[data-call-effect-layers]');
@@ -199,6 +200,7 @@ describe('CallMontageMode — la barre d’Effets', () => {
     expect(view.all('[data-call-effect-layer]').map((entry) => entry.getAttribute('data-call-effect-layer'))).toEqual(['frame']);
     expect(view.find('[data-call-effect-layer-undo="frame"]')?.getAttribute('aria-label')).toContain('Annuler');
     await view.press('[data-call-effect-layer-undo="frame"]');
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     expect(view.find('[data-call-mode-carousel] [aria-checked="true"]')?.getAttribute('data-carousel-item')).toBe('grid');
     expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('false');
@@ -214,6 +216,7 @@ describe('CallMontageMode — la barre d’Effets', () => {
     await act(async () => void add.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
     expect(view.find('[data-call-effect-layers]')).not.toBeNull();
     await act(async () => void add.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
     expect(view.exits).toEqual([]);
     await act(async () => void add.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })));

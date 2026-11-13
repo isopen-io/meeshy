@@ -93,6 +93,17 @@ const es = {
   'callStudio.liveFrame.hold': 'Marco en directo',
   'callStudio.liveFrame.short': 'Marco',
   'callStudio.liveFrame.hint': 'Mantiene este marco alrededor de los dos vídeos durante toda la llamada y se lo propone a la otra persona',
+  'callStudio.mode.frames': 'Marcos',
+  'callStudio.layers.title': 'Efectos aplicados',
+  'callStudio.layers.undo': 'Deshacer {name}',
+  'callStudio.layers.none': 'Ningún efecto aplicado',
+  'callStudio.layers.full': 'Tres efectos como máximo: quita uno para añadir otro',
+  'callStudio.layers.hint': 'Pulsación larga o Mayús + Intro: efectos aplicados',
+  'callStudio.layers.genre.frame': 'Marco',
+  'callStudio.layers.genre.color': 'Color',
+  'callStudio.layers.genre.face': 'Rostro',
+  'callStudio.layers.genre.landscape': 'Paisaje',
+  'callStudio.layers.genre.voice': 'Voz',
 } satisfies CallStudioCatalog;
 
 export default es;
