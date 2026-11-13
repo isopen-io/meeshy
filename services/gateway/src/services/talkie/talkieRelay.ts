@@ -123,6 +123,8 @@ type Session = {
   readonly cutFrom: number;
   bytes: number;
   chunks: number;
+  /** Les fragments dont l'émission vers le destinataire n'a pas levé (#17252). */
+  relayed: number;
   lastSeq: number;
   judgedAt: number;
   rejudging: boolean;
@@ -150,8 +152,11 @@ export type TalkieRelayDeps = {
   readonly followUp?: (params: TalkieFollowUp) => Promise<void>;
   /** La conversation la plus récente de la paire, où le client émetteur enverra la copie vocale d'un repli (#17141). */
   readonly fallbackConversation?: (fromUserId: string, toUserId: string) => Promise<string | null>;
-  readonly trace?: (event: '[TALKIE_WAKING]' | '[TALKIE_JOINED]', fields: Readonly<Record<string, unknown>>) => void;
+  /** Identifiants et compteurs seulement, jamais un octet de voix (#17252) : une perte se localise dans le journal. */
+  readonly trace?: (event: TalkieTraceEvent, fields: Readonly<Record<string, unknown>>) => void;
 };
+
+export type TalkieTraceEvent = '[TALKIE_STARTED]' | '[TALKIE_RELAYED]' | '[TALKIE_ENDED]' | '[TALKIE_WAKING]' | '[TALKIE_JOINED]';
 
 export type TalkieFollowUp = {
   readonly talkieId: string;
@@ -248,6 +253,7 @@ export class TalkieRelay {
       cutFrom,
       bytes: 0,
       chunks: 0,
+      relayed: 0,
       lastSeq: -1,
       judgedAt: startedAt,
       rejudging: false,
@@ -262,6 +268,9 @@ export class TalkieRelay {
     session.timer.unref?.();
     this.sessions.set(session.talkieId, session);
     this.bySocket.set(socketId, session.talkieId);
+    this.deps.trace?.('[TALKIE_STARTED]', {
+      ...pairOf(session), delivery: session.delivery, codec: session.codec, sealed: session.sealed !== undefined,
+    });
 
     if (waking) this.wakeRecipient(session, waking.channel);
     else this.sendTo(toUserId, SERVER_EVENTS.TALKIE_INCOMING, incomingOf(session));
@@ -369,11 +378,21 @@ export class TalkieRelay {
       relayedAt: receivedAt,
     };
     if (!session.waiting) {
-      this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, event);
+      this.noteRelayed(session, event.seq, this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, event));
       return;
     }
     keepInOrder(session.waiting.buffer, event);
-    session.waiting.listeners.forEach((socket) => this.sendToSocket(socket, SERVER_EVENTS.TALKIE_CHUNK, event));
+    const reached = [...session.waiting.listeners].filter((socket) => this.sendToSocket(socket, SERVER_EVENTS.TALKIE_CHUNK, event));
+    this.noteRelayed(session, event.seq, reached.length > 0);
+  }
+
+  /** Le premier fragment relayé se journalise une fois, avec son délai depuis l'ouverture (#17252). */
+  private noteRelayed(session: Session, seq: number, reached: boolean): void {
+    if (!reached) return;
+    session.relayed += 1;
+    if (session.relayed === 1) {
+      this.deps.trace?.('[TALKIE_RELAYED]', { talkieId: session.talkieId, seq, afterMs: Math.max(0, this.deps.now() - session.startedAt) });
+    }
   }
 
   /**
@@ -508,6 +527,16 @@ export class TalkieRelay {
     if (waiting) waiting.listeners.forEach((socket) => this.sendToSocket(socket, SERVER_EVENTS.TALKIE_ENDED, ended));
     else this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
     if (audience === 'both') this.sendTo(session.fromUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
+    this.deps.trace?.('[TALKIE_ENDED]', {
+      ...pairOf(session),
+      delivery: session.delivery,
+      reason,
+      chunks: session.chunks,
+      relayedChunks: session.relayed,
+      bytes: session.bytes,
+      durationMs: Math.max(0, this.deps.now() - session.startedAt),
+      ...(waiting ? { joined: waiting.joined } : {}),
+    });
     if (waiting) this.keepForLateJoin(session, ended, keep);
   }
 
@@ -556,22 +585,28 @@ export class TalkieRelay {
     session.bytes = 0;
   }
 
-  private sendToSocket(socketId: string, ...args: ServerEmitArgs): void {
-    try {
-      this.deps.io?.to(socketId).emit(...args);
-    } catch (error) {
-      this.deps.report('Talkie emit failed', error);
-    }
+  /** `true` quand l'émission est partie sans lever — ce que le journal compte comme relayé. */
+  private sendToSocket(socketId: string, ...args: ServerEmitArgs): boolean {
+    return this.emitTo(socketId, args);
   }
 
-  private sendTo(userId: string, ...args: ServerEmitArgs): void {
+  private sendTo(userId: string, ...args: ServerEmitArgs): boolean {
+    return this.emitTo(ROOMS.user(userId), args);
+  }
+
+  private emitTo(room: string, args: ServerEmitArgs): boolean {
+    if (!this.deps.io) return false;
     try {
-      this.deps.io?.to(ROOMS.user(userId)).emit(...args);
+      this.deps.io.to(room).emit(...args);
+      return true;
     } catch (error) {
       this.deps.report('Talkie emit failed', error);
+      return false;
     }
   }
 }
+
+const pairOf = (session: Session) => ({ talkieId: session.talkieId, fromUserId: session.fromUserId, toUserId: session.toUserId });
 
 function incomingOf(session: Session): TalkieIncomingEventData {
   return {

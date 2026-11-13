@@ -480,3 +480,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil de 14:40 : une prise de parole talkie se localise dans le journal (#17252, volet serveur)
+
+- Reprise : run coupé le 2026-11-10 par une erreur d'API, relancé à 14:40. Les PR de la routine ouvertes (#17956,
+  #17969, #17976, #17979, #17981, #17984, #17994, #17998…) sont toutes écrites dans l'heure par des réveils vivants ;
+  ce réveil n'en prend aucune. #17249 (APNs absent) est déjà livrée côté code (`b90b576e1`) et n'attend que la clé
+  sandbox du porteur. Aucune branche n'écrivait le talkie : lot #17252 réservé sur `claude/cercles-17252-journal`.
+- Lot : `TalkieRelay` journalise `[TALKIE_STARTED]` (mode, codec, scellée ou non), `[TALKIE_RELAYED]` une fois, au
+  premier fragment dont l'émission n'a pas levé (rang, délai depuis l'ouverture) et `[TALKIE_ENDED]` (raison, fragments
+  reçus et relayés, octets, durée, rejointe ou non). Identifiants et compteurs seulement, aucun octet de voix ; un
+  témoin le vérifie. Aucun changement de contrat ni de client.
+- Ouvert en suivi : #18009, l'accusé « entendu » du destinataire et l'état « non reçu » chez l'émetteur (trois clients,
+  capacité annoncée pour ne jamais accuser un ancien client).
+- Gates locaux : 8 suites talkie 198/198 vertes (dont 11 témoins neufs, 8 rouges avant le correctif), 4 suites
+  voisines 38/38, `tsc` passerelle vert.
+- Prochain lot recommandé : #18009 côté passerelle (capacité + délai), ou mener à la fusion les PR ouvertes.
