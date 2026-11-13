@@ -9,16 +9,16 @@ import MeeshySDK
 /// épinglé en sombre.
 ///
 /// Hors de l'écran d'appel (journal d'après l'appel, dans un fil clair ou
-/// sombre), la MÊME couleur s'adapte au schéma du fil (#16634,
-/// `docs/product/appels-vue-finale.md` loi 4) : une personne garde sa couleur
-/// avant et après la fin de l'appel.
+/// sombre), la MÊME couleur s'adapte au thème de l'app (#16634,
+/// `docs/product/appels-vue-finale.md` loi 4) : telle quelle si elle tient
+/// 4,5:1 sur la carte, sinon du plus petit pas (`AuthorInk`, #17863).
 enum CallSpeakerColor {
     static func hex(for userId: String) -> String {
-        hex(for: userId, mode: .dark)
+        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: .dark)
     }
 
     static func hex(for userId: String, mode: ThemeMode) -> String {
-        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: mode)
+        AuthorInk.hex(DynamicColorGenerator.colorForName(userId), for: mode)
     }
 }
 
