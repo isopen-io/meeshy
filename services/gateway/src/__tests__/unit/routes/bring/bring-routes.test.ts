@@ -381,7 +381,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
   });
 
-  it('bloqué par le destinataire : 403 BRING_BLOCKED, et le bouton disparaît (available: false, 0 restant)', async () => {
+  it('bloqué par le destinataire : 403 BRING_NOT_ALLOWED neutre (#14677), et le bouton disparaît (available: false, 0 restant)', async () => {
     const app = await appli(niveau('BLOOD'));
     const pose = await reglerPour(app, MOI, { bringBlocked: true });
     const res = await sonner(app);
@@ -391,21 +391,46 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     expect(pose.status).toBe(200);
     expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('BRING_BLOCKED');
+    expect(res.body.code).toBe('BRING_NOT_ALLOWED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
     expect(app.emissions.filter((e) => e.event === 'bring:ring')).toEqual([]);
   });
 
-  it('l’interrupteur GLOBAL « Recevoir des Bring » coupé : personne ne sonne, BRING_BLOCKED, bouton absent', async () => {
+  it('l’interrupteur GLOBAL « Recevoir des Bring » coupé : personne ne sonne, BRING_NOT_ALLOWED neutre (#14677), bouton absent', async () => {
     const app = await appli({ ...niveau('BLOOD'), personnes: { [AUTRE]: { notification: { bringEnabled: false } } } });
     const res = await sonner(app);
     const lecture = await dispo(app);
     await app.close();
 
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('BRING_BLOCKED');
+    expect(res.body.code).toBe('BRING_NOT_ALLOWED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
     expect(pushes).toEqual([]);
+  });
+
+  it('#14677 — blocage personnel, coupure globale et niveau insuffisant rendent la MÊME réponse : l’expéditeur ne distingue rien', async () => {
+    const bloque = await appli(niveau('BLOOD'));
+    await reglerPour(bloque, MOI, { bringBlocked: true });
+    const parBlocage = await sonner(bloque);
+    const dispoBlocage = await dispo(bloque);
+    await bloque.close();
+
+    const coupe = await appli({ ...niveau('BLOOD'), personnes: { [AUTRE]: { notification: { bringEnabled: false } } } });
+    const parCoupure = await sonner(coupe);
+    const dispoCoupure = await dispo(coupe);
+    await coupe.close();
+
+    const bas = await appli(niveau('ACQUAINTANCE'));
+    const parNiveau = await sonner(bas);
+    const dispoNiveau = await dispo(bas);
+    await bas.close();
+
+    expect(parBlocage.status).toBe(parNiveau.status);
+    expect(parCoupure.status).toBe(parNiveau.status);
+    expect(parBlocage.body).toEqual(parNiveau.body);
+    expect(parCoupure.body).toEqual(parNiveau.body);
+    expect(dispoBlocage.body).toEqual(dispoNiveau.body);
+    expect(dispoCoupure.body).toEqual(dispoNiveau.body);
   });
 
   it('le blocage n’est notifié à PERSONNE : aucun événement, aucun push vers celui qu’on bloque', async () => {
