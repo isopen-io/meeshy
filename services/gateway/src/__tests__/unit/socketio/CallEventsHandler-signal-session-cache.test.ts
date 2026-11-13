@@ -53,6 +53,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     destroy: jest.fn(),
   }),
   checkSocketRateLimit: jest.fn<any>().mockResolvedValue(true),
+  callSignalBudgetId: (userId: string, socketId: string) => `${userId}:${socketId}`,
   SOCKET_RATE_LIMITS: {
     CALL_SIGNAL: { maxRequests: 100, windowMs: 10000, keyPrefix: 'socket:call:signal' },
     CALL_ICE_CANDIDATE: { maxRequests: 60, windowMs: 10000, keyPrefix: 'socket:call:ice' },
