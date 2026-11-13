@@ -56,6 +56,9 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
     /// ended by its own initiator — "cancelled" from the initiator's viewpoint.
     /// `nil` on every other summary (the gateway omits the key entirely).
     public let endedByInitiator: Bool?
+    /// Les noms des AUTRES participants (jamais le lecteur), quand la passerelle les sert.
+    /// `nil` sur tout résumé qui n'en porte pas : la carte n'invente alors aucune ligne.
+    public let participantNames: [String]?
 
     public init(
         callId: String,
@@ -67,7 +70,8 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         bytesEstimated: Bool,
         networkQuality: NetworkQuality?,
         isLive: Bool = false,
-        endedByInitiator: Bool? = nil
+        endedByInitiator: Bool? = nil,
+        participantNames: [String]? = nil
     ) {
         self.callId = callId
         self.initiatorId = initiatorId
@@ -79,11 +83,12 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         self.networkQuality = networkQuality
         self.isLive = isLive
         self.endedByInitiator = endedByInitiator
+        self.participantNames = participantNames
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, callId, initiatorId, callType, outcome, durationSeconds
-        case bytesTotal, bytesEstimated, networkQuality, endedByInitiator
+        case bytesTotal, bytesEstimated, networkQuality, endedByInitiator, participantNames
     }
 
     /// Decodes only when `kind` is `"call"` (terminal summary) or `"call-live"`
@@ -112,6 +117,7 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         bytesEstimated = try c.decodeIfPresent(Bool.self, forKey: .bytesEstimated) ?? false
         networkQuality = try c.decodeIfPresent(NetworkQuality.self, forKey: .networkQuality)
         endedByInitiator = try c.decodeIfPresent(Bool.self, forKey: .endedByInitiator)
+        participantNames = try c.decodeIfPresent([String].self, forKey: .participantNames)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -126,6 +132,7 @@ public struct CallSummaryMetadata: Codable, Sendable, Equatable {
         try c.encode(bytesEstimated, forKey: .bytesEstimated)
         try c.encodeIfPresent(networkQuality, forKey: .networkQuality)
         try c.encodeIfPresent(endedByInitiator, forKey: .endedByInitiator)
+        try c.encodeIfPresent(participantNames, forKey: .participantNames)
     }
 }
 
@@ -157,6 +164,19 @@ public extension CallSummaryMetadata {
         guard let bytes = bytesTotal, bytes > 0 else { return nil }
         let size = Self.formatDataSize(bytes)
         return bytesEstimated ? "~\(size)" : size
+    }
+
+    /// « Awa, Karim, Lina et vous » : les autres participants, puis le lecteur, joints à la
+    /// façon de la langue (`ListFormatter`). `youLabel` est le « vous » de la langue de l'app.
+    /// `nil` quand aucun nom n'a été servi : pas de ligne.
+    func participantsLine(youLabel: String, locale: Locale = .current) -> String? {
+        let names = (participantNames ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !names.isEmpty else { return nil }
+        let formatter = ListFormatter()
+        formatter.locale = locale
+        return formatter.string(from: names + [youLabel])
     }
 
     static func formatDuration(_ seconds: Int) -> String {

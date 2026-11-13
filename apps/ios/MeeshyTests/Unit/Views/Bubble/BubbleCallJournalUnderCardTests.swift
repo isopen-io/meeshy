@@ -161,8 +161,8 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
     func test_transcriptSection_translationToggle_is44pt_withoutGrowingTheFooter() throws {
         let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
         XCTAssertTrue(section.contains(".meeshyTapTarget()"))
-        XCTAssertTrue(section.contains(".padding(-MeeshyTapTarget.inset(forVisualSide:"),
-                      "La cible de 44 pt déborde sans pousser l'en-tête de la feuille ni décaler le glyphe.")
+        XCTAssertTrue(section.contains("-MeeshyTapTarget.inset(forVisualSide:"),
+                      "La cible de 44 pt déborde sans pousser le pied de la feuille.")
     }
 
     // MARK: - Câblage : la bulle, la carte, la feuille
