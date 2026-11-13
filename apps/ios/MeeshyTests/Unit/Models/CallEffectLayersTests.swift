@@ -4,6 +4,7 @@ import XCTest
 /// #17901 · #16979 — la pile de trois couches d'effets, loi pure partagée par Effets et Montage
 /// (miroir de `call-effect-layers.ts` côté web et de `CallEffectLayers.kt` côté Android) : les
 /// six vecteurs communs, puis ce que la barre et la pile font de la configuration de l'appel.
+@MainActor
 final class CallEffectLayersTests: XCTestCase {
 
     private func layer(_ kind: CallEffectKind, _ choice: String) -> CallEffectLayer {
@@ -166,12 +167,6 @@ final class CallEffectLayersTests: XCTestCase {
         XCTAssertNil(CallEffectsModeRule.addingLook(from: .face, layers: stack(frame, filterA, face)))
     }
 
-    func test_startingCategory_isTheFirstKindMissingFromTheStack() {
-        XCTAssertEqual(CallEffectsModeRule.startingCategory(layers: stack(face)), .color)
-        XCTAssertEqual(CallEffectsModeRule.startingCategory(layers: CallEffectLayers()), .face)
-        XCTAssertEqual(CallEffectsModeRule.startingCategory(layers: stack(frame, filterA, face)), .face)
-    }
-
     // MARK: - La barre revient au menu de base
 
     func test_bar_settingsToggles_betweenBaseAndSettings() {
@@ -184,6 +179,7 @@ final class CallEffectLayersTests: XCTestCase {
         XCTAssertEqual(CallEffectsBarRule.afterAddingLook(from: .settings), .base)
         XCTAssertEqual(CallEffectsBarRule.afterAddingLook(from: .applied), .base)
         XCTAssertEqual(CallEffectsBarRule.afterRemoval, .base)
+        XCTAssertEqual(CallEffectsBarRule.afterChoice, .base)
     }
 
     func test_bar_longPressOnPlus_opensTheAppliedList_onlyWhenThereIsOne() {

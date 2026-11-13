@@ -65,9 +65,9 @@ extension CallView {
     private func modeControls(_ mode: CallScreenMode) -> some View {
         switch mode {
         case .effects:
-            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, capturesMyImage: CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: showsConnectedLayout), onExit: exitMode)
+            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, capturesMyImage: CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: showsConnectedLayout), hold: liveFrameHold, onExit: exitMode)
         case .montage:
-            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, hold: liveFrameHold, onExit: exitMode)
+            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, filters: callManager.videoFilters, hold: liveFrameHold, onOpenEffects: currentActionSet.contains(.effects) ? { enterMode(.effects) } : nil, onExit: exitMode)
         }
     }
 
