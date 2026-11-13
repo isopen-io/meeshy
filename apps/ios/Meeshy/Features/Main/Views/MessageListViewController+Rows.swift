@@ -395,6 +395,7 @@ extension MessageListViewController {
             .environment(\.bubbleSkin, scene.skin)
             .environment(\.pendingUploadProgress, self.conversationViewModel?.collaborators.uploadProgress.progress(for: messageId))
             .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)
+            .environment(\.ephemeralBurnWind, self.conversationViewModel?.ephemeralWind.wind) // #17938 — le vent de la combustion
             .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
             .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
             .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre

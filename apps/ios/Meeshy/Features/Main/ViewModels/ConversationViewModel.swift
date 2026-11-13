@@ -37,6 +37,10 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         return coordinator
     }()
 
+    /// Le vent de l'appareil pour la combustion des éphémères (#17938) — le
+    /// capteur ne tourne qu'entre une dernière minute et la fin d'une combustion.
+    lazy var ephemeralWind = EphemeralBurnWindSource()
+
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false

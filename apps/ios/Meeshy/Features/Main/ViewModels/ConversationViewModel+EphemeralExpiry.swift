@@ -200,7 +200,17 @@ extension ConversationViewModel {
     }
 
     /// Réarme l'unique réveil du fil. Appelé à chaque changement de `messages`.
+    ///
+    /// Le même relevé décide du VENT (#17938) : le capteur ne tourne qu'entre
+    /// une dernière minute et la fin d'une combustion, et le shader de la
+    /// combustion se préchauffe dès qu'un fil porte un éphémère — sans quoi la
+    /// première combustion paierait sa compilation pendant l'animation.
     func refreshEphemeralExpirySchedule() {
-        ephemeralExpiry.refresh(deadlines: scheduledEphemeralDeadlines)
+        let deadlines = scheduledEphemeralDeadlines
+        ephemeralExpiry.refresh(deadlines: deadlines)
+        ephemeralWind.sync(wanted: EphemeralBurnWindPolicy.wanted(
+            deadlines: deadlines, burning: !burningEphemeralIds.isEmpty, now: Date()
+        ))
+        if !deadlines.isEmpty { EphemeralBurnShaders.warm() }
     }
 }
