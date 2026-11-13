@@ -69,10 +69,10 @@ class CallTranscriptCaptureReplayTest {
     }
 
     @Test
-    fun `the reader's own capture carries the reader's name`() {
+    fun `the reader's own capture reads Vous whatever the name`() {
         val result = lines(captures = listOf(capture(userId = "me", displayName = null))).single()
 
-        assertThat(result.speakerName).isEqualTo("Ada")
+        assertThat(result.speakerName).isEqualTo("Vous")
         assertThat(result.isLocal).isTrue()
     }
 

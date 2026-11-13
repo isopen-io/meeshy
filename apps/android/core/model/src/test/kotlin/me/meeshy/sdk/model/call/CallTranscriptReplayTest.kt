@@ -8,7 +8,7 @@ import org.junit.Test
  * `CallTranscriptLoader.fetchRemote` + `CallTranscriptSection`: the persisted
  * journal served by `GET /calls/{callId}/transcript`, projected for one reader.
  *
- *  - the reader's own segments are never translated and carry their name (« Vous » when unknown);
+ *  - the reader's own segments are never translated and always read « Vous », whatever their name (A1.11, #17869);
  *  - another speaker's segment is served in the reader's prism — the first language served
  *    wins, the original language competes at its rank, no match ⇒ the original (never
  *    `translations.first`);
@@ -71,11 +71,11 @@ class CallTranscriptReplayTest {
     // --- speakers ---------------------------------------------------------------------------
 
     @Test
-    fun `the reader's own segment carries the reader's name and is never translated`() {
+    fun `the reader's own segment reads Vous whatever the name and is never translated`() {
         val line = lines(page(segment(speakerId = "me", text = "Salut", language = "fr", translations = listOf(es("Hola"))))).single()
 
         assertThat(line.isLocal).isTrue()
-        assertThat(line.speakerName).isEqualTo("Ada")
+        assertThat(line.speakerName).isEqualTo("Vous")
         assertThat(line.translated).isNull()
         assertThat(line.text(showOriginal = false)).isEqualTo("Salut")
     }
@@ -88,7 +88,7 @@ class CallTranscriptReplayTest {
     }
 
     @Test
-    fun `the reader without a name reads « Vous »`() {
+    fun `the reader without a name reads Vous too`() {
         val line = lines(page(segment(speakerId = "me")), reader = reader(name = " ")).single()
 
         assertThat(line.speakerName).isEqualTo("Vous")
@@ -230,5 +230,47 @@ class CallTranscriptReplayTest {
         assertThat(CallTranscriptState.Loading.isVisible).isFalse()
         assertThat(CallTranscriptState.Absent.isVisible).isFalse()
         assertThat(CallTranscriptState.Failed.isVisible).isTrue()
+    }
+
+    // --- « Original · … » under each translation (A1.8, A2.3) -------------------------------
+
+    @Test
+    fun `a translated sentence unfolds its original below`() {
+        val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
+
+        assertThat(line.servesTranslation).isTrue()
+        assertThat(line.originalBelow(showsOriginalInstead = false)).isEqualTo("Nos vemos mañana")
+    }
+
+    @Test
+    fun `the original is not repeated below when the toggle already shows it instead`() {
+        val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
+
+        assertThat(line.originalBelow(showsOriginalInstead = true)).isNull()
+    }
+
+    @Test
+    fun `an untranslated sentence has no original below`() {
+        val line = lines(page(segment(text = "Salut", language = "fr"))).single()
+
+        assertThat(line.servesTranslation).isFalse()
+        assertThat(line.originalBelow(showsOriginalInstead = false)).isNull()
+    }
+
+    @Test
+    fun `the reader's own sentence never has an original below`() {
+        val line = lines(page(segment(speakerId = "me", translations = listOf(fr("Bonjour"))))).single()
+
+        assertThat(line.originalBelow(showsOriginalInstead = false)).isNull()
+    }
+
+    @Test
+    fun `a blank translation does not count as served`() {
+        val line = CallTranscriptLine(
+            speakerName = "Zoé", isLocal = false, elapsedLabel = null, original = "Hi", translated = "  ", translatedLanguage = "fr",
+        )
+
+        assertThat(line.servesTranslation).isFalse()
+        assertThat(CallTranscriptState.of(listOf(line)).let { (it as CallTranscriptState.Ready).canShowOriginal }).isFalse()
     }
 }
