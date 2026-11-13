@@ -1,6 +1,5 @@
 import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
 import type { CallButton } from '@/components/call-glass-button';
@@ -180,7 +179,7 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
       Button={Button}
       back={back}
       fill={fill}
-      trailing={captions.some((caption) => !caption.mine && caption.translated !== null) ? <CallJournalViewSwitch language={language} view={view} onChange={setView} /> : null}
+      trailing={<CallJournalViewSwitch language={language} view={view} onChange={setView} />}
       data={{ 'data-call-journal-panel': '' }}
     >
       {entries.length === 0 ? (
@@ -230,11 +229,7 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
   );
 }
 
-/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne. */
-export function CallJournalInColumn({ width, gutter, ...journal }: Omit<JournalProps, 'fill' | 'windowHeight'> & JournalColumnGeometry) {
-  return (
-    <CallJournalColumn width={width} gutter={gutter}>
-      <CallJournalPanel {...journal} fill />
-    </CallJournalColumn>
-  );
+/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne que l'écran pose (`call-screen.tsx`, `JOURNAL_COLUMN_PLACE`), pour qu'elle entre et reparte par le bord de fin (W1.20). */
+export function CallJournalInColumn(journal: Omit<JournalProps, 'fill' | 'windowHeight'>) {
+  return <CallJournalPanel {...journal} fill />;
 }

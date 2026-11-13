@@ -176,6 +176,16 @@ export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): rea
 }
 
 /**
+ * CE QUI SE RECENTRE QUAND LA COLONNE DU JOURNAL ENTRE OU REPART (W1.20) — le centre de l'élément repart de
+ * celui d'avant (`delta`, en px, signé par la mesure : RTL compris), vu comme une translation, et rejoint le
+ * nouveau ; la mise en page est déjà à son état final. Sous « Réduire les animations », un fondu court.
+ */
+export function inlineSlideKeyframes(delta: number, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (Math.abs(delta) < EPSILON_PX) return null;
+  return reducedMotion ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: `translateX(${delta}px)` }, { transform: 'none' }];
+}
+
+/**
  * LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — sur un écran reçu
  * le verre d'appel s'assombrit (`glass-call` → `glass-call-prominent`, `glass.css`), puis revient. Le
  * passage n'est pas un fond recalculé à chaque image : le verre garde sa densité régulière et un VOILE
