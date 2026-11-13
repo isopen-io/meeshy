@@ -10,6 +10,9 @@ const deContactDiscovery = {
     'Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war kürzlich auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist.',
   'settings.notif.contact_activity': 'Rückkehr eines Kontakts',
   'settings.notif.contact_activity.info': 'Eine Benachrichtigung, wenn ein Kontakt zu Meeshy zurückkehrt.',
+  'settings.notif.bring': 'Brings empfangen',
+  'settings.notif.bring.info':
+    'Eine nahestehende Person kann dein Telefon bei einem extremen Notfall klingeln lassen, auch im Lautlosmodus. Aus: Niemand kann dich mehr klingeln lassen.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default deContactDiscovery;
