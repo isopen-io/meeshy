@@ -797,7 +797,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
               Rail={CallActionRail}
               viewport={viewport}
               inset={bleedEnd}
-              tile={selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset })}
+              tile={selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset, bleed: bleedEnd })}
             />
           </Suspense>
         ) : null}

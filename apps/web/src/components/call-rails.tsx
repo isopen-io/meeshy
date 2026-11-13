@@ -73,7 +73,7 @@ type RailsProps = {
   readonly viewport: TileSize;
   /** Ce que la colonne du journal retire au bord de fin. */
   readonly inset?: number;
-  /** Ma vignette en coin, telle que la scène la pose (`selfTileFootprint`), que le rail de son côté laisse visible. Absente : aucune. */
+  /** Ma vignette en coin, telle que la scène la pose (`selfTileFootprint`, dans la scène que la colonne laisse), que le rail de son côté laisse visible. Absente : aucune. */
   readonly tile?: TileFootprint | null;
 };
 
@@ -120,6 +120,7 @@ export function CallRails({ call, rails, open, language, panels, kit, Rail, view
   const clearance = railsClearance({
     tile,
     viewport,
+    inset,
     rtl: interfaceDirection(language) === 'rtl',
     lengths: { leading: railLength(rowOf('leading')?.actions.length ?? 0), trailing: railLength(rowOf('trailing')?.actions.length ?? 0) },
   });

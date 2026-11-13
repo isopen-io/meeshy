@@ -74,7 +74,7 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number }) {
+function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0, bleedEnd = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number; readonly bleedEnd?: number }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -86,7 +86,7 @@ function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = t
     column: () => null,
     topInset,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} bleedEnd={bleedEnd} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
@@ -101,8 +101,12 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     return { cancel: () => undefined };
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
+    if (this.hasAttribute('data-call-stage-surface')) {
+      const width = window.innerWidth - Number(this.getAttribute('data-bleed') ?? 0);
+      return { left: 0, top: 0, right: width, bottom: 800, width, height: 800, x: 0, y: 0, toJSON: () => ({}) };
+    }
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
-    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - Number(this.closest('[data-bleed]')?.getAttribute('data-bleed') ?? 0) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
     const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
     const width = Number.parseFloat(this.style.width) || 0;
@@ -124,16 +128,29 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   return played;
 }
 
-const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly chromeVisible?: boolean } = {}) => {
+const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0, surface = false }: { readonly chromeVisible?: boolean; readonly bleedEnd?: number; readonly surface?: boolean } = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   const swaps = { count: 0 };
   const reveals = { count: 0 };
   let inset = 0;
-  const render = (visible: boolean, nextInset = inset) => {
+  let bleed = bleedEnd;
+  const render = (visible: boolean, nextInset = inset, nextBleed = bleed) => {
     inset = nextInset;
-    act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} />));
+    bleed = nextBleed;
+    const stage = <Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} bleedEnd={bleed} />;
+    act(() =>
+      root.render(
+        surface ? (
+          <div data-call-stage-surface="" data-bleed={bleed}>
+            {stage}
+          </div>
+        ) : (
+          <div data-bleed={bleed}>{stage}</div>
+        ),
+      ),
+    );
   };
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
@@ -269,6 +286,68 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
   });
 });
 
+describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
+  test('en droite à gauche, un appel neuf la pose en haut à gauche, contre la colonne', () => {
+    fresh();
+    document.documentElement.dir = 'rtl';
+    try {
+      const view = mount();
+      expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+      view.done();
+    } finally {
+      document.documentElement.dir = '';
+    }
+  });
+
+  test('colonne ouverte, la dépose s’élit sur la scène réduite : juste à gauche du milieu de la scène, elle va au coin de début', () => {
+    fresh();
+    const view = mount(call(), { bleedEnd: 360 });
+    view.drag(-300, 0);
+    expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-left');
+    view.done();
+  });
+
+  test('la colonne qui s’ouvre ou se ferme fait GLISSER la vignette — transformation seule, jamais un saut', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(360px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-360px, 0px)' }, { transform: 'none' }],
+    ]);
+  });
+});
+
+describe('W1.5 — la scène qui glisse vers son nouveau centre (W1.20) porte ma vignette : son propre glissé n’en joue que le reste', () => {
+  test('la colonne s’ouvre puis se ferme : la vignette part de sa place vue, la scène qui la porte ayant déjà fait la moitié du chemin', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true });
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(180px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-180px, 0px)' }, { transform: 'none' }],
+    ]);
+  });
+
+  test('un changement de coin, colonne ouverte, ne retire rien : la scène ne bouge pas', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true, bleedEnd: 360 });
+      view.key('ArrowLeft');
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+  });
+});
+
 describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur de coin', () => {
   const turn = (width: number, height: number) => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
@@ -311,6 +390,21 @@ describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur 
     expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
     expect(first?.[1]).toEqual({ transform: 'none' });
     expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
+  });
+
+  test('la scène qui suit la fenêtre qu’on tourne ne glisse pas : ma vignette joue tout son mouvement, rien ne s’en retire (W1.20)', () => {
+    const rotate = (surface: boolean) => {
+      fresh();
+      turn(upright.width, upright.height);
+      return withFlipProbe(() => {
+        const view = mount(call(), { surface });
+        turn(844, 390);
+        view.done();
+      });
+    };
+    const alone = rotate(false);
+    expect(alone).toHaveLength(1);
+    expect(rotate(true)).toEqual(alone);
   });
 
   test('redimensionner la fenêtre sans changer de forme ne rejoue rien : la vignette suit la fenêtre, aucune mesure ni animation à chaque image', () => {

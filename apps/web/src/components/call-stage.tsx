@@ -279,12 +279,12 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const size = selfTileSize(scale, screen);
   const restFactor = selfTileRestingFactor(scale, chromeVisible, screen);
   const topInset = self.topInset ?? 0;
-  const rest = selfTileBox({ corner, size, viewport: screen, topInset });
+  const rest = selfTileBox({ corner, size, viewport: screen, topInset, bleed: bleedEnd });
   const seen = { width: size.width * restFactor, height: size.height * restFactor };
   const seenX = corner.endsWith('left') ? rest.x : rest.x + rest.width - seen.width;
   const seenY = corner.startsWith('top') ? rest.y : rest.y + rest.height - seen.height;
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset });
+    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -304,14 +304,16 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     if (pressed.release()) onRevealChrome();
     else self.onToggle();
   };
-  /* La clé dit la FORME (palier, fenêtre couchée ou debout), jamais les pixels : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
+  /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen) ? 'couchée' : 'debout'}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${offset === null}` : null,
     origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
     reducedDuration: STOW_REDUCED_MS,
     easing: 'ease-out',
+    /* W1.20 : la colonne qui entre ou repart fait glisser la scène vers son nouveau centre (`useFollowInline`, `call-screen.tsx`) ; elle porte ma vignette d'une part du chemin, le FLIP n'en joue que le reste. */
+    carrier: '[data-call-stage-surface]',
   });
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);

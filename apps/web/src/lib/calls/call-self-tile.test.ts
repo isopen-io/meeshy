@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   cornerAfterArrow,
+  defaultSelfCorner,
   DEFAULT_SELF_CORNER,
   DEFAULT_SELF_TILE,
   isLandscapeWindow,
@@ -237,5 +238,41 @@ describe('L1.5 — dans une fenêtre plus large que haute, ma vignette se couche
     expect(selfTileBox({ corner: 'top-left', size, viewport: landscape, topInset: 56 })).toEqual({ x: 16, y: 116, width: 130, height: 96 });
     expect(selfTileBox({ corner: 'bottom-left', size, viewport: landscape })).toEqual({ x: 16, y: 390 - 130 - 96, width: 130, height: 96 });
     expect(selfTileBox({ corner: 'bottom-right', size, viewport: landscape }).y).toBeGreaterThan(60);
+  });
+});
+
+/**
+ * **W1.5 — MA VIGNETTE PREND LE COIN DE FIN DU SENS DE LECTURE** (`.topTrailing` d'iOS, `TopEnd` d'Android) : la colonne du
+ * journal se pose à la fin de la ligne, la vignette la longe — à droite en gauche à droite, à gauche en droite à gauche.
+ * Une vignette que j'ai posée ailleurs garde sa place.
+ */
+describe('W1.5 — le coin de fin du sens de lecture', () => {
+  test('le coin d’un appel neuf est le haut de la fin de ligne : haut-droite, haut-gauche en droite à gauche', () => {
+    expect(defaultSelfCorner(false)).toBe('top-right');
+    expect(defaultSelfCorner(true)).toBe('top-left');
+    selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
+    expect(selfTileCornerFor(selfTileStore.getState(), 'neuf', true)).toBe('top-left');
+    expect(selfTileCornerFor(selfTileStore.getState(), 'neuf', false)).toBe('top-right');
+  });
+
+  test('un coin choisi garde sa place, quel que soit le sens de lecture', () => {
+    selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
+    setSelfTileCorner('choisi', 'bottom-right');
+    expect(selfTileCornerFor(selfTileStore.getState(), 'choisi', true)).toBe('bottom-right');
+  });
+
+  test('colonne ouverte, le coin de fin se tient au bord de la scène réduite, pas de la fenêtre', () => {
+    const size = { width: 112, height: 160 };
+    const wide = { width: 1400, height: 800 };
+    expect(selfTileBox({ corner: 'top-right', size, viewport: wide, bleed: 360 }).x).toBe(1400 - 360 - 16 - 112);
+    expect(selfTileBox({ corner: 'top-left', size, viewport: wide, bleed: 360 }).x).toBe(16);
+  });
+
+  test('colonne ouverte, la dépose s’élit sur la largeur de la scène : à droite de son milieu, elle va au coin de fin', () => {
+    const size = { width: 112, height: 160 };
+    const wide = { width: 1400, height: 800 };
+    const drop = (bleed: number) => nearestSelfCorner({ center: { x: 600, y: 200 }, size, viewport: wide, bleed });
+    expect(drop(0)).toBe('top-left');
+    expect(drop(360)).toBe('top-right');
   });
 });
