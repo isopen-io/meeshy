@@ -802,6 +802,45 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   les PR ouvertes et de corriger `dev` en continu. La preuve de ce lot est donc locale (gates ci-dessus, sur la
   branche refusionnée) et la CI de `dev` qui suit la fusion ; `origin/dev` refusionnée une seconde fois à la main.
 
+## 2026-11-13 — réveil repris (14:21) : accorder « Ce que j'écoute » depuis Android (#16836 ⊂ #13934)
+
+- Reprise : onze PR de la routine ouvertes, toutes tenues par des réveils vivants (CI en cours) ; aucune n'est
+  touchée. #16836 attendait la fusion de #16643 (faite, #17056) ; aucune branche n'écrivait la fiche d'un lien Android.
+  Branche `claude/cercles-16836-android` réservée vide avant toute écriture.
+- Lot : `:core:model` — `RelationPersonSettings.listeningCategoryShared` (absent ⇒ non accordé), `RelationShareGrant`,
+  `RelationPersonSwitch` (Réception = blocage, Partage = accord ; iso `CirclePersonSwitch` iOS),
+  `CirclePersonSetting.personSwitch`, `ListeningCategoryShareBody`. Réseau : `setListeningCategoryShared`. Dépôt :
+  `BringGateway.setShareGranted`. Fiche d'un lien : `CircleReceptionBlockViewModel` porte un interrupteur
+  (`isOn` / `setOn`), « Ce que j'écoute » actif dès Proche, décoché par défaut, optimiste avec retour arrière dit.
+- Écart à l'issue : le texte d'explication sous l'interrupteur n'est PAS posé — le cliquet du texte natif (#17587)
+  refuse un libellé d'explication de plus dans `feature/contacts` (15 > 14). Le libellé du titre suffit à iso du geste ;
+  l'explication suivra derrière un (i) si le porteur la veut.
+- Gates locaux : `jvm-check` (modèle) `RelationPersonSwitchTest` 5/5 et `ProfileCircleTest` 4/4 verts ;
+  `check-verbosity-native` sans échec ; budget de taille et frontières des modules verts. Compose, Hilt et les témoins
+  de `:feature:contacts` / `:sdk-core` se prouvent par `android.yml` sur la PR.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; ensuite l'émission de l'écoute sur Android, ou la
+  position temporaire sur Android (#16985), aucune branche ne l'écrivant au 2026-11-13 14:40.
+
+## 2026-11-13 — réveil : couper tous les Bring depuis les réglages de notification iOS (#16609)
+
+- Reprise : le réveil du 2026-11-10 a été interrompu sans rien laisser (aucune branche, aucune PR). Quatre autres réveils
+  tournent en même temps et ont déjà réservé #16984 (carte web, PR #17956), #17147, #17013 et #16983 ; la branche
+  `claude/cercles-16588-web` est posée sur `dev` sans écriture. Lot libre et petit retenu : #16609.
+- Lot : PR #17973 vers `dev` (brouillon tant que la CI Swift n'a pas parlé). SDK : `bringEnabled: Bool?` stocké tel que
+  servi ou choisi, jamais encodé tant qu'il est `nil` (la passerelle le garde, `keptWhenUnnamed`), `receivesBrings` lu par
+  l'écran. Un `Bool` à défaut vrai aurait rallumé, à la première synchronisation d'un cache d'avant le champ, un refus posé
+  sur le web. App : « Recevoir des Bring » sous « Appels entrants », avec son explication, sept langues.
+- Gates locaux : localisation, cohésion, pbxproj (cohérence, guillemets), inscription des tests, littéraux de loi,
+  ViewBuilder verts ; `check_house_rules.sh` rouge à l'identique sur `dev` (appels, hors lot). Swift : `sdk-tests.yml`
+  et `ios.yml` dispatchés sur la branche.
+- Reste du Bring : l'interrupteur global sur le web (#16588, réservé) et sur Android (issue à ouvrir), Critical Alerts
+  (#14112), décisions #14409 et #14450.
+- Prochain lot recommandé : « ensemble » sur Android (#17100) ou la position temporaire sur Android (#16985), les lots
+  web et iOS de la position étant tenus par d'autres réveils.
+- Gel de la CI des branches de lot (#18048, `CI_DEV_SEUL`) : les runs Swift dispatchés sur la branche ont été annulés
+  sans runner. `origin/dev` refusionnée à la main (journal seul), la preuve Swift du lot est la CI de `dev` qui suit la
+  fusion, comme le demande la consigne du porteur.
+
 ## 2026-11-13 — réveil 27 : deux collègues de l'équipe consentent entre eux sans lien, et le consentement tombe avec le rôle (#16642, #16814)
 
 - Reprise : sept réveils parallèles écrivent `together/`, `sharedLocation/`, la carte web et iOS, les réglages Bring.

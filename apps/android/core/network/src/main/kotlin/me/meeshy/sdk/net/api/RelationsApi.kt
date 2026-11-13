@@ -2,6 +2,7 @@ package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.relation.ListeningCategoryShareBody
 import me.meeshy.sdk.model.relation.BringBlockBody
 import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.model.relation.NowPlayingSnapshotWire
@@ -64,7 +65,7 @@ interface RelationsApi {
     @POST(ApiRoutesRelations.BY_USER_ID_LEVEL)
     suspend fun lower(@Path("userId") userId: String, @Body body: RelationLowerBody): ApiResponse<RelationLinkWire>
 
-    /** Les réglages que JE pose pour l'autre (#13936, #13935) : `bringBlocked` et `talkieBlocked`. */
+    /** Les réglages que JE pose pour l'autre (#13936, #13935, #16836) : `bringBlocked`, `talkieBlocked`, `listeningCategoryShared`. */
     @GET(ApiRoutesRelations.BY_USER_ID_SETTINGS)
     suspend fun settings(@Path("userId") userId: String): ApiResponse<RelationPersonSettings>
 
@@ -75,6 +76,13 @@ interface RelationsApi {
     /** Couper (ou non) le talkie de cette personne vers moi (#16675) : sa voix arrive alors en message vocal. */
     @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
     suspend fun setTalkieBlocked(@Path("userId") userId: String, @Body body: TalkieBlockBody): ApiResponse<RelationPersonSettings>
+
+    /** Accorder (ou retirer) « Ce que j'écoute » à cette personne (#16836) : refusé par défaut, l'autre n'en est pas prévenu. */
+    @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
+    suspend fun setListeningCategoryShared(
+        @Path("userId") userId: String,
+        @Body body: ListeningCategoryShareBody,
+    ): ApiResponse<RelationPersonSettings>
 
     /** Le rituel du Sang : `start` ouvre ou rejoint, `hold` se rejoue tant qu'on tient l'écran, `confirm` scelle. */
     @POST(ApiRoutesRelations.BY_USER_ID_RITUAL)
