@@ -111,6 +111,22 @@ final class SharedLocationsLiveTests: XCTestCase {
         XCTAssertNil(rig.sut.byUser["alice"])
     }
 
+    func test_aReplayedOldPosition_neverOutlivesTheTermTheSenderChose() {
+        let rig = makeRig()
+
+        rig.sut.receive(served(at: -3000, lifetime: 3600))
+
+        XCTAssertEqual(rig.sut.byUser["alice"]?.deadline, t0.addingTimeInterval(600))
+    }
+
+    func test_aReplayedPositionPastItsTerm_isNotShown() {
+        let rig = makeRig()
+
+        rig.sut.receive(served(at: -3600, lifetime: 3000))
+
+        XCTAssertNil(rig.sut.byUser["alice"])
+    }
+
     // MARK: - Ce qui l'efface
 
     func test_ended_clearsThePosition() {
