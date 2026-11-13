@@ -18,6 +18,7 @@ import {
   historyFloorClause,
   historyFloorFor,
   historyReaderFromAuthContext,
+  linkGrantsHistory,
   loadHistoryFloor,
   loadHistoryFloors,
   loadHistoryFloorsFor,
@@ -256,8 +257,54 @@ describe('historyFloorFor — (iv) le lien de partage, quand rien n’est figé'
     expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} }, { allowViewHistory: false })).toEqual(JOINED);
   });
 
-  it('ne borne RIEN quand le lien est INTROUVABLE — posture unique du dépôt', () => {
-    expect(historyFloorFor(participation(), null)).toBeNull();
+  /**
+   * #17140 — le témoin INVERSE de celui qu'il remplace.
+   *
+   * Il gelait « ne borne RIEN quand le lien est INTROUVABLE », présenté comme
+   * la posture unique du dépôt. C'était un fail-OPEN décisionnel : la
+   * participation DÉCLARE être entrée par un lien, et on ne sait plus rien de
+   * ce que ce lien accordait. Deux unités de production fabriquent ce cas —
+   * `deleteShareLinksRevokingGuests` (purge d'un compte) et `cleanupExpiredData`
+   * (balayage horaire des liens ÉCHUS) — parce que toutes deux ne révoquent
+   * que les invités `type: 'anonymous'` avant de supprimer la ligne.
+   */
+  it('borne à l’arrivée quand le lien est INTROUVABLE — fail-CLOSED (#17140)', () => {
+    expect(historyFloorFor(participation(), null)).toEqual(JOINED);
+  });
+
+  it('et ce refus ne prime PAS sur un droit figé qui accorde — le lien n’est que le dernier repli', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: true } }, null),
+    ).toBeNull();
+  });
+
+  it('ni sur un octroi par DATE, ni sur un rang d’administrateur', () => {
+    expect(historyFloorFor(participation({ historyVisibleFrom: GRANTED_FROM }), null)).toEqual(GRANTED_FROM);
+    expect(historyFloorFor(participation({ role: 'admin' }), null)).toBeNull();
+  });
+});
+
+/**
+ * #17140 — l'arbitrage du lien, ÉNONCÉ UNE FOIS.
+ *
+ * `linkGrantsHistory` existe parce que la fiche d'un participant
+ * (`participants-reads.ts`) doit ANNONCER exactement ce que `historyFloorFor`
+ * APPLIQUE. Elle le retapait (`shareLink?.allowViewHistory ?? true`), et le
+ * retapage confondait les deux raisons d'avoir `null` en face.
+ */
+describe('linkGrantsHistory — « aucun lien » et « lien disparu » ne sont pas la même réponse', () => {
+  it('accorde quand la participation n’a emprunté AUCUN lien — rien ne borne qui n’est entré par rien', () => {
+    expect(linkGrantsHistory(null, null)).toBe(true);
+    expect(linkGrantsHistory(undefined, null)).toBe(true);
+  });
+
+  it('refuse quand un `shareLinkId` est posé et que sa ligne a DISPARU', () => {
+    expect(linkGrantsHistory('sl-1', null)).toBe(false);
+  });
+
+  it('rend ce que la ligne dit quand elle est là', () => {
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: true })).toBe(true);
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: false })).toBe(false);
   });
 });
 
@@ -317,6 +364,22 @@ describe('loadHistoryFloor — forme unitaire', () => {
     } as never;
     await expect(loadHistoryFloor(prisma, participation())).rejects.toThrow('mongo down');
   });
+
+  /**
+   * #17140 — la lecture ABOUTIT et ne trouve rien. Ce n'est pas l'échec
+   * ci-dessus : elle a répondu, et sa réponse est « ce lien n'existe plus ».
+   */
+  it('borne à l’arrivée quand la lecture aboutit sur RIEN (lien supprimé depuis la jointure)', async () => {
+    const prisma = prismaWith([]);
+    expect(await loadHistoryFloor(prisma, participation())).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('et quand l’appelant tient un lien qui n’est pas le sien, c’est la LECTURE qui tranche — pas le sien', async () => {
+    const prisma = prismaWith([]);
+    const floor = await loadHistoryFloor(prisma, participation(), { link: { id: 'sl-other', allowViewHistory: true } });
+    expect(floor).toEqual(JOINED);
+  });
 });
 
 describe('loadHistoryFloorsFor — forme ALIGNÉE (un plancher par ligne)', () => {
@@ -347,6 +410,19 @@ describe('loadHistoryFloorsFor — forme ALIGNÉE (un plancher par ligne)', () =
     ]);
     expect(floors).toEqual([null, JOINED]);
     expect((prisma as any).conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * #17140 — sur une page MIXTE, une seule ligne orpheline ne doit emporter ni
+   * ouvrir les autres : chaque index garde son propre verdict.
+   */
+  it('borne la SEULE participation dont le lien a disparu, et laisse les autres intactes', async () => {
+    const floors = await loadHistoryFloorsFor(prismaWith([{ id: 'sl-vivant', allowViewHistory: true }]), [
+      { joinedAt: JOINED, shareLinkId: 'sl-vivant' },
+      { joinedAt: LATER, shareLinkId: 'sl-mort' },
+      { joinedAt: JOINED, shareLinkId: null },
+    ]);
+    expect(floors).toEqual([null, LATER, null]);
   });
 });
 
@@ -392,9 +468,9 @@ describe('loadHistoryFloors — forme ENSEMBLISTE (par conversation)', () => {
     expect(floors.get('c2')).toEqual(LATER);
   });
 
-  it('ne borne pas sur un lien introuvable — même posture que GET messages', async () => {
+  it('BORNE sur un lien introuvable — même posture que GET messages, désormais fail-CLOSED (#17140)', async () => {
     const floors = await loadHistoryFloors(prismaWith([]), [participation()]);
-    expect(floors.size).toBe(0);
+    expect(floors.get('c1')).toEqual(JOINED);
   });
 
   it('rend le MÊME verdict que la forme unitaire', async () => {
@@ -544,6 +620,18 @@ describe('loadHistoryFloorsOrFail', () => {
 
   it('ne retire rien quand la lecture aboutit', async () => {
     const result = await loadHistoryFloorsOrFail(prismaWith([{ id: 'sl-1', allowViewHistory: false }]), [participation()]);
+    expect(result.unreadableConversationIds).toEqual([]);
+    expect(result.floors.get('c1')).toEqual(JOINED);
+  });
+
+  /**
+   * #17140 — la distinction que ce lot pose, vue d'ici : une LEVÉE rend la
+   * conversation ILLISIBLE (on ne sait rien, on ne sert rien) ; une lecture qui
+   * ABOUTIT sur rien rend un PLANCHER (on sait que le lien a disparu, on sert
+   * depuis l'arrivée). Les confondre renverrait à « aucun plancher ».
+   */
+  it('une lecture qui aboutit sur RIEN n’est pas illisible — elle BORNE', async () => {
+    const result = await loadHistoryFloorsOrFail(prismaWith([]), [participation()]);
     expect(result.unreadableConversationIds).toEqual([]);
     expect(result.floors.get('c1')).toEqual(JOINED);
   });

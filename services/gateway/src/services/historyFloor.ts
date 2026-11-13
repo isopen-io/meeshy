@@ -29,7 +29,10 @@
  *   un droit figé explicite, une participation sans lien : zéro requête. Seules
  *   les participations dont le LIEN décide en lisent la ligne.
  *
- * Posture d'échec : un plancher illisible est un CONTRÔLE D'ACCÈS illisible, et
+ * Posture d'échec, et elle a DEUX formes qu'il ne faut pas confondre (#17140) :
+ * une LEVÉE ne prouve rien (la lecture n'a pas abouti) ; une ligne de lien
+ * ABSENTE est une réponse, et elle REFUSE — cf. {@link linkGrantsHistory}. Pour
+ * la première : un plancher illisible est un CONTRÔLE D'ACCÈS illisible, et
  * la seule dégradation sûre est de ne rien servir — à la différence du masquage
  * personnel (`personalHistoryFilter`), une courtoisie dont l'échec dégrade en
  * « on sert ». Les formes unitaires PROPAGENT ; la forme `OrFail` RETIRE, et
@@ -130,18 +133,61 @@ function settleBeforeLink(join: HistoryFloorJoin): FloorVerdict {
 }
 
 /**
+ * Ce que le LIEN accorde, quand c'est à lui de décider — et ce qu'il accorde
+ * quand sa ligne a DISPARU (#17140).
+ *
+ * Trois états, et les confondre a coûté l'historique entier :
+ *
+ * | la participation | la ligne de lien | verdict |
+ * |---|---|---|
+ * | aucun `shareLinkId` | — | **accorde** : rien ne borne qui n'est entré par aucun lien |
+ * | `shareLinkId` posé | lue | ce que la ligne dit |
+ * | `shareLinkId` posé | **INTROUVABLE** | **refuse** |
+ *
+ * La troisième ligne rendait `null` — « aucun plancher » — jusqu'à #17140, sous
+ * un doc-comment qui la présentait comme une posture assumée (« posture
+ * historique de `messages.ts` »). C'était un fail-OPEN **décisionnel**, et il
+ * était annoncé fail-CLOSED par les trois surfaces qui écrivent ce mot. Les
+ * deux ne sont pas la même chose : une LEVÉE ne prouve rien et propage
+ * (cf. `loadHistoryFloorsForOrFail`) ; une ligne ABSENTE est une réponse, et
+ * c'est la seule qu'on reçoive du cas qui la produit.
+ *
+ * **Il ne se produit pas par accident : deux unités de production le
+ * fabriquent**, parce que toutes deux ne révoquent que les invités
+ * `type: 'anonymous'` (`shareLinkActiveGuestsWhere`) avant de supprimer la
+ * ligne du lien, quand un INSCRIT peut entrer par un lien :
+ *
+ *  - `deleteShareLinksRevokingGuests` — la purge d'un compte efface les liens
+ *    qu'il a créés ;
+ *  - `cleanupExpiredData` — le balayage horaire efface les liens ÉCHUS, ce qui
+ *    est le cycle de vie NOMINAL de tout lien qui porte un `expiresAt`.
+ *
+ * Un inscrit admis par un tel lien reste donc actif, son `shareLinkId` pointant
+ * une ligne qui n'existe plus : le lien lui fermait l'historique, sa
+ * suppression le lui rouvrait ENTIER — le fil, l'agrégat, la recherche.
+ *
+ * Ce qu'un `shareLinkId` orphelin PROUVE est exactement ceci : la participation
+ * DÉCLARE être entrée par un lien, et on ne sait plus rien de ce que ce lien
+ * accordait. Une porte de confidentialité échoue en montrant MOINS.
+ */
+export function linkGrantsHistory(
+  shareLinkId: string | null | undefined,
+  link: ShareLinkHistoryGrant,
+): boolean {
+  if (!shareLinkId) return true;
+  return link?.allowViewHistory === true;
+}
+
+/**
  * La règle, énoncée UNE fois. Pure, et volontairement séparée de la lecture de
  * la ligne : les appelants n'ont pas la même stratégie de chargement.
  *
- * Un lien INTROUVABLE (supprimé depuis la jointure) ne borne rien — posture
- * historique de `messages.ts` (`if (shareLink) { … }`), et deux lecteurs de la
- * même règle qui divergeraient sur ce cas seraient pires que le cas lui-même.
+ * Un lien INTROUVABLE borne à l'arrivée — cf. {@link linkGrantsHistory}.
  */
 export function historyFloorFor(join: HistoryFloorJoin, link: ShareLinkHistoryGrant): Date | null {
   const verdict = settleBeforeLink(join);
   if (verdict.kind === 'settled') return verdict.floor;
-  if (!link || link.allowViewHistory) return null;
-  return join.joinedAt;
+  return linkGrantsHistory(join.shareLinkId, link) ? null : join.joinedAt;
 }
 
 /**
