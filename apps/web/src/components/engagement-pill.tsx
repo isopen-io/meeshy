@@ -1,3 +1,5 @@
+import { lazy, Suspense, useId, useState } from 'react';
+
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -6,8 +8,11 @@ import { useMinute } from '@/lib/view/use-minute';
 import { Link } from '@/routes/route-table';
 
 import { Glyph } from './glyph';
+import { loadFlameCard } from './header-flame';
 
 import '@/styles/header-flame.css';
+
+const FlameCard = lazy(() => loadFlameCard().then((m) => ({ default: m.FlameCard })));
 
 /**
  * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906, #9044) — « 🔥 4 · 1,2 k ».
@@ -16,9 +21,14 @@ import '@/styles/header-flame.css';
  * conversation a rapportés au LECTEUR depuis toujours, abrégés. Sans série en
  * cours, le cumul SEUL, sans flamme, à l'encre tertiaire — le rouge reste la
  * couleur de la série ; cumul nul, rien (#9570). Posée sous le titre de
- * l'en-tête DÉPLIÉ, où elle mène à la Progression ; replié, c'est la flamme du
+ * l'en-tête DÉPLIÉ ; replié, c'est la flamme du
  * jour sous l'avatar (`HeaderFlame`) qui parle. La liste porte la série en
  * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
+ *
+ * TOUCHABLE dans l'en-tête déplié (`interactive`, #17987) : une série en cours
+ * ouvre LA MÊME carte que la flamme repliée (`FlameCard`, #17770) — même objet,
+ * même geste, même effet sur les trois plateformes ; le cumul seul, sans
+ * flamme donc sans carte, mène à « Ma Légende ».
  *
  * Même rendu que la flamme sous l'avatar replié, sans capsule ni fond : la
  * flamme, puis « série · total » en chiffres rouges cerclés de blanc
@@ -32,20 +42,26 @@ import '@/styles/header-flame.css';
  */
 export function EngagementPill({
   snapshot,
-  opensProgression = false,
+  interactive = false,
+  onHideFlame,
   language,
   now,
 }: {
   readonly snapshot: ConversationEngagementSnapshot | undefined;
-  /** `true` ⇒ la pastille est un lien vers `/me/progression`. */
-  readonly opensProgression?: boolean;
+  /** `true` ⇒ la série ouvre la carte de la Flamme, le cumul seul mène à `/me/progression`. */
+  readonly interactive?: boolean;
+  /** « Masquer la flamme » de la carte — absent, la carte ne le propose pas. */
+  readonly onHideFlame?: () => void;
   readonly language?: InterfaceLanguage;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
   readonly now?: () => number;
 }) {
   const minute = useMinute();
+  const [cardOpen, setCardOpen] = useState(false);
+  const cardId = useId();
+  const interfaceLanguage = language ?? currentInterfaceLanguage();
   const today = localDayOf(now === undefined ? minute * 60_000 : now());
-  const model = engagementPillModel(snapshot, today, language ?? currentInterfaceLanguage());
+  const model = engagementPillModel(snapshot, today, interfaceLanguage);
   if (model === null) return null;
 
   const body =
@@ -71,7 +87,42 @@ export function EngagementPill({
     );
   const className = 'inline-flex shrink-0 items-center text-check tabular-nums';
 
-  return opensProgression ? (
+  if (interactive && model.kind === 'streak') {
+    return (
+      <span data-engagement-pill={model.kind} className="relative inline-flex shrink-0">
+        <button
+          type="button"
+          onClick={() => setCardOpen((open) => !open)}
+          aria-expanded={cardOpen}
+          aria-controls={cardOpen ? cardId : undefined}
+          className="inline-flex min-h-11 shrink-0 items-center"
+        >
+          <span className={className}>{body}</span>
+        </button>
+        {cardOpen ? (
+          <Suspense fallback={null}>
+            <FlameCard
+              id={cardId}
+              snapshot={snapshot}
+              day={today}
+              language={interfaceLanguage}
+              onClose={() => setCardOpen(false)}
+              {...(onHideFlame === undefined
+                ? {}
+                : {
+                    onHide: () => {
+                      setCardOpen(false);
+                      onHideFlame();
+                    },
+                  })}
+            />
+          </Suspense>
+        ) : null}
+      </span>
+    );
+  }
+
+  return interactive ? (
     <Link to="progression" data-engagement-pill={model.kind} className="inline-flex min-h-11 shrink-0 items-center">
       <span className={className}>{body}</span>
     </Link>
