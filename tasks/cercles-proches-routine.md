@@ -916,3 +916,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste de #16985 : la carte de réception (`TileMapView.kt`, épingles, cercle de flou, TalkBack) câblée sur
   `SharedLocationsGateway`, puis l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan).
 - Prochain lot recommandé : la carte de réception Android, ou la carte de réception iOS (reste de #16983).
+
+## 2026-11-13 — réveil de la nuit : la carte iOS des positions qu'on me partage (#16983)
+
+- Reprise : aucune PR cercles ouverte ; aucune branche n'écrit `Features/Contacts` côté position. Lot réservé sur
+  `claude/cercles-16983-ios-carte`.
+- Lot : la carte de RÉCEPTION iOS, câblée sur `SharedLocationsLive` (SDK, réveil 25), dans « Mes cercles » comme
+  l'onglet Cercles du web (#16984). `SharedLocationsMapViewModel` projette le magasin en épingles (position et rayon
+  SERVIS, jamais plus fins ; nom par `CirclePeopleDirectory`, « Quelqu'un » sinon ; présence servie, aucun anneau hors
+  ligne) ; rattrapage du monde à l'ouverture, puis de l'emprise visible après 300 ms de calme.
+  `SharedLocationsMapSection` : `MKMapView` natif comme `PostsMapRepresentable` (dont il reprend le choix, pas la
+  carte : celle-ci sert les publications et reste réservée au staff), épingle aux initiales teintée par la présence,
+  cercle de flou au rayon servi, libellé VoiceOver « nom, précision · jusqu'à HH:MM ». Un magasin par compte connecté
+  (`SharedLocationsLiveHolder`) : une position servie à un compte ne s'affiche jamais chez un autre. Huit chaînes en
+  sept langues.
+- Gates locaux : `check_localization.py` vert, `check_house_rules.sh` vert (36 règles), `check_cohesion_budget.sh`
+  rouge À L'IDENTIQUE avec et sans le lot (`iPadRootView.navigateFromNotification` 93 → 96, hérité de `dev`).
+  `check_test_registration.sh` attend le pbxproj régénéré par `[xcodegen]`. Swift ne compile pas en conteneur : la
+  preuve est la CI de `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Reste de #16983 : l'émission (fiche d'un Ami : durée, précision, arrêt ; `location:share-start|update|stop`) et les
+  chaînes `InfoPlist.strings` de la permission de position.
+- Prochain lot recommandé : la carte de réception Android (reste de #16985), puis l'émission iOS.
