@@ -45,7 +45,7 @@ import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { hasVideo, membersInArrival, orderedMembers, screenSharer, selfCameraShown, selfCameraStream, type CallLayout } from '@/lib/calls/call-view';
+import { hasVideo, isCompactHeight, membersInArrival, orderedMembers, screenSharer, selfCameraShown, selfCameraStream, type CallLayout } from '@/lib/calls/call-view';
 import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
 import { useStageFlip } from '@/lib/calls/use-stage-flip';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -421,6 +421,7 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
           chromeVisible={chromeVisible}
           onRevealChrome={onRevealChrome}
           landscape={scene.width > scene.height}
+          compact={isCompactHeight(viewport.height)}
           selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
         />
       </Suspense>
