@@ -29,6 +29,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../../services/together/togetherDeps', () => ({
+  ...(jest.requireActual('../../../services/together/togetherDeps') as object),
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
+
 const ADMIN_ID = '507f1f77bcf86cd799439001';
 const CONV_ID = '507f1f77bcf86cd799439aaa';
 const MEMBER_ID = '507f1f77bcf86cd799439bbb';
@@ -322,6 +328,24 @@ describe('PATCH /admin/conversations/:conversationId', () => {
     await patchConv(app, { isActive: false, reason: MOTIF });
     const ecrit = (prisma.conversation.update.mock.calls[0] as unknown as [{ data: AnyRecord }])[0].data;
     expect(ecrit).toEqual({ isActive: false });
+    await app.close();
+  });
+
+  it('#17147 — archiver coupe les séances « ensemble » de la conversation, après l\'écriture', async () => {
+    cutTogetherWhere.mockClear();
+    const { app, prisma } = await monter('ADMIN');
+    await patchConv(app, { isActive: false, reason: MOTIF });
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ conversationId: CONV_ID });
+    expect(cutTogetherWhere.mock.invocationCallOrder[0]).toBeGreaterThan(prisma.conversation.update.mock.invocationCallOrder[0]);
+    await app.close();
+  });
+
+  it('#17147 — un réglage qui ne ferme rien ne coupe aucune séance', async () => {
+    cutTogetherWhere.mockClear();
+    const { app } = await monter('ADMIN');
+    await patchConv(app, { title: 'Renommé', reason: MOTIF });
+    await patchConv(app, { isActive: true, reason: MOTIF });
+    expect(cutTogetherWhere).not.toHaveBeenCalled();
     await app.close();
   });
 });

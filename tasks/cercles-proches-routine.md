@@ -508,6 +508,27 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
 
+## 2026-11-13 — réveil 25 : une séance « ensemble » s'arrête dans une conversation close (#17147)
+
+- Reprise : aucune PR de la routine ouverte ; #17148 fusionnée le 2026-11-09. #17956 (carte des positions sur le web,
+  `claude/cercles-16984-web`) est tenue par un autre réveil, active : ce réveil ne la touche pas. Aucune branche n'écrit
+  `services/together/` : lot #17147 réservé sur `claude/cercles-ensemble-conversation-close`.
+- Lot : la porte `judgeTogether` lit désormais la conversation (ouverte : `isActive`, ni `closedAt`, ni `deletedAt`,
+  lue en JS car `closedAt: null` ne retient pas un champ absent sous MongoDB) ; une ligne absente refuse. La clôture
+  coupe : `announceConversationClosed`, point de convergence des cinq chemins de clôture, appelle
+  `cutTogetherWhere({ conversationId })` (détaché, `.catch` posé). Refus indistinct, fin dite `left` aux deux.
+- Gates locaux : témoins rouges prouvés (6 dans `togetherRelay.test.ts`, 1 dans `announceConversationClosed.test.ts`),
+  puis 443 suites voisines (together, socketio, conversations, relations, directory, attachments, admin, security,
+  balayage des promesses détachées) 6 806/6 806 vertes ; `tsc` passerelle vert.
+- Revue adversariale : fusionnable, un défaut moyen corrigé dans le lot — l'archivage admin (`isActive: false` sans
+  `closed`) ne passe pas par `announceConversationClosed` ; la route souveraine appelle désormais `cutTogetherWhere`
+  après l'écriture (témoin de route). Assumé : `obsoleteConversation` rejuge deux fois (sans effet). Hors lot, en
+  suivi : la désactivation d'une communauté ne touche pas ses conversations (#17971).
+- CI : `dev` était rouge sur six suites d'appel depuis #17952 (doubles partiels de `socket-rate-limiter` sans
+  `callSignalBudgetId`, 22 témoins `SIGNAL_FAILED`) ; corrigé dans ce lot en prolongeant `jest.requireActual`.
+- Prochain lot recommandé : « ensemble » sur Android (#17100), sinon la préférence de réception d'« ensemble » (#17023),
+  puis la position temporaire iOS (#16983) et l'icône par cercle (#17013) quand #17956 aura fusionné.
+
 ## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
 
 - Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
