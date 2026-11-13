@@ -509,15 +509,15 @@ private fun DetailSkeleton() {
 @Composable
 private fun LoadFailureState(failure: CommunityLoadFailure, onRetry: () -> Unit, onBack: () -> Unit) {
     val (icon, title, body) = when (failure) {
-        CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_detail_refused_title, R.string.community_detail_refused_body)
-        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_detail_load_failed_title, R.string.community_detail_load_failed_body)
-        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_detail_server_failed_title, R.string.community_detail_server_failed_body)
+        CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_load_refused_title, R.string.community_load_refused_body)
+        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, R.string.community_load_network_body)
+        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, R.string.community_load_server_body)
     }
     MeeshyEmptyState(
         icon = icon,
         title = stringResource(title),
         subtitle = stringResource(body),
-        actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_detail_refused_back),
+        actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_load_refused_back),
         onAction = if (failure.offersRetry) onRetry else onBack,
     )
 }
