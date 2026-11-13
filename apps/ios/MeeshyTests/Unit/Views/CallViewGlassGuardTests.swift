@@ -749,7 +749,7 @@ final class CallViewGlassGuardTests: XCTestCase {
 
     /// #17948 — en groupe, toucher la vignette à la une range les contrôles (loi 11), comme toucher
     /// l'image ; le retour à la grille passe par la capsule « Revenir à la grille ». iOS le tenait
-    /// déjà ; depuis #17945, une une sans caméra (avatars seuls) le fait aussi.
+    /// déjà : témoin.
     func test_featuredTile_tapStowsTheControls_andTheCapsuleGivesTheGridBack() throws {
         let stage = try stageSource()
         let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))

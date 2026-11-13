@@ -80,16 +80,24 @@ final class CallChromeVisibilityTests: XCTestCase {
 
     // MARK: - Qui peut masquer par un toucher (loi 11, #17945)
 
-    /// #17945 — la scène, c'est l'image en vidéo et le fond derrière l'avatar en audio : un
-    /// toucher y range tout, en duo comme en groupe. Le témoin d'avant (« une scène audio ne
-    /// cache jamais ses contrôles ») figeait le dessin que la décision porteur a retourné.
-    func test_mayToggleByTap_everyScene_videoOrAudio() {
-        XCTAssertTrue(CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: false))
+    /// #17945 — la scène, c'est l'image en vidéo et le fond derrière l'avatar d'un duo audio
+    /// établi. Un groupe sans caméra n'a pas d'image à libérer : ses vignettes répondent au
+    /// toucher. Les MÊMES vecteurs qu'Android (`CallChromeVisibility.isTapStage`) et le web. Le
+    /// témoin d'avant (« une scène audio ne cache jamais ses contrôles ») figeait le dessin que
+    /// la décision porteur a retourné.
+    func test_isTapStage_followsTheSharedVectors() {
+        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: true, isConnected: true), "duo, vidéo")
+        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: false, isConnected: true), "duo, audio établi")
+        XCTAssertFalse(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: false, isConnected: false), "duo, audio pas encore établi")
+        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: true, isVideoStage: true, isConnected: true), "groupe, une caméra")
+        XCTAssertFalse(CallChromeVisibility.isTapStage(isGroup: true, isVideoStage: false, isConnected: true), "groupe, aucune caméra")
     }
 
     /// Sous VoiceOver les contrôles restent en place : le toucher ne les range pas.
-    func test_mayToggleByTap_underVoiceOver_keepsTheControlsInPlace() {
-        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: true))
+    func test_mayToggleByTap_onTheStage_exceptUnderVoiceOver() {
+        XCTAssertTrue(CallChromeVisibility.mayToggleByTap(isTapStage: true, isVoiceOverRunning: false))
+        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isTapStage: true, isVoiceOverRunning: true))
+        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isTapStage: false, isVoiceOverRunning: false))
     }
 
     /// #17945 — en duo audio, le journal se range avec la pilule et l'avatar reprend 120 pt ; le
