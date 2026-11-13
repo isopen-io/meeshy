@@ -60,6 +60,7 @@ function monde(seed: { readonly reglages?: readonly Row[]; readonly preferences?
       leftAt: null,
       bannedAt: null,
     })),
+    conversations: [{ id: CONV, isActive: true, closedAt: null, deletedAt: null }],
   });
   const messageAttachment = table([
     { id: VIDEO, mimeType: 'video/mp4', isViewOnce: false, message: { conversationId: CONV, deletedAt: null, expiresAt: null, isViewOnce: false } },

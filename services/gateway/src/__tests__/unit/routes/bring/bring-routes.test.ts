@@ -642,7 +642,7 @@ describe('#14441 (B2) — l’interrupteur du service, éteint par défaut', () 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('BRING_DISABLED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
-    expect(config.body.data.services).toEqual({ bring: false });
+    expect(config.body.data.services).toEqual({ bring: false, bloodLocation: false });
     expect(app.emissions).toEqual([]);
     expect(pushes).toEqual([]);
   });
@@ -652,7 +652,7 @@ describe('#14441 (B2) — l’interrupteur du service, éteint par défaut', () 
     const config = await app.call('GET', '/api/v1/relations/config');
     await app.close();
 
-    expect(config.body.data.services).toEqual({ bring: true });
+    expect(config.body.data.services).toEqual({ bring: true, bloodLocation: false });
   });
 
   it('éteint, un Bring déjà en vol s’arrête toujours', async () => {

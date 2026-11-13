@@ -168,6 +168,9 @@ export async function purgeAccountIsolatedData(
       eraseCallTelemetryOf(prisma, userId),
       eraseE2EEDataOfUser(prisma, userId),
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
+      // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
+      prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
+      prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
       options.endSharedLocation?.(userId),
     ]);
 

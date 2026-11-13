@@ -150,8 +150,16 @@ describe('le rendu de la pastille', () => {
     );
   });
 
-  test('dans l’en-tête, elle mène à la Progression', () => {
-    const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot()} opensProgression language="fr" now={() => NOON_SEPT_30} />);
+  test('dans l’en-tête, une série en cours est un bouton qui ouvre la carte de la Flamme (#17987)', () => {
+    const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot()} interactive language="fr" now={() => NOON_SEPT_30} />);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('href="/me/progression"');
+  });
+
+  test('dans l’en-tête, le cumul seul, sans Flamme ni carte, mène à Ma Légende (#17987)', () => {
+    const html = renderToStaticMarkup(
+      <EngagementPill snapshot={snapshot({ streakDays: 0 })} interactive language="fr" now={() => NOON_SEPT_30} />,
+    );
     expect(html).toContain('href="/me/progression"');
   });
 });
@@ -179,10 +187,11 @@ describe('l’en-tête du fil porte la pastille', () => {
     viewerEngagement: snapshot({ day: localDayOf(Date.now()) }),
   });
 
-  test('déplié : UNE pastille « 🔥 série · total », qui mène à la Progression', () => {
+  test('déplié : UNE pastille « 🔥 série · total », qui ouvre la carte de la Flamme (#17987)', () => {
     const html = header(withPoints, true);
-    expect(html.match(/data-engagement-pill/g)?.length).toBe(1);
-    expect(html).toContain('href="/me/progression"');
+    expect(html.match(/data-engagement-pill=/g)?.length).toBe(1);
+    expect(html).toContain('data-engagement-pill="streak"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('>120<');
   });
 

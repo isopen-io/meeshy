@@ -150,6 +150,7 @@
     <string name="chat_forward_search_hint">ابحث عن محادثة...</string>
     <string name="chat_forward_sent">تمت إعادة التوجيه</string>
     <string name="chat_guest_bar_close">إغلاق المحادثة</string>
+    <string name="chat_header_engagement_legend_hint">يفتح أسطورتي</string>
     <string name="chat_header_flame_card_hide">إخفاء الشعلة</string>
     <string name="chat_header_flame_card_hint">يفتح سلسلة المحادثة</string>
     <string name="chat_header_flame_card_open">افتح اللعبة</string>

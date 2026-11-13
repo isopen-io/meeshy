@@ -7,8 +7,9 @@
  *   (#13936) coupe le Bring de cette personne vers moi, `talkieBlocked` (#13935) la
  *   réception directe de son talkie (sa voix arrive alors en message vocal), `togetherBlocked`
  *   (#17023) ses invitations à regarder ou écouter ensemble ;
- * - les partages consentis au rituel du Sang (#14401) : ils s'accordent au rituel
- *   seulement, et se RETIRENT ici, un par un, sans quitter le Sang (RGPD art. 7(3)) ;
+ * - les partages consentis au rituel du Sang (#14401) : ils s'accordent au rituel (ou, entre
+ *   deux comptes de l'équipe, ici même, sans lien : #16642), et se RETIRENT ici, un par un,
+ *   sans quitter le Sang (RGPD art. 7(3)) ;
  * - la catégorie de mon écoute (#13934, #16686) : un consentement de l'ÉMETTEUR,
  *   refusé par défaut (#14407), qui s'ACCORDE et se retire ici, personne par personne,
  *   dès Proche (`listeningCategoryShared`).
@@ -47,8 +48,9 @@ export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema
 
 /**
  * Un réglage au moins. `bringBlocked`, `talkieBlocked` et `togetherBlocked` se posent dans les deux sens ;
- * un partage du rituel ne se règle qu'à `false` (le retrait) : l'accorder hors du
- * rituel est refusé.
+ * un partage du rituel se RETIRE toujours (`false`), et ne s'accorde (`true`) hors du rituel
+ * qu'entre deux comptes de l'équipe, sans lien (#16642) : le corps l'accepte, la passerelle
+ * le juge par la loi d'accès et refuse (400) toute autre paire.
  */
 export const relationPersonSettingsUpdateSchema = z
   .object({
@@ -56,10 +58,10 @@ export const relationPersonSettingsUpdateSchema = z
     talkieBlocked: z.boolean().optional(),
     togetherBlocked: z.boolean().optional(),
     listeningCategoryShared: z.boolean().optional(),
-    listeningTitleShared: z.literal(false).optional(),
-    locationShared: z.literal(false).optional(),
-    locationHistoryShared: z.literal(false).optional(),
-    proximityShared: z.literal(false).optional(),
+    listeningTitleShared: z.boolean().optional(),
+    locationShared: z.boolean().optional(),
+    locationHistoryShared: z.boolean().optional(),
+    proximityShared: z.boolean().optional(),
   })
   .strict()
   .refine((update) => Object.keys(update).length > 0, { message: 'Aucun réglage' });

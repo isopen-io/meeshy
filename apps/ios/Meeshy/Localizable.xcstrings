@@ -107010,6 +107010,53 @@
         }
       }
     },
+    "conversation.header.engagement.legend.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح أسطورتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet Meine Legende"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens My Legend"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre Mi Leyenda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre Ma Légende"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre La mia Leggenda"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre Minha Lenda"
+          }
+        }
+      }
+    },
     "conversation.header.flame.card.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -180133,6 +180180,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Selos"
+          }
+        }
+      }
+    },
+    "settings.notifications.bring": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقي Bring"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring empfangen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receive Brings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recibir Bring"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recevoir des Bring"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ricevere Bring"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receber Bring"
+          }
+        }
+      }
+    },
+    "settings.notifications.bring.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صوت إجباري للحالات الطارئة القصوى، حتى في الوضع الصامت. عند إيقافه، لن يتمكن أحد من جعل هاتفك يرن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein erzwungener Ton für echte Notfälle, auch im Lautlos-Modus. Ausgeschaltet kann niemand mehr dein Telefon klingeln lassen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A forced sound for real emergencies, even on silent. Turned off, no one can make your phone ring anymore."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un sonido forzado para urgencias extremas, incluso en silencio. Desactivado, nadie podrá hacer sonar tu teléfono."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un son forcé pour l’urgence extrême, même en silencieux. Coupé, personne ne peut plus faire sonner votre téléphone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un suono forzato per le urgenze estreme, anche in silenzioso. Disattivato, nessuno potrà più far squillare il tuo telefono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um som forçado para urgências extremas, mesmo no silencioso. Desativado, ninguém mais poderá fazer seu telefone tocar."
           }
         }
       }

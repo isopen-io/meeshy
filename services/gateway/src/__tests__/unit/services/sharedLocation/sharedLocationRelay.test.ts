@@ -40,26 +40,27 @@ describe('la projection — la précision donnée, rien de plus riche à côté'
   };
 
   it('exacte : la position et la précision de l\'appareil, jamais sous 10 m', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'exact')).toEqual({
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'exact', circle: 'FRIEND' })).toEqual({
       userId: EMETTEUR,
       latitude: 48.8566,
       longitude: 2.3522,
       precision: 'exact',
       radiusMeters: 10,
+      circle: 'FRIEND',
       updatedAt: state.updatedAt,
       expiresAt: state.expiresAt,
     });
   });
 
   it('quartier et ville : le centre de la maille et le rayon du flou, ni la position ni la précision réelles', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 1200 });
-    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 12000 });
-    expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, 'city'))).not.toMatch(/8566|3522|accuracy|recipients/);
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'neighborhood', circle: 'CLOSE' })).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 1200, circle: 'CLOSE' });
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'city', circle: 'BLOOD' })).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 12000, circle: 'BLOOD' });
+    expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, { precision: 'city', circle: 'BLOOD' }))).not.toMatch(/8566|3522|accuracy|recipients/);
   });
 
   it('deux positions de la même maille livrent le même point : mille envois n\'en disent pas plus qu\'un', () => {
     const voisine = { ...state, position: { latitude: 48.8591, longitude: 2.3588 } };
-    expect(projectSharedLocation(EMETTEUR, voisine, 'neighborhood')).toEqual(projectSharedLocation(EMETTEUR, state, 'neighborhood'));
+    expect(projectSharedLocation(EMETTEUR, voisine, { precision: 'neighborhood', circle: 'CLOSE' })).toEqual(projectSharedLocation(EMETTEUR, state, { precision: 'neighborhood', circle: 'CLOSE' }));
   });
 
   it('`none` ne sert rien', () => {
@@ -825,8 +826,8 @@ describe('contre-audit a1e903a — le cercle de flou contient toujours la positi
       ],
     };
     const coinVille = { ...position, latitude: 0.1249, longitude: 0.1249 };
-    const quartier = projectSharedLocation(EMETTEUR, state, 'neighborhood', PROCHE)!;
-    const ville = projectSharedLocation(EMETTEUR, { ...state, position: coinVille }, 'city', SANG)!;
+    const quartier = projectSharedLocation(EMETTEUR, state, { precision: 'neighborhood', circle: 'CLOSE' }, PROCHE)!;
+    const ville = projectSharedLocation(EMETTEUR, { ...state, position: coinVille }, { precision: 'city', circle: 'BLOOD' }, SANG)!;
 
     expect(quartier).toMatchObject({ latitude: 0.005, longitude: 0.005 });
     expect(metres(quartier, position)).toBeLessThanOrEqual(quartier.radiusMeters);

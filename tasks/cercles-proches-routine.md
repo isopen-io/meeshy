@@ -508,6 +508,27 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
 
+## 2026-11-13 — réveil 25 : une séance « ensemble » s'arrête dans une conversation close (#17147)
+
+- Reprise : aucune PR de la routine ouverte ; #17148 fusionnée le 2026-11-09. #17956 (carte des positions sur le web,
+  `claude/cercles-16984-web`) est tenue par un autre réveil, active : ce réveil ne la touche pas. Aucune branche n'écrit
+  `services/together/` : lot #17147 réservé sur `claude/cercles-ensemble-conversation-close`.
+- Lot : la porte `judgeTogether` lit désormais la conversation (ouverte : `isActive`, ni `closedAt`, ni `deletedAt`,
+  lue en JS car `closedAt: null` ne retient pas un champ absent sous MongoDB) ; une ligne absente refuse. La clôture
+  coupe : `announceConversationClosed`, point de convergence des cinq chemins de clôture, appelle
+  `cutTogetherWhere({ conversationId })` (détaché, `.catch` posé). Refus indistinct, fin dite `left` aux deux.
+- Gates locaux : témoins rouges prouvés (6 dans `togetherRelay.test.ts`, 1 dans `announceConversationClosed.test.ts`),
+  puis 443 suites voisines (together, socketio, conversations, relations, directory, attachments, admin, security,
+  balayage des promesses détachées) 6 806/6 806 vertes ; `tsc` passerelle vert.
+- Revue adversariale : fusionnable, un défaut moyen corrigé dans le lot — l'archivage admin (`isActive: false` sans
+  `closed`) ne passe pas par `announceConversationClosed` ; la route souveraine appelle désormais `cutTogetherWhere`
+  après l'écriture (témoin de route). Assumé : `obsoleteConversation` rejuge deux fois (sans effet). Hors lot, en
+  suivi : la désactivation d'une communauté ne touche pas ses conversations (#17971).
+- CI : `dev` était rouge sur six suites d'appel depuis #17952 (doubles partiels de `socket-rate-limiter` sans
+  `callSignalBudgetId`, 22 témoins `SIGNAL_FAILED`) ; corrigé dans ce lot en prolongeant `jest.requireActual`.
+- Prochain lot recommandé : « ensemble » sur Android (#17100), sinon la préférence de réception d'« ensemble » (#17023),
+  puis la position temporaire iOS (#16983) et l'icône par cercle (#17013) quand #17956 aura fusionné.
+
 ## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
 
 - Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
@@ -709,6 +730,133 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `socket-rate-limiter` sans `callSignalBudgetId`, ajouté par dda1585572) ; corrigé dans ce lot, 2282/2282.
 - Prochain lot recommandé : mener à la fusion les PR ouvertes ; « ensemble » sur Android (#17100) est tenu par le
   réveil 28.
+
+## 2026-11-13 — réveil 26 : la position partagée dit de quel cercle vient la personne (#17966 ⊂ #17013)
+
+- Reprise : #17956 (carte web des positions, #16984) est menée par un réveil actif (commits de 13:13 à 13:19) ;
+  #17147 (« ensemble » dans une conversation close) a été réservée à 13:34 par un autre réveil
+  (`claude/cercles-ensemble-conversation-close`). Ce réveil n'avait rien écrit : il cède les deux.
+- Lot choisi : la tranche SERVEUR de l'icône de position par cercle (#17013), petite, prouvable en conteneur, et
+  préalable aux trois marqueurs. Issue #17966 ouverte sous #17013 (milestone #215).
+- Livré dans la PR : `location:share-changed` et `GET /relations/locations` portent `circle` (`FRIEND` · `CLOSE` ·
+  `BLOOD`), le niveau effectif du verdict qui ouvre `location.temporary` pour CE lecteur ; l'accès d'un lecteur est
+  `{précision, cercle}`, donc une montée ou une baisse de cercle à précision égale ressert la position ; le schéma
+  du rattrapage déclare le champ (enum) et retire toujours tout voisin. Champ additif : un ancien client l'ignore.
+- Décision écrite dans la PR : entre deux comptes de l'équipe, la loi rend le niveau Sang (#16623) ; le marqueur
+  le montre donc en Sang, comme les autres outils de cercle.
+- Ce qui reste de #17013 : les marqueurs web (après la fusion de #17956), iOS (#16983) et Android (#16985).
+- Prochain lot recommandé : la position temporaire sur iOS (#16983), qui dessinera directement le marqueur du cercle ;
+  sinon « ensemble » sur Android (#17100).
+- Le 2026-11-13 à 17:17, la passe de fusion a signalé un conflit de fond avec #17976 (maille retenue par
+  destinataire, heure arrondie, rayons 1200/12000) : `dev` fusionnée à la main dans la branche, le cercle reposé
+  sur la forme de `dev` (projection, `snapshotAllowed` rend désormais le cercle par émetteur), les témoins du cercle
+  déplacés dans `sharedLocationRelay.cercle.test.ts` pour tenir le budget de taille.
+
+## 2026-11-13 — réveil 29 : la position du Sang, socle serveur, menée vers `dev` (#13937)
+
+- Reprise : run interrompu le 2026-11-10 par une erreur d'API, repris à 15:09. Quinze PR de la routine étaient vivantes
+  (poussées dans l'heure et demie) : ce réveil n'en a doublé aucune. La branche `claude/cercles-13937-serveur`
+  (historique scellé, fantôme, journal, proximité, derrière un drapeau éteint) était écrite et auditée depuis le
+  2026-11-09, sans PR et sans session pour la suivre : reprise.
+- Fait : `origin/dev` fusionnée à la main (trois conflits : purge du compte, manifeste des routes régénéré à 809,
+  plafond Android « à porter » 125 → 130 en gardant les deux histoires) ; catalogues TS, Swift et Kotlin régénérés ; les
+  cinq routes déclarées « en attente de leur client » dans les deux cliquets de catalogue mort. PR #18019 (brouillon).
+- Contre-audit adversarial : non bloquant. Corrigé dans le lot en TDD : un point téléporté servait d'ancre au point voisin
+  (le verrou de vitesse se contournait), un effacement rendait vraisemblable n'importe quel point (un point sans ancre
+  n'est plus jamais évalué), le fantôme se devinait au temps de réponse. Les témoins négatifs de proximité reçoivent une
+  ancre : sans elle, la nouvelle règle les aurait rendus verts sans rien prouver.
+- Ouverts : #18023 et #18024 (décisions du porteur : points antérieurs à l'accord, capacité de sondage résiduelle de la
+  proximité), #18025 (relire son fantôme et ses rayons, plafond atomique du journal, porte du drapeau, prérequis staging).
+- Gates locaux : `tsc` passerelle vert ; position du Sang, routes `me`, purge 1 745/1 745 ; ciblé plus large 151 suites,
+  2 043 témoins ; `packages/shared` `api/__tests__` 109/109 et `__tests__/ci` 149/149 ; cliquets de catalogue mort conformes.
+- Prochain lot recommandé : les clients de la position du Sang après les décisions #18023/#18024, sinon les PR ouvertes
+  de la routine à mener à la fusion.
+
+## 2026-11-13 — réveil de 14:40 : une prise de parole talkie se localise dans le journal (#17252, volet serveur)
+
+- Reprise : run coupé le 2026-11-10 par une erreur d'API, relancé à 14:40. Les PR de la routine ouvertes (#17956,
+  #17969, #17976, #17979, #17981, #17984, #17994, #17998…) sont toutes écrites dans l'heure par des réveils vivants ;
+  ce réveil n'en prend aucune. #17249 (APNs absent) est déjà livrée côté code (`b90b576e1`) et n'attend que la clé
+  sandbox du porteur. Aucune branche n'écrivait le talkie : lot #17252 réservé sur `claude/cercles-17252-journal`.
+- Lot : `TalkieRelay` journalise `[TALKIE_STARTED]` (mode, codec, scellée ou non), `[TALKIE_RELAYED]` une fois, au
+  premier fragment dont l'émission n'a pas levé (rang, délai depuis l'ouverture) et `[TALKIE_ENDED]` (raison, fragments
+  reçus et relayés, octets, durée, rejointe ou non). Identifiants et compteurs seulement, aucun octet de voix ; un
+  témoin le vérifie. Aucun changement de contrat ni de client.
+- Ouvert en suivi : #18009, l'accusé « entendu » du destinataire et l'état « non reçu » chez l'émetteur (trois clients,
+  capacité annoncée pour ne jamais accuser un ancien client).
+- Gates locaux : 8 suites talkie 198/198 vertes (dont 11 témoins neufs, 8 rouges avant le correctif), 4 suites
+  voisines 38/38, `tsc` passerelle vert.
+- Prochain lot recommandé : #18009 côté passerelle (capacité + délai), ou mener à la fusion les PR ouvertes.
+
+## 2026-11-13 — réveil de 17:15 : mener #18010 (journal du talkie) à la fusion (#17252)
+
+- Reprise : `dev` venait de recevoir d'un coup quinze PR de la routine (17:09–17:14 UTC) ; les dix PR encore ouvertes
+  étaient toutes en conflit sur ce journal. #18010 était la plus ancienne sans écriture (14:47) : ce réveil la mène, les
+  autres restent à leurs réveils.
+- `origin/dev` fusionnée à la main : conflit du journal seul, les entrées des deux côtés gardées ; `talkieRelay.ts`
+  fusionné sans conflit avec la coupure E2EE du talkie (#14490). Gates relancés : suites talkie 185/185, routes talkie
+  et `socketio` 942/942, `tsc` passerelle vert.
+- Gates sur la branche refusionnée (17:35) : talkie + routes talkie + `socketio` 1127/1127, `tsc` passerelle vert.
+- CI : les deux `ci.yml` dispatchés sur la branche ont été annulés — le porteur a gelé la CI des branches de lot le
+  2026-11-13 (#18048, `CI_DEV_SEUL` : seuls `dev`, `main` et `ci/promotion-*` tournent) avec la consigne de fusionner
+  les PR ouvertes et de corriger `dev` en continu. La preuve de ce lot est donc locale (gates ci-dessus, sur la
+  branche refusionnée) et la CI de `dev` qui suit la fusion ; `origin/dev` refusionnée une seconde fois à la main.
+
+## 2026-11-13 — réveil repris (14:21) : accorder « Ce que j'écoute » depuis Android (#16836 ⊂ #13934)
+
+- Reprise : onze PR de la routine ouvertes, toutes tenues par des réveils vivants (CI en cours) ; aucune n'est
+  touchée. #16836 attendait la fusion de #16643 (faite, #17056) ; aucune branche n'écrivait la fiche d'un lien Android.
+  Branche `claude/cercles-16836-android` réservée vide avant toute écriture.
+- Lot : `:core:model` — `RelationPersonSettings.listeningCategoryShared` (absent ⇒ non accordé), `RelationShareGrant`,
+  `RelationPersonSwitch` (Réception = blocage, Partage = accord ; iso `CirclePersonSwitch` iOS),
+  `CirclePersonSetting.personSwitch`, `ListeningCategoryShareBody`. Réseau : `setListeningCategoryShared`. Dépôt :
+  `BringGateway.setShareGranted`. Fiche d'un lien : `CircleReceptionBlockViewModel` porte un interrupteur
+  (`isOn` / `setOn`), « Ce que j'écoute » actif dès Proche, décoché par défaut, optimiste avec retour arrière dit.
+- Écart à l'issue : le texte d'explication sous l'interrupteur n'est PAS posé — le cliquet du texte natif (#17587)
+  refuse un libellé d'explication de plus dans `feature/contacts` (15 > 14). Le libellé du titre suffit à iso du geste ;
+  l'explication suivra derrière un (i) si le porteur la veut.
+- Gates locaux : `jvm-check` (modèle) `RelationPersonSwitchTest` 5/5 et `ProfileCircleTest` 4/4 verts ;
+  `check-verbosity-native` sans échec ; budget de taille et frontières des modules verts. Compose, Hilt et les témoins
+  de `:feature:contacts` / `:sdk-core` se prouvent par `android.yml` sur la PR.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; ensuite l'émission de l'écoute sur Android, ou la
+  position temporaire sur Android (#16985), aucune branche ne l'écrivant au 2026-11-13 14:40.
+
+## 2026-11-13 — réveil : couper tous les Bring depuis les réglages de notification iOS (#16609)
+
+- Reprise : le réveil du 2026-11-10 a été interrompu sans rien laisser (aucune branche, aucune PR). Quatre autres réveils
+  tournent en même temps et ont déjà réservé #16984 (carte web, PR #17956), #17147, #17013 et #16983 ; la branche
+  `claude/cercles-16588-web` est posée sur `dev` sans écriture. Lot libre et petit retenu : #16609.
+- Lot : PR #17973 vers `dev` (brouillon tant que la CI Swift n'a pas parlé). SDK : `bringEnabled: Bool?` stocké tel que
+  servi ou choisi, jamais encodé tant qu'il est `nil` (la passerelle le garde, `keptWhenUnnamed`), `receivesBrings` lu par
+  l'écran. Un `Bool` à défaut vrai aurait rallumé, à la première synchronisation d'un cache d'avant le champ, un refus posé
+  sur le web. App : « Recevoir des Bring » sous « Appels entrants », avec son explication, sept langues.
+- Gates locaux : localisation, cohésion, pbxproj (cohérence, guillemets), inscription des tests, littéraux de loi,
+  ViewBuilder verts ; `check_house_rules.sh` rouge à l'identique sur `dev` (appels, hors lot). Swift : `sdk-tests.yml`
+  et `ios.yml` dispatchés sur la branche.
+- Reste du Bring : l'interrupteur global sur le web (#16588, réservé) et sur Android (issue à ouvrir), Critical Alerts
+  (#14112), décisions #14409 et #14450.
+- Prochain lot recommandé : « ensemble » sur Android (#17100) ou la position temporaire sur Android (#16985), les lots
+  web et iOS de la position étant tenus par d'autres réveils.
+- Gel de la CI des branches de lot (#18048, `CI_DEV_SEUL`) : les runs Swift dispatchés sur la branche ont été annulés
+  sans runner. `origin/dev` refusionnée à la main (journal seul), la preuve Swift du lot est la CI de `dev` qui suit la
+  fusion, comme le demande la consigne du porteur.
+
+## 2026-11-13 — réveil 27 : deux collègues de l'équipe consentent entre eux sans lien, et le consentement tombe avec le rôle (#16642, #16814)
+
+- Reprise : sept réveils parallèles écrivent `together/`, `sharedLocation/`, la carte web et iOS, les réglages Bring.
+  Aucun n'écrit `routes/relations/settings.ts` ni `relationConsent.ts` : lot réservé sur
+  `claude/cercles-16642-consentement-equipe`. Le travail de #16642, écrit et revu le 2026-11-08 sur
+  `claude/cercles-16642-serveur` sans jamais être proposé, est repris par cherry-pick sur `dev` (trois commits),
+  et #16814 (sa suite de sécurité) s'y ajoute.
+- Lot : PR #17984 vers `dev`. #16642 repris et mis à jour pour la décision du 2026-11-10 (ANALYST et AUDIT
+  consentent comme l'équipe). #16814 : `updateRole`, `updateStatus` (désactivation, bannissement) et `deleteUser`
+  appellent `revokeTeamSharesOf`, qui éteint dans les deux sens ce que le lien réel n'ouvre pas (rituel hors Sang,
+  catégorie d'écoute sous Proche), daté chez chaque émetteur, puis efface l'écoute chez le lecteur qui la voyait.
+- Revue adversariale : un constat à corriger (l'écoute restait affichée 15 min chez l'ex-collègue), corrigé dans le
+  lot avec son témoin rouge ; le reste en suivi #17991 (chemins d'auto-suppression, provenance, dates, concurrence).
+- Gates locaux : 155 suites voisines, 2 857/2 857 vertes ; `tsc` passerelle vert ; contrats shared verts. La CI de PR
+  étant gelée, `ci.yml` est dispatché sur la tête de branche.
+- Prochain lot recommandé : #17991, ou un client pour accorder l'écoute et la position entre collègues (#16864).
 
 ## 2026-11-13 — réveil 28 bis : la branche orpheline des partages du rituel menée à sa PR (#14924)
 

@@ -34,6 +34,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationPoint: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationConsultation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
