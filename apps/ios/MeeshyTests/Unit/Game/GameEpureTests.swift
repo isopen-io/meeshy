@@ -82,7 +82,7 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         let keys = Array(Self.french.keys) + [
             "game.notebook.when", "game.notebook.when.note", "game.door.notebook.line",
-            "game.rules.step.why",
+            "game.rules.step.meaning",
         ]
         let sameInEveryLanguage: Set<String> = ["game2.settings.notifications.switch"]
         for key in keys {
@@ -245,7 +245,7 @@ final class GameEpureTests: XCTestCase {
     // MARK: - Les (i) : la question est le nom, la note reste lue
 
     func test_stepNote_questionNamesTheStep_soSevenInfoButtonsTellApart() {
-        let notes = (1...7).map { MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: String($0)), text: "note \($0)") }
+        let notes = (1...7).map { MeeshyInfoNote(question: GameGuideCopy.stepMeaning(index: String($0)), text: "note \($0)") }
         XCTAssertEqual(Set(notes.map(\.id)).count, 7, "un seul (i) s'ouvre : leurs identifiants diffèrent")
         for note in notes {
             XCTAssertFalse(note.question.isEmpty)
@@ -253,9 +253,25 @@ final class GameEpureTests: XCTestCase {
         }
     }
 
+    /// Le (i) d'une étape déplie ce qu'elle VEUT DIRE : sa question le demande, avec le mot que porte la rangée
+    /// (« Étape N sur 7 »), jamais un « pourquoi » auquel la note ne répond pas, ni « carte » que l'écran ne montre pas.
+    func test_stepNote_question_asksWhatTheStepMeans_withTheWordOfItsRow_inEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        let question = try XCTUnwrap(catalog["game.rules.step.meaning"])
+        let row = try XCTUnwrap(catalog["game.guide.step_of"])
+        XCTAssertNil(catalog["game.rules.step.why"])
+        for language in ["fr"] + Self.otherLanguages {
+            let asked = try XCTUnwrap(question[language], language)
+            let noun = try XCTUnwrap(row[language]?.components(separatedBy: " ").first, language)
+            XCTAssertTrue(asked.lowercased().contains(noun.lowercased()), "\(language) : « \(asked) » ne reprend pas « \(noun) »")
+            XCTAssertTrue(asked.hasSuffix("?") || asked.hasSuffix("؟"), "\(language) : « \(asked) » n'est pas une question")
+            XCTAssertEqual(specifiers(in: asked).count, 1, language)
+        }
+    }
+
     func test_stepNote_onlyOneOpensAtATime() {
-        let first = MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: "1"), text: "a")
-        let second = MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: "2"), text: "b")
+        let first = MeeshyInfoNote(question: GameGuideCopy.stepMeaning(index: "1"), text: "a")
+        let second = MeeshyInfoNote(question: GameGuideCopy.stepMeaning(index: "2"), text: "b")
         let afterFirst = MeeshyInfoNote.toggled(open: nil, tapped: first.id)
         XCTAssertEqual(MeeshyInfoNote.toggled(open: afterFirst, tapped: second.id), second.id)
         XCTAssertNil(MeeshyInfoNote.toggled(open: second.id, tapped: second.id))

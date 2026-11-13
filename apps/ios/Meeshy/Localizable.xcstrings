@@ -315301,49 +315301,49 @@
         }
       }
     },
-    "game.rules.step.why": {
+    "game.rules.step.meaning": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لماذا البطاقة ⁦%@⁩؟"
+            "value": "ماذا تعني المرحلة ⁦%@⁩؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Warum Karte %@?"
+            "value": "Was bedeutet Etappe %@?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Why card %@?"
+            "value": "What does step %@ mean?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Por qué la tarjeta %@?"
+            "value": "¿Qué significa la etapa %@?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pourquoi la carte %@ ?"
+            "value": "Que veut dire l’étape %@ ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Perché la carta %@?"
+            "value": "Che cosa significa la tappa %@?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por que o cartão %@?"
+            "value": "O que significa a etapa %@?"
           }
         }
       }

@@ -174,9 +174,9 @@ struct GameRulesPage: View {
         }
     }
 
-    /// La question porte le numéro de l'étape : sept (i) sur une page se distinguent à l'oreille, et un seul s'ouvre.
+    /// La question porte le numéro de l’étape, avec le mot de « Étape N sur 7 » : sept (i) se distinguent à l’oreille, un seul s’ouvre.
     private func stepNote(_ index: Int, means: String) -> MeeshyInfoNote {
-        MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: GameCopy.formatCount(index)), text: means)
+        MeeshyInfoNote(question: GameGuideCopy.stepMeaning(index: GameCopy.formatCount(index)), text: means)
     }
 
     private func stepFigures(_ card: GuideCard) -> some View {

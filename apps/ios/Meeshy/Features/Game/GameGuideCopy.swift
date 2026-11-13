@@ -27,8 +27,8 @@ struct GuideCopy: Equatable {
 enum GameGuideCopy {
 
     /// Le nom du (i) d'une étape du carnet : la question porte le numéro, pour que les sept (i) se distinguent.
-    static func stepWhy(index: String) -> String {
-        String(localized: "game.rules.step.why", defaultValue: "Pourquoi la carte \(index) ?", bundle: .main)
+    static func stepMeaning(index: String) -> String {
+        String(localized: "game.rules.step.meaning", defaultValue: "Que veut dire l’étape \(index) ?", bundle: .main)
     }
 
     // MARK: - Boutons
