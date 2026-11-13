@@ -104,7 +104,7 @@
       - **La validation est automatique** : il n'y a de « Valider » nulle part. Ce qui est touché s'applique aussitôt, et ‹ revient à l'appel en gardant les effets appliqués.
       - **Après le choix d'une fonction, la barre revient à son menu de base** : un look, un cadre ou un réglage choisi, ce que la fonction avait ouvert se referme par le chemin inverse (loi 17) et la barre retrouve ses puces et `‹ · Réglages · (+)`.
       - **Au plus trois couches d'effet s'empilent** (un cadre, un filtre, une déformation…). (+) en ajoute une par-dessus les autres ; avec trois couches, (+) n'en ajoute plus de quatrième, le dit à son étiquette d'accessibilité et garde son appui long.
-      - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, les autres gardent leur ordre ; la liste vide se referme. Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
+      - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, les autres gardent leur ordre, et la liste se referme : la barre revient à son menu de base, comme après tout choix. Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
       - La pile est une loi PURE, la même sur les trois plateformes (ajouter, retirer, plafond de trois, ordre) : TS, Swift et Kotlin en sont des miroirs.
     - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
 15. **À la une.**
