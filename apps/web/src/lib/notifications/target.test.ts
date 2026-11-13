@@ -378,3 +378,27 @@ describe('un appel manqué sans conversation ouvre le profil de l’appelant (#9
     expect(notificationTarget(record({ type: 'missed_call' }))).toBeNull();
   });
 });
+
+/**
+ * « AJOUTÉ À LA COMMUNAUTÉ Y » (#18052) — la notification nomme la communauté
+ * (`context.communityId` sur la cloche, `communityId` sur la carte `data` du
+ * push) : le tap ouvre son détail, `/communities/$community`.
+ */
+describe('community_invite ouvre la communauté où l’on vient d’entrer', () => {
+  const communityId = '507f1f77bcf86cd799439aaa';
+
+  test('la cloche ouvre `/communities/<id>`', () => {
+    expect(notificationTarget(record({ type: 'community_invite', context: { communityId, communityName: 'Jardins' } }))).toEqual({
+      route: 'community',
+      params: { community: communityId },
+    });
+  });
+
+  test('le tap d’une bannière suit le `communityId` de la charge', () => {
+    expect(pushTapTarget({ type: 'community_invite', communityId })).toEqual({ route: 'community', params: { community: communityId } });
+  });
+
+  test('une charge sans communauté (ancienne passerelle) retombe sur la liste', () => {
+    expect(pushTapTarget({ type: 'community_invite', communityId: '' })).toEqual({ route: 'notifications' });
+  });
+});

@@ -23,6 +23,11 @@ jest.mock('../../../../services/conversations/communitySalonExit', () => {
   return { ...actual, exitCommunitySalons: (...args: unknown[]) => exitCommunitySalons(...args) };
 });
 
+const scheduleCommunityAddedAnnouncement = jest.fn<any>();
+jest.mock('../../../../services/notifications/community-added', () => ({
+  scheduleCommunityAddedAnnouncement: (...args: unknown[]) => scheduleCommunityAddedAnnouncement(...args),
+}));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }) },
 }));
@@ -317,5 +322,49 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW,
     });
     expect(exitCommunitySalons).not.toHaveBeenCalled();
+  });
+});
+
+describe("admitSalonOccupants — qui entre l'apprend (#18052)", () => {
+  it("les occupants faits membres sont prévenus, au nom du créateur, après l'écriture", async () => {
+    const prisma = prismaDouble({
+      occupations: [
+        { conversationId: SALON_A, userId: OCCUPANT },
+        { conversationId: SALON_B, userId: MEMBRE },
+        { conversationId: SALON_B, userId: MORT },
+      ],
+      membres: [{ id: 'cm-membre', userId: MEMBRE, isActive: true }],
+      morts: [MORT],
+    });
+
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+
+    expect(scheduleCommunityAddedAnnouncement).toHaveBeenCalledTimes(1);
+    expect(scheduleCommunityAddedAnnouncement).toHaveBeenCalledWith(prisma, {
+      communityId: COMMUNITY,
+      actorId: CREATEUR,
+      recipientIds: [OCCUPANT],
+    });
+    expect(prisma.communityMember.createMany.mock.invocationCallOrder[0])
+      .toBeLessThan(scheduleCommunityAddedAnnouncement.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it("personne n'entre : personne n'est prévenu, ni un ancien membre qui sort", async () => {
+    const prisma = prismaDouble({
+      occupations: [{ conversationId: SALON_B, userId: ANCIEN }],
+      membres: [{ id: 'cm-ancien', userId: ANCIEN, isActive: false }],
+    });
+
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+
+    expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
+  });
+
+  it("une écriture en panne ne prévient personne", async () => {
+    const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: OCCUPANT }] });
+    prisma.communityMember.createMany.mockRejectedValueOnce(new Error('panne'));
+
+    await expect(admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR })).rejects.toThrow('panne');
+    expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
   });
 });

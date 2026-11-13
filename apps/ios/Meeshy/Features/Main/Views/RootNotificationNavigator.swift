@@ -116,7 +116,10 @@ struct RootNotificationNavigator {
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
              .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
-            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+            // #18052 — « Ajouté à la communauté Y » nomme la communauté : son détail s'ouvre.
+            if let communityId = ctx.communityId, !communityId.isEmpty {
+                router.push(.communityDetail(communityId))
+            } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 conversationOpener.navigateToConversationById(conversationId)
             }
 
