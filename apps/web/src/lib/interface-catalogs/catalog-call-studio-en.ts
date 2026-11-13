@@ -51,7 +51,6 @@ const en = {
   'callStudio.preset.sky': 'Sky',
   'callStudio.preset.monochrome': 'Black & white',
   'callStudio.mode.montage': 'Capture the call',
-  'callStudio.mode.quit': 'Exit',
   'callStudio.mode.backEffects': 'Back to the call',
   'callStudio.mode.addLook': 'Add another look',
   'callStudio.mode.face': 'Face',

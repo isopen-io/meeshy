@@ -93,6 +93,16 @@ const pt = {
   'callControls.liveFrame.answer.declined.anonymous': 'A outra pessoa mantém a própria visualização',
   'callControls.liveFrame.notProposed': 'A moldura está aplicada do seu lado, mas não foi possível sugeri-la',
   'callControls.liveFrame.surface': 'Moldura {frame} em volta dos dois vídeos',
+  'callControls.mode.frames': 'Molduras',
+  'callControls.layers.title': 'Efeitos aplicados',
+  'callControls.layers.undo': 'Desfazer {name}',
+  'callControls.layers.full': 'No máximo três efeitos: remova um para adicionar outro',
+  'callControls.layers.hint': 'Toque longo ou Shift + Enter: efeitos aplicados',
+  'callControls.layers.genre.frame': 'Moldura',
+  'callControls.layers.genre.color': 'Cor',
+  'callControls.layers.genre.face': 'Rosto',
+  'callControls.layers.genre.landscape': 'Paisagem',
+  'callControls.layers.genre.voice': 'Voz',
 } satisfies CallControlsCatalog;
 
 export default pt;

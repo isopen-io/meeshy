@@ -10,6 +10,7 @@ import { inked, recorder } from '@/lib/calls/frames/frame-recorder.test-support'
 import type { FrameStudioModule } from '@/components/use-montage-frames';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
 import { appQueryClient } from '@/lib/api/query-client';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -53,8 +54,10 @@ describe('CallMontageMode — les cadres', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     await loadFrameUsageCatalog('fr');
     await loadCallStudioCatalog('en');
+    await loadCallControlsCatalog('en');
     await loadFrameUsageCatalog('en');
     loaded.module = await import('@/lib/calls/frames/frame-studio');
     ensureHappyDomRegistered();
@@ -88,7 +91,6 @@ describe('CallMontageMode — les cadres', () => {
       root.render(
         <CallMontageMode
           language={options.language ?? 'fr'}
-          quitGlyph={null}
           onExit={() => undefined}
           stage={() => shown}
           env={env}

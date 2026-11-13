@@ -9,6 +9,7 @@ import type { CallMember } from '@/lib/calls/call-store';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import type { EffectsCompanion } from './call-effects-companions';
@@ -29,6 +30,7 @@ describe('CallEffectsMode', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
@@ -400,6 +402,18 @@ describe('CallEffectsMode', () => {
     expect(view.released).toEqual(['video']);
     view.done();
   });
+  test('pendant une vidéo, le stop passe AU-DESSUS de la barre et du carrousel, qui peuvent monter jusqu’au centre (#17903)', async () => {
+    const view = mount();
+    await view.settle('[data-call-record-key]');
+    const layer = (element: Element | null | undefined): number => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.className ?? '')?.[1] ?? 0);
+    const stop = view.find('[data-call-recording]');
+    expect(stop).not.toBeNull();
+    expect(layer(stop)).toBeGreaterThan(layer(view.find('[data-call-mode-rider]')?.parentElement));
+    await view.settle('[data-call-record-stop]');
+    await act(async () => {});
+    view.done();
+  });
+
   test('les autres restent visibles : un bloc nommé, en haut, HORS de l’aperçu capturé, qu’on touche (#8737)', () => {
     const view = mount({ companions: [companion('amina')] });
     const block = view.find('[data-call-effects-companions]');
