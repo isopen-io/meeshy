@@ -37,7 +37,7 @@ class CallChromeControllerTest {
     @Test
     fun `a tap on the background of a duo audio call stows the chrome and a second tap brings it back`() {
         val chrome = controller()
-        val duoAudio = CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = true)
+        val duoAudio = CallChromeVisibility.isTapStage(isVideoStage = false, isConnected = true)
         chrome.onSceneTap(isTapStage = duoAudio, isTouchExplorationOn = false)
         assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Header)).isFalse()
         assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Controls)).isFalse()
@@ -45,12 +45,34 @@ class CallChromeControllerTest {
         assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
+    /** #17945 extended — this witness used to read « a group with no camera on never hides its chrome to a tap ». */
     @Test
-    fun `a group with no camera on never hides its chrome to a tap`() {
+    fun `a tap on the background of a group with no camera on stows the chrome and a second tap brings it back`() {
         val chrome = controller()
-        val audioGroup = CallChromeVisibility.isTapStage(isGroup = true, isVideoStage = false, isConnected = true)
+        val audioGroup = callIsTapStage(connected(video = false, cameraOn = false), CallGroupVideoStage(remoteCamerasOn = 0))
+        chrome.onSceneTap(isTapStage = audioGroup, isTouchExplorationOn = false)
+        assertThat(chrome.visibility(audioGroup, false).isVisible(CallChromeElement.Header)).isFalse()
+        assertThat(chrome.visibility(audioGroup, false).isVisible(CallChromeElement.Controls)).isFalse()
+        assertThat(chrome.visibility(audioGroup, false).isVisible(CallChromeElement.Captions)).isTrue()
         chrome.onSceneTap(isTapStage = audioGroup, isTouchExplorationOn = false)
         assertThat(chrome.visibility(audioGroup, false).isVisible(CallChromeElement.Controls)).isTrue()
+    }
+
+    @Test
+    fun `under TalkBack a group with no camera on keeps its chrome`() {
+        val chrome = controller()
+        val audioGroup = callIsTapStage(connected(video = false, cameraOn = false), CallGroupVideoStage(remoteCamerasOn = 0))
+        chrome.onSceneTap(isTapStage = audioGroup, isTouchExplorationOn = true)
+        assertThat(chrome.visibility(audioGroup, true).isVisible(CallChromeElement.Controls)).isTrue()
+    }
+
+    @Test
+    fun `a group whose last camera goes off keeps its stowed chrome stowed`() {
+        val chrome = controller()
+        val audio = connected(video = false, cameraOn = false)
+        chrome.onSceneTap(isTapStage = callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 1)), isTouchExplorationOn = false)
+        val noCamera = callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))
+        assertThat(chrome.visibility(noCamera, false).isVisible(CallChromeElement.Controls)).isFalse()
     }
 
     @Test
@@ -172,9 +194,10 @@ class CallChromeControllerTest {
     }
 
     @Test
-    fun `a group born video with no camera on is not a video scene, so a tap does not hide the chrome (G1_13)`() {
+    fun `a group born video with no camera on is not a video scene, yet a tap still stows its chrome (G1_13, #17945)`() {
         val videoGroup = connected(video = true, cameraOn = false)
         assertThat(callIsVideoStage(videoGroup, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+        assertThat(callIsTapStage(videoGroup, CallGroupVideoStage(remoteCamerasOn = 0))).isTrue()
     }
 
     @Test
@@ -184,11 +207,12 @@ class CallChromeControllerTest {
         assertThat(callIsVideoStage(connected(video = false, cameraOn = false))).isFalse()
     }
 
+    /** #17945 extended — the group with no camera on used to be « not a tap stage »: it is one now. */
     @Test
-    fun `law 11 (#17945) a duo audio call in progress is a tap stage, a group with no camera on is not`() {
+    fun `law 11 (#17945) a duo audio call in progress and a group with no camera on are tap stages`() {
         val audio = connected(video = false, cameraOn = false)
         assertThat(callIsTapStage(audio)).isTrue()
-        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))).isTrue()
         assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 1))).isTrue()
         assertThat(callIsTapStage(connected(video = true, cameraOn = false))).isTrue()
     }

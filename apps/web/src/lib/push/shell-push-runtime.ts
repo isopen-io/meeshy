@@ -50,6 +50,9 @@ export function shellPushUrl(target: PushTapTarget): string {
       return href('discover', undefined, target.search);
     case 'userProfile':
       return href('userProfile', target.params);
+    /* #18052 — « vous avez été ajouté à la communauté » ouvre son détail, comme `sw-push.js`. */
+    case 'community':
+      return href('community', target.params);
     case 'progression':
       return href('progression', undefined, target.search);
     case 'progressionLigue':

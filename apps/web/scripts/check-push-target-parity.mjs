@@ -130,8 +130,14 @@ export function jumeauDuWorker(source) {
 
 const memeListe = (a, b) => a.length === b.length && a.every((valeur, index) => valeur === b[index]);
 
-/** Les adresses que le critère de fin de #7305 nomme, une par famille de destination. */
-const ADRESSES = [
+/**
+ * Les adresses que le critère de fin de #7305 nomme, une par famille de
+ * destination — EXPORTÉE parce qu'un TROISIÈME site les sert : `shellPushUrl`
+ * (`src/lib/push/shell-push-runtime.ts`), le mappage de la coque Capacitor.
+ * Son témoin rejoue CETTE table plutôt que d'en recopier les attentes : une
+ * famille ajoutée ici interroge le worker ET la coque.
+ */
+export const ADRESSES = [
   [{ notificationId: 'x', conversationId: 'abc' }, '/c/abc'],
   [{ postId: 'p1', postType: 'STORY' }, '/story/p1'],
   [{ postId: 'p1', postType: 'REEL' }, '/post/p1?from=notification'],
@@ -139,6 +145,7 @@ const ADRESSES = [
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
+  [{ type: 'community_invite', communityId: 'c1' }, '/communities/c1'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression?section=badges'],
   [{ type: 'level_up', route: 'progression' }, '/me/progression?section=level'],

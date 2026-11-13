@@ -132,8 +132,34 @@ describe('Couper son talkie (#16638)', () => {
   test('les coupures offertes suivent le cercle', () => {
     expect(receptionBlocksFor('ACQUAINTANCE')).toEqual([]);
     expect(receptionBlocksFor('FRIEND')).toEqual(['bringBlocked']);
-    expect(receptionBlocksFor('CLOSE')).toEqual(['bringBlocked', 'talkieBlocked', 'listeningCategoryShared']);
-    expect(receptionBlocksFor('BLOOD')).toEqual(['bringBlocked', 'talkieBlocked', 'listeningCategoryShared']);
+    expect(receptionBlocksFor('CLOSE')).toEqual(['bringBlocked', 'talkieBlocked', 'togetherBlocked', 'listeningCategoryShared']);
+    expect(receptionBlocksFor('BLOOD')).toEqual(['bringBlocked', 'talkieBlocked', 'togetherBlocked', 'listeningCategoryShared']);
+  });
+});
+
+describe('Couper ses invitations « ensemble » (#17023)', () => {
+  const togetherToggle = (node: HTMLElement) => node.querySelector<HTMLInputElement>('[data-circle-setting="circles.settings.blockTogether"]');
+
+  test('ABSENT sous Proche : un Ami ne peut pas inviter à regarder ensemble', async () => {
+    const { deps } = scripted(async () => ({ ok: true, data: {} }));
+    const node = await mount(<CircleReceptionBlockSwitch block="togetherBlocked" language="fr" userId="u-ada" level="FRIEND" deps={deps} onNotice={() => undefined} />);
+    expect(togetherToggle(node)).toBeNull();
+  });
+
+  test('ouvert dès Proche, DÉCOCHÉ par défaut, et il dit ce qui change', async () => {
+    const { deps } = scripted(async () => ({ ok: true, data: {} }));
+    const node = await mount(<CircleReceptionBlockSwitch block="togetherBlocked" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />);
+    expect(togetherToggle(node)?.checked).toBe(false);
+    expect(node.textContent).toContain('Couper ses invitations « ensemble »');
+    expect(node.textContent).toContain('ne pourra plus vous inviter');
+  });
+
+  test('couper est OPTIMISTE et écrit `{ togetherBlocked: true }` SEUL', async () => {
+    const { deps, requests } = scripted(async () => ({ ok: true, data: { userId: 'u-ada', togetherBlocked: true } }));
+    const node = await mount(<CircleReceptionBlockSwitch block="togetherBlocked" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />);
+    await click(togetherToggle(node));
+    expect(togetherToggle(node)?.checked).toBe(true);
+    expect(requests.filter((req) => req.method === 'PUT').map((req) => req.body)).toEqual([{ togetherBlocked: true }]);
   });
 });
 

@@ -35,9 +35,27 @@ jest.mock('../../../services/messaging/messageRequests', () => ({
   decideOpenings: jest.fn(async () => new Map()),
 }));
 
-jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
-}));
+// PROLONGER, jamais remplacer (CLAUDE.md § « Un double PARTIEL d'un module perd
+// en silence tout ce que le module GAGNE »). Ce double n'exposait que
+// `enhancedLogger.child` ; le jour où un module de la chaîne de création a
+// construit un `CircuitBreaker` — dont le constructeur appelle
+// `enhancedLogger.info` DIRECTEMENT (`utils/circuitBreaker.ts:112`) — la route
+// a rendu 500 au lieu de 201, sur les quatre témoins de création chiffrée.
+// Un double partiel ne se signale qu'au moment où le module GRANDIT, donc
+// jamais avant : `requireActual` + surcharge ciblée, et seule la fabrique
+// `child` est doublée, parce qu'elle seule est observée ici.
+jest.mock('../../../utils/logger-enhanced', () => {
+  const actual = jest.requireActual('../../../utils/logger-enhanced') as {
+    enhancedLogger: Record<string, unknown>;
+  };
+  return {
+    ...actual,
+    enhancedLogger: {
+      ...actual.enhancedLogger,
+      child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })),
+    },
+  };
+});
 
 const activationKeyId = jest.fn<(conversationId: string, designated: string | null) => Promise<string>>();
 jest.mock('../../../services/EncryptionService', () => ({

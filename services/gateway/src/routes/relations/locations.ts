@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
 import { sharedLocationRelayDepsOf } from '../../services/sharedLocation/sharedLocationDeps';
 import { sharedLocationSnapshotFor, type SharedLocationBbox } from '../../services/sharedLocation/sharedLocationRelay';
 import { logError } from '../../utils/logger';
@@ -8,8 +9,9 @@ import { errorResponses, relationLimiter } from './shared';
 /**
  * Une position servie, déclarée CHAMP PAR CHAMP : le sérialiseur retire tout champ non
  * déclaré, et rien de plus riche que la précision du lecteur ne peut partir à côté.
+ * `circle` est le cercle d'où vient l'émetteur pour CE lecteur (#17966).
  */
-const sharedLocationItemSchema = {
+export const sharedLocationItemSchema = {
   type: 'object',
   properties: {
     userId: { type: 'string' },
@@ -17,6 +19,7 @@ const sharedLocationItemSchema = {
     longitude: { type: 'number' },
     precision: { type: 'string' },
     radiusMeters: { type: 'number' },
+    circle: { type: 'string', enum: [...SHARED_LOCATION_CIRCLES] },
     updatedAt: { type: 'string' },
     expiresAt: { type: 'string' },
   },

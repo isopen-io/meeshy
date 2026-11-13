@@ -10722,7 +10722,7 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Conversation"
           }
         },
@@ -11333,7 +11333,7 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Description"
           }
         },
@@ -11427,7 +11427,7 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Emoji"
           }
         },
@@ -11991,8 +11991,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Channel"
+            "state": "translated",
+            "value": "Conversation"
           }
         },
         "it": {
@@ -12226,8 +12226,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Channel"
+            "state": "translated",
+            "value": "Conversation"
           }
         },
         "it": {
@@ -12320,8 +12320,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Conversations will appear here"
+            "state": "translated",
+            "value": "Les conversations apparaîtront ici"
           }
         },
         "it": {
@@ -12367,8 +12367,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "No Channels Yet"
+            "state": "translated",
+            "value": "Aucune conversation pour l’instant"
           }
         },
         "it": {
@@ -12743,8 +12743,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Community feed will appear here"
+            "state": "translated",
+            "value": "Les publications de la communauté apparaîtront ici"
           }
         },
         "it": {
@@ -12790,8 +12790,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "No Posts Yet"
+            "state": "translated",
+            "value": "Aucune publication pour l’instant"
           }
         },
         "it": {
@@ -12837,8 +12837,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Channels"
+            "state": "translated",
+            "value": "Conversations"
           }
         },
         "it": {
@@ -12884,8 +12884,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Members"
+            "state": "translated",
+            "value": "Membres"
           }
         },
         "it": {
@@ -13025,8 +13025,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Invite"
+            "state": "translated",
+            "value": "Inviter"
           }
         },
         "it": {
@@ -13072,8 +13072,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Try a different search term"
+            "state": "translated",
+            "value": "Essayez un autre terme de recherche"
           }
         },
         "it": {
@@ -13119,8 +13119,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "No Users Found"
+            "state": "translated",
+            "value": "Aucun utilisateur trouvé"
           }
         },
         "it": {
@@ -13166,8 +13166,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Recently Invited"
+            "state": "translated",
+            "value": "Invités récemment"
           }
         },
         "it": {
@@ -13213,8 +13213,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Search users..."
+            "state": "translated",
+            "value": "Rechercher des utilisateurs…"
           }
         },
         "it": {
@@ -13260,8 +13260,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Invite Members"
+            "state": "translated",
+            "value": "Inviter des membres"
           }
         },
         "it": {
@@ -13589,8 +13589,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Invite"
+            "state": "translated",
+            "value": "Inviter"
           }
         },
         "it": {
@@ -13636,8 +13636,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Invite people to join this community"
+            "state": "translated",
+            "value": "Invitez des personnes à rejoindre cette communauté"
           }
         },
         "it": {
@@ -13683,8 +13683,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "No Members"
+            "state": "translated",
+            "value": "Aucun membre"
           }
         },
         "it": {
@@ -13730,8 +13730,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Remove"
+            "state": "translated",
+            "value": "Retirer"
           }
         },
         "it": {
@@ -13754,7 +13754,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Admins"
+            "value": "Administrateurs"
           }
         },
         "en": {
@@ -13965,8 +13965,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Members"
+            "state": "translated",
+            "value": "Membres"
           }
         },
         "it": {
@@ -14012,8 +14012,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Unknown"
+            "state": "translated",
+            "value": "Inconnu"
           }
         },
         "it": {
@@ -14764,7 +14764,7 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Description"
           }
         },
@@ -15107,6 +15107,147 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Por convite"
+          }
+        }
+      }
+    },
+    "community.settings.privacy.confirm.button": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعله خاصًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privat machen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make private"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer privada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendre privée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendi privata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tornar privada"
+          }
+        }
+      }
+    },
+    "community.settings.privacy.confirm.message": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيغادر الأعضاء السابقون والحسابات المحظورة محادثاته نهائيًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ehemalige Mitglieder und blockierte Konten verlassen ihre Chats endgültig."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Former members and blocked accounts will leave its conversations for good."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exmiembros y cuentas bloqueadas saldrán de sus conversaciones, sin vuelta atrás."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anciens membres et comptes bloqués quitteront ses conversations, sans retour."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ex membri e account bloccati usciranno dalle sue conversazioni, senza ritorno."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ex-membros e contas bloqueadas sairão das suas conversas, sem volta."
+          }
+        }
+      }
+    },
+    "community.settings.privacy.confirm.title": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل تريد جعل المجتمع خاصًا؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community privat machen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make the community private?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Hacer privada la comunidad?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendre la communauté privée ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendere privata la community?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tornar a comunidade privada?"
           }
         }
       }
@@ -26467,8 +26608,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Tap to collapse"
+            "state": "translated",
+            "value": "Touchez pour réduire"
           }
         },
         "it": {
@@ -26514,8 +26655,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Tap to expand"
+            "state": "translated",
+            "value": "Touchez pour développer"
           }
         },
         "it": {
@@ -79165,7 +79306,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irreversible (RGPD)."
+            "value": "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irréversible (RGPD)."
           }
         },
         "it": {
@@ -79494,7 +79635,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "ECHANTILLONS VOCAUX"
+            "value": "ÉCHANTILLONS VOCAUX"
           }
         },
         "it": {

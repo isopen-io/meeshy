@@ -35,6 +35,7 @@ import {
 } from '@meeshy/shared/types/together';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './togetherGate';
+import { guestReceivesInvitesFrom, takeTogetherInviteSlot, type TogetherReceptionDb } from './togetherReception';
 import {
   claimPairThroughCache,
   extendPairThroughCache,
@@ -59,7 +60,7 @@ import {
 export type TogetherIo = ServerEmitIO;
 
 export type TogetherRelayDeps = {
-  readonly prisma: TogetherGateDb;
+  readonly prisma: TogetherGateDb & TogetherReceptionDb;
   readonly cache: TogetherCache;
   readonly io: TogetherIo | undefined;
   readonly now: () => number;
@@ -164,12 +165,13 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
   if (!payload) return INVALID;
   const subject = { hostId, guestId: payload.toUserId, conversationId: payload.conversationId, attachmentId: payload.attachmentId };
   let verdict: TogetherVerdict;
+  let received: boolean;
   try {
-    verdict = await judge(deps, subject);
+    [verdict, received] = await Promise.all([judge(deps, subject), guestReceivesInvitesFrom(deps.prisma, subject)]);
   } catch {
     return UNAVAILABLE;
   }
-  if (!verdict.ok) return NOT_ALLOWED;
+  if (!verdict.ok || !received) return NOT_ALLOWED;
 
   const sessionId = (deps.newSessionId ?? randomSessionId)();
   const pairKey = togetherPairKey(hostId, payload.toUserId);
@@ -202,10 +204,12 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
    */
   const stillPairs = (await deps.cache.get(pairKey).catch(() => null)) === session.sessionId;
   const stillAllowedNow = stillPairs && (await judge(deps, subject).then((again) => again.ok, () => false));
-  if (!stillAllowedNow) {
+  /* La borne des rafales (#17023) se prend en DERNIER : seule une invitation qui part consomme la fenêtre. */
+  const withinBudget = stillAllowedNow ? await takeTogetherInviteSlot(deps.cache, subject, deps.now()).catch(() => null) : false;
+  if (!withinBudget) {
     await markTogetherEnded(deps.cache, session.sessionId, TOGETHER_SESSION_TTL_SECONDS);
     await clear(deps, session);
-    return stillPairs ? NOT_ALLOWED : UNAVAILABLE;
+    return stillPairs && withinBudget === false ? NOT_ALLOWED : UNAVAILABLE;
   }
   const expiresAt = new Date(session.expiresAt).toISOString();
   emitTo(deps.io, [session.guestId], SERVER_EVENTS.TOGETHER_INVITED, {
