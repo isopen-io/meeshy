@@ -581,3 +581,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   vert (feed 15,51 Ko, story_reader 15,97 Ko) ; suite web complète 31 645/31 648, les trois échecs hors lot (deux
   témoins de présence verts isolément, `act-leak-guard` rouge aussi sur `dev`).
 - Prochain lot recommandé : la jumelle iOS (#14417, ouverte), après avoir mené les PR ouvertes de la routine.
+## 2026-11-13 — réveil 29 : « ensemble » sur Android, couche transport (#17100)
+
+- Reprise (run coupé le 2026-11-11 par une erreur d'API, relancé à 15:02) : 25 PR ouvertes vers `dev`, toutes poussées
+  dans l'heure par des réveils vivants ; ce réveil n'en double aucune. Aucune branche n'écrivait le transport
+  Android d'« ensemble » : lot réservé sur `claude/cercles-17100-android-socket`.
+- Lot : `TogetherWire` (`:core:model`, Kotlin pur) — les quatre charges sortantes au schéma STRICT du serveur (position
+  bornée à [0, 24 h] et arrondie, comme iOS), l'accusé de `sync`, et la lecture typée des quatre événements entrants ;
+  `TogetherSocket` (`sdk-core`) — les quatre routes sur la voie série commune, UN flux `events` dans l'ordre du fil, et
+  l'émetteur à accusé (8 s, comme le web et iOS), « hors ligne » sans rien émettre quand la socket est tombée.
+- Gate local : `jvm-check -PjvmCheckModelOnly` sur `TogetherWireTest` + `TogetherTest`. Le `sdk-core` (Robolectric)
+  se prouve par `android.yml` sur la PR.
+- Reste pour fermer #17100 : lecteur Media3 piloté par la loi, bandeau d'invitation, ligne de la fiche d'un Proche,
+  libellés `together.*`.
