@@ -65,6 +65,7 @@ async function buildBlockApp(opts: {
         .mockResolvedValueOnce(currentUser),
       update: jest.fn<any>().mockResolvedValue({ blockedUserIds: [TARGET_USER_ID] }),
     },
+    relationFeatureSetting: { findUnique: jest.fn<any>().mockResolvedValue(null), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
   } as any;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -94,6 +95,7 @@ async function buildUnblockApp(opts: {
       findUnique: jest.fn<any>().mockResolvedValue(currentUser),
       update: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
     },
+    relationFeatureSetting: { findUnique: jest.fn<any>().mockResolvedValue(null), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
   } as any;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });

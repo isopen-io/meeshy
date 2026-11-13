@@ -55,15 +55,33 @@ async function withdrawOwnerShares(
 /**
  * Le lien est tombé sous le Sang par le geste de `actorId` : les partages du rituel
  * s'éteignent dans les DEUX sens — datés chez l'acteur, sans date chez l'autre.
+ * `at` nul : la chute n'est le geste de personne (course du rituel), aucun côté n'est daté.
  */
 export async function withdrawRitualSharesBetween(
   prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
-  params: { readonly actorId: string; readonly otherId: string; readonly at: Date },
+  params: { readonly actorId: string; readonly otherId: string; readonly at: Date | null },
 ): Promise<void> {
   await Promise.all([
     withdrawOwnerShares(prisma, { ownerId: params.actorId, otherId: params.otherId, at: params.at }),
     withdrawOwnerShares(prisma, { ownerId: params.otherId, otherId: params.actorId, at: null }),
   ]);
+}
+
+const SHARES_OFF_DATA = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, false])) as Record<RelationRitualShare, false>;
+
+/**
+ * Un compte part (désactivation, suppression) : tout partage du rituel qu'il avait consenti
+ * ou qu'on lui avait consenti s'éteint (#14924), sans date — ce n'est le geste de personne.
+ * Aucune ligne n'est créée ; une réactivation ne rallume rien.
+ */
+export async function withdrawRitualSharesOfUser(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly userId: string },
+): Promise<void> {
+  await prisma.relationFeatureSetting.updateMany({
+    where: { OR: [{ ownerId: params.userId }, { otherId: params.userId }] },
+    data: SHARES_OFF_DATA,
+  });
 }
 
 /**
@@ -86,6 +104,23 @@ export async function withdrawListeningCategoryBetween(
       data: { listeningCategoryShared: false },
     }),
   ]);
+}
+
+/**
+ * Le lien vient de tomber, par le geste de `actorId`, au niveau effectif `level` — baisse
+ * (`POST /relations/:userId/level`) ou rupture d'une demande acceptée : site UNIQUE de ce qui
+ * ne tient plus. Sous le Sang, les partages du rituel s'éteignent ; sous Proche, la catégorie
+ * d'écoute aussi. Rejouable sans condition : un retrait échoué se solde au rejeu.
+ */
+export async function withdrawSharesAfterDrop(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly actorId: string; readonly otherId: string; readonly level: RelationLevel; readonly at: Date },
+): Promise<void> {
+  if (params.level === 'BLOOD') return;
+  const pair = { actorId: params.actorId, otherId: params.otherId, at: params.at };
+  await withdrawRitualSharesBetween(prisma, pair);
+  if (params.level === 'CLOSE') return;
+  await withdrawListeningCategoryBetween(prisma, pair);
 }
 
 /** Un sens dont l'accord d'écoute vient de s'éteindre : ce que le lecteur voyait avant, pour l'effacer chez lui. */
