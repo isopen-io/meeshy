@@ -364,18 +364,24 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
-    func test_progressionEmptyAndOffline_areShortened_andTranslated() throws {
+    func test_progressionEmpty_keepsItsOrientation_theFirstGestureLightsTheFirstMedal_inEveryLanguage() throws {
         let app = try app()
-        XCTAssertEqual(app["progression.empty"]?["fr"], "Aucune activité pour l’instant.")
+        let empty = try XCTUnwrap(app["progression.empty"]?["fr"])
+        XCTAssertTrue(empty.contains("première médaille"), "règle 7 : le jeu dit au repos ce qui allume la première médaille")
         XCTAssertEqual(app["progression.offline.empty"]?["fr"], "Hors ligne — aucune progression en mémoire")
         for key in ["progression.empty", "progression.offline.empty"] {
             let french = try XCTUnwrap(app[key]?["fr"])
             for language in Self.otherLanguages {
                 let value = try XCTUnwrap(app[key]?[language])
+                XCTAssertFalse(value.isEmpty, "\(key) \(language)")
                 XCTAssertNotEqual(value, french, "\(key) \(language) : copié du français")
-                XCTAssertFalse(value.contains("…"), "\(key) \(language) : la phrase longue est encore là")
             }
         }
+    }
+
+    func test_progressionNotice_empty_saysWhatLightsTheFirstMedal() {
+        let text = ProgressionNotice(kind: .empty).text
+        XCTAssertTrue(text.contains("médaille"), "l'avis lu à l'écran oriente vers le premier geste : « \(text) »")
     }
 
     func test_emptyStateSites_passNoSubtitle() throws {

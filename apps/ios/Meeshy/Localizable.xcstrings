@@ -163654,43 +163654,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا نشاط بعد."
+            "value": "لا نشاط بعد. أرسل رسالة، انشر قصة… يضيء وسامك الأول مع أول إجراء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Aktivität."
+            "value": "Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No activity yet."
+            "value": "No activity yet. Send a message, post a story… your first medal lights up with your very first move."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no hay actividad."
+            "value": "Aún no hay actividad. Envía un mensaje, publica una historia… tu primera medalla se enciende con el primer gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune activité pour l’instant."
+            "value": "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna attività per ora."
+            "value": "Nessuna attività per ora. Invia un messaggio, pubblica una storia… la tua prima medaglia si accende al primo gesto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma atividade ainda."
+            "value": "Nenhuma atividade ainda. Envie uma mensagem, publique uma story… sua primeira medalha se acende no primeiro gesto."
           }
         }
       }

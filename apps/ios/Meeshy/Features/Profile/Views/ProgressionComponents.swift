@@ -245,12 +245,12 @@ struct ProgressionNotice: View {
         }
     }
 
-    private var text: String {
+    var text: String {
         switch kind {
         case .empty:
             return String(
                 localized: "progression.empty",
-                defaultValue: "Aucune activité pour l’instant.",
+                defaultValue: "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.",
                 bundle: .main
             )
         case .offline(let hasSnapshot):
