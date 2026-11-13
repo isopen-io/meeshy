@@ -177,6 +177,55 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     view.done();
   });
 
+  test('toucher le titre ou la marge de la colonne ne range ni l’en-tête ni la pilule ; toucher l’image, si (W1.18)', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    expect(chrome()).toBe('shown');
+    act(() => (view.find(`${COLUMN} h2`) as HTMLElement).click());
+    expect(chrome()).toBe('shown');
+    act(() => (view.find(COLUMN) as HTMLElement).click());
+    expect(chrome()).toBe('shown');
+    act(() => (view.find('[data-call-stage-surface]') as HTMLElement).click());
+    expect(chrome()).toBe('hidden');
+    view.done();
+  });
+
+  test('la colonne qui entre recentre la scène, la pile des bandeaux, la pilule et le rail de fin en glissant depuis leur centre d’avant, jamais d’un saut (W1.20)', async () => {
+    const played: { readonly element: Element; readonly frames: Keyframe[] }[] = [];
+    const animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    const measure = Object.getOwnPropertyDescriptor(Element.prototype, 'getBoundingClientRect');
+    const half = JOURNAL_COLUMN_RESERVE / 2;
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value(this: Element, frames: Keyframe[]) {
+        played.push({ element: this, frames });
+        return { finished: Promise.resolve(), cancel: () => undefined, effect: null };
+      },
+    });
+    Object.defineProperty(Element.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Element) {
+        const rails = this.closest('[data-call-rail-slot="trailing"]')?.closest<HTMLElement>('[data-call-rails]');
+        const shifted = this.closest('[data-call-journal-reserve]') !== null || (rails?.style.paddingInlineEnd.includes(`${JOURNAL_COLUMN_RESERVE}px`) ?? false);
+        const left = shifted ? -half : 0;
+        return { left, right: left, top: 0, bottom: 0, x: left, y: 0, width: 0, height: 0, toJSON: () => ({}) };
+      },
+    });
+    const view = mount({}, true);
+    await openJournal(view);
+    const slid = (selector: string) => played.filter((move) => move.element === view.find(selector)).map((move) => move.frames.map((frame) => frame.transform));
+    expect(slid('[data-call-stage-surface]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-plane]:not([data-call-header-slot])')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-banner-stack]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-rail-slot="trailing"]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-rail-slot="leading"]')).toEqual([]);
+    if (animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    else Object.defineProperty(HTMLElement.prototype, 'animate', animate);
+    if (measure !== undefined) Object.defineProperty(Element.prototype, 'getBoundingClientRect', measure);
+    view.done();
+  });
+
   test('la colonne entre par le bord de fin et repart par lui, la scène et la pilule glissent à leur nouveau centre (W1.20)', async () => {
     const played: { readonly element: Element; readonly frames: Keyframe[] }[] = [];
     const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');

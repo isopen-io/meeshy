@@ -19,7 +19,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { once, preloadedView } from '@/lib/calls/preloaded-view';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
-import { journalColumnHost, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
+import { JOURNAL_COLUMN_PLACE, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, pillCompactsAudioStage, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
@@ -343,7 +343,7 @@ function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveF
 }
 
 /**
- * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1).
+ * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1). La colonne du journal ouverte, la pile se pose dans la place de la scène (`reserveEnd`, W1.4, W1.21) et la rejoint en glissant (W1.20).
  */
 export function CallTopBannerStack({ call, present, language, hidden, liveFrame, reserveEnd, reserve }: { readonly reserveEnd?: { readonly paddingInlineEnd?: number }; readonly reserve?: Readonly<Record<`data-${string}`, string>>; readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
   const sharedOnce = useRef(false);
@@ -352,6 +352,7 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame,
   const stack = useRef<HTMLDivElement>(null);
   const card = useStore(callChromeStore, (chrome) => chrome.recordingCard);
   useBannersClose(stack, `${orderedTopBanners(present).join()}:${card}`);
+  useFollowInline(stack, reserveEnd?.paddingInlineEnd ?? 0);
   const capturing = present.capture === true;
   const item: Readonly<Record<TopBanner, ReactNode>> = {
     'screen-share': null,
@@ -787,7 +788,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
             />
           </Suspense>
         ) : null}
-        <HeldSwap value={column.shown ? true : null} shape="end" {...journalColumnHost()} data-call-journal-column="" data-call-chrome-keep="">
+        <HeldSwap value={column.shown ? true : null} shape="end" className="glass-call-prominent absolute z-30 flex flex-col rounded-[28px] p-2 text-on-media" style={JOURNAL_COLUMN_PLACE} data-call-journal-column="" data-call-chrome-keep="">
           {() => (
             <Suspense fallback={null}>
               <CallJournalInColumn id={CALL_PANEL_ID.journal} callId={call.callId ?? ''} closeGlyph={closeGlyph} language={language} Button={CallButton} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />

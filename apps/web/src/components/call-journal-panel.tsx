@@ -229,7 +229,7 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
   );
 }
 
-/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne que l'écran pose (`call-journal-dock.ts`, `journalColumnHost`), pour qu'elle entre et reparte par le bord de fin (W1.20). */
+/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne que l'écran pose (`call-screen.tsx`, `JOURNAL_COLUMN_PLACE`), pour qu'elle entre et reparte par le bord de fin (W1.20). */
 export function CallJournalInColumn(journal: Omit<JournalProps, 'fill' | 'windowHeight'>) {
   return <CallJournalPanel {...journal} fill />;
 }
