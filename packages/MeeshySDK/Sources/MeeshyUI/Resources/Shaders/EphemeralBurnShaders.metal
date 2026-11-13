@@ -129,10 +129,14 @@ static inline half burnMatter(SwiftUI::Layer layer, float2 position) {
     } else if (b > -0.16) {
         // La braise : une lueur qui a sa PROPRE alpha, posée sur la matière
         // voisine — elle se voit donc aussi sur un fond clair, entre les lettres.
+        // La lueur ne naît qu'à l'approche du front (`k` > 0,4) : avec la
+        // bande de bruit large, une lueur dès l'entrée dans la bande faisait
+        // pâlir TOUT le texte à l'allumage, et plus rien ne partait « une à une ».
         float k = (b + 0.16) / 0.16;
         half matter = burnMatter(layer, position);
-        half3 ember = mix(half3(1.0h, 0.30h, 0.04h), half3(1.0h, 0.85h, 0.30h), half(k * k));
-        half glow = half(k * k) * matter * 0.9h;
+        half heat = half(smoothstep(0.4, 1.0, k));
+        half3 ember = mix(half3(1.0h, 0.25h, 0.03h), half3(1.0h, 0.78h, 0.22h), heat * heat);
+        half glow = heat * matter * 0.95h;
         color = half4(src.rgb * (1.0h - glow) + ember * glow, max(src.a, glow));
     }
 

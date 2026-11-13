@@ -16,6 +16,13 @@ struct EphemeralBurnLawTests {
         #expect(EphemeralBurn.duration(reduceMotion: true) == 0.25)
     }
 
+    @Test("le relais d'une mort annoncée attend la combustion quand le fil est ouvert, pas sinon")
+    func relayDelay() {
+        #expect(EphemeralBurn.relayDelay(conversationIsOpen: false) == 0)
+        #expect(EphemeralBurn.relayDelay(conversationIsOpen: true) > EphemeralBurn.fullDuration)
+        #expect(EphemeralBurn.relayDelay(conversationIsOpen: true) == EphemeralBurn.fullDuration + EphemeralBurn.relayMargin)
+    }
+
     @Test("le vent brut est absent sans capteur, et sous la zone morte")
     func rawWindAbsent() {
         #expect(EphemeralBurnLaw.windDeadZone == 0.08)

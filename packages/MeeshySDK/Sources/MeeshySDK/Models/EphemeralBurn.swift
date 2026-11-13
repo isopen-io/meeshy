@@ -40,4 +40,19 @@ public enum EphemeralBurn {
     public static func duration(reduceMotion: Bool) -> TimeInterval {
         reduceMotion ? fadeDuration : fullDuration
     }
+
+    /// **Le relais d'une mort annoncée ATTEND la combustion quand le fil est
+    /// ouvert** (#17938). `message:expired` a deux consommateurs : l'écran de
+    /// la conversation, qui fait brûler la ligne, et le moteur de
+    /// synchronisation, qui grave la mort en base et au registre pour les
+    /// conversations FERMÉES. Le second écrivait tout de suite, même fil
+    /// ouvert : le magasin relisait une ligne morte et la retirait au milieu
+    /// de son feu — ou avant qu'il ne prenne, quand l'annonce précède
+    /// l'horloge locale. Fil ouvert, le moteur attend la combustion entière
+    /// plus une marge ; fil fermé, rien ne brûle et rien n'attend.
+    public static let relayMargin: TimeInterval = 0.3
+
+    public static func relayDelay(conversationIsOpen: Bool) -> TimeInterval {
+        conversationIsOpen ? fullDuration + relayMargin : 0
+    }
 }

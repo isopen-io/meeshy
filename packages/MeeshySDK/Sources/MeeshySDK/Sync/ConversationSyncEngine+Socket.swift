@@ -398,7 +398,26 @@ extension ConversationSyncEngine {
     /// aperçu recalculé. La table canonique reçoit `.expired`, que l'hôte
     /// applique comme la conversation ouverte (citations scellées, favori
     /// retiré). La mort se GRAVE au registre de réception (#7552).
+    ///
+    /// **Fil OUVERT, la mort attend la combustion** (#17938) : l'écran de la
+    /// conversation fait brûler la ligne pendant `EphemeralBurn.fullDuration`
+    /// avant de la retirer ; graver tout de suite faisait relire au magasin une
+    /// ligne morte et la retirait au milieu de son feu — ou avant qu'il ne
+    /// prenne, quand l'annonce du serveur précède l'horloge locale. L'attente
+    /// se fait HORS de la file ordonnée, qu'une seconde et demie retiendrait.
     private func handleExpiredMessage(_ event: MessageExpiredEvent) async {
+        let delay = EphemeralBurn.relayDelay(conversationIsOpen: openConversationIds.contains(event.conversationId))
+        guard delay > 0 else {
+            await writeExpiredMessage(event)
+            return
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            await self?.writeExpiredMessage(event)
+        }
+    }
+
+    private func writeExpiredMessage(_ event: MessageExpiredEvent) async {
         let expiredAt = Date()
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = expiredAt
