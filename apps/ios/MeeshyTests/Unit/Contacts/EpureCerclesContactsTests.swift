@@ -425,10 +425,18 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
+    func test_callsSearchEmpty_saysTheLogCoversThreeMonths_theOnlyPlaceThatLimitIsTold() throws {
+        let app = try app()
+        let french = try XCTUnwrap(app["calls.search.empty.hint"]?["fr"])
+        XCTAssertTrue(french.contains("trois derniers mois"))
+        for language in Self.otherLanguages {
+            XCTAssertNotEqual(try XCTUnwrap(app["calls.search.empty.hint"]?[language], language), french, "\(language) : copié du français")
+        }
+        XCTAssertTrue(try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift").contains("calls.search.empty.hint"))
+    }
+
     func test_callsSearchAndAddChannelEmptyStates_haveNoHint() throws {
-        XCTAssertFalse(try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift").contains("calls.search.empty.hint"))
         XCTAssertFalse(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
-        XCTAssertNil(try app()["calls.search.empty.hint"], "plus aucun lecteur : supprimée de toutes les langues")
         XCTAssertNil(try kit()["community.addChannel.empty.hint"], "plus aucun lecteur : supprimée de toutes les langues")
     }
 }

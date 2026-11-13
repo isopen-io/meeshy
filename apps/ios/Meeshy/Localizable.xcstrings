@@ -232052,6 +232052,53 @@
         }
       }
     },
+    "calls.search.empty.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يغطي السجل الأشهر الثلاثة الأخيرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Protokoll umfasst die letzten drei Monate."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The log covers the last three months."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El registro abarca los últimos tres meses."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le journal couvre les trois derniers mois."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il registro copre gli ultimi tre mesi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O histórico cobre os últimos três meses."
+          }
+        }
+      }
+    },
     "calls.search.placeholder": {
       "extractionState": "manual",
       "localizations": {

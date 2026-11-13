@@ -148,7 +148,8 @@ struct CallsTab: View {
         } else if viewModel.isSearching && viewModel.visibleCalls.isEmpty && viewModel.loadState != .loading {
             EmptyStateView(
                 icon: "magnifyingglass",
-                title: String(format: String(localized: "calls.search.empty", defaultValue: "Aucun appel ne correspond à « %@ »", bundle: .main), viewModel.searchQuery)
+                title: String(format: String(localized: "calls.search.empty", defaultValue: "Aucun appel ne correspond à « %@ »", bundle: .main), viewModel.searchQuery),
+                subtitle: String(localized: "calls.search.empty.hint", defaultValue: "Le journal couvre les trois derniers mois.", bundle: .main)
             )
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
