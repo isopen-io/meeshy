@@ -145,27 +145,32 @@ describe('la projection — la précision donnée, rien de plus riche à côté'
     expiresAt: new Date(T0 + HEURE).toISOString(),
   };
 
-  it('exacte : la position et la précision de l\'appareil, jamais sous 10 m', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'exact')).toEqual({
+  const exacte = { precision: 'exact', circle: 'FRIEND' } as const;
+  const quartier = { precision: 'neighborhood', circle: 'CLOSE' } as const;
+  const ville = { precision: 'city', circle: 'BLOOD' } as const;
+
+  it('exacte : la position et la précision de l\'appareil, jamais sous 10 m, et le cercle du lecteur', () => {
+    expect(projectSharedLocation(EMETTEUR, state, exacte)).toEqual({
       userId: EMETTEUR,
       latitude: 48.8566,
       longitude: 2.3522,
       precision: 'exact',
       radiusMeters: 10,
+      circle: 'FRIEND',
       updatedAt: state.updatedAt,
       expiresAt: state.expiresAt,
     });
   });
 
   it('quartier et ville : le centre de la maille et le rayon du flou, ni la position ni la précision réelles', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 800 });
-    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 8000 });
-    expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, 'city'))).not.toMatch(/8566|3522|accuracy|recipients/);
+    expect(projectSharedLocation(EMETTEUR, state, quartier)).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 800, circle: 'CLOSE' });
+    expect(projectSharedLocation(EMETTEUR, state, ville)).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 8000, circle: 'BLOOD' });
+    expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, ville))).not.toMatch(/8566|3522|accuracy|recipients/);
   });
 
   it('deux positions de la même maille livrent le même point : mille envois n\'en disent pas plus qu\'un', () => {
     const voisine = { ...state, position: { latitude: 48.8591, longitude: 2.3588 } };
-    expect(projectSharedLocation(EMETTEUR, voisine, 'neighborhood')).toEqual(projectSharedLocation(EMETTEUR, state, 'neighborhood'));
+    expect(projectSharedLocation(EMETTEUR, voisine, quartier)).toEqual(projectSharedLocation(EMETTEUR, state, quartier));
   });
 
   it('`none` ne sert rien', () => {
@@ -213,6 +218,64 @@ describe('démarrer — chaque destinataire reçoit SA projection, et lui seul',
     expect(m.vers(SANG).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_ENDED]);
     expect(m.vers(AMI).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED]);
     expect(m.vers(CONNAISSANCE)).toEqual([]);
+  });
+});
+
+describe('le cercle — chaque lecteur apprend de quel cercle vient la personne, et lui seul (#17966)', () => {
+  it('l\'Ami, le Proche et le Sang reçoivent chacun SON cercle, sur le direct comme au rattrapage', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    expect(m.vers(AMI).map((e) => e.data.circle)).toEqual(['FRIEND']);
+    expect(m.vers(PROCHE).map((e) => e.data.circle)).toEqual(['CLOSE']);
+    expect(m.vers(SANG).map((e) => e.data.circle)).toEqual(['BLOOD']);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items.map((item) => item.circle)).toEqual(['CLOSE']);
+  });
+
+  it('une montée Ami → Proche à précision égale ressert la position avec le nouveau cercle, au seul lecteur qui monte', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: AMI });
+    await m.lier(EMETTEUR, AMI, 'CLOSE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: AMI, before: avant });
+
+    expect(m.vers(AMI).map((e) => [e.event, e.data.circle, e.data.precision, e.data.latitude])).toEqual([[SERVER_EVENTS.SHARED_LOCATION_CHANGED, 'CLOSE', 'exact', 48.8566]]);
+    expect(m.emissions.filter((e) => e.room !== ROOMS.user(AMI))).toEqual([]);
+  });
+
+  it('une baisse Sang → Proche à précision égale redescend le cercle sans rien ouvrir de plus', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: SANG });
+    await m.lier(EMETTEUR, SANG, 'CLOSE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: SANG, before: avant });
+
+    expect(m.vers(SANG).map((e) => [e.data.circle, e.data.precision, e.data.latitude])).toEqual([['CLOSE', 'city', 48.85]]);
+  });
+
+  it('un lien qui ne bouge pas ne ressert rien', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avant });
+
+    expect(m.vers(PROCHE)).toEqual([]);
+  });
+
+  it('une Connaissance ou un bloqueur n\'apprennent aucun cercle, ni par le direct ni par le rattrapage', async () => {
+    const m = monde();
+    await demarrer(m);
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: CONNAISSANCE });
+
+    expect(m.vers(CONNAISSANCE)).toEqual([]);
+    expect(m.vers(BLOQUEUR)).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, BLOQUEUR, {})).items).toEqual([]);
   });
 });
 
