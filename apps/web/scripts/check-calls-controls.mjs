@@ -12,7 +12,8 @@
  * (`fixtures-call-peer.ts`), en clair et en sombre (390 × 844) puis au doigt
  * (320 × 568, écran tactile émulé, gestes envoyés par CDP) :
  *
- *  1. un appel vocal se connecte ; le `(…)` sort DEUX RAILS (#17327) : « Mon
+ *  1. un appel vocal se connecte ; un toucher sur le fond range les commandes,
+ *     un second les rend (#17945) ; le `(…)` sort DEUX RAILS (#17327) : « Mon
  *     image » sur le bord de début, « L'appel » sur le bord de fin, en
  *     colonnes de verre de boutons de 44 px (chacun son disque, sans flou à
  *     lui — #17345), au milieu de l'écran ; la pilule ne grandit pas ;
@@ -33,7 +34,8 @@
  *     (`call:mute-participant`) ; « Retirer de l'appel » demande confirmation,
  *     Annuler ne retire personne ;
  *  6. à plusieurs, les deux familles reviennent en RANGÉES titrées DANS la
- *     pilule, qui grandit, et aucun rail ne sort ; le pair coupe mon micro : il est coupé, et « Nadia Benali a coupé votre
+ *     pilule, qui grandit, et aucun rail ne sort ; la grille s'arrête au-dessus
+ *     de la pilule, au repos comme agrandie (#17949) ; le pair coupe mon micro : il est coupé, et « Nadia Benali a coupé votre
  *     micro » s'affiche ; je peux le rouvrir ;
  *  7. aucun verre dans un verre, aucune erreur de page ;
  *  8. en vidéo : ma vignette en coin est à ×2, SANS capsule de zoom (#8576) et
@@ -275,6 +277,17 @@ const tapStage = async (page, shown) => {
   return appears(page, `[data-call-chrome="${shown ? 'shown' : 'hidden'}"]`, 2000);
 };
 
+/** #17949 : chaque vignette de la grille s'arrête au-dessus de la pilule, au repos comme agrandie — ses plaques de nom restent visibles. Mesuré une fois le mouvement fini (les boucles, halo et sonnerie, ne finissent jamais). */
+const gridClearOfPill = async (page) => {
+  await until(page, () => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => animation.playState !== 'running' || animation.effect?.getTiming().iterations === Infinity) ?? true, undefined, 3000);
+  return page.evaluate(() => {
+    const pill = document.querySelector('[data-call-control-pill]');
+    const box = pill?.getBoundingClientRect();
+    const tiles = [...document.querySelectorAll('[data-call-slot]')].map((slot) => slot.getBoundingClientRect());
+    return { pill: pill?.getAttribute('data-call-control-pill') ?? null, clear: box !== undefined && tiles.length > 0 && tiles.every((tile) => tile.bottom <= box.top + 1), pillTop: Math.round(box?.top ?? -1), bottoms: tiles.map((tile) => Math.round(tile.bottom)) };
+  });
+};
+
 /* ------------------------------------------------ les gestes au doigt (CDP) */
 
 const touch = (cdp, type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((point, id) => ({ x: point.x, y: point.y, id, radiusX: 4, radiusY: 4, force: 1 })) });
@@ -354,6 +367,10 @@ try {
       // ------------------------------------------------ 1. les actions de l'appel
       check(await startConnectedCall(page), `${label} : l'appel se connecte`);
       await until(page, () => window.__meeshyFixtureCallPeer?.callId() != null);
+      check(await tapStage(page, false), `${label} : #17945 — en duo audio, un toucher sur le fond range les commandes`);
+      const audioStowed = await fadedAll(page, ['[data-call-header]']);
+      check(audioStowed.done && (await visibility(page, ['[data-call-incoming-portrait]']))[0][1] === 'visible', `${label} : #17945 — l'en-tête s'efface, l'avatar reste (${JSON.stringify(audioStowed.seen)})`);
+      check(await tapStage(page, true), `${label} : #17945 — un nouveau toucher les rend`);
       await openActions(page);
       check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'menu', `${label} : le (…) passe l'écran au menu`);
       const rails = await railsOf(page);
@@ -466,7 +483,14 @@ try {
       check((await page.$(`[data-call-tile="${PEER_ID}"]`)) !== null, `${label} : et ne retire personne`);
 
       // ------------------------------------------------ 6. le pair coupe mon micro
+      if ((await page.getAttribute('[data-call-more]', 'aria-expanded')) === 'true') await page.click('[data-call-more]');
+      await appears(page, '[data-call-control-pill="pill"]');
+      const restGrid = await gridClearOfPill(page);
+      check(restGrid.pill === 'pill' && restGrid.clear, `${label} : #17949 — au repos, la grille s'arrête au-dessus de la pilule, les plaques du bas visibles (${JSON.stringify(restGrid)})`);
       await openActions(page);
+      await appears(page, '[data-call-control-pill="grown"] [data-call-row]');
+      const grownGrid = await gridClearOfPill(page);
+      check(grownGrid.pill === 'grown' && grownGrid.clear && grownGrid.pillTop < restGrid.pillTop, `${label} : #17949 — la pilule agrandie, la grille se resserre au-dessus d'elle (${JSON.stringify(grownGrid)})`);
       const groupRows = await rowsOf(page);
       check(JSON.stringify(groupRows.map((row) => row.side)) === JSON.stringify(['mine', 'call']) && groupRows.every((row) => row.title.length > 0 && row.role === 'toolbar' && row.overflowX === 'auto' && row.wrap === 'nowrap' && row.oneLine && row.above && row.inside), `${label} : à plusieurs, deux rangées titrées DANS la pilule, qui défilent sur une ligne (${JSON.stringify(groupRows.map((row) => [row.side, row.title]))})`);
       check(groupRows.every((row) => row.fade === 2), `${label} : chaque rangée s'efface en fondu à ses deux bords (#17700)`);

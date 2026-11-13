@@ -68,6 +68,31 @@ export interface TranslationErrorEvent {
   metadata?: any;
 }
 
+/**
+ * Le translator n'a pas traduit, et ne le fera jamais : le texte dépasse
+ * `MAX_TRANSLATION_LENGTH` (#17204). `taskId` n'est porté que par un translator
+ * qui le connaît ; sans lui, rien ne se solde.
+ */
+export interface TranslationSkippedEvent {
+  type: 'translation_skipped';
+  taskId?: string;
+  messageId: string;
+  conversationId: string;
+  reason: string;
+  length?: number;
+  max_length?: number;
+}
+
+/** Ce que `ZmqMessageHandler` puis `ZmqTranslationClient` émettent sous `translationSkipped`. */
+export interface TranslationSkippedPayload {
+  taskId?: string;
+  messageId: string;
+  conversationId: string;
+  reason: string;
+  length?: number;
+  maxLength?: number;
+}
+
 export interface PongEvent {
   type: 'pong';
   timestamp: number;
@@ -80,6 +105,7 @@ export interface PongEvent {
 export type TranslationEvent =
   | TranslationCompletedEvent
   | TranslationErrorEvent
+  | TranslationSkippedEvent
   | TranslationReadyEvent
   | AudioTranslationReadyEvent
   | AudioTranslationsProgressiveEvent

@@ -39,6 +39,8 @@ export interface NotificationPreference {
   readonly bringEnabled?: boolean;
   /** « Recevoir le talkie » (#13935) : coupé, la voix arrive en message vocal — absent = reçu. */
   readonly talkieEnabled?: boolean;
+  /** « Recevoir les invitations ensemble » (#17023) : coupé, personne ne peut m'inviter — absent = reçu. */
+  readonly togetherEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;

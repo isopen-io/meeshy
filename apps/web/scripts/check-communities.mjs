@@ -528,6 +528,25 @@ try {
       check((await page.$('[data-community-hero] img')) !== null, `${label} : et la nouvelle bannière`);
       await page.click('[data-community-settings-link]');
       await page.waitForSelector('[data-community-settings-delete]');
+      // RENDRE PRIVÉE SE CONFIRME (#16787) : rouvrir part sans détour ; repasser en privée
+      // ouvre une confirmation qui dit qui sort ; « Annuler » n'envoie rien.
+      await page.click('[data-community-privacy-toggle]');
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await page.$('[data-confirm-dialog="community-private"]')) === null, `${label} : rouvrir une communauté part sans confirmation`);
+      await page.click('[data-community-privacy-toggle]');
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-confirm-dialog="community-private"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-private"]')) ?? '').includes('Anciens membres et comptes bloqués quitteront ses conversations'), `${label} : rendre privée se confirme en disant qui sort`);
+      check((await page.getAttribute('[data-community-settings-notice]', 'data-community-settings-notice')) === '', `${label} : rien n'est parti avant la confirmation`);
+      await page.click('[data-confirm-dialog="community-private"] [data-confirm="cancel"]');
+      await page.waitForFunction(() => document.querySelector('[data-confirm-dialog="community-private"]') === null);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : « Annuler » garde le brouillon, rien n'est parti`);
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-confirm-dialog="community-private"]');
+      await page.click('[data-confirm-dialog="community-private"] [data-confirm="confirm"]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await page.getAttribute('[data-community-privacy-toggle]', 'aria-checked')) === 'true', `${label} : confirmée, la communauté est privée`);
       await page.click('[data-community-settings-delete]');
       await page.waitForSelector('[data-confirm-dialog="community-delete"]');
       check(((await textOf(page, '[data-confirm-dialog="community-delete"]')) ?? '').includes('Équipe mise en ligne'), `${label} : la suppression se confirme, en nommant la communauté`);

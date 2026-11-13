@@ -785,10 +785,17 @@ export async function notifyMessageRecipients(params: {
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
-              // évite une relecture PAR MENTIONNÉ, et `Message.expiresAt` étant
-              // écrit à l'insertion et jamais modifié, cette copie ne dérive
-              // pas. Le chemin `new_message`, lui, la prend de sa propre
-              // relecture vivante — il en fait une de toute façon.
+              // évite une relecture PAR MENTIONNÉ.
+              //
+              // #18030 — ce commentaire affirmait de plus que « `Message.
+              // expiresAt` étant écrit à l'insertion et jamais modifié, cette
+              // copie ne dérive pas ». C'est FAUX : quatre écrivains la
+              // réécrivent après l'insertion, dont trois ne font que la
+              // RAPPROCHER (`ephemeralCountdown`, `consumeAfterReadMessages`,
+              // `captureNoticeRetention`). Ce qu'on passe ici est donc une
+              // OBSERVATION, pas un fait : le lot la confronte à sa propre
+              // relecture vivante (`servedMessageDeadline`), et sert la plus
+              // proche des deux.
               messageExpiresAt: message.expiresAt ?? null,
               previewBasis: pushPreviewBasis,
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection

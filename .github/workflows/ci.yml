@@ -124,7 +124,7 @@ jobs:
   # ===========================================================================
   changes:
     name: Zones touchées
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -192,7 +192,7 @@ jobs:
   # ===========================================================================
   quality:
     name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -402,7 +402,7 @@ jobs:
   # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
   gardes-depot:
     name: Gardes du dépôt
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1894,7 +1894,7 @@ jobs:
     name: Tests · gateway · couverture fusionnée
     runs-on: ubuntu-24.04
     needs: [changes, test]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -1938,7 +1938,7 @@ jobs:
   # tient pas à la main. Sans `needs` : elle ne lit rien d'un autre job.
   test-parite:
     name: Tests · voie de parité (web et passerelle)
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -2570,7 +2570,7 @@ jobs:
   # ===========================================================================
   security:
     name: Sécurité · Trivy du dépôt
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
@@ -2719,13 +2719,13 @@ jobs:
     steps:
       - name: Checkout (le script du verdict seul)
         uses: actions/checkout@v7
-        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+        if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
         with:
           sparse-checkout: scripts/ci
           fetch-depth: 1
 
       - name: Tableau
-        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+        if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
         run: |
           echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -2751,7 +2751,7 @@ jobs:
           echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
       - name: Verdict
-        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+        if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: node scripts/ci/needs-verdict.mjs
