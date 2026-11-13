@@ -14,6 +14,7 @@ class ConversationEncryptionExplanation private constructor(
 
     enum class Fact {
         TRANSIT_PROTECTED, STORED_WITHOUT_ENCRYPTION, ENCRYPTED_ON_SERVER_SERVER_READS, HYBRID_IS_SERVER_TODAY,
+        HYBRID_SECOND_LAYER,
         ONLY_PARTICIPANTS_READ, EVERY_SERVER_FEATURE, TRANSLATED_ON_DEVICE,
         NO_SERVER_TRANSCRIPTION, NO_NOTIFICATION_PREVIEW, NO_SEARCH, NO_EDIT, NO_FORWARD, NO_OFFLINE_SENDING,
         NOT_YET_ATTACHMENTS, NOT_YET_DECRYPTED_NOTIFICATIONS, NOT_YET_GROUPS, GROUP_SENDING_UNAVAILABLE, NOT_YET_SAFETY_NUMBERS,
@@ -34,7 +35,9 @@ class ConversationEncryptionExplanation private constructor(
             ConversationEncryptionRegime.NONE -> readable(listOf(Fact.TRANSIT_PROTECTED, Fact.STORED_WITHOUT_ENCRYPTION))
             ConversationEncryptionRegime.SERVER -> readable(listOf(Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS))
             ConversationEncryptionRegime.HYBRID -> readable(
-                listOf(Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS, Fact.HYBRID_IS_SERVER_TODAY),
+                listOf(
+                    Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS, Fact.HYBRID_IS_SERVER_TODAY, Fact.HYBRID_SECOND_LAYER,
+                ),
             )
             ConversationEncryptionRegime.END_TO_END -> endToEnd(isDirect)
         }

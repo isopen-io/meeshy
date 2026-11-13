@@ -7,4 +7,13 @@
     <string name="share_content_refused_source">Meeshy no abre una ruta de archivo. Comparte el archivo en sí.</string>
     <string name="share_capture_warning">Al publicar esta captura, será visible más allá de esta conversación.</string>
     <string name="share_offline">Sin conexión: lo pendiente saldrá cuando vuelvas.</string>
+    <string name="encryption_fact_hybrid_is_server_today">El híbrido no es cifrado de extremo a extremo: el servidor puede leer tus mensajes.</string>
+    <string name="encryption_fact_hybrid_second_layer">Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado.</string>
+    <string name="encryption_note_second_layer_question">¿Qué comprueba la segunda capa?</string>
+    <string name="encryption_detail_served_gap">El servidor presenta esta conversación sin cifrado de extremo a extremo, pero este dispositivo la ha visto cifrada de extremo a extremo: aquí sigue así.</string>
+    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, con verificación entre dispositivos compatibles</string>
+    <string name="encryption_e2ee_direct_only_here">En este teléfono, el cifrado de extremo a extremo solo existe para conversaciones entre dos personas.</string>
+    <string name="participant_profile_info_email">Correo</string>
+    <string name="starred_more_options">Más</string>
+    <string name="riviere_bubble_actions">Más</string>
 </resources>

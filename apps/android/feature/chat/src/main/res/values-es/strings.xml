@@ -34,7 +34,6 @@
     <string name="chat_action_show_translation">Ver traducción</string>
     <string name="chat_action_explore_languages">Explorar idiomas</string>
     <string name="chat_action_unstar">Quitar de guardados</string>
-    <string name="starred_empty_hint">Mantén pulsado un mensaje y toca Guardar para verlo aquí.</string>
     <string name="chat_react_with">Reaccionar con %1$s</string>
     <string name="chat_message_actions">Acciones del mensaje</string>
     <string name="chat_encryption_notice">Los mensajes de esta conversación están cifrados de extremo a extremo. Nadie, ni siquiera Meeshy, puede leerlos.</string>

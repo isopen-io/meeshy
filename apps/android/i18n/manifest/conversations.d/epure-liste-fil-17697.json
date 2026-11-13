@@ -91,6 +91,22 @@
         {
           "androidName": "new_conversation_group_solo_hint",
           "status": "android-only"
+        },
+        {
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_field_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_field_slug",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_action_more",
+          "status": "android-only"
         }
       ]
     }

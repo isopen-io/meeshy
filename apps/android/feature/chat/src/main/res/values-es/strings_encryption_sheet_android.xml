@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_direct_only_here">En este teléfono, el cifrado de extremo a extremo solo está disponible para conversaciones entre dos personas: todavía no se puede cifrar un grupo de extremo a extremo desde aquí.</string>
     <string name="encryption_irreversible_refused">El cifrado de extremo a extremo no se desactiva. Para chatear sin él, crea una conversación nueva.</string>
     <string name="encryption_action_failed">No se pudo hacer el cambio. Inténtalo de nuevo.</string>
     <string name="encryption_offline">Sin conexión: vuelve a conectarte para leer o cambiar el cifrado.</string>

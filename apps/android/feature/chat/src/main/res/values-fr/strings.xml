@@ -34,7 +34,6 @@
     <string name="chat_action_show_translation">Voir la traduction</string>
     <string name="chat_action_explore_languages">Explorer les langues</string>
     <string name="chat_action_unstar">Ne plus enregistrer</string>
-    <string name="starred_empty_hint">Appuyez longuement sur un message puis touchez Enregistrer pour le retrouver ici.</string>
     <string name="chat_react_with">Réagir avec %1$s</string>
     <string name="chat_message_actions">Actions du message</string>
     <string name="chat_encryption_notice">Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.</string>

@@ -30,7 +30,6 @@
     <string name="conversations_action_lock">Lock</string>
     <string name="conversations_action_mark_read">Mark as read</string>
     <string name="conversations_action_mentions_only">Mentions only</string>
-    <string name="conversations_action_more">More actions</string>
     <string name="conversations_action_mute">Mute</string>
     <string name="conversations_action_pin">Pin</string>
     <string name="conversations_action_remove_category">Remove category %1$s</string>
@@ -161,7 +160,6 @@
     <string name="encryption_create_header">Encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
@@ -352,7 +350,6 @@
     <string name="my_share_links_title">Share links</string>
     <string name="my_share_links_toggle">Active</string>
     <string name="new_conversation_close">Close</string>
-    <string name="new_conversation_contacts_empty_subtitle">Search for a user to start a conversation.</string>
     <string name="new_conversation_contacts_empty_title">No contacts</string>
     <string name="new_conversation_contacts_loading">Loading contacts</string>
     <string name="new_conversation_contacts_section">Your contacts</string>
@@ -463,7 +460,6 @@
     <string name="share_link_expiration_3m">3 months</string>
     <string name="share_link_expiration_7d">7 days</string>
     <string name="share_link_expiration_never">Never</string>
-    <string name="share_link_field_description">Description (optional)</string>
     <string name="share_link_field_description_placeholder">e.g. Join our group…</string>
     <string name="share_link_field_expiration">Expiration</string>
     <string name="share_link_field_name">Link name</string>
@@ -475,7 +471,6 @@
         <item quantity="other">%1$d uses maximum</item>
     </plurals>
     <string name="share_link_picker_back">Back</string>
-    <string name="share_link_picker_empty_body">Create a group or a community to share an invite link</string>
     <string name="share_link_picker_empty_cta">New conversation</string>
     <string name="share_link_picker_empty_title">No group found</string>
     <string name="share_link_picker_search">Search for a group…</string>

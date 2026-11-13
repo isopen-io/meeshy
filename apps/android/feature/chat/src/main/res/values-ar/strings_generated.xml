@@ -399,7 +399,6 @@
     <string name="encryption_detail_mode_header">الوضع</string>
     <string name="encryption_detail_mode_label">الوضع</string>
     <string name="encryption_detail_regime_changed">عدّل عضو آخر التشفير للتو: تم تحديث الحالة.</string>
-    <string name="encryption_detail_served_gap">يعرض الخادم هذه المحادثة دون تشفير تام بين الطرفين، لكن هذا الجهاز رآها مشفّرة تمامًا بين الطرفين: تبقى كذلك هنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">التبديل إلى التشفير التام</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">التبديل إلى التشفير التام بين الطرفين؟</string>
     <string name="encryption_detail_title">التشفير</string>
@@ -415,7 +414,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية مشفّرة. يمكنك دائمًا أن تفتح بجانبها محادثة أخرى، دون تشفير تام بين الطرفين، مع هذا الشخص: كلتاهما في القائمة، وهذه مميّزة بقفل.</string>
     <string name="encryption_fact_every_server_feature">جميع الميزات متاحة: الترجمة التلقائية، تفريغ الرسائل الصوتية، معاينة الإشعارات، البحث.</string>
     <string name="encryption_fact_group_sending_unavailable">في هذه المجموعة، لا يستطيع التطبيق بعد إرسال رسائل مشفّرة.</string>
-    <string name="encryption_fact_hybrid_is_server_today">يشفّر الوضع الهجين رسائلك على خوادمنا، التي يمكنها قراءتها من أجل الترجمة والبحث: هذا ليس تشفيرًا من طرف إلى طرف. وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق.</string>
     <string name="encryption_fact_no_edit">لا يمكن تعديل رسالة مُرسلة.</string>
     <string name="encryption_fact_no_forward">لا يمكن إعادة توجيه رسالة.</string>
     <string name="encryption_fact_no_notification_preview">لا تعرض الإشعارات نص الرسالة: فالخادم لا يعرفه.</string>
@@ -440,7 +438,6 @@
     <string name="encryption_legacy_title">التشفير التام بين الطرفين</string>
     <string name="encryption_mode_e2ee_description">أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك.</string>
     <string name="encryption_mode_e2ee_label">تام بين الطرفين</string>
-    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق.</string>
     <string name="encryption_mode_hybrid_label">هجين</string>
     <string name="encryption_mode_server_description">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_mode_server_label">الخادم</string>
@@ -672,7 +669,6 @@
     <string name="participant_profile_history_label">يرى السجل منذ</string>
     <string name="participant_profile_info_birthday">تاريخ الميلاد</string>
     <string name="participant_profile_info_country">البلد</string>
-    <string name="participant_profile_info_email">البريد الإلكتروني</string>
     <string name="participant_profile_info_joined">انضم في</string>
     <string name="participant_profile_info_language">اللغة</string>
     <string name="participant_profile_info_via_link">عبر الرابط</string>
@@ -718,7 +714,6 @@
     <string name="report_reason_other">أخرى</string>
     <string name="report_reason_spam">رسائل مزعجة</string>
     <string name="report_reason_violence">عنف</string>
-    <string name="riviere_bubble_actions">المزيد من الخيارات</string>
     <string name="riviere_bubble_open_in_thread">فتح في المحادثة</string>
     <string name="riviere_bubble_reply_hint">يفتح الرسالة المقتبسة</string>
     <string name="riviere_bubble_reply_to">ردًا على %1$s</string>
@@ -818,7 +813,6 @@
     <string name="share_zone_content">ما سيُرسَل</string>
     <string name="starred_back">رجوع</string>
     <string name="starred_empty_title">لا توجد رسائل مفضّلة</string>
-    <string name="starred_more_options">المزيد من الخيارات</string>
     <string name="starred_no_preview">رسالة</string>
     <string name="starred_remove">إزالة من المفضّلة</string>
     <string name="starred_remove_all">إزالة الكل</string>

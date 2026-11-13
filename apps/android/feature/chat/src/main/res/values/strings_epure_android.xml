@@ -7,4 +7,13 @@
     <string name="share_content_refused_source">Meeshy can\'t open a file path. Share the file itself.</string>
     <string name="share_capture_warning">Publishing this capture shows it beyond this conversation.</string>
     <string name="share_offline">Offline: unsent items go out when you\'re back.</string>
+    <string name="encryption_fact_hybrid_is_server_today">Hybrid is not end-to-end encryption: the server can read your messages.</string>
+    <string name="encryption_fact_hybrid_second_layer">Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified.</string>
+    <string name="encryption_note_second_layer_question">What does the second layer check?</string>
+    <string name="encryption_detail_served_gap">The server presents this conversation without end-to-end encryption, but this device has seen it end-to-end encrypted: it stays so here.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers, with verification between compatible devices</string>
+    <string name="encryption_e2ee_direct_only_here">On this phone, end-to-end encryption exists for one-to-one conversations only.</string>
+    <string name="participant_profile_info_email">Email</string>
+    <string name="starred_more_options">More</string>
+    <string name="riviere_bubble_actions">More</string>
 </resources>

@@ -34,7 +34,6 @@
     <string name="chat_action_show_translation">See translation</string>
     <string name="chat_action_explore_languages">Explore languages</string>
     <string name="chat_action_unstar">Unstar</string>
-    <string name="starred_empty_hint">Long-press a message and tap Star to save it here.</string>
     <string name="chat_react_with">React with %1$s</string>
     <string name="chat_message_actions">Message actions</string>
     <string name="chat_encryption_notice">Messages in this conversation are end-to-end encrypted. No one, not even Meeshy, can read them.</string>

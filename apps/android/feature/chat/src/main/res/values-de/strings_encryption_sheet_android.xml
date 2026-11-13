@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_direct_only_here">Auf diesem Telefon gibt es Ende-zu-Ende-Verschlüsselung nur für Unterhaltungen zu zweit: Eine Gruppe kann von hier aus noch nicht Ende-zu-Ende verschlüsselt werden.</string>
     <string name="encryption_irreversible_refused">Die Ende-zu-Ende-Verschlüsselung lässt sich nicht deaktivieren. Um ohne sie zu chatten, starte eine neue Unterhaltung.</string>
     <string name="encryption_action_failed">Die Änderung konnte nicht vorgenommen werden. Versuche es erneut.</string>
     <string name="encryption_offline">Du bist offline: Verbinde dich erneut, um die Verschlüsselung zu lesen oder zu ändern.</string>

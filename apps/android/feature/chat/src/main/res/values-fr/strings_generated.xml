@@ -378,7 +378,6 @@
     <string name="encryption_detail_mode_header">Mode</string>
     <string name="encryption_detail_mode_label">Mode</string>
     <string name="encryption_detail_regime_changed">Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé.</string>
-    <string name="encryption_detail_served_gap">Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée de bout en bout : elle le reste ici. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">Passer en bout en bout</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Passer au chiffrement de bout en bout ?</string>
     <string name="encryption_detail_title">Chiffrement</string>
@@ -394,7 +393,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.</string>
     <string name="encryption_fact_every_server_feature">Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche.</string>
     <string name="encryption_fact_group_sending_unavailable">Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié.</string>
     <string name="encryption_fact_no_edit">Un message envoyé ne peut pas être modifié.</string>
     <string name="encryption_fact_no_forward">Un message ne peut pas être transféré.</string>
     <string name="encryption_fact_no_notification_preview">Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas.</string>
@@ -419,7 +417,6 @@
     <string name="encryption_legacy_title">Chiffrement de bout en bout</string>
     <string name="encryption_mode_e2ee_description">Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil.</string>
     <string name="encryption_mode_e2ee_label">Bout en bout</string>
-    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin.</string>
     <string name="encryption_mode_hybrid_label">Hybride</string>
     <string name="encryption_mode_server_description">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_mode_server_label">Serveur</string>
@@ -648,7 +645,6 @@
     <string name="participant_profile_history_label">Voit l’historique depuis</string>
     <string name="participant_profile_info_birthday">Naissance</string>
     <string name="participant_profile_info_country">Pays</string>
-    <string name="participant_profile_info_email">Email</string>
     <string name="participant_profile_info_joined">Arrivé le</string>
     <string name="participant_profile_info_language">Langue</string>
     <string name="participant_profile_info_via_link">Par le lien</string>
@@ -694,7 +690,6 @@
     <string name="report_reason_other">Autre</string>
     <string name="report_reason_spam">Spam</string>
     <string name="report_reason_violence">Violence</string>
-    <string name="riviere_bubble_actions">Plus d\'options</string>
     <string name="riviere_bubble_open_in_thread">Ouvrir dans le fil</string>
     <string name="riviere_bubble_reply_hint">Ouvre le message cité</string>
     <string name="riviere_bubble_reply_to">en réponse à %1$s</string>
@@ -794,7 +789,6 @@
     <string name="share_zone_content">Ce qui part</string>
     <string name="starred_back">Retour</string>
     <string name="starred_empty_title">Aucun message favori</string>
-    <string name="starred_more_options">Plus d\'options</string>
     <string name="starred_no_preview">Message</string>
     <string name="starred_remove">Retirer des favoris</string>
     <string name="starred_remove_all">Tout retirer</string>

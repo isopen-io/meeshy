@@ -60,12 +60,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "participantProfile.email",
-          "androidName": "participant_profile_info_email",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "participantProfile.country",
           "androidName": "participant_profile_info_country",
           "status": "adopted"

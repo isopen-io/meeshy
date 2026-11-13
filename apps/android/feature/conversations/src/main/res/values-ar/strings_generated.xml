@@ -30,7 +30,6 @@
     <string name="conversations_action_lock">قفل</string>
     <string name="conversations_action_mark_read">تعليم كمقروء</string>
     <string name="conversations_action_mentions_only">الإشارات فقط</string>
-    <string name="conversations_action_more">مزيد من الإجراءات</string>
     <string name="conversations_action_mute">كتم</string>
     <string name="conversations_action_pin">تثبيت</string>
     <string name="conversations_action_remove_category">إزالة الفئة %1$s</string>
@@ -161,7 +160,6 @@
     <string name="encryption_create_header">التشفير</string>
     <string name="encryption_mode_e2ee_description">أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك.</string>
     <string name="encryption_mode_e2ee_label">تام بين الطرفين</string>
-    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق.</string>
     <string name="encryption_mode_hybrid_label">هجين</string>
     <string name="encryption_mode_server_description">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_mode_server_label">الخادم</string>
@@ -380,7 +378,6 @@
     <string name="my_share_links_title">روابط المشاركة</string>
     <string name="my_share_links_toggle">النشطون</string>
     <string name="new_conversation_close">إغلاق</string>
-    <string name="new_conversation_contacts_empty_subtitle">ابحث عن مستخدم لبدء محادثة.</string>
     <string name="new_conversation_contacts_empty_title">لا توجد جهات اتصال</string>
     <string name="new_conversation_contacts_loading">جارٍ تحميل جهات الاتصال</string>
     <string name="new_conversation_contacts_section">جهات اتصالك</string>
@@ -503,7 +500,6 @@
     <string name="share_link_expiration_3m">3 أشهر</string>
     <string name="share_link_expiration_7d">7 أيام</string>
     <string name="share_link_expiration_never">أبدًا</string>
-    <string name="share_link_field_description">الوصف (اختياري)</string>
     <string name="share_link_field_description_placeholder">مثال: انضم إلى مجموعتنا…</string>
     <string name="share_link_field_expiration">انتهاء الصلاحية</string>
     <string name="share_link_field_name">اسم الرابط</string>
@@ -519,7 +515,6 @@
         <item quantity="other">%1$d استخدام كحد أقصى</item>
     </plurals>
     <string name="share_link_picker_back">رجوع</string>
-    <string name="share_link_picker_empty_body">أنشئ مجموعة أو مجتمعًا لمشاركة رابط دعوة</string>
     <string name="share_link_picker_empty_cta">محادثة جديدة</string>
     <string name="share_link_picker_empty_title">لم يتم العثور على أي مجموعة</string>
     <string name="share_link_picker_search">ابحث عن مجموعة…</string>

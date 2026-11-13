@@ -371,7 +371,6 @@
     <string name="encryption_detail_mode_header">Mode</string>
     <string name="encryption_detail_mode_label">Mode</string>
     <string name="encryption_detail_regime_changed">Encryption was just changed by another member: the status has been refreshed.</string>
-    <string name="encryption_detail_served_gap">The server presents this conversation without end-to-end encryption, but this device has seen it end-to-end encrypted: it stays so here. You can always open another conversation, without end-to-end encryption, with the same people.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">Switch to end-to-end</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Switch to end-to-end encryption?</string>
     <string name="encryption_detail_title">Encryption</string>
@@ -387,7 +386,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. You can always open another conversation alongside, without end-to-end encryption, with this person: both are in the list, this one marked with a padlock.</string>
     <string name="encryption_fact_every_server_feature">Every feature is available: automatic translation, voice message transcription, notification previews, search.</string>
     <string name="encryption_fact_group_sending_unavailable">In this group, the app can’t send encrypted messages yet.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Hybrid mode encrypts your messages on our servers, which can read them for translation and search: it is not end-to-end encryption. Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified.</string>
     <string name="encryption_fact_no_edit">A sent message can’t be edited.</string>
     <string name="encryption_fact_no_forward">A message can’t be forwarded.</string>
     <string name="encryption_fact_no_notification_preview">Notifications don’t show the message text: the server doesn’t know it.</string>
@@ -412,7 +410,6 @@
     <string name="encryption_legacy_title">End-to-end encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
@@ -640,7 +637,6 @@
     <string name="participant_profile_history_label">Sees history from</string>
     <string name="participant_profile_info_birthday">Birthday</string>
     <string name="participant_profile_info_country">Country</string>
-    <string name="participant_profile_info_email">Email</string>
     <string name="participant_profile_info_joined">Joined</string>
     <string name="participant_profile_info_language">Language</string>
     <string name="participant_profile_info_via_link">Via link</string>
@@ -686,7 +682,6 @@
     <string name="report_reason_other">Other</string>
     <string name="report_reason_spam">Spam</string>
     <string name="report_reason_violence">Violence</string>
-    <string name="riviere_bubble_actions">More options</string>
     <string name="riviere_bubble_open_in_thread">Open in the thread</string>
     <string name="riviere_bubble_reply_hint">Opens the quoted message</string>
     <string name="riviere_bubble_reply_to">replying to %1$s</string>
@@ -786,7 +781,6 @@
     <string name="share_zone_content">What’s being sent</string>
     <string name="starred_back">Back</string>
     <string name="starred_empty_title">No starred messages</string>
-    <string name="starred_more_options">More options</string>
     <string name="starred_no_preview">Message</string>
     <string name="starred_remove">Remove from favourites</string>
     <string name="starred_remove_all">Remove all</string>

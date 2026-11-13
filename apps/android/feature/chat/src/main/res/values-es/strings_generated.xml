@@ -378,7 +378,6 @@
     <string name="encryption_detail_mode_header">Modo</string>
     <string name="encryption_detail_mode_label">Modo</string>
     <string name="encryption_detail_regime_changed">Otro miembro acaba de modificar el cifrado: el estado se ha actualizado.</string>
-    <string name="encryption_detail_served_gap">El servidor presenta esta conversación sin cifrado de extremo a extremo, pero este dispositivo la ha visto cifrada de extremo a extremo: aquí sigue así. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">Pasar a extremo a extremo</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">¿Pasar al cifrado de extremo a extremo?</string>
     <string name="encryption_detail_title">Cifrado</string>
@@ -394,7 +393,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado. Siempre podrás abrir al lado otra conversación, sin cifrado de extremo a extremo, con esta persona: las dos están en la lista, esta marcada con un candado.</string>
     <string name="encryption_fact_every_server_feature">Todas las funciones están disponibles: traducción automática, transcripción de audios, vista previa de notificaciones, búsqueda.</string>
     <string name="encryption_fact_group_sending_unavailable">En este grupo, la app aún no puede enviar mensajes cifrados.</string>
-    <string name="encryption_fact_hybrid_is_server_today">El modo híbrido cifra tus mensajes en nuestros servidores, que pueden leerlos para la traducción y la búsqueda: no es cifrado de extremo a extremo. Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado.</string>
     <string name="encryption_fact_no_edit">Un mensaje enviado no se puede editar.</string>
     <string name="encryption_fact_no_forward">Un mensaje no se puede reenviar.</string>
     <string name="encryption_fact_no_notification_preview">Las notificaciones no muestran el texto del mensaje: el servidor no lo conoce.</string>
@@ -419,7 +417,6 @@
     <string name="encryption_legacy_title">Cifrado de extremo a extremo</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
-    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>
@@ -648,7 +645,6 @@
     <string name="participant_profile_history_label">Ve el historial desde</string>
     <string name="participant_profile_info_birthday">Nacimiento</string>
     <string name="participant_profile_info_country">País</string>
-    <string name="participant_profile_info_email">Correo</string>
     <string name="participant_profile_info_joined">Se unió el</string>
     <string name="participant_profile_info_language">Idioma</string>
     <string name="participant_profile_info_via_link">Por el enlace</string>
@@ -694,7 +690,6 @@
     <string name="report_reason_other">Otro</string>
     <string name="report_reason_spam">Spam</string>
     <string name="report_reason_violence">Violencia</string>
-    <string name="riviere_bubble_actions">Más opciones</string>
     <string name="riviere_bubble_open_in_thread">Abrir en el hilo</string>
     <string name="riviere_bubble_reply_hint">Abre el mensaje citado</string>
     <string name="riviere_bubble_reply_to">en respuesta a %1$s</string>
@@ -794,7 +789,6 @@
     <string name="share_zone_content">Lo que se envía</string>
     <string name="starred_back">Atrás</string>
     <string name="starred_empty_title">No hay mensajes favoritos</string>
-    <string name="starred_more_options">Más opciones</string>
     <string name="starred_no_preview">Mensaje</string>
     <string name="starred_remove">Quitar de favoritos</string>
     <string name="starred_remove_all">Quitar todo</string>

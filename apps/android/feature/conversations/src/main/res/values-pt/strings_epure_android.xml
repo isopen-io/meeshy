@@ -22,4 +22,8 @@
     <string name="shareLink_detail_requireNickname">Usuário</string>
     <string name="shareLink_detail_historyRight">Histórico</string>
     <string name="new_conversation_group_solo_hint">Você poderá convidar pessoas depois.</string>
+    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, com verificação entre aparelhos compatíveis</string>
+    <string name="share_link_field_description">Descrição</string>
+    <string name="share_link_field_slug">Endereço do link</string>
+    <string name="conversations_action_more">Mais</string>
 </resources>

@@ -39,7 +39,7 @@ class EpureListeFilStringsTest {
         "encryption_detail_inactive_subtitle", "starred_empty_hint",
     )
 
-    private val sameWordInFrench = emptySet<String>()
+    private val sameWordInFrench = setOf("participant_profile_info_email")
 
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()
 

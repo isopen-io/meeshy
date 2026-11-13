@@ -45,12 +45,6 @@
           "iosKey": "riviere.timeHandle.label",
           "androidName": "riviere_time_handle_label",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.message.actions.long_press",
-          "androidName": "riviere_bubble_actions",
-          "status": "adopted"
         }
       ]
     }

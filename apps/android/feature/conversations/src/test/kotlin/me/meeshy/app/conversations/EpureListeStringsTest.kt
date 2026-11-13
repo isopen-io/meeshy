@@ -46,6 +46,7 @@ class EpureListeStringsTest {
     /** Mots que le lexique écrit pareil en français et en anglais : ce n'est pas une recopie. */
     private val sameWordInFrench = setOf(
         "share_link_permission_images", "share_link_access_email", "invite_access_email", "shareLink_detail_requireEmail",
+        "share_link_field_description",
     )
 
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()

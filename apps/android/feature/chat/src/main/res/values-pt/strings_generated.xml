@@ -378,7 +378,6 @@
     <string name="encryption_detail_mode_header">Modo</string>
     <string name="encryption_detail_mode_label">Modo</string>
     <string name="encryption_detail_regime_changed">Outro membro acabou de alterar a criptografia: o estado foi atualizado.</string>
-    <string name="encryption_detail_served_gap">O servidor apresenta esta conversa sem criptografia de ponta a ponta, mas este dispositivo a viu com criptografia de ponta a ponta: aqui ela continua assim. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">Mudar para ponta a ponta</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Mudar para criptografia de ponta a ponta?</string>
     <string name="encryption_detail_title">Criptografia</string>
@@ -394,7 +393,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada. Você sempre poderá abrir ao lado outra conversa, sem criptografia de ponta a ponta, com esta pessoa: as duas estão na lista, esta marcada com um cadeado.</string>
     <string name="encryption_fact_every_server_feature">Todas as funções estão disponíveis: tradução automática, transcrição de áudios, prévia das notificações, busca.</string>
     <string name="encryption_fact_group_sending_unavailable">Neste grupo, o app ainda não pode enviar mensagens criptografadas.</string>
-    <string name="encryption_fact_hybrid_is_server_today">O modo híbrido criptografa suas mensagens em nossos servidores, que podem lê-las para tradução e busca: não é criptografia de ponta a ponta. Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado.</string>
     <string name="encryption_fact_no_edit">Uma mensagem enviada não pode ser editada.</string>
     <string name="encryption_fact_no_forward">Uma mensagem não pode ser encaminhada.</string>
     <string name="encryption_fact_no_notification_preview">As notificações não mostram o texto da mensagem: o servidor não o conhece.</string>
@@ -419,7 +417,6 @@
     <string name="encryption_legacy_title">Criptografia de ponta a ponta</string>
     <string name="encryption_mode_e2ee_description">Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho.</string>
     <string name="encryption_mode_e2ee_label">Ponta a ponta</string>
-    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
     <string name="encryption_mode_server_label">Servidor</string>
@@ -648,7 +645,6 @@
     <string name="participant_profile_history_label">Vê o histórico desde</string>
     <string name="participant_profile_info_birthday">Nascimento</string>
     <string name="participant_profile_info_country">País</string>
-    <string name="participant_profile_info_email">E-mail</string>
     <string name="participant_profile_info_joined">Entrou em</string>
     <string name="participant_profile_info_language">Idioma</string>
     <string name="participant_profile_info_via_link">Pelo link</string>
@@ -694,7 +690,6 @@
     <string name="report_reason_other">Outro</string>
     <string name="report_reason_spam">Spam</string>
     <string name="report_reason_violence">Violência</string>
-    <string name="riviere_bubble_actions">Mais opções</string>
     <string name="riviere_bubble_open_in_thread">Abrir no fio</string>
     <string name="riviere_bubble_reply_hint">Abre a mensagem citada</string>
     <string name="riviere_bubble_reply_to">em resposta a %1$s</string>
@@ -794,7 +789,6 @@
     <string name="share_zone_content">O que será enviado</string>
     <string name="starred_back">Voltar</string>
     <string name="starred_empty_title">Nenhuma mensagem favorita</string>
-    <string name="starred_more_options">Mais opções</string>
     <string name="starred_no_preview">Mensagem</string>
     <string name="starred_remove">Remover dos favoritos</string>
     <string name="starred_remove_all">Remover tudo</string>

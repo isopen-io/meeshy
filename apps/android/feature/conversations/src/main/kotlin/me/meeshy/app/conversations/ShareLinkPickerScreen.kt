@@ -107,7 +107,7 @@ internal fun ShareLinkConversationPickerSheet(
 
                     state.sections.isEmpty() -> PickerMessage(
                         title = stringResource(R.string.share_link_picker_empty_title),
-                        body = stringResource(R.string.share_link_picker_empty_body),
+                        body = null,
                         cta = stringResource(R.string.share_link_picker_empty_cta),
                         ctaIcon = Icons.Filled.Add,
                         onCta = onNewConversation,
@@ -208,7 +208,7 @@ private fun PickerRow(
 @Composable
 private fun PickerMessage(
     title: String,
-    body: String,
+    body: String?,
     cta: String,
     ctaIcon: androidx.compose.ui.graphics.vector.ImageVector?,
     onCta: () -> Unit,
@@ -231,13 +231,15 @@ private fun PickerMessage(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = MeeshySpacing.md),
         )
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = MeeshySpacing.sm),
-        )
+        if (body != null) {
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = MeeshySpacing.sm),
+            )
+        }
         Button(onClick = onCta, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
             ctaIcon?.let { Icon(it, contentDescription = null, modifier = Modifier.size(18.dp)) }
             Text(text = cta, modifier = Modifier.padding(start = if (ctaIcon != null) MeeshySpacing.xs else 0.dp))

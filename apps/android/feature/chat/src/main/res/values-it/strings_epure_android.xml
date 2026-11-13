@@ -7,4 +7,13 @@
     <string name="share_content_refused_source">Meeshy non apre un percorso di file. Condividi il file stesso.</string>
     <string name="share_capture_warning">Pubblicare questa acquisizione la rende visibile oltre questa conversazione.</string>
     <string name="share_offline">Offline: ciò che non è partito parte quando torni online.</string>
+    <string name="encryption_fact_hybrid_is_server_today">L’ibrido non è la crittografia end-to-end: il server può leggere i tuoi messaggi.</string>
+    <string name="encryption_fact_hybrid_second_layer">Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato.</string>
+    <string name="encryption_note_second_layer_question">Cosa verifica il secondo livello?</string>
+    <string name="encryption_detail_served_gap">Il server presenta questa conversazione senza crittografia end-to-end, ma questo dispositivo l’ha vista crittografata end-to-end: qui resta tale.</string>
+    <string name="encryption_mode_hybrid_description">Crittografato sui nostri server, con verifica tra dispositivi compatibili</string>
+    <string name="encryption_e2ee_direct_only_here">Su questo telefono la crittografia end-to-end esiste solo per le conversazioni a due.</string>
+    <string name="participant_profile_info_email">E-mail</string>
+    <string name="starred_more_options">Altro</string>
+    <string name="riviere_bubble_actions">Altro</string>
 </resources>

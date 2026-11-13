@@ -1463,10 +1463,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "starred_empty_hint",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "starred.messages.empty.title",
           "androidName": "starred_empty_title",

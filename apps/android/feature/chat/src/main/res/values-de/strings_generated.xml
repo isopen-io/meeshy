@@ -371,7 +371,6 @@
     <string name="encryption_detail_mode_header">Modus</string>
     <string name="encryption_detail_mode_label">Modus</string>
     <string name="encryption_detail_regime_changed">Die Verschlüsselung wurde gerade von einem anderen Mitglied geändert: Der Status wurde aktualisiert.</string>
-    <string name="encryption_detail_served_gap">Der Server zeigt diese Unterhaltung ohne Ende-zu-Ende-Verschlüsselung an, aber dieses Gerät hat sie Ende-zu-Ende-verschlüsselt gesehen: Hier bleibt sie es. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm">Zu Ende-zu-Ende wechseln</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Zur Ende-zu-Ende-Verschlüsselung wechseln?</string>
     <string name="encryption_detail_title">Verschlüsselung</string>
@@ -387,7 +386,6 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt. Du kannst daneben jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert.</string>
     <string name="encryption_fact_every_server_feature">Alle Funktionen sind verfügbar: automatische Übersetzung, Transkription von Sprachnachrichten, Benachrichtigungsvorschau, Suche.</string>
     <string name="encryption_fact_group_sending_unavailable">In dieser Gruppe kann die App noch keine verschlüsselten Nachrichten senden.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Der Hybridmodus verschlüsselt deine Nachrichten auf unseren Servern, die sie für Übersetzung und Suche lesen können: Das ist keine Ende-zu-Ende-Verschlüsselung. Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt.</string>
     <string name="encryption_fact_no_edit">Eine gesendete Nachricht kann nicht bearbeitet werden.</string>
     <string name="encryption_fact_no_forward">Eine Nachricht kann nicht weitergeleitet werden.</string>
     <string name="encryption_fact_no_notification_preview">Benachrichtigungen zeigen den Nachrichtentext nicht an: Der Server kennt ihn nicht.</string>
@@ -412,7 +410,6 @@
     <string name="encryption_legacy_title">Ende-zu-Ende-Verschlüsselung</string>
     <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
     <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
-    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
@@ -640,7 +637,6 @@
     <string name="participant_profile_history_label">Sieht den Verlauf seit</string>
     <string name="participant_profile_info_birthday">Geburtstag</string>
     <string name="participant_profile_info_country">Land</string>
-    <string name="participant_profile_info_email">E-Mail</string>
     <string name="participant_profile_info_joined">Beigetreten am</string>
     <string name="participant_profile_info_language">Sprache</string>
     <string name="participant_profile_info_via_link">Über Link</string>
@@ -686,7 +682,6 @@
     <string name="report_reason_other">Andere</string>
     <string name="report_reason_spam">Spam</string>
     <string name="report_reason_violence">Gewalt</string>
-    <string name="riviere_bubble_actions">Weitere Optionen</string>
     <string name="riviere_bubble_open_in_thread">Im Verlauf öffnen</string>
     <string name="riviere_bubble_reply_hint">Öffnet die zitierte Nachricht</string>
     <string name="riviere_bubble_reply_to">Antwort an %1$s</string>
@@ -786,7 +781,6 @@
     <string name="share_zone_content">Was gesendet wird</string>
     <string name="starred_back">Zurück</string>
     <string name="starred_empty_title">Keine favorisierten Nachrichten</string>
-    <string name="starred_more_options">Weitere Optionen</string>
     <string name="starred_no_preview">Nachricht</string>
     <string name="starred_remove">Aus Favoriten entfernen</string>
     <string name="starred_remove_all">Alle entfernen</string>

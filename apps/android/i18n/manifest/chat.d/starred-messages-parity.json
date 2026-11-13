@@ -21,12 +21,6 @@
           "iosKey": "starred.messages.row.hint",
           "androidName": "starred_row_hint",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "starred.messages.more_options",
-          "androidName": "starred_more_options",
-          "status": "adopted"
         }
       ]
     }

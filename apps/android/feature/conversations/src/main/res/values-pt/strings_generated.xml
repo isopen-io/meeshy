@@ -30,7 +30,6 @@
     <string name="conversations_action_lock">Bloquear</string>
     <string name="conversations_action_mark_read">Marcar como lido</string>
     <string name="conversations_action_mentions_only">Somente menções</string>
-    <string name="conversations_action_more">Mais ações</string>
     <string name="conversations_action_mute">Mudo</string>
     <string name="conversations_action_pin">Fixar</string>
     <string name="conversations_action_remove_category">Remover a categoria %1$s</string>
@@ -161,7 +160,6 @@
     <string name="encryption_create_header">Criptografia</string>
     <string name="encryption_mode_e2ee_description">Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho.</string>
     <string name="encryption_mode_e2ee_label">Ponta a ponta</string>
-    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
     <string name="encryption_mode_server_label">Servidor</string>
@@ -359,7 +357,6 @@
     <string name="my_share_links_title">Links de compartilhamento</string>
     <string name="my_share_links_toggle">Ativos</string>
     <string name="new_conversation_close">Fechar</string>
-    <string name="new_conversation_contacts_empty_subtitle">Busque um usuário para iniciar uma conversa.</string>
     <string name="new_conversation_contacts_empty_title">Nenhum contato</string>
     <string name="new_conversation_contacts_loading">Carregando os contatos</string>
     <string name="new_conversation_contacts_section">Seus contatos</string>
@@ -473,7 +470,6 @@
     <string name="share_link_expiration_3m">3 meses</string>
     <string name="share_link_expiration_7d">7 dias</string>
     <string name="share_link_expiration_never">Nunca</string>
-    <string name="share_link_field_description">Descrição (opcional)</string>
     <string name="share_link_field_description_placeholder">ex.: Entre no nosso grupo…</string>
     <string name="share_link_field_expiration">Expiração</string>
     <string name="share_link_field_name">Nome do link</string>
@@ -486,7 +482,6 @@
         <item quantity="other">%1$d usos no máximo</item>
     </plurals>
     <string name="share_link_picker_back">Voltar</string>
-    <string name="share_link_picker_empty_body">Crie um grupo ou uma comunidade para compartilhar um link de convite</string>
     <string name="share_link_picker_empty_cta">Nova conversa</string>
     <string name="share_link_picker_empty_title">Nenhum grupo encontrado</string>
     <string name="share_link_picker_search">Buscar um grupo…</string>

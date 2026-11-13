@@ -34,6 +34,7 @@ internal data class ExplanationTopicLayout(val topic: Topic, val visible: List<F
 }
 
 private fun Topic.notedFacts(): Set<Fact> = when (this) {
+    Topic.WHO_READS -> setOf(Fact.HYBRID_SECOND_LAYER)
     Topic.DEVICES -> setOf(Fact.DEVICE_LIMIT, Fact.RESTORED_DEVICE_IS_NEW)
     Topic.SWITCHING -> setOf(Fact.WHO_MAY_TOGGLE, Fact.SWITCH_KEEPS_HISTORY)
     else -> emptySet()
@@ -41,6 +42,7 @@ private fun Topic.notedFacts(): Set<Fact> = when (this) {
 
 @StringRes
 private fun Topic.noteQuestionRes(): Int? = when (this) {
+    Topic.WHO_READS -> R.string.encryption_note_second_layer_question
     Topic.DEVICES -> R.string.encryption_note_devices_question
     Topic.SWITCHING -> R.string.encryption_note_switching_question
     else -> null
@@ -66,6 +68,7 @@ internal fun Fact.textRes(): Int = when (this) {
     Fact.STORED_WITHOUT_ENCRYPTION -> R.string.encryption_fact_stored_without_encryption
     Fact.ENCRYPTED_ON_SERVER_SERVER_READS -> R.string.encryption_fact_encrypted_on_server_server_reads
     Fact.HYBRID_IS_SERVER_TODAY -> R.string.encryption_fact_hybrid_is_server_today
+    Fact.HYBRID_SECOND_LAYER -> R.string.encryption_fact_hybrid_second_layer
     Fact.ONLY_PARTICIPANTS_READ -> R.string.encryption_fact_only_participants_read
     Fact.EVERY_SERVER_FEATURE -> R.string.encryption_fact_every_server_feature
     Fact.TRANSLATED_ON_DEVICE -> R.string.encryption_fact_translated_on_device
@@ -97,6 +100,7 @@ internal fun Fact.icon(): ImageVector = when (this) {
     Fact.STORED_WITHOUT_ENCRYPTION -> MeeshyIcons.LockOpen
     Fact.ENCRYPTED_ON_SERVER_SERVER_READS -> MeeshyIcons.Cloud
     Fact.HYBRID_IS_SERVER_TODAY -> MeeshyIcons.Info
+    Fact.HYBRID_SECOND_LAYER -> MeeshyIcons.VerifiedUser
     Fact.ONLY_PARTICIPANTS_READ -> MeeshyIcons.ShieldFilled
     Fact.EVERY_SERVER_FEATURE -> MeeshyIcons.CheckCircle
     Fact.TRANSLATED_ON_DEVICE -> MeeshyIcons.Globe

@@ -31,6 +31,42 @@
         {
           "androidName": "share_offline",
           "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_hybrid_is_server_today",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_hybrid_second_layer",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_second_layer_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_detail_served_gap",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_e2ee_direct_only_here",
+          "status": "android-only"
+        },
+        {
+          "androidName": "participant_profile_info_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "starred_more_options",
+          "status": "android-only"
+        },
+        {
+          "androidName": "riviere_bubble_actions",
+          "status": "android-only"
         }
       ]
     }

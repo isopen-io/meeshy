@@ -7,4 +7,13 @@
     <string name="share_content_refused_source">لا يفتح Meeshy مسار ملف. شارك الملف نفسه.</string>
     <string name="share_capture_warning">نشر هذه اللقطة يجعلها مرئية خارج هذه المحادثة.</string>
     <string name="share_offline">غير متصل: سيُرسَل ما لم يُرسَل عند عودتك.</string>
+    <string name="encryption_fact_hybrid_is_server_today">الوضع الهجين ليس تشفيرًا من طرف إلى طرف: يمكن للخادم قراءة رسائلك.</string>
+    <string name="encryption_fact_hybrid_second_layer">وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق.</string>
+    <string name="encryption_note_second_layer_question">ماذا تتحقق منه الطبقة الثانية؟</string>
+    <string name="encryption_detail_served_gap">يعرض الخادم هذه المحادثة دون تشفير تام بين الطرفين، لكن هذا الجهاز رآها مشفّرة تمامًا بين الطرفين: تبقى كذلك هنا.</string>
+    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا، مع التحقق بين الأجهزة المتوافقة</string>
+    <string name="encryption_e2ee_direct_only_here">على هذا الهاتف، لا يوجد التشفير من طرف إلى طرف إلا للمحادثات الثنائية.</string>
+    <string name="participant_profile_info_email">البريد الإلكتروني</string>
+    <string name="starred_more_options">المزيد</string>
+    <string name="riviere_bubble_actions">المزيد</string>
 </resources>
