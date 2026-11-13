@@ -18,6 +18,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
+| 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
 
 ## 2026-11-07 — lot 1
 
@@ -208,6 +209,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 26
+
+- Début du run : #17211 (#17178) fusionnée dans dev ; #17960 (#6451, libellés iOS) ouverte à 13:25 UTC par un autre réveil de cette routine et menée en direct (CI en cours) : cédée, non touchée.
+- Lot : #17209 (passerelle, sécurité, préexistant). `withoutBlockedRecipients` (`utils/blocking.ts`) devient le seul filtre de blocage des diffusions d'une publication : `SocialEventsHandler.withoutBlocked` le consomme, et `StoryTextObjectTranslationService` y passe ses destinataires sur toutes les branches (ONLY, cercles, amis, EXCEPT, communauté). Une lecture du blocage qui échoue ne laisse partir que l'auteur (avant : rien du tout côté temps réel, inchangé puisque l'auteur n'y est pas candidat).
+- Témoin : `storyTranslationBlocking.test.ts` (12 cas : chaque branche × bloqué dans les deux sens, et panne), rouge sans le correctif, vert avec.
+- Clients : rien à changer.
+- Prochain lot recommandé : mener #17960 si elle reste ouverte, sinon #17182 (favoris, audience) ; #16739 et #16893 attendent une décision ; #14227 / #16696 demandent une session de staging.
 
 ## 2026-11-13 — réveil 27
 
