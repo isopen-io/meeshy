@@ -546,3 +546,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   trancher par le porteur.
 - Prochain lot recommandé : une issue libre du jalon 2 (#14685/#14686, retrait d'un partage du Sang), ou finir les PR
   ouvertes dont la branche s'est arrêtée.
+## 2026-11-13 — réveil 29 : le passage en E2EE coupe le talkie à l'instant (#14490)
+
+- Reprise : dix-neuf PR de la routine ouvertes, toutes poussées par d'autres réveils dans l'heure ; aucune n'a été
+  doublée. Aucune branche n'écrivait le talkie côté passerelle hors `talkieRelay.ts` (#18010, traces seulement) : lot
+  #14490 réservé sur `claude/cercles-14490-talkie-e2ee`, témoins rouges poussés avant toute logique.
+- Lot : `cutTalkiesOnEndToEnd` (`talkieCut.ts`) pose la coupure partagée d'un blocage dans les deux sens de la paire,
+  appelée par `POST /conversations/:id/encryption` juste après l'écriture du régime `e2ee` ; `REJUDGE_TIMEOUT_MS`
+  (`talkieRelay.ts`) coupe une prise de parole dont le rejugement ne rend pas en 2 s. Une coupure qui ne s'écrit pas
+  ne défait pas la bascule : le rejugement borné prend le relais.
+- Gates locaux : 69 suites voisines (talkie, conversation-encryption, handlers socket, gardes de minuterie et de
+  promesse détachée) 1 318/1 318 vertes ; ROUGE prouvé en retirant la production (9 témoins tombent) ; `tsc`
+  passerelle vert ; cliquet `any` 489 inchangé.
+- Revue adversariale : fusionnable après correctifs. Corrigés dans le lot : un tête-à-tête qui NAÎT `e2ee`
+  (`POST /conversations`, `core-lifecycle.ts`) coupe aussi (M1) ; les deux sens sont coupés localement avant toute
+  écriture partagée, chacune tentée (m2) ; la coupure par délai se journalise (m3) ; un témoin qui ne pouvait pas
+  tomber est réécrit (m7). Ouverts en suivi : #18033 (une coupure non écrite dans Redis le dit), #18034 (délai
+  du rejugement mesuré sous charge), #18035 (restaurer « pour moi » un tête-à-tête chiffré), #18036 (une seule
+  définition de « paire chiffrée »).
+- Gates après correctifs : 165 suites voisines (talkie, conversations, encryption, handlers, gardes) 2 363/2 363
+  vertes ; ROUGE du témoin de création prouvé ; `tsc` vert ; cliquet `any` inchangé.
+- Prochain lot recommandé : #18035 ou #18036 (petits, serveur, talkie), sinon mener à la fusion les PR ouvertes.
