@@ -55,7 +55,7 @@ enum TalkieInfoWording {
     static var text: String {
         String(
             localized: "talkie.info.text",
-            defaultValue: "Votre voix sort même si Meeshy est en arrière-plan.",
+            defaultValue: "À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.",
             bundle: .main
         )
     }

@@ -129,7 +129,7 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.withheld.flame": "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.",
         "share.sheet.withheld.flame.note": "Sa copie disparaît aussi et ne se retransfère pas.",
         "share.sheet.withheld.flame.question": "Que devient la copie d’une flamme ?",
-        "talkie.info.text": "Votre voix sort même si Meeshy est en arrière-plan.",
+        "talkie.info.text": "À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.",
         "talkie.send.e2ee": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.",
         "talkie.send.explain": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.",
         "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",
@@ -248,7 +248,6 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.withheld.flame",
         "share.sheet.withheld.flame.question",
         "talkie.info.a11y",
-        "talkie.info.text",
         "talkie.send.e2ee",
         "voice.profile.empty.description",
     ]
@@ -386,6 +385,9 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(row.contains("talkie.header.announce.recorded"))
         XCTAssertEqual(ProfileTalkieWording.notice(.voice), String(localized: "talkie.header.announce.recorded", bundle: .main))
         XCTAssertFalse(TalkieInfoWording.text.isEmpty)
+        let note = try XCTUnwrap(app["talkie.info.text"]?["fr"])
+        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Quand utiliser le talkie ?")
+        XCTAssertTrue(note.contains("extrême urgence"), "la note répond à « Quand utiliser le talkie ? » : \(note)")
     }
 
     // MARK: - Le chiffrement : l'irréversibilité reste ENTIÈRE et visible, le détail secondaire derrière un (i)

@@ -334648,43 +334648,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يخرج صوتك حتى لو كان Meeshy في الخلفية."
+            "value": "استخدمه فقط في حالات الطوارئ القصوى: يُسمع صوتك لديهم حتى لو كان Meeshy في الخلفية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Stimme ist auch zu hören, wenn Meeshy im Hintergrund läuft."
+            "value": "Nur im äußersten Notfall verwenden: Deine Stimme ist bei ihnen zu hören, auch wenn Meeshy im Hintergrund ist."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your voice plays even if Meeshy is in the background."
+            "value": "Use it only in an extreme emergency: your voice plays on their phone even when Meeshy is in the background."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu voz suena aunque Meeshy esté en segundo plano."
+            "value": "Úsalo solo en caso de extrema urgencia: tu voz suena en su teléfono aunque Meeshy esté en segundo plano."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre voix sort même si Meeshy est en arrière-plan."
+            "value": "À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua voce esce anche se Meeshy è in background."
+            "value": "Da usare solo in caso di estrema urgenza: la tua voce esce dal loro telefono anche se Meeshy è in background."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua voz sai mesmo que o Meeshy esteja em segundo plano."
+            "value": "Use apenas em caso de extrema urgência: sua voz sai no telefone delas mesmo com o Meeshy em segundo plano."
           }
         }
       }
