@@ -10,6 +10,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import me.meeshy.sdk.model.profile.ProfilePostsEmptyKind
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -47,6 +48,20 @@ class FeedEpureStatesTest {
         compose.onNodeWithText("The feed will appear when the network is back.").assertExists()
         compose.onAllNodesWithText("Offline").assertCountEquals(0)
         compose.onAllNodes(textNodes).assertCountEquals(2)
+    }
+
+    @Test
+    fun `an empty filter still tells how to see everything again`() {
+        compose.setContent { MeeshyTheme { ProfilePostsEmpty(ProfilePostsEmptyKind.NO_REELS) } }
+        compose.onNodeWithText("No reels").assertExists()
+        compose.onNodeWithText("Tap the tile again to see everything").assertExists()
+    }
+
+    @Test
+    fun `a profile with nothing published is one line`() {
+        compose.setContent { MeeshyTheme { ProfilePostsEmpty(ProfilePostsEmptyKind.NO_PUBLICATION) } }
+        compose.onNodeWithText("No posts").assertExists()
+        compose.onAllNodesWithText("Tap the tile again to see everything").assertCountEquals(0)
     }
 
     @Test
@@ -102,7 +117,7 @@ class FeedEpureStringsContractTest {
     @Test
     fun `a line that no screen reads is gone from the seven languages`() {
         val gone = setOf(
-            "feed_empty_subtitle", "profile_posts_empty_subtitle", "profile_posts_empty_filter_subtitle",
+            "feed_empty_subtitle", "profile_posts_empty_subtitle",
             "profile_posts_end_of_content", "nearby_permission_title", "nearby_denied_title",
             "status_composer_placeholder",
         )

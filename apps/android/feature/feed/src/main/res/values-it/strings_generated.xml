@@ -202,6 +202,7 @@
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
     <string name="profile_posts_empty">Nessun post</string>
+    <string name="profile_posts_empty_filter_subtitle">Tocca di nuovo il riquadro per rivedere tutto</string>
     <string name="profile_posts_empty_posts">Nessun post</string>
     <string name="profile_posts_empty_reels">Nessun reel</string>
     <string name="profile_posts_first_published_at">Primo contenuto pubblicato il %1$s</string>

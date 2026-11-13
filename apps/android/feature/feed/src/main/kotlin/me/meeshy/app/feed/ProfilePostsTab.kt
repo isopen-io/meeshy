@@ -179,8 +179,12 @@ internal fun LazyListScope.profilePostsItems(
     }
 }
 
+private val ProfilePostsEmptyKind.isFiltered: Boolean
+    get() = this == ProfilePostsEmptyKind.NO_REELS || this == ProfilePostsEmptyKind.NO_POSTS
+
+/** Un filtre vide dit comment revenir à tout : retoucher la tuile, le seul chemin, qu'aucun autre signe ne montre. */
 @Composable
-private fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
+internal fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
     val title = stringResource(
         when (kind) {
             ProfilePostsEmptyKind.NO_REELS -> R.string.profile_posts_empty_reels
@@ -192,7 +196,7 @@ private fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
         MeeshyEmptyState(
             icon = if (kind == ProfilePostsEmptyKind.NO_REELS) MeeshyIcons.Movie else MeeshyIcons.Notes,
             title = title,
-            subtitle = "",
+            subtitle = if (kind.isFiltered) stringResource(R.string.profile_posts_empty_filter_subtitle) else "",
             compact = true,
         )
     }

@@ -42,6 +42,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "profile.posts.empty.filter.subtitle",
+          "androidName": "profile_posts_empty_filter_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "profile.posts.firstPublishedAt",
           "androidName": "profile_posts_first_published_at",
           "status": "adopted"

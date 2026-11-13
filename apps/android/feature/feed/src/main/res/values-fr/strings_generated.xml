@@ -202,6 +202,7 @@
     <string name="post_detail_title">Publication</string>
     <string name="post_detail_viewers">Vues</string>
     <string name="profile_posts_empty">Aucune publication</string>
+    <string name="profile_posts_empty_filter_subtitle">Touchez à nouveau la tuile pour tout revoir</string>
     <string name="profile_posts_empty_posts">Aucun poste</string>
     <string name="profile_posts_empty_reels">Aucun réel</string>
     <string name="profile_posts_first_published_at">Premier contenu publié le %1$s</string>

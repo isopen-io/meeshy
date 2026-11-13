@@ -202,6 +202,7 @@
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
     <string name="profile_posts_empty">Ninguna publicación</string>
+    <string name="profile_posts_empty_filter_subtitle">Toca de nuevo el mosaico para verlo todo</string>
     <string name="profile_posts_empty_posts">Sin publicaciones</string>
     <string name="profile_posts_empty_reels">Sin reels</string>
     <string name="profile_posts_first_published_at">Primer contenido publicado el %1$s</string>

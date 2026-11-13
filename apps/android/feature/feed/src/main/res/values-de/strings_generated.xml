@@ -193,6 +193,7 @@
     <string name="post_detail_title">Beitrag</string>
     <string name="post_detail_viewers">Aufrufe</string>
     <string name="profile_posts_empty">Keine Beiträge</string>
+    <string name="profile_posts_empty_filter_subtitle">Tippe erneut auf die Kachel, um alles zu sehen</string>
     <string name="profile_posts_empty_posts">Keine Beiträge</string>
     <string name="profile_posts_empty_reels">Keine Reels</string>
     <string name="profile_posts_first_published_at">Erster Inhalt veröffentlicht am %1$s</string>

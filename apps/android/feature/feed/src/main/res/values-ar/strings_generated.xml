@@ -229,6 +229,7 @@
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
     <string name="profile_posts_empty">لا توجد منشورات</string>
+    <string name="profile_posts_empty_filter_subtitle">المس المربع مرة أخرى لعرض كل شيء</string>
     <string name="profile_posts_empty_posts">لا توجد منشورات</string>
     <string name="profile_posts_empty_reels">لا توجد مقاطع</string>
     <string name="profile_posts_first_published_at">تم نشر أول محتوى في %1$s</string>
