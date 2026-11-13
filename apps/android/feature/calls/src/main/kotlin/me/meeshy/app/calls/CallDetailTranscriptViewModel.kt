@@ -84,12 +84,13 @@ class CallDetailTranscriptViewModel internal constructor(
     }
 
     /**
-     * A1.6 — la bulle qui porte ce journal a quitté l'écran : la lecture des pages s'arrête, et la rouvrir relit au lieu
-     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie). Une suppression
-     * confirmée ([delete]) n'est pas une lecture : elle va à son terme.
+     * A1.6 — la bulle qui porte ce journal a quitté l'écran : une lecture en cours s'arrête, et la rouvrir relit au lieu
+     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie). Une lecture finie
+     * reste servie : rien ne se relit. Une suppression confirmée ([delete]) n'est pas une lecture : elle va à son terme.
      */
     fun release() {
-        job?.cancel()
+        val reading = job?.takeIf { it.isActive } ?: return
+        reading.cancel()
         job = null
         request = null
     }
