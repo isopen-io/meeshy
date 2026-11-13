@@ -208,3 +208,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil de 14:34 UTC
+
+- Début du run : quatre PR de la routine ouvertes depuis moins d'une heure par une autre session (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182), CI en file : cédées, non touchées.
+- Lot : #17104 (Android). Le détail d'une communauté dit POURQUOI il ne s'ouvre pas, comme iOS et le web (#7816). `CommunityLoadFailure` (`:core:model`) : refusée (403 = 404), réseau, serveur ; `CommunityFetchException` porte sa cause, classée par `ApiError.toContentFetchFailure()` (un hors-ligne n'a pas de statut). Un refus efface la fiche en cache et le dit avec « Retour aux communautés » (la fermeture silencieuse sur 404 disparaît) ; réseau et serveur gardent une fiche déjà peinte. Sept chaînes adoptées du catalogue SDK.
+- Pas de revue adversariale : ni authentification, ni permission serveur, ni migration.
+- Gotcha : `./apps/android/meeshy.sh jvm-check` échoue en conteneur (`build-artifacts.signal.org` refusé par le proxy) ; seule `android.yml` prouve, même pour `:core:model`.
+- PR #18006.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes (#17960 après #17972), puis #16879 (publications de la communauté sur Android) ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
