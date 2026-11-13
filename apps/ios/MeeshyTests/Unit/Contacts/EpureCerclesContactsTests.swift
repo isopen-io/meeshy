@@ -342,7 +342,7 @@ final class EpureCerclesContactsTests: XCTestCase {
 
     private static let emptyStateSubtitlesRemoved = [
         "keypad.prompt.subtitle", "keypad.no-match.subtitle", "conversations.empty.subtitle",
-        "conversations.error.subtitle", "story.mine.empty.subtitle", "profile.posts.empty.filter.subtitle",
+        "conversations.error.subtitle", "story.mine.empty.subtitle",
         "notifications.story.expired.subtitle",
     ]
 
@@ -384,12 +384,22 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertTrue(text.contains("médaille"), "l'avis lu à l'écran oriente vers le premier geste : « \(text) »")
     }
 
+    func test_filteredPostsEmptyState_keepsTheOnlyHintOfHowToClearTheFilter_inEveryLanguage() throws {
+        let app = try app()
+        let french = try XCTUnwrap(app["profile.posts.empty.filter.subtitle"]?["fr"])
+        XCTAssertTrue(french.contains("tuile"), "le seul indice du geste qui retire le filtre reste lisible")
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(app["profile.posts.empty.filter.subtitle"]?[language], language)
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+        }
+        XCTAssertTrue(try code("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift").contains("profile.posts.empty.filter.subtitle"))
+    }
+
     func test_emptyStateSites_passNoSubtitle() throws {
         let sites: [(String, [String])] = [
             ("apps/ios/Meeshy/Features/Contacts/KeypadTab.swift", ["keypad.prompt.subtitle", "keypad.no-match.subtitle"]),
             ("apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift", ["conversations.error.subtitle", "conversations.empty.subtitle"]),
             ("apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift", ["story.mine.empty.subtitle"]),
-            ("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift", ["profile.posts.empty.filter.subtitle"]),
             ("apps/ios/Meeshy/Features/Stories/Notifications/StoryExpiredContent.swift", ["notifications.story.expired.subtitle"]),
         ]
         for (path, keys) in sites {

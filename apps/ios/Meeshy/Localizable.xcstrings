@@ -157974,6 +157974,53 @@
         }
       }
     },
+    "profile.posts.empty.filter.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المس المربع مرة أخرى لعرض كل شيء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe erneut auf die Kachel, um alles zu sehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the tile again to see everything"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca de nuevo el mosaico para verlo todo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez à nouveau la tuile pour tout revoir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca di nuovo il riquadro per rivedere tutto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque no bloco novamente para ver tudo"
+          }
+        }
+      }
+    },
     "profile.posts.empty.posts": {
       "extractionState": "manual",
       "localizations": {
