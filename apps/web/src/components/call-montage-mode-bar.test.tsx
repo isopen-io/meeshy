@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import type { CaptureEnv } from '@/lib/calls/call-capture';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
@@ -52,6 +52,8 @@ describe('CallMontageMode — la barre d’Effets', () => {
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
+
+  beforeEach(() => setEffectLayers([]));
 
   afterEach(() => {
     setEffectLayers([]);

@@ -6,7 +6,7 @@ import type { ActiveCall } from '@/lib/calls/call-store';
 import { callAudioOf, hasVideo } from '@/lib/calls/call-view';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
-import { canAdd, isFull, nextGenre, NO_CHOICE, removeLayer, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
+import { canAdd, isFull, nextGenre, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import { addingLook, type EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';

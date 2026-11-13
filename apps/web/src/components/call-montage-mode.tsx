@@ -5,8 +5,8 @@ import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { browserCanvas, captureDrawn, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
-import { canAdd, isFull, nextGenre, removeLayer, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
-import { effectLayersStore, setEffectLayers } from '@/lib/calls/call-effect-layers-store';
+import { canAdd, isFull, nextGenre, removeLayer, type EffectGenre, type EffectLayer } from '@/lib/calls/call-effect-layers';
+import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
@@ -161,7 +161,7 @@ const facesGlyph = (
 
 export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined, colorAvailable = false, blurAvailable = false, apply = applyNow, onAddLook }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
-  const [frameId, setFrameId] = useState<string | null>(() => effectLayersStore.getState().stack.find((layer) => layer.genre === 'frame')?.choice ?? null);
+  const [frameId, setFrameId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const list = useLayersList();
   const effects = useStore(videoEffectsStore, (state) => state.effects);
@@ -171,8 +171,8 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
   const frame = frames === null || frameId === null ? null : frames.reconcile(frameId, people);
   const shelf: Shelf = frame?.mood ?? CLASSICS;
   const scope: FrameScope = frames === null ? 'all' : frames.scopeShowing(frame?.id ?? null, people, requestedScope);
-  /* Le cadre est une COUCHE de la pile d'Effets : celui du carrousel, celui qu'on garde en direct, ou — l'atelier se charge — celui de l'entrée. */
-  const frameLayer = frame?.id ?? (frames === null ? frameId : null) ?? hold?.heldFrameId ?? null;
+  /* Le cadre est une COUCHE de la pile d'Effets : celui du carrousel, ou celui qu'on garde en direct. */
+  const frameLayer = frame?.id ?? hold?.heldFrameId ?? null;
   const stack = useEffectLayers([...effectsApplied(effects), ...(frameLayer === null ? [] : [{ genre: 'frame' as const, choice: frameLayer }])], OWNED);
   const crowded = isFull(stack);
   const say = textOf(language);
@@ -283,8 +283,8 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
 
   /* Une arrivée, un départ : le cadre retenu suit sa réconciliation — `null`, retour aux classiques. */
   useEffect(() => {
-    if (frames !== null && frameId !== null && (frame?.id ?? null) !== frameId) setFrameId(frame?.id ?? null);
-  }, [frames, frameId, frame?.id]);
+    if (frameId !== null && (frame?.id ?? null) !== frameId) setFrameId(frame?.id ?? null);
+  }, [frameId, frame?.id]);
 
   useEffect(() => {
     root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus();

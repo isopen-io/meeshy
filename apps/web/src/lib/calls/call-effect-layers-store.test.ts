@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { effectLayersStore, setEffectLayers } from './call-effect-layers-store';
 
 /** La pile est UNE pour l'appel : Effets et Montage la lisent et l'écrivent ; elle part avec l'appel. */
 describe('la pile d’effets partagée', () => {
+  beforeEach(() => setEffectLayers([]));
+
   afterEach(() => setEffectLayers([]));
 
   test('vide au départ ; ce qu’un mode y écrit, l’autre le lit', () => {

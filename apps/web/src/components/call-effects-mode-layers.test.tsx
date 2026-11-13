@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
 import { effectLayersStore, setEffectLayers } from '@/lib/calls/call-effect-layers-store';
@@ -27,6 +27,8 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
+
+  beforeEach(() => setEffectLayers([]));
 
   afterEach(() => {
     setEffectLayers([]);
