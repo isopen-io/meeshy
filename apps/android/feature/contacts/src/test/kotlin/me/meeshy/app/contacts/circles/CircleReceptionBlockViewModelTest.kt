@@ -60,7 +60,8 @@ class CircleReceptionBlockViewModelTest {
         ): RelationPersonSettings? {
             writes += granted
             grants += grant
-            return answer?.await() ?: RelationPersonSettings(userId, listeningCategoryShared = granted)
+            val pending = answer ?: return RelationPersonSettings(userId, listeningCategoryShared = granted)
+            return pending.await()
         }
     }
 
