@@ -44,6 +44,16 @@ class CommunityDraftsTest {
         assertThat(draft.withMemberToggled("a").memberIds).containsExactly("b")
     }
 
+    @Test
+    fun `rendre privee une communaute publique se confirme, pas la rouvrir ni un autre changement`() {
+        val publique = CommunitySettingsDraft.of(fields().copy(isPrivate = false))
+        assertThat(publique.needsPrivacyConfirmation).isFalse()
+        assertThat(publique.edit { it.copy(isPrivate = true) }.needsPrivacyConfirmation).isTrue()
+        assertThat(publique.edit { it.copy(name = "Club du jeudi") }.needsPrivacyConfirmation).isFalse()
+        val privee = CommunitySettingsDraft.of(fields())
+        assertThat(privee.edit { it.copy(isPrivate = false) }.needsPrivacyConfirmation).isFalse()
+    }
+
     private fun fields() = CommunitySettingsFields("Club", "desc", true, "", "", "6366F1", "")
 
     @Test

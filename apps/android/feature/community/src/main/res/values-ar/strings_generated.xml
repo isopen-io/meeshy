@@ -75,6 +75,9 @@
     <string name="community_settings_leave_confirm_title">مغادرة المجتمع</string>
     <string name="community_settings_leave_label">مغادرة المجتمع</string>
     <string name="community_settings_privacy_by_invitation">بالدعوة</string>
+    <string name="community_settings_privacy_confirm_button">جعله خاصًا</string>
+    <string name="community_settings_privacy_confirm_message">سيغادر الأعضاء السابقون والحسابات المحظورة محادثاته نهائيًا.</string>
+    <string name="community_settings_privacy_confirm_title">هل تريد جعل المجتمع خاصًا؟</string>
     <string name="community_settings_privacy_open_to_all">مفتوح للجميع</string>
     <string name="community_settings_privacy_title">مجتمع خاص</string>
     <string name="community_settings_section_danger">منطقة الخطر</string>
