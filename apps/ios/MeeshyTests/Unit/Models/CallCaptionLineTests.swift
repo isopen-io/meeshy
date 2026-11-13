@@ -201,6 +201,21 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertTrue(source.contains("AuthorInk.hex("))
     }
 
+    func test_speakerColor_onTheThread_measuresTheThreadBackdropThatAuthorInkMirrors() throws {
+        let source = try String(contentsOfFile: #filePath
+            .replacingOccurrences(of: "MeeshyTests/Unit/Models/CallCaptionLineTests.swift", with: "Meeshy/Features/Main/Views/ConversationAnimatedBackground.swift"))
+        let stops = [
+            #"Color(hex: "0F0C29")"#,
+            #"Self.tinted("0F0C29", with: accent, amount: 0.12)"#,
+            #"Color(hex: "24243E")"#,
+            #"Self.tinted("FFFFFF", with: accent, amount: 0.08)"#,
+            #"Self.tinted("FFFFFF", with: accent, amount: 0.05)"#,
+        ]
+        for stop in stops {
+            XCTAssertTrue(source.contains(stop), "AuthorInk mesure cet arrêt du fond du fil : \(stop)")
+        }
+    }
+
     func test_speakerColor_differsForMostIds() {
         let hexes = Set((0..<12).map { CallSpeakerColor.hex(for: "user-\($0)") })
         XCTAssertGreaterThan(hexes.count, 4)
