@@ -106,6 +106,9 @@ struct FloatingCallPillView: View {
     var isLastBar: Bool = true
     /// L'encart haut, mesuré par la pile qui l'empile (`TopChromeInsetKey`).
     var topInset: CGFloat = 0
+    /// L'écran visible est la conversation de l'appel : sa puce d'en-tête dit
+    /// déjà l'appel, le bandeau se tait (#18457).
+    var isInCallConversation: Bool = false
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. The
     // slide-in/-out spring animation is the primary animation concern here;
     // when reduce motion is on, collapse it to a simple cross-fade.
@@ -139,16 +142,26 @@ struct FloatingCallPillView: View {
     static func isShowingPill(
         displayMode: CallDisplayMode,
         callState: CallState,
-        isSystemPiPActive: Bool
+        isSystemPiPActive: Bool,
+        isInCallConversation: Bool = false,
+        isVideo: Bool = false
     ) -> Bool {
-        displayMode == .pip && callState.isActive && !isSystemPiPActive
+        CallReducedPresence.resolve(
+            displayMode: displayMode,
+            isActive: callState.isActive,
+            isSystemPiPActive: isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        ) == .pill
     }
 
     var body: some View {
         if Self.isShowingPill(
             displayMode: callManager.displayMode,
             callState: callManager.callState,
-            isSystemPiPActive: callManager.isSystemPiPActive
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: callManager.isVideoEnabled || callManager.isRemoteVideoEnabled
         ) {
             pillContent
                 // Bannière verre + contrôles blancs : on épingle le verre en
