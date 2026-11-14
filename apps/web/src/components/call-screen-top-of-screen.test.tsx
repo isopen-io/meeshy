@@ -114,6 +114,17 @@ describe('P11.1 — en groupe, l’en-tête flotte sur la grille', () => {
     windowOf(real.width, real.height);
   });
 
+  test('flottant, l’en-tête ne prend le doigt que sur ses boutons : une vignette du haut se touche à travers lui, et son menu de modération descend sous lui', async () => {
+    windowOf(390, 844);
+    const view = await mount(group());
+    const slot = headerSlot(view)?.className.split(' ') ?? [];
+    expect(slot).toContain('pointer-events-none');
+    expect(slot).toContain('[&_button]:pointer-events-auto');
+    expect(view.find('[data-call-stage-surface]')?.className).toContain('[&_[data-call-tile-menu]]:top-14');
+    view.done();
+    windowOf(real.width, real.height);
+  });
+
   test('à la une, l’en-tête reprend sa place au-dessus de la scène (P14)', async () => {
     windowOf(390, 844);
     const view = await mount(group());

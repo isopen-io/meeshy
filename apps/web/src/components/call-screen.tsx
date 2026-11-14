@@ -604,7 +604,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const span = topBannerSpan({ window: viewport, safeHorizontal: 0, selfTile: topBannerNeighborOf(tileAtRest, viewport.width), minimumWidth: recordingCard > 0 ? RECORDING_CARD_MAX_WIDTH : TOP_BANNER_LANDSCAPE_MIN });
   const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} reserveEnd={reserveEnd} reserve={reserve} maxWidth={topBannerStackMaxWidth(span)} /> : null;
   const selfTopInset = span.keepsSelfTileBeside ? 0 : selfTileClearance(present, recordingCard);
-  /* P11.1 : sur la grille d'un groupe, l'en-tête flotte sur les vignettes du haut ; à la une, en hauteur compacte ou sous un bandeau, la scène reste sous lui (L4, P14, L4.11). Les vignettes rejoignent leur nouvelle place en glissant. */
+  /* P11.1 : sur la grille d'un groupe, l'en-tête flotte sur les vignettes du haut ; à la une, en hauteur compacte ou sous un bandeau, la scène reste sous lui (L4, P14, L4.11). Les vignettes rejoignent leur nouvelle place en glissant ; l'en-tête flottant ne prend le doigt que sur ses boutons, et le menu de modération d'une vignette descend sous lui. */
   const groupTop = layout === 'grid' ? groupStageTop({ headerFloats: headerFloatsOverGroupStage({ isGrid: spotlight === null, isCompactHeight: isCompactHeight(viewport.height) }), hasBanners: orderedTopBanners(present).length > 0, isStageFullScreen: immersive }) : null;
   const headerFloats = groupTop === 'safe-area';
   useStageFlip(stageRef, groupTop ?? '');
@@ -751,18 +751,18 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
-        <HeldSwap value={chrome.header ? true : null} shape="top" className={headerFloats ? 'absolute inset-x-0 top-2 z-20' : 'relative z-20'} data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="" data-call-header-slot="" {...(headerFloats ? { 'data-call-header-floats': '' } : {})}>
+        <HeldSwap value={chrome.header ? true : null} shape="top" className={headerFloats ? 'pointer-events-none absolute inset-x-0 top-2 z-20 [&_button]:pointer-events-auto' : 'relative z-20'} data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="" data-call-header-slot="" {...(headerFloats ? { 'data-call-header-floats': '' } : {})}>
           {() => <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />}
         </HeldSwap>
         {bannerStack}
         {layout === 'grid' ? (
           <>
             {chrome.mode !== null ? null : (
-              <div className={headerFloats ? 'absolute inset-x-0 top-[3.75rem] z-20' : undefined} data-call-stow="top" style={{ '--stow-clearance': '3.75rem' } as CSSProperties} aria-hidden={hidden ? true : undefined}>
+              <div className={headerFloats ? 'pointer-events-none absolute inset-x-0 top-[3.75rem] z-20' : undefined} data-call-stow="top" style={{ '--stow-clearance': '3.75rem' } as CSSProperties} aria-hidden={hidden ? true : undefined}>
                 {pillRow}
               </div>
             )}
-            <div ref={stageRef} className="flex min-h-[140px] flex-1 flex-col" style={reserveEnd} data-call-stage-surface="" data-call-stage-top={groupTop ?? undefined} {...reserve}>
+            <div ref={stageRef} className={`flex min-h-[140px] flex-1 flex-col ${headerFloats ? '[&_[data-call-tile-menu]]:top-14' : ''}`} style={reserveEnd} data-call-stage-surface="" data-call-stage-top={groupTop ?? undefined} {...reserve}>
               {stage}
             </div>
           </>
