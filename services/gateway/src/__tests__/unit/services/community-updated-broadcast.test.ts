@@ -82,12 +82,12 @@ const fakePrisma = (communities: readonly CommunityRow[], members: readonly Memb
 
 const recorder = () => {
   const sent: Array<{ userId: string; payload: CommunityUpdatedEventData }> = [];
-  return { sent, emit: (userId: string, payload: CommunityUpdatedEventData) => { sent.push({ userId, payload }); } };
+  return { sent, deliver: (userId: string, payload: CommunityUpdatedEventData) => { sent.push({ userId, payload }); } };
 };
 
 const run = async (communities: readonly CommunityRow[], members: readonly MemberRow[]) => {
-  const { sent, emit } = recorder();
-  const count = await broadcastCommunityUpdated({ prisma: fakePrisma(communities, members) as never, emit }, { communityId: COMMUNITY });
+  const { sent, deliver } = recorder();
+  const count = await broadcastCommunityUpdated({ prisma: fakePrisma(communities, members) as never, deliver }, { communityId: COMMUNITY });
   return { sent, count };
 };
 
@@ -131,12 +131,12 @@ describe('broadcastCommunityUpdated', () => {
 
   it("un envoi qui lève n'arrête pas les autres", async () => {
     const sent: string[] = [];
-    const emit = (userId: string) => {
+    const deliver = (userId: string) => {
       if (userId === 'u-a') throw new Error('adaptateur en défaut');
       sent.push(userId);
     };
     const count = await broadcastCommunityUpdated(
-      { prisma: fakePrisma([community()], [member('u-a'), member('u-b')]) as never, emit },
+      { prisma: fakePrisma([community()], [member('u-a'), member('u-b')]) as never, deliver },
       { communityId: COMMUNITY },
     );
 
@@ -148,9 +148,9 @@ describe('broadcastCommunityUpdated', () => {
 describe('scheduleCommunityUpdatedBroadcast', () => {
   it('diffuse après la réponse', async () => {
     const tasks: Array<() => Promise<void>> = [];
-    const { sent, emit } = recorder();
+    const { sent, deliver } = recorder();
     scheduleCommunityUpdatedBroadcast(
-      { prisma: fakePrisma([community()], [member('u-a')]) as never, emit },
+      { prisma: fakePrisma([community()], [member('u-a')]) as never, deliver },
       { communityId: COMMUNITY },
       { afterResponse: (task) => { tasks.push(task); } },
     );
@@ -164,7 +164,7 @@ describe('scheduleCommunityUpdatedBroadcast', () => {
     const tasks: Array<() => Promise<void>> = [];
     const prisma = { community: { findFirst: async () => { throw new Error('Mongo'); } }, communityMember: { findMany: async () => [] } };
     scheduleCommunityUpdatedBroadcast(
-      { prisma: prisma as never, emit: () => undefined },
+      { prisma: prisma as never, deliver: () => undefined },
       { communityId: COMMUNITY },
       { afterResponse: (task) => { tasks.push(task); } },
     );
