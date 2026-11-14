@@ -404,6 +404,13 @@ class GameEpureResourcesTest {
     }
 
     @Test
+    fun `une note derriere un i se lit seule et ne commence pas par une conjonction`() {
+        listOf("game_rules_1_more", "game_rules_3_more").forEach { name ->
+            assertThat(valueIn("values-ar", name)).doesNotMatch("^و.*")
+        }
+    }
+
+    @Test
     fun `les notes du carnet et de la joute sont traduites dans les sept langues, courtes, et leurs noms de i sont des questions`() {
         listOf(
             "game_rules_1_body", "game_rules_1_question", "game_rules_1_more",
