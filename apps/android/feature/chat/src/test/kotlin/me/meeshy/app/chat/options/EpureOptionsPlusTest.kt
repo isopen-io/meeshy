@@ -1,6 +1,10 @@
 package me.meeshy.app.chat.options
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -59,6 +63,16 @@ class EpureOptionsPlusTest {
         setRows(plan())
         compose.onNodeWithText("More", useUnmergedTree = true).performClick()
         rare.forEach { compose.onNodeWithText(it, useUnmergedTree = true).assertIsDisplayed() }
+    }
+
+    @Test
+    fun moreTellsTheScreenReaderWhetherItIsUnfolded() {
+        setRows(plan())
+        val more = hasClickAction() and hasAnyDescendant(hasText("More"))
+        fun state() = compose.onNode(more, useUnmergedTree = true).fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
+        assertThat(state()).isEqualTo("Collapsed")
+        compose.onNode(more, useUnmergedTree = true).performClick()
+        assertThat(state()).isEqualTo("Expanded")
     }
 
     @Test

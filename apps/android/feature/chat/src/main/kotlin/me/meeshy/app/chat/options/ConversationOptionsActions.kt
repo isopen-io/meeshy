@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.conversationoptions.ArchiveGesture
 import me.meeshy.sdk.model.conversationoptions.ConversationOptionsPlan
@@ -17,6 +19,7 @@ import me.meeshy.ui.component.settings.SettingsRow
 import me.meeshy.ui.component.settings.SettingsSeparator
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.R as UiR
 
 internal enum class OptionsDialog { FAVORITE, ARCHIVE, DELETE, OBSOLETE, LEAVE, BLOCK }
 
@@ -49,12 +52,15 @@ internal fun OptionsActionRows(plan: ConversationOptionsPlan, archiveGesture: Ar
             )
         }
         if (rare.isNotEmpty()) {
+            val moreState = stringResource(if (moreOpen) UiR.string.focal_long_message_expanded else UiR.string.focal_long_message_collapsed)
             if (plan.toggleArchive) SettingsSeparator(MeeshyPalette.Neutral500)
             SettingsRow(
                 icon = MeeshyIcons.MoreHorizontal,
                 title = stringResource(R.string.action_more),
                 color = MeeshyPalette.Neutral500,
-                modifier = Modifier.clickable(role = Role.Button) { moreOpen = !moreOpen },
+                modifier = Modifier
+                    .clickable(role = Role.Button) { moreOpen = !moreOpen }
+                    .semantics { stateDescription = moreState },
             )
             if (moreOpen) {
                 rare.forEach { (icon, label, dialog) ->
