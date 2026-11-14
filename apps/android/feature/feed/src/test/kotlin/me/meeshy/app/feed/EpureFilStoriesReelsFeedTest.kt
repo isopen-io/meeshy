@@ -1,6 +1,12 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -9,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
+import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 import me.meeshy.sdk.model.profile.ProfilePostsEmptyKind
 import me.meeshy.ui.theme.MeeshyTheme
@@ -62,6 +69,18 @@ class FeedEpureStatesTest {
         compose.setContent { MeeshyTheme { ProfilePostsEmpty(ProfilePostsEmptyKind.NO_PUBLICATION) } }
         compose.onNodeWithText("No posts").assertExists()
         compose.onAllNodesWithText("Tap the tile again to see everything").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the end of a profile's posts says when the first one was published`() {
+        compose.setContent { MeeshyTheme { ProfilePostsEndFooter("2026-01-12T10:00:00Z", Locale.US) } }
+        compose.onNodeWithText("Jan 12, 2026", substring = true).assertExists()
+    }
+
+    @Test
+    fun `the end of a profile's posts without a date leaves no lone seal in a blank band`() {
+        compose.setContent { MeeshyTheme { Box(Modifier.testTag("end")) { ProfilePostsEndFooter(null, Locale.US) } } }
+        assertThat(compose.onNodeWithTag("end").getBoundsInRoot().height).isEqualTo(0.dp)
     }
 
     @Test

@@ -202,22 +202,21 @@ internal fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
     }
 }
 
+/** La fin des publications : le sceau et la date du premier contenu ; sans date, rien — un sceau seul ne dit rien. */
 @Composable
-private fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) {
-    val date = remember(firstPublishedAtIso, locale) { abbreviatedDate(firstPublishedAtIso, locale) }
+internal fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) {
+    val date = remember(firstPublishedAtIso, locale) { abbreviatedDate(firstPublishedAtIso, locale) } ?: return
     Column(
         Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xl).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         Icon(MeeshyIcons.Verified, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
-        date?.let {
-            Text(
-                stringResource(R.string.profile_posts_first_published_at, it),
-                style = MaterialTheme.typography.labelSmall,
-                color = MeeshyTheme.tokens.textMuted,
-            )
-        }
+        Text(
+            stringResource(R.string.profile_posts_first_published_at, date),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textMuted,
+        )
     }
 }
 
