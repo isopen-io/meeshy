@@ -57,3 +57,26 @@ lancé sur la branche de lot est revenu `skipped`. Les deux sont des MESURES,
 datées, reproductibles — et la seconde a du même coup montré que le dispatch
 d'une branche de lot est précisément ce que #18048 existe pour empêcher, ce
 qu'une lecture du `if` seule n'aurait pas dit.
+
+## Et je l'ai rejouée dans le cycle qui l'écrit
+
+`./apps/android/meeshy.sh jvm-check` échoue sur `build-artifacts.signal.org`
+(403 par le proxy). J'en ai conclu, et ANNONCÉ au porteur, que « ce conteneur ne
+compile pas Kotlin ».
+
+Faux. `gradle -p apps/android/scripts/jvm-check test -PjvmCheckModelOnly` ne tire
+que Maven Central : **`:core:model` compile et passe ses 18 539 témoins ici**,
+en deux minutes et demie. C'est l'audit adversarial qui l'a trouvé, en essayant
+au lieu de déduire.
+
+L'empêchement était RÉEL (une commande a bien échoué) et sa PORTÉE était
+inventée : j'ai conclu d'une invocation à une capacité. Exactement la forme du
+cycle 155, qui concluait d'une lecture à une propriété du workflow.
+
+> **Un échec prouve que CETTE commande échoue, jamais que la capacité manque.**
+> Avant d'écrire « on ne peut pas X ici », chercher la deuxième façon de faire X
+> — surtout quand la première tire une dépendance que X n'exige peut-être pas.
+
+Le reliquat, lui, est mesuré et tient : `:sdk-core` et `:feature:chat` exigent
+l'AGP, donc la CI. Dire « le modèle se prouve ici, ses consommateurs non » coûte
+une phrase de plus et n'est pas faux.
