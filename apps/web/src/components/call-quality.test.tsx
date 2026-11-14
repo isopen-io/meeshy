@@ -217,6 +217,13 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(tag).toContain('data-glass-tone=');
   });
 
+  test('« Vidéo réduite » se range au premier toucher avec les autres bannières, et revient au second (loi 11, comme iOS #18396)', async () => {
+    await loadColdCallViews();
+    const html = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />);
+    const slot = /<[^>]*data-call-video-notice-slot[^>]*>/.exec(html)?.[0] ?? '';
+    expect(slot).toContain('data-call-stow="top"');
+  });
+
   test('« Vidéo réduite » se tait caméra coupée, en appel audio et avant l’appel établi (loi des pastilles de service)', async () => {
     await loadColdCallViews();
     const frozen = quality({ level: 'poor', survival: 'frozen' });
