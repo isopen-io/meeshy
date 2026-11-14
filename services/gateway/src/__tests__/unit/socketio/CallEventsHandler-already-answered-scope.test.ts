@@ -405,4 +405,61 @@ describe('CallEventsHandler — une réponse SDP marque QUI a décroché (#18242
 
     expect(touched).toEqual([]);
   });
+
+  it('R1 — une offre d\'un AUTRE offrant dans le tampon ne marque pas la cible : C répond à B pendant que l\'offre de A attend chez C', async () => {
+    const THIRD_ID = 'user-third-def';
+    const THIRD_ROW = 'participant-third-row-003';
+    mockGetCallSession.mockResolvedValue({
+      ...sessionWithRows(),
+      participants: [
+        ...sessionWithRows().participants,
+        { id: THIRD_ROW, participantId: THIRD_ROW, leftAt: null, participant: { userId: THIRD_ID } },
+      ],
+    });
+    const { prisma, touched } = prismaWithRows([{ id: CALLER_PARTICIPANT_ROW_ID }, { id: CALLEE_PARTICIPANT_ROW_ID }, { id: THIRD_ROW }]);
+    const handler = new CallEventsHandler(prisma);
+    const caller = makeSocket('caller-socket');
+    const callee = makeSocket('callee-socket');
+    const third = makeSocket('third-socket');
+    const { io, fetchSockets } = makeIo();
+    fetchSockets.mockResolvedValue([{ id: 'caller-socket', leave: jest.fn() }, { id: 'callee-socket', leave: jest.fn() }, { id: 'third-socket', leave: jest.fn() }]);
+    const userOf = (sid: string) => ({ 'caller-socket': CALLER_ID, 'callee-socket': CALLEE_ID, 'third-socket': THIRD_ID })[sid];
+    for (const side of [caller, callee, third]) handler.setupCallEvents(side.socket as never, io as never, userOf);
+
+    await caller.handlers[CALL_EVENTS.SIGNAL](offer, jest.fn());
+    await callee.handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, THIRD_ID), jest.fn());
+
+    expect(touched.map((row) => row.id)).toEqual([CALLEE_PARTICIPANT_ROW_ID]);
+  });
+
+  it('R4 — une réponse dont l\'offrant n\'a plus de socket (réponse mise en tampon) marque quand même celui qui répond', async () => {
+    const { prisma, touched } = prismaWithRows([{ id: CALLER_PARTICIPANT_ROW_ID }, { id: CALLEE_PARTICIPANT_ROW_ID }]);
+    const handler = new CallEventsHandler(prisma);
+    const callee = makeSocket('callee-socket');
+    const { io, fetchSockets } = makeIo();
+    fetchSockets.mockResolvedValue([]);
+    handler.setupCallEvents(callee.socket as never, io as never, () => CALLEE_ID);
+
+    await callee.handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
+
+    expect(touched.map((row) => row.id)).toEqual([CALLEE_PARTICIPANT_ROW_ID]);
+  });
+
+  it('R4 — et l\'offrant aussi, quand SON offre vers celui qui répond est dans le tampon', async () => {
+    const { prisma, touched } = prismaWithRows([{ id: CALLER_PARTICIPANT_ROW_ID }, { id: CALLEE_PARTICIPANT_ROW_ID }]);
+    const handler = new CallEventsHandler(prisma);
+    const caller = makeSocket('caller-socket');
+    const callee = makeSocket('callee-socket');
+    const { io, fetchSockets } = makeIo();
+    const userOf = (sid: string) => (sid === 'caller-socket' ? CALLER_ID : CALLEE_ID);
+    handler.setupCallEvents(caller.socket as never, io as never, userOf);
+    handler.setupCallEvents(callee.socket as never, io as never, userOf);
+
+    fetchSockets.mockResolvedValueOnce([{ id: 'callee-socket', leave: jest.fn() }]);
+    await caller.handlers[CALL_EVENTS.SIGNAL](offer, jest.fn());
+    fetchSockets.mockResolvedValue([]);
+    await callee.handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
+
+    expect(touched.map((row) => row.id).sort()).toEqual([CALLEE_PARTICIPANT_ROW_ID, CALLER_PARTICIPANT_ROW_ID].sort());
+  });
 });
