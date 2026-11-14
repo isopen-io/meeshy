@@ -59,13 +59,17 @@ class CallEffectsBaseMenuGuardTest {
         assertThat(picker).contains("isOpen = CallEffectsBarRule.pressed(kind, shownBar) == kind")
     }
 
-    /** TalkBack : un pas « suivant / précédent » parcourt sans appliquer ; seul l'activer choisit (#18185). */
+    /** TalkBack : un pas « suivant / précédent » (et de déclinaison) parcourt sans appliquer ; seul l'activer choisit (#18185, #18192). */
     @Test
     fun `a screen reader step browses, only activating picks`() {
         val carousel = code("CallModeCarousel.kt")
-        val step = carousel.substringAfter("fun step(by: Int): Boolean {").substringBefore("\n    }")
-        assertThat(step).contains("browsed = next")
-        assertThat(step).doesNotContain("onSelect(")
-        assertThat(carousel).contains("if (browsed != selection) onSelect(browsed)")
+        val moved = carousel.substringAfter("fun moved(next: CallModeCarouselBrowse<T>?): Boolean {").substringBefore("\n    }")
+        assertThat(moved).contains("browse = next")
+        assertThat(moved).doesNotContain("onSelect(")
+        assertThat(moved).doesNotContain("pose")
+        assertThat(carousel).contains("browse.activation(selection, variants?.current ?: { it })")
+        val picker = code("CallMontagePicker.kt")
+        assertThat(picker).doesNotContain("fun stepDeclination")
+        assertThat(picker).contains("pose = ::choose")
     }
 }

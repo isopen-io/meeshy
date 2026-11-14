@@ -113,14 +113,12 @@ struct ActiveSessionsView: View {
         case .offline:
             unavailable(
                 title: String(localized: "sessions.offline.title", defaultValue: "Vous êtes hors ligne", bundle: .main),
-                systemImage: "wifi.slash",
-                description: String(localized: "sessions.offline.subtitle", defaultValue: "Vos sessions s'afficheront au retour du réseau.", bundle: .main)
+                systemImage: "wifi.slash"
             )
         case .error:
             unavailable(
                 title: String(localized: "sessions_load_error", defaultValue: "Impossible de charger les sessions", bundle: .main),
-                systemImage: "exclamationmark.triangle",
-                description: String(localized: "sessions.error.subtitle", defaultValue: "Vérifiez votre connexion, puis réessayez.", bundle: .main)
+                systemImage: "exclamationmark.triangle"
             )
         case .loaded, .cachedFresh, .cachedStale:
             emptyState
@@ -140,9 +138,9 @@ struct ActiveSessionsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func unavailable(title: String, systemImage: String, description: String) -> some View {
+    private func unavailable(title: String, systemImage: String) -> some View {
         VStack(spacing: MeeshySpacing.lg) {
-            AdaptiveContentUnavailableView(title, systemImage: systemImage, description: Text(description))
+            AdaptiveContentUnavailableView(title, systemImage: systemImage)
             Button {
                 Task { await viewModel.refresh() }
             } label: {
@@ -283,21 +281,10 @@ struct ActiveSessionsView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Text(row.title)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundStyle(theme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if row.isCurrent {
-                            Text(String(localized: "sessions_current_badge", defaultValue: "Cet appareil", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                                .foregroundStyle(Color.white)
-                                .padding(.horizontal, MeeshySpacing.xsPlus)
-                                .padding(.vertical, MeeshySpacing.xxs)
-                                .background(Capsule().fill(MeeshyColors.success))
-                        }
-                    }
+                    Text(row.title)
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     ForEach(details, id: \.self) { line in
                         Text(line)

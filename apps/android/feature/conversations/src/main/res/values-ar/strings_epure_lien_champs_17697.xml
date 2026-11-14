@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shareLink_detail_nameField">اسم الرابط</string>
+    <string name="share_link_name_question">من يرى هذا الاسم؟</string>
+    <string name="share_link_name_note">أنت وحدك ترى الاسم؛ الضيوف لا يرونه.</string>
+    <string name="shareLink_detail_messageField">رسالة الدعوة</string>
+    <string name="share_link_message_question">من يقرأ هذه الرسالة؟</string>
+    <string name="share_link_message_note">تُعرض للضيوف الذين يفتحون الرابط.</string>
+</resources>

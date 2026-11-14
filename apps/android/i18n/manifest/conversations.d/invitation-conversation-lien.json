@@ -102,24 +102,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "invite.access.account",
-          "androidName": "invite_access_account",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "invite.access.nickname",
-          "androidName": "invite_access_nickname",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "invite.access.email",
-          "androidName": "invite_access_email",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "invite.section.identity",
           "androidName": "invite_section_identity",
           "status": "adopted"
@@ -128,18 +110,6 @@
           "catalog": "app",
           "iosKey": "invite.section.limits",
           "androidName": "invite_section_limits",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "invite.section.permissions",
-          "androidName": "invite_section_permissions",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "invite.section.access",
-          "androidName": "invite_section_access",
           "status": "adopted"
         },
         {

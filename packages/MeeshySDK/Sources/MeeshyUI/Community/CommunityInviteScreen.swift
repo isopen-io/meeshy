@@ -74,8 +74,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
             } else if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
                 EmptyStateView(
                     icon: "person.crop.circle.badge.questionmark",
-                    title: String(localized: "community.invite.empty.title", defaultValue: "No Users Found", bundle: .module),
-                    subtitle: String(localized: "community.invite.empty.subtitle", defaultValue: "Try a different search term", bundle: .module)
+                    title: String(localized: "community.invite.empty.title", defaultValue: "No Users Found", bundle: .module)
                 )
             } else if !viewModel.invitedUserIds.isEmpty {
                 VStack(spacing: MeeshySpacing.md) {

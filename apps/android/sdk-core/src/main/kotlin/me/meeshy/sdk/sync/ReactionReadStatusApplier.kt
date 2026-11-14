@@ -6,6 +6,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.OpenConversationLookup
 import me.meeshy.sdk.model.ReactionLedger
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.isOwnEcho
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.reaction.ReactionRowStore
 import me.meeshy.sdk.session.SessionRepository
@@ -48,7 +49,7 @@ class ReactionReadStatusApplier @Inject constructor(
             currentUserId = me,
             aggregate = event.aggregation?.let { ReactionLedger.Aggregate(it.count, it.participantIds) },
         )
-        val ownEcho = event.userId == me
+        val ownEcho = event.isOwnEcho(me)
         val unknownRow = rows.rows(event.messageId) == null
         if (moved || (!ownEcho && unknownRow)) messages.applyReactionDelta(event.messageId, event.emoji, if (adding) 1 else -1)
     }

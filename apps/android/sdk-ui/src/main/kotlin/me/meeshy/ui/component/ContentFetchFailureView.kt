@@ -11,9 +11,10 @@ import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.ui.R
 
 /**
- * Ecran d'echec d'ouverture d'un contenu : meme silhouette (icone, titre, detail, action) pour
- * disparu / reseau / serveur, memes phrases que iOS `ContentFetchFailure+Copy`. « Reessayer »
- * n'est offert que si [ContentFetchFailure.offersRetry] ET que l'hote fournit [onRetry].
+ * Ecran d'echec d'ouverture d'un contenu : meme silhouette (icone, titre, action) pour
+ * disparu / reseau / serveur, memes titres que iOS `ContentFetchFailure+Copy`. Le titre nomme l'echec
+ * et suffit (epure #18099) : aucun sous-titre. « Reessayer » n'est offert que si
+ * [ContentFetchFailure.offersRetry] ET que l'hote fournit [onRetry].
  */
 @Composable
 public fun ContentFetchFailureView(
@@ -37,13 +38,7 @@ public fun ContentFetchFailureView(
                 ContentFetchFailure.FORBIDDEN, ContentFetchFailure.NOT_FOUND -> R.string.content_failure_unavailable_title
             },
         ),
-        subtitle = stringResource(
-            when (failure) {
-                ContentFetchFailure.NETWORK -> R.string.content_failure_network_body
-                ContentFetchFailure.SERVER -> R.string.content_failure_server_body
-                ContentFetchFailure.FORBIDDEN, ContentFetchFailure.NOT_FOUND -> R.string.content_failure_unavailable_body
-            },
-        ),
+        subtitle = "",
         modifier = modifier,
         actionLabel = retry?.let { stringResource(R.string.content_failure_retry) },
         onAction = retry,

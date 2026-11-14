@@ -56,6 +56,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallModeCarouselActivation
+import me.meeshy.sdk.model.call.CallModeCarouselBrowse
+import me.meeshy.sdk.model.call.CallModeCarouselOrdinal
 import me.meeshy.sdk.model.call.CallModeCarouselRule
 import me.meeshy.sdk.model.call.montage.CallModeGesture
 import me.meeshy.sdk.model.call.montage.CallModeGestureOutcome
@@ -67,6 +70,23 @@ private val SPACING = 14.dp
 
 /** Ce qu'un carrousel déclenche sur son élément centré (#13733) : deux tapes photographient, un appui long filme. */
 internal class CallModeShots(val isRecording: Boolean, val onCapturePhoto: () -> Unit, val onStartRecording: () -> Unit)
+
+/**
+ * #18192 — les déclinaisons d'un élément (un cadre et ses versions), que TalkBack PARCOURT sans les appliquer : [of] liste
+ * l'élément nu puis ses déclinaisons, [current] rend celle qui est posée, [pose] pose celle que l'activation retient.
+ */
+internal class CallModeVariants<T>(
+    val of: (T) -> List<T>,
+    val current: (T) -> T,
+    val next: String,
+    val previous: String,
+    val pose: (T) -> Unit,
+)
+
+/** Ce que la voix dit de l'élément parcouru : son nom, puis son rang (« Néon, 3 sur 12 »). */
+@Composable
+private fun spokenValue(announced: String, ordinal: CallModeCarouselOrdinal?): String =
+    ordinal?.let { "$announced, ${stringResource(R.string.call_mode_carousel_position, it.rank, it.count)}" } ?: announced
 
 /** Le carrousel des effets : un glyphe rond par élément ; avec [shots], l'effet centré se photographie et se filme (#13737). */
 @Composable
@@ -80,6 +100,7 @@ internal fun <T> CallModeCarousel(
     onSelect: (T) -> Unit,
     hint: String? = null,
     shots: CallModeShots? = null,
+    onConfirm: (() -> Unit)? = null,
 ) {
     CallModeCarousel(
         items = items,
@@ -92,6 +113,7 @@ internal fun <T> CallModeCarousel(
         previousLabel = stringResource(R.string.call_effects_previous),
         hint = hint,
         shots = shots,
+        onConfirm = onConfirm,
     ) { item, isShown ->
         Box(
             contentAlignment = Alignment.Center,
@@ -132,6 +154,8 @@ internal fun <T> CallModeCarousel(
     hint: String? = null,
     shots: CallModeShots? = null,
     extraActions: List<CustomAccessibilityAction> = emptyList(),
+    onConfirm: (() -> Unit)? = null,
+    variants: CallModeVariants<T>? = null,
     cell: @Composable (item: T, isShown: Boolean) -> Unit,
 ) {
     val selectedIndex = items.indexOf(selection).coerceAtLeast(0)
@@ -139,17 +163,26 @@ internal fun <T> CallModeCarousel(
     val haptics = LocalHapticFeedback.current
     val centred by rememberCarouselCentre(list, items, selectedIndex, reduceMotion, onSelect)
     val shownName = name(centred?.let(items::getOrNull) ?: selection)
-    var browsed by remember(selection) { mutableStateOf(selection) }
-    val browsedName = name(browsed)
+    var browse by remember(selection) { mutableStateOf(CallModeCarouselBrowse<T>()) }
+    val position = browse.position(selection)
+    val announced = browse.variant?.takeIf { variants != null }?.let { name(it) } ?: name(position)
+    val spoken = spokenValue(announced, CallModeCarouselRule.ordinal(position, items))
     val isRecording = shots?.isRecording == true
     val recordingLabel = stringResource(R.string.call_mode_recording)
     val shotActions = rememberShotActions(shots)
-    fun step(by: Int): Boolean {
-        val next = CallModeCarouselRule.stepping(browsed, items, by)
-        if (next == browsed) return false
+    fun moved(next: CallModeCarouselBrowse<T>?): Boolean {
+        next ?: return false
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        browsed = next
+        browse = next
         return true
+    }
+    val variantActions = if (variants != null && variants.of(position).size > 1) {
+        listOf(
+            CustomAccessibilityAction(variants.next) { moved(browse.stepVariant(1, selection, variants.of, variants.current)) },
+            CustomAccessibilityAction(variants.previous) { moved(browse.stepVariant(-1, selection, variants.of, variants.current)) },
+        )
+    } else {
+        emptyList()
     }
 
     Column(
@@ -157,15 +190,21 @@ internal fun <T> CallModeCarousel(
             .fillMaxWidth()
             .clearAndSetSemantics {
                 contentDescription = title
-                stateDescription = if (isRecording) recordingLabel else browsedName
+                stateDescription = if (isRecording) recordingLabel else spoken
                 onClick {
-                    if (browsed != selection) onSelect(browsed)
+                    val declined = browse.variant
+                    val activation = browse.activation(selection, variants?.current ?: { it })
+                    browse = browse.leave()
+                    when (activation) {
+                        is CallModeCarouselActivation.Apply -> if (declined != null) variants?.let { it.pose(activation.item) } else onSelect(activation.item)
+                        CallModeCarouselActivation.Confirm -> onConfirm?.invoke()
+                    }
                     true
                 }
                 customActions = listOf(
-                    CustomAccessibilityAction(nextLabel) { step(1) },
-                    CustomAccessibilityAction(previousLabel) { step(-1) },
-                ) + shotActions + extraActions
+                    CustomAccessibilityAction(nextLabel) { moved(browse.step(1, items, selection)) },
+                    CustomAccessibilityAction(previousLabel) { moved(browse.step(-1, items, selection)) },
+                ) + variantActions + shotActions + extraActions
             },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -264,7 +303,7 @@ private fun <T> CarouselRow(
                 contentPadding = PaddingValues(horizontal = inset),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().callScrollEdgeFade(horizontal = true),
             ) {
                 itemsIndexed(items) { index, item ->
                     val isShown = index == shownIndex

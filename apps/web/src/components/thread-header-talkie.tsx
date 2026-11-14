@@ -126,7 +126,7 @@ export function ThreadHeaderTalkie({
             style={{
               width: 'var(--size-header-circle)',
               height: 'var(--size-header-circle)',
-              color: pressed ? '#fff' : 'var(--accent)',
+              color: pressed ? 'var(--color-ios-on-brand)' : 'var(--accent)',
               background: pressed
                 ? `linear-gradient(135deg, var(--accent), ${secondary})`
                 : 'color-mix(in srgb, currentColor 18%, transparent)',

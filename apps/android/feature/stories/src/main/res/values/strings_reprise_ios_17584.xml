@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_repost_reprojected">%1$d item(s) repositioned for the new aspect ratio</string>
+</resources>

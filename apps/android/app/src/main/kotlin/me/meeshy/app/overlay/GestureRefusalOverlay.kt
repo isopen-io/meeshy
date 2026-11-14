@@ -16,6 +16,7 @@ import me.meeshy.sdk.chat.GestureRefusalCenter
 import me.meeshy.sdk.chat.GestureRefusalEvent
 import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
+import me.meeshy.ui.component.feedback.dailyGestureLimitInfo
 import me.meeshy.ui.component.feedback.dailyGestureLimitMessage
 
 /**
@@ -39,7 +40,8 @@ class GestureRefusalOverlay @Inject constructor(
                     is GestureRefusalEvent.DailyLimit -> dailyGestureLimitMessage(context, event.limit)
                     is GestureRefusalEvent.SlowMode -> context.getString(R.string.gesture_refusal_slow_mode, event.mode.retryAfterSeconds)
                 }
-                toasts.show(message, FeedbackToastKind.ERROR)
+                val info = (event as? GestureRefusalEvent.DailyLimit)?.let { dailyGestureLimitInfo(context) }
+                toasts.show(message, FeedbackToastKind.ERROR, info = info)
             }
         }
     }

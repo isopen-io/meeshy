@@ -91,14 +91,7 @@ struct GameRulesPage: View {
             MeeStickerFilmView(filmID: "mee-bonjour", animated: true, side: 84, animates: !reduceMotion, pixelCap: 240)
                 .frame(width: 84, height: 84)
                 .accessibilityHidden(true)
-            Text(String(
-                localized: "game.rules.intro",
-                defaultValue: "Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.",
-                bundle: .main
-            ))
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-            .foregroundStyle(theme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
             MeeStickerFilmView(filmID: "meo-salut", animated: true, side: 84, animates: !reduceMotion, pixelCap: 240)
                 .scaleEffect(x: -1, y: 1)
                 .frame(width: 84, height: 84)
@@ -124,10 +117,12 @@ struct GameRulesPage: View {
                         Text(rule.title)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                             .foregroundStyle(theme.textPrimary)
-                        Text(rule.body)
-                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                            .foregroundStyle(theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
+                        MeeshyInfoNoted(note: rule.note, openNoteID: $openNoteID, tint: theme.textMuted) {
+                            Text(rule.body)
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                                .foregroundStyle(theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 .padding(MeeshySpacing.xs)
@@ -136,7 +131,7 @@ struct GameRulesPage: View {
                         .fill(MeeshyColors.brandPrimary.opacity(highlighted == rule.index ? 0.14 : 0))
                 )
                 .id(Self.rowID(rule.index))
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
         }
     }
@@ -174,9 +169,9 @@ struct GameRulesPage: View {
         }
     }
 
-    /// La question porte le numéro de l'étape : sept (i) sur une page se distinguent à l'oreille, et un seul s'ouvre.
+    /// La question porte le numéro de l’étape, avec le mot de « Étape N sur 7 » : sept (i) se distinguent à l’oreille, un seul s’ouvre.
     private func stepNote(_ index: Int, means: String) -> MeeshyInfoNote {
-        MeeshyInfoNote(question: GameGuideCopy.stepWhy(index: GameCopy.formatCount(index)), text: means)
+        MeeshyInfoNote(question: GameGuideCopy.stepMeaning(index: GameCopy.formatCount(index)), text: means)
     }
 
     private func stepFigures(_ card: GuideCard) -> some View {
@@ -203,6 +198,7 @@ struct GameRulesPage: View {
 /// qui explique : aucune entrée ne porte de geste.
 struct GameRulesGlossarySection: View {
     private var theme: ThemeManager { ThemeManager.shared }
+    @State private var openNoteID: String?
 
     static let identifier = "game.rules.section.concepts"
 
@@ -212,24 +208,22 @@ struct GameRulesGlossarySection: View {
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            Text(GameRulesGlossary.intro)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                .foregroundStyle(theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
             ForEach(GameRulesGlossary.entries) { entry in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
-                    Text(entry.body)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                        .foregroundStyle(theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    MeeshyInfoNoted(note: entry.note, openNoteID: $openNoteID, tint: theme.textMuted) {
+                        Text(entry.body)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                            .foregroundStyle(theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(MeeshySpacing.md)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundSecondary))
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("game.rules.concept." + entry.key.rawValue)
             }
         }

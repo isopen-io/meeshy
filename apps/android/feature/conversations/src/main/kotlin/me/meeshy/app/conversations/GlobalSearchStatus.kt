@@ -65,11 +65,6 @@ internal fun SearchFailureState(onRetry: () -> Unit) {
             style = MaterialTheme.typography.titleMedium,
             color = MeeshyTheme.tokens.textPrimary,
         )
-        Text(
-            text = stringResource(R.string.global_search_failed_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textMuted,
-        )
         TextButton(onClick = onRetry) { Text(stringResource(R.string.global_search_retry)) }
     }
 }

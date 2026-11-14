@@ -43,7 +43,6 @@ import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -81,7 +80,6 @@ fun NewConversationScreen(
     state.error?.let { error ->
         AlertDialog(
             onDismissRequest = viewModel::dismissError,
-            title = { Text(stringResource(R.string.new_conversation_error_title)) },
             text = { Text(stringResource(error.messageRes())) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.new_conversation_ok)) }
@@ -143,12 +141,6 @@ internal fun NoContacts() {
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
             color = MeeshyTheme.tokens.textPrimary,
-        )
-        Text(
-            text = stringResource(R.string.new_conversation_contacts_empty_subtitle),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textMuted,
-            textAlign = TextAlign.Center,
         )
     }
 }

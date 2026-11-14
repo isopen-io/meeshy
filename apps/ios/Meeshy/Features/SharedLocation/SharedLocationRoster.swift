@@ -57,6 +57,12 @@ struct SharedLocationRoster: Equatable, Codable {
         return SharedLocationRoster(entries: next)
     }
 
+    /// Ceux de cette liste ET de `other`, `other` l'emportant pour une même personne : quand on ne sait pas laquelle des
+    /// deux listes le serveur sert (accusé perdu), on garde « Arrêter » pour toutes les personnes qu'il peut servir.
+    func union(_ other: SharedLocationRoster) -> SharedLocationRoster {
+        SharedLocationRoster(entries: entries.merging(other.entries) { _, theirs in theirs })
+    }
+
     /// Sans ceux dont l'échéance est passée.
     func pruned(now: Date) -> SharedLocationRoster {
         SharedLocationRoster(entries: entries.filter { $0.value.until > now })

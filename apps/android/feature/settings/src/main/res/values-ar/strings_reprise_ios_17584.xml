@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_feature_cloud_sync">المزامنة السحابية</string>
+    <string name="about_feature_themes">سمات قابلة للتخصيص</string>
+    <string name="about_link_about">عن ميشي</string>
+    <string name="about_section_informations">معلومات</string>
+    <string name="licenses_meeshy_body_mit">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT.</string>
+    <string name="privacy_section_contacts">جهات الاتصال</string>
+    <string name="privacy_section_media">الوسائط والبيانات</string>
+    <string name="settings_privacy_encryption_coming_soon_a11y">التشفير — قريبًا، معطَّل حاليًا</string>
+    <string name="settings_transcription_engine">محرك النسخ النصي</string>
+    <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
+</resources>

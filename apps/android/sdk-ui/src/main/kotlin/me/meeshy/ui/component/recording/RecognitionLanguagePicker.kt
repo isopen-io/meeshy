@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.speech.RecognitionLanguageList
 import me.meeshy.sdk.model.speech.RecognitionLanguageOption
 import me.meeshy.ui.R
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -93,22 +97,39 @@ public fun RecognitionLanguagePickerContent(
             singleLine = true,
             placeholder = { Text(stringResource(R.string.recognition_language_search), color = tokens.textMuted) },
         )
+        var openNote by rememberSaveable { mutableStateOf<String?>(null) }
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .toggleable(value = showAll, role = Role.Switch, onValueChange = { showAll = it }),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(stringResource(R.string.recognition_language_show_all), color = tokens.textPrimary, fontSize = 14.sp)
+            MeeshyInfoNoted(
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.recognition_language_question),
+                    text = stringResource(R.string.recognition_language_hint),
+                ),
+                openNoteId = openNote,
+                onOpenNoteIdChange = { openNote = it },
+                modifier = Modifier.weight(1f),
+                tint = tokens.textMuted,
+            ) {
+                Text(
+                    stringResource(R.string.recognition_language_show_all),
+                    color = tokens.textPrimary,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .toggleable(value = showAll, role = Role.Switch, onValueChange = { showAll = it })
+                        .wrapContentHeight(Alignment.CenterVertically),
+                )
+            }
             Switch(
                 checked = showAll,
-                onCheckedChange = null,
+                onCheckedChange = { showAll = it },
+                modifier = Modifier.clearAndSetSemantics {},
                 colors = SwitchDefaults.colors(checkedTrackColor = accent),
             )
         }
-        Text(stringResource(R.string.recognition_language_hint), color = tokens.textMuted, fontSize = 12.sp)
         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp)) {
             items(options, key = { it.code }, contentType = { "language" }) { option ->
                 val active = RecognitionLanguageList.isSelected(option, selected)

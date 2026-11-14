@@ -57,6 +57,7 @@ import me.meeshy.ui.format.rememberRelativeTimeLongStrings
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.time.ZoneId
@@ -168,7 +169,16 @@ private fun LazyListScope.loadedContent(
         item(key = "no-others", contentType = "unavailable") { EmptyHint() }
     }
     if (state.showsGeolocation) {
-        item(key = "footer", contentType = "footer") { ActiveSessionsFooter(state.attribution) }
+        item(key = "footer", contentType = "footer") {
+            ActiveSessionsFooter(
+                attribution = state.attribution,
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.sessions_place_question),
+                    text = stringResource(R.string.sessions_place_footnote),
+                ),
+                noteHost = rememberNoteHost(),
+            )
+        }
     }
 }
 
@@ -317,17 +327,7 @@ private fun ActiveSessionsDialogs(
     state.failure?.let { failure ->
         AlertDialog(
             onDismissRequest = { onEvent(ActiveSessionsUiEvent.DismissFailure) },
-            title = { Text(stringResource(R.string.sessions_error_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        when (failure) {
-                            ActiveSessionsFailure.REVOKE_ONE -> R.string.sessions_revoke_error
-                            ActiveSessionsFailure.REVOKE_OTHERS -> R.string.sessions_revoke_all_error
-                        },
-                    ),
-                )
-            },
+            text = { Text(stringResource(failureMessageRes(failure))) },
             confirmButton = {
                 TextButton(onClick = { onEvent(ActiveSessionsUiEvent.DismissFailure) }) {
                     Text(stringResource(R.string.sessions_error_ok))
@@ -335,6 +335,12 @@ private fun ActiveSessionsDialogs(
             },
         )
     }
+}
+
+/** Un échec de « Déconnecter les autres appareils » dit qu'ils restent connectés : c'est une action de sécurité. */
+internal fun failureMessageRes(failure: ActiveSessionsFailure): Int = when (failure) {
+    ActiveSessionsFailure.REVOKE_ONE -> R.string.sessions_revoke_error
+    ActiveSessionsFailure.REVOKE_OTHERS -> R.string.sessions_revoke_all_error
 }
 
 @Composable

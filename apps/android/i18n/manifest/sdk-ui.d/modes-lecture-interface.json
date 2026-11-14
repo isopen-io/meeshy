@@ -34,58 +34,32 @@
           "androidName": "reading_mode_focal_title",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "reading_mode.focal.subtitle",
-          "androidName": "reading_mode_focal_subtitle",
-          "status": "adopted"
-        },
+        { "androidName": "reading_mode_focal_subtitle", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "reading_mode.script.title",
           "androidName": "reading_mode_script_title",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "reading_mode.script.subtitle",
-          "androidName": "reading_mode_script_subtitle",
-          "status": "adopted"
-        },
+        { "androidName": "reading_mode_script_subtitle", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "reading_mode.summary.title",
           "androidName": "reading_mode_summary_title",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "reading_mode.summary.subtitle",
-          "androidName": "reading_mode_summary_subtitle",
-          "status": "adopted"
-        },
+        { "androidName": "reading_mode_summary_subtitle", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "reading_mode.river.title",
           "androidName": "reading_mode_river_title",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "reading_mode.river.subtitle",
-          "androidName": "reading_mode_river_subtitle",
-          "status": "adopted"
-        },
+        { "androidName": "reading_mode_river_subtitle", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "reading_mode.bubbles.title",
           "androidName": "reading_mode_bubbles_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "reading_mode.bubbles.subtitle",
-          "androidName": "reading_mode_bubbles_subtitle",
           "status": "adopted"
         },
         {

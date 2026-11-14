@@ -68,7 +68,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 }
             }
         } message: {
-            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous ne pourrez plus accéder aux channels de cette communauté.", bundle: .module))
+            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux conversations de cette communauté.", bundle: .module))
         }
         .sheet(isPresented: $showAddChannel) {
             addChannelSheet { Task { await viewModel.load() } }
@@ -98,7 +98,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         EmptyStateView(
             icon: failure.symbolName,
             title: failure.title,
-            subtitle: failure.message,
+            subtitle: failure.message ?? "",
             actionLabel: failure.actionLabel,
             onAction: {
                 if failure.offersRetry {
@@ -340,15 +340,34 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
 
     @ViewBuilder
     private func statsSection(_ community: MeeshyCommunity) -> some View {
-        HStack(spacing: 0) {
-            statItem(value: "\(community.memberCount)", label: String(localized: "community.detail.stats.members", defaultValue: "Members", bundle: .module), icon: "person.2.fill")
-            Divider().frame(height: 30)
-            statItem(value: "\(community.conversationCount)", label: String(localized: "community.detail.stats.channels", defaultValue: "Channels", bundle: .module), icon: "bubble.left.and.bubble.right.fill")
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: 0) {
+                statItem(value: "\(community.memberCount)", label: String(localized: "community.detail.stats.members", defaultValue: "Members", bundle: .module), icon: "person.2.fill")
+                Divider().frame(height: 30)
+                statItem(value: "\(community.conversationCount)", label: String(localized: "community.detail.stats.channels", defaultValue: "Channels", bundle: .module), icon: "bubble.left.and.bubble.right.fill")
+            }
+            if let online = community.onlineMemberCount, online > 0 {
+                onlineLine(count: online)
+            }
         }
         .padding(.vertical, MeeshySpacing.md)
         .background(theme.backgroundSecondary.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .padding(.horizontal, MeeshySpacing.lg)
+    }
+
+    /// « N en ligne » (#18014) — un agrégat, jamais une liste : la co-appartenance ne révèle la présence de personne.
+    private func onlineLine(count: Int) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Circle()
+                .fill(MeeshyColors.brandPrimary)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+            Text(String(format: String(localized: "community.online", defaultValue: "%lld online", bundle: .module), count))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func statItem(value: String, label: String, icon: String) -> some View {
@@ -446,9 +465,8 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             if viewModel.conversations.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
-                    title: String(localized: "community.detail.channels.empty.title", defaultValue: "No Channels Yet", bundle: .module),
-                    subtitle: String(localized: "community.detail.channels.empty.subtitle", defaultValue: "Conversations will appear here", bundle: .module),
-                    actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer un Channel", bundle: .module),
+                    title: String(localized: "community.detail.channels.empty.title", defaultValue: "Aucune conversation pour l’instant", bundle: .module),
+                    actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer une conversation", bundle: .module),
                     onAction: { showAddChannel = true }
                 )
                 .frame(height: 200)
