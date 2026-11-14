@@ -39,6 +39,15 @@ final class StatusBubbleController: ObservableObject {
     /// Ouvre la page plein écran de l'humeur (`Route.moodSpotlight`, #10814).
     /// Branchée une fois au niveau racine (RootView / iPadRootView).
     var onOpenSpotlight: ((StatusEntry) -> Void)?
+    /// Réaction à une humeur (`StatusViewModel.reactionHandler`, #18110).
+    /// Branchée une fois au niveau racine (RootView / iPadRootView).
+    var reactionHandler: MoodReactionHandler?
+
+    /// On ne réagit qu'à l'humeur d'un autre.
+    func reactions(for entry: StatusEntry) -> MoodReactionHandler? {
+        guard entry.userId != currentUserId() else { return nil }
+        return reactionHandler
+    }
 
     func show(entry: StatusEntry, anchor: CGPoint) {
         currentEntry = entry
@@ -169,7 +178,8 @@ struct StatusBubbleOverlayModifier: ViewModifier {
                         : nil,
                     onReplyTapped: entry.userId != AuthManager.shared.currentUser?.id
                         ? { controller.requestReply() }
-                        : nil
+                        : nil,
+                    reactionHandler: controller.reactions(for: entry)
                 )
                 .zIndex(200)
             }
