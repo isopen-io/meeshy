@@ -11,7 +11,8 @@ import {
   type CursorSort,
 } from '../../utils/cursor-pagination';
 import { parseRequestLevel } from '@meeshy/shared/types/relation';
-import { hasStandingRequest, judgeRelationRequest } from '../../services/relations/relationRequestGate';
+import { hasStandingRequest, judgeRelationRequest, unnamedRequestRung } from '../../services/relations/relationRequestGate';
+import { niveauEffectif } from '../../services/friendship';
 import {
   INCLUDE_PARTIES,
   clauseHorsBlocage,
@@ -57,10 +58,10 @@ export async function envoyerDemande(
 ): Promise<Resultat<Record<string, unknown>>> {
   const { emetteurId, receveurId } = params;
 
-  // Absent, le niveau visé est FRIEND (le sens historique) — et suit la même loi :
-  // aucune exception d'ancien client (D-5). Illisible, il est refusé net.
-  const niveau = params.targetLevel === undefined ? 'FRIEND' : parseRequestLevel(params.targetLevel);
-  if (niveau === null) {
+  // Illisible, le niveau visé est refusé net. Absent, il se résout plus bas au cran
+  // suivant (`unnamedRequestRung`, #18108) : aucun saut, aucune exception d'ancien client (D-5).
+  const nomme = params.targetLevel === undefined ? undefined : parseRequestLevel(params.targetLevel);
+  if (nomme === null) {
     return { refus: { code: 400, message: 'Niveau demandé illisible', codeMetier: 'RELATION_LEVEL_INVALID' } };
   }
 
@@ -111,6 +112,11 @@ export async function envoyerDemande(
 
   if (existante) {
     return { refus: { code: 409, message: 'Une demande d\'ami existe deja entre vous' } };
+  }
+
+  const niveau = nomme ?? unnamedRequestRung(await niveauEffectif(fastify.prisma, emetteurId, receveurId));
+  if (niveau === null) {
+    return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: 'RELATION_PHASE_SKIP' } };
   }
 
   const jugement = await judgeRelationRequest(fastify.prisma, {
