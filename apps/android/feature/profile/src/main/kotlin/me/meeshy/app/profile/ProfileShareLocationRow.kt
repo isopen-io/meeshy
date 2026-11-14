@@ -286,6 +286,7 @@ private fun SharedLocationShareDuration.labelRes(): Int = when (this) {
 private fun SharedLocationShareProblem.messageRes(): Int = when (this) {
     SharedLocationShareProblem.LocationDenied -> R.string.shared_location_share_denied
     SharedLocationShareProblem.LocationUnavailable -> R.string.shared_location_share_unavailable
+    SharedLocationShareProblem.WithdrawalPending -> R.string.shared_location_share_stop_pending
     is SharedLocationShareProblem.Refused -> when (outcome) {
         SharedLocationSendOutcome.OFFLINE, SharedLocationSendOutcome.UNCONFIRMED -> R.string.shared_location_share_offline
         SharedLocationSendOutcome.RATE_LIMITED -> R.string.shared_location_share_rate_limited

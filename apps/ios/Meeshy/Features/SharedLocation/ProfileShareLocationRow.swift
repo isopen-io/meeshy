@@ -82,8 +82,14 @@ struct ProfileShareLocationRow: View {
     }
 
     private func stop() async {
-        guard let problem = await center.stopSharing(with: userId) else { return }
-        FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+        switch await center.stopSharing(with: userId) {
+        case nil:
+            return
+        case .withdrawalPending:
+            FeedbackToastManager.shared.showNotice(ShareLocationWording.problem(.withdrawalPending))
+        case let problem?:
+            FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+        }
     }
 }
 
@@ -214,6 +220,8 @@ enum ShareLocationWording {
             return String(localized: "sharedLocation.share.denied", defaultValue: "Autorise la localisation dans Réglages pour partager ta position", bundle: .main)
         case .locationUnavailable:
             return String(localized: "sharedLocation.share.unavailable", defaultValue: "Position introuvable pour le moment, réessaie", bundle: .main)
+        case .withdrawalPending:
+            return String(localized: "sharedLocation.share.stopPending", defaultValue: "Le partage s'arrêtera dès le retour du réseau", bundle: .main)
         case .refused(.offline), .refused(.unconfirmed):
             return String(localized: "sharedLocation.share.offline", defaultValue: "Le partage de position a besoin du réseau", bundle: .main)
         case .refused(.rateLimited):

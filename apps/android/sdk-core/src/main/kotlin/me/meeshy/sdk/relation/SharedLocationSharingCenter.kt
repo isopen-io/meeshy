@@ -49,6 +49,9 @@ sealed interface SharedLocationShareProblem {
     data object LocationUnavailable : SharedLocationShareProblem
 
     data class Refused(val outcome: SharedLocationSendOutcome) : SharedLocationShareProblem
+
+    /** « Arrêter » n'a pas pu partir : l'intention est gardée, et le centre la fait partir dès le retour du réseau. */
+    data object WithdrawalPending : SharedLocationShareProblem
 }
 
 /** Où la liste survit à un lancement, par compte : des identifiants et des échéances, jamais une position. */
@@ -70,7 +73,10 @@ interface SharedLocationSharing {
     /** Montrer ma position à une personne, à cette précision et pour cette durée. `null` : c'est parti. */
     suspend fun share(userId: String, precision: SharedLocationPrecision, duration: SharedLocationShareDuration): SharedLocationShareProblem?
 
-    /** Ne plus montrer ma position à cette personne ; les autres gardent la leur. */
+    /**
+     * Ne plus montrer ma position à cette personne ; les autres gardent la leur. Si l'arrêt ne peut pas partir, la
+     * personne sort quand même de la liste et son retrait part dès que le réseau revient : on ne retouche jamais.
+     */
     suspend fun stopSharing(userId: String): SharedLocationShareProblem?
 }
 
@@ -87,7 +93,8 @@ interface SharedLocationSharing {
  *   changement de compte n'adopte rien, n'écrit rien et ne rallume rien ;
  * - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
  *   garde « Arrêter » à portée pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder
- *   est rejouée, et à chaque socket accrochée.
+ *   est rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente,
+ *   gardé et rejoué de la même façon (#18204).
  *
  * Le suivi ne vit que tant que l'app est utilisée : la permission demandée est celle « pendant l'utilisation » (fine ou
  * approximative, jamais `ACCESS_BACKGROUND_LOCATION`), et aucun service de premier plan ne la prolonge — l'émission en
@@ -148,7 +155,7 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override fun restore() {
-        val settled = loadedFor != null && loadedFor == accountId() && _roster.value.pruned(clock()) == _roster.value
+        val settled = loadedFor != null && loadedFor == accountId() && _roster.value.isSettled(clock())
         if (settled) return
         scope.launch { reconcile() }
     }
@@ -165,25 +172,39 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
-        republish(ticket, _roster.value.pruned(clock()).removing(userId))
+        val problem = withdrawingRepublish(ticket, _roster.value.pruned(clock()).removing(userId))
+        if (problem == null || !isCurrent(ticket) || _roster.value.entry(userId) == null) return@locked problem
+        adopt(ticket, _roster.value.withdrawing(userId, clock()))
+        scheduleDeadline()
+        if (!_roster.value.hasRecipients) stopFollowingDevice()
+        SharedLocationShareProblem.WithdrawalPending
     }
 
-    /** Reprend la liste du compte connecté et retire du partage serveur chaque personne dont l'échéance est passée. */
+    /** Reprend la liste du compte connecté et fait partir chaque échéance passée et chaque retrait en attente. */
     suspend fun reconcile() {
         locked { ticket ->
-            val current = _roster.value
-            val pruned = current.pruned(clock())
-            if (pruned == current) return@locked null
-            republish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
+            if (_roster.value.isSettled(clock())) return@locked null
+            val pruned = _roster.value.pruned(clock())
+            if (pruned.isEmpty && !_roster.value.hasRecipients) {
+                adopt(ticket, SharedLocationRoster.EMPTY)
+                cancelDeadline()
+                return@locked null
+            }
+            withdrawingRepublish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
         }
     }
 
-    /** Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. */
+    /**
+     * Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. Rien ne
+     * part tant qu'un retrait attend : le serveur sert peut-être encore la personne retirée.
+     */
     internal suspend fun didMove(fix: SharedLocationFix) {
         if (!lock.tryLock()) return
         try {
             val ticket = currentTicket()?.takeIf(::isCurrent) ?: return
-            if (_roster.value.isEmpty || !SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
+            val roster = _roster.value
+            if (!roster.hasRecipients || roster.hasPendingWithdrawals) return
+            if (!SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
             lastSent = SharedLocationUpdateGate.Sent(fix, clock())
             val verdict = emitter.update(fix)
             if (isCurrent(ticket) && verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)) {
@@ -218,10 +239,8 @@ class SharedLocationSharingCenter internal constructor(
         if (account != loadedFor) {
             resetSession(account)
             _roster.value = SharedLocationRoster.fromStored(store.load(account))
-            if (!_roster.value.isEmpty) {
-                startFollowing()
-                scheduleDeadline()
-            }
+            if (_roster.value.hasRecipients) startFollowing()
+            scheduleDeadline()
         }
         return Ticket(account, generation)
     }
@@ -246,18 +265,40 @@ class SharedLocationSharingCenter internal constructor(
      * Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
      * de la localisation.
      */
-    private suspend fun republish(ticket: Ticket, next: SharedLocationRoster): SharedLocationShareProblem? {
-        if (next.isEmpty) return stopAll(ticket)
-        val fix = lastSent?.fix ?: deviceFix() ?: return stopAll(ticket)
+    private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
+        val next = wanted.settled()
+        if (!next.hasRecipients) return stopAll(ticket)
+        val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
     }
 
+    /**
+     * La dernière position envoyée, tant qu'elle a l'âge d'un battement : au-delà, la republier la ferait passer pour
+     * fraîche (le serveur la date de sa réception), on redemande l'appareil.
+     */
+    private fun freshLastFix(): SharedLocationFix? =
+        lastSent?.takeIf { clock() - it.atMillis <= SharedLocationUpdateGate.HEARTBEAT_MS }?.fix
+
+    /**
+     * Un retrait refusé pour une autre raison que le réseau (débit, liste invalide, partage indisponible) ne se rejoue
+     * pas des heures en laissant la personne servie : on ARRÊTE tout, et `stop` n'est pas limité en débit (#18204).
+     */
+    private suspend fun withdrawingRepublish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
+        val problem = republish(ticket, wanted)
+        if (problem == null || !isCurrent(ticket)) return problem
+        val outcome = (problem as? SharedLocationShareProblem.Refused)?.outcome
+        if (outcome == SharedLocationSendOutcome.OFFLINE || outcome == SharedLocationSendOutcome.UNCONFIRMED) return problem
+        return stopAll(ticket)
+    }
+
+    /** La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */
     private suspend fun publish(
         ticket: Ticket,
-        next: SharedLocationRoster,
+        wanted: SharedLocationRoster,
         fix: SharedLocationFix,
         previous: SharedLocationRoster,
     ): SharedLocationShareProblem? {
+        val next = wanted.settled()
         val request = SharedLocationStartRequest.of(next.recipients, next.serverDuration(clock()), fix)
             ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
@@ -310,9 +351,13 @@ class SharedLocationSharingCenter internal constructor(
         }
     }
 
+    /** L'échéance la plus proche réveille le centre ; un retrait en attente le réveille au rythme du rejeu, au plus tard. */
     private fun scheduleDeadline() {
-        val at = _roster.value.nextDeadlineMillis ?: return cancelDeadline()
-        armDeadline((at - clock()).coerceAtLeast(0L) + DEADLINE_SLACK_MS)
+        val roster = _roster.value
+        val untilDeadline = roster.nextDeadlineMillis?.let { (it - clock()).coerceAtLeast(0L) + DEADLINE_SLACK_MS }
+        val untilRetry = RETRY_MS.takeIf { roster.hasPendingWithdrawals }
+        val delayMillis = listOfNotNull(untilDeadline, untilRetry).minOrNull() ?: return cancelDeadline()
+        armDeadline(delayMillis)
     }
 
     private fun scheduleRetry() = armDeadline(RETRY_MS)
@@ -334,10 +379,14 @@ class SharedLocationSharingCenter internal constructor(
 
     private fun wipe(ticket: Ticket) {
         adopt(ticket, SharedLocationRoster.EMPTY)
+        stopFollowingDevice()
+        cancelDeadline()
+    }
+
+    private fun stopFollowingDevice() {
         lastSent = null
         following?.cancel()
         following = null
-        cancelDeadline()
     }
 
     private companion object {
