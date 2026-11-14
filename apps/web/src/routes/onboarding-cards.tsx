@@ -562,7 +562,7 @@ export function FriendsCard({
     <CardFrame
       step="friends"
       title={translateOnboarding(lang, 'onboarding.friends.title')}
-      body={translateOnboarding(lang, 'onboarding.friends.body', { points: String(reward) })}
+      body={translateOnboarding(lang, 'onboarding.friends.body')}
       illustration={<FriendsIllustration />}
       actions={
         <>

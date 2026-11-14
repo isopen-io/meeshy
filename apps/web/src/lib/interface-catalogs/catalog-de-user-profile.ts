@@ -43,7 +43,6 @@ const deUserProfile = {
   'userProfile.blocked.title': 'Sie haben diese Person blockiert',
   'userProfile.blocked.body': 'Ihre Beiträge und Statistiken bleiben verborgen, solange die Blockierung besteht.',
   'userProfile.signin.title': 'Melden Sie sich an, um sich zu verbinden',
-  'userProfile.signin.body': 'Verbindungsanfragen und Nachrichten erfordern ein Konto.',
   'userProfile.signin.cta': 'Anmelden',
   'userProfile.announce.blocked': 'Person blockiert',
   'userProfile.announce.blockFailed': 'Blockieren nicht möglich',

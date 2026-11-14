@@ -3,9 +3,7 @@ import type { OnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-cat
 /** « Montre-toi » — voir `catalog-onboarding-profile-fr.ts`. */
 const en = {
   'onboarding.profile.title': 'Show yourself',
-  'onboarding.profile.body': 'A face and a banner make your profile easier to spot: people recognize you in suggestions, conversations and stories, and you get more contact requests.',
-  'onboarding.profile.visibility': 'More visibility',
-  'onboarding.profile.contacts': 'More contacts',
+  'onboarding.profile.body': 'A face and a banner: people recognize you faster.',
   'onboarding.profile.addBanner': 'Add a banner',
   'onboarding.profile.pickBanner': 'Choose a banner',
   'onboarding.profile.pickAvatar': 'Choose a profile photo',

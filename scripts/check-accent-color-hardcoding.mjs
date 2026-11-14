@@ -450,7 +450,7 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // l'accent de la CONVERSATION que `BubbleCallNoticeView` reçoit de la bulle (`contactColor`, `colorHex`) et relaie
 // déjà à `CallRecordingPlayback`. Même convention `accentHex` que l'entrée #6793 : la chaîne, par opposition à la
 // couleur. Valeur MESURÉE le 2026-11-12 en local sur f74d006819.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 470;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 467;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

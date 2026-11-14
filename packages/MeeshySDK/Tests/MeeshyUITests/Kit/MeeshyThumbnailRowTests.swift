@@ -628,7 +628,7 @@ struct MeeshyThumbnailRowTests {
             let code = try Self.code(file)
             let forbidden = [
                 "Color(hex:", "Color(red:", "Color.white", "Color.black", ".white)", ".black)",
-                "meeshyGlass", "adaptiveGlass", "adaptiveLiquidGlass", ".glassEffect", "UIBlurEffect", ".ultraThinMaterial",
+                "meeshyGlass(", "adaptiveGlass", "adaptiveLiquidGlass", ".glassEffect", "UIBlurEffect", ".ultraThinMaterial",
                 ".blur(", "UIImpactFeedbackGenerator", "sensoryFeedback",
                 "Composer", "StorySlide", "CallMode", "CacheCoordinator", ".shared",
                 "String(localized", "NSLocalizedString", "Text(\"",

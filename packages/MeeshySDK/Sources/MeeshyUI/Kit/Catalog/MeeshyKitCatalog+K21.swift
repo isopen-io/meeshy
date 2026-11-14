@@ -1,4 +1,5 @@
 #if DEBUG
+import MeeshySDK
 import SwiftUI
 
 extension MeeshyKitCatalog {
@@ -110,11 +111,7 @@ private struct MeeshyTrimTrackSample: View {
     )
 
     private static func text(_ time: Double, _ style: MeeshyTrimTrackTimeStyle) -> String {
-        let total = Int(time.rounded(.down))
-        let base = "\(total / 60):" + (total % 60 < 10 ? "0" : "") + "\(total % 60)"
-        guard style != .clock else { return base }
-        let thousandths = Int(((time - Double(total)) * 1000).rounded())
-        return base + "." + String(repeating: "0", count: max(0, 3 - "\(thousandths)".count)) + "\(thousandths)"
+        MediaFormat.duration(time, style: style == .clock ? .clock : .milliseconds)
     }
 }
 
