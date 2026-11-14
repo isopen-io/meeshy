@@ -265,8 +265,8 @@ internal struct _InlineOverlayControls: View {
             playPauseIcon
                 .frame(width: 54, height: 54)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
-                .pressable()
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
             : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
