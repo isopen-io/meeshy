@@ -152,6 +152,7 @@ final class MeeshyLogTests: XCTestCase {
         "story-queue-migrator",
         "story-timeline-export",
         "story.interaction",
+        "story.nav",
         "stuck-publication-retry",
         "sync",
         "test-network-seal",

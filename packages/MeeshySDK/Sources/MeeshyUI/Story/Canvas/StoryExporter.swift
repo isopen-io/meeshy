@@ -260,17 +260,9 @@ public enum StoryExporter {
                                        size: canvasRenderSize)
         }
 
-        // 1.5. Audio mixing. Le MP4 export est destiné au partage externe
-        //      (Photos, WhatsApp, AirDrop…) — un viewer sans la story logic
-        //      ne peut pas re-jouer l'audio à partir de raw assets. Il faut
-        //      donc baker l'audio dans le fichier de sortie. Cette étape
-        //      capture l'audio embedded dans le background video (cas le
-        //      plus courant pour les vlogs / clips capturés caméra).
-        //
-        //      Les `audioPlayerObjects` (audios fg + bg + voice) référencent
-        //      leurs assets par `postMediaId` : quand l'appelant fournit
-        //      `audioResolver`, ils sont composés en pistes dédiées avec
-        //      fenêtre timeline + volume + fades + loop (bg uniquement).
+        // 1.5. Le fichier part hors de Meeshy : il fait entendre tout ce que
+        //      le player joue — son de la vidéo de fond, son des vidéos posées
+        //      (#18555), sons posés et son de fond (`audioPlayerObjects`).
         let bgVideoAudioMix = try await composeBackgroundVideoAudio(
             slide: slide,
             composition: composition,
@@ -293,6 +285,8 @@ public enum StoryExporter {
             storyStart: storyStart,
             resolver: audioResolver
         )
+        mixParameters += try await StoryExportForegroundVideoAudio.compose(
+            slide: slide, composition: composition, totalDuration: storyDuration, storyStart: storyStart)
 
         // Signatures sonores de la marque et enveloppe de la story : la loi de
         // `wrap` (`StoryExportJingleMix`), mixée ici.
@@ -503,12 +497,8 @@ public enum StoryExporter {
     /// automatically — we simply don't insert anything past the asset's
     /// natural duration when `loop == false`.
     ///
-    /// **Out of scope (V1)** — `audioPlayerObjects` (foreground audios +
-    /// background audio entries + voice) are NOT included here. They
-    /// reference assets by `postMediaId` and require an external resolver
-    /// the exporter doesn't yet receive. Follow-up commit will inject a
-    /// resolver via `StoryExporter.export(_:to:..., audioResolver:)` and
-    /// extend this helper.
+    /// Les sons posés et les vidéos posées ont leur propre composition
+    /// (`composeAudioLanes`, `StoryExportForegroundVideoAudio`).
     static func composeBackgroundVideoAudio(
         slide: StorySlide,
         composition: AVMutableComposition,
@@ -707,25 +697,15 @@ public enum StoryExporter {
     ) async throws -> [AVMutableAudioMixInputParameters] {
         var parameters: [AVMutableAudioMixInputParameters] = []
 
-        for audio in slide.effects.audioPlayerObjects ?? [] {
+        for audio in slide.effects.audioPlayerObjects ?? []
+        where StoryExportClipPlacement.carriesSound(volume: audio.volume, keyframes: audio.keyframes) {
             guard let url = await resolveLaneURL(audio, resolver: resolver) else { continue }
             let asset = AVURLAsset(url: url)
             guard let assetTrack = (try? await asset.loadTracks(withMediaType: .audio))?.first,
                   let assetDuration = try? await asset.load(.duration),
-                  assetDuration > .zero else { continue }
-
-            let start = CMTime(seconds: Double(max(0, audio.startTime ?? 0)),
-                               preferredTimescale: 600)
-            guard start < totalDuration else { continue }
-            let available = totalDuration - start
-            let window: CMTime = {
-                guard let declared = audio.duration, declared > 0 else { return available }
-                return CMTimeMinimum(
-                    CMTime(seconds: Double(declared), preferredTimescale: 600),
-                    available
-                )
-            }()
-            let loopsAsBackground = audio.isBackground == true && audio.loop == true
+                  assetDuration > .zero,
+                  let placement = lanePlacement(audio, assetDuration: assetDuration,
+                                                totalDuration: totalDuration) else { continue }
 
             guard let track = composition.addMutableTrack(
                 withMediaType: .audio,
@@ -737,83 +717,86 @@ public enum StoryExporter {
             // `start` et `insertedEnd` restent en temps de STORY (les keyframes
             // et fenêtres de l'auteur y sont exprimées) ; seules les POSES dans
             // la composition portent le décalage de l'interlude.
-            let timelineStart = start + storyStart
-            let insertedEnd: CMTime
-            if loopsAsBackground {
-                var inserted = CMTime.zero
-                while inserted < window {
-                    let remaining = window - inserted
-                    let chunk = CMTimeMinimum(assetDuration, remaining)
-                    try track.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: chunk),
-                        of: assetTrack,
-                        at: timelineStart + inserted
-                    )
-                    inserted = inserted + chunk
-                }
-                insertedEnd = start + window
-            } else {
-                let playable = CMTimeMinimum(assetDuration, window)
-                try track.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: playable),
-                    of: assetTrack,
-                    at: timelineStart
-                )
-                insertedEnd = start + playable
+            let insertedEnd = try placement.insert(assetTrack, into: track, storyStart: storyStart)
+            if let params = laneMixParameters(audio, track: track, start: placement.start,
+                                              insertedEnd: insertedEnd, storyStart: storyStart) {
+                parameters.append(params)
             }
-
-            // Plafond `StoryVolume.maxGain` et non 1.0 : un gain au-delà de
-            // 100 % n'est applicable QUE par AVAudioMix, les nodes
-            // AVFoundation étant bornés — le brider ici le rendrait inaudible
-            // partout.
-            let baseVolume = min(StoryVolume.maxGain, max(0, audio.volume))
-            let fadeIn = Double(audio.fadeIn ?? 0)
-            let fadeOut = Double(audio.fadeOut ?? 0)
-            let automation = (audio.keyframes ?? []).filter { $0.volume != nil }
-            let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
-                || !automation.isEmpty
-            guard needsMix else { continue }
-
-            let params = AVMutableAudioMixInputParameters(track: track)
-            if automation.isEmpty {
-                params.setVolume(baseVolume, at: .zero)
-            } else {
-                // L'automation prime sur le niveau statique ; les rampes sont
-                // décalées de `start`, position du clip dans la timeline.
-                for (range, from, to) in Self.volumeRamps(base: baseVolume,
-                                                          keyframes: audio.keyframes,
-                                                          duration: insertedEnd.seconds) {
-                    let shifted = CMTimeRange(start: range.start + timelineStart,
-                                              duration: range.duration)
-                    params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
-                                         timeRange: shifted)
-                }
-            }
-            if fadeIn > 0.01 {
-                params.setVolumeRamp(
-                    fromStartVolume: 0,
-                    toEndVolume: baseVolume,
-                    timeRange: CMTimeRange(
-                        start: timelineStart,
-                        duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
-                    )
-                )
-            }
-            if fadeOut > 0.01 {
-                let rampDuration = CMTime(seconds: fadeOut, preferredTimescale: 600)
-                let rampStart = insertedEnd - rampDuration
-                if rampStart > start {
-                    params.setVolumeRamp(
-                        fromStartVolume: baseVolume,
-                        toEndVolume: 0,
-                        timeRange: CMTimeRange(start: rampStart + storyStart,
-                                               duration: rampDuration)
-                    )
-                }
-            }
-            parameters.append(params)
         }
 
         return parameters
+    }
+
+    /// La pose d'un son posé : sa fenêtre de source (rognage compris, #18555),
+    /// sa place sur la scène, et la boucle — réservée au son de FOND.
+    nonisolated static func lanePlacement(_ audio: StoryAudioPlayerObject, assetDuration: CMTime,
+                                          totalDuration: CMTime) -> StoryExportClipPlacement? {
+        let start = CMTime(seconds: Double(max(0, audio.startTime ?? 0)), preferredTimescale: 600)
+        guard start < totalDuration else { return nil }
+        let available = totalDuration - start
+        let window: CMTime = {
+            guard let declared = audio.duration, declared > 0 else { return available }
+            return CMTimeMinimum(CMTime(seconds: Double(declared), preferredTimescale: 600), available)
+        }()
+        let source = StoryExportClipPlacement.sourceWindow(
+            audio.trimBounds(sourceDuration: assetDuration.seconds))
+        return StoryExportClipPlacement(source: source, start: start, window: window,
+                                        loops: audio.isBackground == true && audio.loop == true)
+    }
+
+    /// Le mix d'un son posé : volume, automation et fondus. `nil` au niveau
+    /// nominal, sans fondu ni automation — AVFoundation joue alors la piste telle quelle.
+    static func laneMixParameters(_ audio: StoryAudioPlayerObject, track: AVMutableCompositionTrack,
+                                  start: CMTime, insertedEnd: CMTime,
+                                  storyStart: CMTime) -> AVMutableAudioMixInputParameters? {
+        // Plafond `StoryVolume.maxGain` et non 1.0 : un gain au-delà de
+        // 100 % n'est applicable QUE par AVAudioMix, les nodes
+        // AVFoundation étant bornés — le brider ici le rendrait inaudible
+        // partout.
+        let baseVolume = min(StoryVolume.maxGain, max(0, audio.volume))
+        let fadeIn = Double(audio.fadeIn ?? 0)
+        let fadeOut = Double(audio.fadeOut ?? 0)
+        let automation = (audio.keyframes ?? []).filter { $0.volume != nil }
+        let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
+            || !automation.isEmpty
+        guard needsMix else { return nil }
+
+        let timelineStart = start + storyStart
+        let params = AVMutableAudioMixInputParameters(track: track)
+        if automation.isEmpty {
+            params.setVolume(baseVolume, at: .zero)
+        } else {
+            for (range, from, to) in Self.volumeRamps(base: baseVolume,
+                                                      keyframes: audio.keyframes,
+                                                      duration: insertedEnd.seconds) {
+                let shifted = CMTimeRange(start: range.start + timelineStart,
+                                          duration: range.duration)
+                params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
+                                     timeRange: shifted)
+            }
+        }
+        if fadeIn > 0.01 {
+            params.setVolumeRamp(
+                fromStartVolume: 0,
+                toEndVolume: baseVolume,
+                timeRange: CMTimeRange(
+                    start: timelineStart,
+                    duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
+                )
+            )
+        }
+        if fadeOut > 0.01 {
+            let rampDuration = CMTime(seconds: fadeOut, preferredTimescale: 600)
+            let rampStart = insertedEnd - rampDuration
+            if rampStart > start {
+                params.setVolumeRamp(
+                    fromStartVolume: baseVolume,
+                    toEndVolume: 0,
+                    timeRange: CMTimeRange(start: rampStart + storyStart,
+                                           duration: rampDuration)
+                )
+            }
+        }
+        return params
     }
 }
