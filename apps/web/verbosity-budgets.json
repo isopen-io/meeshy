@@ -233,23 +233,23 @@
       "firstScreen": 82
     },
     "me-progression-ligue": {
-      "total": 199,
-      "firstScreen": 66
+      "total": 190,
+      "firstScreen": 71
     },
     "me-progression-prestige": {
       "total": 30,
       "firstScreen": 30
     },
     "me-progression-reglages": {
-      "total": 153,
-      "firstScreen": 69
+      "total": 141,
+      "firstScreen": 59
     },
     "me-progression-regles": {
       "total": 387,
       "firstScreen": 129
     },
     "me-progression-saison": {
-      "total": 139,
+      "total": 136,
       "firstScreen": 98
     },
     "me-progression-succes": {
@@ -565,6 +565,18 @@
       },
       "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
       "issue": 18392
+    },
+    "me-progression-ligue": {
+      "de": {
+        "total": 199,
+        "firstScreen": 66
+      },
+      "a": {
+        "total": 190,
+        "firstScreen": 71
+      },
+      "motif": "Une phrase dit ce qu'est la joute (groupe de 30, 7 qui montent, 5 qui descendent) ; la légende « étincelles » ne se répète plus sur chaque ligne du classement, seule la valeur reste vue",
+      "issue": 18148
     }
   }
 }
