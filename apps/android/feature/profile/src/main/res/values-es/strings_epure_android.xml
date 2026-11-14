@@ -2,4 +2,5 @@
 <!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
 <resources>
     <string name="profile_connection_context_sent">Solicitud enviada a %1$s, a la espera de su respuesta.</string>
+    <string name="profile_voice_what">Su voz clonada lee sus mensajes de voz traducidos a tu idioma.</string>
 </resources>

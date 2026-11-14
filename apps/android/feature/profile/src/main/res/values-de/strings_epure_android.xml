@@ -2,4 +2,5 @@
 <!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
 <resources>
     <string name="profile_connection_context_sent">Anfrage an %1$s gesendet, Antwort steht aus.</string>
+    <string name="profile_voice_what">Die geklonte Stimme liest die übersetzten Sprachnachrichten in deiner Sprache vor.</string>
 </resources>

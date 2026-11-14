@@ -2,29 +2,22 @@ package me.meeshy.app.profile
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import me.meeshy.feature.profile.R
 import me.meeshy.ui.component.audio.MeeshyVoiceSamplePlayer
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -48,8 +41,8 @@ object ProfileVoiceVisibility {
 }
 
 /**
- * La carte verre « Voix » (miroir de `voiceCard` iOS) : icône waveform et titre teintés d'accent,
- * puis le lecteur de l'échantillon ; annoncée « Voix » par TalkBack, ses commandes restant
+ * La carte verre « Voix » (miroir de `voiceCard` iOS) : sans titre redit sous l'en-tête de section,
+ * une phrase dit ce qu'est l'échantillon, puis le lecteur de l'échantillon ; annoncée « Voix » par TalkBack, ses commandes restant
  * atteignables une à une.
  */
 @Composable
@@ -67,18 +60,11 @@ internal fun ProfileVoiceCard(sample: ProfileVoiceSample, accent: Color) {
             modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(imageVector = MeeshyIcons.Waveform, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary,
-                )
-            }
+            Text(
+                text = stringResource(R.string.profile_voice_what),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
             MeeshyVoiceSamplePlayer(url = sample.url, durationMs = sample.durationMs, accent = accent)
         }
     }

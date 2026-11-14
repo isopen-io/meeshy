@@ -2,4 +2,5 @@
 <!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
 <resources>
     <string name="profile_connection_context_sent">أُرسل الطلب إلى %1$s، في انتظار ردّه.</string>
+    <string name="profile_voice_what">يقرأ صوته المستنسخ رسائله الصوتية مترجمةً إلى لغتك.</string>
 </resources>

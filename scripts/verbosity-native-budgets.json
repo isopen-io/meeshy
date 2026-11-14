@@ -26,7 +26,7 @@
     },
     "android:feature/community": {
       "labels": 118,
-      "words": 313,
+      "words": 318,
       "long": 2,
       "explanations": 26
     },
@@ -61,8 +61,8 @@
       "explanations": 7
     },
     "android:feature/profile": {
-      "labels": 173,
-      "words": 470,
+      "labels": 174,
+      "words": 480,
       "long": 1,
       "explanations": 17
     },
