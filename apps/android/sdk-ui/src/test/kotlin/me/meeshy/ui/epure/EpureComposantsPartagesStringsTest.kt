@@ -241,4 +241,23 @@ class EpureComposantsPartagesStringsTest {
             }
         }
     }
+
+    @Test
+    fun `l'echec d'ouverture d'un contenu tient dans son titre et son bouton, sans sous-titre reseau ni serveur`() {
+        val sources = File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.joinToString("\n") { it.readText() }
+        listOf("content_failure_network_body", "content_failure_server_body").forEach { key ->
+            assertThat(sources).doesNotContain("R.string.$key")
+            folders.keys.forEach { language ->
+                assertWithMessage("$language/$key").that(byLanguage.getValue(language).containsKey(key)).isFalse()
+            }
+        }
+        assertThat(text("fr", "content_failure_server_title")).isNotEmpty()
+        assertThat(text("fr", "content_failure_retry")).isNotEmpty()
+    }
+
+    @Test
+    fun `les vides du selecteur de stickers vouvoient en francais`() {
+        assertThat(text("fr", "sticker_sheet_favorites_empty")).isEqualTo("Appuyez longuement sur une décoration pour l'épingler ici.")
+        assertThat(text("fr", "sticker_sheet_recents_empty")).isEqualTo("Ce que vous posez apparaîtra ici.")
+    }
 }
