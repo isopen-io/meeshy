@@ -165,12 +165,8 @@ private fun CallGroupCapsuleBox(
     val boxHeight = animateFloatAsState(held.height, move, label = "callCapsuleHeight")
     var stageTopPx by remember { mutableFloatStateOf(0f) }
     val stageTop = with(LocalDensity.current) { stageTopPx.toDp() }
-    // P11.1 · P14 · U1 : l'en-tête flotte sur le haut de la scène ; la capsule se tient sous lui, et sa course de rangement
-    // part de là (la position mesurée suit le décalage).
-    val belowHeader = LocalCallGroupGridClearance.current
     Box(
         Modifier
-            .callBelowTheFloatingHeader(belowHeader)
             .onGloballyPositioned { stageTopPx = it.positionInWindow().y }
             .layout { measurable, constraints ->
                 val fixed = Constraints.fixed(boxWidth.value.dp.roundToPx().coerceAtLeast(0), boxHeight.value.dp.roundToPx().coerceAtLeast(0))

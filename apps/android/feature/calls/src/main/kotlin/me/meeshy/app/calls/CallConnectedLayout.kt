@@ -255,8 +255,9 @@ internal fun CallConnectedColumn(
         val stageMaxHeight = maxHeight
         val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
         val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
-        // P11.1 : en groupe, la grille prend l'écran depuis le haut de la zone sûre et l'en-tête flotte sur sa première rangée ;
-        // en hauteur compacte, elle reste sous la rangée de l'en-tête (L4.2). En duo, rien ne change.
+        // P11.1 : en groupe, sur la grille, la scène part du haut de la zone sûre et l'en-tête flotte sur sa première rangée ;
+        // à la une, en hauteur compacte (L4.2) ou sous une pile (L4.11), elle reste sous la rangée de l'en-tête. En duo, rien
+        // ne change.
         val columnTop = if (groupStage != null) 0.dp else MeeshySpacing.xl
         Column(
             modifier = Modifier.matchParentSize().padding(start = MeeshySpacing.xl, end = MeeshySpacing.xl, bottom = MeeshySpacing.xl, top = columnTop),
@@ -264,8 +265,8 @@ internal fun CallConnectedColumn(
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             val gridClearance = LocalCallGroupGridClearance.current.takeIf { groupStage != null }
-            val reserveBase = if (gridClearance != null) CallGroupStageSizing.gridTopBaseDp(isCompactHeight).dp else MeeshySpacing.xl
-            CallGroupStageTopReserve(base = reserveBase, clearance = gridClearance)
+            // P11.1 : en groupe, la réserve est le haut entier de la scène (CallTopBannerStack.groupStageTopDp).
+            CallGroupStageTopReserve(base = if (gridClearance != null) 0.dp else MeeshySpacing.xl, clearance = gridClearance)
 
             if (groupStage != null && gridClearance != null) {
                 SideEffect { gridClearance.isCompactHeight = isCompactHeight }
@@ -377,10 +378,10 @@ internal fun CallConnectedColumn(
 }
 
 /**
- * P11.1 · L4.11 — la réserve haute de la scène : en duo la marge fixe d'avant ; en groupe, l'écart de la grille au haut de la
- * zone sûre ([CallGroupStageSizing.gridTopBaseDp] : l'en-tête flotte sur elle, sauf en hauteur compacte), plus la place que la
- * pile des bandeaux prend sous l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que
- * la grille lui cède sa place au lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
+ * P11.1 · L4.11 — la réserve haute de la scène : en duo la marge fixe d'avant ; en groupe, le haut entier de la scène depuis la
+ * zone sûre ([CallTopBannerStack.groupStageTopDp] : rien quand l'en-tête flotte sur la grille, la rangée d'en-tête sinon), plus
+ * la place que la pile des bandeaux prend sous l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct
+ * compris), pour que la grille lui cède sa place au lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
  * qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne se recompose ni la colonne ne se remesure à
  * chaque image. En duo ([clearance] nul), la pile ne pousse rien.
  */

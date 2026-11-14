@@ -131,6 +131,31 @@ object CallTopBannerStack {
     fun groupGridClearanceDp(present: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>, isStageFullScreen: Boolean): Float =
         if (isStageFullScreen) 0f else stackHeightDp(present, heightsDp)
 
+    /** La scène de groupe sous la rangée d'en-tête : la rangée et ses marges, depuis la zone sûre (la place d'avant P11.1). */
+    const val GROUP_STAGE_UNDER_HEADER_DP: Float = 52f
+
+    /** L'écart entre deux vignettes, et celui de la scène de groupe à la zone sûre en plein écran. */
+    const val GROUP_STAGE_SPACING_DP: Float = 8f
+
+    /**
+     * P11.1 (#18220) — en groupe, l'en-tête flotte sur la grille (planche P11). Pas en hauteur compacte (L4.2 : la rangée de
+     * quatre reste entre l'en-tête et la pilule), ni sur la une (P14.1 · U1.3 : la vignette à la une, sa capsule et la puce
+     * d'écran restent sous l'en-tête). Miroir de iOS `CallTopBannerStack.headerFloatsOverGroupStage`, mêmes vecteurs.
+     */
+    fun headerFloatsOverGroupStage(isGrid: Boolean, isCompactHeight: Boolean): Boolean = isGrid && !isCompactHeight
+
+    /**
+     * P11.1 · L4.11 · U2 — le haut de la scène de groupe depuis la zone sûre, pile des bandeaux comprise ([stackDp], mesurée par
+     * [groupGridClearanceDp]). L'en-tête flotte et aucun bandeau n'est là : la grille part de la zone sûre. Plein écran : la zone
+     * sûre et l'écart d'une vignette. Sinon, sous la rangée d'en-tête, puis sous la pile, qui se pose sous l'en-tête et à
+     * laquelle la grille cède sa place. Miroir de iOS `groupStageTopBase` suivi de l'écart de la scène et de la pile.
+     */
+    fun groupStageTopDp(headerFloats: Boolean, stackDp: Float, isStageFullScreen: Boolean): Float = when {
+        isStageFullScreen -> GROUP_STAGE_SPACING_DP
+        headerFloats && stackDp <= 0f -> 0f
+        else -> GROUP_STAGE_UNDER_HEADER_DP + stackDp
+    }
+
     private fun stackHeightDp(banners: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
         ordered(banners).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
 

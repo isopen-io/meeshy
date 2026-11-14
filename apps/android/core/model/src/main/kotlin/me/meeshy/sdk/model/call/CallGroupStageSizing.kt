@@ -26,34 +26,6 @@ object CallGroupStageSizing {
     fun isCompactHeight(stageHeightDp: Float): Boolean =
         stageHeightDp > 0f && stageHeightDp < COMPACT_HEIGHT_THRESHOLD_DP
 
-    /** La rangée de l'en-tête et son écart, depuis le haut de la zone sûre : là où commençait la grille avant P11.1. */
-    const val HEADER_BAND_DP: Float = 52f
-
-    /** P11.1 — l'écart de la grille au haut de la zone sûre quand l'en-tête flotte sur elle : celui de deux vignettes. */
-    const val FLOATING_GRID_TOP_DP: Float = 8f
-
-    /**
-     * P11.1 · L4.2 — la place que la grille de groupe laisse au-dessus d'elle, depuis le haut de la zone sûre. Quand la hauteur
-     * suffit (le portrait), la grille prend l'écran et l'en-tête flotte sur sa première rangée ; en hauteur compacte, elle
-     * reste ENTRE l'en-tête et la pilule, aucune plaque sous l'en-tête.
-     */
-    fun gridTopBaseDp(isCompactHeight: Boolean): Float = if (isCompactHeight) HEADER_BAND_DP else FLOATING_GRID_TOP_DP
-
-    /**
-     * L4.11 — ce que la pile des bandeaux ([stackDp], déjà mesurée) ajoute à [gridTopBaseDp] : la pile se pose SOUS l'en-tête,
-     * si bien qu'une grille qui flottait redescend d'abord sous sa rangée, puis sous la pile. Une seule valeur, animée d'un
-     * seul geste : la grille glisse sans saut de sa place flottante à sa place sous la pile.
-     */
-    fun gridBannerClearanceDp(isCompactHeight: Boolean, stackDp: Float): Float =
-        if (stackDp <= 0f) 0f else stackDp + HEADER_BAND_DP - gridTopBaseDp(isCompactHeight)
-
-    /**
-     * P14 · U1 — ce que l'en-tête couvre encore du haut de la scène, la part de pile montrée ([bannerClearanceDp]) comprise :
-     * la capsule de la une et la puce d'un écran s'y tiennent dessous. Jamais négatif.
-     */
-    fun headerOverlapDp(isCompactHeight: Boolean, bannerClearanceDp: Float): Float =
-        (HEADER_BAND_DP - gridTopBaseDp(isCompactHeight) - bannerClearanceDp).coerceAtLeast(0f)
-
     fun rows(families: List<CallActionFamilyRow>, isCompactHeight: Boolean): List<CallPillRowContent> {
         if (!isCompactHeight) return families.map { CallPillRowContent(it.family, it.actions) }
         val actions = families.flatMap { it.actions }

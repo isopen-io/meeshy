@@ -184,9 +184,10 @@ fun CallScreen(
     val selfTileClearance = rememberSelfTileBannerClearance(
         bannerHeights, state.isPeerScreenCapturing && !inPip, servicePills, reduceMotion,
     )
+    // P11.1 : sur la grille, l'en-tête flotte et la scène part de la zone sûre ; à la une, elle reste sous lui.
     val groupGridClearance = rememberGroupGridBannerClearance(
         bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen,
-        servicePills, reduceMotion,
+        servicePills, reduceMotion, isGroupGrid = groupFocus == GroupCallStageFocus.Grid,
     )
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :

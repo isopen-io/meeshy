@@ -92,28 +92,33 @@ class CallSceneWithoutJumpGuardTest {
         assertThat(toast).doesNotContain("exit = fadeOut() + slideOutVertically { -it }")
     }
 
-    /** P11.1 — en portrait, la grille commence au haut de la zone sûre et l'en-tête flotte dessus ; L4.2 et L4.11 gardés par la loi. */
+    /**
+     * P11.1 — sur la grille, l'en-tête flotte et la scène part de la zone sûre ; à la une (P14.1), en hauteur compacte (L4.2) et
+     * sous une pile (L4.11), elle reste sous lui. Une seule réserve animée porte tout le haut de la scène : la grille glisse d'un
+     * état à l'autre, sans saut. Miroir de iOS `headerFloatsOverGroupStage` / `groupStageTopBase` (#18395).
+     */
     @Test
-    fun `P11_1 - la grille prend l'ecran sous l'en-tete flottant, par la loi de la reserve haute`() {
-        val layout = code("CallConnectedLayout.kt")
-        assertThat(layout).contains("CallGroupStageSizing.gridTopBaseDp(isCompactHeight)")
-        assertThat(layout).contains("gridClearance.isCompactHeight = isCompactHeight")
-        assertThat(layout).doesNotContain(".padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance)")
+    fun `P11_1 - la grille part de la zone sure sous l'en-tete flottant, par la loi miroir d'iOS`() {
         val host = code("CallTopBannerStackHost.kt")
-        assertThat(host).contains("CallGroupStageSizing.gridBannerClearanceDp(")
-        assertThat(host).contains("CallGroupStageSizing.headerOverlapDp(")
+        val grid = block(host, "internal fun rememberGroupGridBannerClearance(", "\n}")
+        assertThat(grid).contains("CallTopBannerStack.headerFloatsOverGroupStage(isGroupGrid, compactHeight.value)")
+        assertThat(grid).contains("CallTopBannerStack.groupStageTopDp(floats, stack, isStageFullScreen)")
+        assertThat(grid).doesNotContain("animateDpAsState(")
+        val screen = code("CallScreen.kt")
+        assertThat(screen).contains("isGroupGrid = groupFocus == GroupCallStageFocus.Grid")
+        val layout = code("CallConnectedLayout.kt")
+        assertThat(layout).contains("CallGroupStageTopReserve(base = if (gridClearance != null) 0.dp else MeeshySpacing.xl, clearance = gridClearance)")
+        assertThat(layout).contains("SideEffect { gridClearance.isCompactHeight = isCompactHeight }")
+        assertThat(layout).doesNotContain(".padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance)")
     }
 
-    /** P14 · U1 — la capsule de la une et la puce d'écran se tiennent sous l'en-tête qui flotte sur la scène, lues au placement. */
+    /** P11.1 · #17949 — la pilule reste dans le flux : la grille se resserre au-dessus d'elle ; seul l'en-tête flotte. */
     @Test
-    fun `P11_1 - la capsule de la une et la puce d'ecran se tiennent sous l'en-tete flottant`() {
-        val chrome = code("CallGroupFeaturedChrome.kt")
-        assertThat(chrome).contains("callBelowTheFloatingHeader(")
-        val spotlight = code("CallGroupSpotlight.kt")
-        assertThat(spotlight).contains("callBelowTheFloatingHeader(")
-        val host = code("CallTopBannerStackHost.kt")
-        val below = block(host, "internal fun Modifier.callBelowTheFloatingHeader(", "\n}")
-        assertThat(below).contains("offset {")
-        assertThat(below).contains("headerOverlap")
+    fun `P11_1 - la pilule reste dans le flux, seul l'en-tete flotte sur la grille`() {
+        val layout = code("CallConnectedLayout.kt")
+        val column = layout.substringAfter("internal fun CallConnectedColumn(").substringAfter("Column(").substringBefore("CallActionRails(")
+        assertThat(column.indexOf("groupStage(")).isLessThan(column.indexOf("CallControlsBlock("))
+        assertThat(column).contains(".padding(bottom = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance)")
+        assertThat(code("CallGroupFeaturedChrome.kt")).doesNotContain("headerOverlap")
     }
 }
