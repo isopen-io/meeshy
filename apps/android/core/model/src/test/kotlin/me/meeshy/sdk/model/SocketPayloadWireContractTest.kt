@@ -224,4 +224,59 @@ class SocketPayloadWireContractTest {
         assertThat(event.attachmentId).isNull()
         assertThat(event.status).isEqualTo("ready")
     }
+
+    /**
+     * La charge exacte de `PostReactionHandler.ts` — l'émetteur de `post:liked` et `post:unliked` —
+     * recopiée clé par clé : le total absolu s'appelle **`likeCount`**, sans `s`.
+     *
+     * Le miroir déclarait `likesCount`. `ignoreUnknownKeys` laissait passer la trame entière, le
+     * champ prenait son défaut `0`, et les quatre écrans sociaux d'Android (réels, fil, posts de
+     * profil, détail) écrivaient ce `0` par-dessus le compteur juste à chaque j'aime reçu en direct
+     * (#18157). Pire qu'un champ mort : un champ mort laisse l'écran tel quel, celui-ci écrase une
+     * valeur correcte par une fausse.
+     *
+     * **Vu rougir** : sans `@SerialName("likeCount")`, l'assertion rend 0 au lieu de 42.
+     */
+    @Test
+    fun `decodes the absolute like count of post colon liked from the gateway key`() {
+        val raw = """
+            {
+              "postId": "p1",
+              "userId": "u1",
+              "emoji": "\u2764\ufe0f",
+              "likeCount": 42,
+              "reactionSummary": { "\u2764\ufe0f": 42 }
+            }
+        """.trimIndent()
+
+        val event = json.decodeFromString(SocketPostLikedData.serializer(), raw)
+
+        assertThat(event.postId).isEqualTo("p1")
+        assertThat(event.userId).isEqualTo("u1")
+        assertThat(event.likesCount).isEqualTo(42)
+    }
+
+    /** Jumelle DESCENDANTE de la précédente — même émetteur, même clé, même absolu après retrait. */
+    @Test
+    fun `decodes the absolute like count of post colon unliked from the gateway key`() {
+        val raw = """{"postId":"p1","userId":"u1","emoji":"\u2764\ufe0f","likeCount":41,"reactionSummary":{}}"""
+
+        val event = json.decodeFromString(SocketPostUnlikedData.serializer(), raw)
+
+        assertThat(event.likesCount).isEqualTo(41)
+    }
+
+    /**
+     * `comment:liked` / `comment:unliked` — `CommentLikedEventData` porte la MÊME clé `likeCount`,
+     * et le miroir portait la même faute. Trois classes, une seule cause.
+     */
+    @Test
+    fun `decodes the absolute like count of comment colon liked from the gateway key`() {
+        val raw = """{"postId":"p1","commentId":"c1","userId":"u1","emoji":"\u2764\ufe0f","likeCount":7}"""
+
+        val event = json.decodeFromString(SocketCommentLikedData.serializer(), raw)
+
+        assertThat(event.commentId).isEqualTo("c1")
+        assertThat(event.likesCount).isEqualTo(7)
+    }
 }

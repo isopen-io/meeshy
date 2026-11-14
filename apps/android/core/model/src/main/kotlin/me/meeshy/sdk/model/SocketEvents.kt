@@ -636,6 +636,15 @@ data class SocketPostRepostedData(
 data class SocketPostLikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -643,6 +652,15 @@ data class SocketPostLikedData(
 data class SocketPostUnlikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -691,6 +709,15 @@ data class SocketCommentLikedData(
     val postId: String,
     val commentId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
