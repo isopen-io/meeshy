@@ -138,6 +138,16 @@ describe('Mon atmosphère', () => {
     expect(noteOf(host, infoButton(host, 'Que change mon atmosphère ?')).textContent).toContain('décore tes photos');
   });
 
+  test('hors de sa carte, le bouton se nomme avec son bloc : « Choisir Mon atmosphère »', async () => {
+    const host = await mount(<GameSettings {...settings({ current: null, onChange: () => undefined })} />);
+    const button = host.querySelector('[data-game-setting-atmosphere]') as Element;
+    const name = (button.getAttribute('aria-labelledby') ?? '')
+      .split(' ')
+      .map((id) => host.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? '')
+      .join(' ');
+    expect(name).toBe('Choisir Mon atmosphère');
+  });
+
   test('avec un choix : le bouton dit « Changer »', async () => {
     const host = await mount(<GameSettings {...settings({ current: 'olympe', onChange: () => undefined })} />);
     expect(host.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Changer');
