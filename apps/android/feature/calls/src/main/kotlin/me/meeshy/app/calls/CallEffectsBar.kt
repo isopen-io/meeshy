@@ -18,6 +18,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,6 +101,26 @@ internal fun EffectsBar(
         }
         EffectsBaseRow(bar, layers, addsLook, settingsHint, onBack, onSettings, onAddLook, onShowApplied)
     }
+}
+
+/**
+ * #17927 — tout ce qui est posé AU-DESSUS de la barre (sous-titres, option « Cadre », bande de looks ou panneau) : un
+ * poids sans remplissage dans la colonne du mode. Une colonne mesure d'abord ses enfants sans poids, donc [EffectsBar],
+ * posée après, reçoit toute sa hauteur ; le dessus prend ce qui reste, à sa hauteur naturelle quand elle tient, et
+ * défile (bords en fondu) quand l'écran est bas — téléphone en paysage, fenêtre basse. Jamais la barre : sans cela, un
+ * cadre choisi (option « Cadre » en plus) la repoussait hors de la zone touchable.
+ */
+@Composable
+internal fun ColumnScope.EffectsAbove(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .weight(1f, fill = false)
+            .callScrollEdgeFade(horizontal = false)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        content = content,
+    )
 }
 
 /**

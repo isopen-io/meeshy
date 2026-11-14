@@ -170,18 +170,20 @@ internal fun CallMontagePicker(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        captions()
-        MontageHoldOption(
-            live, hold, visible = hold != null && CallEffectsBarRule.showsLooks(shownBar),
-            enabled = CallMontagePickRule.holdEnabled(captureState.isRecording), reduceMotion = reduceMotion,
-            onToggled = chosen,
-        )
-        EffectsBand(shownBar, reduceMotion) { shown ->
-            when (shown) {
-                CallEffectsBarMode.Base -> Unit
-                CallEffectsBarMode.Looks -> MontageLooksBand(capture, people, reduceMotion, layers, shooter, hints, onChosen = chosen)
-                CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = faces)
-                CallEffectsBarMode.Applied -> EffectsAppliedPanel(layers, removeLayer)
+        EffectsAbove {
+            captions()
+            MontageHoldOption(
+                live, hold, visible = hold != null && CallEffectsBarRule.showsLooks(shownBar),
+                enabled = CallMontagePickRule.holdEnabled(captureState.isRecording), reduceMotion = reduceMotion,
+                onToggled = chosen,
+            )
+            EffectsBand(shownBar, reduceMotion) { shown ->
+                when (shown) {
+                    CallEffectsBarMode.Base -> Unit
+                    CallEffectsBarMode.Looks -> MontageLooksBand(capture, people, reduceMotion, layers, shooter, hints, onChosen = chosen)
+                    CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = faces)
+                    CallEffectsBarMode.Applied -> EffectsAppliedPanel(layers, removeLayer)
+                }
             }
         }
         EffectsBar(
