@@ -527,6 +527,15 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
+    /// Le filtre « Publications » vide disait « Aucun poste » (un poste est un emploi) : l'état vide redit le mot de
+    /// la tuile qu'on vient de toucher.
+    func test_profilePostsFilterEmpty_saysTheWordOfTheTile() throws {
+        let app = try app()
+        XCTAssertEqual(app["profile.posts.empty.posts"]?["fr"], "Aucune publication")
+        XCTAssertEqual(app["profile.posts.stat.posts"]?["fr"], "Publications")
+        XCTAssertFalse(try code("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift").contains("Aucun poste"))
+    }
+
     func test_callsSearchEmpty_staysOneLine_theThreeMonthLimitInsideTheSentence() throws {
         let calls = try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift")
         XCTAssertTrue(calls.contains("calls.search.empty\""))
