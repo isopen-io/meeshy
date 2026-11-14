@@ -250,11 +250,6 @@ private fun ShareLocationChoiceSheet(
                     }
                 }
             }
-            Text(
-                text = stringResource(R.string.shared_location_share_explain, displayName),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text(stringResource(UiR.string.common_cancel)) }
                 TextButton(

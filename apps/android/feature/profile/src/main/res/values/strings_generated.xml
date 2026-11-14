@@ -140,7 +140,6 @@
     <string name="shared_location_share_denied">Allow location access in Settings to share your location</string>
     <string name="shared_location_share_duration_title">For</string>
     <string name="shared_location_share_eight_hours">8 hours</string>
-    <string name="shared_location_share_explain">%1$s sees your location until it ends, then nothing; it updates while Meeshy is open. You can stop any time from their profile.</string>
     <string name="shared_location_share_failed">Location sharing didn\'t go through, try again</string>
     <string name="shared_location_share_offline">Location sharing needs a connection</string>
     <string name="shared_location_share_one_hour">1 hour</string>

@@ -140,7 +140,6 @@
     <string name="shared_location_share_denied">Erlaube den Standortzugriff in den Einstellungen, um deinen Standort zu teilen</string>
     <string name="shared_location_share_duration_title">Für</string>
     <string name="shared_location_share_eight_hours">8 Stunden</string>
-    <string name="shared_location_share_explain">%1$s sieht deinen Standort bis zum Ende, danach nichts mehr; er wird aktualisiert, solange Meeshy geöffnet ist. Du kannst jederzeit über das Profil beenden.</string>
     <string name="shared_location_share_failed">Standortfreigabe fehlgeschlagen, versuche es erneut</string>
     <string name="shared_location_share_offline">Standortfreigabe braucht eine Verbindung</string>
     <string name="shared_location_share_one_hour">1 Stunde</string>

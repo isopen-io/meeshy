@@ -140,7 +140,6 @@
     <string name="shared_location_share_denied">Permita a localização nos Ajustes para compartilhar sua localização</string>
     <string name="shared_location_share_duration_title">Por</string>
     <string name="shared_location_share_eight_hours">8 horas</string>
-    <string name="shared_location_share_explain">%1$s vê sua localização até o fim do prazo e depois mais nada; ela se atualiza enquanto o Meeshy está aberto. Você pode parar a qualquer momento pelo perfil.</string>
     <string name="shared_location_share_failed">O compartilhamento de localização não foi enviado, tente novamente</string>
     <string name="shared_location_share_offline">O compartilhamento de localização precisa de conexão</string>
     <string name="shared_location_share_one_hour">1 hora</string>

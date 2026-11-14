@@ -140,7 +140,6 @@
     <string name="shared_location_share_denied">Autorise la localisation dans Réglages pour partager ta position</string>
     <string name="shared_location_share_duration_title">Pendant</string>
     <string name="shared_location_share_eight_hours">8 heures</string>
-    <string name="shared_location_share_explain">%1$s voit ta position jusqu\'à l\'échéance, puis plus rien ; elle se met à jour quand Meeshy est ouvert. Tu peux arrêter à tout moment depuis sa fiche.</string>
     <string name="shared_location_share_failed">Le partage de position n\'est pas parti, réessaie</string>
     <string name="shared_location_share_offline">Le partage de position a besoin du réseau</string>
     <string name="shared_location_share_one_hour">1 heure</string>

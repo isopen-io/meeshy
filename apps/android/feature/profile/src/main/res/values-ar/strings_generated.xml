@@ -140,7 +140,6 @@
     <string name="shared_location_share_denied">اسمح بالوصول إلى الموقع في الإعدادات لمشاركة موقعك</string>
     <string name="shared_location_share_duration_title">لمدة</string>
     <string name="shared_location_share_eight_hours">8 ساعات</string>
-    <string name="shared_location_share_explain">يرى %1$s موقعك حتى انتهاء المدة، ثم لا شيء؛ ويتحدّث الموقع عندما يكون Meeshy مفتوحًا. يمكنك الإيقاف في أي وقت من ملفه.</string>
     <string name="shared_location_share_failed">لم تتم مشاركة الموقع، حاول مرة أخرى</string>
     <string name="shared_location_share_offline">تتطلب مشاركة الموقع اتصالًا بالشبكة</string>
     <string name="shared_location_share_one_hour">ساعة واحدة</string>
