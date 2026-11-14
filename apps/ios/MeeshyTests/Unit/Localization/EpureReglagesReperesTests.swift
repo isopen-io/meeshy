@@ -51,6 +51,8 @@ final class EpureReglagesReperesTests: XCTestCase {
         "settings.notifications.bring.note": "Coupé, personne ne peut plus faire sonner votre téléphone.",
         "settings.security.2fa.backup_codes.summary": "Pour entrer sans votre téléphone ; de nouveaux codes annulent les anciens.",
         "settings.privacy.last_seen.summary": "Vos proches voient quand vous étiez actif, vos amis si vous êtes en ligne.",
+        "settings.privacy.hide_from_contact_search.summary": "Votre profil ne ressort plus d'une recherche par numéro ou e-mail.",
+        "settings.privacy.hide_from_contact_search.info": "Activé, vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy.",
         "circleNotify.explain.BLOOD": "Votre famille de cœur seulement.",
         "circleNotify.explain.CLOSE": "Sang et Proche.",
         "circleNotify.explain.FRIEND": "Sang, Proche et Ami.",
@@ -138,5 +140,20 @@ final class EpureReglagesReperesTests: XCTestCase {
         XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .close), "Sang et Proche.")
         XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .blood), "Votre famille de cœur seulement.")
         XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .acquaintance), "Du Sang à la Connaissance.")
+    }
+
+    // MARK: - Règle 7 : le carnet d'adresses dit ce qu'il fait, au repos
+
+    func test_privacy_hideFromContactSearch_saysWhatItDoes_atRest_notOnlyBehindTheInfo() throws {
+        let view = try code(Self.views + "PrivacySettingsView.swift")
+        XCTAssertTrue(view.contains("settings.privacy.hide_from_contact_search.summary"), "la phrase d'orientation est lisible sans clic")
+        XCTAssertTrue(view.contains("note: SettingsInfoNotes.contactSearch"), "le (i) reste pour le détail secondaire")
+    }
+
+    func test_contactSearchNote_keepsItsQuestion_andOnlyTheSecondaryDetail() {
+        let note = SettingsInfoNotes.contactSearch
+        XCTAssertEqual(note.question, "Qui peut me trouver par mon numéro ?")
+        XCTAssertFalse(note.text.contains("recherche par numéro"), "la phrase visible le dit déjà : le (i) ne la répète pas")
+        XCTAssertTrue(note.text.contains("pas non plus prévenus"), "le détail secondaire : les contacts ne sont pas prévenus")
     }
 }
