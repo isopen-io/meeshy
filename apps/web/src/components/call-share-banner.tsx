@@ -114,18 +114,19 @@ export const servicePresence = (call: ActiveCall, live: boolean): PresentBanners
 /**
  * La capsule de capture puis « Vidéo réduite », voisines dans la pile (capture · En attente · Vidéo réduite) :
  * chacune entre par le haut et repart vers le haut (`HeldSwap`, forme `top` ; un fondu seul sous Réduire les
- * animations), toujours montée à son rang pour se retenir le temps de repartir. Aucune ne se range avec les
- * commandes : une capture ne se cache pas (R1), et l'avis dit pourquoi l'image change. « En attente » ne
- * s'allume pas sur le web : son moteur n'expose aucun état d'attente.
+ * animations), toujours montée à son rang pour se retenir le temps de repartir. Une capture ne se cache pas
+ * (R1) ; « Vidéo réduite » se range au premier toucher avec les autres bannières et revient au second
+ * (loi 11, comme iOS #18396). « En attente » ne
+ * s'allume pas sur le web : son moteur n'expose aucun état d'attente (#18397).
  */
-export function CallServiceBanners({ call, capturing, language }: { readonly call: ActiveCall; readonly capturing: boolean; readonly language: InterfaceLanguage }) {
+export function CallServiceBanners({ call, capturing, hidden, language }: { readonly call: ActiveCall; readonly capturing: boolean; readonly hidden: boolean; readonly language: InterfaceLanguage }) {
   const notice = pillsOf(call).videoNotice;
   return (
     <>
       <HeldSwap value={capturing ? call.members : null} shape="top" className="flex w-full justify-center" data-call-capture-slot="">
         {(held) => <CallCaptureAlerts members={held} language={language} />}
       </HeldSwap>
-      <HeldSwap value={notice === 'none' ? null : notice} shape="top" className="flex w-full justify-center px-3" data-call-video-notice-slot="">
+      <HeldSwap value={notice === 'none' ? null : notice} shape="top" className="flex w-full justify-center px-3" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-video-notice-slot="">
         {(held) => <CallVideoNoticePill notice={held} language={language} />}
       </HeldSwap>
     </>

@@ -370,10 +370,10 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame,
   const item: Readonly<Partial<Record<TopBanner, ReactNode>>> = {
     'screen-share': null,
     recording: <div key="recording" aria-hidden style={{ height: recordingSlotHeight(card) }} data-call-banner-slot="recording" />,
-    /* La capsule de capture, puis les pastilles de service : toujours montées à leur place d'ordre, elles entrent par le haut et y repartent comme le bandeau de partage (R1.6), et se retiennent le temps de repartir. Voisines dans l'ordre, un seul maillon du chunk les pose ; « En attente » ne s'allume pas sur le web (aucun état d'attente). */
+    /* La capsule de capture, puis les pastilles de service : toujours montées à leur place d'ordre, elles entrent par le haut et y repartent comme le bandeau de partage (R1.6), et se retiennent le temps de repartir. Voisines dans l'ordre, un seul maillon du chunk les pose ; « Vidéo réduite » se range avec les commandes, la capture non (R1) ; « En attente » ne s'allume pas sur le web (aucun état d'attente). */
     capture: (
       <Suspense key="capture" fallback={null}>
-        <CallServiceBanners call={call} capturing={present.capture === true} language={language} />
+        <CallServiceBanners call={call} capturing={present.capture === true} hidden={hidden} language={language} />
       </Suspense>
     ),
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
