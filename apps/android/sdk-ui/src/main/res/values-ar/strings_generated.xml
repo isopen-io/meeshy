@@ -155,6 +155,7 @@
     <string name="bubble_story_citation_open_hint">يفتح القصة المقتبسة</string>
     <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
     <string name="bubble_translated">مترجم</string>
+    <string name="call_card_participants_you">أنت</string>
     <string name="capture_microphone_denied">تم رفض الميكروفون — سيكون الفيديو صامتًا. اضغط لفتح الإعدادات</string>
     <string name="code_viewer_load_error">تعذّر تحميل الملف</string>
     <string name="code_viewer_loading">جارٍ التحميل...</string>
