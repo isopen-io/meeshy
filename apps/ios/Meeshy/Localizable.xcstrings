@@ -332146,43 +332146,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حتى لو كان Meeshy في الخلفية."
+            "value": "يخرج صوتك رغم ذلك لدى قريبك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auch wenn Meeshy im Hintergrund ist."
+            "value": "Deine Stimme ist bei deinem nahen Menschen trotzdem zu hören."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Even if Meeshy is in the background."
+            "value": "Your voice still plays on your loved one’s side."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aunque Meeshy esté en segundo plano."
+            "value": "Tu voz suena igualmente en el lado de tu ser querido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Même si Meeshy est en arrière-plan."
+            "value": "Votre voix sort quand même chez votre proche."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anche se Meeshy è in background."
+            "value": "La tua voce esce comunque dal tuo caro."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesmo com o Meeshy em segundo plano."
+            "value": "Sua voz sai mesmo assim do lado da pessoa próxima."
           }
         }
       }
@@ -332193,43 +332193,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متى أستخدم جهاز اللاسلكي؟"
+            "value": "وماذا لو كان Meeshy في الخلفية؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wann das Walkie-Talkie nutzen?"
+            "value": "Und wenn Meeshy im Hintergrund ist?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When to use the walkie-talkie?"
+            "value": "What if Meeshy is in the background?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Cuándo usar el walkie-talkie?"
+            "value": "¿Y si Meeshy está en segundo plano?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quand utiliser le talkie ?"
+            "value": "Et si Meeshy est en arrière-plan ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando usare il walkie-talkie?"
+            "value": "E se Meeshy è in background?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando usar o walkie-talkie?"
+            "value": "E se o Meeshy estiver em segundo plano?"
           }
         }
       }

@@ -124,11 +124,11 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.content.refused-source": "Cette app n’a remis qu’un chemin de fichier : partagez le fichier lui-même.",
         "share.sheet.offline": "Hors ligne : l’envoi repartira au retour du réseau.",
         "share.sheet.sign-in.body": "Votre partage est gardé : il vous attend dans Meeshy.",
-        "talkie.info.a11y": "Quand utiliser le talkie ?",
+        "talkie.info.a11y": "Et si Meeshy est en arrière-plan ?",
         "share.sheet.withheld.flame": "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.",
         "share.sheet.withheld.flame.note": "Sa copie disparaît aussi et ne se retransfère pas.",
         "share.sheet.withheld.flame.question": "Que devient la copie d’une flamme ?",
-        "talkie.info.text": "Même si Meeshy est en arrière-plan.",
+        "talkie.info.text": "Votre voix sort quand même chez votre proche.",
         "talkie.send.e2ee": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.",
         "talkie.send.explain": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.",
         "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",
@@ -388,8 +388,8 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(ProfileTalkieWording.notice(.voice), String(localized: "talkie.header.announce.recorded", bundle: .main))
         XCTAssertFalse(TalkieInfoWording.text.isEmpty)
         let note = try XCTUnwrap(app["talkie.info.text"]?["fr"])
-        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Quand utiliser le talkie ?")
-        XCTAssertEqual(note, "Même si Meeshy est en arrière-plan.", "le (i) ne garde que le détail secondaire : la phrase visible dit déjà l'urgence et la voix")
+        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Et si Meeshy est en arrière-plan ?")
+        XCTAssertEqual(note, "Votre voix sort quand même chez votre proche.", "la note RÉPOND à la question : un fragment « Même si… » n'apprend rien une fois ouvert")
         XCTAssertFalse(note.contains("urgence"))
     }
 
@@ -686,9 +686,10 @@ final class ConversationEpureTests: XCTestCase {
             "ar": "عدد الاستخدامات ومدة الرابط"
         ],
         "talkie.info.text": [
-            "fr": "Même si Meeshy est en arrière-plan.", "en": "Even if Meeshy is in the background.", "es": "Aunque Meeshy esté en segundo plano.",
-            "pt-BR": "Mesmo com o Meeshy em segundo plano.", "de": "Auch wenn Meeshy im Hintergrund ist.", "it": "Anche se Meeshy è in background.",
-            "ar": "حتى لو كان Meeshy في الخلفية."
+            "fr": "Votre voix sort quand même chez votre proche.", "en": "Your voice still plays on your loved one’s side.",
+            "es": "Tu voz suena igualmente en el lado de tu ser querido.", "pt-BR": "Sua voz sai mesmo assim do lado da pessoa próxima.",
+            "de": "Deine Stimme ist bei deinem nahen Menschen trotzdem zu hören.", "it": "La tua voce esce comunque dal tuo caro.",
+            "ar": "يخرج صوتك رغم ذلك لدى قريبك."
         ],
     ]
 
@@ -736,11 +737,11 @@ final class ConversationEpureTests: XCTestCase {
     }
 
     func test_talkieInfo_keepsOnlyTheSecondaryDetail_behindItsQuestion() throws {
-        XCTAssertEqual(TalkieInfoWording.a11y, "Quand utiliser le talkie ?")
+        XCTAssertEqual(TalkieInfoWording.a11y, "Et si Meeshy est en arrière-plan ?")
+        XCTAssertEqual(TalkieInfoWording.text, "Votre voix sort quand même chez votre proche.", "la note répond à la question qu'elle porte")
         XCTAssertFalse(TalkieInfoWording.text.contains("urgence"))
         XCTAssertLessThan(TalkieInfoWording.text.count, 50)
         let source = try code("Meeshy/Features/Talkie/TalkieInfoButton.swift")
-        XCTAssertTrue(source.contains("defaultValue: \"Même si Meeshy est en arrière-plan.\""))
         XCTAssertTrue(source.contains(".accessibilityHint(TalkieInfoWording.text)"), "la note reste lue par le lecteur d'écran")
     }
 
