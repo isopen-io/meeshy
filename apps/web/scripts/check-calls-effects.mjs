@@ -86,6 +86,12 @@ const capture = async (page, name) => {
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 /** Un toucher CENTRE son élément en défilant : le geste suivant vise l'élément arrêté, comme un doigt. */
+/** Le carrousel rouvert a fini de monter (#18186) : une double tape le vise à sa place, pas pendant sa montée. */
+const risen = (page, selector) => page.waitForFunction((target) => {
+  const element = document.querySelector(target);
+  return element !== null && element.getAnimations().every((animation) => animation.playState !== 'running');
+}, selector, { timeout: 4000 }).catch(() => undefined);
+
 const centered = (page, id) =>
   until(
     page,
@@ -349,7 +355,11 @@ try {
       });
       check(/^linear-gradient\(/.test(edgeFade) && (edgeFade.match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length === 2, `${label} : le carrousel s'efface en fondu à ses deux bords (#17409) — ${edgeFade}`);
       await page.click('[data-carousel-item="golden"]');
-      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Doré » est coché`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : « Doré » choisi, le carrousel se referme (#18186)`);
+      check((await page.$$eval('[data-call-mode-bar] [data-call-effects-category][aria-pressed="true"]', (tabs) => tabs.length)) === 0 && (await page.$('[data-call-mode-bar] [data-call-effects-add-look]')) !== null, `${label} : la barre revient à son menu de base — Visage · Couleur · Cadres sur ‹ · Réglages · (+)`);
+      await page.click('[data-call-effects-category="color"]');
+      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Couleur » rouvre le carrousel, « Doré » coché`);
+      await risen(page, '[data-call-effects-looks]');
       await centered(page, 'golden');
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="golden"]');
@@ -366,7 +376,7 @@ try {
       // ------------------------------------------------ 4 bis. l'éruption
       await page.click('[data-call-effects-category="face"]');
       await page.click('[data-carousel-item="volcano"]');
-      check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : « Éruption » est coché`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : « Éruption » choisie, le carrousel se referme`);
       const warmth = (color) => (color === null ? 0 : color.r - color.b);
       const tinted = await until(page, (base) => {
         const video = document.querySelector('[data-call-mode-preview] video');
@@ -409,9 +419,13 @@ try {
       check((await page.$('[data-call-mode-bar] [data-call-effects-categories]')) === null, `${label} : la barre a perdu ses puces et se resserre sur ‹ · Réglages · (+)`);
       check(settingsLayout.titles[0] === 'Luminosité' && settingsLayout.titleAbove, `${label} : « Luminosité » au-dessus de son curseur (P8b.3)`);
       await capture(page, `effets-reglages-${slug}`);
-      check(await vanishes(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : à la place du carrousel, qui repart en fondu`);
       await page.click('[data-call-effects-settings-toggle]');
-      check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
+      check((await vanishes(page, '[data-call-effects-settings]')) && (await appears(page, '[data-call-mode-bar] [data-call-effects-categories]')) && (await page.$('[data-call-mode="effects"] [data-call-mode-carousel]')) === null, `${label} : un second appui rend le menu de base, ses puces revenues`);
+      await page.click('[data-call-effects-settings-toggle]');
+      await appears(page, '[data-call-effects-settings]');
+      check((await page.getAttribute('[data-call-mode-quit]', 'aria-label')) === 'Fermer les réglages', `${label} : panneau ouvert, ‹ se nomme « Fermer les réglages »`);
+      await page.click('[data-call-mode-quit]');
+      check((await vanishes(page, '[data-call-effects-settings]')) && (await page.$('[data-call-mode="effects"]')) !== null, `${label} : ‹ referme le panneau sans quitter le mode (#17947)`);
 
       // ------------------------------------------------ 5 bis. la pile d'effets : l'appui long sur (+) liste ce qui est appliqué (#17903)
       check(await holdAddLook(page), `${label} : l'appui long sur (+) liste les effets appliqués`);
@@ -436,7 +450,8 @@ try {
       check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : l'effet validé est gardé`);
       await page.click('[data-call-effects-category="color"]');
       await page.click('[data-carousel-item="sky"]');
-      await page.focus('[data-carousel-item="sky"]');
+      await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]');
+      check(await until(page, () => document.activeElement?.getAttribute('data-call-effects-category') === 'color'), `${label} : le carrousel refermé, le focus rejoint la puce « Couleur »`);
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]') && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : Échap quitte le mode sans réduire l'appel`);
       await openActions(page);
@@ -490,6 +505,7 @@ try {
       check(await paintedAll('[data-call-capture-thumb]'), `${label} : les treize vignettes se peignent (${(await painted(page, '[data-call-capture-thumb]')).filter(Boolean).length}/13)`);
       await page.click('[data-carousel-item="cover"]');
       check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === 'cover', `${label} : l'aperçu passe en Couverture`);
+      check(await vanishes(page, '[data-call-mode="montage"] [data-call-mode-carousel]'), `${label} : « Couverture » choisie, le carrousel se referme (#18186)`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : la couverture se peint`);
       await capture(page, `montage-couverture-${slug}`);
       // ------------------------------------------------ 8 ter. la barre du Montage est celle d'Effets (#17903, #16979)
@@ -504,15 +520,18 @@ try {
           frames: bar?.querySelector('[data-call-effects-category="frames"]')?.getAttribute('aria-pressed') ?? null,
           sizes,
           validate: document.querySelector('[data-call-effects-validate]') !== null,
-          faces: document.querySelector('[data-call-capture-faces]') !== null,
+          faces: document.querySelector('[data-call-mode-bar] [data-call-capture-faces]') === null,
           keyboard: document.querySelector('[data-call-record-key]') !== null,
         };
       });
       check(montageBar.glass && montageBar.back === 'Retour à l’appel' && montageBar.settings && montageBar.add && !montageBar.validate, `${label} : la barre du Montage est celle d'Effets — verre, ‹ · Réglages · (+), ni Quitter ni Valider (${JSON.stringify(montageBar.back)})`);
-      check(montageBar.frames === 'true', `${label} : sous la barre, la puce « Cadres » est pressée`);
+      check(montageBar.frames === 'false', `${label} : menu de base — la puce « Cadres » n'est pas pressée, rien n'est ouvert`);
       check(montageBar.sizes.length === 3 && montageBar.sizes.every((size) => size >= TAP_FLOOR - 0.5), `${label} : les trois boutons de la barre font ${TAP_FLOOR} au moins`);
-      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » et la vidéo au clavier restent atteignables`);
+      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » (dans Réglages) et la vidéo au clavier restent atteignables`);
 
+      await page.click('[data-call-effects-category="frames"]');
+      check((await appears(page, '[data-call-mode="montage"] [data-call-mode-carousel]')) && (await page.getAttribute('[data-call-effects-category="frames"]', 'aria-pressed')) === 'true', `${label} : « Cadres » rouvre le carrousel, pressée`);
+      await risen(page, '[data-call-montage-looks]');
       await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
@@ -547,13 +566,17 @@ try {
       const tiles = await page.$$eval('video[data-call-stream]', (videos) => videos.filter((video) => video.videoWidth > 0).length);
       const downloads = [];
       page.on('download', (item) => downloads.push(item.suggestedFilename()));
+      await page.click('[data-call-effects-settings-toggle]');
+      await appears(page, '[data-call-effects-settings] [data-call-capture-faces]');
       await page.click('[data-call-capture-faces]');
+      check(await vanishes(page, '[data-call-effects-settings]'), `${label} : « Chaque visage », dans Réglages, rend le menu de base`);
       check(await until(page, () => /visages? enregistrés?/.test(document.querySelector('[data-call-capture-status]')?.textContent ?? '')), `${label} : « Chaque visage » le dit (${await page.textContent('[data-call-capture-status]')})`);
       const deadline = Date.now() + 3000;
       while (downloads.length < tiles && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
       check(tiles > 0 && downloads.length === tiles && downloads.every((name) => /^meeshy-appel-visage-/.test(name)), `${label} : un portrait par tuile affichée (${downloads.length}/${tiles})`);
 
       // ------------------------------------------------ 8 bis. les cadres de capture (#8742, #8743)
+      await page.click('[data-call-effects-category="frames"]');
       check(await appears(page, '[data-call-frame-moods] [data-call-frame-mood]:nth-child(2)'), `${label} : les puces d'ambiance se montrent`);
       const chips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }));
       check(chips[0]?.id === 'classics' && chips[0]?.label === 'Classiques' && chips[0]?.pressed === 'true' && chips.length > 2, `${label} : « Classiques » d'abord et choisie, puis ${chips.length - 1} ambiances (${chips.map((chip) => chip.label).join(' · ')})`);
@@ -572,7 +595,9 @@ try {
       check((await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')))).includes('frame'), `${label} : le cadre est une couche de la pile`);
       await capture(page, `montage-pile-${slug}`);
       await page.click('[data-call-effect-layer-undo="frame"]');
-      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : annuler le cadre referme la liste et rend les classiques`);
+      check(await vanishes(page, '[data-call-effect-layers]'), `${label} : annuler le cadre referme la liste et rend le menu de base`);
+      await page.click('[data-call-effects-category="frames"]');
+      check((await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : le cadre annulé, « Cadres » rouvre les classiques`);
       await page.click(`[data-call-frame-mood="${mood}"]`);
       await centered(page, duoFrames[0]);
       const framed = page.waitForEvent('download', { timeout: 8000 });

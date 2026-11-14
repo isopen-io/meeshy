@@ -181,7 +181,7 @@ class CallMontageEffectsBarTest {
         rule.waitForIdle()
 
         assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isEqualTo(before)
-        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Cover"))
+        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher("announces the browsed style then its rank") { it.config.getOrNull(SemanticsProperties.StateDescription)?.matches(Regex("Cover, \\d+ of \\d+")) == true })
     }
 
     /**

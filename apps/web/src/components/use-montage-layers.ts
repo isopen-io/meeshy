@@ -23,8 +23,10 @@ type Input = {
   /** (+) ou une puce Visage · Couleur : ouvre Effets sur ce genre. Sans lui, la rangée ne montre que « Cadres ». */
   readonly onAddLook: ((genre: 'face' | 'color') => void) | undefined;
   readonly clearFrame: () => void;
-  readonly closeSettings: () => void;
-  readonly closeList: () => void;
+  /** (+) touché : la barre suit `afterAddingLook`. */
+  readonly onAdding: () => void;
+  /** Une couche annulée : la barre suit `afterRemoval`. */
+  readonly onRemoval: () => void;
   readonly say: (text: string) => void;
 };
 
@@ -34,7 +36,7 @@ type Input = {
  * et les gestes de la barre : (+), annuler une couche. Annuler la couche « cadre » retire aussi le cadre gardé
  * en direct, par le chemin de « Cadre » (loi 16).
  */
-export function useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame, closeSettings, closeList, say }: Input) {
+export function useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame, onAdding, onRemoval, say }: Input) {
   const text = textOf(language);
   const words = layersTextOf(language);
   const frameLayer = frame?.id ?? hold?.heldFrameId ?? null;
@@ -44,15 +46,14 @@ export function useMontageLayers({ language, effects, frame, frames, hold, apply
   const refuse = (): void => say(words.full);
 
   /** À trois couches, un cadre de plus n'entre pas : le choix est refusé et dit ; changer le cadre déjà posé reste permis. */
+  const frameFits = canAdd(stack, 'frame');
   const framePermitted = (): boolean => {
-    const permitted = canAdd(stack, 'frame');
-    if (!permitted) refuse();
-    return permitted;
+    if (!frameFits) refuse();
+    return frameFits;
   };
 
   const addLook = (): void => {
-    closeSettings();
-    closeList();
+    onAdding();
     if (crowded) {
       refuse();
       return;
@@ -62,7 +63,7 @@ export function useMontageLayers({ language, effects, frame, frames, hold, apply
   };
 
   const undo = (genre: EffectGenre): void => {
-    closeList();
+    onRemoval();
     if (genre === 'face') apply({ faceEffect: 'none' });
     else if (genre === 'color') apply({ preset: 'natural' });
     else {
@@ -82,9 +83,9 @@ export function useMontageLayers({ language, effects, frame, frames, hold, apply
   };
 
   const sortEntries: readonly CategoryEntry[] = [
-    ...(onAddLook === undefined ? [] : [{ id: 'face', label: text('callStudio.mode.face') }, { id: 'color', label: text('callStudio.effects.color') }]),
-    { id: 'frames', label: words.frames },
+    ...(onAddLook === undefined ? [] : [{ id: 'face', label: text('callStudio.mode.face'), genre: 'face' as const }, { id: 'color', label: text('callStudio.effects.color'), genre: 'color' as const }]),
+    { id: 'frames', label: words.frames, genre: 'frame' },
   ];
 
-  return { stack: stack satisfies EffectStack, crowded, framePermitted, addLook, undo, layerName, sortEntries, words };
+  return { stack: stack satisfies EffectStack, crowded, frameFits, framePermitted, addLook, undo, layerName, sortEntries, words };
 }

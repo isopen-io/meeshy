@@ -339,17 +339,40 @@ struct CallCaptionsBand: View {
     }
 
     private func journalButton(_ action: @escaping () -> Void) -> some View {
+        CallJournalButton(isOpen: false, action: action)
+    }
+}
+
+/// #17964 — « Journal » au pied : au repos sous les sous-titres, une puce de verre qui ouvre le
+/// journal ; journal ouvert dans la pilule, à la même place, un disque blanc plein à icône et
+/// texte sombres qui le referme (P6, P9b — comme la colonne du grand écran, #17932). Une seule
+/// pièce pour les deux états : VoiceOver y lit une bascule.
+struct CallJournalButton: View {
+    let isOpen: Bool
+    let action: () -> Void
+
+    private var ink: Color { isOpen ? MeeshyColors.indigo950 : .white }
+
+    var body: some View {
         Button(action: action) {
-            Text(CallCaptionsCopy.journal)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .frame(minHeight: 44)
-                .callChipGlass(isActive: false, tint: .white)
-                .contentShape(Capsule())
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                if isOpen {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                Text(CallCaptionsCopy.journal)
+                    .font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(ink)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .frame(minHeight: 44)
+            .callChipGlass(isActive: isOpen, tint: .white)
+            .contentShape(Capsule())
         }
         .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
-        .accessibilityHint(CallCaptionsCopy.journalHint)
+        .optionalAccessibilityHint(isOpen ? nil : CallCaptionsCopy.journalHint)
+        .toggleStateAccessibility(isToggle: true, isActive: isOpen)
     }
 }
 
@@ -512,7 +535,8 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
 /// (« Journal » à gauche, la bascule Traduit / Original à droite — la planche P6 n'y
 /// dessine rien d'autre), puis la liste, qui défile et offre « Revenir au direct ».
 /// Le réglage Traduit / Original est celui du journal seul (#17678) : la bande des
-/// sous-titres ne le lit pas. Un toucher par phrase l'inverse. On le range par le (…) ou par le bouton Journal ;
+/// sous-titres ne le lit pas. Un toucher par phrase l'inverse. Le (…) le range ; « Journal », au pied,
+/// en disque blanc, le referme et rend les sous-titres ou la pilule de base (#17964, P9b, P13.9) ;
 /// Échap (clavier, geste d'échappement de VoiceOver) le ferme aussi.
 struct CallJournalPanel: View {
     let items: [CallJournalItem<CallTranscriptionSegment>]
@@ -523,12 +547,14 @@ struct CallJournalPanel: View {
     let onClose: () -> Void
 
     @AccessibilityFocusState private var titleHasFocus: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
             header
             CallJournalList(items: items, line: line, onToggleOriginal: onToggleOriginal)
                 .frame(height: height)
+            footer
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.journalTitle)
@@ -554,6 +580,27 @@ struct CallJournalPanel: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.xsPlus)
+    }
+
+    /// Le pied des sous-titres, à la même place : la légende, puis « Journal » actif qui referme.
+    private var footer: some View {
+        let note = CallCaptionsCopy.footer(CallCaptionsFooter.journal(lines: items.suffix(2).map(line)))
+        return HStack(spacing: MeeshySpacing.sm) {
+            if let note {
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .contentTransition(.opacity)
+                    .transition(.opacity)
+            }
+            Spacer(minLength: 0)
+            CallJournalButton(isOpen: true, action: onClose)
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.xs)
+        .animation(.easeInOut(duration: reduceMotion ? 0.12 : 0.22), value: note)
     }
 }
 
