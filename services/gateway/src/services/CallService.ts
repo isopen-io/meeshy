@@ -38,6 +38,7 @@ import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
+import { resolveCallSummaryParticipants } from './calls/callSummaryParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { assertCallableConversationType, assertViewerMayStartCall } from './calls/callStartAdmission';
 import { commitCallEnd } from './calls/endCallRetry';
@@ -2681,7 +2682,9 @@ export class CallService {
     // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
     // line) in a single pass. Persisted on `Message.metadata`; survives both the
     // socket broadcast and REST history.
+    const participants = call.answeredAt ? await resolveCallSummaryParticipants(this.prisma, call.id) : [];
     const built = buildCallSummaryWithMetadata({
+      participants,
       status: call.status,
       endReason: call.endReason,
       callType,
@@ -2708,7 +2711,8 @@ export class CallService {
       const conversion = buildGarbageCollectedConversion({
         callId: call.id,
         initiatorId: call.initiatorId,
-        callType
+        callType,
+        participants
       });
       return applyUpdate(existing.id, conversion.summary.content, conversion.metadata);
     }

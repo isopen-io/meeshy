@@ -43,6 +43,13 @@ const NETWORK_QUALITIES: ReadonlySet<string> = new Set([
  * `'call'` degrade to their plain-text system bubble on `'call-live'` — by
  * design, no enum they decode strictly is ever extended.
  */
+export interface CallSummaryParticipant {
+  /** Compte de la personne — le lecteur se retire de la liste par cet id. */
+  readonly userId: string;
+  /** Le nom que la conversation montre déjà pour elle : jamais un e-mail ni un numéro. */
+  readonly displayName: string;
+}
+
 export interface CallSummaryMetadata {
   readonly kind: 'call' | 'call-live';
   /** CallSession id — lets the client re-join an active call or call back. */
@@ -71,6 +78,15 @@ export interface CallSummaryMetadata {
    * ignore unknown keys) keep their exact current behaviour.
    */
   readonly endedByInitiator?: true;
+  /**
+   * Tous ceux qui ont REJOINT l'appel, dans l'ordre d'arrivée, lecteur compris
+   * (planche A1 : « Awa, Karim, Lina et vous »). Le résumé est UN message pour
+   * tous ses lecteurs : c'est le lecteur qui se retire par `userId`, puis
+   * s'ajoute en « vous » s'il figure dans la liste. Clé ABSENTE quand rien
+   * n'est connu — les anciens clients l'ignorent, les nouveaux n'affichent
+   * aucune ligne (#9223).
+   */
+  readonly participants?: ReadonlyArray<CallSummaryParticipant>;
 }
 
 export interface CallSummaryInput {
@@ -225,6 +241,27 @@ export interface CallSummaryMetadataInput extends CallSummaryInput {
   readonly answeredAt?: Date | string | null;
   /** User id recorded as having ended the call (`CallSession.metadata.endedBy`). */
   readonly endedById?: string | null;
+  /** Ceux qui ont rejoint l'appel, dans l'ordre d'arrivée (voir `CallSummaryMetadata.participants`). */
+  readonly participants?: ReadonlyArray<CallSummaryParticipant> | null;
+}
+
+/**
+ * Ne garde que `userId` + `displayName` (jamais une coordonnée qui aurait
+ * voyagé dans l'objet), rogne les espaces, écarte les entrées sans id ou sans
+ * nom lisible, retire les doublons (première arrivée gagnante). Rend un objet
+ * à répandre : VIDE quand rien ne reste, pour que la clé soit absente.
+ */
+export function callSummaryParticipantsField(
+  participants?: ReadonlyArray<CallSummaryParticipant> | null
+): { readonly participants?: ReadonlyArray<CallSummaryParticipant> } {
+  const kept = (participants ?? []).reduce<ReadonlyArray<CallSummaryParticipant>>((acc, entry) => {
+    const userId = typeof entry?.userId === 'string' ? entry.userId.trim() : '';
+    const displayName = typeof entry?.displayName === 'string' ? entry.displayName.trim() : '';
+    return userId === '' || displayName === '' || acc.some((known) => known.userId === userId)
+      ? acc
+      : [...acc, { userId, displayName }];
+  }, []);
+  return kept.length === 0 ? {} : { participants: kept };
 }
 
 /** Approximate per-second byte rates per direction, used to ESTIMATE data spent
@@ -310,7 +347,8 @@ function metadataFromSummary(
     bytesTotal,
     bytesEstimated,
     networkQuality: normalizeQuality(input.networkQuality),
-    ...(wasCancelledByInitiator(summary.outcome, input) ? { endedByInitiator: true as const } : {})
+    ...(wasCancelledByInitiator(summary.outcome, input) ? { endedByInitiator: true as const } : {}),
+    ...callSummaryParticipantsField(input.participants)
   };
 }
 
@@ -347,6 +385,11 @@ export interface LiveCallInput {
   readonly initiatorId: string;
   /** Media type of the call (`CallSession.metadata.type`); non-'video' → audio. */
   readonly callType?: string | null;
+}
+
+export interface GarbageCollectedConversionInput extends LiveCallInput {
+  /** Ceux qui ont rejoint un appel décroché avant son ramassage (voir `CallSummaryMetadata.participants`). */
+  readonly participants?: ReadonlyArray<CallSummaryParticipant> | null;
 }
 
 /**
@@ -390,7 +433,7 @@ export function buildLiveCallMetadata(
  * must not stay "en cours" forever — it converts to the `failed` state.
  */
 export function buildGarbageCollectedConversion(
-  input: LiveCallInput
+  input: GarbageCollectedConversionInput
 ): { summary: CallSummary; metadata: CallSummaryMetadata } {
   const callType = normalizeMediaType(input.callType);
   return {
@@ -410,7 +453,8 @@ export function buildGarbageCollectedConversion(
       durationSeconds: 0,
       bytesTotal: null,
       bytesEstimated: false,
-      networkQuality: null
+      networkQuality: null,
+      ...callSummaryParticipantsField(input.participants)
     }
   };
 }
