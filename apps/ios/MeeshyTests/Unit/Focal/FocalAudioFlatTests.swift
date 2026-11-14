@@ -109,3 +109,42 @@ final class FocalAudioFlatTests: XCTestCase {
         XCTAssertEqual(a, b, "mêmes entrées ⇒ égal — le gate Equatable ne doit pas re-rendre pour rien")
     }
 }
+
+/// **Une rangée qui porte un vocal ne rend jamais le vide** (#10690). Le bloc
+/// audio dérivait son `Message` de la projection `allAudioItems` du ViewModel ;
+/// à l'accusé serveur, la bascule d'identifiant local → serveur la privait de
+/// la bulle qu'on venait d'envoyer, et la rangée restait vide jusqu'à la
+/// réouverture. Le message de la rangée est le repli.
+@MainActor
+final class FocalAudioHostMessageTests: XCTestCase {
+
+    private func message(id: String, attachment: MessageAttachment) -> Message {
+        Message(id: id, conversationId: "c1", senderId: "me", content: "", attachments: [attachment], deliveryStatus: .sending, isMe: true)
+    }
+
+    func test_hostingMessage_prefersTheProjection_whenItKnowsTheTrack() {
+        let att = MessageAttachment.audio(durationMs: 9_000, color: "#3366FF")
+        let projected = message(id: "server-1", attachment: att)
+        let row = message(id: "cid-1", attachment: att)
+        let item = ConversationViewModel.AudioItem(id: att.id, attachment: att, message: projected, transcription: nil, translatedAudios: [])
+
+        XCTAssertEqual(FocalAudioBlock.hostingMessage(for: att.id, in: [item], fallback: row)?.id, "server-1")
+    }
+
+    func test_hostingMessage_fallsBackToTheRow_whenTheProjectionLagsBehind() {
+        let att = MessageAttachment.audio(durationMs: 9_000, color: "#3366FF")
+        let row = message(id: "cid-1", attachment: att)
+
+        XCTAssertEqual(FocalAudioBlock.hostingMessage(for: att.id, in: [], fallback: row)?.id, "cid-1",
+                       "la bulle qu'on vient d'envoyer se rend depuis son propre message")
+        XCTAssertNil(FocalAudioBlock.hostingMessage(for: att.id, in: [], fallback: nil),
+                     "sans vocal, la rangée n'a rien à rendre — et ne fabrique rien")
+    }
+
+    func test_theController_handsTheRowMessage_onlyWhenItCarriesAudio() throws {
+        let iosRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let rows = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift"), encoding: .utf8)
+        XCTAssertTrue(rows.contains("input.audioHostMessage = message.attachments.contains { $0.type == .audio } ? message : nil"))
+    }
+}

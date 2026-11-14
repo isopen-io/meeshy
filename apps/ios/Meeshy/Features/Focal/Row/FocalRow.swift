@@ -532,6 +532,7 @@ struct FocalRow: View {
                 accentHex: input.accentHex,
                 isDark: input.isDark,
                 allAudioItems: input.allAudioItems,
+                hostMessage: input.audioHostMessage,
                 translatedAudios: input.translatedAudios,
                 mentionDisplayNames: input.mentionDisplayNames,
                 conversationName: input.conversationName,
