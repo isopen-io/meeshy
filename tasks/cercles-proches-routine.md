@@ -1035,3 +1035,28 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Mineurs non traités : « Arrêter » peut attendre le relevé (jusqu'à 30 s) quand aucun n'a été envoyé ; un accusé
   perdu dit « a besoin du réseau » (même phrase qu'Android).
 - Prochain lot recommandé : l'émission web (#14109), puis #18204 (iOS + Android), puis la passerelle #18205.
+
+## 2026-11-14 — réveil du matin : partager ma position depuis le web (#18345 ⊂ #14109)
+
+- Reprise : aucune PR cercles ouverte ; #18228 (révocation iOS) fusionnée. Aucune branche n'écrit l'émission web :
+  issue #18345 ouverte (milestone #215, sous-issue de #14109), lot réservé sur `claude/cercles-18345-web-emission`.
+- Lot : l'ÉMISSION web, iso #16983 et des lois de révocation de #18166. `lib/shared-locations/` :
+  `shared-location-sending.ts` (charge bornée comme le schéma serveur, sans Zod ; accusé ; cadence 5 s / 50 m / 120 s),
+  `shared-location-roster.ts` (échéance par personne, terme serveur qui couvre la plus lointaine, union),
+  `shared-location-sharing.ts` (le centre : verrou unique, compte propriétaire relu après chaque attente, « dans le
+  doute on arrête »), `shared-location-sharing-live.ts` (`navigator.geolocation`, la socket vivante, un centre par
+  compte, liste en `localStorage` par compte — identifiants et échéances, jamais une position). La fiche d'un Ami porte
+  « Partager ma position » (feuille : 1 h · 8 h, ville par défaut, quartier, exacte), puis « X voit votre position (…)
+  jusqu'à HH:MM » et « Arrêter », gardés sous Ami tant qu'un partage court. Le chrome différé reprend le partage au
+  chargement. 21 libellés en sept langues (adaptés du catalogue iOS, vouvoiement du web).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné — deux onglets du même compte, un arrêt fait dans l'un
+  était republié par l'autre (liste relue sous le verrou et à l'événement `storage`). Corrigés aussi : la liste gardée
+  couvre l'union AVANT l'accusé (onglet fermé pendant l'attente), aucune demande de géolocalisation sans geste
+  (reprise et retrait lisent la permission sans la demander), un retrait refusé retombe sur l'arrêt complet, une
+  échéance réveillée trop tôt se réarme. Ouvert : « Se déconnecter arrête mon partage » (#18351, `décision-produit`,
+  vaut aussi pour iOS et Android).
+- Gates locaux : `bun test` du lot 74/74 (témoins des correctifs vus rouges d'abord) ; `tsc --noEmit` vert ; build,
+  `check-utilities`, `measure-weight` verts. Suite web complète : 31 958 verts, 5 rouges hors lot (parité des
+  catalogues du jeu web/iOS ×2, `act-leak-guard`, et deux témoins de présence `focal-row`/`lens-row` qui passent seuls).
+- Prochain lot recommandé : #18204 (« Arrêter » hors ligne rejoué, iOS + Android), puis la passerelle #18205, puis
+  #18351 une fois tranchée.

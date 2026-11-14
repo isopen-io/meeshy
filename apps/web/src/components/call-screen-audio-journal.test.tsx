@@ -277,7 +277,7 @@ describe('le passage est un morphisme, un fondu court sous « Réduire les anima
     await view.settle();
     await openJournal(view);
     runs.length = 0;
-    view.press('[data-call-control-pill] [data-call-journal-panel] [data-panel-close]');
+    view.press('[data-call-control-pill] [data-call-journal-panel] [data-call-journal-toggle]');
     await view.settle();
     expect(view.stage()).toBe('full');
     expect(view.portraitSize()).toBe('144px');

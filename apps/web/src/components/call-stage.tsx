@@ -29,6 +29,7 @@ import {
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
+  selfTileRailShift,
   selfTileRestingFactor,
   selfTileScaleFor,
   selfTileSize,
@@ -36,12 +37,12 @@ import {
   setSelfTileCorner,
   setSelfTileScale,
   type SelfTileCorner,
-  type SelfTileScale,
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
 import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
+import type { CornerSight } from '@/components/call-duo-corner';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -54,7 +55,6 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 import { preloadedView } from '@/lib/calls/preloaded-view';
 import { sessionStore } from '@/lib/api/session';
-import { peerSpeakingOnCameraOff } from '@/lib/calls/call-camera-off';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 /**
@@ -93,6 +93,8 @@ export type SelfView = {
   readonly topInset?: number;
   /** Ma vignette se retire : un cadre en direct me compose dans sa case (#16943, comme `duoOverlays` iOS). */
   readonly tileHidden?: boolean;
+  /** Les rails du duo sont sortis : en paysage, ma vignette leur cède le coin (L2.8, `selfTileRailShift`). Absent : rangés. */
+  readonly railsOpen?: boolean;
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -129,14 +131,11 @@ export const CALL_GRID_KIT: CallGridKit = {
 export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.ScreenZoomSurface));
 const ScreenZoomSurface = screenZoomSurfaceView.View;
 
+
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
 const ZOOM_STEP_ROOM = 52;
 
-const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 'callControls.selfTile.medium' | 'callControls.selfTile.large'>> = {
-  1: 'callControls.selfTile.small',
-  2: 'callControls.selfTile.medium',
-  3: 'callControls.selfTile.large',
-};
+const TILE_SAID = ['small', 'medium', 'large'] as const;
 
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
 export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing' | 'cameraPreview'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing && (call.cameraPreview ?? null) === null });
@@ -164,17 +163,11 @@ const SELF_TILE_FLIP_MS = 300;
 
 const screenCorner = { top: `calc(env(safe-area-inset-top) + ${SCREEN_SELF_TILE.y}px)`, right: SELF_TILE_MARGIN, width: SCREEN_SELF_TILE.width, height: SCREEN_SELF_TILE.height } as const;
 
-const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.corner.${SelfTileCorner}`>> = {
-  'top-left': 'callControls.selfTile.corner.top-left',
-  'top-right': 'callControls.selfTile.corner.top-right',
-  'bottom-left': 'callControls.selfTile.corner.bottom-left',
-  'bottom-right': 'callControls.selfTile.corner.bottom-right',
-};
 
-/** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, viewport: TileSize): { readonly left: string; readonly top: string } {
+/** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles ; `shift`, le pas de côté qui cède le coin au rail (L2.8). */
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, viewport: TileSize, shift: number): { readonly left: string; readonly top: string } {
   const clearance = selfTileCornerInsets(viewport);
-  const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
+  const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN + shift}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width - shift}px)`;
   const tileTop = clearance.top + topInset;
   const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${clearance.bottom + size.height}px))`;
   return { left, top };
@@ -193,15 +186,15 @@ const both =
 /** Sous la rangée des pastilles, au centre : entre les rangées d'une vignette de coin. */
 const peerMutedTop = { top: 'calc(env(safe-area-inset-top) + 7rem)' } as const;
 
-/** Le micro coupé du pair (#8787), posé sur son image : il reste quand le chrome se retire. */
-function PeerMuted({ where }: { readonly where: 'main' | 'corner' }) {
-  const place = where === 'main' ? 'absolute left-1/2 z-10 -translate-x-1/2 size-9' : 'absolute bottom-1.5 left-1.5 z-10 size-7';
+/** Le micro coupé du pair (#8787), posé sur son image : il reste quand le chrome se retire. Dans la vignette du coin, il vit dans sa plaque, comme en groupe. */
+function PeerMuted() {
   return (
-    <span aria-hidden="true" className={`glass-call pointer-events-none grid place-items-center rounded-full text-on-media ${place}`} style={where === 'main' ? peerMutedTop : undefined} data-call-peer-muted={where}>
-      <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={where === 'main' ? 18 : 14} />
+    <span aria-hidden="true" className="glass-call pointer-events-none absolute left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full text-on-media" style={peerMutedTop} data-call-peer-muted="main">
+      <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={18} />
     </span>
   );
 }
+
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -236,58 +229,39 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible' | 'onRevealChrome' | 'bleedEnd'>) {
-  const swapped = self.full;
+type TileInput = { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly swapped: boolean; readonly shown: boolean; readonly chromeVisible: boolean; readonly topInset: number; readonly bleedEnd: number; readonly railsOpen: boolean };
+
+/**
+ * OÙ SE TIENT MA VIGNETTE, ET COMMENT ELLE BOUGE : son palier et son coin retenus pour l'appel, le pincement, le glissé
+ * de coin en coin et les flèches, le pas de côté qui cède le coin au rail en paysage (L2.8), et le FLIP qui joue tout
+ * changement de place — jamais left/top/width/height.
+ */
+function useSelfTilePlace({ call, language, swapped, shown, chromeVisible, topInset, bleedEnd, railsOpen }: TileInput) {
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
   const corner = useStore(selfTileStore, (state) => selfTileCornerFor(state, callId));
-  const meId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
   const [said, setSaid] = useState('');
-  const hint = useId();
-  const resize = (next: SelfTileScale): void => {
-    setSelfTileScale(call.callId ?? '', next);
-    setSaid(translateCallControls(language, TILE_SAID[next]));
-  };
-  const pinch = useTilePinch(scale, resize);
+  const pinch = useTilePinch(scale, (next) => {
+    setSelfTileScale(callId, next);
+    setSaid(translateCallControls(language, `callControls.selfTile.${TILE_SAID[next - 1] ?? 'medium'}`));
+  });
   const moveTo = (next: SelfTileCorner): void => {
     setSelfTileCorner(callId, next);
-    setSaid(translateCallControls(language, TILE_CORNER_SAID[next]));
+    setSaid(translateCallControls(language, `callControls.selfTile.corner.${next}`));
   };
-  const firstPeer = orderedMembers(call.members)[0];
-  const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
-  const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
-  /* La vignette du coin porte la couleur de qui s'y montre : la mienne, ou celle du correspondant une fois échangée (#16635). */
-  const mainOwner = swapped ? meId : (firstPeer?.userId ?? null);
-  const cornerOwner = swapped ? (firstPeer?.userId ?? null) : meId;
-  const colorOf = (owner: string | null): string => (owner === null ? SELF_SPEAKER_COLOR : speakerColor(owner));
-  const cornerColor = colorOf(cornerOwner);
-  const selfMirrored = selfPreviewMirrored(call);
-  const local = useLocalZoom(call.callId, call.facing);
-  const you = translate(language, 'call.you');
-  const selfStream = selfCameraStream(call);
-  const selfOn = selfCameraShown(call);
-  const main = swapped ? selfStream : remoteStream;
-  const cornerStream = swapped ? remoteStream : selfStream;
-  const mainOn = swapped ? selfOn : remoteVideoOn;
-  const cornerShown = swapped || selfOn;
-  /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
-  const composed = self.tileHidden === true && !swapped;
-  const cornerVideo = swapped ? remoteVideoOn : selfOn;
   const screen = useCallViewport();
-  const compact = !chromeVisible;
   /* G1.11 : le cadre garde la taille du palier choisi ; rangée, la vignette s'y met à l'échelle de sa petite taille depuis son coin — une transformation, jamais une mise en page. */
   const size = selfTileSize(scale, screen);
   const restFactor = selfTileRestingFactor(scale, chromeVisible, screen);
-  const topInset = self.topInset ?? 0;
-  const rest = selfTileBox({ corner, size, viewport: screen, topInset, bleed: bleedEnd });
+  const railShift = selfTileRailShift({ corner, viewport: screen, railsOpen });
+  const box = selfTileBox({ corner, size, viewport: screen, topInset, bleed: bleedEnd });
   const seen = { width: size.width * restFactor, height: size.height * restFactor };
-  const seenX = corner.endsWith('left') ? rest.x : rest.x + rest.width - seen.width;
-  const seenY = corner.startsWith('top') ? rest.y : rest.y + rest.height - seen.height;
-  const drop = ({ dx, dy }: TileOffset): void => {
+  const seenX = box.x + railShift + (corner.endsWith('left') ? 0 : box.width - seen.width);
+  const seenY = corner.startsWith('top') ? box.y : box.y + box.height - seen.height;
+  const drag = useTileDrag(({ dx, dy }: TileOffset): void => {
     const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd });
     if (next !== corner) moveTo(next);
-  };
-  const drag = useTileDrag(drop);
+  });
   const offset = swapped ? null : drag.offset;
   const gestures = {
     onPointerDown: both(pinch.onPointerDown, drag.onPointerDown),
@@ -297,16 +271,10 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     onClickCapture: both(pinch.onClickCapture, drag.onClickCapture),
     onWheel: pinch.onWheel,
   };
-  const cornerFrame = useRef<HTMLDivElement>(null);
-  /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
-  const pressed = usePressedChrome(chromeVisible);
-  const tap = (): void => {
-    if (pressed.release()) onRevealChrome();
-    else self.onToggle();
-  };
-  /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
-  useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${offset === null}` : null,
+  const frame = useRef<HTMLDivElement>(null);
+  /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non, coin cédé au rail), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
+  useFlip(frame, {
+    key: shown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${railShift}:${offset === null}` : null,
     origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
@@ -321,10 +289,59 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     event.preventDefault();
     moveTo(next);
   };
+  const origin = selfTileOrigin(corner);
+  const place = { ...cornerPlace(corner, size, topInset, screen, railShift), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: origin, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` };
+  /* Rangée par une échelle, la vignette contre-met à l'échelle son liseré, ses coins et sa plaque : ils gardent leur taille de petite vignette. */
+  const look = { rim: selfTileCounterScaled(TILE_RIM, restFactor), radius: `calc(var(--radius-card) / ${restFactor})`, plate: selfTileCounterScaled(1, restFactor), origin, avatar: Math.round(size.width / 2) };
+  return { scale, corner, size, offset, gestures, pinchStyle: pinch.style, frame, place, look, onArrow, said };
+}
+
+/**
+ * LA VIGNETTE DU COIN, CHARGÉE À PART (#17982, `call-duo-corner.tsx`) : `call_overlay` n'en porte que l'`import()`.
+ * L'écran la précharge dès qu'un duo se montre (il sonne avant de se connecter) et avec l'appel (`PREFETCH`) ; elle se
+ * rend dans le même rendu une fois là.
+ */
+export const duoCornerView = preloadedView(() => import('./call-duo-corner').then((module) => module.DuoCorner));
+const DuoCornerView = duoCornerView.View;
+
+/** La couleur de qui se montre : la mienne sans identifiant est le neutre de l'écran, jamais une couleur inventée. */
+const ownerColor = (owner: string | null): string => (owner === null ? SELF_SPEAKER_COLOR : speakerColor(owner));
+
+function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible' | 'onRevealChrome' | 'bleedEnd'>) {
+  const swapped = self.full;
+  const meId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  const hint = useId();
+  const firstPeer = orderedMembers(call.members)[0];
+  const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
+  const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
+  /* La vignette du coin porte la couleur de qui s'y montre : la mienne, ou celle du correspondant une fois échangée (#16635). */
+  const peerId = firstPeer?.userId ?? null;
+  const selfMirrored = selfPreviewMirrored(call);
+  const local = useLocalZoom(call.callId, call.facing);
+  const you = translate(language, 'call.you');
+  const selfStream = selfCameraStream(call);
+  const selfOn = selfCameraShown(call);
+  const main = swapped ? selfStream : remoteStream;
+  const mainOn = swapped ? selfOn : remoteVideoOn;
+  const cornerShown = swapped || selfOn;
+  /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
+  const composed = self.tileHidden === true && !swapped;
+  const tile = useSelfTilePlace({ call, language, swapped, shown: cornerShown, chromeVisible, topInset: self.topInset ?? 0, bleedEnd, railsOpen: self.railsOpen === true });
+  /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
+  const pressed = usePressedChrome(chromeVisible);
+  const tap = (): void => (pressed.release() ? onRevealChrome() : self.onToggle());
   const peerMuted = firstPeer?.micMuted === true;
+  const sight: CornerSight | null = cornerShown ? { swapped, video: swapped ? remoteVideoOn : selfOn, stream: swapped ? remoteStream : selfStream, name: swapped ? call.title : you, muted: peerMuted && swapped, peerId: firstPeer?.userId } : null;
   const stageLabel = peerMuted ? `${call.title} · ${translate(language, 'call.peer.muted')}` : call.title;
-  const zoomStep = !swapped && self.zoom === 'step' && call.cameraOn && !composed && size.width >= ZOOM_STEP_ROOM && size.height >= ZOOM_STEP_ROOM;
+  const zoomStep = !swapped && self.zoom === 'step' && call.cameraOn && !composed && tile.size.width >= ZOOM_STEP_ROOM && tile.size.height >= ZOOM_STEP_ROOM;
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
+  const zoom = zoomStep ? (
+    <div className="absolute right-1 top-1 z-20" data-call-chrome-fade="" data-call-self-zoom="">
+      <Suspense fallback={null}>
+        <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={CallButton} />
+      </Suspense>
+    </div>
+  ) : null;
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
       {mainOn && bleedEnd > 0 ? <StageBleed stream={main} mirrored={swapped && selfMirrored} width={bleedEnd} /> : null}
@@ -334,58 +351,23 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
         name={swapped ? you : call.title}
         avatar={swapped ? null : call.avatar}
         presenceKey={swapped ? undefined : (call.peerKey ?? undefined)}
-        color={colorOf(mainOwner)}
-        speaking={!swapped && peerSpeakingOnCameraOff(call.captions, firstPeer?.userId)}
+        color={ownerColor(swapped ? meId : peerId)}
+        speech={swapped ? null : remoteStream}
         label={translate(language, swapped ? 'call.camera.off' : remoteStream === null ? 'call.video.connecting' : 'call.camera.peerOff')}
       />
-      {peerMuted && !swapped ? <PeerMuted where="main" /> : null}
+      <HeldSwap value={peerMuted && !swapped ? true : null} shape="fade" className="pointer-events-none absolute inset-0 z-10" data-call-peer-muted-slot="">
+        {() => <PeerMuted />}
+      </HeldSwap>
       {swapped ? (
         <Suspense fallback={self.zoom === 'capsule' ? self.column(null) : null}>
           <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} glyphs={glyphs} column={self.zoom === 'capsule' ? self.column : null} />
         </Suspense>
       ) : null}
-      {cornerShown ? (
-        <div
-          ref={cornerFrame}
-          className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset, screen), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
-          {...(composed ? { 'aria-hidden': true, inert: true } : {})}
-          data-call-corner-frame=""
-          data-call-self-tile-composed={composed ? '' : undefined}
-          data-call-self-tile-corner={corner}
-          data-call-self-tile-compact={compact ? '' : undefined}
-          data-call-self-tile-dragging={offset === null ? undefined : ''}
-        >
-          <button
-            type="button"
-            aria-label={translate(language, 'call.video.swap')}
-            aria-describedby={swapped ? undefined : hint}
-            onPointerDownCapture={pressed.press}
-            onClick={tap}
-            onKeyDown={(event) => {
-              pressed.clear();
-              onArrow(event);
-            }}
-            className={`relative z-10 grid size-full place-items-center overflow-hidden border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
-            {...(swapped ? {} : gestures)}
-            style={{ background: 'var(--color-scrim-soft)', borderColor: cornerColor, borderWidth: selfTileCounterScaled(TILE_RIM, restFactor), borderRadius: `calc(var(--radius-card) / ${restFactor})`, ...(swapped ? {} : { ...pinch.style, transformOrigin: selfTileOrigin(corner) }) }}
-            data-call-corner=""
-            data-call-self-tile={swapped ? undefined : String(scale)}
-          >
-            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} presenceKey={call.peerKey ?? undefined} />}
-            {peerMuted && swapped ? <PeerMuted where="corner" /> : null}
-          </button>
-          {zoomStep ? (
-            <div className="absolute right-1 top-1 z-20" data-call-chrome-fade="" data-call-self-zoom="">
-              <Suspense fallback={null}>
-                <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={CallButton} />
-              </Suspense>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <Suspense fallback={null}>
+        <DuoCornerView call={call} language={language} sight={sight} tile={tile} swapped={swapped} composed={composed} compact={!chromeVisible} color={ownerColor(swapped ? peerId : meId)} hint={hint} onTap={tap} pressed={pressed} mirrored={selfMirrored} Off={CameraOffStage} zoom={zoom} />
+      </Suspense>
       <span role="status" aria-live="polite" className="sr-only" data-call-self-tile-status="">
-        {said}
+        {tile.said}
       </span>
       <span id={hint} hidden>
         {translateCallControls(language, 'callControls.selfTile.hint')}

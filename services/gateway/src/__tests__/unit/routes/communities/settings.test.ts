@@ -73,6 +73,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversationShare: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    messageAttachment: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
     $transaction: jest.fn<any>().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops)),
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
@@ -269,6 +272,7 @@ describe('PUT /communities/:id — avatar et bannière (#16788)', () => {
     ["un chemin d'API", '/api/v1/attachments/file/2026/11/a.webp'],
   ])('accepte %s et l\'écrit', async (_label, url) => {
     const prisma = creatorPrisma();
+    prisma.messageAttachment.findFirst = jest.fn<any>().mockResolvedValue({ id: 'att-own' });
     const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PUT', url: `/communities/${COMMUNITY_ID}`,
@@ -303,5 +307,88 @@ describe('PUT /communities/:id — avatar et bannière (#16788)', () => {
       expect(prisma.community.update).not.toHaveBeenCalled();
       await app.close();
     }
+  });
+});
+
+// ─── #16811 — une image d'identité ne désigne qu'un fichier de l'appelant ─────
+
+describe("PUT /communities/:id — l'image désigne un fichier du créateur (#16811)", () => {
+  const OWN = '2026/11/usr-settings-test-001/community_avatar.webp';
+  const FOREIGN = '2026/11/usr-autre/photo_privee.jpg';
+
+  const creatorPrisma = (stored: { avatar?: string | null; banner?: string | null } = {}) => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
+      id: COMMUNITY_ID, createdBy: USER_ID, identifier: 'mshy_test', isPrivate: false,
+      avatar: stored.avatar ?? null, banner: stored.banner ?? null,
+    });
+    prisma.messageAttachment.findFirst = jest.fn<any>().mockImplementation(async ({ where }: any) =>
+      where.uploadedBy === USER_ID && where.OR.some((c: any) => c.filePath === OWN) ? { id: 'att-own' } : null,
+    );
+    return prisma;
+  };
+
+  it.each([
+    ['le chemin de stockage', FOREIGN],
+    ['la route de flux', `/api/v1/attachments/file/${encodeURIComponent(FOREIGN)}`],
+    ['une adresse absolue de la route de flux', `https://gate.meeshy.me/api/v1/attachments/file/${FOREIGN}`],
+  ])("refuse le fichier d'un autre (%s) en 400 IDENTITY_IMAGE_NOT_OWNED sans rien écrire", async (_label, url) => {
+    for (const field of ['avatar', 'banner'] as const) {
+      const prisma = creatorPrisma();
+      const { app } = await buildApp({ prisma });
+      const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { [field]: url } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+      expect(prisma.community.update).not.toHaveBeenCalled();
+      await app.close();
+    }
+  });
+
+  it("cherche le fichier parmi les images TÉLÉVERSÉES PAR L'APPELANT", async () => {
+    const prisma = creatorPrisma();
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { avatar: OWN } });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.messageAttachment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ uploadedBy: USER_ID, mimeType: { startsWith: 'image/' } }),
+      }),
+    );
+    expect(prisma.community.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ avatar: OWN }) }),
+    );
+    await app.close();
+  });
+
+  it('accepte la valeur DÉJÀ posée, même venue de qui que ce soit (rétrocompatible)', async () => {
+    const prisma = creatorPrisma({ avatar: FOREIGN, banner: FOREIGN });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { name: 'Nouveau nom', avatar: FOREIGN, banner: FOREIGN },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("laisse une adresse d'un hôte tiers à #16809, sans lecture", async () => {
+    const prisma = creatorPrisma();
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { avatar: 'https://cdn.example.com/a.png' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('répond 500 sans rien écrire quand la lecture du fichier échoue', async () => {
+    const prisma = creatorPrisma();
+    prisma.messageAttachment.findFirst = jest.fn<any>().mockRejectedValue(new Error('db down'));
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { avatar: OWN } });
+    expect(res.statusCode).toBe(500);
+    expect(prisma.community.update).not.toHaveBeenCalled();
+    await app.close();
   });
 });

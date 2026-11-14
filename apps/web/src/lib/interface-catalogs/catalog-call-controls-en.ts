@@ -41,7 +41,6 @@ const en = {
   'callControls.incoming.silent': '{name} won’t see or hear you',
   'callControls.incoming.noVideo': 'No video',
   'callControls.incoming.answer': 'Answer',
-  'callControls.incoming.me': 'me',
   'callControls.error.invite': 'Couldn’t invite {name}',
   'callControls.error.mute': 'Couldn’t mute {name}',
   'callControls.error.remove': 'Couldn’t remove {name}',

@@ -9,6 +9,7 @@ import type { Arrives } from '@/components/call-arrives';
 import { useScreenZoom } from '@/components/use-screen-zoom';
 import type { HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { PeerSpeechRing } from '@/components/call-camera-off';
+import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
@@ -158,20 +159,6 @@ function selfSubject(kit: CallGridKit, self: CallGridProps['self'], language: In
   return { id: SELF, name: self.name || you, shown: you, avatar: self.avatar ?? null, color: kit.colorOf(self.id || null), stream: self.stream, video: self.cameraOn, mirrored: self.mirrored, muted: self.micMuted, suffix: null, ringing: false, presenceKey: undefined, self: true };
 }
 
-function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
-  return (
-    <span className="glass-call absolute bottom-2 start-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini">
-      {muted ? (
-        <span className="contents" data-call-tile-muted="">
-          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={12} />
-        </span>
-      ) : null}
-      {name}
-      {suffix === null ? null : ` · ${suffix}`}
-    </span>
-  );
-}
-
 /**
  * LA VIDÉO D'UNE VIGNETTE, DÉPLACÉE ET NON RECRÉÉE (P14.10) — son `<video>` est tenu par la grille, sous
  * l'identité de la personne ; la vignette qui se monte dans un autre arbre le pose dans SON cadre, et
@@ -214,7 +201,7 @@ function Tile({ kit, subject, held, onPress, label, portrait, press }: TileProps
   const body = (
     <>
       {subject.video ? <HeldVideo held={held} subject={subject} /> : <kit.Portrait name={subject.name} avatar={subject.avatar} size={portrait} pulse={subject.ringing} presenceKey={subject.presenceKey} tint={subject.color} />}
-      <NameLabel name={subject.shown} muted={subject.muted} suffix={subject.suffix} />
+      <CallTileNameplate name={subject.shown} muted={subject.muted} suffix={subject.suffix} />
     </>
   );
   const Tag = onPress === null || subject.ringing ? 'div' : 'button';
