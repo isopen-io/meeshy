@@ -131,7 +131,7 @@ fun WorldGuestEntryScreen(
                 .imePadding()
                 .formColumnWidth(),
         ) {
-            TopBar(
+            WorldGuestTopBar(
                 step = state.step,
                 backLabel = stringResource(
                     if (state.step == WorldGuestStep.LANGUAGE) R.string.world_entry_back else R.string.world_entry_close,
@@ -193,14 +193,19 @@ private fun stepTransition(initial: WorldGuestStep, target: WorldGuestStep, redu
 }
 
 @Composable
-private fun TopBar(step: WorldGuestStep, backLabel: String, onBack: () -> Unit) {
+internal fun WorldGuestTopBar(step: WorldGuestStep, backLabel: String, onBack: () -> Unit) {
     val stepDescription = stringResource(R.string.world_entry_step, step.ordinal + 1, WorldGuestEntryRules.STEP_COUNT)
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-            Icon(leadingNavigationIcon(), contentDescription = leadingNavigationLabel(backLabel), tint = MeeshyPalette.Indigo500)
+            val stepsBack = step == WorldGuestStep.LANGUAGE
+            Icon(
+                if (stepsBack) MeeshyIcons.Back else leadingNavigationIcon(),
+                contentDescription = if (stepsBack) backLabel else leadingNavigationLabel(backLabel),
+                tint = MeeshyPalette.Indigo500,
+            )
         }
         Spacer(Modifier.weight(1f))
         Row(
