@@ -189,6 +189,8 @@ protocol SharedLocationRosterStoring: AnyObject {
 
 /// La liste d'UN compte, dans ses réglages locaux.
 final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
+    nonisolated deinit {}
+
     private let key: String
     private let defaults: UserDefaults
 
