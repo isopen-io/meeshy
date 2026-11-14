@@ -29,11 +29,14 @@ extension ContentFetchFailure {
         }
     }
 
-    /// Seule une ABSENCE explique : un échec de réseau ou de serveur tient dans son titre et son
-    /// bouton « Réessayer » (règle 4 de l'épure, #18109).
+    /// Un échec de SERVEUR tient dans son titre et son bouton « Réessayer » (règle 4 de l'épure, #18109) ;
+    /// celui du RÉSEAU dit en une phrase ce que l'utilisateur peut vérifier, sans quoi rien ne le distinguerait
+    /// d'une panne de Meeshy (#6508) ; une ABSENCE dit pourquoi le contenu manque.
     var message: String? {
         switch self {
-        case .network, .server:
+        case .network:
+            return String(localized: "feed.post.detail.loadFailed.body", defaultValue: "Vérifiez votre connexion.", bundle: .main)
+        case .server:
             return nil
         case .forbidden, .notFound:
             return String(localized: "feed.post.detail.unavailable.body", defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main)

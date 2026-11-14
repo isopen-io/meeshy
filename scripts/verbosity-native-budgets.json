@@ -475,10 +475,10 @@
       "explanations": 5
     },
     "ios:Meeshy/feed": {
-      "labels": 224,
-      "words": 775,
+      "labels": 225,
+      "words": 778,
       "long": 3,
-      "explanations": 37
+      "explanations": 38
     },
     "ios:Meeshy/focal": {
       "labels": 23,

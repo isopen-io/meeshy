@@ -85,6 +85,7 @@ final class EpureFeedStoriesTests: XCTestCase {
         "feed.nearby.empty.none.why.question": "Pourquoi une publication manque-t-elle ?",
         "feed.nearby.empty.none.why.note": "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas.",
         "feed.unsent.composerBusy": "Terminez d'abord le brouillon en cours.",
+        "feed.post.detail.loadFailed.body": "Vérifiez votre connexion.",
         "post.daily_limit.comment": "Limite de commentaires atteinte — vos étincelles ne bougent pas. Reprise à %@.",
         "post.daily_limit.comment.untimed": "Limite de commentaires du jour atteinte — vos étincelles ne bougent pas.",
         "post.daily_limit.reaction": "Limite de réactions atteinte — vos étincelles ne bougent pas. Reprise à %@.",
@@ -148,7 +149,7 @@ final class EpureFeedStoriesTests: XCTestCase {
 
     private static let removedFromApp = [
         "story.viewer.comments.beFirst", "story.mine.drafts.empty.subtitle", "feed.map.empty.detail",
-        "feed.post.detail.loadFailed.body", "feed.post.detail.serverFailed.body",
+        "feed.post.detail.serverFailed.body",
         "feed.nearby.empty.denied.detail", "feed.nearby.empty.unavailable.detail", "feed.nearby.empty.offline.detail",
         "feed.nearby.empty.signin.detail", "feed.nearby.empty.none.detail", "bookmarks.empty.subtitle",
         "story.viewer.notFound.description", "feed.bookmark.error", "feed.bookmark.success", "feed.post.stat.reposts",
@@ -189,8 +190,9 @@ final class EpureFeedStoriesTests: XCTestCase {
         XCTAssertFalse(mine.contains("story.mine.drafts.empty.subtitle"))
     }
 
-    func test_contentFetchFailure_retryableCauses_areTitleAndRetry_onlyTheAbsenceExplains() {
-        XCTAssertNil(ContentFetchFailure.network.message)
+    func test_contentFetchFailure_serverIsTitleAndRetry_networkSaysWhatToCheck_absenceExplains() {
+        XCTAssertEqual(ContentFetchFailure.network.message, String(localized: "feed.post.detail.loadFailed.body", bundle: .main),
+                       "seul l'échec de réseau dit ce que l'utilisateur peut vérifier")
         XCTAssertNil(ContentFetchFailure.server.message)
         XCTAssertNotNil(ContentFetchFailure.forbidden.message)
         XCTAssertEqual(ContentFetchFailure.forbidden.message, ContentFetchFailure.notFound.message)
