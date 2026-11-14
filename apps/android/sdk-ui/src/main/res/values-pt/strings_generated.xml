@@ -191,7 +191,6 @@
     <string name="contacts_tab_prefix">Aba</string>
     <string name="content_failure_retry">Tentar novamente</string>
     <string name="content_failure_server_title">O Meeshy não conseguiu carregar este conteúdo</string>
-    <string name="content_failure_unavailable_body">Ele pode ter expirado ou sido removido pelo autor.</string>
     <string name="content_failure_unavailable_title">Este conteúdo não está mais disponível</string>
     <string name="document_card_pages">%1$d páginas</string>
     <string name="document_delete_attachment">Excluir anexo</string>

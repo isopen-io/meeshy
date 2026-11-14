@@ -408,12 +408,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.post.detail.unavailable.body",
-          "androidName": "content_failure_unavailable_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "feed.post.detail.unavailable.title",
           "androidName": "content_failure_unavailable_title",
           "status": "adopted"
