@@ -3,7 +3,7 @@ import { bannerMoment, bannerRecall, type BannerMomentSource, type BannerRecallR
 import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/game-state-order';
 import { appQueryClient } from '@/lib/api/query-client';
 
-import { recallPlayerBanner } from './player-banner-visit';
+import { recallPlayerBanner } from './player-banner-recall';
 
 /**
  * **LE GUET DU RAPPEL** (#17366, retouche 3) — le bandeau du joueur revient quelques secondes quand le bloc `game` en
