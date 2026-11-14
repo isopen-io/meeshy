@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
 <resources>
-    <string name="post_daily_limit_comment">Límite de comentarios alcanzado: se reanuda a las %1$s</string>
-    <string name="post_daily_limit_comment_untimed">Límite de comentarios alcanzado</string>
-    <string name="post_daily_limit_reaction">Límite de reacciones alcanzado: se reanuda a las %1$s</string>
-    <string name="post_daily_limit_reaction_untimed">Límite de reacciones alcanzado</string>
+    <string name="post_daily_limit_comment">Límite diario de comentarios alcanzado: se reanuda a las %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Límite diario de comentarios alcanzado</string>
+    <string name="post_daily_limit_reaction">Límite diario de reacciones alcanzado: se reanuda a las %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Límite diario de reacciones alcanzado</string>
     <string name="post_daily_limit_note_question">¿Este límite afecta a mis chispas?</string>
     <string name="post_daily_limit_note">Cuenta tus gestos, nunca tus chispas.</string>
     <string name="bubble_failed_attachment_right">Este tipo de adjunto aún no está permitido aquí.</string>

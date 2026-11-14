@@ -65,16 +65,16 @@ class EpureComposantsPartagesStringsTest {
 
     @Test
     fun `la limite de commentaires dit la limite et la reprise en une ligne, la precision etincelles est derriere le i`() {
-        assertThat(text("fr", "post_daily_limit_comment")).isEqualTo("Limite de commentaires atteinte : reprise à %1\$s")
-        assertThat(text("fr", "post_daily_limit_comment_untimed")).isEqualTo("Limite de commentaires atteinte")
+        assertThat(text("fr", "post_daily_limit_comment")).isEqualTo("Limite quotidienne de commentaires atteinte : reprise à %1\$s")
+        assertThat(text("fr", "post_daily_limit_comment_untimed")).isEqualTo("Limite quotidienne de commentaires atteinte")
         assertThat(text("fr", "post_daily_limit_note_question")).isEqualTo("Cette limite touche-t-elle mes étincelles ?")
         assertThat(text("fr", "post_daily_limit_note")).isEqualTo("Elle compte vos gestes, jamais vos étincelles.")
     }
 
     @Test
     fun `la limite de reactions dit la limite et la reprise en une ligne`() {
-        assertThat(text("fr", "post_daily_limit_reaction")).isEqualTo("Limite de réactions atteinte : reprise à %1\$s")
-        assertThat(text("fr", "post_daily_limit_reaction_untimed")).isEqualTo("Limite de réactions atteinte")
+        assertThat(text("fr", "post_daily_limit_reaction")).isEqualTo("Limite quotidienne de réactions atteinte : reprise à %1\$s")
+        assertThat(text("fr", "post_daily_limit_reaction_untimed")).isEqualTo("Limite quotidienne de réactions atteinte")
     }
 
     @Test

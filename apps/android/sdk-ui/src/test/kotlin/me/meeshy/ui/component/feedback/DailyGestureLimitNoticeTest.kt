@@ -21,15 +21,15 @@ class DailyGestureLimitNoticeTest {
     @Test
     fun `la limite de commentaires dit la reprise en une ligne, sans la precision`() {
         val text = message(DailyGestureLimit.Gesture.COMMENT, 1_700_000_000_000)
-        assertThat(text).startsWith("Comment limit reached: resumes at ")
+        assertThat(text).startsWith("Daily comment limit reached: resumes at ")
         assertThat(text).doesNotContain("sparks")
         assertThat(text.length).isAtMost(60)
     }
 
     @Test
-    fun `la limite de reactions sans heure ne promet aucune reprise`() {
-        assertThat(message(DailyGestureLimit.Gesture.REACTION, null)).isEqualTo("Reaction limit reached")
-        assertThat(message(DailyGestureLimit.Gesture.COMMENT, null)).isEqualTo("Comment limit reached")
+    fun `la limite sans heure ne promet aucune reprise mais dit qu elle est du jour`() {
+        assertThat(message(DailyGestureLimit.Gesture.REACTION, null)).isEqualTo("Daily reaction limit reached")
+        assertThat(message(DailyGestureLimit.Gesture.COMMENT, null)).isEqualTo("Daily comment limit reached")
     }
 
     @Test
