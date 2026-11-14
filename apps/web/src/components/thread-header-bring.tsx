@@ -73,12 +73,12 @@ export function ThreadHeaderBring({
         >
           <span
             data-chrome-disc=""
-            className="grid place-items-center rounded-chip transition-[background] duration-150"
+            className="grid place-items-center rounded-chip"
             style={{
               width: 'var(--size-header-circle)',
               height: 'var(--size-header-circle)',
               color: state === 'ringing' ? 'var(--color-ios-on-brand)' : DANGER,
-              background: state === 'ringing' ? DANGER : 'color-mix(in srgb, currentColor 18%, transparent)',
+              background: state === 'ringing' ? DANGER : undefined,
             }}
           >
             <Glyph name={state === 'ringing' ? 'bellSlash' : 'bell'} size={13} />

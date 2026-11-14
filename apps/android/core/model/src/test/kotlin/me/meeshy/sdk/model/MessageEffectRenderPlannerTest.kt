@@ -214,4 +214,40 @@ class MessageEffectRenderPlannerTest {
         assertThat(result.isEmpty).isFalse()
         assertThat(result.persistent).isEmpty()
     }
+
+    private val everyVisualEffect = MessageEffectFlags.SHAKE or MessageEffectFlags.ZOOM or
+        MessageEffectFlags.CONFETTI or MessageEffectFlags.GLOW or MessageEffectFlags.PULSE or
+        MessageEffectFlags.RAINBOW or MessageEffectFlags.SPARKLE
+
+    private fun reducedPlan(flags: Long) = MessageEffectRenderPlanner.plan(
+        MessageEffects(flags = flags),
+        hasPlayedAppearance = false,
+        reduceMotion = true,
+    )
+
+    @Test
+    fun plan_reduceMotion_playsNoAppearanceEffect() {
+        assertThat(reducedPlan(everyVisualEffect).appearance).isEmpty()
+    }
+
+    @Test
+    fun plan_reduceMotion_keepsOnlyTheStaticGlowAndTheRainbowLetters() {
+        val result = reducedPlan(everyVisualEffect)
+        assertThat(result.persistent).containsExactly(PersistentEffect.GLOW)
+        assertThat(result.rainbowLetters).isTrue()
+        assertThat(result.animatesPersistent).isFalse()
+    }
+
+    @Test
+    fun plan_reduceMotion_pulseAndSparkleAloneRenderNothing() {
+        assertThat(reducedPlan(MessageEffectFlags.PULSE or MessageEffectFlags.SPARKLE).isEmpty).isTrue()
+    }
+
+    @Test
+    fun plan_byDefault_keepsTheAnimatedPlan() {
+        val result = plan(everyVisualEffect)
+        assertThat(result.appearance).containsExactly(AppearanceEffect.SHAKE, AppearanceEffect.ZOOM, AppearanceEffect.CONFETTI)
+        assertThat(result.persistent).containsExactly(PersistentEffect.GLOW, PersistentEffect.PULSE, PersistentEffect.SPARKLE)
+        assertThat(result.animatesPersistent).isTrue()
+    }
 }

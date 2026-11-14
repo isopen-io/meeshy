@@ -16,27 +16,21 @@ struct AffiliateCreateView: View {
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                theme.backgroundGradient.ignoresSafeArea()
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
-                VStack(spacing: MeeshySpacing.xxl) {
-                    formSection
-                    createButton
-                    Spacer()
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.lg)
+    var body: some View {
+        LinksPage(
+            title: String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main),
+            accent: Color(hex: accentColor),
+            glyph: .close
+        ) {
+            VStack(spacing: MeeshySpacing.xxl) {
+                formSection
+                createButton
             }
-            .navigationTitle(String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                        .foregroundStyle(Color(hex: accentColor))
-                }
-            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
+            .padding(.bottom, 40)
         }
     }
 
@@ -44,52 +38,17 @@ struct AffiliateCreateView: View {
 
     private var formSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                // A `Text` sitting above a `TextField` is a separate accessibility
-                // element, not the field's label: VoiceOver would read the field as
-                // its placeholder ("Ex: Invitation Twitter") and never say what it
-                // is for. Hiding the caption and promoting it to the field's own
-                // label is the pattern `CreateTrackingLinkView.formField` already
-                // applies to the twin screen.
-                Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                    .accessibilityHidden(true)
-
-                TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex. : Invitation Twitter", bundle: .main), text: $name)
-                    .accessibilityLabel(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .padding(MeeshySpacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.surfaceGradient(tint: accentColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                    .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                            )
-                    )
-            }
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                    .accessibilityHidden(true)
-
-                TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimité", bundle: .main), text: $maxUses)
-                    .accessibilityLabel(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .keyboardType(.numberPad)
-                    .padding(MeeshySpacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.surfaceGradient(tint: accentColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                    .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                            )
-                    )
-            }
+            LinksFormField(
+                label: String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main),
+                prompt: String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex. : Invitation Twitter", bundle: .main),
+                text: $name
+            )
+            LinksFormField(
+                label: String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main),
+                prompt: String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimité", bundle: .main),
+                text: $maxUses,
+                input: .numeric
+            )
 
             if let errorMessage {
                 Text(errorMessage)
@@ -101,63 +60,33 @@ struct AffiliateCreateView: View {
 
     // MARK: - Create Button
 
+    /// Le bouton principal du kit, sans chevron : pendant l'envoi il devient un
+    /// anneau et dit « Création en cours » — la clé déjà partagée avec le bouton
+    /// jumeau des liens de suivi.
     private var createButton: some View {
-        Button {
-            Task { await create() }
-        } label: {
-            HStack(spacing: MeeshySpacing.sm) {
-                if isCreating {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.8)
-                } else {
-                    // Decorative glyph — the adjacent "Créer le lien" text already
-                    // says what the button does, so hide it rather than let
-                    // VoiceOver read the SF Symbol name in front of the label.
-                    Image(systemName: "link.badge.plus")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                        .accessibilityHidden(true)
-                }
-                Text(String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.mdPlus)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(
-                        name.trimmingCharacters(in: .whitespaces).isEmpty
-                            ? Color(hex: accentColor).opacity(0.4)
-                            : Color(hex: accentColor)
-                    )
-            )
-        }
-        .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main))
-        // While the request is in flight the glyph becomes a bare `ProgressView`:
-        // a sighted user sees a spinner, a VoiceOver user hears only "dimmed" and
-        // cannot tell whether the tap registered. Carry the transient state as a
-        // value, exactly as the twin button does (CreateTrackingLinkView:136) and
-        // the mood composer (MeeshyComposerHost.publishButton). The key is shared with the
-        // tracking-link button — same action, same words, already localised.
-        .accessibilityValue(isCreating
-            ? String(localized: "a11y.tracking.create.in-progress", defaultValue: "Création en cours", bundle: .main)
-            : "")
-        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isCreating)
+        MeeshySplitActionButton(
+            String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main),
+            phase: isCreating
+                ? .busy(progress: nil, title: String(localized: "a11y.tracking.create.in-progress", defaultValue: "Création en cours", bundle: .main))
+                : .ready,
+            width: .fill,
+            isEnabled: !trimmedName.isEmpty,
+            action: { Task { await create() } }
+        )
     }
 
     // MARK: - Actions
 
     @MainActor
     private func create() async {
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard !trimmedName.isEmpty else { return }
         isCreating = true
         errorMessage = nil
 
         do {
-            let uses = Int(maxUses)
+            let uses = Int(maxUses.filter(\.isNumber))
             let token = try await AffiliateService.shared.createToken(
-                name: name.trimmingCharacters(in: .whitespaces),
+                name: trimmedName,
                 maxUses: uses
             )
             HapticFeedback.success()
