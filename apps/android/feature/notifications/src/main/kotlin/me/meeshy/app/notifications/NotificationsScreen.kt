@@ -52,6 +52,7 @@ private const val LIST_ANIMATION_MS = 250
  * @param onOpenReel Navigate to a réel, anchored at its id ([NotificationDestination.Reel]).
  * @param onOpenStory Navigate to a user's story tray ([NotificationDestination.Story]).
  * @param onOpenProfile Navigate to a user's profile ([NotificationDestination.Profile]).
+ * @param onOpenCommunity Navigate to a community's detail ([NotificationDestination.Community]).
  * @param onOpenGame Navigate to the game screen a level/streak/badge/duo/league notice names ([NotificationDestination.Game]).
  *
  * Every parameter defaults to a no-op so existing callers keep compiling; wiring them is what
@@ -69,6 +70,7 @@ fun NotificationsScreen(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    onOpenCommunity: (String) -> Unit = {},
     onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
     toasts: NotificationFeedbackToasts = hiltViewModel(),
@@ -83,6 +85,7 @@ fun NotificationsScreen(
     val openMood by rememberUpdatedState(onOpenMood)
     val openProfile by rememberUpdatedState(onOpenProfile)
     val openGame by rememberUpdatedState(onOpenGame)
+    val openCommunity by rememberUpdatedState(onOpenCommunity)
     val openStoryContent by rememberUpdatedState(onOpenStoryContent)
 
     LaunchedEffect(viewModel) {
@@ -109,6 +112,7 @@ fun NotificationsScreen(
                 onOpenProfile = { openProfile(it) },
                 onOpenMood = { openMood(it) },
                 onOpenGame = { openGame(it) },
+                onOpenCommunity = { openCommunity(it) },
                 onOpenStoryContent = { target ->
                     openStoryContent?.invoke(target, StoryNotificationContext.from(notification, System.currentTimeMillis()))
                         ?: openPost(target.postId)
