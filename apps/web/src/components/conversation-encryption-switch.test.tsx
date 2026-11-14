@@ -97,6 +97,18 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(document.querySelector('[data-conversation-encryption-switch]')?.textContent).toContain('Vous pourrez toujours ouvrir une autre conversation');
   });
 
+  test('l’irréversibilité : une phrase visible, la suite derrière « Peut-on revenir en arrière ? », lue même repliée (#18361)', async () => {
+    await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    const footer = document.querySelector('[data-conversation-encryption-switch-footer]');
+    expect(footer?.textContent).toBe('Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus.');
+    expect(footer?.className).not.toContain('sr-only');
+    const back = document.querySelector<HTMLButtonElement>('[data-conversation-encryption-switch] button[aria-label="Peut-on revenir en arrière ?"]');
+    expect(back).not.toBeNull();
+    const note = document.getElementById(back?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toBe('Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.');
+    expect(note?.className).toContain('sr-only');
+  });
+
   test('le bout en bout se voit, désactivé, et dit pourquoi le navigateur ne l’active pas', async () => {
     await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
     const endToEnd = target('e2ee');
