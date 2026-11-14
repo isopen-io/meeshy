@@ -14,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +34,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,6 +109,11 @@ enum class CallBackAction { Inert, Minimize, Close }
  * `docs/product/appels-vue-finale.md`). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  *
+ * P18.3 (#18218) — the reduced call says « name · duration » in ONE label, the name being the header's ([names], iOS
+ * `CallReducedRule.title`: the group, else the name I gave the person, else their display name). The duration keeps
+ * its colour-coded status (green once connected, amber while ringing, red while reconnecting), and TalkBack names the
+ * person the same way. The banner's shape (avatar, mute, speaker, hang up) is left to the open decision #17731.
+ *
  * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
  * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`. It
  * then says « name · duration » (P18.10), the name being the header's ([names], iOS `CallReducedRule.title`), on the red glass of
@@ -128,7 +135,8 @@ fun CallPill(
     reduceMotion: Boolean = LocalReduceMotion.current,
 ) {
     val reopenLabel = stringResource(R.string.call_pill_reopen)
-    val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
+    val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
+    val ongoingLabel = stringResource(R.string.call_pill_ongoing, title ?: state.peerName)
     // #17767 — « Arrêter » prend et rend la place de la barre par un fondu et une échelle courts (loi 17).
     AnimatedContent(
         targetState = isScreenSharing,
@@ -137,9 +145,9 @@ fun CallPill(
         label = "callPillShareSwap",
     ) { sharing ->
         if (sharing) {
-            CallPillSharing(state, names, reopenLabel, ongoingLabel, onClick, onStopScreenShare)
+            CallPillSharing(state, title, reopenLabel, ongoingLabel, onClick, onStopScreenShare)
         } else {
-            CallPillIdle(state, peerAvatarUrl, peerUserId, reopenLabel, ongoingLabel, onClick, onToggleMute, onToggleSpeaker, onHangUp)
+            CallPillIdle(state, title, peerAvatarUrl, peerUserId, reopenLabel, ongoingLabel, onClick, onToggleMute, onToggleSpeaker, onHangUp)
         }
     }
 }
@@ -157,7 +165,7 @@ private fun callPillSwap(reduceMotion: Boolean): ContentTransform {
 @Composable
 private fun CallPillSharing(
     state: CallUiState,
-    names: CallHeaderNames,
+    title: String?,
     reopenLabel: String,
     ongoingLabel: String,
     onClick: () -> Unit,
@@ -176,7 +184,6 @@ private fun CallPillSharing(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
-                val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
                 CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
             }
             CallShareStopButton(onStopScreenShare)
@@ -187,6 +194,7 @@ private fun CallPillSharing(
 @Composable
 private fun CallPillIdle(
     state: CallUiState,
+    title: String?,
     peerAvatarUrl: String?,
     peerUserId: String,
     reopenLabel: String,
@@ -211,7 +219,7 @@ private fun CallPillIdle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
-            CallPillIdentity(state = state, peerAvatarUrl = peerAvatarUrl, accent = accent)
+            CallPillIdentity(state = state, title = title, peerAvatarUrl = peerAvatarUrl, accent = accent)
         }
         CallPillControls(
             state = state,
@@ -241,9 +249,9 @@ private fun RowScope.CallPillReopenArea(
     )
 }
 
-/** Hors partage : l'avatar à la couleur de l'autre, son nom, la ligne d'état et le glyphe d'appel ou de vidéo. */
+/** Hors partage : l'avatar à la couleur de l'autre, « nom · durée » (P18.3) et le glyphe d'appel ou de vidéo. */
 @Composable
-private fun RowScope.CallPillIdentity(state: CallUiState, peerAvatarUrl: String?, accent: Color) {
+private fun RowScope.CallPillIdentity(state: CallUiState, title: String?, peerAvatarUrl: String?, accent: Color) {
     // Decorative: the identity row's label already names the peer.
     MeeshyAvatar(
         name = state.peerName,
@@ -253,29 +261,34 @@ private fun RowScope.CallPillIdentity(state: CallUiState, peerAvatarUrl: String?
         modifier = Modifier.clearAndSetSemantics { },
     )
 
-    Column(modifier = Modifier.weight(1f)) {
-        Text(
-            text = state.peerName,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MeeshyTheme.tokens.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = pillStatusLine(state),
-            style = MaterialTheme.typography.bodySmall,
-            color = pillStatusColor(state.status),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    Text(
+        text = reducedLabel(title, pillStatusLine(state), pillStatusColor(state.status)),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MeeshyTheme.tokens.textPrimary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
+    )
 
     Icon(
         imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
         contentDescription = null,
         tint = accent,
     )
+}
+
+/**
+ * P18.3 — « nom · durée » en une étiquette, la phrase de [CallReducedCaption.caption] ; seule la durée (ou la phase)
+ * prend la couleur de son état, le nom reste à l'encre du texte.
+ */
+private fun reducedLabel(title: String?, status: String, statusColor: Color): AnnotatedString {
+    val caption = CallReducedCaption.caption(title, status)
+    val statusStart = caption.length - status.length
+    return buildAnnotatedString {
+        append(caption)
+        addStyle(SpanStyle(color = statusColor), statusStart, caption.length)
+    }
 }
 
 /** P18.10 — pendant MON partage : l'icône d'écran puis « nom · durée » ; la bannière garde sa forme, « Arrêter » est à côté. */
