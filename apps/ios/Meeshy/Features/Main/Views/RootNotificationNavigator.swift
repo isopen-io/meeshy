@@ -44,9 +44,9 @@ struct RootNotificationNavigator {
     /// conversations.
     private func openSocialContent(_ ctx: NotificationNavContext, postId: String) {
         DetailOpenSources.shared.markOpenedFromNotification(postId)
-        // Story, réel ou feuille en cours : le routeur les referme d'abord, par
-        // le site des conversations (#10543) — la cible ne s'ouvre plus dessous.
-        router.clearPresentedSurfaces { _ in showSocialContent(ctx, postId: postId) }
+        // Story, réel ou feuille en cours : le routeur les referme d'abord
+        // (#10543), et la cible ne s'ouvre qu'une fois leur départ fini (#18443).
+        router.present(afterPresentedSurfacesLeave: { showSocialContent(ctx, postId: postId) })
     }
 
     private func showSocialContent(_ ctx: NotificationNavContext, postId: String) {
@@ -95,6 +95,21 @@ struct RootNotificationNavigator {
         openSocialContent(ctx, postId: postId)
     }
 
+    private func openMessageNotification(_ ctx: NotificationNavContext) {
+        guard let conversationId = ctx.conversationId, !conversationId.isEmpty else {
+            // A mention lives EITHER in a conversation OR in a post/comment
+            // (`createPostMentionNotificationsBatch` /
+            // `createCommentMentionNotificationsBatch` ship a `postId` and
+            // no `conversationId`). Without this fallback the tap was a
+            // dead end for every mention made outside a chat.
+            if let postId = ctx.postId, !postId.isEmpty {
+                openSocialContent(ctx, postId: postId)
+            }
+            return
+        }
+        conversationOpener.navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
+    }
+
     func navigateFromNotification(_ ctx: NotificationNavContext) {
         switch ctx.type {
         case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
@@ -102,27 +117,15 @@ struct RootNotificationNavigator {
              .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else {
-                // A mention lives EITHER in a conversation OR in a post/comment
-                // (`createPostMentionNotificationsBatch` /
-                // `createCommentMentionNotificationsBatch` ship a `postId` and
-                // no `conversationId`). Without this fallback the tap was a
-                // dead end for every mention made outside a chat.
-                if let postId = ctx.postId, !postId.isEmpty {
-                    openSocialContent(ctx, postId: postId)
-                }
-                return
-            }
-            conversationOpener.navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
+            openMessageNotification(ctx)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
              .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: ctx.senderUsername ?? senderId
-                )
+                router.present(afterPresentedSurfacesLeave: {
+                    router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId)
+                })
             }
 
         case .communityInvite, .communityJoined, .communityLeft,
@@ -131,7 +134,7 @@ struct RootNotificationNavigator {
              .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
             // #18052 — « Ajouté à la communauté Y » nomme la communauté : son détail s'ouvre.
             if let communityId = ctx.communityId, !communityId.isEmpty {
-                router.push(.communityDetail(communityId))
+                router.present(afterPresentedSurfacesLeave: { router.push(.communityDetail(communityId)) })
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 conversationOpener.navigateToConversationById(conversationId)
             }
@@ -186,18 +189,22 @@ struct RootNotificationNavigator {
             // le tableau de bord dès que ce palier est posé. `nil` quand la
             // charge ne dit pas lequel — on n'en invente pas, et le tap se
             // comporte alors exactement comme avant.
-            router.pendingEngagementReveal = ctx.reveal
             // … puis ouvre la FICHE de son concept, au-dessus de la première page (#9564, carte de navigation).
-            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
+            router.present(afterPresentedSurfacesLeave: {
+                router.pendingEngagementReveal = ctx.reveal
+                router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
+            })
 
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme (#9564) : le
             // Classement pour un duo ou un résultat de ligue, la Saison pour une étape, la fiche des Missions à ses
             // gestes — posé sur son chemin complet, le retour remonte la chaîne. Le type décide, jamais la métadonnée.
-            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
+            router.present(afterPresentedSurfacesLeave: {
+                router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
+            })
 
         case .legacyAffiliateSignup:
-            router.push(.affiliate)
+            router.present(afterPresentedSurfacesLeave: { router.push(.affiliate) })
 
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
@@ -205,7 +212,7 @@ struct RootNotificationNavigator {
             // Pas d'entité cible : ouvrir la liste des notifications plutôt
             // qu'un tap muet — l'utilisateur retrouve au moins la notification
             // (et son détail) qu'il vient de toucher.
-            router.push(.notifications)
+            router.present(afterPresentedSurfacesLeave: { router.push(.notifications) })
         }
     }
 

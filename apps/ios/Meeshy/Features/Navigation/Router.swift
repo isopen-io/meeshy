@@ -332,15 +332,16 @@ final class Router: ObservableObject {
         }
     }
 
-    /// Le post qui attend qu'une surface ait fini de partir pour monter : une
-    /// feuille ne se présente pas pendant qu'une autre se referme.
-    private var postAwaitingPresentation: PostDetailSheetTarget?
+    /// La présentation qui attend qu'une surface ait fini de partir : une
+    /// feuille, une story ou une page ne se pose pas pendant qu'une autre se
+    /// referme (#16676, #18443). Une seule attend : la dernière demande gagne.
+    private var presentationAwaitingSurfaces: (@MainActor () -> Void)?
 
     /// Les surfaces encore en train de partir (`noteSurfacesLeaving`).
     private var leavingSurfaces = 0
 
-    /// Le temps qu'une surface met à se refermer avant que la feuille du post
-    /// monte à sa place.
+    /// Le temps qu'une surface met à se refermer avant que la présentation en
+    /// attente monte à sa place.
     private let surfaceHandoff: Duration
 
     /// Ce que le lien profond de partage remet à l'écran de partage unique (#10947).
@@ -453,9 +454,20 @@ final class Router: ObservableObject {
     /// elle monte une fois leur départ fini — jamais deux présentations qui se
     /// croisent, ce qui ferait tomber la seconde en silence.
     private func presentPost(_ post: PostDetailSheetTarget) {
+        present(afterPresentedSurfacesLeave: { [weak self] in self?.presentedPost = post })
+    }
+
+    // MARK: - Présenter une fois la surface partie (#18443)
+
+    /// Referme story, réel, fiche ou feuille en cours, puis présente `present`
+    /// une fois leur départ fini — sur-le-champ quand rien n'est présenté. Le
+    /// profil d'un auteur touché dans un réel, la page d'une notification ou
+    /// le post d'un lien ne tombent plus en silence sous la surface qui part.
+    /// Une demande suivante, ou toute route posée entre-temps, la remplace.
+    func present(afterPresentedSurfacesLeave present: @escaping @MainActor () -> Void) {
         clearPresentedSurfaces { [weak self] _ in
-            self?.postAwaitingPresentation = post
-            self?.presentPostAwaitingPresentation()
+            self?.presentationAwaitingSurfaces = present
+            self?.runPresentationAwaitingSurfaces()
         }
     }
 
@@ -470,23 +482,25 @@ final class Router: ObservableObject {
         Task { @MainActor [weak self] in
             _ = await cancellableSleep(for: delay)
             self?.leavingSurfaces -= 1
-            self?.presentPostAwaitingPresentation()
+            self?.runPresentationAwaitingSurfaces()
         }
     }
 
-    private func presentPostAwaitingPresentation() {
-        guard leavingSurfaces == 0, let post = postAwaitingPresentation else { return }
-        postAwaitingPresentation = nil
-        presentedPost = post
+    /// Remise à nil AVANT l'exécution : une présentation qui pose elle-même une
+    /// route ne s'annule pas par son propre `place`.
+    private func runPresentationAwaitingSurfaces() {
+        guard leavingSurfaces == 0, let present = presentationAwaitingSurfaces else { return }
+        presentationAwaitingSurfaces = nil
+        present()
     }
 
     /// Le détail d'un post s'ouvre en feuille partout, sauf dans les deux
     /// colonnes de l'iPad où il occupe le panneau de droite.
     var presentsPostDetailAsSheet: Bool { onRouteRequested == nil }
 
-    /// Referme la feuille du post, et oublie celui qui attendait de monter.
+    /// Referme la feuille du post, et oublie la présentation qui attendait de monter.
     func closePresentedPost() {
-        postAwaitingPresentation = nil
+        presentationAwaitingSurfaces = nil
         if presentedPost != nil { presentedPost = nil }
     }
 

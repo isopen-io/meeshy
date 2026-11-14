@@ -34,14 +34,14 @@ extension iPadRootView {
     /// Pose la conversation dans la colonne de détail, SANS repasser la porte :
     /// réservé à ce que le routeur a déjà admis (`onRouteRequested`).
     func placeConversation(_ conversation: Conversation) {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+        withAnimation(iPadPanelMotion.spring) {
             activeConversation = conversation
             rightPanelRoute = nil
         }
     }
 
     func closePanels() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+        withAnimation(iPadPanelMotion.spring) {
             activeConversation = nil
             rightPanelRoute = nil
             router.pendingReplyContext = nil

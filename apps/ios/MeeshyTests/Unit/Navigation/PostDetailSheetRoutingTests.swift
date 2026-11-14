@@ -143,6 +143,61 @@ final class PostDetailSheetRoutingTests: XCTestCase {
         XCTAssertNil(router.presentedPost, "le post en attente ne monte pas sur la conversation ouverte ensuite")
     }
 
+    // MARK: - Présenter une fois la surface partie (#18443)
+
+    private func makeRouterWithStory(handoff: Duration = .milliseconds(60)) -> Router {
+        let registry = PresentedSurfaceRegistry()
+        _ = registry.declare(.storyViewer, answer: { .closes }) {}
+        return Router(surfaces: registry, surfaceHandoff: handoff)
+    }
+
+    private func settle(_ duration: Duration) async {
+        try? await Task.sleep(for: duration)
+    }
+
+    func test_present_underAStory_waitsForTheDeparture_thenRunsExactlyOnce() async {
+        let router = makeRouterWithStory()
+        var runs = 0
+
+        router.present(afterPresentedSurfacesLeave: { runs += 1 })
+
+        XCTAssertEqual(runs, 0, "rien ne se présente pendant que la story descend")
+        await settle(.milliseconds(300))
+        XCTAssertEqual(runs, 1)
+    }
+
+    func test_present_withNothingPresented_runsAtOnce() {
+        let router = makeRouter()
+        var runs = 0
+
+        router.present(afterPresentedSurfacesLeave: { runs += 1 })
+
+        XCTAssertEqual(runs, 1)
+    }
+
+    func test_present_twice_keepsOnlyTheLastRequest() async {
+        let router = makeRouterWithStory()
+        var ran: [String] = []
+
+        router.present(afterPresentedSurfacesLeave: { ran.append("profil") })
+        router.present(afterPresentedSurfacesLeave: { ran.append("communauté") })
+
+        await settle(.milliseconds(300))
+        XCTAssertEqual(ran, ["communauté"])
+    }
+
+    func test_present_aPresentationThatPushes_isNotCancelledByItsOwnPlace() async {
+        let router = makeRouterWithStory()
+
+        router.present(afterPresentedSurfacesLeave: {
+            router.push(.settings)
+            router.push(.postDetail("p1"))
+        })
+
+        await awaitPresentedPost(router, id: "p1")
+        XCTAssertEqual(router.path, [.settings])
+    }
+
     // MARK: - Fermer
 
     func test_closePostDetail_closesTheSheet_withoutTouchingThePath() {
