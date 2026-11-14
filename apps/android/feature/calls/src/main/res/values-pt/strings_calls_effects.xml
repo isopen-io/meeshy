@@ -25,4 +25,6 @@
     <string name="call_effects_category_landscape">Paisagem</string>
     <string name="call_effects_category_voice">Voz</string>
     <string name="call_effects_layer_entry">%1$s · %2$s</string>
+    <string name="call_effects_settings_panel">Ajustes da minha imagem</string>
+    <string name="call_mode_carousel_position">%1$d de %2$d</string>
 </resources>

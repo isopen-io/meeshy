@@ -117,6 +117,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "call_effects_settings_panel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_mode_carousel_position",
+          "status": "android-only"
+        },
+        {
           "catalog": "app",
           "iosKey": "call.mode.effects.applied.cancel",
           "androidName": "call_effects_layer_undo",
