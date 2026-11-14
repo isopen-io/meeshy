@@ -128,7 +128,7 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.withheld.flame": "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.",
         "share.sheet.withheld.flame.note": "Sa copie disparaît aussi et ne se retransfère pas.",
         "share.sheet.withheld.flame.question": "Que devient la copie d’une flamme ?",
-        "talkie.info.text": "À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.",
+        "talkie.info.text": "Même si Meeshy est en arrière-plan.",
         "talkie.send.e2ee": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.",
         "talkie.send.explain": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.",
         "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",

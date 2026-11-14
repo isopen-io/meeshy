@@ -184637,43 +184637,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء رابط المشاركة"
+            "value": "إنشاء الرابط"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Freigabelink erstellen"
+            "value": "Link erstellen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create share link"
+            "value": "Create the link"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crear el enlace para compartir"
+            "value": "Crear el enlace"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer le lien de partage"
+            "value": "Créer le lien"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea il link di condivisione"
+            "value": "Crea il link"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criar o link de compartilhamento"
+            "value": "Criar o link"
           }
         }
       }
@@ -186085,43 +186085,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ما يجب على الزوار تقديمه للانضمام"
+            "value": "ما يجب على الضيوف تقديمه"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was Besucher angeben müssen, um beizutreten"
+            "value": "Was Gäste angeben müssen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "What visitors must provide in order to join"
+            "value": "What guests must provide"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lo que los visitantes deben facilitar para unirse"
+            "value": "Lo que los invitados deben facilitar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce que les visiteurs doivent fournir pour rejoindre"
+            "value": "Ce que les invités doivent fournir"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ciò che i visitatori devono fornire per partecipare"
+            "value": "Ciò che gli ospiti devono fornire"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O que os visitantes precisam fornecer para entrar"
+            "value": "O que os convidados devem fornecer"
           }
         }
       }
@@ -186269,43 +186269,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحكّم في جمهور الرابط ومدة صلاحيته"
+            "value": "عدد الاستخدامات ومدة الرابط"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Steuern Sie Reichweite und Lebensdauer des Links"
+            "value": "Anzahl der Nutzungen und Dauer des Links"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Control the link's audience and lifetime"
+            "value": "Number of uses and link duration"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controle la audiencia y la duración del enlace"
+            "value": "Número de usos y duración del enlace"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contrôlez l'audience et la durée de vie du lien"
+            "value": "Nombre d’utilisations et durée du lien"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controlla il pubblico e la durata del link"
+            "value": "Numero di utilizzi e durata del link"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controle o público e a duração do link"
+            "value": "Número de usos e duração do link"
           }
         }
       }
@@ -332193,43 +332193,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "استخدمه فقط في حالات الطوارئ القصوى: يُسمع صوتك لديهم حتى لو كان Meeshy في الخلفية."
+            "value": "حتى لو كان Meeshy في الخلفية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur im äußersten Notfall verwenden: Deine Stimme ist bei ihnen zu hören, auch wenn Meeshy im Hintergrund ist."
+            "value": "Auch wenn Meeshy im Hintergrund ist."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use it only in an extreme emergency: your voice plays on their phone even when Meeshy is in the background."
+            "value": "Even if Meeshy is in the background."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Úsalo solo en caso de extrema urgencia: tu voz suena en su teléfono aunque Meeshy esté en segundo plano."
+            "value": "Aunque Meeshy esté en segundo plano."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan."
+            "value": "Même si Meeshy est en arrière-plan."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da usare solo in caso di estrema urgenza: la tua voce esce dal loro telefono anche se Meeshy è in background."
+            "value": "Anche se Meeshy è in background."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use apenas em caso de extrema urgência: sua voz sai no telefone delas mesmo com o Meeshy em segundo plano."
+            "value": "Mesmo com o Meeshy em segundo plano."
           }
         }
       }

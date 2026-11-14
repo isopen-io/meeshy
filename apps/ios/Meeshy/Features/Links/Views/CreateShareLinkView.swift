@@ -158,7 +158,7 @@ struct CreateShareLinkView: View {
 
     private var accessSection: some View {
         formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Demander aux invités", bundle: .main), icon: "person.badge.key.fill",
-                    subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les visiteurs doivent fournir pour rejoindre", bundle: .main)) {
+                    subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les invités doivent fournir", bundle: .main)) {
             VStack(spacing: 0) {
                 ruleToggle(
                     String(localized: "share.link.create.access.account_required", defaultValue: "Compte Meeshy", bundle: .main),
@@ -242,7 +242,7 @@ struct CreateShareLinkView: View {
 
     private var limitsSection: some View {
         formSection(title: String(localized: "share.link.create.section.limits", defaultValue: "Limites", bundle: .main), icon: "gauge.with.dots.needle.bottom.50percent",
-                    subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Contrôlez l'audience et la durée de vie du lien", bundle: .main)) {
+                    subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Nombre d’utilisations et durée du lien", bundle: .main)) {
             VStack(spacing: 0) {
                 // Max utilisations
                 HStack(spacing: MeeshySpacing.md) {
@@ -344,7 +344,7 @@ struct CreateShareLinkView: View {
                     }
                     Text(isCreating
                         ? String(localized: "share.link.create.button.creating", defaultValue: "Création en cours…", bundle: .main)
-                        : String(localized: "share.link.create.button.create", defaultValue: "Créer le lien de partage", bundle: .main))
+                        : String(localized: "share.link.create.button.create", defaultValue: "Créer le lien", bundle: .main))
                         .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                 }

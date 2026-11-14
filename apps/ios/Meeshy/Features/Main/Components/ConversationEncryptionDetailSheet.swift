@@ -164,10 +164,6 @@ struct ConversationEncryptionDetailSheet: View {
         }
 
         Section {
-            LabeledContent(String(localized: "conversation.encryption.detail.modeLabel",
-                                  defaultValue: "Mode",
-                                  bundle: .main),
-                           value: modeLabel(mode))
             if let enabledAt = status.enabledAt {
                 LabeledContent(String(localized: "conversation.encryption.detail.enabledOn",
                                       defaultValue: "Activé le",

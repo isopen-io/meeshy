@@ -507,7 +507,7 @@
     "ios:Meeshy/game": {
       "labels": 962,
       "words": 6554,
-      "long": 85,
+      "long": 84,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
@@ -896,7 +896,7 @@
     },
     "ios:Meeshy/share": {
       "labels": 151,
-      "words": 658,
+      "words": 651,
       "long": 3,
       "explanations": 15
     },
@@ -1004,8 +1004,8 @@
     },
     "ios:Meeshy/talkie": {
       "labels": 28,
-      "words": 182,
-      "long": 2,
+      "words": 179,
+      "long": 1,
       "explanations": 4
     },
     "ios:Meeshy/thread": {
