@@ -133,7 +133,7 @@ struct MeeshySelectionFeedbackTests {
         #expect(Double(style.engagedEdgeWidth) == engaged["filet"] as? Double)
         #expect(style.candidateOpacity == candidates["opacite"] as? Double)
         #expect(Double(style.candidateWidth) == candidates["epaisseur"] as? Double)
-        #expect(style.candidateDash.map(Double.init) == candidates["tirets"] as? [Double])
+        #expect(style.candidateDash.map { Double($0) } == candidates["tirets"] as? [Double])
         #expect(style.boundsOpacity == bounds["opacite"] as? Double)
         #expect(Double(style.boundsWidth) == bounds["epaisseur"] as? Double)
         #expect(Double(style.boundsInset) == bounds["retrait"] as? Double)
@@ -232,8 +232,8 @@ struct MeeshySelectionFeedbackTests {
         let table = try #require(expected as? [String: Any])
         let vertical = try #require(table["verticales"] as? [Double])
         let horizontal = try #require(table["horizontales"] as? [Double])
-        let x = MeeshySnapGuidesRule.points(lines.vertical, length: CGFloat(size.0)).map(Double.init)
-        let y = MeeshySnapGuidesRule.points(lines.horizontal, length: CGFloat(size.1)).map(Double.init)
+        let x = MeeshySnapGuidesRule.points(lines.vertical, length: CGFloat(size.0)).map { Double($0) }
+        let y = MeeshySnapGuidesRule.points(lines.horizontal, length: CGFloat(size.1)).map { Double($0) }
         #expect(x.count == vertical.count && zip(x, vertical).allSatisfy { abs($0 - $1) < 1e-6 }, "\(name) x \(x) ≠ \(vertical)")
         #expect(y.count == horizontal.count && zip(y, horizontal).allSatisfy { abs($0 - $1) < 1e-6 }, "\(name) y \(y) ≠ \(horizontal)")
     }
