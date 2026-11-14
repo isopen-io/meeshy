@@ -406,15 +406,7 @@ struct VoiceProfileManageView: View {
         }
     }
 
-    private func statusLabel(for status: VoiceProfileStatus) -> String {
-        switch status {
-        case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
-        case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
-        case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
-        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Échec", bundle: .main)
-        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expiré", bundle: .main)
-        }
-    }
+    private func statusLabel(for status: VoiceProfileStatus) -> String { status.displayLabel }
 
     /// Les états « Actif », « En attente » et « Analyse en cours » se suffisent : leur description répétait le libellé (épure #18078, règle 2). « Échec » et « Expiré » disent quoi faire.
     private func statusDescription(for status: VoiceProfileStatus) -> String? {
@@ -423,6 +415,19 @@ struct VoiceProfileManageView: View {
         case .ready: return nil
         case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
         case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)
+        }
+    }
+}
+
+/// Le mot du statut d'un profil vocal, le même sur l'écran de gestion et sur le récapitulatif de l'assistant.
+extension VoiceProfileStatus {
+    var displayLabel: String {
+        switch self {
+        case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Échec", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expiré", bundle: .main)
         }
     }
 }

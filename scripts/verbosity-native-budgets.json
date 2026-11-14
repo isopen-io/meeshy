@@ -261,7 +261,7 @@
     "ios:Meeshy/circles": {
       "labels": 94,
       "words": 670,
-      "long": 13,
+      "long": 12,
       "explanations": 8
     },
     "ios:Meeshy/commands": {
@@ -727,8 +727,8 @@
       "explanations": 0
     },
     "ios:Meeshy/participantProfile": {
-      "labels": 42,
-      "words": 133,
+      "labels": 36,
+      "words": 76,
       "long": 0,
       "explanations": 0
     },
@@ -1177,10 +1177,10 @@
       "explanations": 0
     },
     "ios:MeeshyUI/community": {
-      "labels": 103,
-      "words": 300,
+      "labels": 101,
+      "words": 287,
       "long": 2,
-      "explanations": 30
+      "explanations": 28
     },
     "ios:MeeshyUI/composer": {
       "labels": 7,

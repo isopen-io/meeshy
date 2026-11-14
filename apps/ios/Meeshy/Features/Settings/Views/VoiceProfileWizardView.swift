@@ -357,7 +357,7 @@ struct VoiceProfileWizardView: View {
                     if let quality = profile.quality {
                         profileInfoRow(label: String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main), value: "\(Int(quality * 100))%")
                     }
-                    profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.rawValue.capitalized)
+                    profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.displayLabel)
                 }
                 .padding(MeeshySpacing.lg)
                 .background(

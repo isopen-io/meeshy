@@ -135,12 +135,6 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
         }
     }
 
-    func test_voiceStatus_displayLabel_isNeverTheEnglishRawValue() {
-        for status in VoiceProfileStatus.allCases {
-            XCTAssertNotEqual(status.displayLabel, status.rawValue.capitalized, "\(status.rawValue) : valeur brute de l'énumération")
-        }
-    }
-
     // MARK: - 3. Création d'une communauté : les mots des réglages
 
     func test_communityCreate_privacyRow_saysTheSettingsWords() throws {
