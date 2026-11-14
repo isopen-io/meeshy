@@ -309971,7 +309971,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tens %1$@ em mãos, todas convertíveis. A Meesh n.º %2$@ custa %3$@: faltam %4$@."
+            "value": "A tua luz conta %1$@: faltam %2$@ para a Meesh n.º %3$@."
           }
         },
         "pt-BR": {
@@ -309983,7 +309983,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "你手上有 %1$@，全部可兑换。第 %2$@ 枚 Meesh 价格为 %3$@：还差 %4$@。"
+            "value": "你的光芒有 %1$@：距第 %3$@ 枚 Meesh 还差 %2$@。"
           }
         }
       }

@@ -819,6 +819,11 @@ final class GameEpureTests: XCTestCase {
                 XCTAssertEqual(specifiers(in: value), specifiers(in: expected), "\(key) [\(language)] : mêmes marqueurs que le français")
             }
         }
+        for (key, expected) in Self.frenchStateLines {
+            for (language, value) in try XCTUnwrap(catalog[key]) where language != "fr" {
+                XCTAssertEqual(specifiers(in: value), specifiers(in: expected), "\(key) [\(language)] : une langue partielle (pt, zh-Hans) lit les mêmes marqueurs, sinon la ligne affiche un marqueur sans valeur")
+            }
+        }
         XCTAssertNil(catalog["game.state.points.ready"], "fusionnée avec sa jumelle sans conversion")
         XCTAssertNil(catalog["game.state.points.missing"], "fusionnée avec sa jumelle sans conversion")
     }
