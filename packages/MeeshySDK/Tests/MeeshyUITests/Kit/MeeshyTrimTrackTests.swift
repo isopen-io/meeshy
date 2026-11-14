@@ -49,7 +49,8 @@ struct MeeshyTrimTrackTests {
     func rule_stop_followsTheVectors() throws {
         for row in try Self.rows("butee") {
             let rule = try Self.rule(row)
-            let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(row["partie"] as? String)))
+            let rawMeeshyTrimTrackPart = try #require(row["partie"] as? String)
+            let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
             let stop = rule.stop(part: part, requested: try #require(row["entree"] as? Double), range: try Self.range(row, "plage"))
             #expect(stop?.rawValue == row["butee"] as? String, "\(row["nom"] ?? "")")
         }
@@ -59,7 +60,8 @@ struct MeeshyTrimTrackTests {
     func rule_adjusted_followsTheVectors() throws {
         for row in try Self.rows("ajustement") {
             let rule = try Self.rule(row)
-            let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(row["partie"] as? String)))
+            let rawMeeshyTrimTrackPart = try #require(row["partie"] as? String)
+            let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
             let selection = MeeshyTrimTrackSelection(rawValue: row["selection"] as? String ?? "kept") ?? .kept
             let result = rule.adjusted(
                 part: part, up: try #require(row["haut"] as? Bool), step: try #require(row["pas"] as? Double),
@@ -308,6 +310,14 @@ struct MeeshyTrimTrackTests {
         #expect(layers[readout.upperBound...].prefix(1500).contains(".accessibilityHidden(true)"))
     }
 
+    @Test("loi 13 : sans `keptText` aucun relevé, une source trop courte n'a ni poignées ni cadre ni voile, la tête reste")
+    func source_law13_drawsOnlyWhatIsUseful() throws {
+        let code = try Self.code("MeeshyTrimTrack.swift")
+        #expect(code.contains("if let keptText {\n            MeeshyTrimTrackReadout("))
+        #expect(code.components(separatedBy: "if rule.canTrim {").count == 3, "le voile avec son liseré, et les poignées")
+        #expect(code.contains("if let playhead {\n            let shown"), "la tête ne dépend que de `playhead`, jamais de la coupe")
+    }
+
     @Test("le temps ne se met pas en miroir : la piste et le relevé sont forcés de gauche à droite")
     func source_layout_isLeftToRight() throws {
         let code = try Self.code("MeeshyTrimTrack.swift")
@@ -323,6 +333,14 @@ struct MeeshyTrimTrackTests {
             #expect(!code.contains(".blur("))
         }
         #expect(layers.contains(".scaleEffect(x: fraction, y: 1, anchor: anchor)"))
+        #expect(layers.contains(".scaleEffect(x: 1, y: gripHeight / MeeshyTrimTrackRecipe.restGripHeight)"), "la prise grandit par une échelle")
+        #expect(layers.contains(".scaleEffect(x: recipe.playheadWidth / MeeshyTrimTrackRecipe.playheadWidth, y: 1)"), "la tête s'épaissit par une échelle")
+        #expect(!layers.contains(".frame(width: recipe.playheadWidth"), "jamais une largeur animée")
+        #expect(!layers.contains("height: gripHeight)"), "jamais une hauteur animée")
+        #expect(
+            track.contains(".meeshyAnimation(.easeOut(duration: MeeshyTrimTrackRecipe.loupeFade), value: recipe.isPrecise)"),
+            "la loupe et le décor qu'elle efface passent en fondu de 150 ms, rien sous « Réduire les animations »"
+        )
         #expect(layers.contains("let first = Int((max(0, window.lowerBound) * 100).rounded(.up))"))
         for layer in ["VeilLayer", "HandleShape", "HeadShape", "LoupeLayer", "Readout", "PreciseCapsule"] {
             #expect(layers.contains("struct MeeshyTrimTrack\(layer): View, Equatable"), "\(layer)")
@@ -352,9 +370,15 @@ struct MeeshyTrimTrackTests {
 
     @Test("la garde « un seul rogneur » admet `MeeshyTrimTrack` et refuse toute autre piste hors `Composer…`")
     func source_oneTrimTrack_isTheKitOne() throws {
-        let pattern = #"(struct|class)\s+(?!Meeshy|Composer)\w*TrimTrack\w*\s*[:<]"#
-        let ok = ["public struct MeeshyTrimTrack<Content: View>: View {", "struct ComposerTrimTrack: View {"]
-        let ko = ["struct SoundTrimTrack: View {", "struct TrimTrack<Content>: View {"]
+        let pattern = #"(struct|class)\s+(?!MeeshyTrimTrack|ComposerTrimTrack)\w*TrimTrack\w*\s*[:<]"#
+        let ok = [
+            "public struct MeeshyTrimTrack<Content: View>: View {", "struct MeeshyTrimTrackVeilLayer: View, Equatable {",
+            "struct ComposerTrimTrack: View {",
+        ]
+        let ko = [
+            "struct SoundTrimTrack: View {", "struct TrimTrack<Content>: View {",
+            "struct MeeshyAudioTrimTrack: View {", "struct ComposerVideoTrimTrack: View {",
+        ]
         for line in ok { #expect(line.range(of: pattern, options: .regularExpression) == nil, "\(line)") }
         for line in ko { #expect(line.range(of: pattern, options: .regularExpression) != nil, "\(line)") }
     }
@@ -412,7 +436,8 @@ struct MeeshyTrimTrackTests {
                 part, up: try #require(row["haut"] as? Bool), range: range, playhead: try #require(row["tete"] as? Double)
             ), isAtStop: false)
         default:
-            let command = try #require(MeeshyTrimTrackCommand(rawValue: try #require(row["commande"] as? String)))
+            let rawMeeshyTrimTrackCommand = try #require(row["commande"] as? String)
+            let command = try #require(MeeshyTrimTrackCommand(rawValue: rawMeeshyTrimTrackCommand))
             return MeeshyTrimTrackStep(effects: interaction.perform(command, on: part, range: range, playhead: try #require(row["tete"] as? Double)), isAtStop: false)
         }
     }
@@ -421,12 +446,14 @@ struct MeeshyTrimTrackTests {
         let effects = try #require(row["effets"] as? [[String: Any]])
         return try effects.map { effect in
             if let editing = effect["editing"] as? [Any] {
-                let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(editing[0] as? String)))
+                let rawMeeshyTrimTrackPart = try #require(editing[0] as? String)
+                let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
                 return .editing(part, try #require(editing[1] as? Bool))
             }
             if let bounds = effect["range"] as? [Double] { return .range(bounds[0]...bounds[1]) }
             if let time = effect["seek"] as? Double { return .seek(time) }
-            let kind = try #require(MeeshyTrimTrackHapticKind(rawValue: try #require(effect["haptic"] as? String)))
+            let rawMeeshyTrimTrackHapticKind = try #require(effect["haptic"] as? String)
+            let kind = try #require(MeeshyTrimTrackHapticKind(rawValue: rawMeeshyTrimTrackHapticKind))
             return .haptic(kind)
         }
     }

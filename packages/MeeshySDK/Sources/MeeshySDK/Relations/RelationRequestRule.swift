@@ -52,10 +52,20 @@ public enum RelationRequestRule {
         cooldownUntil: Date?,
         now: Date
     ) -> RelationRequestVerdict {
-        guard rung(after: current) == target else { return .refused(.phaseSkip) }
+        guard reachable(target, from: current) else { return .refused(.phaseSkip) }
         if let cooldownUntil, cooldownUntil > now { return .refused(.cooldown) }
         if requiresSeries(target), eligibleFor != target { return .refused(.notEligible) }
         return .allowed
+    }
+
+    /// Ami se demande DIRECTEMENT tant qu'on est sous Ami (décision porteur,
+    /// #18101) ; tout autre cran est le suivant, ou rien. Miroir de `reachable` côté serveur.
+    private static func reachable(_ target: RelationLevel, from current: RelationLevel) -> Bool {
+        guard target == .friend else { return rung(after: current) == target }
+        switch current {
+        case .public, .community, .acquaintance: return true
+        case .friend, .close, .blood: return false
+        }
     }
 
     /// Proche et Sang exigent leur série (RG-04) ; Connaissance et Ami n'en ont pas.

@@ -831,4 +831,49 @@ describe('PostReactionHandler', () => {
       await expect(handler.handleLeavePost(socket, { postId: POST_ID })).resolves.toBeUndefined();
     });
   });
+
+  describe('quotas des salles et des réactions (#18100)', () => {
+    const meterEachBucket = () => {
+      const counts = new Map<string, number>();
+      rateLimiterMockObj.checkLimit.mockImplementation((...args: unknown[]) => {
+        const [userId, config] = args as [string, { maxRequests: number; keyPrefix?: string }];
+        const key = `${config.keyPrefix}:${userId}`;
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return Promise.resolve(count <= config.maxRequests);
+      });
+    };
+
+    it('parcourir quarante posts ne refuse pas le like suivant', async () => {
+      meterEachBucket();
+      const { handler, postReactionService } = buildHandler();
+      const socket = makeSocket();
+      for (const index of Array.from({ length: 40 }, (_, i) => i)) {
+        const postId = `post-${index}`;
+        await handler.handleJoinPost(socket, { postId });
+        await handler.handleRequestSync(socket, { postId });
+        await handler.handleLeavePost(socket, { postId });
+      }
+      const callback = jest.fn<any>();
+
+      await handler.handleAddReaction(socket, { postId: POST_ID, emoji: '❤️' }, callback);
+
+      expect(callback).not.toHaveBeenCalledWith(expect.objectContaining({ error: 'Rate limit exceeded' }));
+      expect(postReactionService.addReaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('la trente et unième réaction de la minute reste refusée', async () => {
+      meterEachBucket();
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      for (const _ of Array.from({ length: 30 })) {
+        await handler.handleAddReaction(socket, { postId: POST_ID, emoji: '❤️' });
+      }
+      const callback = jest.fn<any>();
+
+      await handler.handleAddReaction(socket, { postId: POST_ID, emoji: '❤️' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+    });
+  });
 });

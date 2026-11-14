@@ -39,7 +39,7 @@
     }
   },
   {
-    "id": "public-to-friend-is-a-skip",
+    "id": "public-to-friend-is-direct",
     "input": {
       "targetLevel": "FRIEND",
       "currentLevel": "PUBLIC",
@@ -48,8 +48,48 @@
       "now": "2026-10-31T12:00:00Z"
     },
     "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "community-to-friend-is-direct",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "COMMUNITY",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "public-to-close-is-a-skip",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "PUBLIC",
+      "eligibleFor": "CLOSE",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
       "allowed": false,
       "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "public-to-friend-respects-the-cooldown",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "PUBLIC",
+      "eligibleFor": null,
+      "cooldownUntil": "2026-11-05T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_COOLDOWN"
     }
   },
   {

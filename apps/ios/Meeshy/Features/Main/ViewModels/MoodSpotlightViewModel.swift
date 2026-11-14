@@ -38,6 +38,7 @@ final class MoodSpotlightViewModel: ObservableObject {
     @Published private(set) var author: MeeshyUser?
     @Published var replyText = ""
     @Published private(set) var replyState: ReplyState = .idle
+    @Published private(set) var reactions = MoodReactionSelection()
 
     let statusId: String
     private var viewRecorded = false
@@ -45,19 +46,22 @@ final class MoodSpotlightViewModel: ObservableObject {
     private let sender: MoodReplySending
     private let currentUserId: @MainActor () -> String?
     private let now: @MainActor () -> Date
+    private let reactionHandler: @MainActor () -> MoodReactionHandler?
 
     init(
         statusId: String,
         source: MoodSpotlightSourcing = MoodSpotlightSource(),
         sender: MoodReplySending = MoodReplySender(),
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
-        now: @escaping @MainActor () -> Date = { Date() }
+        now: @escaping @MainActor () -> Date = { Date() },
+        reactionHandler: @escaping @MainActor () -> MoodReactionHandler? = { nil }
     ) {
         self.statusId = statusId
         self.source = source
         self.sender = sender
         self.currentUserId = currentUserId
         self.now = now
+        self.reactionHandler = reactionHandler
     }
 
     var entry: StatusEntry? {
@@ -69,6 +73,11 @@ final class MoodSpotlightViewModel: ObservableObject {
     var canReply: Bool {
         guard let entry else { return false }
         return entry.userId != currentUserId()
+    }
+
+    /// On ne réagit qu'à l'humeur d'un autre (#18110).
+    var canReact: Bool {
+        canReply && reactionHandler() != nil
     }
 
     var canSend: Bool {
@@ -113,8 +122,19 @@ final class MoodSpotlightViewModel: ObservableObject {
         }
     }
 
+    /// Par la même `reactToStatus` que la bulle ; la page tient son propre
+    /// état optimiste, que l'humeur soit ou non dans la barre.
+    func react(with emoji: String) async {
+        guard canReact, let handler = reactionHandler(), let entry, reactions.begin(emoji) else { return }
+        let outcome = await handler.react(entry.id, emoji)
+        reactions.settle(emoji, outcome: outcome)
+    }
+
     private func present(_ entry: StatusEntry) {
         content = .mood(entry)
+        if let handler = reactionHandler() {
+            reactions = reactions.merging(handler.placed(entry.id))
+        }
         guard !viewRecorded, entry.userId != currentUserId() else { return }
         viewRecorded = true
         let source = source

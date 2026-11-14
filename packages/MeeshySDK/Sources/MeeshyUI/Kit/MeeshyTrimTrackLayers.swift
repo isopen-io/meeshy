@@ -78,7 +78,8 @@ struct MeeshyTrimTrackHandleShape: View, Equatable {
         .overlay {
             RoundedRectangle(cornerRadius: MeeshyTrimTrackRecipe.gripRadius, style: .continuous)
                 .fill(recipe.gripColor)
-                .frame(width: MeeshyTrimTrackRecipe.gripWidth, height: gripHeight)
+                .frame(width: MeeshyTrimTrackRecipe.gripWidth, height: MeeshyTrimTrackRecipe.restGripHeight)
+                .scaleEffect(x: 1, y: gripHeight / MeeshyTrimTrackRecipe.restGripHeight)
         }
         .overlay {
             if showsFocusRing {
@@ -95,8 +96,8 @@ struct MeeshyTrimTrackHandleShape: View, Equatable {
     }
 }
 
-/// La tête de lecture : un trait blanc de 3 (4 tenue) et son halo, dans une
-/// cible de 44. Elle seule suit l'horloge de l'hôte : le contenu n'en dépend pas.
+/// La tête de lecture : un trait blanc de 3 (4 tenue, par une échelle, jamais
+/// une largeur recalculée) et son halo, dans une cible de 44. Elle seule suit l'horloge de l'hôte : le contenu n'en dépend pas.
 struct MeeshyTrimTrackHeadShape: View, Equatable {
     let height: CGFloat
     let recipe: MeeshyTrimTrackRecipe
@@ -104,7 +105,8 @@ struct MeeshyTrimTrackHeadShape: View, Equatable {
     var body: some View {
         RoundedRectangle(cornerRadius: MeeshyTrimTrackRecipe.gripRadius, style: .continuous)
             .fill(recipe.playheadColor)
-            .frame(width: recipe.playheadWidth, height: height)
+            .frame(width: MeeshyTrimTrackRecipe.playheadWidth, height: height)
+            .scaleEffect(x: recipe.playheadWidth / MeeshyTrimTrackRecipe.playheadWidth, y: 1)
             .shadow(color: recipe.playheadHaloColor, radius: MeeshyTrimTrackRecipe.playheadHaloRadius)
             .frame(width: MeeshyTrimTrackRecipe.hitWidth, height: height)
             .contentShape(Rectangle())

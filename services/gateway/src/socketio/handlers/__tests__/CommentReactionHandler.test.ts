@@ -569,4 +569,28 @@ describe('CommentReactionHandler', () => {
       await expect(handler.handleRequestSync(makeSocket(), { commentId: COMMENT_ID })).resolves.toBeUndefined();
     });
   });
+
+  describe('quota de synchronisation séparé (#18100)', () => {
+    it('resynchroniser quarante commentaires ne refuse pas la réaction suivante', async () => {
+      const counts = new Map<string, number>();
+      rateLimiterMockObj.checkLimit.mockImplementation((...args: unknown[]) => {
+        const [userId, config] = args as [string, { maxRequests: number; keyPrefix?: string }];
+        const key = `${config.keyPrefix}:${userId}`;
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return Promise.resolve(count <= config.maxRequests);
+      });
+      const { handler, commentReactionService } = buildHandler();
+      const socket = makeSocket();
+      for (const index of Array.from({ length: 40 }, (_, i) => i)) {
+        await handler.handleRequestSync(socket, { commentId: `comment-${index}` });
+      }
+      const callback = jest.fn<any>();
+
+      await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '❤️' }, callback);
+
+      expect(callback).not.toHaveBeenCalledWith(expect.objectContaining({ error: 'Rate limit exceeded' }));
+      expect(commentReactionService.addReaction).toHaveBeenCalledTimes(1);
+    });
+  });
 });

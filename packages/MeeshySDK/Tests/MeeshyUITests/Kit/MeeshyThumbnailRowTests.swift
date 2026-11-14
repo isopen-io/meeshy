@@ -162,9 +162,11 @@ struct MeeshyThumbnailRowTests {
     @Test("le cran : light à l'aller et à la duplication, medium à l'armement, rigid par place ; none se tait")
     func haptics_followTheVectors() throws {
         for row in try Self.rows("haptics") {
+            let eventName = try #require(row["event"] as? String)
+            let hapticName = try #require(row["haptic"] as? String)
             let style = MeeshyThumbnailRowRule.hapticStyle(
-                for: try #require(MeeshyThumbnailRowHapticEvent(rawValue: try #require(row["event"] as? String))),
-                haptic: try #require(MeeshyThumbnailHaptic(rawValue: try #require(row["haptic"] as? String)))
+                for: try #require(MeeshyThumbnailRowHapticEvent(rawValue: eventName)),
+                haptic: try #require(MeeshyThumbnailHaptic(rawValue: hapticName))
             )
             #expect(style?.rawValue == row["style"] as? String, "\(row)")
         }
