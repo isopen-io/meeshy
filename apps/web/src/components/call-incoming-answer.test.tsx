@@ -12,7 +12,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 import { CallIncomingAnswer } from './call-incoming-answer';
-import { CallTileNameplate } from './call-tile-nameplate';
 import { CallScreen, loadColdCallViews } from './call-screen';
 
 const colorOf = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -100,7 +99,6 @@ const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = ne
       onDecline={() => void (counts.declined += 1)}
       onDeclineMessage={() => void (counts.messages += 1)}
       colorOf={colorOf}
-      Nameplate={CallTileNameplate}
     />,
   );
   return { ...view, accepted, counts };
@@ -238,7 +236,7 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
     expect(tile?.style.borderColor).not.toBe('');
     expect(tile?.querySelector('[data-call-tile-plate]')?.textContent).toBe('Vous');
-    expect(tile?.querySelector('[data-call-tile-plate]')?.className.split(' ')).toContain('glass-call');
+    expect(tile?.querySelector('[data-call-tile-plate]')?.className.split(' ')).toContain('glass-tone');
     view.press('[data-call-incoming-camera]');
     expect(camera.readyState).toBe('ended');
     view.done();

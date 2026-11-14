@@ -105,6 +105,18 @@ const expected = (corner: SelfTileCorner, counts: { readonly leading: number; re
 const railCount = (host: HTMLElement, family: 'mine' | 'call') => host.querySelectorAll(`[data-call-rail="${family}"] button`).length;
 
 describe('CallScreen — les rails du duo laissent ma vignette visible (#17429)', () => {
+  /* Debout (P2) : couchée, la fenêtre fait céder le coin à ma vignette (L2.8), et aucun rail ne bouge. */
+  const real = { width: 0, height: 0 };
+  const size = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+  };
+  beforeEach(() => {
+    Object.assign(real, { width: window.innerWidth, height: window.innerHeight });
+    size(390, 844);
+  });
+  afterEach(() => size(real.width, real.height));
+
   test('ma vignette en haut à droite : le rail « l’appel » se pose SOUS elle, « mon image » ne bouge pas', () => {
     const view = mount();
     const counts = { leading: railCount(view.host, 'mine'), trailing: railCount(view.host, 'call') };

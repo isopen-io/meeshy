@@ -1,4 +1,5 @@
 import { act, useState } from 'react';
+import { readFileSync } from 'node:fs';
 import { createRoot } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
@@ -10,7 +11,7 @@ import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileRestingFactor, selfTile
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
-import { CallStage } from './call-stage';
+import { CallStage, duoCornerView } from './call-stage';
 
 /**
  * LE DUO VIDÉO (#8747, #8787) — ma vignette se GLISSE vers l'un des quatre
@@ -62,6 +63,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await duoCornerView.load();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -459,12 +461,12 @@ describe('le micro coupé du correspondant se voit en vidéo (#8787)', () => {
     view.done();
   });
 
-  test('vidéos permutées : le micro barré suit son image dans la vignette', () => {
+  test('vidéos permutées : le micro barré suit son image dans la vignette, dans sa plaque comme en groupe', () => {
     fresh();
     const view = mount(call({ members: { 'u-peer': member({ micMuted: true }) } }));
     act(() => view.tile().click());
-    expect(view.find('[data-call-peer-muted="main"]')).toBeNull();
-    expect(view.find('[data-call-corner] [data-call-peer-muted="corner"]')).not.toBeNull();
+    expect(view.find('[data-call-peer-muted-slot]:not([data-leaving]) [data-call-peer-muted="main"]')).toBeNull();
+    expect(view.find('[data-call-corner] [data-call-tile-plate] [data-call-tile-muted] svg')).not.toBeNull();
     view.done();
   });
 });
@@ -598,8 +600,9 @@ describe('P1.4 — ma vignette de duo porte la plaque « Vous »', () => {
     fresh();
     const view = mount();
     expect(plate(view)?.textContent).toBe('Vous');
-    expect(plate(view)?.className.split(' ')).toContain('glass-call');
-    expect(plate(view)?.closest('[data-call-corner]')?.style.borderColor).not.toBe('');
+    expect(plate(view)?.className.split(' ')).toContain('glass-tone');
+    expect(plate(view)?.getAttribute('data-glass-tone')).toBe('deep');
+    expect(plate(view)?.closest<HTMLElement>('[data-call-corner]')?.style.borderColor).not.toBe('');
     view.done();
   });
 
@@ -639,13 +642,11 @@ describe('P1.4 — ma vignette de duo porte la plaque « Vous »', () => {
     view.done();
   });
 
-  test('la grille d’un groupe et la vignette du duo posent le MÊME composant de plaque', async () => {
-    const { CALL_GRID_KIT } = await import('./call-stage');
-    const { CallTileNameplate } = await import('./call-tile-nameplate');
-    expect(CALL_GRID_KIT.Nameplate).toBe(CallTileNameplate);
-    const grid = await Bun.file(new URL('./call-grid.tsx', import.meta.url)).text();
-    expect(grid).not.toContain('function NameLabel');
-    expect(grid).toContain('<kit.Nameplate');
+  test('la grille d’un groupe, la vignette du duo et celle de la sonnerie posent le MÊME composant de plaque, au même mot', async () => {
+    const source = (name: string) => readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
+    for (const host of ['call-grid.tsx', 'call-incoming-answer.tsx', 'call-duo-corner.tsx']) expect({ host, poses: source(host).includes('<CallTileNameplate') }).toEqual({ host, poses: true });
+    expect(source('call-grid.tsx')).not.toContain('function NameLabel');
+    expect(source('call-incoming-answer.tsx')).toContain("translate(language, 'call.you')");
   });
 });
 
@@ -656,68 +657,67 @@ describe('P1.4 — ma vignette de duo porte la plaque « Vous »', () => {
  * son image à son avatar en fondu quand sa caméra se coupe.
  */
 describe('loi 17 — ma vignette et le micro coupé du pair entrent et sortent en fondu', () => {
-  test('loi-17.1 — ma caméra coupée : ma vignette repart en fondu, sortante et intouchable le temps du mouvement', async () => {
-    fresh();
+  /* Chaque mouvement demandé reste en cours jusqu'à ce que le témoin le finisse : on lit l'état PENDANT le fondu. */
+  const finishers: Array<() => void> = [];
+  const saved: { animate?: PropertyDescriptor | undefined } = {};
+  beforeAll(async () => {
     const { loadPillMotion } = await import('@/lib/calls/use-pill-motion');
     await loadPillMotion();
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    const self = { full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null };
-    const stage = (active: ActiveCall) => <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible />;
-    const finished: Array<() => void> = [];
-    const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  });
+  beforeEach(() => {
+    finishers.length = 0;
+    saved.animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
     Object.defineProperty(HTMLElement.prototype, 'animate', {
       configurable: true,
       value: () => {
         const settle = { done: () => undefined as void };
-        const promise = new Promise<void>((resolve) => (settle.done = resolve));
-        finished.push(() => settle.done());
-        return { finished: promise, cancel: () => undefined };
+        const finished = new Promise<void>((resolve) => (settle.done = resolve));
+        finishers.push(() => settle.done());
+        return { finished, cancel: () => undefined };
       },
     });
-    act(() => root.render(stage(call())));
-    const slot = () => host.querySelector('[data-call-corner-slot]');
+  });
+  afterEach(() => {
+    if (saved.animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    else Object.defineProperty(HTMLElement.prototype, 'animate', saved.animate);
+  });
+
+  test('loi-17.1 — ma caméra coupée : ma vignette repart en fondu, sortante et intouchable le temps du mouvement ; rallumée, elle revient', async () => {
+    fresh();
+    const view = mount();
+    const slot = () => view.find('[data-call-corner-slot]');
     expect(slot()?.hasAttribute('data-leaving')).toBe(false);
-    act(() => root.render(stage(call({ cameraOn: false }))));
+    view.render(true, 0, 0, call({ cameraOn: false }));
     expect(slot()?.hasAttribute('data-leaving')).toBe(true);
     expect(slot()?.hasAttribute('inert')).toBe(true);
     expect(slot()?.querySelector('[data-call-tile-plate]')?.textContent).toBe('Vous');
-    await act(async () => finished.forEach((done) => done()));
+    await act(async () => finishers.forEach((done) => done()));
     expect(slot()).toBeNull();
-    act(() => root.render(stage(call())));
+    view.render(true, 0, 0, call());
     expect(slot()?.hasAttribute('data-leaving')).toBe(false);
-    act(() => root.unmount());
-    host.remove();
-    if (saved === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
-    else Object.defineProperty(HTMLElement.prototype, 'animate', saved);
+    expect(finishers.length).toBeGreaterThan(1);
+    view.done();
   });
 
-  test('loi-17.1 — le micro coupé du pair arrive et repart en fondu, monté le temps de sa sortie', async () => {
+  test('loi-17.1 — le micro coupé du pair arrive et repart en fondu, monté le temps de sa sortie', () => {
     fresh();
-    const { loadPillMotion } = await import('@/lib/calls/use-pill-motion');
-    await loadPillMotion();
     const view = mount();
     expect(view.find('[data-call-peer-muted-slot]')).toBeNull();
-    const muted = call({ members: { 'u-peer': member({ micMuted: true }) } });
-    const harness = (active: ActiveCall) => view.render(true, 0, 0, active);
-    harness(muted);
+    view.render(true, 0, 0, call({ members: { 'u-peer': member({ micMuted: true }) } }));
     expect(view.find('[data-call-peer-muted-slot] [data-call-peer-muted="main"]')).not.toBeNull();
-    harness(call());
+    view.render(true, 0, 0, call());
     expect(view.find('[data-call-peer-muted-slot]')?.hasAttribute('data-leaving')).toBe(true);
     view.done();
   });
 
-  test('loi-17.12 — permutée, la caméra de l’autre qui se coupe : son avatar monte en fondu PAR-DESSUS son image dans la vignette', async () => {
+  test('loi-17.12 — permutée, la caméra de l’autre qui se coupe : son avatar monte en fondu PAR-DESSUS son image dans la vignette', () => {
     fresh();
-    const { loadPillMotion } = await import('@/lib/calls/use-pill-motion');
-    await loadPillMotion();
     const view = mount();
     act(() => view.tile().click());
     expect(view.find('[data-call-corner] video')).not.toBeNull();
-    expect(view.find('[data-call-corner] [data-call-corner-avatar]')?.className).toContain('invisible');
+    expect(view.find('[data-call-corner] [data-call-camera-off]')?.className).toContain('invisible');
     view.render(true, 0, 0, call({ members: { 'u-peer': member({ cameraOn: false }) } }));
-    expect(view.find('[data-call-corner] [data-call-corner-avatar]')?.className).not.toContain('invisible');
+    expect(view.find('[data-call-corner] [data-call-camera-off]')?.className).not.toContain('invisible');
     expect(view.find('[data-call-corner] video')).not.toBeNull();
     view.done();
   });

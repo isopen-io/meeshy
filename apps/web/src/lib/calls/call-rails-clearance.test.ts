@@ -103,13 +103,26 @@ describe('railsClearance', () => {
     expect(railSpan(small, clearance.trailing, lengths.trailing).bottom - railSpan(small, clearance.trailing, lengths.trailing).top).toBeGreaterThanOrEqual(RAIL_MIN_BAND);
   });
 
-  test('L2.8 (#17965) — en paysage, le rail reste à son BORD, centré sur toute sa hauteur : c’est ma vignette qui lui cède le coin', () => {
+  test('L2.8 (#17965) — en paysage, le rail reste à son BORD, centré sur toute sa hauteur : c’est ma vignette du duo qui lui cède le coin', () => {
     for (const viewport of [landscapeRoomy, landscape]) {
       for (const corner of ['top-right', 'top-left', 'bottom-right', 'bottom-left'] as const) {
-        expect(railsClearance({ tile: tile(corner, viewport), viewport, rtl: false, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
-        expect(railsClearance({ tile: tile(corner, viewport), viewport, rtl: true, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+        const mine = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner, scale: 2, viewport, topInset: 0 });
+        expect(mine?.yields).toBe(true);
+        expect(railsClearance({ tile: mine, viewport, rtl: false, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+        expect(railsClearance({ tile: mine, viewport, rtl: true, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
       }
     }
+  });
+
+  test('debout, ma vignette du duo ne cède rien : le rail se pose sous elle (P2)', () => {
+    expect(selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: 2, viewport: phone, topInset: 0, railsOpen: true })?.yields).toBe(false);
+  });
+
+  test('l’écran reçu de l’autre (P15) garde, en paysage, le rail qui évite ma vignette : sa place attend la décision #17730', () => {
+    const mine = selfTileFootprint({ layout: 'screen', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: 2, viewport: landscapeRoomy, topInset: 0, railsOpen: true });
+    expect(mine?.yields ?? false).toBe(false);
+    expect(mine?.x).toBe(landscapeRoomy.width - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width);
+    expect(railsClearance({ tile: mine, viewport: landscapeRoomy, rtl: false, lengths }).trailing).not.toEqual(NO_RAIL_CLEARANCE);
   });
 
   test('un écran debout trop court pour une bande utile garde le rail À CÔTÉ de ma vignette, au-dessus de la pilule (l’ancien recours, hors paysage)', () => {
@@ -163,10 +176,11 @@ describe('L2.8 — en paysage, ma vignette cède le coin au rail, et y revient',
     }
   });
 
-  test('les rails rangés, l’empreinte reprend son coin', () => {
+  test('les rails rangés, l’empreinte reprend son coin — et le rail qui sort reste à son bord : la forme de la fenêtre seule décide', () => {
     const base = { layout: 'video-duo' as const, cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right' as const, scale: 2 as const, viewport: wide, topInset: 0 };
-    expect(selfTileFootprint({ ...base, railsOpen: false })).toEqual(tile('top-right', wide));
-    expect(selfTileFootprint(base)).toEqual(tile('top-right', wide));
+    expect(selfTileFootprint({ ...base, railsOpen: false })).toEqual({ ...tile('top-right', wide), yields: true });
+    expect(selfTileFootprint(base)).toEqual({ ...tile('top-right', wide), yields: true });
+    expect(railsClearance({ tile: selfTileFootprint(base), viewport: wide, rtl: false, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
   });
 });
 
@@ -184,7 +198,8 @@ describe('W1 — colonne ouverte, le rail longe ma vignette depuis le bord de la
   test('L2.8 — fenêtre couchée, colonne ouverte : le rail de fin reste au bord de la scène réduite, ma vignette lui cède le coin', () => {
     for (const rtl of [false, true]) {
       for (const corner of ['top-right', 'top-left'] as const) {
-        expect(railsClearance({ tile: tile(corner, wideShort, 2, column), viewport: wideShort, inset: column, rtl, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+        const mine = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner, scale: 2, viewport: wideShort, topInset: 0, bleed: column });
+        expect(railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
       }
     }
     const mine = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: 2, viewport: wideShort, topInset: 0, bleed: column, railsOpen: true });
@@ -200,8 +215,8 @@ describe('W1 — colonne ouverte, le rail longe ma vignette depuis le bord de la
 
   test('selfTileFootprint remet ma vignette où la scène réduite la pose, et l’écran partagé aussi', () => {
     const base = { cameraOn: true, swapped: false, framed: false, immersive: false, scale: 2 as const, viewport: wideShort, topInset: 0, bleed: column };
-    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-right' })).toEqual(tile('top-right', wideShort, 2, column));
-    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-left' })).toEqual(tile('top-left', wideShort, 2, column));
+    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-right' })).toEqual({ ...tile('top-right', wideShort, 2, column), yields: true });
+    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-left' })).toEqual({ ...tile('top-left', wideShort, 2, column), yields: true });
     expect(selfTileFootprint({ ...base, layout: 'screen', corner: 'top-right' })?.x).toBe(wideShort.width - column - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width);
   });
 });
@@ -210,7 +225,7 @@ describe('selfTileFootprint', () => {
   const base = { cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right' as const, scale: 2 as const, viewport: phone, topInset: 0 };
 
   test('en duo vidéo, ma vignette en coin est celle que la scène pose', () => {
-    expect(selfTileFootprint({ ...base, layout: 'video-duo' })).toEqual(tile('top-right', phone));
+    expect(selfTileFootprint({ ...base, layout: 'video-duo' })).toEqual({ ...tile('top-right', phone), yields: false });
   });
 
   test('la capsule de capture la fait descendre d’autant', () => {
