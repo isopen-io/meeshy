@@ -478,5 +478,6 @@ struct iPadRootView: View {
 /// Le ressort UNIQUE de la colonne droite de l'iPad (#18443) : une route du panneau, une conversation posée,
 /// un retour ou une fermeture avancent au même rythme.
 enum iPadPanelMotion {
-    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.85)
+    static let spring = Animation.spring(response: MeeshyGlassPillRecipe.springResponse,
+                                         dampingFraction: MeeshyGlassPillRecipe.springDamping)
 }

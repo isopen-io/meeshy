@@ -123,9 +123,7 @@ struct RootNotificationNavigator {
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
              .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
-                router.present(afterPresentedSurfacesLeave: {
-                    router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId)
-                })
+                router.presentProfileSheet(ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId))
             }
 
         case .communityInvite, .communityJoined, .communityLeft,
