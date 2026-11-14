@@ -28612,19 +28612,19 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Keine Reaktionen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "No reactions"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Sin reacciones"
           }
         },
@@ -28642,7 +28642,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Sem reações"
           }
         }
