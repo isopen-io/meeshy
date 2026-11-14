@@ -294,7 +294,15 @@ private fun AccessoryView(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTog
         is MeeshyToggleRowAccessory.Toggle -> Switch(
             checked = accessory.isOn,
             onCheckedChange = null,
-            colors = SwitchDefaults.colors(checkedTrackColor = recipe.trackOnColor),
+            thumbContent = EvenThumb,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = recipe.thumbColor,
+                checkedTrackColor = recipe.trackOnColor,
+                checkedBorderColor = Color.Transparent,
+                uncheckedThumbColor = recipe.thumbColor,
+                uncheckedTrackColor = recipe.trackOffColor,
+                uncheckedBorderColor = Color.Transparent,
+            ),
             modifier = Modifier.clearAndSetSemantics {},
         )
         is MeeshyToggleRowAccessory.Check -> CheckMark(isSelected = accessory.isSelected, color = recipe.accessoryColor)
@@ -317,6 +325,12 @@ private fun AccessoryView(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTog
         )
     }
 }
+
+/**
+ * Un pouce de même taille ouvert ou fermé, comme la planche (`.tg i`) et la bascule iOS : Material3 rétrécit le pouce
+ * d'une bascule fermée tant qu'elle n'a pas de contenu de pouce.
+ */
+private val EvenThumb: @Composable () -> Unit = {}
 
 /**
  * La coche n'existe que sur le choix retenu (loi 13) ; elle apparaît et s'efface en fondu de 200 ms, instantanément avec

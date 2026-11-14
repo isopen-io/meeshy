@@ -119,6 +119,14 @@ class MeeshyToggleRowTest {
     }
 
     @Test
+    fun `une bascule fermee a une piste de l'encre de la ligne a 30 pour cent et un pouce blanc dans les deux etats`() {
+        val off = recipe(accessory = MeeshyToggleRowAccessory.Toggle(isOn = false), tone = MeeshyGlassTone.Deep)
+        assertThat(off.trackOffColor).isEqualTo(MeeshyMediaChromeColors.OnMedia.copy(alpha = MeeshyOpacity.medium))
+        assertThat(off.thumbColor).isEqualTo(MeeshyMediaChromeColors.OnMedia)
+        assertThat(recipe(accessory = MeeshyToggleRowAccessory.Toggle(isOn = true)).thumbColor).isEqualTo(MeeshyMediaChromeColors.OnMedia)
+    }
+
+    @Test
     fun `le libelle d'accessibilite joint titre et sous-titre`() {
         assertThat(MeeshyToggleRowRecipe.accessibilityLabel(title = "Tendances", subtitle = "Monde"))
             .isEqualTo("Tendances, Monde")
