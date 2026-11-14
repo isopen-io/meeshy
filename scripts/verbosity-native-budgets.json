@@ -661,10 +661,10 @@
       "explanations": 0
     },
     "ios:Meeshy/message-detail": {
-      "labels": 82,
-      "words": 187,
+      "labels": 80,
+      "words": 176,
       "long": 0,
-      "explanations": 82
+      "explanations": 80
     },
     "ios:Meeshy/message-more": {
       "labels": 5,
