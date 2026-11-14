@@ -64,3 +64,32 @@ Choix retenus (mode autonome) :
 14. Exécution en sonnet, non en haiku.
 
 Non vérifié localement : aucun compilateur Swift dans le conteneur. La compilation, les témoins et les instantanés ne se prouvent que par la CI.
+
+## 10. Android (lot K06 Android, #17617)
+Relevé le 2026-11-12 : la fiche d'origine ne décrivait que iOS. Le lot Android la complète ici, sans rien changer aux sections précédentes.
+
+- **Cible** : `apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyToggleRow.kt` (composables : `MeeshyToggleRowFace`, `MeeshyToggleRow`) et `MeeshyToggleRowRecipe.kt` (recette pure, en valeurs : `resolve`, `accessibilityLabel`, `valueFor`, `isChosen`, `veilOpacity`). Miroir des noms iOS, en `camelCase` Kotlin.
+- **API** : `MeeshyToggleRow(content, onClick, …)` ; `MeeshyToggleRow(title, onClick, subtitle, accessory, kind, showsDivider, tone, tint, enabled, haptic, icon)` ; `MeeshyToggleRowFace(content, enabled, leading, titleAccessory, trailing)`. Accessoire : `MeeshyToggleRowAccessory` (`None`, `Toggle`, `Check`, `Checkbox`, `Chevron`, `Value`). Variante : `MeeshyToggleRowKind` (`Normal`, `Destructive`, `Accent`). Haptique : `MeeshyToggleRowHaptic` (`Light`, `None`).
+- **Icône** : une `ImageVector` (`MeeshyIcons`, équivalents Material des symboles SF) ; l'emplacement `leading` accepte toute composable (l'hôte reste maître du dessin de tête, comme sur iOS).
+- **Ton** : `MeeshyGlassTone` de K01 (`Theme` pour l'encre du thème) ; à défaut, `LocalMeeshyGlassTone` (défaut `Deep`, comme `meeshyGlassTone` sur iOS).
+- **Gestes** : toute la ligne est la cible (`clickable`, sans indication Material) ; l'appui déclenche une fois au relâcher ; le voile d'appui (encre 15 %, survol 8 %, rayon `MeeshyRadius.sm`, débord `MeeshySpacing.sm`) fond en 200 ms au relâcher et s'applique instantanément à l'appui, sans fondu avec « Réduire les animations ».
+- **Haptique** : `rememberMeeshyHaptics().light()` par action, si `haptic == Light` et la ligne est active.
+- **Accessibilité** : un seul nœud fusionné ; libellé « titre, sous-titre » ; état lu par `stateDescription` (`a11y_kit_toggle_on` / `_off`, les chaînes déjà générées pour le kit) ; `selected` pour coche et case cochée ; texte pour `Value`. Accessoires et emplacements masqués du lecteur d'écran.
+- **Grande police** : à partir de `MeeshyToggleRowRecipe.ACCESSIBILITY_FONT_SCALE` (1,3), l'accessoire passe sous le titre.
+
+**Choix retenus (Android, sans décision produit) :**
+1. **Cible 48 dp, visuel 46 dp.** La ligne a une hauteur minimale de 46 dp (`rowMinimumHeight`), mais la zone tactile est portée à 48 dp (plancher Material, `MeeshyControlSize.minTouchTarget`). Le plancher de la plateforme l'emporte sur le 46 pt iOS, qui reste le visuel.
+2. **Seuil de grande police à 1,3.** Android n'a pas d'équivalent exact de `isAccessibilitySize` ; le seuil retenu est celui que les réglages système atteignent à la première taille « grande ».
+3. **Bascule Material3 inerte** (`onCheckedChange = null`, sémantique effacée) : la piste est teintée `tint ?: Indigo500`. Son animation de pouce est celle du système et ne se coupe pas avec « Réduire les animations » (écart mineur, consigné).
+4. **Échantillon « tuile pressée » ignoré**, comme sur iOS (`contentK06` ignore `isPressed`) : le catalogue Android ne fige pas l'appui.
+
+**Jumeaux Android (relevés, aucun rebranché dans K06, comme sur iOS) :**
+- `:sdk-ui` `settings/SettingsRow.kt` et `SettingsSwitchRow.kt` (ligne à interrupteur, teinte `Indigo500`, `toggleable`).
+- Privés à rebrancher par les lots d'intégration : `AlignToggle`, `PermanentSwitch`, `LoopSwitch` (écrans du composer et de la capture), `AudienceRow`, `PersonRow` (`people/DirectoryPersonRow.kt`).
+
+**Témoins Android :**
+- Comportement et recette : `apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/kit/MeeshyToggleRowTest.kt` (recette, hauteur, voile, encres, libellé, valeur ; cible tactile, état lu, sélection, désactivé, un seul déclenchement).
+- Instantanés : `KitCatalogSnapshotTest` (feature/kit), images `MeeshyToggleRow/<état>.<variante>.png` sous `apps/android/feature/kit/src/test/snapshots/`, enregistrées par le job `kit-snapshots-record` de `android.yml` (jamais sur un poste).
+- Catalogue : `apps/android/feature/kit/src/main/kotlin/me/meeshy/feature/kit/KitCatalogK06.kt` (`entryK06`, seize états, dont dix touchables, miroir de `MeeshyKitCatalog+K06`).
+
+**Non vérifié localement** : aucun SDK Android dans le conteneur. Compilation, témoins et instantanés ne se prouvent que par `android.yml` sur la PR.
