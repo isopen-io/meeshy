@@ -66,6 +66,16 @@ describe('MessageTranslationService — translationFailed requires a conversatio
     expect(service.getStats().errors).toBe(errorsBefore + 1);
   });
 
+  it('counts a pool-full rejection declared by its code alone, whatever its label (#17189)', async () => {
+    const { service } = await startedService();
+    const poolBefore = service.getStats().pool_full_rejections;
+
+    fakeZmqClient.emit('translationError', translationError({ error: 'pool saturated', errorCode: 'TRANSLATION_POOL_FULL' }));
+    await flushAsync();
+
+    expect(service.getStats().pool_full_rejections).toBe(poolBefore + 1);
+  });
+
   it('counts a pool-full rejection without a conversationId and announces nothing', async () => {
     const { service, failures } = await startedService();
     const poolBefore = service.getStats().pool_full_rejections;

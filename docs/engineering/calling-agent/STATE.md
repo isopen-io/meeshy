@@ -968,3 +968,55 @@ socket jusqu'au client.
 1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 28 — 2026-11-14
+
+- **Base** : `origin/dev` @ `a978a2c2`. Le lot du cycle 27 (#17205) y est fusionné.
+- **Branche** : `claude/determined-volta-6f599d`.
+- **Objectif** : #17189. Le refus transitoire du traducteur (« translation pool full ») devient un contrat déclaré : un `errorCode` additif `TRANSLATION_POOL_FULL`, lu par la passerelle à côté du libellé historique, et un test de contrat qui tombe si l'un des deux côtés change.
+- **Livré** (passerelle et traducteur ; aucune charge socket vers les clients ne change) :
+  - **Traducteur** : `_pool_full_error` ajoute `errorCode: 'TRANSLATION_POOL_FULL'` en dernière clé, à côté de `error: 'translation pool full'`. Le code et le libellé deviennent deux constantes de module. Une ancienne passerelle reçoit le même JSON avec un champ de plus ; son parseur, qui n'est pas strict, le relaie déjà sans effet.
+  - **Passerelle** : `TRANSLATION_POOL_FULL_ERROR_CODE` et `LEGACY_POOL_FULL_ERROR` sont déclarés dans `zmq-translation/types.ts`, à côté de `UNSUPPORTED_LANGUAGE`. Un prédicat unique, `isTransientPoolRefusal` (`utils/zmq-helpers.ts`, hors du barrel qui chargerait l'addon zeromq), reconnaît le code OU le libellé. Il remplace le littéral aux trois sites : le disjoncteur neutre, la requête laissée armée avec `pool_full_rejections`, et `MessageTranslationService` (diff net 0, fichier hors budget).
+  - **Décision** : le code n'est pas négocié par `acceptsErrorCodes`. Il est additif et ne termine pas la requête : une passerelle qui l'ignore lit le libellé et garde le même comportement. `UNSUPPORTED_LANGUAGE`, lui, se négocie parce qu'il REMPLACE un comportement.
+- **Tests** :
+  - `transientPoolRefusal.contract.test.ts` (11) : il lit la source Python, teste le prédicat et le client avec le code seul.
+  - `test_pool_full_error_code.py` (3) : le test symétrique, qui lit `types.ts`.
+  - Un témoin s'ajoute à `MessageTranslationService.translationFailedNoConversation`.
+  - Sept témoins Python figeaient la forme du refus : ils l'ont gardée exacte, avec `errorCode` en plus.
+  - **Rouge avant correctif** : passerelle `11 failed, 12 passed`, traducteur `5 failed, 18 passed`. La QA l'a reproduit avec le code de `origin/dev` : 11/181 côté passerelle, 14/76 côté traducteur.
+  - **Vert** : relancé par moi, passerelle `23 passed` sur 2 suites et traducteur `23 passed`. La QA mesure 47 suites et 949 tests côté passerelle ; `tsc --noEmit` sort à 0. Côté traducteur : `475 passed, 18 skipped, 1 xfailed`, plus 8 erreurs connues ou d'environnement (`TestRealTranslatorIntegration`, `soundfile`).
+  - **Mutations QA** : 9 sur 9 tuées (libellé, code et constante TS renommés, `errorCode` retiré, chaque branche du prédicat retirée, chaque site ramené au libellé seul).
+- **QA** : favorable avec réserves.
+  - Défaut corrigé dans le lot : le chemin du test jest vers le Python échappait à `scripts/ci/voie-parite.mjs`, si bien qu'une PR qui ne touche que le traducteur ne l'aurait pas lancé. Le chemin cite maintenant `services/translator/…`.
+  - Réserves : lecture par expression régulière, `as never`. Elles partent dans #18497, avec la bascule et le retrait.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18436 (logs de la boucle de réception, branche morte, `never awaited`).
+2. #17132, #17133, #18154 et #18371.
+3. #18497 seulement après déploiement du traducteur sur le staging ET en production. Mesurer d'abord.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 29 — 2026-11-14
+
+- **Base** : `origin/dev` @ `04a31e14`. Le lot du cycle 28 (#17189, PR #18498) a été fusionné pendant ce cycle (`671c6e01`), et ses fichiers ne recoupent pas ceux de ce lot.
+- **Branche** : `claude/determined-volta-40rrxt`.
+- **Objectif** : #17132. Un lot refusé reste signalé à la passerelle même si `stop()` est lui-même annulé, une fois ou plus, pendant le report.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni les compteurs) :
+  - **`ConnectionManager._report_through_cancellation`** n'attend plus le report sous `asyncio.shield` puis par un `await report` sans protection. Il l'attend en boucle par `asyncio.wait`, qui ne l'annule pas. Chaque annulation suivante retrouve donc le même report, qui ne s'exécute qu'une fois. L'annulation n'est rendue qu'une fois le report fini.
+  - Un `shield` en boucle a été essayé puis écarté : si le report lève, `await shield(report)` relance l'exception avant la branche d'annulation. La boucle de flush ne voit alors jamais l'annulation, et `stop()` ne se termine pas. Le témoin « report qui lève » l'a montré.
+  - Un report qui lève après une annulation est journalisé par son seul type. Sans annulation, son exception est relancée telle quelle, comme avant.
+  - `connection_manager.py` passe de 609 à 618 lignes.
+- **Tests** : dans `test_shutdown_flush_cancel_and_quiet_logs_qa.py`, l'`xfail` de `TestSecondCancellation` est retiré. Deux témoins sont ajoutés : `TestThirdCancellation` (deux `cancel()`) et `TestReportThatRaisesAfterCancellation`.
+  - **Rouge avant correctif** : `3 failed, 3 passed`. La QA l'a reproduit avec le code de `origin/dev`.
+  - **Vert** : relancé par moi, `6 passed`. La QA mesure 29 fichiers : `447 passed, 6 skipped, 5 errors` avant comme après, avec une liste d'échecs identique. Les 5 erreurs, préexistantes, viennent de `TestRealTranslatorIntegration`. Sur 15 lancements avec `-W error::RuntimeWarning`, aucun avertissement « never retrieved ».
+  - **Mutations QA** : 8 sur 8 font rougir les témoins.
+- **QA** : favorable avec une réserve. `stop()` ne peut plus être annulé tant que le rappel de rejet n'a pas rendu la main. En production, le rappel est un envoi PUB qui ne bloque pas, et aucun appelant ne borne `stop()` → #18535.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle (#18536) n'est pas fusionnée, la reprendre.
+1. #18436, puis #17133 et #18535.
+2. #18371, #18154 et #18497.
+3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

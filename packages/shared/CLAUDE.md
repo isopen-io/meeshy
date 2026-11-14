@@ -136,6 +136,18 @@ présence est DÉRIVÉE par le backend depuis `isOnline` + `lastActiveAt`, cf.
 déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un garde
 « tout `CLIENT_EVENTS` a un handler gateway » sans liste d'exemptions.
 
+**Ce garde existe depuis le 2026-11-14 (#18499)** : `socket-event-handler-gate`
+ferme la direction MONTANTE, que les cinq cliquets voisins laissaient ouverte —
+un nom de `CLIENT_EVENTS` sans `socket.on` est un canal que le contrat AFFIRME
+et que **Socket.IO laisse tomber sans lever la moindre erreur**. Il est à deux
+sens : une dette neuve rougit chez celui qui l'écrit, et un canal qui gagne son
+écouteur doit SORTIR de l'inventaire. Il tient aussi `CALL_EVENTS`
+(`types/video-call.ts`) dans la portée des gardes : c'est une SECONDE carte de
+noms de fil, et c'est celle que la passerelle importe — un nom ajouté à l'une et
+pas à l'autre échappait à tous les cliquets. Le scan « la passerelle épelle-t-elle
+ce nom ? » est un site UNIQUE (`__tests__/ci/socket-payload-shape/gateway-event-names.ts`),
+partagé avec `socket-event-emitter-gate`.
+
 ## Build
 ```bash
 npm run build   # TypeScript → dist/ (ESM + declarations + source maps)

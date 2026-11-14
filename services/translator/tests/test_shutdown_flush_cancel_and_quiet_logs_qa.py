@@ -7,8 +7,9 @@ QA indépendante de #17063 / #17064 — trous laissés par les témoins du lot :
   refus d'arrivée tardive (rétrocompatibilité de `set_rejection_handler`) ;
 - un rappel qui lève pendant le report protégé n'empêche ni l'arrêt ni le
   comptage, et son journal ne porte pas le texte ;
-- réserve documentée : une SECONDE annulation (l'arrêt lui-même annulé pendant
-  le report) perd encore le lot.
+- #17132 : une SECONDE (voire N-ième) annulation — l'arrêt lui-même annulé
+  pendant le report — ne perd plus le lot, l'arrêt se termine quand même, et un
+  report qui lève n'empêche ni l'arrêt ni ne journalise autre chose que le type.
 """
 import asyncio
 import logging
@@ -131,29 +132,79 @@ class TestFailingCallbackUnderShield:
         assert all(SENTINEL not in r.getMessage() for r in caplog.records)
 
 
+async def _stop_cancelled_during_report(cm, gate, cancels: int):
+    stopping = asyncio.create_task(cm.stop())
+    await asyncio.sleep(0.01)
+    for _ in range(cancels):
+        stopping.cancel()
+        await asyncio.sleep(0)
+    gate.set()
+    done, _ = await asyncio.wait({stopping}, timeout=1.0)
+    return stopping, done
+
+
+def _slow_recorder(gate, signaled):
+    async def slow(tasks):
+        await gate.wait()
+        signaled.extend(t.task_id for t in tasks)
+    return slow
+
+
 class TestSecondCancellation:
-    @pytest.mark.xfail(strict=True, reason=(
-        "Réserve QA (#17063) : si `stop()` est lui-même annulé pendant le report "
-        "protégé, l'annulation se propage à la boucle de flush, qui attend alors "
-        "le report SANS bouclier ; le lot, déjà compté, n'est jamais signalé."
-    ))
     async def test_refused_batch_is_signaled_even_if_stop_is_cancelled(self):
         mgr = _manager(normal_pool_size=1)
         cm = mgr.connection_manager
         gate = asyncio.Event()
         signaled = []
 
-        async def slow(tasks):
-            await gate.wait()
-            signaled.extend(t.task_id for t in tasks)
+        await _flush_loop_reporting(mgr, _slow_recorder(gate, signaled))
+        stopping, done = await _stop_cancelled_during_report(cm, gate, cancels=1)
 
-        await _flush_loop_reporting(mgr, slow)
-        stopping = asyncio.create_task(cm.stop())
-        await asyncio.sleep(0.01)
-        stopping.cancel()
-        await asyncio.sleep(0)
-        gate.set()
-        await asyncio.gather(stopping, return_exceptions=True)
-        await asyncio.sleep(0.05)
-
+        assert stopping in done, "l'arrêt annulé ne se termine pas une fois le report fini"
+        assert cm._batch_flush_task.done()
         assert sorted(signaled) == ["acc-0", "acc-1", "acc-2"]
+        assert cm.get_stats()["pool_full_rejections"] == 3
+
+
+class TestThirdCancellation:
+    async def test_two_cancels_of_stop_during_the_report_still_signal_once(self):
+        mgr = _manager(normal_pool_size=1)
+        cm = mgr.connection_manager
+        gate = asyncio.Event()
+        signaled = []
+
+        await _flush_loop_reporting(mgr, _slow_recorder(gate, signaled))
+        stopping, done = await _stop_cancelled_during_report(cm, gate, cancels=2)
+
+        assert stopping in done, "l'arrêt annulé deux fois reste bloqué"
+        assert cm._batch_flush_task.done()
+        assert sorted(signaled) == ["acc-0", "acc-1", "acc-2"]
+        assert cm.get_stats()["pool_full_rejections"] == 3
+
+
+class TestReportThatRaisesAfterCancellation:
+    async def test_stop_completes_and_logs_only_the_exception_type(self, caplog):
+        caplog.set_level(logging.DEBUG)
+        mgr = _manager(normal_pool_size=1)
+        cm = mgr.connection_manager
+        gate = asyncio.Event()
+        calls = []
+
+        async def raising_report(batches):
+            calls.append(len(batches))
+            await gate.wait()
+            raise RuntimeError(f"report broke {SENTINEL}")
+
+        cm._report_batches = raising_report
+        await _flush_loop_reporting(mgr, AsyncMock())
+        stopping, done = await _stop_cancelled_during_report(cm, gate, cancels=2)
+        await asyncio.sleep(0.02)
+
+        assert stopping in done, "un report qui lève bloque l'arrêt"
+        assert cm._batch_flush_task.done()
+        assert calls == [1], "le report a été relancé : la boucle tourne"
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("RuntimeError" in r.getMessage() for r in errors)
+        assert all(SENTINEL not in r.getMessage() for r in caplog.records)
+        assert all("report broke" not in r.getMessage() for r in caplog.records)
+        assert all(r.exc_info is None for r in caplog.records)

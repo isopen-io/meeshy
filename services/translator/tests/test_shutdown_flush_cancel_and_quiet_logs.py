@@ -180,6 +180,7 @@ class TestQuietRefusalsDuringShutdown:
             "messageId": "msg-late",
             "error": "translation pool full",
             "conversationId": "c1",
+            "errorCode": "TRANSLATION_POOL_FULL",
         }).encode("utf-8")
 
     async def test_full_pool_refusal_outside_shutdown_keeps_its_warning(self, caplog):

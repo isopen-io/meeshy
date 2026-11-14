@@ -27,7 +27,12 @@ data class Community(
     val theme: String = DEFAULT_THEME,
     /** Nom de la langue de conversation (`french` par défaut, comme iOS). */
     val language: String = DEFAULT_LANGUAGE,
+    /** Membres en ligne, sans identité (#18014) : seul le détail le sert. */
+    val onlineMemberCount: Int? = null,
 ) {
+    /** Le nombre qu'écrit « N en ligne » ; rien quand il est absent ou nul (iOS `statsSection`). */
+    val onlineLine: Int? get() = onlineMemberCount?.takeIf { it > 0 }
+
     companion object {
         const val DEFAULT_COLOR: String = "4ECDC4"
         const val DEFAULT_THEME: String = "general"
@@ -53,6 +58,7 @@ fun ApiCommunity.toCommunity(): Community = Community(
     updatedAt = updatedAt ?: createdAt,
     memberCount = memberCount ?: count?.members ?: members?.size ?: 0,
     conversationCount = conversationCount ?: count?.conversation ?: 0,
+    onlineMemberCount = onlineMemberCount,
 )
 
 fun ApiCommunitySearchResult.toCommunity(): Community = Community(

@@ -19,9 +19,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -42,7 +39,10 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.dialog
 import kotlinx.coroutines.launch
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.chrome.LocalPresentedAsSheet
+import me.meeshy.ui.component.presentation.meeshyCoverEnter
+import me.meeshy.ui.component.presentation.meeshyCoverExit
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -148,7 +148,8 @@ private fun PageSheet(surface: Color, onClosed: () -> Unit, content: @Composable
 
 /**
  * `.fullScreenCover` : plein écran qui monte du bas et redescend, sans glissé (iOS n'en offre pas), fermé par la
- * croix ou le retour système. La destination est déjà une fenêtre plein écran : aucune feuille Material dessus.
+ * croix ou le retour système ; fondu court sous « Réduire les animations ». La destination est déjà une fenêtre plein
+ * écran : aucune feuille Material dessus.
  */
 @Composable
 private fun CoverSheet(surface: Color, onClosed: () -> Unit, content: @Composable (dismiss: () -> Unit) -> Unit) {
@@ -159,18 +160,17 @@ private fun CoverSheet(surface: Color, onClosed: () -> Unit, content: @Composabl
         onClosed()
     }
     BackHandler(onBack = dismiss)
+    val reduce = LocalReduceMotion.current
     AnimatedVisibility(
         visibleState = visibility,
-        enter = slideInVertically(tween(COVER_MILLIS)) { it },
-        exit = slideOutVertically(tween(COVER_MILLIS)) { it },
+        enter = meeshyCoverEnter(reduce),
+        exit = meeshyCoverExit(reduce),
     ) {
         CompositionLocalProvider(LocalPresentedAsSheet provides true) {
             Box(Modifier.fillMaxSize().background(surface)) { content(dismiss) }
         }
     }
 }
-
-private const val COVER_MILLIS = 300
 
 @OptIn(ExperimentalMaterial3Api::class)
 private fun CoroutineScope.launchHide(state: SheetState, onClosed: () -> Unit) {

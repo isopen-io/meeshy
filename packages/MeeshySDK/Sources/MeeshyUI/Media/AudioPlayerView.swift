@@ -597,6 +597,8 @@ public struct AudioPlayerView: View {
             let shownProgress = displayedProgress.fraction
             let playedColor = displayedProgress.isLive ? accent : accent.opacity(0.4)
 
+            // Les barres vivent dans la BANDE HAUTE du ruban ; la bande basse
+            // est à la puce (#18526) : rien ne se recouvre pendant la lecture.
             HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
                     let fraction = (Double(i) + 0.5) / Double(barCount)
@@ -606,12 +608,12 @@ public struct AudioPlayerView: View {
                     Capsule(style: .continuous)
                         .fill(isPlayed ? playedColor : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
                         .frame(width: barWidth, height: h)
-                        .frame(width: slot, height: 24, alignment: .center)
+                        .frame(width: slot, height: AudioWaveformStripLayout.barsHeight, alignment: .center)
                 }
             }
-            .frame(height: 24, alignment: .center)
+            .frame(width: geo.size.width, height: AudioWaveformStripLayout.barsHeight, alignment: .center)
         }
-        .frame(height: 24)
+        .frame(height: AudioWaveformStripLayout.stripHeight)
         .overlay(
             GeometryReader { geo in
                 Color.clear
@@ -646,10 +648,10 @@ public struct AudioPlayerView: View {
         // le conteneur de swipe de la bulle désengage reply/forward tant que le
         // doigt manipule la waveform.
         .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
-        // Les deux puces SUR l'onde (#18421), au-dessus de la nappe de scrub :
-        // la durée au début ne prend aucun doigt, l'avancement à la fin ouvre
-        // le plein écran. Elles lisent la MÊME progression que les barres.
-        .overlay { waveformChips }
+        // La puce de l'onde (#18421), au-dessus de la nappe de scrub, dans la
+        // BANDE BASSE du ruban (#18526) : elle lit la MÊME progression que les
+        // barres et n'en couvre aucune.
+        .overlay(alignment: .bottomLeading) { waveformChips }
     }
 
     // MARK: - Waveform Chips
@@ -729,26 +731,17 @@ public struct AudioPlayerView: View {
             )
     }
 
-    /// Bar height in points. Maps the normalized amplitude (0–1) to the strip
-    /// height with a mild perceptual curve (`pow 0.65`) so quiet passages stay
-    /// visible instead of collapsing to the floor next to a few loud peaks —
-    /// the envelope reads truer to the ear. Falls back to a smooth procedural
-    /// shape until the real samples finish decoding.
+    /// Bar height in points, by `AudioWaveformStripLayout` (#18526) : the
+    /// normalized amplitude climbs a pronounced perceptual curve so quiet
+    /// passages stay visible next to a few loud peaks. Falls back to the law's
+    /// procedural shape until the real samples finish decoding.
     private func waveformHeight(index: Int, total: Int) -> CGFloat {
-        let minHeight: CGFloat = 2
-        let maxHeight: CGFloat = 22
         let samples = waveformAnalyzer.samples
-        if !samples.isEmpty {
-            // Map the bar index onto the sample array so the render density and
-            // the sample count can differ without dropping or duplicating data.
-            let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
-            let normalized = Double(max(0, min(1, samples[sampleIndex])))
-            let curved = pow(normalized, 0.65)
-            return max(minHeight, CGFloat(curved) * maxHeight)
-        }
-        let seed = Double(index * 7 + 3)
-        let base = 5.0 + sin(seed) * 6 + cos(seed * 0.5) * 4.0
-        return CGFloat(max(minHeight, min(maxHeight, base)))
+        guard !samples.isEmpty else { return AudioWaveformStripLayout.placeholderHeight(index: index) }
+        // Map the bar index onto the sample array so the render density and
+        // the sample count can differ without dropping or duplicating data.
+        let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
+        return AudioWaveformStripLayout.barHeight(normalized: Double(samples[sampleIndex]))
     }
 
     private func loadWaveformSamples() {
