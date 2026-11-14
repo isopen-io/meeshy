@@ -36,6 +36,20 @@ public nonisolated struct MeeshySelectionHaloRecipe: Sendable, Equatable {
     }
 }
 
+/// Ce que le halo peint pour une forme et une intensité de lueur (0 : éteint,
+/// 1 : allumé) : les opacités des deux lueurs de la silhouette, et les lueurs
+/// de la boîte arrondie. Éteint, la boîte n'a AUCUNE couche : un objet non
+/// choisi ne porte aucun calque.
+public nonisolated struct MeeshySelectionHaloPaint: Sendable, Equatable {
+    public let silhouette: [Double]
+    public let box: [MeeshySelectionHaloLayer]
+
+    public init(silhouette: [Double], box: [MeeshySelectionHaloLayer]) {
+        self.silhouette = silhouette
+        self.box = box
+    }
+}
+
 /// Les traits des repères : la ligne engagée, les lignes candidates et le
 /// contour de la scène.
 public nonisolated struct MeeshySnapGuidesStyle: Sendable, Equatable {
@@ -101,6 +115,20 @@ public nonisolated enum MeeshySelectionFeedbackRecipe {
             ink: tone == .onLight ? .mediaBackdrop : .onMedia,
             layers: layers.map { MeeshySelectionHaloLayer(radius: $0.radius / divisor, opacity: $0.opacity) }
         )
+    }
+
+    /// La peinture d'un halo : la silhouette ne prend que la forme `.content`,
+    /// la boîte que `.rounded`, et rien ne se peint lueur éteinte.
+    public static func paint(_ recipe: MeeshySelectionHaloRecipe, shape: MeeshySelectionHaloShape, glow: Double) -> MeeshySelectionHaloPaint {
+        let lit = glow.isFinite && glow > 0
+        let intensity = lit ? min(glow, 1) : 0
+        switch shape {
+        case .content:
+            return MeeshySelectionHaloPaint(silhouette: recipe.layers.map { $0.opacity * intensity }, box: [])
+        case .rounded:
+            let box = lit ? recipe.layers.map { MeeshySelectionHaloLayer(radius: $0.radius, opacity: $0.opacity * intensity) } : []
+            return MeeshySelectionHaloPaint(silhouette: Array(repeating: 0.0, count: recipe.layers.count), box: box)
+        }
     }
 
     public static func guides() -> MeeshySnapGuidesStyle {
