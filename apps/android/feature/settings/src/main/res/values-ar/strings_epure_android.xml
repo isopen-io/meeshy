@@ -62,7 +62,7 @@
     <string name="settings_interface_riviere_mode_subtitle">في المجموعات النشطة تُقرأ المحادثة في مسارات، مسار لكل صوت.</string>
     <string name="settings_languages_orientation">تُترجم الرسائل إلى لغتك الأساسية ثم إلى اللغة الإقليمية.</string>
     <string name="sessions_place_question">من أين يأتي موقع الجلسة؟</string>
-    <string name="settings_media_autosave_note">الصور ومقاطع الفيديو، مرة واحدة فقط، باستثناء المؤقتة أو ذات العرض الواحد.</string>
+    <string name="settings_media_autosave_note">تُضاف الصور ومقاطع الفيديو المستلمة إلى ألبوم Meeshy مرة واحدة فقط. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
     <string name="settings_media_autosave_question">ما الوسائط التي تُحفظ؟</string>
     <string name="settings_media_capture_original_note">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
     <string name="settings_media_capture_original_question">ماذا تحتوي النسخة الأصلية؟</string>

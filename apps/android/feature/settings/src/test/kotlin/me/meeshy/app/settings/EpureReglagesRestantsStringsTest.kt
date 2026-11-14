@@ -27,8 +27,8 @@ class EpureReglagesRestantsStringsTest {
     }
 
     @Test
-    fun `the autosave note carries the exclusion in one sentence, translated`() {
-        assertThat(fr("settings_media_autosave_note")).isEqualTo("Images et vidéos, une seule fois, sauf éphémères ou à vue unique.")
+    fun `the autosave note keeps the album and every exclusion, blurred included, translated`() {
+        assertThat(fr("settings_media_autosave_note")).isEqualTo("Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.")
         assertThat(fr("settings_media_autosave_question")).isEqualTo("Quels médias sont enregistrés ?")
         Tree.locales.filter { it != "fr" }.forEach { locale ->
             assertWithMessage("note copiée du français en $locale")

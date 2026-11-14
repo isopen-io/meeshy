@@ -62,7 +62,7 @@
     <string name="settings_interface_riviere_mode_subtitle">Nei gruppi attivi la conversazione si legge in corsie, una per voce.</string>
     <string name="settings_languages_orientation">I messaggi vengono tradotti nella lingua principale, poi in quella regionale.</string>
     <string name="sessions_place_question">Da dove arriva la posizione di una sessione?</string>
-    <string name="settings_media_autosave_note">Immagini e video, una sola volta, esclusi effimeri o visualizzabili una volta.</string>
+    <string name="settings_media_autosave_note">Le immagini e i video ricevuti vanno nell\'album Meeshy, una sola volta. Mai un contenuto effimero, sfocato o visualizzabile una volta.</string>
     <string name="settings_media_autosave_question">Quali media vengono salvati?</string>
     <string name="settings_media_capture_original_note">La foto o il video originale, senza effetti né cornice, viene salvato in Foto a ogni scatto.</string>
     <string name="settings_media_capture_original_question">Cosa contiene l\'originale?</string>

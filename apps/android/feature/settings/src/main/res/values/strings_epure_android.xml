@@ -62,7 +62,7 @@
     <string name="settings_interface_riviere_mode_subtitle">In active groups, the conversation reads in lanes, one per voice.</string>
     <string name="settings_languages_orientation">Messages are translated into your primary language, then your regional one.</string>
     <string name="sessions_place_question">Where does a session\'s location come from?</string>
-    <string name="settings_media_autosave_note">Images and videos, once only, except ephemeral or view-once.</string>
+    <string name="settings_media_autosave_note">Received images and videos join the Meeshy album, once only. Never an ephemeral, blurred or view-once media.</string>
     <string name="settings_media_autosave_question">Which media are saved?</string>
     <string name="settings_media_capture_original_note">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
     <string name="settings_media_capture_original_question">What does the original contain?</string>
