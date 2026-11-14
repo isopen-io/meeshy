@@ -3,6 +3,11 @@ import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { joinConversationRoomsWithRetry } from './handlers/join-user-conversations.js';
+import {
+  noteConversationReachable,
+  noteConversationUnreachable,
+  withCombinedReachability,
+} from './socketReachability.js';
 import type { SocketUser } from './utils/socket-helpers.js';
 
 const logger = enhancedLogger.child({ module: 'MidSessionRoomAdmission' });
@@ -61,21 +66,19 @@ export type MidSessionAdmissionDeps = {
   readonly connectedUsers: Map<string, SocketUser>;
 };
 
-function markUnreachable(connectedUsers: Map<string, SocketUser>, key: string, conversationId: string): void {
+/**
+ * L'unique écriture au niveau du COMPTE, et elle a sa raison : il n'y a ici
+ * AUCUNE socket locale à qui confier le fait (#16726 range la joignabilité sur
+ * la socket). Elle est transitoire — la prochaine authentification ou
+ * déconnexion recalcule l'entrée depuis les sockets, c'est-à-dire depuis une
+ * preuve.
+ */
+function markAccountUnreachable(connectedUsers: Map<string, SocketUser>, key: string, conversationId: string): void {
   const entry = connectedUsers.get(key);
   if (!entry) return;
   const next = new Set(entry.unreachableConversations ?? []);
   next.add(conversationId);
-  entry.unreachableConversations = next;
-}
-
-function clearUnreachable(connectedUsers: Map<string, SocketUser>, key: string, conversationId: string): void {
-  const entry = connectedUsers.get(key);
-  const current = entry?.unreachableConversations;
-  if (!entry || !current?.has(conversationId)) return;
-  const next = new Set(current);
-  next.delete(conversationId);
-  entry.unreachableConversations = next.size > 0 ? next : undefined;
+  connectedUsers.set(key, { ...entry, unreachableConversations: next });
 }
 
 export async function admitUserToConversationRoom(
@@ -103,23 +106,27 @@ export async function admitUserToConversationRoom(
 
   if (localSockets.length === 0) {
     if (clusterJoinProven || !deps.connectedUsers.has(roomKey)) return;
-    markUnreachable(deps.connectedUsers, roomKey, conversationId);
+    markAccountUnreachable(deps.connectedUsers, roomKey, conversationId);
     return;
   }
 
   const failures = await Promise.all(
     localSockets.map(socket => joinConversationRoomsWithRetry(socket, [conversationId])),
   );
+  localSockets.forEach((socket, index) => {
+    if (failures[index].length === 0) noteConversationReachable(socket, conversationId);
+    else noteConversationUnreachable(socket, conversationId);
+  });
+
+  const entry = deps.connectedUsers.get(roomKey);
+  if (entry) deps.connectedUsers.set(roomKey, withCombinedReachability(entry, localSockets));
+
   const joinedSomewhere = failures.some(failed => failed.length === 0);
-  if (joinedSomewhere) {
-    clearUnreachable(deps.connectedUsers, roomKey, conversationId);
-    return;
-  }
+  if (joinedSomewhere) return;
 
   logger.error('mid-session conversation room join failed after retries — account marked unreachable for this conversation', {
     userId: roomKey,
     conversationId,
     sockets: localSockets.length,
   });
-  markUnreachable(deps.connectedUsers, roomKey, conversationId);
 }

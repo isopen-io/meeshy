@@ -19,6 +19,7 @@ import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 import { admitUserToConversationRoom, type MidSessionAdmissionDeps } from '../../../socketio/midSessionRoomAdmission';
 import type { SocketUser } from '../../../socketio/utils/socket-helpers';
+import { recordSocketReachability } from '../../../socketio/socketReachability';
 import { enqueueForOfflineParticipants } from '../../../socketio/offlineParticipantQueue';
 import type { OfflineParticipantQueueDeps, OfflineParticipantQueueParams } from '../../../socketio/offlineParticipantQueue';
 
@@ -26,7 +27,7 @@ const USER = '507f1f77bcf86cd799439011';
 const CONV = '507f1f77bcf86cd799439022';
 const OTHER_CONV = '507f1f77bcf86cd799439033';
 
-type FakeSocket = { id: string; join: jest.Mock };
+type FakeSocket = { id: string; join: jest.Mock; data?: unknown };
 
 function socketThat(behaviour: 'joins' | 'rejects' | { failsFirst: number }, id = 'sock-1'): FakeSocket {
   let calls = 0;
@@ -108,9 +109,11 @@ describe('#18381 — la porte de mi-session', () => {
     expect(h.connectedUsers.get(USER)?.unreachableConversations).toBeUndefined();
   });
 
-  it('RETIRE un marqueur hérité quand la jonction réussit, et laisse les autres conversations marquées', async () => {
+  it('RETIRE le marqueur de la conversation rejointe, et laisse les autres — le verdict du compte suit la SOCKET', async () => {
+    const socket = socketThat('joins');
+    recordSocketReachability(socket, { unreachableConversations: new Set([CONV, OTHER_CONV]) });
     const h = deps({
-      sockets: [socketThat('joins')],
+      sockets: [socket],
       entry: connectedUser({ unreachableConversations: new Set([CONV, OTHER_CONV]) }),
     });
 
