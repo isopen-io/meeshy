@@ -200,7 +200,7 @@ describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
     const host = await mount({ deps: d });
     const title = host.querySelector('h1');
     const about = host.querySelector('[data-world-about]');
-    expect(about?.textContent).toBe('La conversation ouverte au monde entier.');
+    expect(about?.textContent).toBe('Ouverte au monde entier.');
     expect(about?.classList.contains('sr-only')).toBe(false);
     expect(precedes(title, about)).toBe(true);
     expect(precedes(about, nameField(host))).toBe(true);
@@ -209,14 +209,14 @@ describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
   test('la traduction n’est dite qu’UNE fois, par la phrase de la langue — l’orientation ne la redit pas (épure #17584, règle 2)', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
-    expect(host.querySelector('#world-language-hint')?.textContent).toBe('Tout ce que vous lirez dans World Wide arrivera dans cette langue.');
+    expect(host.querySelector('#world-language-hint')?.textContent).toBe('Tout arrivera dans cette langue.');
     expect(host.querySelector('[data-world-about]')?.textContent).not.toMatch(/langue|tradui/u);
   });
 
   test('une phrase LISIBLE AU REPOS dit que l’entrée se fait sans compte et ce que voient les autres (épure #17584, règle 7)', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
-    const note = [...host.querySelectorAll('p')].find((p) => (p.textContent ?? '') === 'Entrée sans compte : les autres verront ce nom.');
+    const note = [...host.querySelectorAll('p')].find((p) => (p.textContent ?? '') === 'Sans compte : les autres verront ce nom.');
     expect(note).toBeDefined();
     expect(note?.classList.contains('sr-only')).toBe(false);
     expect(precedes(note ?? null, nameField(host))).toBe(false);

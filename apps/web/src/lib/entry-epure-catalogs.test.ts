@@ -27,7 +27,7 @@ describe('sept langues, quatre phrases raccourcies et une ligne neuve', () => {
     expect(fr.friends).toBe('Ajoute 3 personnes qui te ressemblent.');
     expect(fr.profile).toBe('Un visage et une bannière : on te reconnaît plus vite.');
     expect(fr.age).toBe('Pour te proposer les bons espaces.');
-    expect(fr.about).toBe('La conversation ouverte au monde entier.');
+    expect(fr.about).toBe('Ouverte au monde entier.');
     for (const l of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
       const served = [
         [translate(l, 'magicLink.howItWorks'), fr.lead],

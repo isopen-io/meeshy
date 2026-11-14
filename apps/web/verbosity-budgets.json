@@ -157,8 +157,8 @@
       "firstScreen": 66
     },
     "forgot-password": {
-      "total": 35,
-      "firstScreen": 35
+      "total": 28,
+      "firstScreen": 28
     },
     "help": {
       "total": 757,
@@ -357,8 +357,8 @@
       "firstScreen": 23
     },
     "world": {
-      "total": 35,
-      "firstScreen": 35
+      "total": 25,
+      "firstScreen": 25
     }
   },
   "uncovered": {
@@ -481,30 +481,6 @@
       },
       "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
       "issue": 17641
-    },
-    "forgot-password": {
-      "de": {
-        "total": 31,
-        "firstScreen": 31
-      },
-      "a": {
-        "total": 35,
-        "firstScreen": 35
-      },
-      "motif": "L’écran retrouve son titre « Mot de passe oublié » au-dessus de la phrase qui dit ce que fait la demande",
-      "issue": 17666
-    },
-    "world": {
-      "de": {
-        "total": 25,
-        "firstScreen": 25
-      },
-      "a": {
-        "total": 35,
-        "firstScreen": 35
-      },
-      "motif": "Une ligne d’orientation sous « World Wide » dit ce qu’est la conversation ouverte au monde, puis la phrase de l’entrée sans compte ; la traduction n’est dite qu’une fois, par la phrase de la langue",
-      "issue": 17666
     }
   }
 }

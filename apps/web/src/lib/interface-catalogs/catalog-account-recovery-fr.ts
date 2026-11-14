@@ -5,7 +5,7 @@
  * d'iOS (`auth.forgotPassword.*`) quand la clé existe.
  */
 const fr = {
-  'recovery.forgot.lead': 'Recevez par e-mail un lien pour choisir un nouveau mot de passe.',
+  'recovery.forgot.lead': 'Recevez un lien par e-mail.',
   'recovery.forgot.neverHad': 'Jamais eu de mot de passe ?',
   'recovery.forgot.neverHad.text': 'Ce même lien vous permet d’en créer un.',
   'recovery.reset.newPassword': 'Nouveau mot de passe',

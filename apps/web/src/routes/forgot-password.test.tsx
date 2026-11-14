@@ -94,14 +94,14 @@ describe('/forgot-password prend la forme de /login', () => {
     expect(el.querySelector('h1')).toBeNull();
     const title = el.querySelector('h2');
     expect(title?.textContent).toBe('Mot de passe oublié');
-    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Recevez par e-mail'));
+    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Recevez un lien'));
     expect(title && lead && (title.compareDocumentPosition(lead) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
   });
 
   test('un glyphe, la phrase, le champ et le bouton', () => {
     const el = mount();
     expect(el.querySelector('svg')).not.toBeNull();
-    expect(text(el)).toContain('Recevez par e-mail un lien pour choisir un nouveau mot de passe.');
+    expect(text(el)).toContain('Recevez un lien par e-mail.');
     expect(el.querySelector('#forgot-email')).not.toBeNull();
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Recevoir le lien');
   });
@@ -220,7 +220,7 @@ describe('/forgot-password parle la langue d’interface', () => {
   test('interface en : la phrase, le (i), le bouton, le retour — aucun mot français', () => {
     document.documentElement.lang = 'en';
     const el = mount();
-    expect(text(el)).toContain('Get a link by email to choose a new password.');
+    expect(text(el)).toContain('Get a link by email.');
     expect(text(el)).toContain('Never had a password?');
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Get the link');
     expect(text(el)).toContain('Back to sign in');
@@ -240,7 +240,7 @@ describe('/forgot-password parle la langue d’interface', () => {
   test('interface de : la phrase vient du catalogue allemand', () => {
     document.documentElement.lang = 'de';
     const el = mount();
-    expect(text(el)).toContain('Erhalte per E-Mail einen Link, um ein neues Passwort festzulegen.');
+    expect(text(el)).toContain('Erhalte einen Link per E-Mail.');
     expect(text(el)).toContain('Noch nie ein Passwort gehabt?');
   });
 });
