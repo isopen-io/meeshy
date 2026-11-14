@@ -14,6 +14,7 @@ struct ShareLinkDetailView: View {
     @StateObject private var viewModel: ShareLinkDetailViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showDeleteConfirm = false
     @State private var copiedFeedback = false
 
@@ -36,12 +37,12 @@ struct ShareLinkDetailView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            LinksPage(title: link.displayName, accent: MeeshyColors.brandPrimary) {
                 VStack(spacing: MeeshySpacing.lg) {
                     heroCard
                     ShareLinkArrivalsSection(linkId: link.linkId, state: viewModel.stats, isDark: isDark)
                     ShareLinkConfigurationCard(link: link, isDark: isDark) {
-                        withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
                     }
                     ShareLinkEditForm(
                         draft: $viewModel.draft,
@@ -61,9 +62,6 @@ struct ShareLinkDetailView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .background(ThemeManager.shared.backgroundGradient.ignoresSafeArea())
-        .navigationTitle(link.displayName)
-        .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.loadStats() }
         .confirmationDialog(ShareLinkDetailCopy.deleteTitle, isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(ShareLinkDetailCopy.delete, role: .destructive) { deleteLink() }
@@ -208,9 +206,7 @@ struct ShareLinkDetailView: View {
     // MARK: - Actions
 
     private func copyLink() {
-        UIPasteboard.general.string = link.address.absoluteString
-        HapticFeedback.success()
-        UIAccessibility.post(notification: .announcement, argument: ShareLinkDetailCopy.copied)
+        LinksClipboard.copy(link.address.absoluteString, confirmation: .inline)
         withAnimation { copiedFeedback = true }
         Task { @MainActor in
             _ = await cancellableSleep(for: .seconds(2))

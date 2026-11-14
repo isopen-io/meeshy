@@ -31,25 +31,20 @@ struct TrackingLinkDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: MeeshySpacing.xl) {
-                    headerCard.padding(.horizontal, MeeshySpacing.lg)
-                    actionsBar.padding(.horizontal, MeeshySpacing.lg)
-                    mainStatsSection.padding(.horizontal, MeeshySpacing.lg)
-                    if !viewModel.clicks.isEmpty {
-                        geoBreakdown.padding(.horizontal, MeeshySpacing.lg)
-                        deviceBreakdown.padding(.horizontal, MeeshySpacing.lg)
-                        clicksTimeline.padding(.horizontal, MeeshySpacing.lg)
-                    }
-                    utmInfoSection.padding(.horizontal, MeeshySpacing.lg)
+        LinksPage(title: link.displayName, accent: MeeshyColors.trackingAccent) {
+            VStack(spacing: MeeshySpacing.xl) {
+                headerCard.padding(.horizontal, MeeshySpacing.lg)
+                actionsBar.padding(.horizontal, MeeshySpacing.lg)
+                mainStatsSection.padding(.horizontal, MeeshySpacing.lg)
+                if !viewModel.clicks.isEmpty {
+                    geoBreakdown.padding(.horizontal, MeeshySpacing.lg)
+                    deviceBreakdown.padding(.horizontal, MeeshySpacing.lg)
+                    clicksTimeline.padding(.horizontal, MeeshySpacing.lg)
                 }
-                .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
+                utmInfoSection.padding(.horizontal, MeeshySpacing.lg)
             }
+            .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
         }
-        .navigationTitle(link.displayName)
-        .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
         .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
@@ -103,9 +98,8 @@ struct TrackingLinkDetailView: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             detailActionButton(String(localized: "tracking.link.detail.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                color: copiedFeedback ? MeeshyColors.success : MeeshyColors.trackingAccent) {
-                UIPasteboard.general.string = link.shortUrl
-                HapticFeedback.success()
-                UIAccessibility.post(notification: .announcement, argument: String(localized: "tracking.link.detail.a11y.copied", defaultValue: "Lien copié", bundle: .main))
+                LinksClipboard.copy(link.shortUrl, confirmation: .inline,
+                                    message: String(localized: "tracking.link.detail.a11y.copied", defaultValue: "Lien copié", bundle: .main))
                 withAnimation { copiedFeedback = true }
             }
             shareActionButton
@@ -123,6 +117,8 @@ struct TrackingLinkDetailView: View {
         Button(action: action) {
             actionButtonLabel(label, icon: icon, color: color)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     // Native ShareLink for the tracking URL — replaces a hand-rolled
@@ -145,14 +141,9 @@ struct TrackingLinkDetailView: View {
 
     private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
         VStack(spacing: MeeshySpacing.xs) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
-                    .frame(width: 46, height: 46)
-                Image(systemName: icon).font(.body)
-                    .foregroundStyle(color)
-            }
-            .accessibilityHidden(true)
-            Text(label).font(.caption2.weight(.medium)).foregroundStyle(theme.textSecondary)
+            MeeshyGlassButtonFace(systemImage: icon, size: .s44, glyphTint: color)
+                .accessibilityHidden(true)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -397,7 +388,12 @@ struct TrackingLinkDetailView: View {
             do {
                 try await TrackingLinkService.shared.deleteLink(token: link.token)
                 await MainActor.run { dismiss() }
-            } catch { /* handle if needed */ }
+            } catch {
+                await MainActor.run {
+                    HapticFeedback.error()
+                    FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                }
+            }
         }
     }
 }

@@ -25,6 +25,7 @@ public struct CollapsibleHeaderPage<Trailing: View, Content: View>: View {
     private let backgroundColor: Color
     private let trailing: () -> Trailing
     private let content: () -> Content
+    private var leadingGlyph: CollapsibleHeaderBackGlyph = .back
 
     /// Référence stable, jamais observée par la page : seul l'en-tête, via
     /// `ScrollOffsetReader`, se re-rend à la cadence du défilement (P1-1).
@@ -77,11 +78,19 @@ public struct CollapsibleHeaderPage<Trailing: View, Content: View>: View {
                     backgroundColor: backgroundColor,
                     trailing: trailing
                 )
+                .backGlyph(leadingGlyph)
             }
         }
     }
 
     private static var espaceDeDefilement: String { "collapsibleHeaderPage.scroll" }
+
+    /// La même page, dont le disque de tête FERME la feuille qu'elle occupe (#16676, #18429).
+    public func backGlyph(_ glyph: CollapsibleHeaderBackGlyph) -> Self {
+        var page = self
+        page.leadingGlyph = glyph
+        return page
+    }
 }
 
 public extension CollapsibleHeaderPage where Trailing == EmptyView {
