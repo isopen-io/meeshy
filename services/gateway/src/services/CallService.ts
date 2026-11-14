@@ -1253,6 +1253,7 @@ export class CallService {
           participantId,
           role: ParticipantRole.initiator,
           leftAt: null,
+          answeredAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
         }
@@ -1461,6 +1462,7 @@ export class CallService {
           participantId,
           role: ParticipantRole.participant,
           leftAt: null,
+          answeredAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true) : false
         }

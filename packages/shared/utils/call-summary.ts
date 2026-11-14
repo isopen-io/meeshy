@@ -299,6 +299,21 @@ export function storedCallSummaryParticipantIds(metadata: unknown): ReadonlyArra
   ));
 }
 
+/**
+ * La métadonnée d'un message, sans les participants d'un résumé d'appel
+ * terminal : pour un chemin qui ne compose pas leurs noms (citation,
+ * `replyTo` d'une diffusion, vue d'administration). Servir la forme stockée
+ * `{ userId }` contredirait le contrat servi, qui annonce `displayName`.
+ * Rend l'objet tel quel quand il n'y a rien à retirer.
+ */
+export function withoutCallSummaryParticipants<T>(metadata: T): T {
+  if (metadata === null || typeof metadata !== 'object') return metadata;
+  const { kind } = metadata as { readonly kind?: unknown };
+  if (kind !== 'call' || !('participants' in metadata)) return metadata;
+  const { participants: _withheld, ...rest } = metadata as Record<string, unknown>;
+  return rest as T;
+}
+
 /** Approximate per-second byte rates per direction, used to ESTIMATE data spent
  * when the client never reported WebRTC byte counters. Mid-range of the values
  * observed across WhatsApp/Telegram (audio ~0.5–1 MB/min ≈ 12.5 KB/s; 1:1 video

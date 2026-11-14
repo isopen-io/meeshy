@@ -1187,6 +1187,14 @@ export class CallEventsHandler {
     }
   }
 
+  /** #18242 — une offre (ou un redémarrage ICE) d'un `offerer` vers un `answerer` est-elle dans le tampon ? */
+  private bufferedOfferFrom(callId: string, answererIds: readonly (string | null | undefined)[], offererIds: readonly (string | null | undefined)[]): boolean {
+    return answererIds.some((to) => {
+      const signal = to ? this.bufferedOffers.get(`${callId}:${to}`)?.signal.signal : undefined;
+      return !!signal && (signal.type === 'offer' || signal.type === 'ice-restart') && offererIds.includes(signal.from);
+    });
+  }
+
   /**
    * Drop every `qualityDegradedStreaks` entry for a terminated call. Entries
    * are keyed `${callId}:${participantId}`, so unlike `clearBufferedOffer`/
@@ -3060,6 +3068,8 @@ export class CallEventsHandler {
           // a call-wide sweep here silently starves that third participant's
           // mesh connection, `bufferedOfferFor` finding nothing left to
           // replay on their own eventual `call:join`.
+          // #18242 — l'offrant ne se marque que si SON offre vers ce répondant est connue (lue avant la purge).
+          const offerKnown = this.bufferedOfferFrom(data.callId, [userId, senderParticipant.participantId], [targetUserId, targetParticipant.participantId]);
           this.clearBufferedOfferFor(
             data.callId,
             userId,
@@ -3072,8 +3082,8 @@ export class CallEventsHandler {
           // identifies the FIRST answer (never a later renegotiation answer,
           // e.g. enabling video mid-call, which would already have it set).
           const isFirstAnswer = !callSession.answeredAt;
-          // #18242 B1 — le décroché se porte par ligne : celui qui répond et l'offrant qu'il rejoint.
-          await markCallParticipantsAnswered(this.prisma, [senderParticipant, targetParticipant]);
+          // #18242 B1 — le décroché se porte par ligne : celui qui répond, et l'offrant dont l'offre est connue.
+          await markCallParticipantsAnswered(this.prisma, [senderParticipant, offerKnown ? targetParticipant : null]);
           // #11468 — l'appareil qui répond devient la seule socket de son utilisateur dans la room.
           await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));

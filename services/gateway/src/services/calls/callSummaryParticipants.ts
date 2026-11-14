@@ -33,5 +33,5 @@ export async function resolveCallSummaryParticipantIds(
     orderBy: { joinedAt: 'asc' },
     select: { role: true, answeredAt: true, participant: { select: { userId: true } } }
   });
-  return [...new Set(answeredCallRoster(lines, true).flatMap(accountOf))];
+  return [...new Set(answeredCallRoster(lines, call).flatMap(accountOf))];
 }

@@ -22,7 +22,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallSummaryParticipant } from '@meeshy/shared/utils/call-summary';
-import { storedCallSummaryParticipantIds } from '@meeshy/shared/utils/call-summary';
+import { storedCallSummaryParticipantIds, withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
 import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { accountDisplayName } from '../participantNameSnapshots';
 import { DELETED_ACCOUNT_DISPLAY_NAME } from '../messaging/deletedAccountDisplayName';
@@ -30,17 +30,21 @@ import { logger } from '../../utils/logger';
 
 type Served = { readonly metadata?: unknown; readonly conversationId?: unknown };
 
-type MemberRow = {
-  readonly conversationId: string;
-  readonly userId: string | null;
+/** Ce qu'il faut d'un membre de conversation pour le NOMMER — rien d'autre (ni coordonnée, ni présence). */
+export type NamedMember = {
   readonly displayName: string;
-  readonly nickname: string | null;
+  readonly nickname?: string | null;
   readonly user: {
     readonly displayName: string | null;
     readonly firstName: string | null;
     readonly lastName: string | null;
     readonly username: string;
   } | null;
+};
+
+type MemberRow = NamedMember & {
+  readonly conversationId: string;
+  readonly userId: string | null;
 };
 
 type NameByMember = ReadonlyMap<string, string>;
@@ -50,7 +54,11 @@ const memberKey = (conversationId: string, userId: string): string => `${convers
 const nonBlank = (value: string | null | undefined): string | undefined =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 
-const servedMemberName = (row: MemberRow): string => {
+/**
+ * Le nom qu'un participant d'appel porte dans SA conversation — partagé par la
+ * carte du fil et le journal #8066, pour qu'ils ne divergent pas.
+ */
+export const conversationMemberName = (row: NamedMember): string => {
   if (row.displayName === DELETED_ACCOUNT_DISPLAY_NAME) return DELETED_ACCOUNT_DISPLAY_NAME;
   return nonBlank(row.nickname)
     ?? resolveParticipantDisplayName(row)
@@ -60,10 +68,6 @@ const servedMemberName = (row: MemberRow): string => {
 const conversationOf = (row: Served, fallback: string | undefined): string | undefined =>
   (typeof row.conversationId === 'string' ? nonBlank(row.conversationId) : undefined) ?? fallback;
 
-const withoutParticipants = (metadata: unknown): unknown => {
-  const { participants: _dropped, ...rest } = metadata as Record<string, unknown>;
-  return rest;
-};
 
 const servedMetadata = (metadata: unknown, conversationId: string, names: NameByMember): unknown => {
   const participants: ReadonlyArray<CallSummaryParticipant> = storedCallSummaryParticipantIds(metadata).map((userId) => ({
@@ -91,7 +95,7 @@ const loadNames = async (
   return rows.reduce<NameByMember>((names, row) => {
     if (!row.userId) return names;
     const key = memberKey(row.conversationId, row.userId);
-    return names.has(key) ? names : new Map(names).set(key, servedMemberName(row));
+    return names.has(key) ? names : new Map(names).set(key, conversationMemberName(row));
   }, new Map());
 };
 
@@ -119,7 +123,7 @@ export async function withCallSummaryParticipantNames<T extends Served>(
     if (storedCallSummaryParticipantIds(row.metadata).length === 0) return row;
     const conversationId = conversationOf(row, options.conversationId);
     const metadata = names === null || conversationId === undefined
-      ? withoutParticipants(row.metadata)
+      ? withoutCallSummaryParticipants(row.metadata)
       : servedMetadata(row.metadata, conversationId, names);
     return { ...row, metadata };
   });

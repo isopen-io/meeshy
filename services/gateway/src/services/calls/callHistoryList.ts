@@ -14,6 +14,7 @@ import {
   type CallHistoryRow
 } from '../callHistory';
 import { resolveGroupCallParticipants } from './callHistoryParticipants';
+import { answeredCallRoster, CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE } from './answeredCallRoster';
 import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
 
 export type CallHistoryType = 'all' | 'audio' | 'video';
@@ -137,7 +138,9 @@ export async function listCallHistory(
   // quand personne n'a répondu, ou (b) — miroir de `deriveCallDirection` — un
   // appel décroché par d'autres où il n'a aucune `CallParticipant` (refusé,
   // ignoré, hors ligne). Ce second cas finit `ended`, jamais `missed` : filtrer
-  // sur le seul statut le retirait de l'onglet (Vague 136).
+  // sur le seul statut le retirait de l'onglet (Vague 136). Depuis #18242, une
+  // ligne de SONNERIE ne vaut plus participation : seule une ligne décrochée
+  // l'exclut, pour un appel décroché après le suivi par ligne.
   const where: Prisma.CallSessionWhereInput = {
     ...scope,
     ...(conversationIds !== null ? { conversationId: { in: conversationIds } } : {}),
@@ -147,7 +150,8 @@ export async function listCallHistory(
           initiatorId: { not: userId },
           OR: [
             { status: CallStatus.missed },
-            { answeredAt: { not: null }, participants: { none: { participant: { userId } } } }
+            { answeredAt: { lt: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE }, participants: { none: { participant: { userId } } } },
+            { answeredAt: { gte: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE }, participants: { none: { participant: { userId }, answeredAt: { not: null } } } }
           ]
         }
       : {}),
@@ -242,20 +246,22 @@ export async function listCallHistory(
   }
 
   // Resolve, for each call the current user did NOT initiate, whether they
-  // have their own `CallParticipant` row — i.e. they actually joined this
-  // specific call, as opposed to merely being a conversation member. A
-  // group member who never joined (declined, ignored, or lost a join race)
-  // never gets a row, and must never be shown "incoming" just because the
-  // call's shared `answeredAt` was set by participants who did join. See
+  // TOOK PART in it — `answeredCallRoster` (#18242), the same law as the
+  // card and the roster: a `CallParticipant` row exists from the RING on
+  // (clients early-join to receive the offer), so a member who rang and
+  // declined has a row and must still read "missed", never "incoming". See
   // `deriveCallDirection`.
-  const nonOutgoingCallIds = page.filter((r) => r.initiatorId !== userId).map((r) => r.id);
+  const nonOutgoingCalls = page.filter((r) => r.initiatorId !== userId);
   const participatedCallIds = new Set<string>();
-  if (nonOutgoingCallIds.length > 0) {
-    const myParticipations = await prisma.callParticipant.findMany({
-      where: { callSessionId: { in: nonOutgoingCallIds }, participant: { userId } },
-      select: { callSessionId: true }
+  if (nonOutgoingCalls.length > 0) {
+    const lines = await prisma.callParticipant.findMany({
+      where: { callSessionId: { in: nonOutgoingCalls.map((r) => r.id) } },
+      select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } }
     });
-    for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
+    for (const call of nonOutgoingCalls) {
+      const tookPart = answeredCallRoster(lines.filter((line) => line.callSessionId === call.id), call);
+      if (tookPart.some((line) => line.participant?.userId === userId)) participatedCallIds.add(call.id);
+    }
   }
 
   const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
