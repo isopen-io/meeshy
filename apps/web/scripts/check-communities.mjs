@@ -341,7 +341,7 @@ try {
       await page.waitForSelector('[data-community-conversation]');
       await page.waitForTimeout(250);
       check((await textOf(page, '[data-community-title]')) === 'Équipe déploiement', `${label} : la carte ouvre SON détail`);
-      check((await textOf(page, '[data-community-stat="members"] strong')) === '9', `${label} : les compteurs du détail`);
+      check((await textOf(page, '[data-community-members-count]')) === '9', `${label} : les compteurs du détail`);
       const rows = await page.$$eval('[data-community-conversation]', (els) => els.map((el) => el.getAttribute('href')));
       check(JSON.stringify(rows) === JSON.stringify(['/c/c-deploiement', '/c/c-annonces']), `${label} : ses conversations mènent à leurs fils (${JSON.stringify(rows)})`);
       check((await page.$('.floating-menus')) === null, `${label} : le détail, route profonde, ne porte pas les disques (miroir isDeepRoute)`);
@@ -351,7 +351,7 @@ try {
       const detailInks = {
         titre: await contrastOf(page, '[data-community-title]'),
         confidentialite: await contrastOf(page, '[data-community-hero] [data-community-privacy]'),
-        libelle: await contrastOf(page, '[data-community-stat="members"] .text-chip'),
+        libelle: await contrastOf(page, '[data-community-members-link] .font-semibold'),
         section: await contrastOf(page, '#community-conversations'),
         ligne: await contrastOf(page, '[data-community-conversation] .text-body'),
         membres: await contrastOf(page, '[data-community-conversation] .text-caption'),
