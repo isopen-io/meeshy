@@ -130,8 +130,8 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_theSheetDevelopsTheCard_itNeverRephrasesIt() {
         for concept in ProgressionConcept.allCases {
-            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.tip1(concept), ConceptText.tip2(concept)]
-            XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : la fiche redit une phrase de la carte au lieu de la développer")
+            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.tip1(concept), ConceptText.tip2(concept)].compactMap { $0 }
+            XCTAssertEqual(Set(texts).count, texts.count, "\(concept.rawValue) : la fiche redit une phrase de la carte au lieu de la développer")
             XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une phrase vide")
         }
     }
@@ -579,12 +579,12 @@ final class ProgressionConceptModelTests: XCTestCase {
             : ConceptText.stateElansIdle(families: families))
     }
 
-    /// Quatre questions par concept : ce que c'est, à quoi ça sert, comment ça marche, comment s'en servir — quatre
+    /// Jusqu'à quatre questions par concept : ce que c'est, à quoi ça sert, comment ça marche (sauf quand `what` le dit), comment s'en servir — autant de
     /// phrases, jamais une répétée.
     func test_everyConcept_answersFourQuestions() {
         for concept in ProgressionConcept.allCases {
-            let texts = [ConceptText.what(concept), ConceptText.why(concept), ConceptText.how(concept), ConceptText.use(concept)]
-            XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : une question reçoit la réponse d'une autre")
+            let texts = [ConceptText.what(concept), ConceptText.why(concept), ConceptText.how(concept), ConceptText.use(concept)].compactMap { $0 }
+            XCTAssertEqual(Set(texts).count, texts.count, "\(concept.rawValue) : une question reçoit la réponse d'une autre")
             XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une question sans réponse")
         }
     }

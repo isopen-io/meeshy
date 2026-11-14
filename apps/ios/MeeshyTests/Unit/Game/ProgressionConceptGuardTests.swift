@@ -449,7 +449,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
     func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
         let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
+        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.howNote(concept)", "ConceptText.use(concept)",
                       "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
         }

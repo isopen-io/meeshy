@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -50,19 +51,19 @@ final class GameEpureTests: XCTestCase {
 
     private static let french: [String: String] = [
         "game2.settings.celebrations.switch": "Signes des aïeux",
-        "game2.settings.notifications.switch": "Notifications",
-        "game2.settings.notifications.body": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils.",
-        "game2.settings.friends_league.switch": "Me retirer de la joute des amis",
+        "game2.settings.notifications.switch": "Alliance, joute, voyage",
+        "game2.settings.notifications.body": "Au plus une par jour, sur tous tes appareils.",
+        "game2.settings.friends_league.switch": "Me retirer",
         "game2.settings.friends_league.body": "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.",
-        "game2.settings.visibility.body": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.",
-        "game2.settings.hidden.body": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.",
+        "game2.settings.visibility.body": "Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas",
+        "game2.settings.hidden.body": "Masque le jeu et le ferme aux autres ; rien n’est perdu.",
         "game2.league.pseudonym.invalid": "Nom non valable : lettres, chiffres, point, tiret, tiret bas.",
         "game2.league.pseudonym.hint_change": "3 à 20 caractères. Ni ton nom, ni ton identifiant.",
         "game2.league.friends.body": "Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.",
         "game2.season.how": "Actes et alliance font avancer le voyage : %@ pas par halte. Tout est gratuit.",
         "game2.season.seal.body": "Objet décoratif, une fois toutes les %@ haltes. Sans effet sur le jeu.",
         "game2.atlas.intro": "Un tampon par langue vraiment échangée : un message envoyé, un reçu.",
-        "game2.atlas.privacy": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.",
+        "game2.atlas.privacy": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi.",
         "game2.atlas.empty": "Pas encore de tampon : écris dans une autre langue.",
         "game2.showcase.visibility_hint": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte.",
         "game2.showcase.empty": "Tes trophées t’attendent : coupes de joute et de voyage, Renaissance, Flamme.",
@@ -84,7 +85,7 @@ final class GameEpureTests: XCTestCase {
             "game.notebook.when", "game.notebook.when.note", "game.door.notebook.line",
             "game.rules.step.meaning",
         ]
-        let sameInEveryLanguage: Set<String> = ["game2.settings.notifications.switch"]
+        let sameInEveryLanguage: Set<String> = []
         for key in keys {
             let values = catalog[key] ?? [:]
             let french = try XCTUnwrap(values["fr"], key)
@@ -104,7 +105,8 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         let limit: [String: Int] = [
             "game2.settings.celebrations.switch": 30, "game2.settings.notifications.switch": 30,
-            "game2.settings.friends_league.switch": 40, "game2.league.pseudonym.invalid": 80,
+            "game2.settings.friends_league.switch": 20, "game2.settings.hidden.body": 60, "game2.league.snapshot": 40,
+            "game2.atlas.privacy": 80, "game2.league.pseudonym.invalid": 80,
             "game2.league.pseudonym.hint_change": 60, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
             "game.flame_panel.freeze_full": 60, "game.photo.camera.unavailable": 100,
             "game.rules.concepts_intro": 60, "game2.atlas.intro": 100, "game2.league.friends.body": 100,
@@ -118,9 +120,9 @@ final class GameEpureTests: XCTestCase {
         }
     }
 
-    /// Un commutateur se lit SEUL au lecteur d'écran, hors de son titre de carte : « Me retirer » ne dit pas de quoi.
-    /// Le libellé nomme la joute dont on se retire, dans chaque langue.
-    func test_friendsLeagueSwitch_namesWhatYouLeave_whenReadWithoutItsCardTitle() throws {
+    /// Le titre du bloc porte « Joute des amis », la rangée dit « Me retirer » : le libellé visible NOMME le geste. Lu SEUL
+    /// par le lecteur d'écran, le commutateur dit pourtant de quoi l'on se retire — son nom parlé reprend le titre.
+    func test_friendsLeagueSwitch_isShortOnScreen_butSpokenWithTheNameOfTheJoustItLeaves() throws {
         let catalog = try Self.catalog()
         let title = try XCTUnwrap(catalog["game2.settings.friends_league.title"])
         let switchLabel = try XCTUnwrap(catalog["game2.settings.friends_league.switch"])
@@ -128,10 +130,13 @@ final class GameEpureTests: XCTestCase {
                                        "de": "Turnier der Freunde", "it": "Torneo degli amici", "ar": "مبارزة الأصدقاء"]
         for (language, name) in joust {
             XCTAssertTrue((title[language] ?? "").lowercased().contains(name.lowercased()), "\(language) : le titre nomme la joute")
-            XCTAssertTrue((switchLabel[language] ?? "").lowercased().contains(name.lowercased()), "\(language) : « \(switchLabel[language] ?? "") » ne dit pas de quoi l'on se retire")
+            XCTAssertFalse((switchLabel[language] ?? "").lowercased().contains(name.lowercased()), "\(language) : « \(switchLabel[language] ?? "") » redit le titre du bloc")
         }
         let view = try code("Meeshy/Features/Game/Wave2/GameSettingsViews.swift")
         XCTAssertTrue(view.contains("label: GameText.settingsFriendsLeagueSwitch"))
+        XCTAssertTrue(view.contains("spokenLabel: \"\\(GameText.settingsFriendsLeagueTitle), \\(GameText.settingsFriendsLeagueSwitch)\""), "le nom parlé reprend le titre du bloc")
+        let parts = try code("Meeshy/Features/Game/Wave2/GameWave2Parts.swift")
+        XCTAssertTrue(parts.contains(".accessibilityLabel(spokenLabel ?? label)"))
     }
 
     // MARK: - Ce qui sort du texte : la redite, jamais la conséquence
@@ -200,11 +205,13 @@ final class GameEpureTests: XCTestCase {
 
     func test_catalog_theConsequences_andTheLandmarks_stayVisible() throws {
         let catalog = try Self.catalog()
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("te retire de la joute publique"), "la conséquence de « Jeu masqué »")
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("gardés"), "les étincelles et les trophées sont gardés")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("ferme aux autres"), "la conséquence de « Jeu masqué », au repos")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("rien n’est perdu"), "ce qui est gardé, au repos")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.note"]?["fr"]).contains("te retire de la joute publique"), "le détail de « Jeu masqué » n'est pas perdu")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.note"]?["fr"]).contains("gardés"), "les étincelles et les trophées sont gardés")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.friends_league.body"]?["fr"]).contains("masque"), "se retirer vous masque les uns aux autres")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.atlas.privacy"]?["fr"]).contains("privé par défaut"), "le repère de confidentialité de l'Atlas")
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.atlas.privacy"]?["fr"]).contains("jamais l’interlocuteur"), "ce que le jeu ne garde pas")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.atlas.privacy.note"]?["fr"]).contains("jamais l’interlocuteur"), "ce que le jeu ne garde pas, derrière son (i)")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.season.how"]?["fr"]).contains("gratuit"), "la gratuité du voyage")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.season.seal.body"]?["fr"]).contains("Sans effet sur le jeu"), "le Sceau ne change rien")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.league.friends.body"]?["fr"]).contains("rien à accepter"), "la Joute des amis est ouverte")
@@ -334,18 +341,6 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(guideCard.contains("card.copy.means"), "la carte de Mee garde sa phrase « Ça veut dire »")
     }
 
-    /// Règle 7 : la fiche est LA page qui explique un concept propre au jeu. Sous « C’est quoi ? », la définition se lit
-    /// au repos — `why` ne dit pas ce qu'est un niveau ni ce que fait une renaissance ; la cacher derrière un (i)
-    /// laissait le bloc sans sa seule explication.
-    func test_conceptSheet_whatWhyAndHow_areReadAtRest_noInfoButtonHidesTheDefinition() throws {
-        let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        XCTAssertTrue(page.contains("sentence(ConceptText.what(concept))"), "la définition se lit sans rien ouvrir")
-        XCTAssertTrue(page.contains("sentence(ConceptText.why(concept), strong: true)"))
-        XCTAssertTrue(page.contains("sentence(ConceptText.how(concept))"))
-        XCTAssertFalse(page.contains("MeeshyInfoNoted"), "aucun (i) ne cache la définition")
-        XCTAssertNil(try Self.catalog()["game.fiche.what.question"], "la question du (i) retiré n'a plus de lecteur")
-    }
-
     // MARK: - Les repères restent lisibles au repos (règle 7)
 
     func test_frontList_chronicleRow_saysWhatItIs_withoutOpeningAnything() throws {
@@ -356,16 +351,137 @@ final class GameEpureTests: XCTestCase {
         XCTAssertEqual(catalog["game.door.notebook.line"]?["fr"], "Tes photos avec Mee et Meo")
     }
 
-    func test_settings_everyNonUsualBlock_keepsItsOrientationSentenceVisible() throws {
+    /// Règle 7 : chaque bloc non usuel garde sa phrase d'orientation AU REPOS ; seul le détail secondaire passe derrière
+    /// un (i). La phrase du bloc « Mee et Meo » nomme les deux personnages, le titre de carte n'existe plus.
+    func test_settings_everyNonUsualBlock_keepsItsOrientationSentenceVisible_andTheDetailIsBehindAnInfoButton() throws {
         let view = try code("Meeshy/Features/Game/Wave2/GameSettingsViews.swift")
         for sentence in [
-            "GameNote(text: GameText.settingsCelebrationsBody)", "GameNote(text: GameText.settingsHiddenBody)",
-            "GameNote(text: GameText.settingsNotificationsBody)", "GameNote(text: GameText.settingsVisibilityBody)",
+            "GameNoteInfo(text: GameText.settingsCelebrationsBody, note: GameText.settingsCelebrationsNote",
+            "GameNoteInfo(text: GameText.settingsHiddenBody, note: GameText.settingsHiddenNote",
+            "GameNoteInfo(text: GameText.settingsVisibilityBody, note: GameText.settingsVisibilityNote",
             "GameNote(text: GameText.settingsFriendsLeagueBody)",
+            "GameCard(title: GameText.settingsNotificationsTitle, note: GameText.settingsNotificationsNote)",
         ] {
-            XCTAssertTrue(view.contains(sentence), "« \(sentence) » ne se lit plus au repos")
+            XCTAssertTrue(view.contains(sentence), "« \(sentence) » ne se lit plus au repos ou n'a plus son (i)")
         }
-        XCTAssertFalse(view.contains("InfoNote"), "les phrases d'orientation du jeu ne sont pas rangées derrière un (i)")
+        XCTAssertFalse(view.contains("settingsCelebrationsTitle"), "un seul nom : l'interrupteur « Signes des aïeux » ; le titre de carte redisait « Mee et Meo »")
+        XCTAssertFalse(view.contains("settingsNotificationsBody"), "la fréquence et la portée sont derrière le (i)")
+        XCTAssertTrue(try XCTUnwrap(try Self.catalog()["game2.settings.celebrations.body"]?["fr"]).contains("Mee et Meo"), "le repère propre à Meeshy reste lisible")
+    }
+
+    func test_settingsNotes_eachInfoButtonIsNamedByAQuestion_andCarriesTheDetail() throws {
+        let catalog = try Self.catalog()
+        let questions: [(String, String)] = [
+            ("game2.settings.hidden.question", "game2.settings.hidden.note"),
+            ("game2.settings.celebrations.question", "game2.settings.celebrations.note"),
+            ("game2.settings.notifications.question", "game2.settings.notifications.body"),
+            ("game2.settings.visibility.question", "game2.settings.visibility.note"),
+            ("game2.atlas.privacy.question", "game2.atlas.privacy.note"),
+            ("game2.league.snapshot.question", "game2.league.snapshot.note"),
+            ("game2.showcase.visibility_question", "game2.showcase.visibility_hint"),
+            ("game.constellation.visibility.question", "game.constellation.visibility"),
+            ("game.fiche.how.question", "game.concept.level.how"),
+        ]
+        let fr: [String: String] = [
+            "game2.settings.hidden.question": "Qu’est-ce que « Jeu masqué » ferme ?",
+            "game2.settings.celebrations.question": "Ce réglage vaut-il sur mes autres appareils ?",
+            "game2.settings.notifications.question": "Combien de notifications le jeu envoie-t-il ?",
+            "game2.settings.visibility.question": "Qui voit si je suis en ligne ?",
+            "game2.atlas.privacy.question": "Que garde le jeu de mes échanges ?",
+            "game2.league.snapshot.question": "Pourquoi le classement est-il figé ?",
+            "game2.showcase.visibility_question": "Qu’est-ce qu’un visiteur voit de mes trophées ?",
+            "game.constellation.visibility.question": "Qui voit mon ciel ?",
+            "game.fiche.how.question": "Comment ça marche ?",
+        ]
+        for (question, note) in questions {
+            XCTAssertEqual(catalog[question]?["fr"], fr[question], question)
+            for language in ["fr"] + Self.otherLanguages {
+                let asked = try XCTUnwrap(catalog[question]?[language], "\(question) [\(language)]")
+                XCTAssertTrue(asked.hasSuffix("?") || asked.hasSuffix("؟"), "\(question) [\(language)] : « \(asked) » n'est pas une question")
+                XCTAssertFalse(asked.localizedCaseInsensitiveContains("Plus d"), "jamais « Plus d'infos »")
+                if language != "fr" { XCTAssertNotEqual(asked, catalog[question]?["fr"], "\(question) [\(language)] : copié du français") }
+                XCTAssertFalse(try XCTUnwrap(catalog[note]?[language], "\(note) [\(language)]").isEmpty)
+            }
+        }
+        XCTAssertEqual(Set(questions.map(\.0)).count, questions.count, "deux (i) ne portent jamais le même nom")
+    }
+
+    func test_settingsNotes_theTextsThatLeaveTheScreen_becomeTheNote_sevenLanguages() throws {
+        let catalog = try Self.catalog()
+        let notes: [String: String] = [
+            "game2.settings.hidden.note": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.",
+            "game2.settings.visibility.note": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.",
+            "game2.settings.celebrations.note": "Non : il vaut pour cet appareil seulement.",
+            "game2.atlas.privacy.note": "Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.",
+            "game2.league.snapshot.note": "Personne ne voit qui joue en ce moment. Seule ta ligne est en direct.",
+        ]
+        for (key, expected) in notes {
+            XCTAssertEqual(catalog[key]?["fr"], expected, key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, expected, "\(key) [\(language)] : copié du français")
+            }
+        }
+    }
+
+    // MARK: - Atlas, joute, vitrine, ciel : le repère reste, le détail passe derrière un (i) (#17687)
+
+    func test_atlas_headerCardHasNoTitleRepeatingThePage_andNoRemainingNote() throws {
+        let atlas = try code("Meeshy/Features/Game/Wave2/GameAtlasViews.swift")
+        XCTAssertFalse(atlas.contains("GameCard(tint: MeeshyColors.brandPrimary, title: GameText.atlasTitle)"), "le titre de page dit déjà « Atlas des langues »")
+        XCTAssertFalse(atlas.contains("atlasRemaining"), "le compte et les pastilles disent les langues à découvrir")
+        XCTAssertNotNil(try Self.catalog()["game2.atlas.remaining"], "la ligne de la carte « Atlas » de Progression la lit encore : la clé n'est pas orpheline")
+        let card = try code("Meeshy/Features/Game/ProgressionConceptModel.swift")
+        XCTAssertTrue(card.contains("GameText.atlasRemaining("), "…et c'est ce lecteur qui la garde")
+        XCTAssertTrue(atlas.contains("GameNoteInfo(text: GameText.atlasPrivacy, note: GameText.atlasPrivacyNote"), "la première phrase se lit au repos, la seconde est derrière un (i)")
+        XCTAssertTrue(try XCTUnwrap(try Self.catalog()["game2.atlas.privacy"]?["fr"]).contains("privé par défaut"))
+    }
+
+    func test_league_snapshotLine_saysItFrozenAtRest_andWhyBehindAnInfoButton() throws {
+        let league = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
+        XCTAssertTrue(league.contains("GameNoteInfo(text: GameText.leagueSnapshot, note: GameText.leagueSnapshotNote"))
+        XCTAssertEqual(try Self.catalog()["game2.league.snapshot"]?["fr"], "Classement figé chaque jour à 4 h")
+    }
+
+    func test_showcase_visitorLineAndSkyLine_areBehindInfoButtonsOnTheirCardTitle() throws {
+        let views = try code("Meeshy/Features/Game/Wave2/GameShowcaseViews.swift")
+        XCTAssertTrue(views.contains("GameCard(title: GameText.showcaseVisibility, note: GameText.showcaseVisibilityNote)"))
+        XCTAssertTrue(views.contains("note: GameText.constellationVisibilityNote)"))
+        XCTAssertFalse(views.contains("GameNote(text: GameText.showcaseVisibilityHint)"))
+        XCTAssertFalse(views.contains("GameNote(text: GameText.constellationVisibility)"))
+        let surface = try code("Meeshy/Features/Game/GameSurface.swift")
+        XCTAssertTrue(surface.contains("MeeshyInfoNoted(note: note, openNoteID: $openNoteID"), "la carte range sa note derrière le (i) de son titre")
+    }
+
+    // MARK: - La fiche : what et why au repos, how derrière « Comment ça marche ? » ou supprimé quand il ne dit rien de plus
+
+    private static let conceptsWithNoHow: Set<ProgressionConcept> = [.meesh, .flame, .elans, .succes]
+
+    func test_conceptHow_isBehindAnInfoButtonNamedByItsQuestion_exceptWhenWhatAlreadySaysIt() {
+        for concept in ProgressionConcept.allCases {
+            let note = ConceptText.howNote(concept)
+            if Self.conceptsWithNoHow.contains(concept) {
+                XCTAssertNil(ConceptText.how(concept), "\(concept.rawValue) : `how` redit `what`")
+                XCTAssertNil(note, "\(concept.rawValue) : pas de (i) vide")
+            } else {
+                XCTAssertEqual(note?.question, ConceptText.ficheHow, "\(concept.rawValue)")
+                XCTAssertEqual(note?.text, ConceptText.how(concept), "\(concept.rawValue)")
+                XCTAssertNotEqual(note?.text, ConceptText.why(concept), "\(concept.rawValue) : un (i) n'est pas un dépotoir")
+            }
+        }
+    }
+
+    func test_conceptSheet_whatAndWhyAreReadAtRest_howIsBehindItsInfoButton() throws {
+        let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(page.contains("sentence(ConceptText.what(concept))"), "la définition se lit sans rien ouvrir")
+        XCTAssertTrue(page.contains("MeeshyInfoNoted(note: ConceptText.howNote(concept)"))
+        XCTAssertTrue(page.contains("sentence(ConceptText.why(concept), strong: true)"))
+        XCTAssertFalse(page.contains("sentence(ConceptText.how(concept))"), "how n'est plus au repos")
+        let catalog = try Self.catalog()
+        for concept in Self.conceptsWithNoHow {
+            XCTAssertNil(catalog["game.concept.\(concept.rawValue).how"], "\(concept.rawValue) : la clé n'a plus de lecteur, elle est supprimée de toutes les langues")
+        }
+        XCTAssertNotNil(catalog["game.concept.level.how"])
     }
 
     func test_flamePanel_fullVigilsLine_isAShortVisibleNote() throws {
@@ -385,7 +501,7 @@ final class GameEpureTests: XCTestCase {
         "game.rules.badges.imprint": "Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.",
         "game2.prestige.meo": "En renaissant, ton niveau repart à 1 et tes étincelles à 0. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais.",
         "game.concept.prestige.use": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.",
-        "game2.settings.celebrations.body": "Cartes de Mee et Meo sur Progression. Cet appareil seulement.",
+        "game2.settings.celebrations.body": "Les cartes de Mee et Meo s’affichent sur Progression",
         "game.concept.meesh.use": "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
     ]
 
@@ -490,8 +606,7 @@ final class GameEpureTests: XCTestCase {
         "game.notebook.empty": "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
         "game2.duo.none": "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.",
         "game.flame_panel.relight_missing_window": "Rallumage possible dans les 48 h qui suivent l’extinction.",
-        "game.concept.flame.how": "Elle grandit d’un jour à chaque jour où tu fais un geste.",
-        "game.concept.flame.use": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.",
+                "game.concept.flame.use": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.",
         "game.concept.points.tip.1": "Reviens chaque jour : une Flamme allumée nourrit tes étincelles.",
         "game.concept.showcase.use": "Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul.",
         "game.concept.defis.use": "Ouvre la liste : chaque palier dit sa rareté.",

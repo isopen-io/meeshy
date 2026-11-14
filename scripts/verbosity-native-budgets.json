@@ -505,15 +505,15 @@
       "explanations": 1
     },
     "ios:Meeshy/game": {
-      "labels": 963,
-      "words": 6991,
+      "labels": 962,
+      "words": 6955,
       "long": 109,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
       "labels": 287,
       "words": 1816,
-      "long": 26,
+      "long": 25,
       "explanations": 7
     },
     "ios:Meeshy/guest": {
