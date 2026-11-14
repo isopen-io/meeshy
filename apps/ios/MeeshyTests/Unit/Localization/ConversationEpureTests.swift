@@ -389,7 +389,8 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertFalse(TalkieInfoWording.text.isEmpty)
         let note = try XCTUnwrap(app["talkie.info.text"]?["fr"])
         XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Quand utiliser le talkie ?")
-        XCTAssertTrue(note.contains("extrême urgence"), "la note répond à « Quand utiliser le talkie ? » : \(note)")
+        XCTAssertEqual(note, "Même si Meeshy est en arrière-plan.", "le (i) ne garde que le détail secondaire : la phrase visible dit déjà l'urgence et la voix")
+        XCTAssertFalse(note.contains("urgence"))
     }
 
     // MARK: - Le chiffrement : l'irréversibilité reste ENTIÈRE et visible, le détail secondaire derrière un (i)
@@ -665,5 +666,81 @@ final class ConversationEpureTests: XCTestCase {
     func test_memberExpelledToast_isSpelledWithItsAccent() throws {
         let ui = try Self.catalog(Self.uiCatalogPath)
         XCTAssertEqual(ui["conversation.settings.toast.memberExpelled"]?["fr"], "Membre expulsé")
+    }
+
+    // MARK: - Passe 3 (#18078) : la fiche ne redit pas son mode, le lien se crée en trois mots, le (i) du talkie ne répète pas la phrase visible
+
+    private static let pass3: [String: [String: String]] = [
+        "share.link.create.button.create": [
+            "fr": "Créer le lien", "en": "Create the link", "es": "Crear el enlace", "pt-BR": "Criar o link",
+            "de": "Link erstellen", "it": "Crea il link", "ar": "إنشاء الرابط"
+        ],
+        "share.link.create.section.access.subtitle": [
+            "fr": "Ce que les invités doivent fournir", "en": "What guests must provide", "es": "Lo que los invitados deben facilitar",
+            "pt-BR": "O que os convidados devem fornecer", "de": "Was Gäste angeben müssen", "it": "Ciò che gli ospiti devono fornire",
+            "ar": "ما يجب على الضيوف تقديمه"
+        ],
+        "share.link.create.section.limits.subtitle": [
+            "fr": "Nombre d’utilisations et durée du lien", "en": "Number of uses and link duration", "es": "Número de usos y duración del enlace",
+            "pt-BR": "Número de usos e duração do link", "de": "Anzahl der Nutzungen und Dauer des Links", "it": "Numero di utilizzi e durata del link",
+            "ar": "عدد الاستخدامات ومدة الرابط"
+        ],
+        "talkie.info.text": [
+            "fr": "Même si Meeshy est en arrière-plan.", "en": "Even if Meeshy is in the background.", "es": "Aunque Meeshy esté en segundo plano.",
+            "pt-BR": "Mesmo com o Meeshy em segundo plano.", "de": "Auch wenn Meeshy im Hintergrund ist.", "it": "Anche se Meeshy è in background.",
+            "ar": "حتى لو كان Meeshy في الخلفية."
+        ],
+    ]
+
+    func test_pass3_shortenedLabels_areTranslatedInEveryLanguage() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for (key, values) in Self.pass3 {
+            for (language, value) in values {
+                XCTAssertEqual(app[key]?[language], value, "\(key) en \(language)")
+            }
+        }
+    }
+
+    func test_encryptionSheet_activeState_saysTheModeOnceInItsHeader_notAgainInTheDetails() throws {
+        let sheet = try code("Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        let start = try XCTUnwrap(sheet.range(of: "private func activeStateSections"))
+        let end = try XCTUnwrap(sheet.range(of: "// MARK:", range: start.upperBound..<sheet.endIndex))
+        let active = String(sheet[start.lowerBound..<end.lowerBound])
+        XCTAssertEqual(active.components(separatedBy: "modeLabel(mode)").count - 1, 1, "le mode n'est dit qu'une fois : sous « Chiffrement actif »")
+        XCTAssertFalse(active.contains("conversation.encryption.detail.modeLabel"), "la rangée « Mode » doublonnait l'en-tête")
+        XCTAssertTrue(active.contains("conversation.encryption.detail.enabledOn"))
+        XCTAssertTrue(active.contains("conversation.encryption.detail.translation"))
+        XCTAssertTrue(sheet.contains("Picker(String(localized: \"conversation.encryption.detail.modeLabel\""), "la clé reste lue par le sélecteur d'activation")
+        let app = try Self.catalog(Self.appCatalogPath)
+        for language in ["fr"] + Self.otherLanguages {
+            XCTAssertFalse((app["conversation.encryption.detail.modeLabel"]?[language] ?? "").isEmpty, "detail.modeLabel manque en \(language)")
+        }
+    }
+
+    func test_createShareLink_button_doesNotRepeatTheScreenTitle() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        let title = try XCTUnwrap(app["share.link.create.title"]?["fr"])
+        let button = try XCTUnwrap(app["share.link.create.button.create"]?["fr"])
+        XCTAssertFalse(button.contains("de partage"), "« \(button) » redit « \(title) »")
+        let view = try code("Meeshy/Features/Links/Views/CreateShareLinkView.swift")
+        XCTAssertTrue(view.contains("defaultValue: \"Créer le lien\""))
+    }
+
+    func test_createShareLink_orientationSentences_stayVisible_andSayGuestsOnce() throws {
+        let view = try code("Meeshy/Features/Links/Views/CreateShareLinkView.swift")
+        XCTAssertTrue(view.contains("share.link.create.section.access.subtitle"))
+        XCTAssertTrue(view.contains("share.link.create.section.limits.subtitle"))
+        XCTAssertFalse(view.contains("visiteurs"), "« invités » partout, comme dans le titre du bloc")
+        let app = try Self.catalog(Self.appCatalogPath)
+        XCTAssertFalse((app["share.link.create.section.limits.subtitle"]?["fr"] ?? "").contains("audience"))
+    }
+
+    func test_talkieInfo_keepsOnlyTheSecondaryDetail_behindItsQuestion() throws {
+        XCTAssertEqual(TalkieInfoWording.a11y, "Quand utiliser le talkie ?")
+        XCTAssertFalse(TalkieInfoWording.text.contains("urgence"))
+        XCTAssertLessThan(TalkieInfoWording.text.count, 50)
+        let source = try code("Meeshy/Features/Talkie/TalkieInfoButton.swift")
+        XCTAssertTrue(source.contains("defaultValue: \"Même si Meeshy est en arrière-plan.\""))
+        XCTAssertTrue(source.contains(".accessibilityHint(TalkieInfoWording.text)"), "la note reste lue par le lecteur d'écran")
     }
 }
