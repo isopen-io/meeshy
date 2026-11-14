@@ -62,9 +62,9 @@ internal fun MeeshyPinnedStoryBand(
         reveal = reveal,
         modifier = modifier,
         self = self,
-        onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
-        onAddStory = { navController.navigate(storyDoor) },
-        onManageStories = { navController.navigate(Routes.MY_STORIES) },
+        onOpenStory = { userId -> navController.navigateSingleTop(Routes.story(userId)) },
+        onAddStory = { navController.navigateSingleTop(storyDoor) },
+        onManageStories = { navController.navigateSingleTop(Routes.MY_STORIES) },
         moodEmojiOf = moods::emojiOf,
         viewModel = storiesViewModel,
     )

@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -15,9 +16,9 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 /** L'écran autonome « Demandes d'amis » (iso `FriendRequestListView`), route `friends/requests`. */
 class FriendRequestListDestinations @Inject constructor() : NavGraphContributor {
     override fun contribute(builder: NavGraphBuilder, navController: NavHostController) {
-        builder.composable(ROUTE) {
+        builder.composable(ROUTE) { entry ->
             FriendRequestListScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popFrom(entry) },
                 onOpenProfile = rememberProfileOpenerOverSheet(navController),
             )
         }

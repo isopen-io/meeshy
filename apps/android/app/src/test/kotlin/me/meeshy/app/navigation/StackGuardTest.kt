@@ -209,6 +209,18 @@ class StackGuardTest {
         assertThat(nav.routes().count { it == Routes.SETTINGS }).isEqualTo(1)
     }
 
+    @Test
+    fun `an event-driven conversation opened over another stacks over it`() {
+        val nav = controller()
+        nav.navigateSingleTop(Routes.chat("a"))
+
+        nav.navigateSingleTop(Routes.chat("b"))
+        nav.navigateSingleTop(Routes.chat("b"))
+
+        assertThat(nav.routes()).containsExactly(Routes.CONVERSATIONS, Routes.CHAT, Routes.CHAT).inOrder()
+        assertThat(nav.top().arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG)).isEqualTo("b")
+    }
+
     private companion object {
         const val SETTINGS_PAGE = "settings/privacy"
         const val CHANNEL = "communities/{communityId}/channel"
