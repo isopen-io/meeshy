@@ -43,4 +43,38 @@ class CallGroupStageSizingTest {
         assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 300f, reservedDp = 240f)).isEqualTo(96f)
         assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 0f, reservedDp = 240f)).isEqualTo(96f)
     }
+
+    /** P11.1 — en portrait, la grille prend l'écran : elle commence au haut de la zone sûre et l'en-tête flotte sur sa première rangée. */
+    @Test
+    fun `P11_1 the grid starts at the top of the safe area and the header floats over its first row`() {
+        assertThat(CallGroupStageSizing.gridTopBaseDp(isCompactHeight = false)).isEqualTo(8f)
+        assertThat(CallGroupStageSizing.headerOverlapDp(isCompactHeight = false, bannerClearanceDp = 0f)).isEqualTo(44f)
+    }
+
+    /** L4.2 — en hauteur compacte, la grille reste ENTRE l'en-tête et la pilule : aucune plaque sous l'en-tête. */
+    @Test
+    fun `L4_2 in compact height the grid keeps the band of the header above it`() {
+        assertThat(CallGroupStageSizing.gridTopBaseDp(isCompactHeight = true)).isEqualTo(CallGroupStageSizing.HEADER_BAND_DP)
+        assertThat(CallGroupStageSizing.HEADER_BAND_DP).isEqualTo(52f)
+        assertThat(CallGroupStageSizing.headerOverlapDp(isCompactHeight = true, bannerClearanceDp = 0f)).isEqualTo(0f)
+    }
+
+    /** L4.11 — la pile des bandeaux se pose SOUS l'en-tête : une grille qui flottait redescend d'abord sous sa rangée. */
+    @Test
+    fun `L4_11 a banner stack sends the floating grid back under the header row, then below the stack`() {
+        assertThat(CallGroupStageSizing.gridBannerClearanceDp(isCompactHeight = false, stackDp = 0f)).isEqualTo(0f)
+        assertThat(CallGroupStageSizing.gridBannerClearanceDp(isCompactHeight = false, stackDp = 60f)).isEqualTo(104f)
+        assertThat(CallGroupStageSizing.gridBannerClearanceDp(isCompactHeight = true, stackDp = 60f)).isEqualTo(60f)
+        listOf(false, true).forEach { compact ->
+            val top = CallGroupStageSizing.gridTopBaseDp(compact) + CallGroupStageSizing.gridBannerClearanceDp(compact, stackDp = 60f)
+            assertThat(top).isEqualTo(CallGroupStageSizing.HEADER_BAND_DP + 60f)
+        }
+    }
+
+    /** P14 · U1 — ce que la scène pose à son haut (capsule de la une, puce d'écran) se tient sous l'en-tête, et le suit en glissant. */
+    @Test
+    fun `the header overlap shrinks as the grid glides down under the banners, and never goes negative`() {
+        assertThat(CallGroupStageSizing.headerOverlapDp(isCompactHeight = false, bannerClearanceDp = 20f)).isEqualTo(24f)
+        assertThat(CallGroupStageSizing.headerOverlapDp(isCompactHeight = false, bannerClearanceDp = 104f)).isEqualTo(0f)
+    }
 }
