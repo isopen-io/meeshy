@@ -586,13 +586,22 @@ class ConnectionManager:
     async def _report_through_cancellation(self, batches: List[List[TranslationTask]]) -> None:
         """#17063 — les lots refusés ont déjà quitté l'accumulateur et sont
         comptés : leur report va jusqu'au bout même si `stop()` annule la boucle
-        de flush, et l'annulation n'est rendue qu'une fois le report fini."""
+        de flush, et l'annulation n'est rendue qu'une fois le report fini.
+        #17132 — `asyncio.wait` n'annule pas le report : chaque annulation
+        suivante (l'arrêt lui-même annulé) le retrouve, exécuté une seule fois."""
         report = asyncio.ensure_future(self._report_batches(batches))
-        try:
-            await asyncio.shield(report)
-        except asyncio.CancelledError:
-            await report
-            raise
+        cancelled = False
+        while not report.done():
+            try:
+                await asyncio.wait({report})
+            except asyncio.CancelledError:
+                cancelled = True
+        if not cancelled:
+            return report.result()
+        error = None if report.cancelled() else report.exception()
+        if error is not None:
+            logger.error(f"[TRANSLATOR] Rejected batches report failed: {type(error).__name__}")
+        raise asyncio.CancelledError()
 
     async def _report_batches(self, batches: List[List[TranslationTask]]) -> None:
         for tasks in batches:
