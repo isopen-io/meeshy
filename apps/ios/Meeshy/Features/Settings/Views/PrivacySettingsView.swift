@@ -112,6 +112,7 @@ struct PrivacySettingsView: View {
                     id: "hideSearch", icon: "magnifyingglass",
                     title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Masquer mon numéro et mon e-mail", bundle: .main),
                     color: MeeshyColors.tileCoralHex, keyPath: \.hideProfileFromSearch,
+                    summary: String(localized: "settings.privacy.hide_from_contact_search.summary", defaultValue: "Votre profil ne ressort plus d'une recherche par numéro ou e-mail.", bundle: .main),
                     note: SettingsInfoNotes.contactSearch
                 ),
             ]

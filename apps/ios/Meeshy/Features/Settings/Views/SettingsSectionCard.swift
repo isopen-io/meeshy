@@ -275,7 +275,7 @@ enum SettingsInfoNotes {
     static var contactSearch: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.privacy.hide_from_contact_search.question", defaultValue: "Qui peut me trouver par mon numéro ?", bundle: .main),
-            text: String(localized: "settings.privacy.hide_from_contact_search.info", defaultValue: "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy.", bundle: .main)
+            text: String(localized: "settings.privacy.hide_from_contact_search.info", defaultValue: "Activé, vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy.", bundle: .main)
         )
     }
 

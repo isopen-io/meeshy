@@ -233220,43 +233220,90 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy."
+            "value": "Activé, vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When on, your profile no longer shows up in a search by phone number or email, and your contacts aren't notified when you join Meeshy."
+            "value": "When on, your contacts aren't notified when you join Meeshy either."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si está activado, tu perfil ya no aparece en una búsqueda por número o correo, y tus contactos no reciben aviso de tu llegada a Meeshy."
+            "value": "Si está activado, tus contactos tampoco reciben aviso de tu llegada a Meeshy."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst."
+            "value": "Wenn aktiviert, werden deine Kontakte auch nicht benachrichtigt, wenn du zu Meeshy kommst."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se attivo, il tuo profilo non compare più in una ricerca per numero o e-mail, e i tuoi contatti non vengono avvisati del tuo arrivo su Meeshy."
+            "value": "Se attivo, i tuoi contatti non vengono nemmeno avvisati del tuo arrivo su Meeshy."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativado, seu perfil não aparece mais em buscas por número ou e-mail, e seus contatos não são avisados da sua chegada ao Meeshy."
+            "value": "Ativado, seus contatos também não são avisados da sua chegada ao Meeshy."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy."
+            "value": "عند التفعيل، لا يتم أيضًا إخطار جهات اتصالك بانضمامك إلى Meeshy."
+          }
+        }
+      }
+    },
+    "settings.privacy.hide_from_contact_search.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Profil erscheint nicht mehr bei einer Suche nach Nummer oder E-Mail."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your profile no longer shows up in a search by phone number or email."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu perfil ya no aparece en una búsqueda por número o correo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre profil ne ressort plus d'une recherche par numéro ou e-mail."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo profilo non compare più in una ricerca per numero o e-mail."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu perfil não aparece mais em buscas por número ou e-mail."
           }
         }
       }
