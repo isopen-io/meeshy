@@ -385,6 +385,47 @@ struct MeeshyTimelineFriseTests {
         #expect(resting != resting)
     }
 
+    @Test("pendant un geste, seule la rangée qui change se re-rend ; la règle ne bouge pas")
+    func source_rowsAndRulerAreFrozenDuringAGesture() throws {
+        let row = try Self.code("MeeshyTimelineFriseRow.swift")
+        #expect(row.contains("struct MeeshyTimelineFriseRow<Content: View>: View, Equatable"))
+        #expect(row.contains("struct MeeshyTimelineFriseRowModel: Equatable"))
+        #expect(row.contains("lhs.model.isFrozen && rhs.model.isFrozen && lhs.model == rhs.model"), "au repos, les rappels suivent la frise")
+        let strip = try Self.code("MeeshyTimelineFriseRulerStrip.swift")
+        #expect(strip.contains("struct MeeshyTimelineFriseRulerStrip: View, Equatable"))
+        #expect(strip.contains("lhs.isFrozen && rhs.isFrozen"))
+        let frise = try Self.code("MeeshyTimelineFrise.swift")
+        #expect(frise.components(separatedBy: ".equatable()").count >= 3, "rangées et règle montées en `.equatable()`")
+    }
+
+    @Test("un pincement ne devient jamais un glissé : le doigt qui reste après lui est ignoré jusqu'au lâcher")
+    func source_pinchNeverBecomesADrag() throws {
+        let frise = try Self.code("MeeshyTimelineFrise.swift")
+        #expect(frise.contains("if isPinching {\n            if held == nil { held = ignoredHold(track, part: part) }"))
+        #expect(!frise.contains("isPinching = false\n                held = nil"), "la fin du pincement ne relâche pas la barre ignorée")
+    }
+
+    @Test("l'anneau de focus ne se montre qu'au clavier, jamais sous le doigt")
+    func source_focusRingIsKeyboardOnly() throws {
+        let row = try Self.code("MeeshyTimelineFriseRow.swift")
+        #expect(row.contains("if model.showsFocus && focus.wrappedValue == .track(track.id)"))
+        #expect(row.contains("showsFocusRing: model.showsFocus && focus.wrappedValue == .handle(track.id, part)"))
+        let strip = try Self.code("MeeshyTimelineFriseRulerStrip.swift")
+        #expect(strip.contains("if focusVisible.wrappedValue && focus.wrappedValue == .ruler"))
+        let frise = try Self.code("MeeshyTimelineFrise.swift")
+        #expect(frise.contains("if !showsFocus { showsFocus = true }"))
+        #expect(frise.contains("if showsFocus { showsFocus = false }"))
+    }
+
+    @Test("ton `theme` : la puce de l'invite prend un voile de l'encre du thème, pas le voile blanc d'un média")
+    func recipe_hintFillFollowsTheInk() {
+        let media = MeeshyTimelineFriseRecipe.resolve(tone: .deep, isEnabled: true, held: nil, isSnapped: false, isZoomed: false, hasSelection: false)
+        let sheet = MeeshyTimelineFriseRecipe.resolve(tone: .theme, isEnabled: true, held: nil, isSnapped: false, isZoomed: false, hasSelection: false)
+        #expect(media.hintFill(isDark: true) == MeeshyColors.mediaFill)
+        #expect(sheet.hintFill(isDark: false) != MeeshyColors.mediaFill)
+        #expect(sheet.hintFill(isDark: false) == MeeshyColors.textPrimary(isDark: false).opacity(MeeshyTimelineFriseRecipe.bedOpacity))
+    }
+
     // MARK: - Gardes de source
 
     @Test("aucun verre, aucune couleur en dur, aucun type du composer, aucune chaîne dans les fichiers de K22")

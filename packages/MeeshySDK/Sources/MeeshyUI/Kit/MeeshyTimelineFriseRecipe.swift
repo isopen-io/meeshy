@@ -154,7 +154,14 @@ public nonisolated extension MeeshyTimelineFriseRecipe {
 
     var snapLabelInk: Color { MeeshyColors.mediaBackdrop }
 
-    var hintFill: Color { MeeshyColors.mediaFill }
+    /// La puce de l'invite : le voile d'un média, ou un voile de l'encre du thème
+    /// sur une feuille claire (le voile blanc y disparaîtrait).
+    func hintFill(isDark: Bool) -> Color {
+        switch ink {
+        case .onMedia: return MeeshyColors.mediaFill
+        case .theme: return inkColor(isDark: isDark).opacity(Self.bedOpacity)
+        }
+    }
 
     func focusColor(isDark: Bool) -> Color { inkColor(isDark: isDark) }
 

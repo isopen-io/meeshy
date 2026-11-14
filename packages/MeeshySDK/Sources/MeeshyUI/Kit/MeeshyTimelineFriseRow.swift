@@ -17,7 +17,7 @@ struct MeeshyTimelineFriseRowCalls {
 
 /// Ce qu'une rangée dessine : sa piste, la fenêtre montrée (l'aperçu local
 /// pendant un geste), et ce que la sélection et le geste lui accordent.
-struct MeeshyTimelineFriseRowModel {
+struct MeeshyTimelineFriseRowModel: Equatable {
     let track: MeeshyTimelineFriseTrack
     let shown: ClosedRange<Double>
     let viewport: MeeshyTimelineFriseViewport
@@ -29,14 +29,18 @@ struct MeeshyTimelineFriseRowModel {
     let isEnabled: Bool
     let isDark: Bool
     let canTouchKeyframes: Bool
+    /// L'anneau de focus ne se montre qu'au clavier, jamais sous le doigt.
+    let showsFocus: Bool
     let accessibilityValue: String
     let keyframeNames: [String]
 }
 
 /// **Une rangée de 44** : le couloir d'icône, puis le lit de la piste, sa barre
 /// au contenu de l'hôte, et — choisie — ses poignées et ses losanges. Un seul
-/// élément d'accessibilité, ses six pas nommés.
-struct MeeshyTimelineFriseRow<Content: View>: View {
+/// élément d'accessibilité, ses six pas nommés. `Equatable` pendant un geste :
+/// tant qu'un doigt glisse, pince ou tire, seule la rangée dont la valeur
+/// change se re-rend ; au repos, chacune suit la frise et ses rappels.
+struct MeeshyTimelineFriseRow<Content: View>: View, Equatable {
     let model: MeeshyTimelineFriseRowModel
     let names: MeeshyTimelineFriseNames
     let focus: FocusState<MeeshyTimelineFriseFocus?>.Binding
@@ -44,6 +48,10 @@ struct MeeshyTimelineFriseRow<Content: View>: View {
     let content: (MeeshyTimelineFriseTrack) -> Content
 
     @GestureState private var dragging = false
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.model.isFrozen && rhs.model.isFrozen && lhs.model == rhs.model && lhs.names == rhs.names
+    }
 
     private var track: MeeshyTimelineFriseTrack { model.track }
     private var recipe: MeeshyTimelineFriseRecipe { model.recipe }
@@ -82,7 +90,7 @@ struct MeeshyTimelineFriseRow<Content: View>: View {
 
     @ViewBuilder
     private var focusRing: some View {
-        if focus.wrappedValue == .track(track.id) {
+        if model.showsFocus && focus.wrappedValue == .track(track.id) {
             RoundedRectangle(cornerRadius: MeeshyTimelineFriseRecipe.radius, style: .continuous)
                 .stroke(recipe.focusColor(isDark: model.isDark), lineWidth: MeeshyTimelineFriseRecipe.focusRingWidth)
                 .allowsHitTesting(false)
@@ -167,7 +175,7 @@ struct MeeshyTimelineFriseRow<Content: View>: View {
         let isStart = part == .start
         return MeeshyTimelineFriseHandleShape(
             height: barHeight, recipe: recipe,
-            showsFocusRing: focus.wrappedValue == .handle(track.id, part), isDark: model.isDark
+            showsFocusRing: model.showsFocus && focus.wrappedValue == .handle(track.id, part), isDark: model.isDark
         )
         .equatable()
         .padding(isStart ? .leading : .trailing, zone.outside)

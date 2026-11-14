@@ -4,8 +4,9 @@ import SwiftUI
 /// ou glisser y pose la tête (`onSeek`, au plus une fois par instant), entre une
 /// paire `editing(.playhead, true / false)`. Elle tient son propre geste : la
 /// frise ne se réévalue pas pendant qu'un doigt la promène. Sans `onSeek`, elle
-/// est dessinée, inerte et absente de l'arbre d'accessibilité.
-struct MeeshyTimelineFriseRulerStrip: View {
+/// est dessinée, inerte et absente de l'arbre d'accessibilité. `Equatable`
+/// pendant le glissé d'une barre : la règle ne se re-rend pas à chaque image.
+struct MeeshyTimelineFriseRulerStrip: View, Equatable {
     let viewport: MeeshyTimelineFriseViewport
     let duration: Double
     let interaction: MeeshyTimelineFriseInteraction
@@ -15,6 +16,8 @@ struct MeeshyTimelineFriseRulerStrip: View {
     let timeText: (Double, MeeshyTimelineFriseTimeStyle) -> String
     let clock: PlayheadClock?
     let focus: FocusState<MeeshyTimelineFriseFocus?>.Binding
+    let focusVisible: Binding<Bool>
+    let isFrozen: Bool
     let play: ([MeeshyTimelineFriseEffect]) -> Void
     let zoom: (MeeshyTimelineFriseCommand) -> Void
 
@@ -22,6 +25,12 @@ struct MeeshyTimelineFriseRulerStrip: View {
     @State private var scrubbed: Double?
     @State private var lastSought: Double = 0
     @GestureState private var isScrubbing = false
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.isFrozen && rhs.isFrozen && lhs.clock === rhs.clock && lhs.viewport == rhs.viewport
+            && lhs.duration == rhs.duration && lhs.interaction == rhs.interaction && lhs.recipe == rhs.recipe
+            && lhs.isDark == rhs.isDark && lhs.names == rhs.names
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -34,9 +43,12 @@ struct MeeshyTimelineFriseRulerStrip: View {
         .overlay { accessibilityLeaf }
         .overlay { focusRing }
         .modifier(MeeshyTimelineFriseKeys(target: .ruler, isEnabled: interaction.isEnabled && interaction.canSeek, focus: focus) { command in
-            command == .zoomIn || command == .zoomOut || command == .zoomReset
-                ? zoom(command)
-                : play(interaction.playheadCommand(command, current: current))
+            if !focusVisible.wrappedValue { focusVisible.wrappedValue = true }
+            if command == .zoomIn || command == .zoomOut || command == .zoomReset {
+                zoom(command)
+            } else {
+                play(interaction.playheadCommand(command, current: current))
+            }
         })
         .adaptiveOnChange(of: isScrubbing) { _, active in
             if !active { finish() }
@@ -84,7 +96,7 @@ struct MeeshyTimelineFriseRulerStrip: View {
 
     @ViewBuilder
     private var focusRing: some View {
-        if focus.wrappedValue == .ruler {
+        if focusVisible.wrappedValue && focus.wrappedValue == .ruler {
             RoundedRectangle(cornerRadius: MeeshyTimelineFriseRecipe.radius, style: .continuous)
                 .stroke(recipe.focusColor(isDark: isDark), lineWidth: MeeshyTimelineFriseRecipe.focusRingWidth)
                 .allowsHitTesting(false)
@@ -100,6 +112,7 @@ struct MeeshyTimelineFriseRulerStrip: View {
             .updating($isScrubbing) { _, state, _ in state = true }
             .onChanged { value in
                 guard width > 0 else { return }
+                if focusVisible.wrappedValue { focusVisible.wrappedValue = false }
                 let time = viewport.time(atFraction: Double(value.location.x / width))
                 let step = MeeshyTimelineFriseRuler.majorStep(span: viewport.span, width: width)
                 let effects = interaction.scrub(to: time, previous: scrubbed, majorStep: step)

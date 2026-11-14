@@ -186,7 +186,7 @@ struct MeeshyTimelineFriseZoomHint: View, Equatable {
             .lineLimit(1)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .frame(minHeight: MeeshyTimelineFriseRecipe.hintHeight)
-            .background(Capsule().fill(recipe.hintFill))
+            .background(Capsule().fill(recipe.hintFill(isDark: isDark)))
             .accessibilityHidden(true)
     }
 }

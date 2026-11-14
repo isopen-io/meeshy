@@ -38,6 +38,7 @@ public struct MeeshyTimelineFrise<Content: View, Transport: View, Empty: View>: 
     @State private var viewport: MeeshyTimelineFriseViewport?
     @State private var gestureViewport: MeeshyTimelineFriseViewport?
     @State private var isPinching = false
+    @State private var showsFocus = false
     @FocusState private var focus: MeeshyTimelineFriseFocus?
 
     init(
@@ -169,8 +170,10 @@ public struct MeeshyTimelineFrise<Content: View, Transport: View, Empty: View>: 
     private func ruler(_ recipe: MeeshyTimelineFriseRecipe) -> some View {
         MeeshyTimelineFriseRulerStrip(
             viewport: visible, duration: rule.duration, interaction: interaction, recipe: recipe, isDark: isDark,
-            names: names, timeText: timeText, clock: clock, focus: $focus, play: play, zoom: zoom
+            names: names, timeText: timeText, clock: clock, focus: $focus, focusVisible: $showsFocus,
+            isFrozen: held != nil, play: play, zoom: zoom
         )
+        .equatable()
         .accessibilityHidden(calls.onSeek == nil)
     }
 
@@ -183,6 +186,7 @@ public struct MeeshyTimelineFrise<Content: View, Transport: View, Empty: View>: 
                 MeeshyTimelineFriseRow(
                     model: rowModel(track, recipe: recipe), names: names, focus: $focus, calls: rowCalls, content: content
                 )
+                .equatable()
             }
         }
     }
@@ -194,7 +198,7 @@ public struct MeeshyTimelineFrise<Content: View, Transport: View, Empty: View>: 
             track: track, shown: shown, viewport: visible, recipe: recipe, isSelected: track.id == selectedID,
             isAdjustable: interaction.isAdjustable(track), heldPart: held?.part,
             isFrozen: self.held != nil || isPinching, isEnabled: isEnabled, isDark: isDark,
-            canTouchKeyframes: calls.onKeyframe != nil,
+            canTouchKeyframes: calls.onKeyframe != nil, showsFocus: showsFocus,
             accessibilityValue: spokenValue(track),
             keyframeNames: track.keyframes.map { timeText($0.time, .spoken) }
         )
@@ -291,7 +295,10 @@ extension MeeshyTimelineFrise {
 
     private var rowCalls: MeeshyTimelineFriseRowCalls {
         MeeshyTimelineFriseRowCalls(
-            tap: { track, time, density in play(interaction.tap(track, at: time, pointsPerSecond: density)) },
+            tap: { track, time, density in
+                touched()
+                play(interaction.tap(track, at: time, pointsPerSecond: density))
+            },
             dragChanged: dragChanged,
             dragEnded: dragEnded,
             dragReset: dragReset,
@@ -305,13 +312,19 @@ extension MeeshyTimelineFrise {
     }
 
     /// Le doigt glisse une barre ou une poignée : un glissé d'abord vertical est
-    /// rendu à l'hôte, un pincement l'emporte toujours, sinon l'aperçu aimanté.
+    /// rendu à l'hôte, un pincement l'emporte toujours — et le doigt qui reste
+    /// après lui ne devient jamais un glissé —, sinon l'aperçu aimanté.
     private func dragChanged(_ track: MeeshyTimelineFriseTrack, part: MeeshyTimelineFrisePart, translation: CGSize, width: CGFloat) {
-        guard interaction.isAdjustable(track), !isPinching else { return }
+        guard interaction.isAdjustable(track) else { return }
+        touched()
+        if isPinching {
+            if held == nil { held = ignoredHold(track, part: part) }
+            return
+        }
         if let held, held.trackID == track.id, held.isIgnored { return }
         if held?.trackID != track.id {
             guard abs(translation.width) >= abs(translation.height) else {
-                held = MeeshyTimelineFriseHeld(trackID: track.id, part: part, preview: .init(range: track.range, snappedTime: nil), isIgnored: true)
+                held = ignoredHold(track, part: part)
                 return
             }
             play(interaction.beginDrag(track, part: part))
@@ -325,6 +338,15 @@ extension MeeshyTimelineFrise {
         )
         held = MeeshyTimelineFriseHeld(trackID: track.id, part: part, preview: step.preview, isIgnored: false)
         play(step.effects)
+    }
+
+    private func ignoredHold(_ track: MeeshyTimelineFriseTrack, part: MeeshyTimelineFrisePart) -> MeeshyTimelineFriseHeld {
+        MeeshyTimelineFriseHeld(trackID: track.id, part: part, preview: .init(range: track.range, snappedTime: nil), isIgnored: true)
+    }
+
+    /// Un toucher éteint l'anneau du clavier : il ne se montre qu'au clavier.
+    private func touched() {
+        if showsFocus { showsFocus = false }
     }
 
     /// Le doigt se lève : la fenêtre part une fois, au lâcher.
@@ -380,7 +402,6 @@ extension MeeshyTimelineFrise {
             .onEnded { _ in
                 gestureViewport = nil
                 isPinching = false
-                held = nil
                 if let current = viewport, !current.isZoomed(in: rule.duration) { viewport = nil }
             }
     }
@@ -399,6 +420,7 @@ extension MeeshyTimelineFrise {
     }
 
     private func command(_ track: MeeshyTimelineFriseTrack, part: MeeshyTimelineFrisePart, command: MeeshyTimelineFriseCommand) {
+        if !showsFocus { showsFocus = true }
         switch command {
         case .zoomIn, .zoomOut, .zoomReset: zoom(command)
         default: play(interaction.trackCommand(command, on: track, part: part))
