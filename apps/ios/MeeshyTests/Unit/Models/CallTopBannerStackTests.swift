@@ -402,4 +402,19 @@ final class CallTopBannerSpanTests: XCTestCase {
         XCTAssertTrue(clearance.contains("CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside"))
         XCTAssertTrue(selfView.contains("var selfTileBannerNeighbor: CallTopBannerTileNeighbor?"))
     }
+
+    // MARK: - Ma vignette vue de la pile
+
+    func test_duoTile_atATopCorner_isSeenWithItsMargin() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false), CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+    }
+
+    func test_duoTile_railsOpen_isSeenAgainstTheRail() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: true), CallTopBannerTileNeighbor(width: 130, edgeDistance: 135))
+    }
+
+    func test_duoTile_atTheBottom_orHidden_leavesTheStackAlone() {
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: false, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: false, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+    }
 }

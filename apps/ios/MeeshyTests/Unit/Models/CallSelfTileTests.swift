@@ -287,6 +287,31 @@ final class CallSelfTilePlateTests: XCTestCase {
         XCTAssertEqual(CallSelfTilePlate.accessibilityValue(name: "Vous", size: "Vignette moyenne"), "Vous, Vignette moyenne")
     }
 
+    // MARK: - §7.2 — les coins
+
+    func test_corner_center_sitsAtItsEdgeDistances() {
+        let insets = EdgeInsets(top: 60, leading: 16, bottom: 130, trailing: 76)
+        let container = CGSize(width: 852, height: 393)
+        let size = CGSize(width: 130, height: 96)
+        XCTAssertEqual(CallSelfTileCorner.topTrailing.center(of: size, in: container, insets: insets), CGPoint(x: 852 - 76 - 65, y: 60 + 48))
+        XCTAssertEqual(CallSelfTileCorner.topLeading.center(of: size, in: container, insets: insets), CGPoint(x: 16 + 65, y: 60 + 48))
+        XCTAssertEqual(CallSelfTileCorner.bottomLeading.center(of: size, in: container, insets: insets), CGPoint(x: 16 + 65, y: 393 - 130 - 48))
+        XCTAssertEqual(CallSelfTileCorner.bottomTrailing.center(of: size, in: container, insets: insets), CGPoint(x: 852 - 76 - 65, y: 393 - 130 - 48))
+    }
+
+    func test_corner_nearest_isTheClosestCenter() {
+        let centers: [CallSelfTileCorner: CGPoint] = [.topLeading: CGPoint(x: 0, y: 0), .topTrailing: CGPoint(x: 100, y: 0), .bottomLeading: CGPoint(x: 0, y: 100), .bottomTrailing: CGPoint(x: 100, y: 100)]
+        XCTAssertEqual(CallSelfTileCorner.nearest(to: CGPoint(x: 90, y: 80)) { centers[$0] ?? .zero }, .bottomTrailing)
+        XCTAssertEqual(CallSelfTileCorner.nearest(to: CGPoint(x: 10, y: 20)) { centers[$0] ?? .zero }, .topLeading)
+    }
+
+    func test_corner_isTop_and_isLeading() {
+        XCTAssertTrue(CallSelfTileCorner.topTrailing.isTop)
+        XCTAssertFalse(CallSelfTileCorner.topTrailing.isLeading)
+        XCTAssertFalse(CallSelfTileCorner.bottomLeading.isTop)
+        XCTAssertTrue(CallSelfTileCorner.bottomLeading.isLeading)
+    }
+
     // MARK: - Loi 17.10 — Réduire les animations : un fondu court
 
     func test_motion_reduceMotion_isTheShortFadeOfTheChrome() {
@@ -330,11 +355,13 @@ final class CallSelfTilePlateTests: XCTestCase {
     func test_duoTile_wearsTheGroupNameplate_readByVoiceOver() throws {
         let source = try selfView()
         let pip = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var pipView: some View", in: source))
-        XCTAssertTrue(pip.contains(".overlay(alignment: .bottom) { selfTileNameplate(tileSize: size) }"), "la plaque au pied de la vignette, comme la planche")
+        XCTAssertTrue(pip.contains(".overlay(alignment: .bottom) { CallSelfTileNameplate(title: selfTilePlateTitle, tileWidth: size.width, stowFactor: selfTileStowFactor, reservesBadge: showsPeerMutedBadge && effectiveSwapStreams) }"), "la plaque au pied de la vignette, comme la planche")
         XCTAssertTrue(pip.contains(".accessibilityValue(CallSelfTilePlate.accessibilityValue(name: selfTilePlateTitle, size: CallSelfTileCopy.sizeName(selfTileScale)))"), "le lecteur d'écran dit qui est dans la vignette")
-        let plate = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func selfTileNameplate(tileSize: CGSize)", in: source))
-        XCTAssertTrue(plate.contains("CallTileNameplate(title: selfTilePlateTitle)"), "le composant de plaque du groupe, pas un second")
-        XCTAssertTrue(plate.contains("scaleEffect(CallSelfTileScale.counterScaled(1, by: selfTileStowFactor), anchor: .bottom)"), "rangée, la vignette garde une plaque lisible (loi 11)")
+        let chrome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTileChrome.swift"))
+        let plate = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallSelfTileNameplate: View", in: chrome))
+        XCTAssertTrue(plate.contains("CallTileNameplate(title: title)"), "le composant de plaque du groupe, pas un second")
+        XCTAssertTrue(plate.contains(".scaleEffect(CallSelfTileScale.counterScaled(1, by: stowFactor), anchor: .bottom)"), "rangée, la vignette garde une plaque lisible (loi 11)")
+        XCTAssertTrue(plate.contains("CallSelfTilePlate.maxWidth(tileWidth: tileWidth, stowFactor: stowFactor, reservesBadge: reservesBadge)"), "ni sur le liseré ni sur le badge micro coupé")
         XCTAssertTrue(plate.contains(".accessibilityHidden(true)"), "la vignette la dit déjà : pas de double lecture")
         XCTAssertTrue(source.contains("String(localized: \"call.group.tile.you\", defaultValue: \"Vous\", bundle: .main)"), "la clé partagée du groupe, déjà dans les sept langues")
         XCTAssertTrue(source.contains("CallSelfTilePlate.title(showsLocal: !effectiveSwapStreams"), "la plaque suit la personne montrée, comme le liseré")
@@ -350,7 +377,8 @@ final class CallSelfTilePlateTests: XCTestCase {
         let source = try selfView()
         let center = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func pipCenter(_ corner: PiPCorner", in: source))
         XCTAssertTrue(center.contains("CallRailsLayout.selfTileEdgeDistance("), "les deux bords suivent la loi du rail")
-        XCTAssertTrue(source.contains("CallRailsLayout.selfTileYieldsToRails(isLandscape: CallSelfTileScale.isLandscape(container), railsShown: isChromeVisible && !controlsDisposition.railRows(currentActionSet, layer: layer).isEmpty)"))
+        XCTAssertTrue(source.contains("var selfTileRailsShown: Bool { isChromeVisible && !controlsDisposition.railRows(currentActionSet, layer: layer).isEmpty }"), "les rails que (…) fait sortir, à l'écran, et rien qu'eux")
+        XCTAssertTrue(source.contains("CallRailsLayout.selfTileYieldsToRails(isLandscape: CallSelfTileScale.isLandscape(container), railsShown: selfTileRailsShown)"))
         XCTAssertTrue(source.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: selfTileYieldsToRails(in: geo.size))"), "elle se décale et revient en mouvement ; Réduire les animations : un fondu court")
     }
 }
