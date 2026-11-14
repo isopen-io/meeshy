@@ -407,14 +407,14 @@ final class CallSelfViewPresenceTests: XCTestCase {
     }
 
     func test_aCameraOff_showsNoTile() {
-        XCTAssertEqual(presence(video: false), .none)
-        XCTAssertEqual(presence(video: false, track: false, suspended: true), .none)
-        XCTAssertEqual(presence(track: false), .none, "aucune piste et aucune pause : rien à montrer")
+        XCTAssertEqual(presence(video: false), .hidden)
+        XCTAssertEqual(presence(video: false, track: false, suspended: true), .hidden)
+        XCTAssertEqual(presence(track: false), .hidden, "aucune piste et aucune pause : rien à montrer")
     }
 
     func test_aHiddenSelfView_showsNoTile() {
-        XCTAssertEqual(presence(shown: false), .none, "groupe, mode Effets ou Montage, cadre en direct")
-        XCTAssertEqual(presence(shown: false, track: false, suspended: true), .none)
+        XCTAssertEqual(presence(shown: false), .hidden, "groupe, mode Effets ou Montage, cadre en direct")
+        XCTAssertEqual(presence(shown: false, track: false, suspended: true), .hidden)
     }
 
     func test_duoSelfView_appearsLeavesAndChangesFace_byAFade() throws {

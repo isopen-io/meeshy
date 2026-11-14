@@ -24,9 +24,7 @@ extension CallView {
                     duoLayout
                 }
 
-                if !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown {
-                    duoOverlays
-                }
+                duoSelfView
 
                 callEdgeControls
 
@@ -116,20 +114,18 @@ extension CallView {
                 if !callManager.isVideoUIActive {
                     // En audio aussi, glisser vers le bas quitte le plein
                     // écran. Les sous-titres vivent dans la pilule (#17343) :
-                    // aucun panneau ne remplace l'avatar ; le journal le resserre.
+                    // aucun panneau ne remplace l'avatar ; le journal le resserre,
+                    // par morphisme d'UN avatar (P9b.15).
                     // Le fond est la scène (loi 11, #17945) : l'avatar reprend 120 pt.
-                    VStack(spacing: MeeshySpacing.md) {
-                        if pillText.compactsAudioLayout {
-                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName,
-                                                   duration: { callManager.formattedDuration },
-                                                   spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
-                                .padding(.top, CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset))
-                            Spacer()
-                        } else {
-                            Spacer()
-                            audioCallLayout
-                            Spacer()
-                        }
+                    CallAudioStage(isCompact: pillText.compactsAudioLayout, compactTopInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) {
+                        audioAvatarPair(isCompact: pillText.compactsAudioLayout)
+                            .accessibilityHidden(true)
+                    } compact: {
+                        CallCompactAudioHeader(name: peerDisplayName,
+                                               duration: { callManager.formattedDuration },
+                                               spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
+                    } rest: {
+                        audioCallLayout
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { if exposesTheTapToggle { toggleControls() } }
@@ -198,33 +194,38 @@ extension CallView {
             .accessibilityHidden(!exposesTheTapToggle)
     }
 
-    /// Ce qui flotte AU-DESSUS de la disposition 1:1 : la vignette perso. Les
-    /// actions du `(…)` sortent en rails sur les bords (#17327).
-    @ViewBuilder
-    private var duoOverlays: some View {
-        // §7.2 — draggable, corner-snapping PiP showing the secondary
-        // stream. Tap to swap it with the full-area primary (FaceTime).
-        if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-            pipView
-        } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
-            // Survie réseau : depuis L6-1 la piste locale RESTE attachée
-            // (l'encodeur est au plancher), donc `hasLocalVideoTrack` est
-            // vrai et c'est la PiP qui gagne — elle montre l'image
-            // réellement gelée. Cette branche ne sert plus que si la piste
-            // disparaît pour une AUTRE raison (échec de ré-acquisition) :
-            // une tuile « en pause » sur l'avatar plutôt qu'une self-view
-            // qui s'évapore.
-            localVideoSuspendedTile
+    /// Ma vignette (§7.2 : la PiP déplaçable, ou la tuile « en pause » de la
+    /// survie réseau, `CallSelfViewPresence`) ; les actions du `(…)` sortent en
+    /// rails (#17327). Loi 17.1 · 17.12 : elle paraît, part et change de face en fondu.
+    private var duoSelfView: some View {
+        let presence = selfViewPresence
+        return ZStack {
+            switch presence {
+            case .camera: pipView.transition(.opacity)
+            case .paused: localVideoSuspendedTile.transition(.opacity)
+            case .hidden: EmptyView()
+            }
         }
+        .animation(.easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)), value: presence)
     }
 
-    /// La scène de groupe entre l'en-tête et la pilule, dans le flux
-    /// de la mise en page : quand la pilule grandit (rangées, sous-titres), la
-    /// grille rétrécit au lieu de passer dessous — en portrait comme en paysage.
+    private var selfViewPresence: CallSelfViewPresence {
+        CallSelfViewPresence.resolve(isShown: !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown,
+                                     isVideoEnabled: callManager.isVideoEnabled, hasLocalVideoTrack: callManager.hasLocalVideoTrack,
+                                     isVideoSuspended: callManager.isVideoSuspended)
+    }
+
+    /// La scène de groupe au-dessus de la pilule, dans le flux de la mise en
+    /// page : quand la pilule grandit (rangées, sous-titres), la grille rétrécit
+    /// au lieu de passer dessous (#17949). En portrait, l'en-tête flotte sur la
+    /// grille (P11.1) ; la une, la hauteur compacte et une pile de bandeaux
+    /// gardent la scène sous lui (`CallTopBannerStack.groupStageTopBase`).
     private var groupStageLayout: some View {
         VStack(spacing: MeeshySpacing.sm) {
             CallGroupStageTopReserve(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, hasLiveFrameStatus: hasLiveFrameStatus,
-                                     heights: topBannerHeights, base: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52, isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion)
+                                     heights: topBannerHeights, safeAreaTop: DeviceLayout.safeAreaTop, chromeTopInset: Self.chromeTopInset,
+                                     headerFloats: CallTopBannerStack.headerFloatsOverGroupStage(isGrid: groupStageFocus == .grid, isCompactHeight: isStageCompactHeight),
+                                     isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, chrome: chromeVisibility, isCompactHeight: isStageCompactHeight, onStageTap: toggleControls, onFocusChange: { groupStageFocus = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
                 // La pilule qui grandit rétrécit ses rangées (qui
@@ -319,17 +320,10 @@ extension CallView {
         isOnMac || callManager.screenShare.isRemoteSharing ? .scaleAspectFit : .scaleAspectFill
     }
 
+    /// Le repos du duo audio sous son avatar (que `CallAudioStage` pose) : le
+    /// nom, la durée, puis les états.
     var audioCallLayout: some View {
         VStack(spacing: MeeshySpacing.lg) {
-            // Duo d'avatars (no pulse) — correspondant + pastille locale.
-            // Decorative: the remote user's name is shown as a Text element
-            // directly below, mirroring pulsingAvatar's rationale — without
-            // .accessibilityHidden VoiceOver reads the avatar initial, then
-            // "Vous", then the full name as three disjoint stops.
-            callAvatarPair(size: 120)
-                .accessibilityHidden(true)
-                .padding(.bottom, MeeshySpacing.sm)
-
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.white)
@@ -367,27 +361,14 @@ extension CallView {
             }
             .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
-            // Status indicators
-            HStack(spacing: MeeshySpacing.md) {
-                // §4.3 — reconnexion ICE en cours : une pill compacte, plutôt qu'un bandeau
-                // plein-écran, au même endroit que les autres indicateurs de statut.
-                if case .reconnecting = callManager.callState {
-                    CallStatusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
-                }
-                if callManager.isMuted {
-                    CallStatusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
-                }
-                if !callManager.isRemoteAudioEnabled {
-                    CallStatusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
-                }
-                if callManager.isSpeaker {
-                    CallStatusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
-                }
-                if callManager.isSignalingDegraded {
-                    CallStatusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
-                }
-            }
+            CallAudioStatusRow(isReconnecting: isReconnectingCall, isMuted: callManager.isMuted, isPeerMuted: !callManager.isRemoteAudioEnabled,
+                               isSpeaker: callManager.isSpeaker, isSignalingDegraded: callManager.isSignalingDegraded)
         }
+    }
+
+    private var isReconnectingCall: Bool {
+        if case .reconnecting = callManager.callState { return true }
+        return false
     }
 
     // MARK: - Connection Quality (glyphe signal)
@@ -704,43 +685,116 @@ private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
     }
 }
 
-/// #17343 — l'appel audio quand le journal ouvert dans la pilule prend une part de
-/// la fenêtre : l'avatar resserré (120 → 56) en haut, le nom et la durée lisibles ;
-/// aucun panneau ne remplace la personne. La durée se relit sous l'horloge, à 1 Hz.
-struct CallCompactAudioHeader<Avatar: View>: View {
+/// P9b.15 (#18206) — le duo audio, du repos (avatar de 120 pt au centre, nom, durée, états) au journal
+/// ouvert dans la pilule (avatar de 56 pt en tête, le nom et la durée à côté) : UNE vue d'avatar, dont
+/// la disposition change (`AnyLayout` garde son identité). Elle glisse et se réduit vers l'en-tête
+/// compact pendant que le nom et la durée la rejoignent en fondu, ≈ 200 ms, puis le chemin inverse.
+/// « Réduire les animations » : chaque disposition est une vue à part, qui se fond sur place.
+struct CallAudioStage<Avatar: View, Compact: View, Rest: View>: View {
+    let isCompact: Bool
+    let compactTopInset: CGFloat
     let avatar: Avatar
+    let compact: Compact
+    let rest: Rest
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(isCompact: Bool, compactTopInset: CGFloat, @ViewBuilder avatar: () -> Avatar,
+         @ViewBuilder compact: () -> Compact, @ViewBuilder rest: () -> Rest) {
+        self.isCompact = isCompact
+        self.compactTopInset = compactTopInset
+        self.avatar = avatar()
+        self.compact = compact()
+        self.rest = rest()
+    }
+
+    var body: some View {
+        ZStack {
+            arrangement
+                .id(CallAudioStageLayout.identity(isCompact: isCompact, reduceMotion: reduceMotion))
+                .transition(.opacity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: isCompact)
+    }
+
+    private var arrangement: some View {
+        let layout = isCompact ? AnyLayout(HStackLayout(spacing: MeeshySpacing.md)) : AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))
+        return layout {
+            avatar
+                .padding(.bottom, isCompact ? 0 : MeeshySpacing.sm)
+            if isCompact {
+                compact.transition(.opacity)
+            } else {
+                rest.transition(.opacity)
+            }
+        }
+        .padding(.horizontal, isCompact ? MeeshySpacing.lg : 0)
+        .padding(.top, isCompact ? compactTopInset : 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isCompact ? .topLeading : .center)
+    }
+}
+
+/// #17343 — l'en-tête compact de l'appel audio quand le journal ouvert dans la pilule prend une part
+/// de la fenêtre : le nom et la durée, à côté de l'avatar resserré que `CallAudioStage` pose. La
+/// durée se relit sous l'horloge, à 1 Hz.
+struct CallCompactAudioHeader: View {
     let name: String
     let duration: () -> String
     let spokenDuration: () -> String
     @Binding var showsQualityDetail: Bool
 
     var body: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            avatar
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            Text(name)
+                .font(.system(.headline, design: .rounded).weight(.semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
 
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(name)
-                    .font(.system(.headline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-
-                CallDurationClock {
-                    Text(duration())
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(MeeshyColors.indigo400)
-                        // Aucune rangée d'états ici : la durée s'annonce nommée,
-                        // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                        .accessibilityValue(spokenDuration())
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
-                .callQualityDetailTrigger(isPresented: $showsQualityDetail)
+            CallDurationClock {
+                Text(duration())
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    // Aucune rangée d'états ici : la durée s'annonce nommée,
+                    // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(spokenDuration())
+                    .accessibilityAddTraits(.updatesFrequently)
             }
-
-            Spacer(minLength: 0)
+            .callQualityDetailTrigger(isPresented: $showsQualityDetail)
         }
-        .padding(.horizontal, MeeshySpacing.lg)
+    }
+}
+
+/// Les états de l'appel audio sous la durée (reconnexion, micro coupé, contact en sourdine,
+/// haut-parleur, serveur déconnecté) : une vue feuille qui ne reçoit que des primitives.
+struct CallAudioStatusRow: View {
+    let isReconnecting: Bool
+    let isMuted: Bool
+    let isPeerMuted: Bool
+    let isSpeaker: Bool
+    let isSignalingDegraded: Bool
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            // §4.3 — reconnexion ICE en cours : une pill compacte, plutôt qu'un bandeau
+            // plein-écran, au même endroit que les autres indicateurs de statut.
+            if isReconnecting {
+                CallStatusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
+            }
+            if isMuted {
+                CallStatusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
+            }
+            if isPeerMuted {
+                CallStatusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
+            }
+            if isSpeaker {
+                CallStatusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
+            }
+            if isSignalingDegraded {
+                CallStatusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
+            }
+        }
     }
 }

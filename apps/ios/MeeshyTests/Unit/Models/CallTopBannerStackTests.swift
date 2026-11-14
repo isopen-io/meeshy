@@ -506,22 +506,29 @@ final class CallGroupHeaderFloatTests: XCTestCase {
 
     func test_floatingHeader_startsTheGridAtTheSafeArea() {
         XCTAssertEqual(
-            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, headerFloats: true, hasBanners: false, isStageFullScreen: false),
-            59,
-            "la grille part de la zone sûre, 8 pt au-dessus de la rangée d'en-tête (planche P11)"
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            59 - 8,
+            "après l'espacement de la scène, la grille part de la zone sûre, 8 pt au-dessus de la rangée d'en-tête (planche P11)"
+        )
+    }
+
+    func test_floatingHeader_onAWindowWithoutSafeArea_neverReservesANegativeBand() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 0, chromeTopInset: 8, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            0
         )
     }
 
     func test_reservedHeader_keepsTheStageUnderTheHeaderRow() {
         XCTAssertEqual(
-            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, headerFloats: false, hasBanners: false, isStageFullScreen: false),
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: false, hasBanners: false, isStageFullScreen: false),
             67 + 52
         )
     }
 
     func test_aBanner_pushesTheGridUnderTheStack_evenWhenTheHeaderFloats() {
         XCTAssertEqual(
-            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, headerFloats: true, hasBanners: true, isStageFullScreen: false),
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: true, isStageFullScreen: false),
             CallTopBannerStack.topInset(chromeTopInset: 67),
             "L4.11 (#17833) : la pile se pose sous l'en-tête, la grille lui cède sa place"
         )
@@ -530,7 +537,7 @@ final class CallGroupHeaderFloatTests: XCTestCase {
     func test_fullScreenStage_startsAtTheSafeArea_floatingOrNot() {
         for floats in [true, false] {
             XCTAssertEqual(
-                CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, headerFloats: floats, hasBanners: false, isStageFullScreen: true),
+                CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: floats, hasBanners: false, isStageFullScreen: true),
                 59
             )
         }
