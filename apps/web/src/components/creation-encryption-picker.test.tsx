@@ -109,28 +109,15 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
     expect(note?.className).toContain('sr-only');
   });
 
-  test('l’irréversibilité tient en UNE phrase visible ; la seconde est derrière un (i) « Peut-on revenir en arrière ? »', async () => {
+  test('l’irréversibilité est dite ENTIÈRE, visible au repos, sans rien déplier — et une seule fois', async () => {
     await mount({ platformRole: 'USER', conversationType: 'group' });
     const footers = document.querySelectorAll('[data-creation-encryption-footer]');
     expect(footers).toHaveLength(1);
     expect(footers[0]?.closest('details')).toBeNull();
     expect(footers[0]?.className).not.toContain('sr-only');
-    expect(footers[0]?.textContent).toBe('Le chiffrement de bout en bout ne se désactive jamais.');
-    const back = document.querySelector<HTMLButtonElement>('[data-creation-encryption-block] button[aria-label="Peut-on revenir en arrière ?"]');
-    expect(back).not.toBeNull();
-    expect(back?.closest('details')).toBeNull();
-    const note = document.getElementById(back?.getAttribute('aria-controls') ?? '');
-    expect(note?.textContent).toBe('Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.');
-    expect(note?.className).toContain('sr-only');
-  });
-
-  test('le (i) de l’irréversibilité ouvre sa note sans fermer le sens de l’autre (i)', async () => {
-    await mount({ platformRole: 'USER', conversationType: 'group' });
-    const back = document.querySelector<HTMLButtonElement>('button[aria-label="Peut-on revenir en arrière ?"]');
-    act(() => back?.click());
-    expect(back?.getAttribute('aria-expanded')).toBe('true');
-    const note = document.getElementById(back?.getAttribute('aria-controls') ?? '');
-    expect(note?.className).not.toContain('sr-only');
+    expect(footers[0]?.textContent).toBe(
+      'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
+    );
   });
 });
 

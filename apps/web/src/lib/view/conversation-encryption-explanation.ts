@@ -143,18 +143,6 @@ export const FACT_KEY = {
   serverCannotTurnItOff: 'conversationEncryption.fact.serverCannotTurnItOff',
 } as const satisfies Record<ExplanationFact, ConversationEncryptionCatalogKey>;
 
-/**
- * L'IRRÉVERSIBILITÉ EN UNE PHRASE + UN (i) (épure #18361, règle 1) : la règle visible au repos ne dit que
- * « ne se désactive jamais » ; ce que l'on peut faire à la place — ouvrir une autre conversation — est la note
- * du (i) « Peut-on revenir en arrière ? », la MÊME sur l'écran de création et sur la fiche du fil. La clé
- * `FACT_KEY.endToEndNeverTurnedOff` reste entière pour l'encart de tête de la fiche (règle 7).
- */
-export const REVERT_KEY = {
-  rule: 'conversationEncryption.fact.endToEndNeverTurnedOffShort',
-  label: 'conversationEncryption.revert.label',
-  note: 'conversationEncryption.revert.note',
-} as const satisfies Record<string, ConversationEncryptionCatalogKey>;
-
 /** Le geste d'un tête-à-tête chiffré de bout en bout : la conversation non chiffrée à côté (#12966). */
 export const PLAINTEXT_DIRECT_KEY = {
   open: 'conversationEncryption.plaintextDirect.open',

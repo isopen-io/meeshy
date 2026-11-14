@@ -4,7 +4,7 @@ import type { CreationEncryptionMode, CreationEncryptionOffer } from '@meeshy/sh
 import { CREATION_ENCRYPTION_KEY, CREATION_INFO_KEY, CREATION_UNAVAILABILITY_KEY } from '@/lib/conversation-new/encryption';
 import { translateConversationEncryption, type ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-encryption-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { REVERT_KEY } from '@/lib/view/conversation-encryption-explanation';
+import { FACT_KEY } from '@/lib/view/conversation-encryption-explanation';
 import { useConversationEncryptionCatalog } from '@/lib/view/use-conversation-encryption-catalog';
 
 import { SETTINGS_GLYPHS } from './glyphs-settings';
@@ -58,7 +58,6 @@ function LoadedPicker({
   const language = currentInterfaceLanguage();
   const baseId = useId();
   const info = useInfoHint();
-  const revert = useInfoHint();
 
   const t = (key: ConversationEncryptionCatalogKey): string => translateConversationEncryption(language, key);
   const name = `${baseId}-mode`;
@@ -67,7 +66,6 @@ function LoadedPicker({
   const moreKey = chosen === undefined ? null : CREATION_ENCRYPTION_KEY[chosen.mode].more;
   const currentKey = chosen === undefined ? null : CREATION_ENCRYPTION_KEY[chosen.mode].detail;
   const hint = { text: moreKey === null ? '' : t(moreKey), label: t(CREATION_INFO_KEY), glyph: SETTINGS_GLYPHS.info };
-  const revertHint = { text: t(REVERT_KEY.note), label: t(REVERT_KEY.label), glyph: SETTINGS_GLYPHS.info };
   return (
     <div className="px-4 pt-3" data-creation-encryption-block>
       <div className="flex items-center gap-1">
@@ -135,13 +133,9 @@ function LoadedPicker({
           {t(currentKey)}
         </p>
       )}
-      <div className="flex items-center gap-1">
-        <p data-creation-encryption-footer className="min-w-0 flex-1 px-1 text-caption" style={{ color: MUTED }}>
-          {t(REVERT_KEY.rule)}
-        </p>
-        <InfoHintButton hint={revertHint} state={revert} />
-      </div>
-      <InfoHintText hint={revertHint} state={revert} className="px-1" />
+      <p data-creation-encryption-footer className="px-1 text-caption" style={{ color: MUTED }}>
+        {t(FACT_KEY.endToEndNeverTurnedOff)}
+      </p>
     </div>
   );
 }

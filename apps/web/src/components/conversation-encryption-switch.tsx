@@ -4,7 +4,7 @@ import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-c
 
 import { CREATION_ENCRYPTION_KEY, CREATION_INFO_KEY, CREATION_UNAVAILABILITY_KEY } from '@/lib/conversation-new/encryption';
 import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-encryption-catalog';
-import { encryptionRegime, REVERT_KEY } from '@/lib/view/conversation-encryption-explanation';
+import { encryptionRegime } from '@/lib/view/conversation-encryption-explanation';
 import {
   encryptionSwitchTargets,
   type EncryptionModeSwitchGesture,
@@ -53,7 +53,6 @@ export function ConversationEncryptionSwitch({
   readonly onShownMode?: ((mode: CreationEncryptionMode | null) => void) | undefined;
 }) {
   const headingId = useId();
-  const revert = useInfoHint();
   const closed = locked;
   const asks = !closed;
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
@@ -107,7 +106,6 @@ export function ConversationEncryptionSwitch({
       : feedback.kind === 'switched'
         ? t(SWITCH_KEY.done, { mode: t(CREATION_ENCRYPTION_KEY[feedback.mode].title) })
         : t(SWITCH_REFUSAL_KEY[feedback.kind]);
-  const revertHint = { text: t(REVERT_KEY.note), label: t(REVERT_KEY.label), glyph: SETTINGS_GLYPHS.info };
   const endToEndShown = targets.some((target) => target.mode === 'e2ee' && !target.available);
 
   return (
@@ -156,13 +154,9 @@ export function ConversationEncryptionSwitch({
           {t(SWITCH_KEY.endToEndOnApps)}
         </p>
       ) : null}
-      <div className="flex items-center gap-1 pt-2">
-        <p className="min-w-0 flex-1 text-caption" style={{ color: MUTED }} data-conversation-encryption-switch-footer>
-          {t(SWITCH_KEY.footer)}
-        </p>
-        <InfoHintButton hint={revertHint} state={revert} />
-      </div>
-      <InfoHintText hint={revertHint} state={revert} className="px-1" />
+      <p className="pt-2 text-caption" style={{ color: MUTED }}>
+        {t(SWITCH_KEY.footer)}
+      </p>
       <p role="status" aria-live="polite" className="pt-2 text-caption font-semibold" data-conversation-encryption-switch-status>
         {feedbackText}
       </p>
