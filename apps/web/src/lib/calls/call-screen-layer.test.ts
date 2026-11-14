@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallScreenLayer } from './call-screen-layer';
+import { IDLE, layerChrome, layerExpanded, layerOffered, nextLayer, panelInThePill, type CallScreenLayer } from './call-screen-layer';
 
 /**
  * UNE CHOSE À LA FOIS (#8578) — l'écran d'appel est dans UN état : repos,
@@ -140,5 +140,34 @@ describe('G3.5 — « Ajouter » (Participants) est une feuille, pas une option 
   test('la feuille des personnes laisse les rangées (et les rails) sous elle ; une option de la pilule les remplace', () => {
     expect(layerChrome(panel('people'))).toEqual({ header: true, pill: true, rows: true, panel: 'people', mode: null, selfZoom: true });
     expect(layerChrome(panel('record')).rows).toBe(false);
+  });
+});
+
+/**
+ * #17964 (point 3, tranché le 2026-11-13 ; P9b.3) — journal ouvert DANS la pilule, (…) n'est pas
+ * ouvert : c'est « Journal », en disque blanc au pied, qui le referme. (…) reste un disque au repos,
+ * « Afficher les actions », et le toucher range le journal derrière le menu (#17343). Mêmes vecteurs
+ * que `CallScreenLayer.isExpanded` d'iOS et d'Android, qui suivent dans leurs lots.
+ */
+describe('layerExpanded — (…) n’est ouvert que par le menu ou une option, jamais par le journal', () => {
+  test('repos et mode : fermé', () => {
+    expect(layerExpanded(IDLE)).toBe(false);
+    expect(layerExpanded(mode('effects'))).toBe(false);
+    expect(layerExpanded(mode('montage'))).toBe(false);
+  });
+
+  test('le menu, y compris par-dessus un journal rangé : ouvert', () => {
+    expect(layerExpanded(menu)).toBe(true);
+    expect(layerExpanded(menuOverJournal)).toBe(true);
+  });
+
+  test('une option (Réagir, Enregistrer) ou la feuille des personnes : ouvert', () => {
+    expect(layerExpanded(panel('react'))).toBe(true);
+    expect(layerExpanded(panel('record'))).toBe(true);
+    expect(layerExpanded(panel('people'))).toBe(true);
+  });
+
+  test('P9b.3 — le journal ouvert dans la pilule : (…) au repos', () => {
+    expect(layerExpanded(panel('journal'))).toBe(false);
   });
 });

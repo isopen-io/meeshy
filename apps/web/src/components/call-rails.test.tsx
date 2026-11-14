@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { RAIL_TILE_GAP, RAILS_BESIDE_PILL_WIDTH, RAILS_PILL_CLEARANCE, RAILS_TOP, railLength, railsClearance } from '@/lib/calls/call-rails-clearance';
-import { callViewport, DEFAULT_SELF_TILE, SELF_TILE_MARGIN, selfTileFootprint, selfTileStore, setSelfTileCorner, type SelfTileCorner } from '@/lib/calls/call-self-tile';
+import { RAILS_BESIDE_PILL_WIDTH, RAILS_PILL_CLEARANCE, RAILS_TOP, railLength, railsClearance } from '@/lib/calls/call-rails-clearance';
+import { callViewport, DEFAULT_SELF_TILE, RAIL_YIELD, SELF_TILE_MARGIN, selfTileFootprint, selfTileStore, setSelfTileCorner, type SelfTileCorner } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -105,6 +105,18 @@ const expected = (corner: SelfTileCorner, counts: { readonly leading: number; re
 const railCount = (host: HTMLElement, family: 'mine' | 'call') => host.querySelectorAll(`[data-call-rail="${family}"] button`).length;
 
 describe('CallScreen — les rails du duo laissent ma vignette visible (#17429)', () => {
+  /* Debout (P2) : couchée, la fenêtre fait céder le coin à ma vignette (L2.8), et aucun rail ne bouge. */
+  const real = { width: 0, height: 0 };
+  const size = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+  };
+  beforeEach(() => {
+    Object.assign(real, { width: window.innerWidth, height: window.innerHeight });
+    size(390, 844);
+  });
+  afterEach(() => size(real.width, real.height));
+
   test('ma vignette en haut à droite : le rail « l’appel » se pose SOUS elle, « mon image » ne bouge pas', () => {
     const view = mount();
     const counts = { leading: railCount(view.host, 'mine'), trailing: railCount(view.host, 'call') };
@@ -183,18 +195,22 @@ describe('CallScreen — tourner l’écran replace le rail (#17429)', () => {
       window.dispatchEvent(new Event('resize'));
     });
 
-  test('du portrait à un paysage court, le rail « l’appel » passe de sous ma vignette à côté d’elle, et ma vignette suit l’écran', () => {
+  test('L2.8 (#17965) — du portrait au paysage, le rail « l’appel » quitte le dessous de ma vignette pour son bord, et ma vignette lui cède le coin ; (…) rangé, elle y revient', () => {
     const real = { width: window.innerWidth, height: window.innerHeight };
     resize(390, 844);
     const view = mount();
     const counts = { leading: railCount(view.host, 'mine'), trailing: railCount(view.host, 'call') };
     expect(view.side('trailing')?.style.paddingTop).toBe(`${expected('top-right', counts).trailing.top}px`);
+    const frame = () => view.host.querySelector<HTMLElement>('[data-call-corner-frame]');
+    expect(frame()?.style.left).toBe(`calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + 112}px)`);
     resize(568, 240);
-    const turned = expected('top-right', counts);
-    expect(turned.trailing.inline).toBeGreaterThan(0);
+    const turned = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: DEFAULT_SELF_TILE, viewport: { width: 568, height: 240 }, topInset: 0 });
     expect(view.side('trailing')?.style.paddingTop ?? '').toBe('');
-    expect(view.side('trailing')?.style.paddingInlineEnd).toBe(`${turned.trailing.inline}px`);
-    expect(view.host.querySelector<HTMLElement>('[data-call-corner-frame]')?.style.height).toBe(`${selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: DEFAULT_SELF_TILE, viewport: { width: 568, height: 240 }, topInset: 0 })?.height}px`);
+    expect(view.side('trailing')?.style.paddingInlineEnd ?? '').toBe('');
+    expect(frame()?.style.height).toBe(`${turned?.height}px`);
+    expect(frame()?.style.left).toBe(`calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + (turned?.width ?? 0) + RAIL_YIELD}px)`);
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    expect(frame()?.style.left).toBe(`calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + (turned?.width ?? 0)}px)`);
     view.done();
     resize(real.width, real.height);
   });
@@ -284,7 +300,7 @@ describe('CallScreen — colonne du journal ouverte (W1), le rail de fin longe m
       window.dispatchEvent(new Event('resize'));
     });
 
-  test('grand écran court, journal en colonne, (…) ouvert : le rail « l’appel » se pose à côté de ma vignette, à sa largeur près', async () => {
+  test('L2.8 — grand écran couché, journal en colonne, (…) ouvert : le rail « l’appel » reste au bord de la scène réduite, ma vignette lui cède le coin', async () => {
     const real = { width: window.innerWidth, height: window.innerHeight };
     resize(1400, 240);
     const host = document.createElement('div');
@@ -299,7 +315,8 @@ describe('CallScreen — colonne du journal ouverte (W1), le rail de fin longe m
     const frame = host.querySelector<HTMLElement>('[data-call-corner-frame]');
     const trailing = host.querySelector<HTMLElement>('[data-call-rails] > [data-call-rail-slot="trailing"]');
     expect(trailing?.style.paddingTop ?? '').toBe('');
-    expect(trailing?.style.paddingInlineEnd).toBe(`${SELF_TILE_MARGIN + Number.parseFloat(frame?.style.width ?? '0') + RAIL_TILE_GAP}px`);
+    expect(trailing?.style.paddingInlineEnd ?? '').toBe('');
+    expect(frame?.style.left).toContain(`${SELF_TILE_MARGIN + Number.parseFloat(frame?.style.width ?? '0') + RAIL_YIELD}px`);
     act(() => root.unmount());
     host.remove();
     resize(real.width, real.height);
