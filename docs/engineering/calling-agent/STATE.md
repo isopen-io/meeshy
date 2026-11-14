@@ -895,3 +895,28 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132, #17133 et #18154.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 25 — 2026-11-14
+
+- **Base** : `origin/dev` @ `ac59c0e6`. Le lot du cycle 24 (#18064) y est fusionné.
+- **Branche** : `claude/determined-volta-ah45gp`.
+- **Objectif** : #18097. `_handleTranslationError` reçoit un `TranslationErrorPayload`, et aucun `translation:failed` ne part sans `conversationId`.
+- **Livré** (seule la passerelle change ; aucune charge socket modifiée pour un `conversationId` valide) :
+  - **`MessageTranslationService._handleTranslationError`** est typé `TranslationErrorPayload`.
+  - Un échec dont le `conversationId` est vide est toujours compté (`errors`, `pool_full_rejections`). Il n'émet plus `translationFailed` : un `warn` le dit. C'est le seul émetteur de `translationFailed`, et son seul abonné est `MeeshySocketIOManager._handleTranslationFailed`. La room fantôme `conversation:` ne reçoit donc plus rien.
+  - Budget : le fichier fait 3023 lignes, hors budget. Le diff y est de +7/−7, sans aucun ajout net.
+- **Tests** : `MessageTranslationService.translationFailedNoConversation.test.ts` (4). L'événement `translationError` est émis sur le faux client ZMQ.
+  - **Rouge avant correctif** : `2 failed, 2 passed`. La QA l'a reproduit en remettant le code de `origin/dev` en place.
+  - **Vert** : relancé par moi, `4 passed`, avec `toStrictEqual` sur le cas sans `taskId` (réserve QA 3). La QA mesure 44 suites et 877 tests (`translation-failure-broadcast`, `MessageTranslationService`, `zmq-translation`, `ZmqTranslationClient`, `ZmqMessageHandler`, `directTextTranslation`, `admin-monitoring`). `tsc --noEmit` sort à 0.
+  - **Mutations QA** : 4 sur 4 font rougir les témoins.
+- **QA** : favorable avec réserves.
+  - Un `conversationId` non vide mais invalide est encore diffusé, et le chien de garde émet sans `metadata` → #18232.
+  - Témoin du `taskId` absent trop laxiste (`toEqual`) : corrigé dans le lot.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18232 (identifiant de conversation validé avant diffusion, `metadata` du chien de garde).
+2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+3. #17132, #17133 et #18154.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
