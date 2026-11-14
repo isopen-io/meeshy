@@ -4,8 +4,9 @@ import type { SoundsMineCatalog } from '@/lib/i18n-sounds-mine-catalog';
 const ar = {
   'soundsMine.title': 'أصواتي',
   'soundsMine.back': 'العودة إلى الإعدادات',
-  'soundsMine.empty.title': 'لا توجد أصوات في مكتبتك',
+  'soundsMine.empty.title': 'لا يوجد صوت',
   'soundsMine.empty.subtitle': 'ستظهر هنا الأصوات التي ترفعها أو التي تُستخرج من مقاطع الفيديو الخاصة بك.',
+  'soundsMine.empty.question': 'من أين تأتي أصواتي؟',
   'soundsMine.error.title': 'تعذّر تحميل أصواتك',
   'soundsMine.untitled': 'صوت أصلي',
   'soundsMine.posts.one': 'منشور واحد ({count})',

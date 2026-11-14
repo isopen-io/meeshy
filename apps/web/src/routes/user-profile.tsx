@@ -46,6 +46,8 @@ const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m
 const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
 /* Regarder ou écouter ensemble (#17055) : son propre chunk, dès Proche, comme le talkie. */
 const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').then((m) => ({ default: m.ProfileTogetherRow })));
+/* Partager ma position (#18345) : son propre chunk, dès Ami — et gardé tant qu'un partage court. */
+const ProfileShareLocationRow = lazy(() => import('@/routes/user-profile-share-location').then((m) => ({ default: m.ProfileShareLocationRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -324,6 +326,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                     />
                                   </>
                                 ) : null}
+                                <ProfileShareLocationRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  offered={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
                                 <ProfileBringRow
                                   language={language}
                                   person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}

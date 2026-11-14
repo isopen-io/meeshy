@@ -1,7 +1,7 @@
 import SwiftUI
 import MeeshyUI
 
-/// APP-1 — partage d'écran, enregistrement, capture (R1) et cadre en direct : UNE pile sous
+/// APP-1 — partage d'écran, enregistrement, capture (R1), pastilles de service (E3 · E4) et cadre en direct : UNE pile sous
 /// la rangée d'en-tête de l'appel, dans l'ordre fixe de `CallTopBannerStack`,
 /// au lieu de trois décalages figés (60, 110, 160 pt) qui passaient sous le
 /// chevron « Réduire » et se chevauchaient. Vue à part : elle observe seule le
@@ -15,22 +15,32 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
     let chrome: CallChromeVisibility
     let hasLiveFrameStatus: Bool
     let topInset: CGFloat
+    /// #17965 (L1.8) — le retrait de la zone sûre des bords, et ma vignette quand elle tient un coin du haut.
+    var safeHorizontal: CGFloat = 0
+    var selfTile: CallTopBannerTileNeighbor? = nil
+    /// #18227 (E3 · E4) — « En attente » et « Vidéo réduite », telles que la loi les montre.
+    var servicePills: CallServicePills = .none
     @ViewBuilder let liveFrameStatus: () -> LiveFrameStatus
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
-                content(banner)
-                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        GeometryReader { geo in
+            let span = CallTopBannerStack.span(window: geo.size, safeHorizontal: safeHorizontal, selfTile: selfTile)
+            VStack(spacing: MeeshySpacing.sm) {
+                ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
+                    content(banner)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallRecordingBannerStage.of(phase: recording.phase, notice: recording.notice))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
+            .frame(maxWidth: span.stackMaxWidth)
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: span)
+            .padding(.top, topInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
-        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallRecordingBannerStage.of(phase: recording.phase, notice: recording.notice))
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
-        .padding(.top, topInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var present: Set<CallTopBanner> {
@@ -38,7 +48,8 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
             isScreenShareShown: screenShare.isSharing || screenShare.isRemoteSharing,
             isRecordingShown: recording.phase != .idle || recording.notice != nil,
             isCaptureAlertShown: captureJournal.alert != nil,
-            isLiveFrameShown: hasLiveFrameStatus
+            isLiveFrameShown: hasLiveFrameStatus,
+            service: servicePills.banners
         )
     }
 
@@ -58,6 +69,19 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
             CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)
                 .equatable()
                 .padding(.horizontal, MeeshySpacing.lg)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.captureAlert), reduceMotion: reduceMotion))
+                .callChromeVisibility(chrome.isVisible(.captureAlert))
+        case .hold:
+            CallHoldPill()
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.servicePill), reduceMotion: reduceMotion))
+                .callChromeVisibility(chrome.isVisible(.servicePill))
+        case .videoNotice:
+            CallVideoNoticePill(notice: servicePills.videoNotice)
+                .equatable()
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.servicePill), reduceMotion: reduceMotion))
+                .callChromeVisibility(chrome.isVisible(.servicePill))
         case .liveFrame:
             liveFrameStatus()
                 .padding(.horizontal, CallTopBannerStack.horizontalMargin)

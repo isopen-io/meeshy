@@ -1,7 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { createCallLiveFrame, decodeLiveFrameSelected, isLiveFrameId, liveFrameDuo, liveFrameMayShowProposal, toggledHold, type LiveFrameDeps } from './call-live-frame';
+import {
+  createCallLiveFrame,
+  decodeLiveFrameSelected,
+  isLiveFrameId,
+  liveFrameDuo,
+  liveFrameMayShowProposal,
+  liveFramePeerReleaseDropsMine,
+  liveFrameReleaseReachesPeer,
+  toggledHold,
+  type LiveFrameDeps,
+} from './call-live-frame';
 import { createCallLiveFrameStore } from './call-live-frame-store';
 import { createCallStore, type ActiveCall, type CallMember } from './call-store';
 
@@ -157,6 +167,107 @@ describe('mon cadre (C1)', () => {
     await g.frame.apply('pas un cadre');
     expect(g.state().frameId).toBeNull();
     expect(g.sent).toHaveLength(0);
+  });
+});
+
+describe('relâcher « Cadre » retire le cadre partagé chez les deux (C1.10, #18183)', () => {
+  const WITHDRAWAL = { event: CLIENT_EVENTS.CALL_FRAME_SELECT, payload: { callId: CALL, frameId: null } };
+
+  test('la loi : relâcher prévient l’autre quand ma proposition attend, ou quand il montre le même cadre (mêmes vecteurs que `CallLiveFrameRule` iOS et Android)', () => {
+    expect(liveFrameReleaseReachesPeer({ frameId: 'jovial.a', sentProposal: 'jovial.a', peerFrameId: null })).toBe(true);
+    expect(liveFrameReleaseReachesPeer({ frameId: 'jovial.a', sentProposal: null, peerFrameId: 'jovial.a' })).toBe(true);
+    expect(liveFrameReleaseReachesPeer({ frameId: 'jovial.a', sentProposal: null, peerFrameId: 'jovial.b' })).toBe(false);
+    expect(liveFrameReleaseReachesPeer({ frameId: 'jovial.a', sentProposal: null, peerFrameId: null })).toBe(false);
+    expect(liveFrameReleaseReachesPeer({ frameId: null, sentProposal: null, peerFrameId: null })).toBe(false);
+    expect(liveFrameReleaseReachesPeer({ frameId: null, sentProposal: null, peerFrameId: 'jovial.a' })).toBe(false);
+  });
+
+  test('la loi : le retrait de l’autre fait tomber mon cadre quand c’est celui qu’il montrait — jamais un autre', () => {
+    expect(liveFramePeerReleaseDropsMine({ frameId: 'jovial.a', peerFrameId: 'jovial.a' })).toBe(true);
+    expect(liveFramePeerReleaseDropsMine({ frameId: 'jovial.a', peerFrameId: 'jovial.b' })).toBe(false);
+    expect(liveFramePeerReleaseDropsMine({ frameId: 'jovial.a', peerFrameId: null })).toBe(false);
+    expect(liveFramePeerReleaseDropsMine({ frameId: null, peerFrameId: 'jovial.a' })).toBe(false);
+    expect(liveFramePeerReleaseDropsMine({ frameId: null, peerFrameId: null })).toBe(false);
+  });
+
+  test('Awa a appliqué mon cadre : le relâcher lui envoie le retrait, le même événement que celui d’une proposition retirée', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'accepted' }));
+    h.sent.length = 0;
+    await h.frame.apply(null);
+    expect(h.state().frameId).toBeNull();
+    expect(h.sent).toEqual([WITHDRAWAL]);
+  });
+
+  test('j’ai appliqué le cadre d’Awa : le relâcher le retire chez elle aussi', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    h.sent.length = 0;
+    await h.frame.apply(null);
+    expect(h.state().frameId).toBeNull();
+    expect(h.sent).toEqual([WITHDRAWAL]);
+  });
+
+  test('un cadre qu’Awa a refusé ne lui envoie rien au relâcher : elle ne le montre pas', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'declined' }));
+    h.sent.length = 0;
+    await h.frame.apply(null);
+    expect(h.state().frameId).toBeNull();
+    expect(h.sent).toHaveLength(0);
+  });
+
+  test('Awa relâche le cadre qu’elle m’avait proposé et que j’ai appliqué : il tombe chez moi', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    expect(h.state().frameId).toBeNull();
+    expect(h.state().peerFrameId).toBeNull();
+    expect(h.state().proposal).toBeNull();
+  });
+
+  test('Awa relâche mon cadre qu’elle avait appliqué : il tombe chez moi, sans rien renvoyer', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'accepted' }));
+    h.sent.length = 0;
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    await h.frame.settle();
+    expect(h.state().frameId).toBeNull();
+    expect(h.sent).toHaveLength(0);
+  });
+
+  test('Awa retire une proposition qui attendait encore : mon propre cadre reste', async () => {
+    const h = harness();
+    await h.frame.apply('signature.trait');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    expect(h.state().frameId).toBe('signature.trait');
+    expect(h.state().proposal).toBeNull();
+  });
+
+  test('j’ai gardé un autre cadre depuis : le retrait d’Awa ne touche pas le mien', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    await h.frame.apply('signature.trait');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    expect(h.state().frameId).toBe('signature.trait');
+  });
+
+  test('après le retrait partagé, garder de nouveau le même cadre le repropose : l’autre ne le montre plus', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'accepted' }));
+    await h.frame.apply(null);
+    h.sent.length = 0;
+    await h.frame.apply('jovial.confettis');
+    expect(h.state().sentProposal).toBe('jovial.confettis');
+    expect(h.sent).toEqual([{ event: CLIENT_EVENTS.CALL_FRAME_SELECT, payload: { callId: CALL, frameId: 'jovial.confettis', texts: { name: 'Sam' } } }]);
   });
 });
 

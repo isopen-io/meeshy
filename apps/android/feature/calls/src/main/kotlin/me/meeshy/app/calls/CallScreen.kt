@@ -177,9 +177,16 @@ fun CallScreen(
     val glassTone = callGlassTone(groupShown, state.isPeerScreenSharing, duo, chromeState.layer.activeMode, groupFocus)
     // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
     val bannerHeights = remember { CallTopBannerHeights() }
-    val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
+    // L1.8 · L2.8 : ma vignette longe la pile des bannières et cède son coin aux rails, en paysage.
+    val selfTileNeighbours = remember { CallSelfTileNeighbours() }
+    // E3 · E4 (#18227) : « En attente » et « Vidéo réduite » sont des maillons de la pile ; ma vignette et la grille leur cèdent la place.
+    val servicePills = overlayContext.servicePills()
+    val selfTileClearance = rememberSelfTileBannerClearance(
+        bannerHeights, state.isPeerScreenCapturing && !inPip, servicePills, reduceMotion,
+    )
     val groupGridClearance = rememberGroupGridBannerClearance(
-        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen, reduceMotion,
+        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen,
+        servicePills, reduceMotion,
     )
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
@@ -191,6 +198,7 @@ fun CallScreen(
             LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallSelfTileNeighbours provides selfTileNeighbours,
             LocalCallGroupGridClearance provides groupGridClearance,
         ) {
         Box(
@@ -279,6 +287,7 @@ fun CallScreen(
                                 modifier = stageModifier,
                                 onFocusChange = { groupFocus = it },
                                 isCompactHeight = isCompactHeight,
+                                selfCameraZoom = selfCamera.zoom,
                             )
                         }
                     } else {
@@ -340,12 +349,6 @@ fun CallScreen(
                 )
             }
 
-            if (state.showsConnectedLayout && !inPip) {
-                CallVideoNoticePill(
-                    notice = state.videoNotice,
-                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MeeshySpacing.xxl * 2),
-                )
-            }
             CallOverlaySlotHost(
                 extensions.overlays, CallOverlaySlot.Center, overlayContext,
                 Modifier.align(Alignment.Center),

@@ -4,9 +4,11 @@ import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,6 +17,9 @@ import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.sdk.model.navigation.NavigationHubRule
 import me.meeshy.sdk.model.navigation.NavigationHubRule.Decision
 import javax.inject.Inject
+
+/** Le routeur de la racine, pour les écrans et les calques qui n'ont pas reçu le contrôleur ; `null` hors de [MeeshyApp]. */
+val LocalAppNavigator = staticCompositionLocalOf<AppNavigator?> { null }
 
 @HiltViewModel
 class AppNavigatorViewModel @Inject constructor(
@@ -25,7 +30,7 @@ class AppNavigatorViewModel @Inject constructor(
 /**
  * **LE routeur de l'application** (iOS `Router`) : tout ce qui change la pile passe ici.
  *
- *  - une route égale à l'écran courant est ignorée ; `launchSingleTop` est systématique ;
+ *  - une route égale à l'écran courant est ignorée ; une autre cible de même motif s'empile (iOS `Router.push`) ;
  *  - renaviguer vers un HUB déjà empilé dépile jusqu'à lui au lieu d'en poser un second ([NavigationHubRule]) ;
  *  - une conversation s'ouvre d'abord en libérant l'écran : les surfaces de sa fenêtre se referment, celles qui
  *    retiennent un travail (composeur, partie de jeu) restent et l'ouverture attend leur départ
@@ -59,10 +64,25 @@ class AppNavigator internal constructor(
         surfaces.clearForConversation { navigate(Routes.chat(conversationId, highlightMessageId)) }
     }
 
+    /** [navigate] depuis le bouton de l'écran [entry] : ignoré si [entry] n'est plus au sommet (double toucher). */
+    fun navigateFrom(entry: NavBackStackEntry, route: String) {
+        if (controller.isOnTop(entry)) navigate(route)
+    }
+
+    /** [openConversation] depuis le bouton de l'écran [entry] : ignoré si [entry] n'est plus au sommet. */
+    fun openConversationFrom(entry: NavBackStackEntry, conversationId: String, highlightMessageId: String? = null) {
+        if (controller.isOnTop(entry)) openConversation(conversationId, highlightMessageId)
+    }
+
     /** Retour d'une page ; `false` à la racine, où il n'y a rien à dépiler. */
     fun pop(): Boolean = controller.previousBackStackEntry != null && controller.popBackStack()
 
-    private fun push(route: String) = controller.navigate(route) { launchSingleTop = true }
+    /**
+     * Sans `launchSingleTop` : Navigation compare la destination, pas les arguments, et une conversation B ouverte
+     * depuis A remplacerait A sur place (son ViewModel gardé, le retour vers A perdu). Le doublon exact est déjà
+     * [Decision.Ignore], le suivi étant mis à jour par l'écouteur de destination.
+     */
+    private fun push(route: String) = controller.navigate(route)
 
     companion object {
         /** Les écrans que le menu ouvre : un seul exemplaire dans la pile, comme `Route.isHub` d'iOS. */

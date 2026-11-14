@@ -118,9 +118,6 @@ export default function HashtagScreen() {
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               {translate(currentInterfaceLanguage(), 'hashtag.empty.title', { tag: canonical })}
             </p>
-            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(currentInterfaceLanguage(), 'hashtag.empty.body')}
-            </p>
           </div>
         ) : (
           <>

@@ -61,8 +61,6 @@ const fr = {
   'game.banner.link.meesh': '{count} Meeshes dans ton héritage',
   'game.banner.glory': 'gloire {glory}',
   'game.banner.glory_missing': '{glory} de gloire jusqu’à {rank}',
-  'game.banner.level_short': '{n} jusqu’au {level}',
-  'game.banner.glory_short': '{n} jusqu’à {rank}',
   'game.banner.glory_top': 'gloire {n}',
   'game.banner.offering.ready': 'Offrande prête',
   'game.banner.offering.open': 'Offrande prête : l’ouvrir',

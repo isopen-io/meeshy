@@ -167,6 +167,7 @@
 18. **Simplicité : la vue affiche ce qu'elle dessine, rien en plus** (directive porteur du 2026-11-10, #17406).
     - Aucun extra : ni libellé, ni badge, ni bouton, ni panneau d'appoint que la vue ne montre pas.
     - **Ne pas régresser : ce que le code porte en plus de la planche est GARDÉ, et la planche le dessine (ou l'écrit sous la vue), sauf décision contraire du porteur** (directive porteur du 2026-11-14). Un écart où le code fait plus que la vue ne se corrige pas en retirant du code : on dessine ce qu'il porte. Seule une décision du porteur retire une fonction, comme le carrousel qui ne reste plus ouvert après un cadre (loi 14).
+    - **Les extras du code que le porteur garde sont dessinés** (#18226, #18227 ; E1 à E5) : le zoom de ma caméra et son indicateur (E1), le badge du micro coupé de l'autre et le bouton de zoom de ma vignette (E2), la pastille « En attente » (E3), la pastille « Vidéo réduite » (E4) et la rangée « Force du lissage » des réglages (E5). Aucune ne se retire sans décision du porteur. **« En attente » et « Vidéo réduite » existent sur les TROIS plateformes** (décision porteur du 2026-11-14, #18227) : Android les portait seul, iOS et le web s'alignent sur lui, mêmes déclencheurs, en verre partagé, dans la pile des bannières du haut.
     - Rien de ce qui existe ne se recrée : un lot réutilise ou étend le composant, la loi et le texte déjà là.
     - Le verre est partout l'atome adaptatif (`adaptiveLiquidGlass` sur iOS, `MeeshyGlassSurface` sur Android, la surface de verre partagée sur le web).
 
@@ -264,6 +265,18 @@ Les rails restent sur les bords, chacun centré verticalement sur sa hauteur lib
 |---|---|
 | ![L5](appels-vue-finale/vues/L5.png) | ![L6](appels-vue-finale/vues/L6.png) |
 
+### Ce que le code porte en plus
+
+Loi 18 : ce que le code porte en plus de la vue est gardé, et la planche le dessine (directive porteur du 2026-11-14). E1 et E2 montrent le zoom de ma caméra et le micro coupé de l'autre (iOS ; le badge est aussi sur le web, #8787) ; E3 et E4 montrent « En attente » et « Vidéo réduite », sur les trois plateformes (#18227) ; E5 montre la rangée « Force du lissage » du panneau de réglages (iOS, #9289).
+
+| E1 · Mon image en plein écran : le zoom | E2 · Le micro de l'autre est coupé | E3 · En attente |
+|---|---|---|
+| ![E1](appels-vue-finale/vues/E1.png) | ![E2](appels-vue-finale/vues/E2.png) | ![E3](appels-vue-finale/vues/E3.png) |
+
+| E4 · Vidéo réduite | E5 · Effets : réglages avec Lissage |
+|---|---|
+| ![E4](appels-vue-finale/vues/E4.png) | ![E5](appels-vue-finale/vues/E5.png) |
+
 ### Après l'appel : le journal fidèle
 
 Les captures A1 et A2 montrent l'état par défaut : la traduction en tête, « Original · … » dessous, et « Voir l'original » au pied. Toucher « Voir l'original » inverse les deux lignes de tout l'appel. L'original passe en tête, la traduction dessous (« Traduit · … »), et le pied dit « Voir la traduction » (loi 7, #17862).
@@ -286,6 +299,28 @@ Sur un écran large, la scène reste centrée et le journal se pose en colonne d
 | W2 · Groupe |
 |---|
 | ![W2](appels-vue-finale/vues/W2.png) |
+
+## Où en est chaque plateforme (audit final, `origin/dev` à `8a9072691e`, 2026-11-14)
+
+Chaque cellule : conformes / total des clauses jugées, puis écarts, absents, à rejouer et sans objet, puis les issues ouvertes principales. Relevé avant les PR #17942 à #18197 (R3.5 et une partie de W1/W2, de C1 et du carrousel VoiceOver iOS sont livrés depuis). Décisions ouvertes : #17730, #17731, #16974, #17810, #17883.
+
+| Famille (vues) | Web | iOS | Android natif |
+|---|---|---|---|
+| Duo vidéo, portrait (P1–P8) | 59/65 (6 écarts) ; ouvert : #17843, #17928, #17982, #18221, #18224 | 63/65 (2 écarts) ; ouvert : #17982, #18208 | 60/65 (5 écarts) ; ouvert : #17819, #17843, #17982, #18213 |
+| Gestes et options (G1–G4, P8b) | 35/39 (4 écarts) ; ouvert : #17982, #18221, #18226 | 37/39 (2 écarts) ; ouvert : #17558, #17982, #18226 | 37/39 (2 écarts) ; ouvert : #17982, #18217, #18226 |
+| À la une (U1–U3) | 27/34 (7 écarts) ; ouvert : #17961 | 25/34 (7 écarts, 2 à rejouer) ; ouvert : #17961 | 27/34 (7 écarts) ; ouvert : #17961, #18213 |
+| Je partage mon écran (S1–S2) | 14/17 (3 écarts) ; ouvert : #17982, #18223 | 12/17 (2 écarts, 3 à rejouer) ; ouvert : #17982, #18210 | 14/17 (3 écarts) ; ouvert : #17982, #18218 |
+| Cadres en direct (C1–C3) | 31/34 (3 écarts) ; ouvert : #18183, #18221, #18222 | 33/34 (1 écart) ; ouvert : #18183 | 32/34 (2 écarts) ; ouvert : #18183, #18213 |
+| Capture et enregistrement (R1–R3) | 28/36 (4 écarts, 3 à rejouer, 1 sans objet) ; ouvert : #17963 | 31/36 (5 écarts) ; ouvert : #17963 | 29/36 (5 écarts, 2 à rejouer) ; ouvert : #17963 |
+| Duo audio (P9, P9b, P10) | 41/44 (3 écarts) ; ouvert : #17928, #17982 | 42/44 (2 écarts) ; ouvert : #17964, #18206 | 43/44 (1 écart) ; ouvert : #17964 |
+| Groupe (P11–P14) | 36/39 (3 écarts) ; ouvert : #17928, #17963 | 34/39 (3 écarts, 2 à rejouer) ; ouvert : #17964, #18206 | 33/39 (3 écarts, 3 à rejouer) ; ouvert : #17964, #18220 |
+| Partage d'écran, appel entrant, appel réduit (P15–P18) | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18223, #18224 | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18211, #18212 | 38/47 (7 écarts, 2 absents) ; ouvert : #17982, #18218, #18219 |
+| Paysage (L1–L5) | 52/58 (5 écarts, 1 absent) ; ouvert : #17963, #17982 | 50/58 (5 écarts, 1 absent, 2 à rejouer) ; ouvert : #17982 | 51/58 (5 écarts, 1 absent, 1 à rejouer) ; ouvert : #17982 |
+| Après l'appel : le journal fidèle (A1–A2) | 23/25 (2 écarts) ; ouvert : #17868, #18225 | 21/25 (4 écarts) ; ouvert : #18209 | 21/25 (4 écarts) ; ouvert : #17868, #18216 |
+| Grand écran (web) (W1–W2) | 35/36 (1 écart) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 |
+| Lois sans vue (lois 17–18) | 9/18 (9 écarts) ; ouvert : #17961, #17982, #18223, #18224, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17961, #17982, #18206, #18207, #18208, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17819, #17843, #18213, #18214, #18215, #18226 |
+
+Livré depuis le relevé (fusionné dans dev) : #18189 (iOS C1), #18194 (Android C1) et #18234 (web C1) : la barre ‹ · Réglages · (+) revient au menu de base après chaque choix d'effet ; #18197 : sous VoiceOver iOS, balayer parcourt le carrousel d'effets sans appliquer, le double-tap applique ; #18235 : sur Android, rails, bandeau, colonne et rangées s'effacent en fondu à leurs deux bords ; #18236 : la planche dessine ce que le code porte en plus (E1–E5 : zoom, micro de l'autre, En attente, Vidéo réduite, Lissage) ; #17970, #17980, #18001 et #17999 : en audio et en groupe sans caméra, un toucher sur le fond range l'appel (Android, iOS, web).
 
 ## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev` ; complété le 2026-11-11, le 2026-11-13 et le 2026-11-14)
 

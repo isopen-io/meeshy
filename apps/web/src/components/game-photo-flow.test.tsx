@@ -184,7 +184,7 @@ describe('une caméra refusée n’est pas une impasse', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Autorise');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('autorise-la dans les réglages');
   });
 
   /* #10833 — dans la coque Android, deux refus et Android ne redemande plus :

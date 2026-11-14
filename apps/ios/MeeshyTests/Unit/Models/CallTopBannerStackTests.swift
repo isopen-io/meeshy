@@ -328,3 +328,150 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la marge de la pile, celle du bandeau de partage")
     }
 }
+
+/// #17965 (L1.8, L6) — en paysage, la pile des bannières a la borne de la pilule (560), centrée,
+/// et ma vignette garde son coin à côté d'elle tant que la pile, resserrée pour la laisser, reste
+/// lisible. En portrait, rien ne change : la pile tient la largeur et ma vignette descend dessous.
+/// Vecteurs (pt) partagés avec Android et le web.
+@MainActor
+final class CallTopBannerSpanTests: XCTestCase {
+
+    private let phoneLandscape = CGSize(width: 852, height: 393)
+    private let phonePortrait = CGSize(width: 393, height: 852)
+    private let padLandscape = CGSize(width: 1194, height: 834)
+
+    func test_landscapeMaxWidth_isThePillBound() {
+        XCTAssertEqual(CallTopBannerStack.landscapeMaxWidth, 560)
+        XCTAssertEqual(CallTopBannerStack.landscapeMaxWidth, CallPillWidth.text)
+    }
+
+    func test_portrait_keepsTheWholeWidth_andTheTileGoesUnder() {
+        let span = CallTopBannerStack.span(window: phonePortrait, safeHorizontal: 0, selfTile: CallTopBannerTileNeighbor(width: 100, edgeDistance: 16))
+        XCTAssertNil(span.bannerMaxWidth)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+        XCTAssertEqual(span.stackMaxWidth, .infinity)
+    }
+
+    func test_landscape_withoutTile_isBoundedTo560() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: nil)
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+        XCTAssertEqual(span.stackMaxWidth, 560 + 2 * CallTopBannerStack.horizontalMargin)
+    }
+
+    func test_landscape_tileAtTheTop_keepsItsCornerBesideTheStack() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+        XCTAssertEqual(span.bannerMaxWidth, 544)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_landscape_railsOpen_theStackNarrowsAgainForTheTile() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 135))
+        XCTAssertEqual(span.bannerMaxWidth, 306)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_landscape_tooNarrowBeside_theTileGoesUnder_andTheStackTakes560() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 195, edgeDistance: 135))
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+    }
+
+    func test_padLandscape_tileBeside_stackAt560() {
+        let span = CallTopBannerStack.span(window: padLandscape, safeHorizontal: 0, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_minimumWidth_holdsTheShareBannerAndItsStop() {
+        XCTAssertGreaterThanOrEqual(CallTopBannerStack.landscapeMinimumWidth, 300)
+    }
+
+    func test_stackView_isBoundedAndCentred_inMotion() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("CallTopBannerStack.span(window: geo.size, safeHorizontal: safeHorizontal, selfTile: selfTile)"))
+        XCTAssertTrue(stack.contains(".frame(maxWidth: span.stackMaxWidth)"))
+        XCTAssertTrue(stack.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: span)"))
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertTrue(connected.contains("safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor"))
+    }
+
+    func test_selfTile_keepsItsCorner_whenTheStackLeavesItBeside() throws {
+        let selfView = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift"))
+        let clearance = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var selfTileTopBannerClearance: CGFloat", in: selfView))
+        XCTAssertTrue(clearance.contains("CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside"))
+        XCTAssertTrue(selfView.contains("var selfTileBannerNeighbor: CallTopBannerTileNeighbor?"))
+    }
+
+    // MARK: - Ma vignette vue de la pile
+
+    func test_duoTile_atATopCorner_isSeenWithItsMargin() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false), CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+    }
+
+    func test_duoTile_railsOpen_isSeenAgainstTheRail() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: true), CallTopBannerTileNeighbor(width: 130, edgeDistance: 135))
+    }
+
+    func test_duoTile_atTheBottom_orHidden_leavesTheStackAlone() {
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: false, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: false, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+    }
+
+    // MARK: - #17963 — la puce de capture : verre teinté rouge, 5 s, rangée avec les bannières (R1.2, R1.4, R1.6)
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func kitMilliseconds(_ name: String) throws -> Double {
+        let source = try String(contentsOf: Self.repoRoot.appendingPathComponent("packages/shared/types/call-capture.ts"), encoding: .utf8)
+        let regex = try NSRegularExpression(pattern: "export const \(name) = ([0-9_]+);")
+        let match = try XCTUnwrap(regex.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)), "\(name) introuvable dans le kit")
+        let literal = try XCTUnwrap(Range(match.range(at: 1), in: source).map { String(source[$0]) })
+        return try XCTUnwrap(Double(literal.replacingOccurrences(of: "_", with: "")))
+    }
+
+    /// R1.4 — une capture ponctuelle tient la puce le temps du kit partagé, 5 s, comme Android et
+    /// le web ; la passerelle relaie sa fin synthétique au même terme. Le témoin lit la constante
+    /// du kit : elle ne peut plus diverger en silence.
+    func test_captureChip_lastsTheKitScreenshotAlertTTL() throws {
+        let ttl = try kitMilliseconds("CALL_SCREENSHOT_ALERT_TTL_MS")
+        XCTAssertEqual(ttl, 5_000)
+        XCTAssertEqual(CallCaptureAlertCapsule.transientSeconds * 1_000, ttl, "la puce dure CALL_SCREENSHOT_ALERT_TTL_MS")
+    }
+
+    /// R1.2 — la puce porte le verre teinté rouge du kit, celui du bandeau de partage : plus
+    /// d'aplat rouge. L'atome du kit directement (`meeshyGlass`, ton `theme`), que le cliquet
+    /// `kit-glass-call` ne compte pas. L'anneau blanc puis la phrase, aucun bouton, 44 pt de
+    /// haut, une seule annonce pour VoiceOver.
+    func test_captureChip_wearsTheKitRedTintedGlass_likeTheShareBanner() throws {
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func capsule(_ text: String) -> some View", in: views))
+        XCTAssertTrue(
+            capsule.contains(".meeshyGlass(in: Capsule(), tone: .theme, tint: MeeshyColors.error.opacity(MeeshyOpacity.medium))"),
+            "le verre teinté rouge du kit, la recette même de « Vous partagez votre écran » (adaptiveLiquidGlass y renvoie)"
+        )
+        XCTAssertFalse(capsule.contains("isInteractive: true"), "rien à toucher : un verre au repos")
+        XCTAssertFalse(capsule.contains(".background(MeeshyColors.error"), "plus d'aplat rouge")
+        XCTAssertFalse(capsule.contains("Button("), "la puce n'a aucun bouton")
+        XCTAssertTrue(capsule.contains(".stroke(Color.white, lineWidth: MeeshyBorder.strong)"), "l'anneau blanc reste")
+        XCTAssertTrue(capsule.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(capsule.contains(".accessibilityElement(children: .ignore)"))
+        XCTAssertTrue(capsule.contains(".modifier(CallTopBannerHeightReporter(banner: .capture))"), "la pile mesure toujours sa hauteur")
+    }
+
+    /// R1.6 — au premier toucher, la puce sort par le haut AVEC les bannières (loi 11) et revient
+    /// au second ; « Réduire les animations » : un fondu. Sa minuterie de 5 s court pendant qu'elle
+    /// est rangée : la ranger ne la prolonge pas.
+    func test_captureChip_stowsByTheTopEdge_withTheBanners() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let capture = try XCTUnwrap(stack.range(of: "case .capture:").map { String(stack[$0.upperBound...]) })
+        let branch = try XCTUnwrap(capture.components(separatedBy: "case .liveFrame:").first)
+        XCTAssertTrue(branch.contains("CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)"), "rien ne change de ce qui la nourrit")
+        XCTAssertTrue(branch.contains(".modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.captureAlert), reduceMotion: reduceMotion))"))
+        XCTAssertTrue(branch.contains(".callChromeVisibility(chrome.isVisible(.captureAlert))"))
+    }
+}

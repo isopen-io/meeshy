@@ -36,7 +36,7 @@ extension CallView {
 
                 // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
                 CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, remoteName: callManager.remoteUsername ?? "", participantName: callManager.participantName(for:), chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
-                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { liveFrameStatus }
+                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset), safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor, servicePills: servicePills) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)
@@ -64,7 +64,7 @@ extension CallView {
         .adaptiveOnChange(of: isGroupStage) { _, isGroup in
             if !isGroup {
                 isStageFullScreen = false
-                isSelfFeatured = false
+                groupStageFocus = .grid
             }
         }
         .adaptiveOnChange(of: isTapStage) { _, stows in
@@ -188,7 +188,7 @@ extension CallView {
             .contentShape(Rectangle())
             .onTapGesture { toggleControls() }
             // Le balayage vers le bas vit ici : déplacer la vignette, au-dessus, ne ferme pas l'appel.
-            .simultaneousGesture(swipeDownToLeaveGesture)
+            .modifier(CallSwipeDownGate(gesture: swipeDownToLeaveGesture))
             .accessibilityLabel(showControls
                 ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                 : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
@@ -224,8 +224,8 @@ extension CallView {
     private var groupStageLayout: some View {
         VStack(spacing: MeeshySpacing.sm) {
             CallGroupStageTopReserve(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, hasLiveFrameStatus: hasLiveFrameStatus,
-                                     heights: topBannerHeights, base: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52, isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, chrome: chromeVisibility, isCompactHeight: isStageCompactHeight, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
+                                     heights: topBannerHeights, base: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52, isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion, service: servicePills.banners)
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, chrome: chromeVisibility, isCompactHeight: isStageCompactHeight, onStageTap: toggleControls, onFocusChange: { groupStageFocus = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
                 // La pilule qui grandit rétrécit ses rangées (qui
                 // défilent alors), jamais la grille sous ce minimum.

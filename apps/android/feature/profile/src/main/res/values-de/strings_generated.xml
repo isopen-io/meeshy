@@ -141,6 +141,7 @@
     <string name="shared_location_share_sheet_title">Mein Standort für %1$s</string>
     <string name="shared_location_share_stop">Beenden</string>
     <string name="shared_location_share_stop_a11y">Teilen meines Standorts mit %1$s beenden</string>
+    <string name="shared_location_share_stop_pending">Die Freigabe endet, sobald du wieder online bist</string>
     <string name="shared_location_share_unavailable">Standort gerade nicht verfügbar, versuche es erneut</string>
     <string name="user_stats_activity">AKTIVITÄT</string>
     <string name="user_stats_badges">BADGES</string>

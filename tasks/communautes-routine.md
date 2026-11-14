@@ -19,6 +19,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
 | 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
+| 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
 
 ## 2026-11-07 — lot 1
 
@@ -210,6 +211,18 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
 
+## 2026-11-13 — réveil « N en ligne »
+
+- Début du run : cinq PR de la routine ouvertes (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182, #18006 #17104), toutes menées EN DIRECT par d'autres sessions (commentaires et poussées de moins de deux heures) : cédées, non touchées. Le run précédent de ce fil avait été coupé par une erreur d'API le 2026-11-10 ; sa branche était déjà fusionnée.
+- Lot : #18014 (issue ouverte). `GET /communities/:id` sert `onlineMemberCount` (additif) : les AUTRES membres actifs en ligne (règle 1/3/5), hors comptes non vivants, bloqués dans un sens ou dans l'autre, ou ayant coupé `showOnlineStatus` ; `null` sous dix autres membres actifs (`ONLINE_COUNT_ANONYMITY_FLOOR`) — dans une petite communauté, un compte désigne quelqu'un. Site unique : `services/community-online-count.ts`. Lecture bornée (membres dans la fenêtre de 5 min, 1 000 au plus), comptage APRÈS la garde d'accès, panne ⇒ `null` sans casser le détail.
+- Web : `CommunityStats` écrit « N en ligne » ; iOS : `CommunityDetailScreen.statsSection`. Rien à 0, `null` ou absent. Clé `community.detail.online` × 7 langues des deux côtés.
+- Suivi ouvert : #18026 (miroir Android).
+- Décision prise sur la lecture la plus probable, à confirmer par le porteur : plancher d'anonymat à 10 ; le compte est servi aussi à un non-membre d'une communauté PUBLIQUE (il peut déjà la lire).
+- Gotcha : `act-leak-guard.test.ts` (web) est rouge en conteneur sans ce diff aussi (mesuré par `git stash`).
+- Revue adversariale : BLOQUANTE. Corrigés dans le lot : bloquer-relire-débloquer faisait du compte un oracle (le compte ne dépend plus du lecteur), dix comptes désactivés franchissaient le plancher (population = comptes vivants), préférence illisible fail-closed. Reste ouvert, et c'est ce qui retient la PR : une communauté FABRIQUÉE (dix comptes de l'attaquant + la cible ajoutée sans son accord, `POST …/members` ou `…/invite`, #16669) fait du compte exact un oracle de la présence de la cible, mineurs compris. Parade proposée au porteur : ne compter que les membres entrés d'eux-mêmes (champ `CommunityMember.joinedVia`, lignes existantes exclues) + paliers. M1 (aucun index sur `CommunityMember`) rejoint #14227 / #16696.
+- État en fin de run : PR #18028 en BROUILLON, non fusionnée, en attente de la décision du porteur sur la parade. Ne pas la fusionner sans elle.
+- **Décision du porteur, 2026-11-14 : « ce n'est pas grave ».** Le risque de la communauté fabriquée est ACCEPTÉ, sans parade (ni `joinedVia`, ni paliers) ; le compte exact reste servi, plancher à 10, et aussi au non-membre d'une communauté publique. La PR sort du brouillon.
+- Prochain lot recommandé : la parade choisie sur #18028 ; sinon #18026 (Android, après #18028), puis les événements temps réel `community:*` (membre rejoint/parti, rôle, réglages) — dont un `community:online-count-changed` pourrait rafraîchir l'agrégat ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
 ## 2026-11-13 — réveil 26
 
 - Début du run : #17211 (#17178) fusionnée dans dev ; #17960 (#6451, libellés iOS) ouverte à 13:25 UTC par un autre réveil de cette routine et menée en direct (CI en cours) : cédée, non touchée.
@@ -323,3 +336,20 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : shared vitest 9651 (après correction du témoin périmé) ; passerelle `unit/routes/communities` + `unit/routes/users` + cliquet `tsc-never-loaded-tests-ratchet` 88/88 suites, `tsc --noEmit` vert ; web `bun test src/lib/api src/lib/profile src/routes` 9073/9073, `tsc --noEmit` vert.
 - Pas de revue adversariale : resserrement d'une validation d'entrée, ni permission ni migration.
 - Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), puis #16809 (hôtes Meeshy) ; #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 36 (05:38 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne », #18014). Le porteur a accepté le risque de l'oracle « communauté fabriquée » (décision consignée à 04:58 UTC, aucune parade) et la PR est sortie du brouillon ; dernière poussée 40 minutes avant, sans session active : run consacré à sa fusion, aucun lot nouveau.
+- `origin/dev` intégré sans conflit. Gates locaux sur la tête intégrée : passerelle `unit/routes/communities` + `community-online-count` + cliquet `tsc-never-loaded-tests-ratchet` 33/33 suites (530 tests), `tsc --noEmit` vert (il n'avait pas pu tourner au run précédent : client Prisma généré ici) ; web `bun test src/lib/api src/routes/community` 4226/4226, `tsc --noEmit` vert, `bun run build` + `measure-weight.mjs` verts. `check-communities.mjs` ne tourne pas en conteneur (Playwright cherche `chromium_headless_shell-1248`, absent) — hors lot.
+- Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 37 (07:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18028 (« N en ligne ») fusionnée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev`.
+- Lot : #16811 (passerelle + partagé, sécurité). Une image d'identité ne désigne plus qu'un fichier TÉLÉVERSÉ par celui qui la pose. `profileImageStorageKey` (`packages/shared/utils/profile-image-reference.ts`) rend la clé de stockage sous ses trois formes (chemin relatif, route de flux, adresse absolue de la route de flux — quel que soit l'hôte) ; `identityImageIsCallers` (`services/attachments/identityImageOwnership.ts`) exige une ligne `MessageAttachment` image avec `uploadedBy` = l'appelant (`filePath` ou `fileUrl`), la règle que la source `upload` de l'administration appliquait déjà (#8217). Branché sur `POST /communities`, `PUT /communities/:id`, `PATCH /users/me/avatar` et `/banner` : sinon 400 `IDENTITY_IMAGE_NOT_OWNED`, rien d'écrit ; une lecture qui échoue ⇒ 500.
+- Rétrocompatible : la valeur DÉJÀ posée passe sans lecture (une valeur stockée avant la garde n'est jamais refusée à son propriétaire) ; les trois clients posent le `fileUrl` que leur propre téléversement vient de rendre. Un hôte tiers reste l'affaire de #16809.
+- Témoins : `profile-image-ownership.test.ts` (14), cinq de plus dans `settings.test.ts`, un dans `core.test.ts`, quatre pour `profileImageStorageKey` ; 17 rouges sans le correctif des routes.
+- Pas de revue adversariale : resserrement d'une validation d'entrée sur une règle existante, ni permission ni migration.
+- Gates locaux (CI des branches coupée, #18048) : passerelle `unit/routes` + `routes/__tests__` + `security` 930/930 suites (14 155 tests), `tsc --noEmit` vert, cliquet `tsc-never-loaded-tests-ratchet` vert ; shared vitest ciblé 95/95. Un rouge corrigé en route : `search-tokens-write-guard` lit toute clé `displayName` dans le `data` d'un `user.update` comme une écriture de nom — la composition explicite du taux de complétion l'y faisait entrer, revenue à l'étalement.
+- PR #18355.
+- Prochain lot recommandé : #16809 (hôtes Meeshy, même loi), #18026 et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.

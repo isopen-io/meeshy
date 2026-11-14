@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
 import { listLayers, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
+import { afterAddingLook, afterBack, afterChoice, afterEscape, afterGenre, afterRemoval, afterSettings, afterShowingApplied, pressed as pressedGenre, showsLooks, type EffectsBarMode } from '@/lib/calls/call-effects-bar-rule';
+import { onRowWheel, ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, type VideoEffects } from '@/lib/calls/video-effects';
 import { translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
@@ -11,13 +13,15 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CallModeBar, GLASS_WIDTH, ModeOption } from './call-mode-carousel';
+import { IosSwitch } from './ios-switch';
 
 /**
  * **LA BARRE D'EFFETS, UNE POUR LES DEUX MODES** (#17903, décision porteur du 2026-11-13 sur #16979 ; P8, C1) —
  * Effets, filtres et cadres sont UNE famille d'outils : le mode Effets et le mode Montage composent la MÊME
  * barre de verre, `‹ · Réglages · (+)`, sous les mêmes puces de tri. Ni « Quitter » ni « Valider » : ce qu'on
- * touche s'applique aussitôt, ‹ rend l'appel en gardant tout, et la barre revient à son menu de base après
- * chaque choix (liste refermée, Réglages rangé).
+ * touche s'applique aussitôt, et la barre revient à son menu de base après chaque choix — carrousel, liste et
+ * Réglages refermés (directive du 2026-11-14, #18186 ; `call-effects-bar-rule.ts`). ‹ referme le panneau
+ * Réglages, sinon rend l'appel en gardant tout (#17947).
  *
  * (+) pose un genre de plus par-dessus ; son APPUI LONG — ou le menu contextuel, ou Maj + Entrée au clavier, que
  * le lecteur d'écran annonce — ouvre la liste des effets appliqués, de la couche du dessus à celle du dessous,
@@ -33,6 +37,7 @@ export type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: Transla
 /** Les mots de la pile d'effets : au catalogue des contrôles d'appel, chargé avec l'écran d'appel (le catalogue du studio est à son plafond). */
 export type LayersText = {
   readonly frames: string;
+  readonly closeSettings: string;
   readonly title: string;
   readonly full: string;
   readonly hint: string;
@@ -42,6 +47,7 @@ export type LayersText = {
 
 export const layersTextOf = (language: InterfaceLanguage): LayersText => ({
   frames: translateCallControls(language, 'callControls.mode.frames'),
+  closeSettings: translateCallControls(language, 'callControls.mode.closeSettings'),
   title: translateCallControls(language, 'callControls.layers.title'),
   full: translateCallControls(language, 'callControls.layers.full'),
   hint: translateCallControls(language, 'callControls.layers.hint'),
@@ -94,23 +100,30 @@ export const STACKED: CSSProperties = { gridArea: '1 / 1' };
  */
 const LEAVING_ROW: CSSProperties = { position: 'absolute', insetInline: '0.5rem', bottom: 'calc(100% - 0.5rem)' };
 
-export type CategoryEntry = { readonly id: string; readonly label: string };
+export type CategoryEntry = { readonly id: string; readonly label: string; readonly genre: EffectGenre };
 
-type CategoriesProps = { readonly entries: readonly CategoryEntry[]; readonly pressed: string; readonly onPick: (id: string) => void; readonly label: string };
+type CategoriesProps = { readonly entries: readonly CategoryEntry[]; readonly pressed: EffectGenre | null; readonly onPick: (id: string) => void; readonly label: string };
 
-/** Les puces qui trient les looks (Visage · Couleur · Cadres) : la rangée du haut de la barre, que Réglages ouvert fait partir. */
+/**
+ * Les puces qui trient les looks (Visage · Couleur · Cadres) : la rangée du haut de la barre, que Réglages ouvert fait
+ * partir. Elle défile à l'horizontale quand le texte grossit ou que la langue s'allonge, effacée en fondu à ses deux
+ * bords (P8.5, #17409 : `ROW_EDGE_FADE`, la recette unique) ; les marges automatiques de la grappe la centrent quand
+ * elle tient, sans jamais couper son début.
+ */
 function EffectsCategories({ entries, pressed, onPick, label }: CategoriesProps) {
   return (
     <>
-      <div role="group" aria-label={label} className="flex items-center justify-center text-on-media [text-shadow:0_1px_2px_var(--color-scrim)]" data-call-effects-categories="">
-        {entries.map((entry, index) => (
-          <span key={entry.id} className="flex items-center">
-            {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
-            <button type="button" aria-pressed={pressed === entry.id} onClick={() => onPick(entry.id)} className={`${TEXT_TAB} ${pressed === entry.id ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry.id}>
-              {entry.label}
-            </button>
-          </span>
-        ))}
+      <div role="group" aria-label={label} onWheel={onRowWheel} className="flex w-full items-center overflow-x-auto overscroll-x-none px-2 text-on-media [scrollbar-width:none] [text-shadow:0_1px_2px_var(--color-scrim)] [&::-webkit-scrollbar]:hidden" style={ROW_EDGE_FADE} data-call-effects-categories="">
+        <div className="mx-auto flex shrink-0 items-center">
+          {entries.map((entry, index) => (
+            <span key={entry.id} className="flex shrink-0 items-center">
+              {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
+              <button type="button" aria-pressed={pressed === entry.genre} onClick={() => onPick(entry.id)} className={`${TEXT_TAB} whitespace-nowrap ${pressed === entry.genre ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry.id}>
+                {entry.label}
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
       <span aria-hidden className="h-px w-full" style={{ background: 'var(--color-media-hairline)' }} />
     </>
@@ -180,7 +193,7 @@ function EffectLayersList({ open, stack, label, onUndo, text }: ListProps) {
  * La liste et la pile se tiennent (`CallEffectsBarRule` d'iOS et d'Android) : rien d'appliqué, rien à lister ; une
  * liste qui perd sa dernière couche se referme ; refermée alors que le focus y était, elle le rend à (+).
  */
-function useLayersListRule(bar: RefObject<HTMLDivElement | null>, list: BarProps['list'], hasLayers: boolean): boolean {
+function useLayersListRule(bar: RefObject<HTMLDivElement | null>, list: BarProps['list'] & { readonly open: boolean }, hasLayers: boolean): boolean {
   const shown = list.open && hasLayers;
   const was = useRef(shown);
   useEffect(() => {
@@ -204,10 +217,12 @@ type AddProps = {
   readonly full: boolean;
   readonly onAdd: () => void;
   readonly onList: () => void;
+  /** Le nom de l'action « Effets appliqués » offerte au lecteur d'écran quand il y a des couches ; rien sinon. */
+  readonly appliedLabel: string | null;
 };
 
-/** (+) : une tape pose un genre de plus ; l'appui long, le menu contextuel ou Maj + Entrée ouvrent la liste des effets appliqués. */
-function AddLookButton({ label, hint, full, onAdd, onList }: AddProps) {
+/** (+) : une tape pose un genre de plus ; l'appui long, le menu contextuel ou Maj + Entrée ouvrent la liste des effets appliqués — et, pour le lecteur d'écran tactile qui n'a pas d'appui long, une commande nommée « Effets appliqués » (C1.13, l'action d'accessibilité de (+) sur iOS), hors de l'ordre de tabulation. */
+function AddLookButton({ label, hint, full, onAdd, onList, appliedLabel: applied }: AddProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fired = useRef(false);
   const clear = (): void => {
@@ -237,57 +252,85 @@ function AddLookButton({ label, hint, full, onAdd, onList }: AddProps) {
     onList();
   };
   return (
-    <ModeOption
-      label={label}
-      hint={hint}
-      glyph={plus}
-      dimmed={full}
-      onPress={press}
-      data={{ 'data-call-effects-add-look': '' }}
-      extra={{
-        'aria-keyshortcuts': 'Shift+Enter',
-        'aria-disabled': full ? true : undefined,
-        onPointerDown: start,
-        onPointerUp: clear,
-        onPointerCancel: clear,
-        onPointerLeave: clear,
-        onKeyDown,
-        onContextMenu: (event) => {
-          event.preventDefault();
-          clear();
-          fired.current = false;
-          onList();
-        },
-      }}
-    />
+    <>
+      <ModeOption
+        label={label}
+        hint={hint}
+        glyph={plus}
+        dimmed={full}
+        onPress={press}
+        data={{ 'data-call-effects-add-look': '' }}
+        extra={{
+          'aria-keyshortcuts': 'Shift+Enter',
+          'aria-disabled': full ? true : undefined,
+          onPointerDown: start,
+          onPointerUp: clear,
+          onPointerCancel: clear,
+          onPointerLeave: clear,
+          onKeyDown,
+          onContextMenu: (event) => {
+            event.preventDefault();
+            clear();
+            fired.current = false;
+            onList();
+          },
+        }}
+      />
+      {applied === null ? null : (
+        <button type="button" tabIndex={-1} aria-label={applied} onClick={onList} className="sr-only" data-call-effects-applied-action="">
+          {applied}
+        </button>
+      )}
+    </>
   );
 }
 
 type BarProps = {
   readonly language: InterfaceLanguage;
-  /** Les puces de tri, déjà composées (`EffectsCategories` via `categories`), ou rien. */
-  readonly categories: { readonly entries: readonly CategoryEntry[]; readonly pressed: string; readonly onPick: (id: string) => void } | null;
+  /** Où en est la barre (`call-effects-bar-rule.ts`) : la puce pressée, les puces en place, le nom de ‹ s'en lisent. */
+  readonly mode: EffectsBarMode;
+  /** Les puces de tri, déjà composées (`EffectsCategories` via `categories`), et le genre du mode ; ou rien. */
+  readonly categories: { readonly entries: readonly CategoryEntry[]; readonly genre: EffectGenre; readonly onPick: (id: string) => void } | null;
   /** Réglages : le centre de la barre ; sans traitement d'images, rien. */
-  readonly settings: { readonly open: boolean; readonly onToggle: () => void } | null;
+  readonly settings: { readonly onToggle: () => void } | null;
   /** (+) : rien quand le mode n'a pas de looks à ajouter. */
   readonly add: { readonly onAdd: () => void } | null;
   readonly stack: EffectStack;
   readonly full: boolean;
-  readonly list: { readonly open: boolean; readonly onOpen: () => void; readonly onClose: () => void; readonly onUndo: (genre: EffectGenre) => void; readonly label: (layer: EffectLayer) => string };
+  readonly list: { readonly onOpen: () => void; readonly onClose: () => void; readonly onUndo: (genre: EffectGenre) => void; readonly label: (layer: EffectLayer) => string };
   readonly onBack: () => void;
   /** Ce qui est posé sur la barre, hors de son verre : il suit son bord du haut pendant le morphisme. */
   readonly rider: RefObject<HTMLElement | null>;
-  /** Les puces et leur rangée sont en place (jamais pendant Réglages ouvert). */
-  readonly chips: { readonly mounted: boolean; readonly ref: RefObject<HTMLDivElement | null>; readonly leaving: boolean };
+  /** Les puces et leur rangée sont en place (jamais pendant Réglages ouvert ni la liste). */
+  readonly chips: { readonly mounted: boolean; readonly ref: RefObject<HTMLDivElement | null> };
 };
 
+/**
+ * Le carrousel refermé par un choix emporte le focus qu'il tenait : il rejoint la puce du genre, qui le rouvre — le
+ * clavier et le lecteur d'écran restent dans la barre.
+ */
+function useFocusAfterChoice(bar: RefObject<HTMLDivElement | null>, mode: EffectsBarMode, chip: string | null): void {
+  const was = useRef(mode);
+  useEffect(() => {
+    const closed = was.current === 'looks' && mode === 'base';
+    was.current = mode;
+    const host = bar.current;
+    if (!closed || host === null || chip === null) return;
+    const active = document.activeElement;
+    const lost = active === null || active === document.body || active.closest('[data-call-mode-carousel]') !== null;
+    if (lost) host.querySelector<HTMLElement>(`[data-call-effects-category="${chip}"]`)?.focus();
+  }, [mode]);
+}
+
 /** La barre de verre, la même en Effets et en Montage. */
-export function EffectsBar({ language, categories, settings, add, stack, full, list, onBack, rider, chips }: BarProps) {
+export function EffectsBar({ language, mode, categories, settings, add, stack, full, list, onBack, rider, chips }: BarProps) {
   const t = textOf(language);
   const text = layersTextOf(language);
   const bar = useRef<HTMLDivElement>(null);
   const hasLayers = stack.length > 0;
-  const shown = useLayersListRule(bar, list, hasLayers);
+  const shown = useLayersListRule(bar, { ...list, open: mode === 'applied' }, hasLayers);
+  const leaving = !showsLooks(mode);
+  useFocusAfterChoice(bar, mode, categories?.entries.find((entry) => entry.genre === categories.genre)?.id ?? null);
   return (
     <div ref={bar} className="relative flex w-full flex-col items-center">
       <EffectLayersList open={shown} stack={stack} label={list.label} onUndo={list.onUndo} text={text} />
@@ -296,23 +339,55 @@ export function EffectsBar({ language, categories, settings, add, stack, full, l
         rider={rider}
         above={
           chips.mounted && categories !== null ? (
-            <div ref={chips.ref} className={`flex w-full flex-col items-center ${chips.leaving ? 'pointer-events-none' : ''}`} style={chips.leaving ? LEAVING_ROW : undefined} data-call-effects-categories-row="">
-              <EffectsCategories entries={categories.entries} pressed={categories.pressed} onPick={categories.onPick} label={t('callStudio.mode.categories')} />
+            <div ref={chips.ref} className={`flex w-full flex-col items-center ${leaving ? 'pointer-events-none' : ''}`} style={leaving ? LEAVING_ROW : undefined} data-call-effects-categories-row="">
+              <EffectsCategories entries={categories.entries} pressed={pressedGenre(categories.genre, mode)} onPick={categories.onPick} label={t('callStudio.mode.categories')} />
             </div>
           ) : null
         }
-        quit={{ label: t('callStudio.mode.backEffects'), glyph: chevron, onPress: onBack, data: { 'data-call-mode-quit': '' } }}
-        center={settings === null ? null : <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={settings.open} onPress={settings.onToggle} data={{ 'data-call-effects-settings-toggle': '' }} />}
-        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={() => (hasLayers ? list.onOpen() : undefined)} />}
+        quit={{ label: mode === 'settings' ? text.closeSettings : t('callStudio.mode.backEffects'), glyph: chevron, onPress: onBack, data: { 'data-call-mode-quit': '' } }}
+        center={settings === null ? null : <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={mode === 'settings'} onPress={settings.onToggle} data={{ 'data-call-effects-settings-toggle': '' }} />}
+        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={() => (hasLayers ? list.onOpen() : undefined)} appliedLabel={hasLayers ? text.title : null} />}
       />
     </div>
   );
 }
 
-/** Le menu de base : la liste refermée, et le geste qui la rouvre — l'état que chaque mode garde pour sa barre. */
-export function useLayersList(): { readonly open: boolean; readonly show: () => void; readonly hide: () => void } {
-  const [open, setOpen] = useState(false);
-  return { open, show: () => setOpen(true), hide: () => setOpen(false) };
+/**
+ * L'état que chaque mode garde pour sa barre, et les gestes qui le font avancer (`call-effects-bar-rule.ts`) : ‹ et
+ * Échap referment avant de quitter, sauf `direct` (rien à refermer : le mode Effets sans traitement d'images).
+ */
+export function useEffectsBarMode(entering: EffectsBarMode, onExit: () => void, direct = false) {
+  const [mode, setMode] = useState<EffectsBarMode>(entering);
+  const leave = (next: EffectsBarMode | null): void => (next === null || direct ? onExit() : setMode(next));
+  return {
+    mode,
+    back: () => leave(afterBack(mode)),
+    escape: () => leave(afterEscape(mode)),
+    toggleSettings: () => setMode(afterSettings),
+    chosen: () => setMode(afterChoice),
+    adding: () => setMode(afterAddingLook),
+    removed: () => setMode(afterRemoval),
+    genre: (isOpen: boolean) => setMode((from) => afterGenre(from, { isOpen })),
+    showApplied: (hasLayers: boolean) => setMode((from) => afterShowingApplied(from, { hasLayers })),
+  };
+}
+
+const facesGlyph = (
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="8" cy="9" r="3" />
+    <circle cx="16.5" cy="9" r="3" />
+    <path d="M3 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5M11.5 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5" />
+  </svg>
+);
+
+/** « Chaque visage », en tête du panneau Réglages du Montage (#17962, comme iOS) : une rangée de 44 px au moins. */
+export function FacesRow({ language, onPress }: { readonly language: InterfaceLanguage; readonly onPress: () => void }) {
+  return (
+    <button type="button" aria-label={translateCallStudio(language, 'callStudio.capture.facesLabel')} onClick={onPress} className="flex min-h-11 w-full touch-manipulation items-center gap-3 text-mini font-semibold text-on-media" data-call-capture-faces="">
+      {facesGlyph}
+      <span aria-hidden="true">{translateCallStudio(language, 'callStudio.capture.faces')}</span>
+    </button>
+  );
 }
 
 type SettingsProps = {
@@ -351,19 +426,18 @@ export function EffectsSettings({ language, effects, colorAvailable, blurAvailab
       {blurAvailable ? (
         <button type="button" role="switch" aria-checked={effects.blur} onClick={() => apply({ blur: !effects.blur })} className="flex min-h-11 w-full items-center justify-between gap-3 text-mini font-semibold text-on-media" data-call-effects-blur="">
           <span>{translate(language, 'call.effects.blur')}</span>
-          <span aria-hidden className="relative h-6 w-10 shrink-0 rounded-full transition-colors motion-reduce:transition-none" style={{ background: effects.blur ? 'var(--ios-success)' : 'var(--color-media-hairline)' }}>
-            <span className={`absolute top-0.5 size-5 rounded-full bg-on-media transition-transform motion-reduce:transition-none ${effects.blur ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
-          </span>
+          <IosSwitch checked={effects.blur} tint="var(--ios-success)" />
         </button>
       ) : null}
     </>
   );
 }
 
-/** Le verre de Réglages, tel que les deux modes le posent au-dessus de leur barre. */
-export function SettingsGlass({ presence, open, language, effects, colorAvailable, blurAvailable, apply }: SettingsProps & { readonly presence: { readonly ref: RefObject<HTMLDivElement | null> }; readonly open: boolean }) {
+/** Le verre de Réglages, tel que les deux modes le posent au-dessus de leur barre ; `first` y pose ce que le mode y range en tête (« Chaque visage » au Montage). */
+export function SettingsGlass({ presence, open, language, effects, colorAvailable, blurAvailable, apply, first = null }: SettingsProps & { readonly presence: { readonly ref: RefObject<HTMLDivElement | null> }; readonly open: boolean; readonly first?: ReactNode }) {
   return (
-    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.settings')} className={`${PANEL} gap-1 px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
+    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.panel')} className={`${PANEL} gap-1 px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
+      {first}
       <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
     </div>
   );

@@ -216,4 +216,69 @@ class CallSelfTileLawTest {
         assertThat(back.xDp).isWithin(0.001f).of(115f / 100f)
         assertThat(back.yDp).isWithin(0.001f).of(118f / 140f)
     }
+
+    @Test
+    fun `#17982 - ma vignette de duo porte la plaque Vous, et le nom de qui elle montre une fois permutee`() {
+        assertThat(CallSelfTileLaw.plate(showsPeer = false, peerName = "Alice")).isEqualTo(CallSelfTilePlate.You)
+        assertThat(CallSelfTileLaw.plate(showsPeer = true, peerName = " Alice ")).isEqualTo(CallSelfTilePlate.Named("Alice"))
+        assertThat(CallSelfTileLaw.plate(showsPeer = true, peerName = "  ")).isEqualTo(CallSelfTilePlate.Unknown)
+    }
+
+    @Test
+    fun `#17982 G1_2 - la plaque tient dans la vignette montree, liseré libre, rangee comme posee`() {
+        val inset = 4f
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 100f, stowFactor = 1f, insetDp = inset)).isEqualTo(92f)
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 100f, stowFactor = 0.72f, insetDp = inset)).isWithin(0.001f).of(64f)
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 4f, stowFactor = 1f, insetDp = inset)).isEqualTo(0f)
+    }
+
+    private val landscape = CallTileSize(widthDp = 844f, heightDp = 390f)
+    private val lying = CallTileSize(130f, 96f)
+
+    @Test
+    fun `L2_8 - en paysage, les rails du (…) dehors, ma vignette leur cede son coin et s'arrete a un ecart du rail`() {
+        val yieldDp = CallSelfTileLaw.railYieldDp(isLandscape = true, railsShown = true)
+        assertThat(yieldDp).isEqualTo(CallRailsLayout.EDGE_INSET_DP + CallRailsLayout.RAIL_WIDTH_DP + CallSelfTileLaw.NEIGHBOUR_GAP_DP - CallSelfTileLaw.MARGIN_DP)
+        val insets = CallSafeInsets(railDp = yieldDp)
+        val topEnd = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, landscape, lying, insets)
+        val railInnerEdge = landscape.widthDp - CallRailsLayout.EDGE_INSET_DP - CallRailsLayout.RAIL_WIDTH_DP
+        assertThat(railInnerEdge - (topEnd.xDp + lying.widthDp / 2)).isWithin(0.001f).of(CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        val bottomStart = CallSelfTileLaw.center(CallSelfTileCorner.BottomStart, landscape, lying, insets)
+        val leadingRailInnerEdge = CallRailsLayout.EDGE_INSET_DP + CallRailsLayout.RAIL_WIDTH_DP
+        assertThat((bottomStart.xDp - lying.widthDp / 2) - leadingRailInnerEdge).isWithin(0.001f).of(CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+    }
+
+    @Test
+    fun `L2_8 - les rails rentres ou le portrait, ma vignette reste a son coin`() {
+        assertThat(CallSelfTileLaw.railYieldDp(isLandscape = true, railsShown = false)).isEqualTo(0f)
+        assertThat(CallSelfTileLaw.railYieldDp(isLandscape = false, railsShown = true)).isEqualTo(0f)
+        val back = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, landscape, lying, CallSafeInsets(railDp = 0f))
+        assertThat(back.xDp).isWithin(0.001f).of(844f - 16f - 65f)
+    }
+
+    @Test
+    fun `L2_8 - ma vignette glisse jusqu'a sa nouvelle place depuis celle ou l'oeil la voyait, du bon cote`() {
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopEnd, shownDp = 0f, targetDp = 64f)).isEqualTo(64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.BottomEnd, shownDp = 64f, targetDp = 0f)).isEqualTo(-64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopStart, shownDp = 0f, targetDp = 64f)).isEqualTo(-64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.BottomStart, shownDp = 32f, targetDp = 64f)).isEqualTo(-32f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopEnd, shownDp = 64f, targetDp = 64f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `L2_8 - ceder le coin ne change pas la taille de ma vignette`() {
+        val still = CallSelfTileLaw.tileSize(landscape, CallSafeInsets(), CallSelfTileScale.X2, 1f)
+        val yielded = CallSelfTileLaw.tileSize(landscape, CallSafeInsets(railDp = 64f), CallSelfTileScale.X2, 1f)
+        assertThat(yielded).isEqualTo(still)
+    }
+
+    @Test
+    fun `L1_8 - ma vignette en haut dit a la pile la place qu'elle tient depuis le bord, zone sure et rails compris`() {
+        val reserve = { corner: CallSelfTileCorner, insets: CallSafeInsets -> CallSelfTileLaw.bannerReserveDp(corner, insets, lying.widthDp) }
+        assertThat(reserve(CallSelfTileCorner.TopEnd, CallSafeInsets())).isEqualTo(16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.TopStart, CallSafeInsets(startDp = 32f))).isEqualTo(32f + 16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.TopEnd, CallSafeInsets(startDp = 32f, railDp = 64f))).isEqualTo(32f + 64f + 16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.BottomEnd, CallSafeInsets(endDp = 20f))).isEqualTo(0f)
+        assertThat(reserve(CallSelfTileCorner.BottomStart, CallSafeInsets())).isEqualTo(0f)
+    }
 }

@@ -143,6 +143,46 @@ class CallScreenLayerTest {
         assertThat(CallScreenLayer.MenuOverJournal.reconciled(all)).isEqualTo(CallScreenLayer.MenuOverJournal)
     }
 
+    /**
+     * #17964 · P9b.3 — journal open in the pill, the base row stays (…) · Mic · Output · End with (…) AT REST: the journal
+     * is read at rest, it is not an action of the (…) unfolded. Touching (…) stows it (`MenuOverJournal`), and only then
+     * is (…) active. Vector shared with iOS `test_openJournal_leavesTheMoreButtonAtRest`.
+     */
+    @Test
+    fun `the open journal leaves the more button at rest`() {
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).isExpanded).isFalse()
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).togglingMenu().isExpanded).isTrue()
+    }
+
+    @Test
+    fun `the menu and the other options still expand the more button`() {
+        val expanded = listOf(
+            CallScreenLayer.Menu,
+            CallScreenLayer.MenuOverJournal,
+            CallScreenLayer.Panel(CallScreenPanel.React),
+            CallScreenLayer.Panel(CallScreenPanel.Record),
+            CallScreenLayer.Panel(CallScreenPanel.People),
+        )
+        assertThat(expanded.all { it.isExpanded }).isTrue()
+        assertThat(CallScreenLayer.Idle.isExpanded).isFalse()
+    }
+
+    /** G1 (#17964 point 4) — « Journal » of the captions always OPENS: on a pill stowed over an open journal, it gives the controls back WITH the journal, never the menu. */
+    @Test
+    fun `opening the open journal again keeps it open`() {
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).opening(CallScreenPanel.Journal))
+            .isEqualTo(CallScreenLayer.Panel(CallScreenPanel.Journal))
+    }
+
+    /** P13.9 — touching « Journal » again (white disc, at the foot of the journal) closes it and gives back what it replaced: the captions if they were on, else the base pill. */
+    @Test
+    fun `closing the journal gives back the captions or the base pill`() {
+        val closed = CallScreenLayer.Panel(CallScreenPanel.Journal).closed()
+        assertThat(CallPillText.resolve(isCaptionsEnabled = true, layer = closed, isChromeRevealed = true)).isEqualTo(CallPillText.Captions)
+        assertThat(CallPillText.resolve(isCaptionsEnabled = false, layer = closed, isChromeRevealed = true)).isEqualTo(CallPillText.None)
+        assertThat(closed.isExpanded).isFalse()
+    }
+
     @Test
     fun `reconciliation keeps a layer whose action is still offered`() {
         val panel = CallScreenLayer.Panel(CallScreenPanel.Record)

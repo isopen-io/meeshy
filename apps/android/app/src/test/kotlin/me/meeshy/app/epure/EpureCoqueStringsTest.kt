@@ -61,7 +61,7 @@ class EpureCoqueStringsTest {
     @Test
     fun `le portugais de la coque est celui du Bresil, comme le reste de l'application`() {
         assertThat(text("pt", "share_sheet_sign_in_body_reshare")).isEqualTo("Nada foi copiado: faça login e compartilhe de novo.")
-        assertThat(text("pt", "share_sheet_sign_in_body_reshare")).doesNotContain("partilhe")
+        assertThat(text("pt", "share_sheet_sign_in_body_reshare")).doesNotContainMatch("\\bpartilhe")
     }
 
     @Test

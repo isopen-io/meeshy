@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasContentDescription
@@ -159,7 +160,7 @@ class CallEffectsCarouselTest {
             assertThat(mode.face).isEqualTo(CallFaceEffect.None)
             assertThat(mode.bar).isEqualTo(CallEffectsBarMode.Looks)
         }
-        carousel("Face").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Skin smoothing"))
+        carousel("Face").assert(SemanticsMatcher("announces the browsed look then its rank") { it.config.getOrNull(SemanticsProperties.StateDescription)?.matches(Regex("Skin smoothing, \\d+ of \\d+")) == true })
 
         rule.runOnIdle { carousel("Face").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!() }
         rule.runOnIdle {

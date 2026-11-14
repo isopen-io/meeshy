@@ -253,7 +253,7 @@ class ConversationMenuModelTest {
     fun `the rare red departures rest behind More, still reachable, while Leave and Hide stay on the root`() {
         val model = menu(conversation(role = "creator"), isCreator = true)
 
-        assertThat(model.more).containsAtLeast(DELETE_FOR_ALL)
+        assertThat(model.more).contains(DELETE_FOR_ALL)
         assertThat(model.departure).containsNoneOf(DELETE_FOR_ALL, MAKE_OBSOLETE)
         assertThat(model.entries).contains(DELETE_FOR_ALL)
         assertThat(model.more.filter { it.isDestructive }).contains(DELETE_FOR_ALL)

@@ -425,4 +425,22 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: true))), open)
         XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: false))), .idle)
     }
+
+    // MARK: - Réduire les animations, part du carrousel (loi 17.10)
+
+    func test_animation_underReduceMotion_isTheShortChromeFade_whateverTheFullOneIs() {
+        let fade = Animation.easeInOut(duration: CallChromeStow.reducedFadeDuration)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: true, full: .spring(response: 0.25, dampingFraction: 0.8)), fade)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: true, full: .easeInOut(duration: 0.25)), fade)
+    }
+
+    func test_animation_withMotion_keepsTheFullOne() {
+        let full = Animation.easeInOut(duration: 0.25)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: false, full: full), full)
+    }
+
+    func test_scaleAnimation_underReduceMotion_neverMoves_andElseSprings() {
+        XCTAssertNil(CallModeCarouselRule.scaleAnimation(reduceMotion: true), "Le fondu seul : la taille ne glisse pas d'une case à l'autre")
+        XCTAssertNotNil(CallModeCarouselRule.scaleAnimation(reduceMotion: false))
+    }
 }

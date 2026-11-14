@@ -91,10 +91,13 @@ describe('seulement ce qui existe', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  test('la jauge dit les points et ce qu’il manque ; au sommet, plus rien ne manque', () => {
-    const model = newcomer();
-    expect(markup(model)).toContain('data-player-banner-missing=');
-    expect(markup({ ...model, level: model.level === null ? null : { ...model.level, nextLevel: null, pointsToNext: null, progress: 1 } })).not.toContain('data-player-banner-missing=');
+  test('la jauge garde la valeur et la barre, sans légende tronquée ; le nom accessible dit les étincelles et le niveau visé', () => {
+    const host = document.createElement('div');
+    host.innerHTML = markup(newcomer());
+    const gauge = host.querySelector('[data-player-banner-gauge]');
+    expect(gauge?.textContent?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('✦ 1 000');
+    expect(host.querySelector('[data-player-banner-missing]')).toBeNull();
+    expect(host.querySelector('a[data-player-banner-link="points"]')?.getAttribute('aria-label')?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('Étincelles : 1 000, 14 % vers le 4');
   });
 });
 
@@ -407,25 +410,14 @@ describe('aux très grandes tailles de texte', () => {
 describe('le rang, sa jauge de Gloire et ce qui manque', () => {
   const rankBlock = (host: ParentNode): HTMLElement | null => host.querySelector<HTMLElement>('a[data-player-banner-link="glory"] [data-player-banner-rank-gauge]');
 
-  test('le nom du rang, la jauge de la division et la forme courte « 1 200 vers Conteur II »', async () => {
+  test('le nom du rang et la jauge de la division, sans légende tronquée « 1 200 jusqu’à Conteur II » (le nom accessible la dit)', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Conteur III');
     expect(block?.querySelector<HTMLElement>('[data-player-banner-rank-fill]')?.style.transform).toBe('scaleX(0.400)');
-    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 jusqu’à Conteur II');
+    expect(block?.querySelector('[data-player-banner-rank-missing]')).toBeNull();
+    expect(block?.textContent).not.toContain('jusqu’à');
     expect(block?.querySelector('[data-player-banner-rank-total]')).toBeNull();
-  });
-
-  test('un manque de 10 000 et plus se dit en chiffre compact', async () => {
-    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur({ gloryMissing: 12_345, next: { rank: 'passeur', division: 2 } }) }} motion={motion().value} />);
-    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k jusqu’à Passeur II');
-  });
-
-  test('la jauge du niveau dit la forme courte : « 8 700 vers le 62 », compacte dès 10 000', async () => {
-    const at = (pointsToNext: number): PlayerBannerModel => ({ ...newcomer(), level: { level: 61, progress: 0.5, prestige: 0, nextLevel: 62, pointsToNext, opener: null } });
-    const short = (host: ParentNode): string => host.querySelector('[data-player-banner-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ') ?? '';
-    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 jusqu’au 62');
-    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k jusqu’au 62');
   });
 
   test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque — la forme complète', async () => {

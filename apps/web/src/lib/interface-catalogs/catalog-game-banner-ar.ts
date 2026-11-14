@@ -69,8 +69,6 @@ const ar = {
   'game.banner.link.meesh': '{count} Meesh في إرثك',
   'game.banner.glory': 'المجد {glory}',
   'game.banner.glory_missing': '{glory} من المجد حتى {rank}',
-  'game.banner.level_short': '{n} حتى المستوى {level}',
-  'game.banner.glory_short': '{n} حتى {rank}',
   'game.banner.glory_top': 'المجد {n}',
   'game.banner.offering.ready': 'العطيّة جاهزة',
   'game.banner.offering.open': 'العطيّة جاهزة: افتحها',

@@ -4,6 +4,8 @@ import { memo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { PersonSummary } from '@/lib/api/friend-requests';
@@ -63,7 +65,13 @@ export const ProfileBringRowView = memo(function ProfileBringRowView({
   readonly onBring: () => void;
   readonly onCancel: () => void;
 }) {
+  const exceptions = useInfoHint();
   if (availability === null || !availability.available) return null;
+  const exceptionsHint: InfoHint = {
+    label: translateCircles(language, 'bring.exceptions.question'),
+    text: translateCircles(language, 'bring.exceptions'),
+    glyph: SETTINGS_GLYPHS.info,
+  };
   const exhausted = availability.remainingToday === 0;
   const counter =
     availability.remainingToday === null
@@ -71,9 +79,13 @@ export const ProfileBringRowView = memo(function ProfileBringRowView({
       : translateCircles(language, 'bring.remaining', { count: String(availability.remainingToday) });
   return (
     <div data-bring-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: `color-mix(in srgb, ${DANGER} 8%, transparent)` }}>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translateCircles(language, 'bring.explain')}
-      </p>
+      <div className="flex items-center gap-1">
+        <p className="min-w-0 flex-1 text-caption" style={{ color: INK_2 }}>
+          {translateCircles(language, 'bring.explain')}
+        </p>
+        <InfoHintButton hint={exceptionsHint} state={exceptions} />
+      </div>
+      <InfoHintText hint={exceptionsHint} state={exceptions} />
       {ringing ? (
         <div className="flex items-center gap-3">
           <span role="status" className="min-w-0 flex-1 text-body font-semibold" style={{ color: INK }}>
