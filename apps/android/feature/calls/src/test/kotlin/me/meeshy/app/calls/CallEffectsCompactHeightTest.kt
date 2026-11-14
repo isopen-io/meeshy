@@ -183,9 +183,9 @@ class CallEffectsCompactHeightTest {
             .first { File(it, "CallEffectsBar.kt").isFile }
         val picker = File(dir, "CallMontagePicker.kt").readText().substringAfter("internal fun CallMontagePicker(").substringBefore("private fun MontageHoldOption(")
         val effects = File(dir, "CallEffectsMode.kt").readText().substringAfter("private fun EffectsControls(").substringBefore("internal fun EffectsModeBar(")
-        listOf(picker, effects).forEach { host ->
+        listOf(picker to "EffectsBar(", effects to "EffectsModeBar(").forEach { (host, bar) ->
             assertThat(host).contains("EffectsAbove {")
-            assertThat(host.indexOf("EffectsAbove {")).isLessThan(host.indexOf("EffectsBar("))
+            assertThat(host.indexOf("EffectsAbove {")).isLessThan(host.indexOf(bar))
         }
         assertThat(File(dir, "CallEffectsBar.kt").readText()).contains("weight(1f, fill = false)")
     }
