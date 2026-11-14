@@ -336784,6 +336784,53 @@
         }
       }
     },
+    "sharedLocation.share.stopPending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستتوقف المشاركة فور عودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Freigabe endet, sobald du wieder online bist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing will stop as soon as you're back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se dejará de compartir en cuanto vuelva la conexión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le partage s'arrêtera dès le retour du réseau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La condivisione si fermerà appena torna la rete"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O compartilhamento vai parar assim que a conexão voltar"
+          }
+        }
+      }
+    },
     "sharedLocation.share.denied": {
       "extractionState": "manual",
       "localizations": {
