@@ -11,7 +11,9 @@ import { InfoHintButton, InfoHintText, InfoNoted, useInfoHint, type InfoHint } f
  *
  * Deux formes, un seul tracé : `AdminNoted` pose le (i) À LA FIN d'un nom
  * (titre de bloc, rangée) ; `AdminInfoAlone` le pose SEUL, à côté d'un texte
- * que l'hôte dessine lui-même.
+ * que l'hôte dessine lui-même — et, loin de tout nom qui dirait de quoi il
+ * parle, il ÉCRIT sa question à côté du glyphe : un (i) orphelin au milieu d'un
+ * bloc ne se lit pas, et un bloc qui n'a plus que lui paraît vide.
  */
 export const adminInfo = (question: string, text: string): InfoHint => ({ label: question, text, glyph: ADMIN_GLYPHS.info });
 
@@ -41,7 +43,7 @@ export function AdminInfoAlone({ question, text, anchor }: { readonly question: 
   return (
     <div className="grid gap-1" {...(anchor === undefined ? {} : { 'data-admin-info': anchor })}>
       <div className="flex items-center">
-        <InfoHintButton hint={hint} state={state} />
+        <InfoHintButton hint={hint} state={state} showsLabel />
       </div>
       <InfoHintText hint={hint} state={state} />
     </div>

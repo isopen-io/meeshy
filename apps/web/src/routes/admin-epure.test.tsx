@@ -77,6 +77,12 @@ describe('Analytique > Langues : la note du tableau passe derrière un (i)', () 
     expect(visibleText(host)).not.toContain('variation du nombre de messages');
   });
 
+  test('un (i) posé seul, loin de tout nom, ÉCRIT sa question à côté du glyphe : on sait de quoi il parle sans l’ouvrir', async () => {
+    const host = await mount(<LanguagesDetailTable language="fr" rows={[{ code: 'fr', messageCount: 10, userCount: 3, percentage: 80, growth: 12 }]} />);
+
+    expect(visibleText(infoButton(host, 'Comment lire ce tableau ?') ?? host)).toBe('Comment lire ce tableau ?');
+  });
+
   test('le lecteur d’écran annonce le tableau par le titre de SON bloc, « Détail par langue »', async () => {
     const host = await mount(<LanguagesDetailTable language="fr" rows={[{ code: 'fr', messageCount: 10, userCount: 3, percentage: 80, growth: 12 }]} />);
 
