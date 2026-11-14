@@ -752,14 +752,20 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(at('[data-call-control="journal"]')).toBe(at('[data-call-control="invite"]') + 1);
     expect(at('[data-call-control="react"]')).toBe(at('[data-call-control="journal"]') + 1);
     expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-label')).toBe('Ouvrir le journal de l’appel');
+    const railGlyph = [...view.host.querySelectorAll('[data-call-control="journal"] svg path')].map((path) => path.getAttribute('d'));
     view.press('[data-call-control="journal"]');
     await settle(() => import('./call-journal-panel'));
+    /* Le même pictogramme au rail et dans « Journal » actif, au pied du journal (loi 1, P6). */
+    expect([...view.host.querySelectorAll('[data-call-journal-toggle] svg path')].map((path) => path.getAttribute('d'))).toEqual(railGlyph);
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
     expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
-    view.press('[data-panel-back]');
-    expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
+    /* Évolue avec #17964 (point 3) : le journal n'a plus de ‹ ; « Journal », en disque blanc au pied, le referme, rend les sous-titres et leur « Journal » reprend le focus. */
+    view.press('[data-call-journal-toggle]');
+    await frame();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
+    expect(document.activeElement?.hasAttribute('data-call-captions-journal')).toBe(true);
     view.done();
   });
 

@@ -23,7 +23,7 @@ import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySid
 import { JOURNAL_COLUMN_PLACE, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, pillCompactsAudioStage, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
-import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
+import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerExpanded, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
@@ -254,6 +254,9 @@ const PANEL_OPENER: Readonly<Record<CallPanelKind, string>> = {
 
 const MORE = '[data-call-more]';
 
+/** Le journal refermé rend le focus au « Journal » des sous-titres qu'il rend, sinon à `(…)` (#17964). */
+const JOURNAL_CLOSED = `[data-call-control-pill] [data-call-captions-journal], ${MORE}`;
+
 /** La couleur d'un locuteur : une fonction pure, la même à chaque rendu — les lignes mémoïsées du bandeau et du journal ne se redessinent pas pour elle. */
 const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
 
@@ -261,7 +264,7 @@ const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string =>
 function focusTarget(from: CallScreenLayer, to: CallScreenLayer): string | null {
   if (from.kind === to.kind && (from.kind !== 'panel' || to.kind !== 'panel' || from.panel === to.panel)) return null;
   if (to.kind === 'menu' && from.kind === 'panel') return to.stowed === undefined ? PANEL_OPENER[from.panel] : null;
-  if (to.kind === 'idle' && (from.kind === 'panel' || from.kind === 'mode')) return MORE;
+  if (to.kind === 'idle' && (from.kind === 'panel' || from.kind === 'mode')) return from.kind === 'panel' && from.panel === 'journal' ? JOURNAL_CLOSED : MORE;
   return null;
 }
 
@@ -462,7 +465,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const { column, panels, reserve, reserveEnd, bleedEnd } = useJournalDock({ wide, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
-  const expanded = shown.kind === 'menu' || shown.kind === 'panel';
+  const expanded = layerExpanded(shown);
   const pillPanel = chrome.panel !== null && panelInThePill(chrome.panel) ? chrome.panel : null;
   const grown = unfoldsPill(disposition, shown);
 
@@ -475,8 +478,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   }, [live]);
 
   useEffect(() => {
-    if (expanded) prefetchCallChunks();
-  }, [expanded]);
+    if (expanded || grown) prefetchCallChunks();
+  }, [expanded, grown]);
 
   /* Un groupe sonne avant de se connecter : sa grille arrive pendant ce temps (#17650). */
   useEffect(() => {
