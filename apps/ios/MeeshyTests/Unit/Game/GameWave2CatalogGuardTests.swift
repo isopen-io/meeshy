@@ -16,6 +16,8 @@ final class GameWave2CatalogGuardTests: XCTestCase {
         "game2.banner.season.short",
         // « Alliance » : le nom du concept s'écrit pareil en anglais, comme sur le web (glossaire, #11179).
         "game2.duo.title",
+        // « Notifications » : le libellé du lexique de l'épure (concept game.notifications) s'écrit pareil en anglais.
+        "game2.settings.notifications.switch",
     ]
 
     private func entries() throws -> [String: [String: String]] {

@@ -51,8 +51,8 @@ final class GameEpureTests: XCTestCase {
 
     private static let french: [String: String] = [
         "game2.settings.celebrations.switch": "Signes des aïeux",
-        "game2.settings.notifications.switch": "Alliance, joute, voyage",
-        "game2.settings.notifications.body": "Au plus une par jour, sur tous tes appareils.",
+        "game2.settings.notifications.switch": "Notifications",
+        "game2.settings.notifications.body": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils.",
         "game2.settings.friends_league.switch": "Me retirer",
         "game2.settings.friends_league.body": "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.",
         "game2.settings.visibility.body": "Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas",
@@ -84,14 +84,14 @@ final class GameEpureTests: XCTestCase {
             "game.notebook.when", "game.notebook.when.note", "game.door.notebook.line",
             "game.rules.step.meaning",
         ]
-        let sameInEveryLanguage: Set<String> = []
+        let sameInEnglish: Set<String> = ["game2.settings.notifications.switch"]
         for key in keys {
             let values = catalog[key] ?? [:]
             let french = try XCTUnwrap(values["fr"], key)
             for language in Self.otherLanguages {
                 let value = try XCTUnwrap(values[language], "\(key) [\(language)]")
                 XCTAssertFalse(value.isEmpty, "\(key) [\(language)]")
-                if !sameInEveryLanguage.contains(key) {
+                if !(language == "en" && sameInEnglish.contains(key)) {
                     XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
                 }
                 XCTAssertEqual(specifiers(in: value), specifiers(in: french), "\(key) [\(language)] : mêmes marqueurs que le français")

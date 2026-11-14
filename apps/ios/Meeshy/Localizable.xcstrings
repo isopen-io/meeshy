@@ -291417,43 +291417,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au plus une par jour, sur tous tes appareils."
+            "value": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "At most one a day, on all your devices."
+            "value": "Alliance, joust, journey: at most one a day, on all your devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como máximo una al día, en todos tus dispositivos."
+            "value": "Alianza, justa, viaje: como máximo una al día, en todos tus dispositivos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Höchstens eine pro Tag, auf allen deinen Geräten."
+            "value": "Bündnis, Turnier, Reise: höchstens eine pro Tag, auf allen deinen Geräten."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Al massimo una al giorno, su tutti i tuoi dispositivi."
+            "value": "Alleanza, torneo, viaggio: al massimo una al giorno, su tutti i tuoi dispositivi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No máximo uma por dia, em todos os seus aparelhos."
+            "value": "Aliança, torneio, viagem: no máximo uma por dia, em todos os seus aparelhos."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
+            "value": "تحالف، مبارزة، رحلة: إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
           }
         }
       }
@@ -291511,43 +291511,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joute, voyage"
+            "value": "Notifications"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joust, journey"
+            "value": "Notifications"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alianza, justa, viaje"
+            "value": "Notificaciones"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bündnis, Turnier, Reise"
+            "value": "Mitteilungen"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alleanza, torneo, viaggio"
+            "value": "Notifiche"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aliança, torneio, viagem"
+            "value": "Notificações"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحالف، مبارزة، رحلة"
+            "value": "الإشعارات"
           }
         }
       }
