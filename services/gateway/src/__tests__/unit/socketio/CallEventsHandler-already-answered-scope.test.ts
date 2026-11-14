@@ -230,7 +230,7 @@ describe('CallEventsHandler — call:join no longer emits ALREADY_ANSWERED', () 
     const { io } = makeIo();
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, () => CALLEE_ID);
+    handler.setupCallEvents(socket as never, io as never, () => CALLEE_ID);
     await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
 
     expect(alreadyAnsweredCalls(toEmit)).toHaveLength(0);
@@ -246,7 +246,7 @@ describe('CallEventsHandler — call:join no longer emits ALREADY_ANSWERED', () 
     const { io } = makeIo();
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, () => CALLEE_ID);
+    handler.setupCallEvents(socket as never, io as never, () => CALLEE_ID);
     await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
 
     expect(alreadyAnsweredCalls(toEmit)).toHaveLength(0);
@@ -266,7 +266,7 @@ describe('CallEventsHandler — call:signal answer emits ALREADY_ANSWERED (reloc
     fetchSockets.mockResolvedValue([{ id: 'caller-socket', leave: jest.fn() }]);
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, (sid: string) =>
+    handler.setupCallEvents(socket as never, io as never, (sid: string) =>
       sid === 'caller-socket' ? CALLER_ID : CALLEE_ID
     );
     await handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
@@ -286,7 +286,7 @@ describe('CallEventsHandler — call:signal answer emits ALREADY_ANSWERED (reloc
     fetchSockets.mockResolvedValue([{ id: 'caller-socket', leave: jest.fn() }]);
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, (sid: string) =>
+    handler.setupCallEvents(socket as never, io as never, (sid: string) =>
       sid === 'caller-socket' ? CALLER_ID : CALLEE_ID
     );
     await handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
@@ -302,7 +302,7 @@ describe('CallEventsHandler — call:signal answer emits ALREADY_ANSWERED (reloc
     fetchSockets.mockResolvedValue([{ id: 'callee-socket', leave: jest.fn() }]);
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, (sid: string) =>
+    handler.setupCallEvents(socket as never, io as never, (sid: string) =>
       sid === 'callee-socket' ? CALLEE_ID : CALLER_ID
     );
     // The "from" identity is the socket's own resolved userId (CALLER_ID here).
@@ -322,7 +322,7 @@ describe('CallEventsHandler — call:signal answer emits ALREADY_ANSWERED (reloc
     fetchSockets.mockResolvedValue([]); // target (caller) has no live socket
 
     const handler = new CallEventsHandler(prisma);
-    handler.setupCallEvents(socket as never, io, () => CALLEE_ID);
+    handler.setupCallEvents(socket as never, io as never, () => CALLEE_ID);
     await handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
 
     const calls = alreadyAnsweredCalls(toEmit);

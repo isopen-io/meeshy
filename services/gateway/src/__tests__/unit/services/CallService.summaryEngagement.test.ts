@@ -34,7 +34,7 @@ const INITIATOR_USER_ID = '6650000000000000000000cc';
 function build(existing: { id: string; metadata: unknown } | null) {
   const prisma = {
     callSession: {
-      findUnique: jest.fn<any>().mockResolvedValue({
+      findUnique: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue({
         id: CALL_ID,
         conversationId: CONVERSATION_ID,
         initiatorId: INITIATOR_USER_ID,
@@ -44,14 +44,14 @@ function build(existing: { id: string; metadata: unknown } | null) {
         answeredAt: new Date('2026-09-30T10:00:00Z'),
         metadata: { type: 'audio' }
       }),
-      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 })
+      updateMany: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue({ count: 1 })
     },
-    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'p-init' }) },
-    callParticipant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    participant: { findFirst: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'p-init' }) },
+    callParticipant: { findMany: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue([]) },
     message: {
-      findFirst: jest.fn<any>().mockResolvedValue(existing),
-      create: jest.fn<any>().mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID }),
-      update: jest.fn<any>().mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID })
+      findFirst: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue(existing),
+      create: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID }),
+      update: jest.fn<(args?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID })
     }
   };
   return { sut: new CallService(prisma as never), prisma };

@@ -9,7 +9,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallHistoryParticipant } from '../callHistory';
-import { answeredCallRoster, type CallRosterLine } from './answeredCallRoster';
+import { answeredCallRoster, type CallRosterLine, type RosterCall } from './answeredCallRoster';
 import { conversationMemberName } from './callSummaryParticipantNames';
 
 type RosterParticipant = {
@@ -23,7 +23,7 @@ type RosterParticipant = {
 
 type RosterRow = CallRosterLine & { callSessionId: string; participant: RosterParticipant | null };
 
-export type JournalCall = { readonly id: string; readonly answeredAt: Date | null };
+export type JournalCall = RosterCall;
 
 const toHistoryParticipant = (participant: RosterParticipant): CallHistoryParticipant => ({
   participantId: participant.id,

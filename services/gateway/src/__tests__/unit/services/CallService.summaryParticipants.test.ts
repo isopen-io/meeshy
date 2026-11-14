@@ -20,6 +20,7 @@ jest.mock('../../../services/TURNCredentialService', () => ({
 }));
 
 import { CallService } from '../../../services/CallService';
+import { findManyIn, type MongoDocument } from '../../helpers/mongo-where';
 
 type AsyncMock = jest.Mock<(args?: unknown) => Promise<unknown>>;
 type Written = { readonly data: { readonly metadata: Record<string, unknown> } };
@@ -60,7 +61,9 @@ const session = (overrides: Record<string, unknown> = {}) => ({
   ...overrides
 });
 
-const line = (userId: string, overrides: Record<string, unknown> = {}) => ({
+/** Une ligne telle que MongoDB la garde, rattachée à l'appel : le double évalue le `where`. */
+const line = (userId: string, overrides: Record<string, unknown> = {}): MongoDocument => ({
+  callSessionId: CALL_ID,
   role: 'participant',
   answeredAt: ANSWERED_AT,
   leftAt: null,
@@ -74,6 +77,11 @@ const GROUP_OF_THREE = [
   line('u_awa')
 ];
 
+const linesOf = (rows: ReadonlyArray<MongoDocument>) => {
+  const { findMany } = findManyIn(rows);
+  return (args?: unknown) => findMany(args as Parameters<typeof findMany>[0]);
+};
+
 const LIVE = { id: 'm-live', metadata: { kind: 'call-live', callId: CALL_ID, initiatorId: INITIATOR_USER_ID, callType: 'video', outcome: 'completed' } };
 
 describe('CallService.createCallSummaryMessage — participants persistés', () => {
@@ -82,7 +90,7 @@ describe('CallService.createCallSummaryMessage — participants persistés', () 
   it('persiste ceux qui ont DÉCROCHÉ, par leur seul userId, dans l\'ordre d\'arrivée (Karim a sonné puis refusé)', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(session());
-    prisma.callParticipant.findMany.mockResolvedValue(GROUP_OF_THREE);
+    prisma.callParticipant.findMany.mockImplementation(linesOf(GROUP_OF_THREE));
 
     await sut.createCallSummaryMessage(CALL_ID);
 
@@ -95,7 +103,7 @@ describe('CallService.createCallSummaryMessage — participants persistés', () 
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(session());
     prisma.message.findFirst.mockResolvedValue(LIVE);
-    prisma.callParticipant.findMany.mockResolvedValue([line('u_awa')]);
+    prisma.callParticipant.findMany.mockImplementation(linesOf([line('u_awa')]));
 
     await sut.createCallSummaryMessage(CALL_ID);
 
@@ -145,7 +153,7 @@ describe('CallService.createCallSummaryMessage — participants persistés', () 
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(session({ status: 'failed', endReason: 'garbageCollected' }));
     prisma.message.findFirst.mockResolvedValue(LIVE);
-    prisma.callParticipant.findMany.mockResolvedValue([line('u_awa')]);
+    prisma.callParticipant.findMany.mockImplementation(linesOf([line('u_awa')]));
 
     await sut.createCallSummaryMessage(CALL_ID);
 

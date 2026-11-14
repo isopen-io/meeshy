@@ -2951,7 +2951,9 @@ model CallParticipant {
   /// clients rejoignent la room dès la SONNERIE (`call:join`), donc la ligne
   /// existe pour qui a seulement sonné, et `CallSession.answeredAt` est porté
   /// par l'appel entier : seul ce champ dit qui a PRIS PART. Nul pour une
-  /// sonnerie ignorée ou refusée, et pour les lignes écrites avant lui.
+  /// sonnerie ignorée ou refusée ; la clé est écrite (`null`) à la création
+  /// et ABSENTE des lignes écrites avant lui : un appel dont aucune ligne ne
+  /// la porte n'est pas suivi et garde la liste d'avant (#18242 B-1).
   answeredAt      DateTime?
   /// Updated on every heartbeat flush (debounced every 30s). Survives gateway
   /// restarts so CallCleanupService can detect zombie calls without in-memory state.

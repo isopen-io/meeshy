@@ -14,7 +14,7 @@ import {
   type CallHistoryRow
 } from '../callHistory';
 import { resolveGroupCallParticipants } from './callHistoryParticipants';
-import { answeredCallRoster, CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE, type CallRosterLine } from './answeredCallRoster';
+import { answeredCallRoster, callsTrackingAnswers, isDuoCall, type CallRosterLine, type RosterCall } from './answeredCallRoster';
 import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
 
 export type CallHistoryType = 'all' | 'audio' | 'video';
@@ -44,6 +44,29 @@ const journalAccess = (userId: string): Prisma.CallSessionWhereInput => ({
     { conversation: { participants: { some: { userId, isActive: true } } } },
     { participants: { some: { participant: { userId } } } },
     { invitedUserIds: { has: userId } }
+  ]
+});
+
+/**
+ * L'ONGLET « MANQUÉS » D'UN LECTEUR (#18242), traduction en requête de la
+ * direction (`answeredCallRoster`) : un appel qu'il n'a pas lancé, et (a) le
+ * statut `missed` que pose la sonnerie quand personne n'a répondu, ou (b) un
+ * appel décroché où il n'a aucune ligne (refusé, ignoré, hors ligne — il finit
+ * `ended`, jamais `missed`, Vague 136), ou (c) un appel de GROUPE SUIVI (une
+ * ligne au moins porte la clé `answeredAt`) où aucune de ses lignes n'est
+ * décrochée — une ligne de sonnerie n'y vaut pas participation. Un duo et un
+ * appel non suivi gardent la règle d'avant : sa ligne l'exclut. Aucune horloge.
+ */
+const missedByReader = (userId: string): Prisma.CallSessionWhereInput => ({
+  initiatorId: { not: userId },
+  OR: [
+    { status: CallStatus.missed },
+    { answeredAt: { not: null }, participants: { none: { participant: { userId } } } },
+    {
+      answeredAt: { not: null },
+      participants: { some: { answeredAt: { isSet: true } }, none: { participant: { userId }, answeredAt: { not: null } } },
+      OR: [{ conversation: { type: { not: 'direct' } } }, { invitedUserIds: { isEmpty: false } }]
+    }
   ]
 });
 
@@ -135,28 +158,12 @@ export async function listCallHistory(
   // Type d'appel (#8203) : `isVideo` est posé à la création ; un appel plus
   // ancien que ce champ (non encore rattrapé par la migration 020) n'en porte
   // pas et se lit « audio », comme `callIsVideo` le lit sur `metadata`.
-  //
-  // « Manqués », pour CE lecteur : (a) le statut `missed` que pose la sonnerie
-  // quand personne n'a répondu, ou (b) — miroir de `deriveCallDirection` — un
-  // appel décroché par d'autres où il n'a aucune `CallParticipant` (refusé,
-  // ignoré, hors ligne). Ce second cas finit `ended`, jamais `missed` : filtrer
-  // sur le seul statut le retirait de l'onglet (Vague 136). Depuis #18242, une
-  // ligne de SONNERIE ne vaut plus participation : seule une ligne décrochée
-  // l'exclut, pour un appel décroché après le suivi par ligne.
+  // « Manqués », pour CE lecteur : `missedByReader`.
   const where: Prisma.CallSessionWhereInput = {
     ...scope,
     ...(conversationIds !== null ? { conversationId: { in: conversationIds } } : {}),
     ...(options.type === 'video' ? { isVideo: true } : {}),
-    ...(filter === 'missed'
-      ? {
-          initiatorId: { not: userId },
-          OR: [
-            { status: CallStatus.missed },
-            { answeredAt: { lt: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE }, participants: { none: { participant: { userId } } } },
-            { answeredAt: { gte: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE }, participants: { none: { participant: { userId }, answeredAt: { not: null } } } }
-          ]
-        }
-      : {}),
+    ...(filter === 'missed' ? missedByReader(userId) : {}),
     AND: [...scope.AND, ...(options.type === 'audio' ? [AUDIO_ONLY] : [])]
   };
 
@@ -180,6 +187,7 @@ export async function listCallHistory(
       bytesReceived: true,
       metadata: true,
       reactionCounts: true,
+      invitedUserIds: true,
       conversation: {
         select: {
           type: true,
@@ -192,6 +200,8 @@ export async function listCallHistory(
   });
 
   const hasMore = rows.length > limit;
+  // La forme du duo se lit AVANT `asSeenByGuest`, qui réécrit le type de la conversation.
+  const duoCallIds = new Set(rows.filter(isDuoCall).map((row) => row.id));
   const page = (hasMore ? rows.slice(0, limit) : rows).map((row) =>
     row.conversation.participants.length > 0 ? row : asSeenByGuest(row)
   );
@@ -251,9 +261,20 @@ export async function listCallHistory(
   // TOOK PART in it — `answeredCallRoster` (#18242), the same law as the
   // card and the roster: a `CallParticipant` row exists from the RING on
   // (clients early-join to receive the offer), so a member who rang and
-  // declined has a row and must still read "missed", never "incoming". See
-  // `deriveCallDirection`.
+  // declined has a row and must still read "missed", never "incoming" — in a
+  // GROUP call that tracks answers. A duo and an untracked call keep the
+  // former rule (B-1). See `deriveCallDirection`.
   const nonOutgoingCalls = page.filter((r) => r.initiatorId !== userId);
+  const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
+  const needsTracking = [...nonOutgoingCalls, ...groupCalls].filter((r) => r.answeredAt !== null && !duoCallIds.has(r.id));
+  const tracked = await callsTrackingAnswers(prisma, needsTracking.map((r) => r.id));
+  const rosterCall = (row: { id: string; answeredAt: Date | null }): RosterCall => ({
+    id: row.id,
+    answeredAt: row.answeredAt,
+    duo: duoCallIds.has(row.id),
+    tracksAnswers: tracked.has(row.id)
+  });
+
   const participatedCallIds = new Set<string>();
   if (nonOutgoingCalls.length > 0) {
     const lines: ReadonlyArray<ReaderCallLine> = await prisma.callParticipant.findMany({
@@ -261,13 +282,12 @@ export async function listCallHistory(
       select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } }
     });
     for (const call of nonOutgoingCalls) {
-      const tookPart = answeredCallRoster(lines.filter((line) => line.callSessionId === call.id), call);
+      const tookPart = answeredCallRoster(lines.filter((line) => line.callSessionId === call.id), rosterCall(call));
       if (tookPart.some((line) => line.participant?.userId === userId)) participatedCallIds.add(call.id);
     }
   }
 
-  const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
-  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCalls, userId);
+  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCalls.map(rosterCall), userId);
 
   const items = page.map((row) =>
     buildCallHistoryItem(

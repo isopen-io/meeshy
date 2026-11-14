@@ -26,7 +26,12 @@ import { CallService } from '../../../services/CallService';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
-type MockFn = jest.Mock<any>;
+type MockFn = jest.Mock<(args?: unknown) => Promise<unknown>>;
+/** Ce que le résumé remet à `message.create` / `message.update`, et la mise à jour des statistiques. */
+type Written = {
+  readonly where?: unknown;
+  readonly data: Readonly<Record<string, unknown>> & { readonly metadata: Readonly<Record<string, unknown>> };
+};
 
 const createMockPrisma = () => ({
   // `updateMany` resolves by default so persistCallStats' `.updateMany(...).catch(...)`
@@ -107,7 +112,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     expect(result).toEqual({ kind: 'created', message: { id: 'm1', conversationId: CONVERSATION_ID } });
     expect(prisma.message.create).toHaveBeenCalledTimes(1);
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect(arg.data).toMatchObject({
       conversationId: CONVERSATION_ID,
       senderId: INITIATOR_PARTICIPANT_ID,
@@ -128,7 +133,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect(arg.data.metadata).toEqual({
       kind: 'call',
       callId: CALL_ID,
@@ -150,7 +155,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    expect((prisma.message.create.mock.calls[0][0] as any).data.content).toBe('Appel vidéo · 01:05');
+    expect((prisma.message.create.mock.calls[0][0] as Written).data.content).toBe('Appel vidéo · 01:05');
   });
 
   it('labels a rejected call "Appel refusé"', async () => {
@@ -163,7 +168,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    expect((prisma.message.create.mock.calls[0][0] as any).data.content).toBe('Appel refusé');
+    expect((prisma.message.create.mock.calls[0][0] as Written).data.content).toBe('Appel refusé');
   });
 
   it('returns null and creates nothing for a non-terminal call', async () => {
@@ -242,7 +247,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect(arg.data.senderId).toBe(INITIATOR_PARTICIPANT_ID);
     expect(arg.data.senderId).not.toBe(OTHER_PARTY_PARTICIPANT_ID);
   });
@@ -262,7 +267,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    const { data } = prisma.message.create.mock.calls[0][0] as Written;
     expect(Object.prototype.hasOwnProperty.call(data, 'deletedAt')).toBe(true);
     expect(data.deletedAt).toBeNull();
   });
@@ -296,7 +301,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
 
     expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
     expect(prisma.message.create).not.toHaveBeenCalled();
-    const arg = prisma.message.update.mock.calls[0][0] as any;
+    const arg = prisma.message.update.mock.calls[0][0] as Written;
     expect(arg.where).toEqual({ id: 'm-live' });
     expect(arg.data.content).toBe('Appel audio · 04:32');
     expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'completed', callId: CALL_ID });
@@ -349,7 +354,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
     const result = await sut.createCallSummaryMessage(CALL_ID);
 
     expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
-    expect((prisma.message.update.mock.calls[0][0] as any).data.content).toBe('Appel audio · 04:32');
+    expect((prisma.message.update.mock.calls[0][0] as Written).data.content).toBe('Appel audio · 04:32');
   });
 
   it('P2002 au create puis re-lookup terminal → null (l\'autre terminal a gagné)', async () => {
@@ -386,7 +391,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
     const result = await sut.createCallSummaryMessage(CALL_ID);
 
     expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
-    const arg = prisma.message.update.mock.calls[0][0] as any;
+    const arg = prisma.message.update.mock.calls[0][0] as Written;
     expect(arg.data.content).toBe('Appel vidéo interrompu');
     expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'failed' });
   });
@@ -431,7 +436,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'missed', endedByInitiator: true });
   });
 
@@ -449,7 +454,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect(arg.data.metadata.outcome).toBe('missed');
     expect('endedByInitiator' in arg.data.metadata).toBe(false);
   });
@@ -468,7 +473,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
 
     await sut.createCallSummaryMessage(CALL_ID);
 
-    const arg = prisma.message.create.mock.calls[0][0] as any;
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
     expect('endedByInitiator' in arg.data.metadata).toBe(false);
   });
 });
@@ -477,7 +482,7 @@ describe('CallService.persistCallStats', () => {
   beforeEach(() => jest.clearAllMocks());
 
   const lastUpdateData = (prisma: ReturnType<typeof createMockPrisma>) =>
-    (prisma.callSession.updateMany.mock.calls[0]?.[0] as any)?.data;
+    (prisma.callSession.updateMany.mock.calls[0]?.[0] as Written | undefined)?.data;
 
   it('stores the (sent, received) pair as a coherent unit, not per-field max', async () => {
     const { sut, prisma } = makeSUT();

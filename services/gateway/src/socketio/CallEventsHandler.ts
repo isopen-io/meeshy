@@ -70,7 +70,7 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
 import { isInvitedToCall } from '../services/calls/callInvitation';
-import { markCallParticipantsAnswered } from '../services/calls/callParticipantAnswered';
+import { answeringLines, markCallParticipantsAnswered } from '../services/calls/callParticipantAnswered';
 import { withCallSummaryParticipantNames } from '../services/calls/callSummaryParticipantNames';
 import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
 import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
@@ -1185,14 +1185,6 @@ export class CallEventsHandler {
       this.bufferedOffers.delete(`${callId}:${id}`);
       this.signalReplay.clearSlot(`${callId}:${id}`);
     }
-  }
-
-  /** #18242 — une offre (ou un redémarrage ICE) d'un `offerer` vers un `answerer` est-elle dans le tampon ? */
-  private bufferedOfferFrom(callId: string, answererIds: readonly (string | null | undefined)[], offererIds: readonly (string | null | undefined)[]): boolean {
-    return answererIds.some((to) => {
-      const signal = to ? this.bufferedOffers.get(`${callId}:${to}`)?.signal.signal : undefined;
-      return !!signal && (signal.type === 'offer' || signal.type === 'ice-restart') && offererIds.includes(signal.from);
-    });
   }
 
   /**
@@ -2932,6 +2924,12 @@ export class CallEventsHandler {
         // Resolves target userId to their socketIds within the call room
         const targetUserId = targetParticipant.participant?.userId || targetParticipant.participantId;
         const targetSocketIds = await this.resolveTargetSockets(io, data.callId, targetUserId, getUserId);
+        // #18242 — qui cette réponse marque, lu AVANT que le tampon ne change (R1), sur les deux branches (R4).
+        const answering = data.signal.type !== 'answer' ? [] : answeringLines({
+          answerer: { ids: [userId, senderParticipant.participantId], line: senderParticipant },
+          offerer: { ids: [targetUserId, targetParticipant.participantId], line: targetParticipant },
+          bufferedSignalFor: (slot) => this.bufferedOffers.get(`${data.callId}:${slot}`)?.signal.signal
+        });
 
         if (targetSocketIds.length === 0) {
           // §4.6 — target not in the room yet (PushKit wake / socket churn /
@@ -2963,6 +2961,7 @@ export class CallEventsHandler {
             callId: data.callId,
             targetUserId
           });
+          await markCallParticipantsAnswered(this.prisma, answering);
           // Audit 2026-07-11 #3 — le mirror answered-elsewhere doit partir
           // MÊME quand l'appelant n'a aucun socket à l'instant de l'answer
           // (churn socket mid-answer) : ce return sautait le bloc push du
@@ -3068,8 +3067,6 @@ export class CallEventsHandler {
           // a call-wide sweep here silently starves that third participant's
           // mesh connection, `bufferedOfferFor` finding nothing left to
           // replay on their own eventual `call:join`.
-          // #18242 — l'offrant ne se marque que si SON offre vers ce répondant est connue (lue avant la purge).
-          const offerKnown = this.bufferedOfferFrom(data.callId, [userId, senderParticipant.participantId], [targetUserId, targetParticipant.participantId]);
           this.clearBufferedOfferFor(
             data.callId,
             userId,
@@ -3083,7 +3080,7 @@ export class CallEventsHandler {
           // e.g. enabling video mid-call, which would already have it set).
           const isFirstAnswer = !callSession.answeredAt;
           // #18242 B1 — le décroché se porte par ligne : celui qui répond, et l'offrant dont l'offre est connue.
-          await markCallParticipantsAnswered(this.prisma, [senderParticipant, offerKnown ? targetParticipant : null]);
+          await markCallParticipantsAnswered(this.prisma, answering);
           // #11468 — l'appareil qui répond devient la seule socket de son utilisateur dans la room.
           await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));

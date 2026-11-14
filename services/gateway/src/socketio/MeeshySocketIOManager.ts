@@ -81,7 +81,6 @@ import { PresenceVisibilityService, type PresenceViewer } from '../services/Pres
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
-import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
@@ -3022,7 +3021,7 @@ export class MeeshySocketIOManager {
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             messageType: (message.replyTo.messageType || 'text') as MessageType,
             createdAt: message.replyTo.createdAt || new Date(),
-            metadata: withoutCallSummaryParticipants((message.replyTo as unknown as { metadata?: unknown }).metadata),
+            metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
             sender: message.replyTo.sender ? {
               id: message.replyTo.sender.id,
               displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,

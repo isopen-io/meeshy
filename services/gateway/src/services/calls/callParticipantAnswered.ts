@@ -20,6 +20,29 @@ import { logger } from '../../utils/logger';
 
 export type AnsweringLine = { readonly id: string; readonly answeredAt?: Date | null };
 
+type Identity = string | null | undefined;
+type BufferedSignal = { readonly type: string; readonly from: string } | undefined;
+
+/**
+ * QUI UNE RÉPONSE SDP MARQUE : celui qui répond, et l'offrant seulement si
+ * SON offre (ou son redémarrage ICE) vers le répondant attend dans le tampon
+ * du répondant — lu AVANT toute purge. Une offre d'un AUTRE offrant dans ce
+ * tampon ne marque pas la cible (#18242 R1 : C répond à B pendant que l'offre
+ * de A attend chez C). La même lecture sert la réponse relayée et la réponse
+ * mise en tampon faute de socket chez l'offrant (R4).
+ */
+export function answeringLines<L>(input: {
+  readonly answerer: { readonly ids: ReadonlyArray<Identity>; readonly line: L };
+  readonly offerer: { readonly ids: ReadonlyArray<Identity>; readonly line: L };
+  readonly bufferedSignalFor: (slot: string) => BufferedSignal;
+}): ReadonlyArray<L> {
+  const offerKnown = input.answerer.ids.some((slot) => {
+    const signal = slot ? input.bufferedSignalFor(slot) : undefined;
+    return !!signal && (signal.type === 'offer' || signal.type === 'ice-restart') && input.offerer.ids.includes(signal.from);
+  });
+  return offerKnown ? [input.answerer.line, input.offerer.line] : [input.answerer.line];
+}
+
 export async function markCallParticipantsAnswered(
   prisma: Pick<PrismaClient, 'callParticipant'>,
   lines: ReadonlyArray<AnsweringLine | null | undefined>,

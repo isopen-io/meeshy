@@ -2638,7 +2638,9 @@ export class CallService {
         metadata: true,
         bytesSent: true,
         bytesReceived: true,
-        networkQuality: true
+        networkQuality: true,
+        invitedUserIds: true,
+        conversation: { select: { type: true } }
       }
     });
     if (!call) {
