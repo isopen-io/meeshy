@@ -69,7 +69,6 @@ final class EpureReglagesLiensTests: XCTestCase {
         "settings.security.email.resend_email": "Renvoyer l'e-mail",
         "settings.security.email.resend_failed": "Impossible de renvoyer l'e-mail",
         "settings.security.email.verification_sent": "E-mail de vérification envoyé",
-        "settings.privacy.contacts_groups": "Contacts",
         "links.hub.affiliate.title": "Parrainage",
         "links.hub.affiliate.description": "Invitez et suivez qui s'inscrit par vos liens",
         "links.hub.affiliate.create.a11y": "Créer un lien de parrainage",
@@ -85,7 +84,7 @@ final class EpureReglagesLiensTests: XCTestCase {
 
     /// Le même mot dans deux langues n'est pas une copie : le lexique lui-même le dit (E-mail, Contacts).
     private static let sameWordAsFrenchByDesign: Set<String> = [
-        "settings.notifications.email", "settings.security.email", "settings.privacy.contacts_groups",
+        "settings.notifications.email", "settings.security.email",
     ]
 
     func test_catalog_shortenedAndRevealedLabels_sayTheirNewFrench() throws {
@@ -148,7 +147,7 @@ final class EpureReglagesLiensTests: XCTestCase {
         "settings.privacy.coming_soon", "settings.privacy.coming_soon.a11y", "settings.privacy.share_data",
         "settings.privacy.block_screenshots", "settings.privacy.contact_requests", "settings.privacy.group_invites",
         "sessions_current_badge", "links.hub.banner.title", "links.hub.banner.subtitle",
-        "tracking.links.empty.subtitle", "affiliate.empty.subtitle",
+        "tracking.links.empty.subtitle", "affiliate.empty.subtitle", "settings.privacy.contacts_groups",
     ]
 
     func test_removedKeys_areGoneFromEveryLanguage_andNoSourceReadsThemAnymore() throws {
@@ -170,6 +169,17 @@ final class EpureReglagesLiensTests: XCTestCase {
         }
         XCTAssertTrue(view.contains("\\.acceptCallsFromNonContacts"), "la rangée qui a un effet reste")
         XCTAssertTrue(view.contains("\\.allowAnalytics"))
+    }
+
+    /// Les deux rangées des Appels vivent sous le MÊME titre : sorties les demandes de contact et les invitations,
+    /// une section « Contacts » qui ne portait plus qu'« Appels hors contacts » se lisait comme un réglage de contacts.
+    func test_privacy_callsFromNonContacts_livesUnderCalls_withTheHiddenAddress_noLoneContactsSection() throws {
+        let view = try code(Self.settingsViews + "PrivacySettingsView.swift")
+        XCTAssertFalse(view.contains("contactsSection"))
+        let calls = try XCTUnwrap(view.range(of: "private var callsSection").map { String(view[$0.lowerBound...]) })
+        let callsBody = calls.components(separatedBy: "private var encryptionSection")[0]
+        XCTAssertTrue(callsBody.contains("\\.acceptCallsFromNonContacts"), "Appels hors contacts est une rangée des Appels")
+        XCTAssertTrue(callsBody.contains("settings.privacy.calls.hide_ip"))
     }
 
     // MARK: - Sessions : le titre de section suffit, la rangée garde ses dates

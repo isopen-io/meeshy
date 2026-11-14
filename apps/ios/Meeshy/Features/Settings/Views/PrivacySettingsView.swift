@@ -41,7 +41,6 @@ struct PrivacySettingsView: View {
     private var pageContent: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             visibilitySection
-            contactsSection
             locationSection
             mediaSection
             callsSection
@@ -119,22 +118,6 @@ struct PrivacySettingsView: View {
         )
     }
 
-    private var contactsSection: some View {
-        section(
-            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts", bundle: .main),
-            icon: "person.2.fill",
-            color: MeeshyColors.brandPrimaryHex,
-            specs: [
-                ToggleSpec(
-                    id: "callsNonContacts", icon: "phone.arrow.down.left",
-                    title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                    color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
-                    note: SettingsInfoNotes.callsFromNonContacts
-                ),
-            ]
-        )
-    }
-
     /// Les réglages de partage de position — la MÊME vue que celle qu'ouvre le
     /// `(i)` du sélecteur de lieu. Une seule source, deux surfaces : ce sont
     /// des préférences applicatives, pas propres à une conversation.
@@ -160,14 +143,22 @@ struct PrivacySettingsView: View {
 
     // MARK: - Appels (#11296)
 
-    /// « Masquer mon adresse IP » force le relais TURN sur toutes les connexions
-    /// d'appel : le correspondant ne voit que l'adresse du relais Meeshy.
+    /// Qui peut m'appeler, et ce que voit le correspondant. « Masquer mon adresse
+    /// IP » force le relais TURN sur toutes les connexions d'appel : le
+    /// correspondant ne voit que l'adresse du relais Meeshy.
     private var callsSection: some View {
         let titre = String(localized: "settings.privacy.calls.hide_ip", defaultValue: "Masquer mon adresse IP", bundle: .main)
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             SettingsSectionHeader(title: String(localized: "settings.privacy.calls", defaultValue: "Appels", bundle: .main),
                                   icon: "phone.fill", color: MeeshyColors.tileBlueHex)
             SettingsCard(tint: MeeshyColors.tileBlueHex) {
+                privacyToggle(ToggleSpec(
+                    id: "callsNonContacts", icon: "phone.arrow.down.left",
+                    title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
+                    color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
+                    note: SettingsInfoNotes.callsFromNonContacts
+                ))
+                SettingsSeparator(tint: MeeshyColors.tileBlueHex)
                 SettingsRow(
                     icon: "eye.slash.fill", title: titre, color: MeeshyColors.tileBlueHex,
                     note: SettingsInfoNotes.hiddenCallAddress,
