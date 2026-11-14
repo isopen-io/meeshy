@@ -4,7 +4,10 @@
     ":sdk-ui": {
       "resDir": "sdk-ui/src/main/res",
       "entries": [
-        { "androidName": "bring_explain", "status": "android-only" },
+        {
+          "androidName": "bring_explain",
+          "status": "android-only"
+        },
         {
           "catalog": "app",
           "iosKey": "bring.action",
@@ -70,6 +73,14 @@
           "iosKey": "bring.failed",
           "androidName": "bring_failed",
           "status": "adopted"
+        },
+        {
+          "androidName": "bring_silent_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bring_silent_note",
+          "status": "android-only"
         }
       ]
     }

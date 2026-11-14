@@ -23,6 +23,10 @@
         {
           "androidName": "recognition_language_selected",
           "status": "android-only"
+        },
+        {
+          "androidName": "recognition_language_question",
+          "status": "android-only"
         }
       ]
     }
