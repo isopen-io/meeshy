@@ -49,4 +49,12 @@ class MyShareLinksIntroTest {
 
         compose.onNodeWithText("Invite contacts to join your conversations").assertIsDisplayed()
     }
+
+    @Test
+    fun `an empty list names itself and still says what a share link is for`() {
+        compose.setContent { MeeshyTheme { EmptyLinks() } }
+
+        compose.onNodeWithText("No share links").assertIsDisplayed()
+        compose.onNodeWithText("Invite contacts to join your conversations").assertIsDisplayed()
+    }
 }

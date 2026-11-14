@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -166,7 +167,7 @@ private fun Modifier.headerReserve(): Modifier =
         .padding(top = CollapsibleHeaderMetrics.EXPANDED_HEIGHT.dp)
 
 @Composable
-private fun EmptyLinks() {
+internal fun EmptyLinks() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -181,6 +182,13 @@ private fun EmptyLinks() {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.links_hub_share_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = MeeshySpacing.sm),
         )
     }
 }

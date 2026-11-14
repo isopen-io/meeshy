@@ -72,7 +72,7 @@ class EpureListeLot3Test {
     }
 
     @Test
-    fun `the three empty states of the links are one line, the title`() {
+    fun `the three empty states of the links drop their creation hint and keep their title`() {
         listOf("MyShareLinksScreen.kt", "links/TrackingLinksScreen.kt", "links/AffiliateScreen.kt").forEach { path ->
             assertThat(source(path)).doesNotContain("empty_subtitle")
         }
