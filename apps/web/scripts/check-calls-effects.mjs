@@ -86,6 +86,12 @@ const capture = async (page, name) => {
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 /** Un toucher CENTRE son élément en défilant : le geste suivant vise l'élément arrêté, comme un doigt. */
+/** Le carrousel rouvert a fini de monter (#18186) : une double tape le vise à sa place, pas pendant sa montée. */
+const risen = (page, selector) => page.waitForFunction((target) => {
+  const element = document.querySelector(target);
+  return element !== null && element.getAnimations().every((animation) => animation.playState !== 'running');
+}, selector, { timeout: 4000 }).catch(() => undefined);
+
 const centered = (page, id) =>
   until(
     page,
@@ -353,6 +359,7 @@ try {
       check((await page.$$eval('[data-call-mode-bar] [data-call-effects-category][aria-pressed="true"]', (tabs) => tabs.length)) === 0 && (await page.$('[data-call-mode-bar] [data-call-effects-add-look]')) !== null, `${label} : la barre revient à son menu de base — Visage · Couleur · Cadres sur ‹ · Réglages · (+)`);
       await page.click('[data-call-effects-category="color"]');
       check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Couleur » rouvre le carrousel, « Doré » coché`);
+      await risen(page, '[data-call-effects-looks]');
       await centered(page, 'golden');
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="golden"]');
@@ -524,6 +531,7 @@ try {
 
       await page.click('[data-call-effects-category="frames"]');
       check((await appears(page, '[data-call-mode="montage"] [data-call-mode-carousel]')) && (await page.getAttribute('[data-call-effects-category="frames"]', 'aria-pressed')) === 'true', `${label} : « Cadres » rouvre le carrousel, pressée`);
+      await risen(page, '[data-call-montage-looks]');
       await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
