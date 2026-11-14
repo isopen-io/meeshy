@@ -205,6 +205,25 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(found).toEqual(['find']);
   });
 
+  test('l’état vide dit CE QU’EST un cercle au repos ; « comment on y entre » passe derrière un (i) en forme de question (épure #17584, règle 7)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, []);
+    const host = await mount(panel([]));
+    const empty = host.querySelector('[data-circles-empty]');
+    const intro = empty?.querySelector('[data-circles-empty-intro]');
+    expect(intro?.textContent).toBe('Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.');
+    expect(intro?.className).not.toContain('sr-only');
+    expect(empty?.textContent).toContain('Vos liens apparaîtront ici');
+    const info = empty?.querySelector<HTMLButtonElement>('button[aria-expanded]');
+    expect(info?.getAttribute('aria-label')).toBe('Comment rejoignent-elles mes cercles ?');
+    const noteId = info?.getAttribute('aria-controls') ?? '';
+    const note = document.getElementById(noteId);
+    expect(note?.textContent).toBe('À mesure que vous échangez avec des personnes, elles rejoignent vos cercles.');
+    expect(note?.className).toContain('sr-only');
+    await click(info ?? null);
+    expect(document.getElementById(noteId)?.className).not.toContain('sr-only');
+    expect(host.querySelector('[data-circles-find]')).not.toBeNull();
+  });
+
   test('la phrase d’orientation est lisible au repos, une ligne au-dessus de la liste, sans clic (épure #17584, règle 7)', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
     const host = await mount(panel([]));
