@@ -55,6 +55,7 @@ export function ConversationMediaSection({
   const { languages } = useReaderLanguages();
   const online = useOnline();
   const headingId = useId();
+  const openLabelId = useId();
   const sectionRef = useRef<HTMLElement | null>(null);
   const { query, items } = useMediaHubIndex({ deps, conversationId, kind: 'visual', term: null });
   const [hubOpen, setHubOpen] = useState(false);
@@ -101,12 +102,14 @@ export function ConversationMediaSection({
         type="button"
         onClick={() => setHubOpen(true)}
         data-conversation-details-media-open
-        aria-labelledby={headingId}
+        aria-labelledby={`${openLabelId} ${headingId}`}
         className="mt-2 flex w-full items-center gap-3 px-4 text-start"
         style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
       >
         <Glyph name="image" size={20} style={{ color: 'var(--accent)' }} />
-        <span className="flex-1 text-body font-medium">{translate(language, 'conversation.details.media.more')}</span>
+        <span id={openLabelId} className="flex-1 text-body font-medium">
+          {translate(language, 'conversation.details.media.more')}
+        </span>
         <Glyph name="caretDown" size={14} style={{ color: 'var(--color-ios-ink-3)', transform: 'rotate(-90deg)' }} />
       </button>
 

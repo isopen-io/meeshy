@@ -425,8 +425,11 @@ describe('ConversationMediaSection — l’aperçu de la feuille de détails (#7
     expect(client.getQueryData(mediaHubQueryKey('c1', 'visual', null))).toBeDefined();
     const open = $('[data-conversation-details-media-open]');
     expect(open?.textContent).toBe('Tout voir');
-    const heading = document.getElementById(open?.getAttribute('aria-labelledby') ?? '');
-    expect(heading?.textContent).toBe('MÉDIAS, LIENS ET DOCUMENTS');
+    const name = (open?.getAttribute('aria-labelledby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(name).toBe('Tout voir MÉDIAS, LIENS ET DOCUMENTS');
   });
 });
 
