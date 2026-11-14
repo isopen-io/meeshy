@@ -23,7 +23,7 @@ final class CallCompactHeightBarGuardTests: XCTestCase {
 
     func test_overflowContainer_fitsWhenTallAndScrollsWhenShort() throws {
         let bar = try code("Meeshy/Features/Call/Views/CallEffectsBar.swift")
-        let overflow = try slice(bar, from: "struct CallAboveBarOverflow", to: "/// P8")
+        let overflow = try slice(bar, from: "struct CallAboveBarOverflow", to: "struct CallEffectsBar<")
         XCTAssertTrue(overflow.contains("ViewThatFits(in: .vertical)"), "Assez de place : le contenu tel quel ; sinon il défile")
         XCTAssertTrue(overflow.contains("ScrollView(.vertical, showsIndicators: false)"), "Faute de hauteur, ce qui est au-dessus de la barre défile")
     }
