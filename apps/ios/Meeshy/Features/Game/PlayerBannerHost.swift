@@ -12,8 +12,10 @@ import MeeshyUI
 //    jamais un squelette — un cache vide ne peint RIEN jusqu'à la réponse), et quand il se revalide en silence ;
 //  - quand la bannière a la place (`PlayerBannerPlacement`) et comment elle entre et sort (le mouvement des barres
 //    du haut, `TopChromeBarMotion` : elle glisse, sous « Réduire les animations » elle apparaît sans bouger) ;
-//  - quand elle PARAÎT (#9536) : à l'ouverture de l'app seulement (`GamePlayerBannerOpening`) — trente secondes, puis
+//  - quand elle PARAÎT (#9536) : à l'ouverture de l'app (`GamePlayerBannerOpening`) — trente secondes, puis
 //    elle s'en va LENTEMENT en remontant (une seconde ; sous « Réduire les animations », un fondu simple) ;
+//  - quand elle REVIENT (#17366) : quelques secondes (`GameBannerRecall.seconds`), sur un acte réalisé, l'Offrande prête
+//    ou la Flamme à risque (`GameBannerRecall`), et quand on tire la liste des conversations ;
 //  - le reflet qui traverse l'anneau quand un niveau est franchi ;
 //  - ce qu'elle remonte à la bande de la barre d'état : sa couleur d'aplat.
 //
@@ -24,6 +26,8 @@ extension Notification.Name {
     /// Un instantané du jeu vient d'être écrit dans le cache (Progression, ou la revalidation de la bannière) : la
     /// bannière et l'anneau des actes du menu le relisent, sans réseau.
     static let engagementSnapshotPersisted = Notification.Name("meeshy.engagement.snapshotPersisted")
+    /// « Tirer la liste rappelle le bandeau » (#17366) : l'écran des conversations le demande au geste de rafraîchir.
+    static let playerBannerRecallRequested = Notification.Name("meeshy.game.playerBannerRecallRequested")
 }
 
 // MARK: - La source
@@ -109,6 +113,10 @@ final class PlayerBannerStore: ObservableObject {
     private let minimumInterval: TimeInterval
     private let now: () -> Date
     private var opening: GamePlayerBannerOpening
+    /// La fin du rappel en cours (#17366) ; `nil` hors rappel.
+    private var recallUntil: Date?
+    /// La dernière révision du jeu adoptée depuis `game:updated` : un état plus ancien ne se rejoue pas.
+    private var gameRevision: Int?
     private var lastFetch: Date?
     private var lastSettingsRead: Date?
     private var fetching = false
@@ -130,12 +138,24 @@ final class PlayerBannerStore: ObservableObject {
     }
 
     /// Ce qu'il reste à la bannière avant de s'en aller ; l'hôte dort ce temps-là.
-    var openingRemaining: TimeInterval { opening.remaining(at: now()) }
+    var openingRemaining: TimeInterval {
+        max(opening.remaining(at: now()), recallUntil.map { $0.timeIntervalSince(now()) } ?? 0)
+    }
 
-    /// La minuterie a sonné : si l'ouverture est bien terminée, la bannière n'a plus lieu d'être.
+    /// La minuterie a sonné : si l'ouverture et le rappel sont bien terminés, la bannière n'a plus lieu d'être.
     func closeOpeningIfDue() {
-        guard lingering, !opening.isOpen(at: now()) else { return }
+        guard lingering, !opening.isOpen(at: now()), (recallUntil ?? .distantPast) <= now() else { return }
         lingering = false
+        recallUntil = nil
+    }
+
+    /// Le bandeau revient `GameBannerRecall.seconds`, puis repart seul (#17366). Pendant l'ouverture, rien ne change :
+    /// ses trente secondes couvrent déjà le moment. Un second rappel relance les secondes.
+    func recall() {
+        guard !suspended, !(lingering && opening.isOpen(at: now())) else { return }
+        recallUntil = now().addingTimeInterval(GameBannerRecall.seconds)
+        lingering = true
+        openingGeneration += 1
     }
 
     /// L'app passe à l'arrière-plan : on retient depuis quand.
@@ -148,6 +168,7 @@ final class PlayerBannerStore: ObservableObject {
     /// ne compte pas le temps où l'appareil dort, elle sonnerait en retard.
     func appCameBack() async {
         if opening.appCameBack(at: now()) {
+            recallUntil = nil
             lingering = true
             openingGeneration += 1
             await revalidate(force: true)
@@ -183,7 +204,7 @@ final class PlayerBannerStore: ObservableObject {
         guard !openingOffering, !suspended, let before = game, before.chest.status == .ready else { return }
         openingOffering = true
         defer { openingOffering = false }
-        adopt(GameOptimistic.afterChestOpening(GameState(game: before, meesh: nil)).game)
+        adopt(GameOptimistic.afterChestOpening(GameState(game: before, meesh: nil)).game, recalls: false)
         let requestId = offeringRequestId ?? newRequestId()
         offeringRequestId = requestId
         do {
@@ -191,11 +212,11 @@ final class PlayerBannerStore: ObservableObject {
             offeringRequestId = nil
             let served = GameOptimistic.withChestReward(GameState(game: game ?? before, meesh: nil), reward: response.reward,
                                                         score: response.score, starFragments: response.starFragments)
-            adopt(served.game)
+            adopt(served.game, recalls: false)
             offeringReward = response.reward.points
         } catch {
             if GameService.refusal(of: error) == .requestIdConflict { offeringRequestId = nil }
-            adopt(before)
+            adopt(before, recalls: false)
         }
         await revalidate(force: true)
     }
@@ -232,10 +253,22 @@ final class PlayerBannerStore: ObservableObject {
         return true
     }
 
+    /// `game:updated` (#10900) : l'état du jeu changé ailleurs arrive sans requête ; un état plus ancien est ignoré.
+    func adoptServed(_ event: GameUpdatedEvent) {
+        guard !suspended, !openingOffering, let game = event.game else { return }
+        if let gameRevision, event.gameRevision <= gameRevision { return }
+        gameRevision = event.gameRevision
+        adopt(game)
+    }
+
     /// `GamePlayerBanner.make` décide : un joueur qui n'a rien fait n'a pas de bandeau (`nil`), et un bandeau qui
-    /// n'a plus rien à dire (jeu remis à zéro) s'efface.
-    private func adopt(_ game: GameBlock) {
+    /// n'a plus rien à dire (jeu remis à zéro) s'efface. Ce qui vient de naître entre l'ancien bloc et le nouveau
+    /// (`GameBannerRecall`) rappelle le bandeau — sauf les gestes du bandeau lui-même (`recalls: false`).
+    private func adopt(_ game: GameBlock, recalls: Bool = true) {
+        let reason = GameBannerRecall.reason(before: GameBannerMoment.of(self.game, hidden: false),
+                                             after: GameBannerMoment.of(game, hidden: false))
         self.game = game
+        if recalls, reason != nil { recall() }
         let next = GamePlayerBanner.make(game: game)
         if next != banner { banner = next }
     }
@@ -259,6 +292,15 @@ final class PlayerBannerStore: ObservableObject {
             .sink { [weak self] _ in
                 Task { @MainActor in await self?.readCache() }
             }
+            .store(in: &subscriptions)
+        NotificationCenter.default.publisher(for: .gameStateUpdated)
+            .compactMap { $0.object as? GameUpdatedEvent }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.adoptServed(event) }
+            .store(in: &subscriptions)
+        NotificationCenter.default.publisher(for: .playerBannerRecallRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.recall() }
             .store(in: &subscriptions)
         NotificationToastManager.shared.newNotificationReceived
             .filter { EngagementReveal.announcingTypes.contains($0.notificationType) }

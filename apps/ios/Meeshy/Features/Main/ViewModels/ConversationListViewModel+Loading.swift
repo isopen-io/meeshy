@@ -362,10 +362,9 @@ extension ConversationListViewModel {
     /// repeuplée par `forceRefresh()` lui-même ; les autres stores se
     /// rehydratent paresseusement à la prochaine lecture, cache-first.
     func pullToRefresh() async {
-        // Cancel any in-flight persist BEFORE we reset the cursor.
-        // Otherwise an orphaned `loadMore` save scheduled moments before
-        // the pull could re-write the old blob on disk after the fetch
-        // below replaces it.
+        NotificationCenter.default.post(name: .playerBannerRecallRequested, object: nil) // le bandeau revient (#17366)
+        // Cancel any in-flight persist BEFORE we reset the cursor. Otherwise an orphaned `loadMore` save scheduled
+        // moments before the pull could re-write the old blob on disk after the fetch below replaces it.
         cancelPendingPersist()
         nextCursor = nil
         hasMore = true
