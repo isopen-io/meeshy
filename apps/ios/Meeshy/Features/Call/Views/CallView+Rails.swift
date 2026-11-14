@@ -23,7 +23,7 @@ extension CallView {
 
     /// Le retrait de la zone sûre horizontale, identique des deux côtés : la
     /// fenêtre donne des bords physiques, pas des bords de lecture.
-    private static var railsSafeHorizontal: CGFloat {
+    static var railsSafeHorizontal: CGFloat {
         guard let insets = DeviceLayout.measurementWindow?.safeAreaInsets else { return 0 }
         return max(insets.left, insets.right)
     }
