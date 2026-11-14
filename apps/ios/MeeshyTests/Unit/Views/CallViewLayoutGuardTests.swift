@@ -103,9 +103,13 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "morph rogne alors le fond au ras de la safe area haute, et le " +
             "blanc du cover apparaît en bandeau sous la Dynamic Island."
         )
+        XCTAssertFalse(
+            source.contains("cornerRadius: pipMorphProgress"),
+            "P18.8 — le morph ne joue que sur la transformation et l'opacité : aucun rayon de coins animé."
+        )
         let clip = try XCTUnwrap(
-            source.range(of: ".clipShape(RoundedRectangle(cornerRadius: pipMorphProgress"),
-            "Le morph PiP doit toujours clipper ses coins arrondis."
+            source.range(of: ".clipped()\n        .scaleEffect(pipMorphTarget"),
+            "Le morph PiP découpe sa racine, d'une découpe droite et constante, avant de la mettre à l'échelle."
         )
         let before = String(source[source.startIndex ..< clip.lowerBound])
         let ignore = try XCTUnwrap(

@@ -24,6 +24,118 @@ final class CallShareCapsuleTests: XCTestCase {
         XCTAssertEqual(CallShareCapsuleMotion.windowFade(reduceMotion: false, appearing: false), 0.18)
     }
 
+    // MARK: - P18.4 · P18.8 — la fenêtre d'appel se contracte VERS l'appel réduit et se redéploie DEPUIS lui
+    // Mêmes vecteurs qu'Android `CallShareCapsuleMotion.window` (#18449).
+
+    func test_window_towardTheBanner_contractsToATenthAnchoredTopCenter() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true),
+            CallWindowMotion(scale: 0.1, pivotX: 0.5, pivotY: 0)
+        )
+    }
+
+    func test_window_expansionStartsFromTheSamePointAsTheContraction() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true),
+            CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true)
+        )
+        XCTAssertEqual(CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true).anchor, .top)
+    }
+
+    func test_window_reduceMotion_isAFadeOnly_neitherScaleNorShift() {
+        for capsuleLive in [true, false] {
+            XCTAssertEqual(CallShareCapsuleMotion.window(reduceMotion: true, capsuleLive: capsuleLive).scale, 1)
+        }
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: true, bubbleCenter: CGPoint(x: 351, y: 422), in: CGSize(width: 390, height: 844)).scale,
+            1
+        )
+    }
+
+    func test_window_withoutCapsule_keepsItsShortCenteredScale() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: false),
+            CallWindowMotion(scale: 0.92, pivotX: 0.5, pivotY: 0.5)
+        )
+    }
+
+    /// P18.4 — depuis la bulle, l'appel part de là où elle flotte : bord de fin, mi-hauteur…
+    func test_window_fromTheBubble_anchorsWhereItFloats() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, bubbleCenter: CGPoint(x: 351, y: 422), in: CGSize(width: 390, height: 844)),
+            CallWindowMotion(scale: 0.1, pivotX: 0.9, pivotY: 0.5)
+        )
+    }
+
+    /// …ou bord de début (droite à gauche compris : la place mesurée fait foi), et jamais hors de l'écran.
+    func test_window_fromTheBubble_isClampedToTheScreen() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, bubbleCenter: CGPoint(x: -20, y: 900), in: CGSize(width: 400, height: 800)),
+            CallWindowMotion(scale: 0.1, pivotX: 0, pivotY: 1)
+        )
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, bubbleCenter: CGPoint(x: 40, y: 200), in: CGSize(width: 400, height: 800)),
+            CallWindowMotion(scale: 0.1, pivotX: 0.1, pivotY: 0.25)
+        )
+    }
+
+    func test_window_fromTheBubble_withoutMeasure_fallsBackToTheBanner() {
+        XCTAssertEqual(
+            CallShareCapsuleMotion.window(reduceMotion: false, bubbleCenter: CGPoint(x: 10, y: 10), in: .zero),
+            CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true)
+        )
+    }
+
+    func test_windowMotion_scaleFollowsTheProgress() {
+        let motion = CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true)
+        XCTAssertEqual(motion.scale(at: 0), 1)
+        XCTAssertEqual(motion.scale(at: 1), 0.1, accuracy: 0.0001)
+        XCTAssertEqual(motion.scale(at: 0.5), 0.55, accuracy: 0.0001)
+    }
+
+    /// P18.8 — transformation et opacité seulement : plus de rayon de coins animé ; la
+    /// découpe est une découpe droite, constante, posée AVANT l'échelle.
+    func test_callView_morphsByTransformAndOpacityOnly_towardTheRecordedPoint() throws {
+        let view = try source("Meeshy/Features/Call/Views/CallView.swift")
+        XCTAssertFalse(view.contains("cornerRadius: pipMorphProgress"), "aucun rayon de coins animé")
+        XCTAssertTrue(view.contains(".clipped()\n        .scaleEffect(pipMorphTarget.scale(at: pipMorphProgress), anchor: pipMorphTarget.anchor)"))
+        XCTAssertTrue(view.contains("if let origin = callManager.consumePendingPipExpansion() {"))
+        XCTAssertTrue(view.contains("pipMorphTarget = origin"))
+        let header = try source("Meeshy/Features/Call/Views/CallView+Header.swift")
+        let collapse = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func collapseIntoPip()", in: header))
+        XCTAssertTrue(collapse.contains("pipMorphTarget = CallShareCapsuleMotion.window(reduceMotion: reduceMotion, capsuleLive: true)"))
+    }
+
+    /// P18.4 — la bannière et la bulle rouvrent l'appel par LE MÊME déploiement, chacune depuis sa place.
+    func test_banner_andBubble_expandFromWhereTheyFloat() throws {
+        let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
+        XCTAssertTrue(pill.contains("CallPipMorph.expand(callManager, from: CallShareCapsuleMotion.window(reduceMotion: reduceMotion, capsuleLive: true), reduceMotion: reduceMotion)"))
+        let bubble = try source("Meeshy/Features/Call/Views/CallBubbleView.swift")
+        XCTAssertTrue(bubble.contains("CallShareCapsuleMotion.window(reduceMotion: reduceMotion, bubbleCenter: center, in: geometry.size)"))
+        XCTAssertTrue(bubble.contains("CallPipMorph.expand(callManager, from: origin, reduceMotion: reduceMotion)"))
+        XCTAssertFalse(bubble.contains("callManager.displayMode = .fullScreen"), "plus de bascule sans déploiement, toucher comme VoiceOver")
+        let morph = try source("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let expand = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func expand(", in: morph))
+        XCTAssertTrue(expand.contains("guard !reduceMotion else"), "Réduire les animations : la fenêtre se fond, rien ne s'étire")
+        XCTAssertTrue(expand.contains("manager.requestPipExpansionMorph(from: origin)"))
+        XCTAssertTrue(expand.contains("disablesAnimations = true"), "le déploiement EST la transition, pas l'animation système")
+    }
+
+    /// P18.8 — interruptible : toucher l'appel pendant qu'il se contracte le rend au plein écran.
+    func test_contraction_isInterruptible_byATouchOnTheShrinkingCall() throws {
+        let morph = try source("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let contract = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func contract(", in: morph))
+        XCTAssertTrue(contract.contains("contraction = Task"))
+        XCTAssertTrue(contract.contains("guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }"))
+        let interrupt = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func interruptContraction(", in: morph))
+        XCTAssertTrue(interrupt.contains("pending.cancel()"))
+        XCTAssertTrue(interrupt.contains("progress.wrappedValue = 0"))
+        let view = try source("Meeshy/Features/Call/Views/CallView.swift")
+        XCTAssertTrue(view.contains(".overlay { pipContractionCatcher }\n        .clipped()"), "le toucher suit l'appel qui rétrécit : posé avant l'échelle")
+        let header = try source("Meeshy/Features/Call/Views/CallView+Header.swift")
+        XCTAssertTrue(header.contains("CallPipMorph.interruptContraction(progress: $pipMorphProgress)"))
+    }
+
     func test_presenter_neverShowsNorHidesTheCallWindowWithoutAFade() throws {
         let presenter = try source("Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(presenter.contains("CallShareCapsuleMotion.windowFade(reduceMotion: UIAccessibility.isReduceMotionEnabled, appearing: true)"))
