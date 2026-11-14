@@ -56,7 +56,8 @@ export type DuoSharedScreenProps = {
   /** Ce que l'écran d'appel garde et remet (il n'est jamais importé d'ici) : le miroir de mon aperçu, le coin de ma vignette, le bouton de verre et la loi du glissé. */
   readonly mirrored: boolean;
   readonly corner: CSSProperties;
-  readonly Button: typeof CallButton;
+  /** Le bouton de verre de l'écran, déjà teinté (`tone`, `prominent`) : le verre reste dans l'écran qui le dessine. */
+  readonly Button: (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => ReactNode;
   readonly isDrag: ScreenZoomLayer['isDrag'];
 };
 
@@ -81,8 +82,6 @@ export function DuoSharedScreen({ call, sharer, language, immersive, onToggleImm
           label={translate(language, immersive ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
           glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[immersive ? 'cornersIn' : 'cornersOut']} size={20} />}
           onPress={onToggleImmersive}
-          tone="glass"
-          prominent
           size={44}
           data={{ 'data-call-fullscreen': '' }}
         />

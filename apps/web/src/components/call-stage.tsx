@@ -203,6 +203,8 @@ function PeerMuted() {
 }
 
 
+const ScreenButton = (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => <CallButton {...props} tone="glass" prominent />;
+
 /**
  * L'écran reçu en duo (P15) vit avec sa surface de zoom, dans son chunk préchargé avec l'appel ; tant qu'il n'est pas
  * là, l'écran reçu se montre entier.
@@ -218,7 +220,7 @@ function DuoScreen({ call, language, fullScreen, onFullScreen }: Pick<StageProps
   );
   return (
     <Suspense fallback={fallback}>
-      <DuoScreenView call={call} sharer={sharer} language={language} immersive={immersive} onToggleImmersive={() => onFullScreen(immersive ? 'off' : 'full')} mirrored={selfPreviewMirrored(call)} corner={screenCorner} Button={CallButton} isDrag={isTileDrag} />
+      <DuoScreenView call={call} sharer={sharer} language={language} immersive={immersive} onToggleImmersive={() => onFullScreen(immersive ? 'off' : 'full')} mirrored={selfPreviewMirrored(call)} corner={screenCorner} Button={ScreenButton} isDrag={isTileDrag} />
     </Suspense>
   );
 }

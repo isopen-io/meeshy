@@ -11,12 +11,14 @@ import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, FullScreenLevel, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, fullScreenLevelFor, spotlightCapsuleButtons, type SpotlightButton } from '@/lib/calls/call-spotlight-gestures';
 import { edgeFadeMask } from '@/lib/calls/call-row-keys';
 import type { CallMember } from '@/lib/calls/call-store';
+import { zoomLabel } from '@/lib/calls/camera-zoom';
 import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
 import type { useStageFlip } from '@/lib/calls/use-stage-flip';
@@ -254,6 +256,19 @@ const stripBox = (strip: Filmstrip): CSSProperties => {
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
+/** La puce « Écran de X · 2× » (U2.5) : rangée et rendue avec la capsule, vers le haut, son propre fondu sous « Réduire les animations ». */
+function ScreenChip({ zoom, title, stowed, language }: { readonly zoom: number; readonly title: string; readonly stowed: boolean; readonly language: InterfaceLanguage }) {
+  const chip = useRef<HTMLSpanElement>(null);
+  useStowFade(chip, stowed);
+  return (
+    <span ref={chip} className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" aria-hidden={stowed ? true : undefined} data-call-stow="top" data-call-chrome-keep="" data-call-stowed={stowed ? '' : undefined} data-call-screen-banner="">
+      <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={14} />
+      <span className="truncate">{title}</span>
+      {zoom > 1 ? <span aria-hidden="true">{` · ${zoomLabel(zoom, language)}`}</span> : null}
+    </span>
+  );
+}
+
 /** L'écran partagé avant que son chunk n'arrive (préchargé avec la grille, il est là d'ordinaire) : l'image entière, sans geste. */
 function ScreenWaiting({ member, stream }: { readonly member: CallMember; readonly stream: MediaStream | undefined }) {
   return (
@@ -413,7 +428,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
             </div>
           ) : screen ? (
             <Suspense key={featured.userId} fallback={<ScreenWaiting member={featured} stream={remoteStreams[featured.userId]} />}>
-              <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} stowed={stowed} color={kit.colorOf(featured.userId)} isDrag={kit.isDrag} />
+              <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} chip={(zoom, title) => <ScreenChip zoom={zoom} title={title} stowed={stowed} language={language} />} color={kit.colorOf(featured.userId)} isDrag={kit.isDrag} />
             </Suspense>
           ) : (
             <div className="grid min-h-0 min-w-0 flex-1">
