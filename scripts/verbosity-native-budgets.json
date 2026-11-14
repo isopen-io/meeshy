@@ -691,10 +691,10 @@
       "explanations": 0
     },
     "ios:Meeshy/new_conversation": {
-      "labels": 7,
-      "words": 26,
+      "labels": 6,
+      "words": 19,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/notification": {
       "labels": 29,
@@ -1171,10 +1171,10 @@
       "explanations": 0
     },
     "ios:MeeshyUI/community": {
-      "labels": 104,
-      "words": 296,
+      "labels": 103,
+      "words": 289,
       "long": 2,
-      "explanations": 31
+      "explanations": 30
     },
     "ios:MeeshyUI/composer": {
       "labels": 7,

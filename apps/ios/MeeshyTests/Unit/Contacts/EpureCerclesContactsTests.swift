@@ -414,15 +414,10 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
-    func test_addChannelEmpty_saysToCreateAConversationFirst_theOnlyWayOut_inEveryLanguage() throws {
-        let kit = try kit()
-        let french = try XCTUnwrap(kit["community.addChannel.empty.hint"]?["fr"])
-        for language in Self.otherLanguages {
-            let value = try XCTUnwrap(kit["community.addChannel.empty.hint"]?[language], language)
-            XCTAssertNotEqual(value, french, "\(language) : copié du français")
-        }
-        XCTAssertTrue(try XCTUnwrap(kit["community.addChannel.empty.hint"]?["de"]).contains("hier"), "l'allemand dit où la conversation s'ajoutera")
-        XCTAssertTrue(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
+    func test_addChannelEmpty_isTheTitleAlone_theScreenOffersNoAction() throws {
+        let source = try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift")
+        XCTAssertTrue(source.contains("community.addChannel.empty.noConversations"), "le titre reste")
+        XCTAssertFalse(source.contains("community.addChannel.empty.hint"))
     }
 
     // MARK: - Épure 1/3 (#18088, constats 1 à 12)
@@ -566,5 +561,46 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertFalse(detail.contains("channels de cette communauté"))
         let settings = try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
         XCTAssertFalse(settings.contains("canaux"))
+    }
+
+    // MARK: - Épure 2/3 (#18088, constats 1 à 4)
+
+    func test_epure2_removedKeys_areGoneFromEveryLanguage_andNoSourceReadsThem() throws {
+        let app = try app(), kit = try kit(), sources = try shippedSources()
+        for key in ["new_conversation.contacts.empty.subtitle", "circles.offline.empty"] {
+            XCTAssertNil(app[key], "\(key) : encore au catalogue de l'app")
+            XCTAssertFalse(sources.contains("\"\(key)\""), "\(key) : une source la lit encore")
+        }
+        XCTAssertNil(kit["community.addChannel.empty.hint"], "encore au catalogue du kit")
+        XCTAssertFalse(sources.contains("\"community.addChannel.empty.hint\""))
+    }
+
+    func test_newConversationContactsEmpty_isTheTitleAlone_theSearchBarSaysTheRest() throws {
+        let source = try code("apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift")
+        XCTAssertTrue(source.contains("new_conversation.contacts.empty.title"))
+        XCTAssertFalse(source.contains("new_conversation.contacts.empty.subtitle"))
+    }
+
+    func test_circlesOffline_readsTheBannerWord_inEveryLanguage() throws {
+        let source = try code("apps/ios/Meeshy/Features/Contacts/CirclesTab.swift")
+        XCTAssertFalse(source.contains("circles.offline.empty"))
+        XCTAssertGreaterThanOrEqual(source.components(separatedBy: "circles.offline.banner").count - 1, 2, "la bannière et l'état vide disent le même mot")
+        let banner = try XCTUnwrap(try app()["circles.offline.banner"])
+        XCTAssertEqual(banner["fr"], "Hors ligne")
+        for language in Self.otherLanguages { XCTAssertFalse(try XCTUnwrap(banner[language]).isEmpty, language) }
+    }
+
+    func test_starredEmpty_isOneLine_theGestureBehindAQuestion() throws {
+        let note = StarredMessagesView.emptyInfoNote
+        XCTAssertTrue(note.question.hasSuffix("?"), "le nom accessible du (i) est la question")
+        XCTAssertEqual(note.text, "Appui long sur un message, puis « Ajouter aux favoris ».", "le geste reste appris à cet endroit")
+        XCTAssertNotEqual(note.question, note.text)
+        let source = try code("apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift")
+        XCTAssertTrue(source.contains("MeeshyInfoNoted(note: Self.emptyInfoNote"))
+        XCTAssertFalse(source.contains("description: Text("), "plus de sous-titre sous le titre")
+    }
+
+    func test_starredEmptyQuestion_isTranslatedInEveryLanguage_neverCopiedFromFrench() throws {
+        try assertTranslated(try app(), "starred.messages.empty.question", french: "Comment ajouter un message aux favoris ?")
     }
 }
