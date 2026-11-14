@@ -388,3 +388,68 @@ describe('buildGarbageCollectedConversion — live message reaped as failed', ()
     expect(result.summary.content).toBe('Appel audio interrompu');
   });
 });
+
+describe('participants du résumé d\'appel (#17868, planche A1)', () => {
+  const awa = { userId: 'user_awa', displayName: 'Awa' };
+  const karim = { userId: 'user_karim', displayName: 'Karim' };
+  const lina = { userId: 'user_lina', displayName: 'Lina' };
+
+  it('laisse la clé ABSENTE quand aucun participant n\'est connu (anciens clients inchangés)', () => {
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput())!).toBe(false);
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participants: [] }))!).toBe(false);
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participants: undefined }))!).toBe(false);
+  });
+
+  it('sert la liste dans l\'ordre d\'arrivée, lecteur compris (le lecteur se retire lui-même)', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [awa, karim, lina] }));
+    expect(meta?.participants).toEqual([awa, karim, lina]);
+  });
+
+  it('ne sert que userId et displayName — ni e-mail, ni numéro, ni aucune autre clé', () => {
+    const wide = { ...awa, email: 'awa@example.com', phoneNumber: '+33600000000', username: 'awa' };
+    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [wide] }));
+    expect(meta?.participants).toEqual([awa]);
+    expect(JSON.stringify(meta)).not.toMatch(/awa@example|\+33600000000/);
+  });
+
+  it('écarte les entrées sans identifiant ou sans nom lisible, et rogne les espaces', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({
+      participants: [
+        { userId: '', displayName: 'Fantôme' },
+        { userId: 'user_x', displayName: '   ' },
+        { userId: 'user_karim', displayName: '  Karim  ' }
+      ]
+    }));
+    expect(meta?.participants).toEqual([karim]);
+  });
+
+  it('retire les doublons d\'un même userId en gardant la première arrivée', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({
+      participants: [awa, karim, { userId: 'user_awa', displayName: 'Awa (autre appareil)' }]
+    }));
+    expect(meta?.participants).toEqual([awa, karim]);
+  });
+
+  it('laisse la clé absente quand toutes les entrées sont écartées', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [{ userId: '', displayName: '' }] }));
+    expect('participants' in meta!).toBe(false);
+  });
+
+  it('les participants voyagent avec le résumé ET avec la métadonnée combinée', () => {
+    const built = buildCallSummaryWithMetadata(makeMetaInput({ participants: [awa, karim] }));
+    expect(built?.metadata.participants).toEqual([awa, karim]);
+  });
+
+  it('un appel jamais terminé en direct (call-live) ne porte aucun participant', () => {
+    const live = buildLiveCallMetadata({ callId: 'c', initiatorId: 'u', callType: 'video' });
+    expect('participants' in live.metadata).toBe(false);
+  });
+
+  it('la conversion GC d\'un message vivant les porte aussi quand on les lui donne', () => {
+    const converted = buildGarbageCollectedConversion({
+      callId: 'c', initiatorId: 'u', callType: 'audio', participants: [awa]
+    });
+    expect(converted.metadata.participants).toEqual([awa]);
+    expect('participants' in buildGarbageCollectedConversion({ callId: 'c', initiatorId: 'u' }).metadata).toBe(false);
+  });
+});
