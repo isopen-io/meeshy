@@ -61,6 +61,7 @@ const itCall = {
   'call.a11y.screen': 'Chiamata con {name}',
   'call.bubble.callBack': 'Richiama',
   'call.bubble.join': 'Partecipa',
+  'call.card.participants.you': 'tu',
   'call.callBack.named': 'Richiama {name}',
   'call.you': 'Tu',
   'call.ended.removed': 'Sei stato rimosso dalla chiamata',

@@ -61,6 +61,7 @@ const ptCall = {
   'call.a11y.screen': 'Chamada com {name}',
   'call.bubble.callBack': 'Ligar de volta',
   'call.bubble.join': 'Entrar',
+  'call.card.participants.you': 'você',
   'call.callBack.named': 'Ligar de volta a {name}',
   'call.you': 'Você',
   'call.ended.removed': 'Você foi removido da chamada',
