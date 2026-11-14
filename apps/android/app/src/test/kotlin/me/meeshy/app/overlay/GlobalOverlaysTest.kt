@@ -88,7 +88,10 @@ class GlobalOverlaysTest {
 
         val toast = toasts.current.value
         assertThat(toast?.kind).isEqualTo(FeedbackToastKind.ERROR)
-        assertThat(toast?.message).contains("comments allowed today")
+        /* Le texte livré par l'épure #18099 : `post_daily_limit_comment_untimed`, servi par
+           `dailyGestureLimitMessage` quand la limite n'a pas d'heure de remise à zéro. L'ancienne
+           formule (« X comments allowed today ») n'existe plus dans aucune langue. */
+        assertThat(toast?.message).contains("Daily comment limit reached")
     }
 
     @Test
