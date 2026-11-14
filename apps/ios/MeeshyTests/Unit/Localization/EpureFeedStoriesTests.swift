@@ -232,11 +232,13 @@ final class EpureFeedStoriesTests: XCTestCase {
 
     func test_nearbyDetail_isOneSentence_andAbsentOnTheEmptyMap() {
         XCTAssertNil(NearbyEmptyStateCard.detail(for: .nothingOnTheMap, radiusKm: 10), "titre seul : l'état vide tient en une ligne")
-        for reason in [NearbyEmptyReason.locationDenied, .offline, .signInRequired, .serviceUnavailable, .noneInRadius] {
+        for reason in [NearbyEmptyReason.offline, .signInRequired, .serviceUnavailable, .noneInRadius] {
             XCTAssertNil(NearbyEmptyStateCard.detail(for: reason, radiusKm: 10), "\(reason) : le titre et l'action suffisent")
         }
         let awaiting = NearbyEmptyStateCard.detail(for: .awaitingLocation, radiusKm: 10)
         XCTAssertEqual(awaiting?.filter { $0 == "." }.count, 1, "la seule consigne qui guide le geste reste une phrase")
+        XCTAssertEqual(NearbyEmptyStateCard.detail(for: .locationDenied, radiusKm: 10), awaiting,
+                       "sans la position, la carte se déplace encore à la main : l'écran le dit, ses deux boutons ne le disent pas")
     }
 
     func test_soundMutedBadge_isNamedSonCoupe_andTheRestIsTheAccessibilityHint() throws {
