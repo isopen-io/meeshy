@@ -30,11 +30,9 @@ extension GameText {
 
     static var settingsHiddenSwitch: String { String(localized: "game2.settings.hidden.switch", defaultValue: "Masquer le jeu", bundle: .main) }
 
-    static var settingsHiddenCard: String { String(localized: "game2.settings.hidden.card", defaultValue: "Le jeu est masqué sur cet appareil.", bundle: .main) }
-
     static var settingsHiddenShow: String { String(localized: "game2.settings.hidden.show", defaultValue: "Réafficher le jeu", bundle: .main) }
 
-    static var settingsHiddenReopenNote: String { String(localized: "game2.settings.hidden.reopen_note", defaultValue: "Tes réglages de visibilité restent fermés : rouvre-les ici quand tu le souhaites.", bundle: .main) }
+    static var settingsHiddenReopenNote: String { String(localized: "game2.settings.hidden.reopen_note", defaultValue: "Tes réglages de visibilité restent fermés : rouvre-les ici.", bundle: .main) }
 
     static var settingsNotificationsTitle: String { String(localized: "game2.settings.notifications.title", defaultValue: "Notifications du jeu", bundle: .main) }
 

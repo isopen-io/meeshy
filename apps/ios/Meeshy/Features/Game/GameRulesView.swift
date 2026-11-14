@@ -91,14 +91,7 @@ struct GameRulesPage: View {
             MeeStickerFilmView(filmID: "mee-bonjour", animated: true, side: 84, animates: !reduceMotion, pixelCap: 240)
                 .frame(width: 84, height: 84)
                 .accessibilityHidden(true)
-            Text(String(
-                localized: "game.rules.intro",
-                defaultValue: "Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.",
-                bundle: .main
-            ))
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-            .foregroundStyle(theme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
             MeeStickerFilmView(filmID: "meo-salut", animated: true, side: 84, animates: !reduceMotion, pixelCap: 240)
                 .scaleEffect(x: -1, y: 1)
                 .frame(width: 84, height: 84)

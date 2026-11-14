@@ -277,7 +277,7 @@ extension GameText {
     }
 
     static var constellationHow: String {
-        String(localized: "game.constellation.how", defaultValue: "Dans le ciel de tes aïeux, dix fragments d’étoile allument une étoile. Chacune t’offre une parure de profil, sans avantage de jeu.", bundle: .main)
+        String(localized: "game.constellation.how", defaultValue: "Dix fragments allument une étoile et offrent une parure de profil, sans avantage de jeu.", bundle: .main)
     }
 
     static var constellationCosmetics: String { String(localized: "game.constellation.cosmetics", defaultValue: "Parures offertes", bundle: .main) }

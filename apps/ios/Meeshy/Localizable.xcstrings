@@ -32074,43 +32074,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "في سماء أجدادك، عشر شظايا نجم تُضيء نجمة. وكل نجمة تهديك زينة للملف الشخصي، دون أي أفضلية في اللعب."
+            "value": "عشر شظايا تُضيء نجمة وتهديك زينة للملف الشخصي، دون أي أفضلية في اللعب."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Himmel deiner Ahnen lassen zehn Sternfragmente einen Stern aufleuchten. Jeder schenkt dir einen Profilschmuck, ohne Spielvorteil."
+            "value": "Zehn Fragmente lassen einen Stern aufleuchten und schenken einen Profilschmuck, ohne Spielvorteil."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In your ancestors’ sky, ten star fragments light a star. Each one offers you a profile adornment, with no game advantage."
+            "value": "Ten fragments light a star and offer a profile adornment, with no game advantage."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En el cielo de tus ancestros, diez fragmentos de estrella encienden una estrella. Cada una te ofrece un adorno de perfil, sin ventaja de juego."
+            "value": "Diez fragmentos encienden una estrella y ofrecen un adorno de perfil, sin ventaja de juego."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dans le ciel de tes aïeux, dix fragments d’étoile allument une étoile. Chacune t’offre une parure de profil, sans avantage de jeu."
+            "value": "Dix fragments allument une étoile et offrent une parure de profil, sans avantage de jeu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nel cielo dei tuoi antenati, dieci frammenti di stella accendono una stella. Ognuna ti offre un ornamento del profilo, senza vantaggi di gioco."
+            "value": "Dieci frammenti accendono una stella e offrono un ornamento del profilo, senza vantaggi di gioco."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No céu dos seus ancestrais, dez fragmentos de estrela acendem uma estrela. Cada uma oferece a você um adorno de perfil, sem vantagem de jogo."
+            "value": "Dez fragmentos acendem uma estrela e oferecem um adorno de perfil, sem vantagem de jogo."
           }
         }
       }
@@ -269131,53 +269131,6 @@
         }
       }
     },
-    "game.rules.intro": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ثماني قواعد، واللعبة كلها بداخلها. ميو يشرحها، ومي تُريك الإجراء."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acht Regeln, und das ganze Spiel passt hinein. Meo erklärt sie, Mee zeigt dir die Aktion."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eight rules, and the whole game fits inside. Meo explains them, Mee shows you the move."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ocho reglas, y todo el juego cabe en ellas. Meo las explica, Mee te muestra el gesto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Otto regole, e tutto il gioco ci sta dentro. Meo le spiega, Mee ti mostra il gesto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Oito regras, e o jogo inteiro cabe nelas. O Meo as explica, a Mee mostra a ação."
-          }
-        }
-      }
-    },
     "game.rules.section_rules": {
       "extractionState": "manual",
       "localizations": {
@@ -269936,43 +269889,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يسمح هذا الجهاز بالكاميرا هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط."
+            "value": "الكاميرا غير متاحة هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieses Gerät erlaubt hier keine Kamera. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte."
+            "value": "Kamera hier nicht verfügbar. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This device does not allow the camera here. Pick a photo from your gallery, or keep the card only."
+            "value": "Camera unavailable here. Pick a photo from your gallery, or keep the card only."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este dispositivo no permite la cámara aquí. Elige una foto de tu galería, o quédate solo con la tarjeta."
+            "value": "Cámara no disponible aquí. Elige una foto de tu galería, o quédate solo con la tarjeta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule."
+            "value": "Caméra indisponible ici. Choisis une photo dans ta galerie, ou garde la carte seule."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo dispositivo non consente la fotocamera qui. Scegli una foto dalla galleria, oppure tieni solo la carta."
+            "value": "Fotocamera non disponibile qui. Scegli una foto dalla galleria, oppure tieni solo la carta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este aparelho não permite a câmera aqui. Escolha uma foto da galeria, ou fique só com o cartão."
+            "value": "Câmera indisponível aqui. Escolha uma foto da galeria, ou fique só com o cartão."
           }
         }
       }
@@ -279009,43 +278962,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تبقى إعدادات الظهور مغلقة: أعد فتحها هنا متى شئت."
+            "value": "تبقى إعدادات الظهور مغلقة: أعد فتحها هنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Sichtbarkeitseinstellungen bleiben geschlossen: Öffne sie hier, wann du möchtest."
+            "value": "Deine Sichtbarkeitseinstellungen bleiben geschlossen: Öffne sie hier."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your visibility settings stay closed: reopen them here whenever you like."
+            "value": "Your visibility settings stay closed: reopen them here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus ajustes de visibilidad siguen cerrados: ábrelos aquí cuando quieras."
+            "value": "Tus ajustes de visibilidad siguen cerrados: ábrelos aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes réglages de visibilité restent fermés : rouvre-les ici quand tu le souhaites."
+            "value": "Tes réglages de visibilité restent fermés : rouvre-les ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le tue impostazioni di visibilità restano chiuse: riaprile qui quando vuoi."
+            "value": "Le tue impostazioni di visibilità restano chiuse: riaprile qui."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas configurações de visibilidade continuam fechadas: reabra-as aqui quando quiser."
+            "value": "Suas configurações de visibilidade continuam fechadas: reabra-as aqui."
           }
         }
       }
@@ -279093,53 +279046,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar o jogo de novo"
-          }
-        }
-      }
-    },
-    "game2.settings.hidden.card": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اللعبة مخفية على هذا الجهاز."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Spiel ist auf diesem Gerät ausgeblendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The game is hidden on this device."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El juego está oculto en este dispositivo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le jeu est masqué sur cet appareil."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il gioco è nascosto su questo dispositivo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O jogo está oculto neste aparelho."
           }
         }
       }
@@ -289866,43 +289772,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا رحلة جارية حاليًا"
+            "value": "لا رحلة جارية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerade ist keine Reise unterwegs"
+            "value": "Keine Reise unterwegs"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No journey under way right now"
+            "value": "No journey under way"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ningún viaje en curso por ahora"
+            "value": "Ningún viaje en curso"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun voyage en cours pour le moment"
+            "value": "Aucun voyage en cours"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun viaggio in corso per ora"
+            "value": "Nessun viaggio in corso"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma viagem em andamento no momento"
+            "value": "Nenhuma viagem em andamento"
           }
         }
       }
