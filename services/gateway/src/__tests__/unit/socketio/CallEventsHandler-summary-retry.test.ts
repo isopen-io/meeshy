@@ -10,16 +10,20 @@
 
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
+type SyncFn = (...args: unknown[]) => unknown;
+type AsyncFn = (...args: unknown[]) => Promise<unknown>;
+type SocketHandler = (...args: unknown[]) => unknown;
+
 // ---------------------------------------------------------------------------
 // Module-level mocks — must precede all imports
 // ---------------------------------------------------------------------------
 
-const mockEndCall = jest.fn<any>();
-const mockClearRingingTimeout = jest.fn<any>();
-const mockCreateCallSummaryMessage = jest.fn<any>();
-const mockCreateLiveCallMessage = jest.fn<any>();
-const mockInitiateCall = jest.fn<any>();
-const mockGetCallSession = jest.fn<any>();
+const mockEndCall = jest.fn<AsyncFn>();
+const mockClearRingingTimeout = jest.fn<SyncFn>();
+const mockCreateCallSummaryMessage = jest.fn<AsyncFn>();
+const mockCreateLiveCallMessage = jest.fn<AsyncFn>();
+const mockInitiateCall = jest.fn<AsyncFn>();
+const mockGetCallSession = jest.fn<AsyncFn>();
 
 jest.mock('../../../services/CallService', () => ({
   ...(jest.requireActual('../../../services/CallService') as object),
@@ -29,14 +33,14 @@ jest.mock('../../../services/CallService', () => ({
     createCallSummaryMessage: mockCreateCallSummaryMessage,
     createLiveCallMessage: mockCreateLiveCallMessage,
     initiateCall: mockInitiateCall,
-    joinCall: jest.fn<any>(),
+    joinCall: jest.fn<SyncFn>(),
     getCallSession: mockGetCallSession,
-    generateIceServers: jest.fn<any>().mockReturnValue([]),
-    getIceServerTtl: jest.fn<any>().mockReturnValue(300),
-    scheduleRingingTimeout: jest.fn<any>(),
-    listHistory: jest.fn<any>(),
-    handleMissedCall: jest.fn<any>(),
-    leaveCall: jest.fn<any>(),
+    generateIceServers: jest.fn<SyncFn>().mockReturnValue([]),
+    getIceServerTtl: jest.fn<SyncFn>().mockReturnValue(300),
+    scheduleRingingTimeout: jest.fn<SyncFn>(),
+    listHistory: jest.fn<SyncFn>(),
+    handleMissedCall: jest.fn<SyncFn>(),
+    leaveCall: jest.fn<SyncFn>(),
   })),
 }));
 
@@ -50,10 +54,10 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
-  isValidationFailure: jest.fn((r: any) => !r.success),
+  isValidationFailure: jest.fn((r: { success: boolean }) => !r.success),
 }));
 
-const mockCheckRateLimit = jest.fn<any>().mockResolvedValue(true);
+const mockCheckRateLimit = jest.fn<AsyncFn>().mockResolvedValue(true);
 jest.mock('../../../utils/socket-rate-limiter', () => ({
   SocketRateLimiter: jest.fn().mockImplementation(() => ({
     checkLimit: mockCheckRateLimit,
@@ -72,7 +76,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
   },
 }));
 
-const mockLoggerError = jest.fn<any>();
+const mockLoggerError = jest.fn<SyncFn>();
 jest.mock('../../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
@@ -119,25 +123,25 @@ function makeCallSession() {
 function makePrisma() {
   return {
     callSession: {
-      findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }),
+      findUnique: jest.fn<AsyncFn>().mockResolvedValue({ conversationId: CONV_ID }),
     },
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      findFirst: jest.fn<AsyncFn>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<AsyncFn>().mockResolvedValue([]),
     },
   } as unknown as PrismaClient;
 }
 
 function makeSocket() {
-  const handlers: Record<string, (...args: any[]) => any> = {};
-  const directEmit = jest.fn<any>();
+  const handlers: Record<string, SocketHandler> = {};
+  const directEmit = jest.fn<SyncFn>();
   const socket = {
     id: 'socket-retry-1',
-    on: jest.fn((event: string, fn: (...args: any[]) => any) => {
+    on: jest.fn((event: string, fn: SocketHandler) => {
       handlers[event] = fn;
     }),
     emit: directEmit,
-    join: jest.fn<any>().mockResolvedValue(undefined),
+    join: jest.fn<AsyncFn>().mockResolvedValue(undefined),
     to: jest.fn().mockReturnValue({ emit: jest.fn() }),
     rooms: new Set<string>(['socket-retry-1']),
     data: {},
@@ -146,10 +150,10 @@ function makeSocket() {
 }
 
 function makeIo() {
-  const roomEmit = jest.fn<any>();
+  const roomEmit = jest.fn<SyncFn>();
   const io = {
-    to: jest.fn<any>().mockReturnValue({ emit: roomEmit }),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) }),
+    to: jest.fn<SyncFn>().mockReturnValue({ emit: roomEmit }),
+    in: jest.fn<SyncFn>().mockReturnValue({ fetchSockets: jest.fn<AsyncFn>().mockResolvedValue([]) }),
   };
   return { io, roomEmit };
 }
@@ -163,7 +167,7 @@ describe('CallEventsHandler — postCallSummary retry', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+    (validateSocketEvent as unknown as jest.Mock<SyncFn>).mockReturnValue({ success: true });
     mockEndCall.mockResolvedValue(makeCallSession());
     mockClearRingingTimeout.mockReturnValue(undefined);
     mockGetCallSession.mockResolvedValue({
@@ -187,15 +191,15 @@ describe('CallEventsHandler — postCallSummary retry', () => {
       .mockRejectedValueOnce(new Error('transient DB error'))
       .mockResolvedValueOnce({ kind: 'created', message: fakeMessage });
 
-    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const messageBroadcaster = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     const prisma = makePrisma();
     const { socket, handlers } = makeSocket();
     const { io } = makeIo();
-    const ack = jest.fn<any>();
+    const ack = jest.fn<SyncFn>();
 
     const handler = new CallEventsHandler(prisma);
     handler.setMessageBroadcaster(messageBroadcaster);
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     // Start the call:end handler — it runs postCallSummary internally
     const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, ack);
@@ -223,15 +227,15 @@ describe('CallEventsHandler — postCallSummary retry', () => {
     // Always fail
     mockCreateCallSummaryMessage.mockRejectedValue(new Error('persistent DB error'));
 
-    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const messageBroadcaster = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     const prisma = makePrisma();
     const { socket, handlers } = makeSocket();
     const { io } = makeIo();
-    const ack = jest.fn<any>();
+    const ack = jest.fn<SyncFn>();
 
     const handler = new CallEventsHandler(prisma);
     handler.setMessageBroadcaster(messageBroadcaster);
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, ack);
 
@@ -249,7 +253,7 @@ describe('CallEventsHandler — postCallSummary retry', () => {
 
     // The 'giving up' error must have been logged
     const givingUpCall = mockLoggerError.mock.calls.find(
-      ([msg]: any[]) => typeof msg === 'string' && msg.includes('Giving up on call summary')
+      ([msg]: unknown[]) => typeof msg === 'string' && msg.includes('Giving up on call summary')
     );
     expect(givingUpCall).toBeDefined();
 
@@ -274,15 +278,15 @@ describe('CallEventsHandler — postCallSummary retry', () => {
       participants: [],
     });
 
-    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const messageBroadcaster = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     const prisma = makePrisma();
     const { socket, handlers } = makeSocket();
     const { io } = makeIo();
-    const ack = jest.fn<any>();
+    const ack = jest.fn<SyncFn>();
 
     const handler = new CallEventsHandler(prisma);
     handler.setMessageBroadcaster(messageBroadcaster);
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     await handlers[CALL_EVENTS.INITIATE](
       { conversationId: CONV_ID, type: 'audio', settings: {} },
@@ -304,15 +308,15 @@ describe('CallEventsHandler — postCallSummary retry', () => {
     // promise below would still be pending after only the *first* attempt.
     mockCreateCallSummaryMessage.mockRejectedValue(new Error('transient DB error'));
 
-    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const messageBroadcaster = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     const prisma = makePrisma();
     const { socket, handlers } = makeSocket();
     const { io } = makeIo();
-    const ack = jest.fn<any>();
+    const ack = jest.fn<SyncFn>();
 
     const handler = new CallEventsHandler(prisma);
     handler.setMessageBroadcaster(messageBroadcaster);
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     // No timer advancement before this resolves: the handler must settle on
     // its own once postCallSummary is fired off, not awaited.
@@ -333,7 +337,7 @@ describe('CallEventsHandler — postCallSummary et les participants du résumé 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+    (validateSocketEvent as unknown as jest.Mock<SyncFn>).mockReturnValue({ success: true });
     mockEndCall.mockResolvedValue(makeCallSession());
     mockGetCallSession.mockResolvedValue({
       participants: [{ participantId: PARTICIPANT_ID, leftAt: null, participant: { userId: CALLER_ID } }],
@@ -350,8 +354,8 @@ describe('CallEventsHandler — postCallSummary et les participants du résumé 
     const { io } = makeIo();
 
     const handler = new CallEventsHandler(makePrisma());
-    handler.setMessageBroadcaster(jest.fn<any>().mockResolvedValue(undefined));
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setMessageBroadcaster(jest.fn<AsyncFn>().mockResolvedValue(undefined));
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, jest.fn());
     handler.destroy();
@@ -373,16 +377,16 @@ describe('CallEventsHandler — postCallSummary et les participants du résumé 
     };
     mockCreateCallSummaryMessage.mockResolvedValue({ kind: 'created', message: summary });
     const prisma = makePrisma();
-    (prisma.participant.findMany as jest.MockedFunction<any>).mockResolvedValue([
+    (prisma.participant.findMany as unknown as jest.Mock<AsyncFn>).mockResolvedValue([
       { conversationId: CONV_ID, userId: 'u-awa', displayName: 'Awa Renommée', nickname: null, user: null },
     ]);
-    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const messageBroadcaster = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     const { socket, handlers } = makeSocket();
     const { io } = makeIo();
 
     const handler = new CallEventsHandler(prisma);
     handler.setMessageBroadcaster(messageBroadcaster);
-    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    handler.setupCallEvents(socket as never, io, () => CALLER_ID);
 
     const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, jest.fn());
     handler.destroy();

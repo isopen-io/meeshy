@@ -9,7 +9,13 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 
+const mockWarn = jest.fn();
+jest.mock('../../../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: mockWarn, error: jest.fn(), debug: jest.fn() }
+}));
+
 import { resolveCallSummaryParticipantIds } from '../callSummaryParticipants';
+import { CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE } from '../answeredCallRoster';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const RING = new Date('2026-11-14T10:00:00.000Z');
@@ -95,10 +101,22 @@ describe('resolveCallSummaryParticipantIds — seuls ceux qui ont DÉCROCHÉ', (
     expect(findMany).not.toHaveBeenCalled();
   });
 
-  it('un appel décroché AVANT le champ (aucune ligne marquée) garde la liste d\'avant : tous ceux qui ont rejoint', async () => {
+  it('un appel décroché AVANT le déploiement du champ (aucune ligne marquée) garde la liste d\'avant, sans alerte', async () => {
+    mockWarn.mockClear();
     const { prisma } = prismaWith([initiator(), row('u_karim'), row('u_awa')]);
+    const before = new Date(CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE.getTime() - 60_000);
 
-    expect(await resolveCallSummaryParticipantIds(prisma, answeredCall)).toEqual(['u_moi', 'u_karim', 'u_awa']);
+    expect(await resolveCallSummaryParticipantIds(prisma, { id: CALL, answeredAt: before })).toEqual(['u_moi', 'u_karim', 'u_awa']);
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it('un appel décroché APRÈS le déploiement sans aucune ligne marquée ne retombe PAS sur l\'ancienne liste : l\'initiateur seul, et une alerte', async () => {
+    mockWarn.mockClear();
+    const { prisma } = prismaWith([initiator(), row('u_karim'), row('u_awa')]);
+    const after = new Date(CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE.getTime() + 60_000);
+
+    expect(await resolveCallSummaryParticipantIds(prisma, { id: CALL, answeredAt: after })).toEqual(['u_moi']);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringMatching(/answered call has no answered participant/i), expect.objectContaining({ callId: CALL }));
   });
 
   it('écarte une ligne sans compte, une ligne orpheline et le second appareil d\'un même compte', async () => {

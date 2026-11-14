@@ -10,6 +10,7 @@ import {
   callSummaryClientMessageId,
   callContentKey,
   storedCallSummaryParticipantIds,
+  withoutCallSummaryParticipants,
   type CallSummaryInput,
   type CallSummaryMetadataInput
 } from '../utils/call-summary';
@@ -450,5 +451,21 @@ describe('storedCallSummaryParticipantIds — ce que la lecture réhydrate (#182
     expect(storedCallSummaryParticipantIds({ kind: 'call-live', participants: [{ userId: 'a' }] })).toEqual([]);
     expect(storedCallSummaryParticipantIds({ kind: 'call', participants: 'a' })).toEqual([]);
     expect(storedCallSummaryParticipantIds({ kind: 'call', participants: [null, { userId: 3 }, { userId: ' ' }, { userId: 'b' }] })).toEqual(['b']);
+  });
+});
+
+describe('withoutCallSummaryParticipants — un chemin qui ne nomme pas ne sert pas la forme stockée (#18242)', () => {
+  it('retire `participants` d\'un résumé d\'appel terminal, et garde le reste', () => {
+    const metadata = { kind: 'call', callId: 'c', outcome: 'completed', participants: [{ userId: 'a' }] };
+    expect(withoutCallSummaryParticipants(metadata)).toEqual({ kind: 'call', callId: 'c', outcome: 'completed' });
+  });
+
+  it('rend l\'objet tel quel quand il n\'y a rien à retirer', () => {
+    const plain = { kind: 'member-joined', participants: [{ userId: 'a' }] };
+    const live = { kind: 'call-live', callId: 'c' };
+    expect(withoutCallSummaryParticipants(plain)).toBe(plain);
+    expect(withoutCallSummaryParticipants(live)).toBe(live);
+    expect(withoutCallSummaryParticipants(null)).toBeNull();
+    expect(withoutCallSummaryParticipants(undefined)).toBeUndefined();
   });
 });

@@ -46,7 +46,7 @@ describe('resolveGroupCallParticipants', () => {
     ]);
     const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g')], READER);
     expect(byCall.get('call-g')).toEqual([
-      { participantId: 'p-alice', userId: 'u-alice', username: 'alice', displayName: 'Alice', avatar: 'https://cdn/alice.png' },
+      { participantId: 'p-alice', userId: 'u-alice', username: 'alice', displayName: 'alice-participant', avatar: 'https://cdn/alice.png' },
       { participantId: 'p-bob', userId: null, username: null, displayName: 'Bob (invité)', avatar: 'https://cdn/bob.png' },
     ]);
     const query = findMany.mock.calls[0][0];
@@ -64,7 +64,7 @@ describe('resolveGroupCallParticipants', () => {
       rosterRow('call-g', awa, { role: 'participant', answeredAt: ANSWERED_AT }),
     ]);
     const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g')], 'u-awa');
-    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Me']);
+    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Moi']);
   });
 
   it('#18242 B1 — une sonnerie ignorée ou un refus tardif ne font pas un participant ; un appel non décroché n\'en a aucun', async () => {
@@ -75,9 +75,24 @@ describe('resolveGroupCallParticipants', () => {
       rosterRow('call-m', karim, { role: 'participant', answeredAt: null }),
     ]);
     const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g'), { id: 'call-m', answeredAt: null }], READER);
-    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Alice']);
+    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['alice-participant']);
     expect(byCall.get('call-m') ?? []).toEqual([]);
     expect(JSON.stringify(findMany.mock.calls[0][0].select)).toMatch(/answeredAt/);
+  });
+
+  it('#18242 — nomme comme la carte du fil : surnom, copie du participant, compte, Prénom Nom, pseudo ; un compte purgé est « Compte supprimé »', async () => {
+    const person = (id: string, participant: Record<string, unknown>, user: Record<string, unknown> | null) =>
+      rosterRow('call-g', { id: `p-${id}`, userId: `u-${id}`, displayName: '', nickname: null, avatar: null, ...participant, user: user && { username: `${id}_handle`, displayName: null, firstName: null, lastName: null, avatar: null, ...user } });
+    const { prisma } = prismaWithRoster([
+      person('1', { nickname: 'Surnom', displayName: 'Copie' }, { displayName: 'Compte' }),
+      person('2', { displayName: 'Copie 2' }, { displayName: 'Compte 2' }),
+      person('3', {}, { displayName: 'Compte 3' }),
+      person('4', {}, { firstName: 'Lina', lastName: 'Diallo' }),
+      person('5', {}, {}),
+      person('6', { displayName: 'Compte supprimé', nickname: 'Ancien surnom' }, { firstName: 'Compte', lastName: 'supprimé' }),
+    ]);
+    const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g')], READER);
+    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Surnom', 'Copie 2', 'Compte 3', 'Lina Diallo', '5_handle', 'Compte supprimé']);
   });
 
   it('ne lit rien quand la page ne porte aucun appel de groupe', async () => {
@@ -114,7 +129,36 @@ describe('listCallHistory — participants d’un appel de groupe', () => {
       callParticipant: { findMany: jest.fn<any>().mockResolvedValue([rosterRow('call-g', alice)]) },
     } as unknown as PrismaClient;
     const page = await listCallHistory(prisma, READER, { limit: 30, filter: 'all', viewer: VIEWER as any });
-    expect(page.items.find((item) => item.callId === 'call-g')?.participants.map((p) => p.displayName)).toEqual(['Alice']);
+    expect(page.items.find((item) => item.callId === 'call-g')?.participants.map((p) => p.displayName)).toEqual(['alice-participant']);
     expect(page.items.find((item) => item.callId === 'call-d')?.participants).toEqual([]);
+  });
+
+  it('#18242 — un membre qui a sonné puis refusé lit « manqué », jamais « entrant décroché »', async () => {
+    const karimCall = { ...groupRow, id: 'call-k', initiatorId: 'u-init' };
+    const init = { id: 'p-init', userId: 'u-init', displayName: 'Init', avatar: null, user: null };
+    const prisma = {
+      callSession: { findMany: jest.fn<any>().mockResolvedValue([karimCall]) },
+      participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+      callParticipant: { findMany: jest.fn<any>().mockResolvedValue([
+        rosterRow('call-k', init, { role: 'initiator', answeredAt: ANSWERED_AT }),
+        rosterRow('call-k', alice, { role: 'participant', answeredAt: ANSWERED_AT }),
+        rosterRow('call-k', reader, { role: 'participant', leftAt: new Date('2026-09-20T10:00:02Z') }),
+      ]) },
+    } as unknown as PrismaClient;
+    const page = await listCallHistory(prisma, READER, { limit: 30, filter: 'all', viewer: VIEWER as any });
+    expect(page.items.find((item) => item.callId === 'call-k')?.direction).toBe('missed');
+  });
+
+  it('#18242 — un membre qui a décroché lit « entrant »', async () => {
+    const awaCall = { ...groupRow, id: 'call-a', initiatorId: 'u-init' };
+    const prisma = {
+      callSession: { findMany: jest.fn<any>().mockResolvedValue([awaCall]) },
+      participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+      callParticipant: { findMany: jest.fn<any>().mockResolvedValue([
+        rosterRow('call-a', reader, { role: 'participant', answeredAt: ANSWERED_AT }),
+      ]) },
+    } as unknown as PrismaClient;
+    const page = await listCallHistory(prisma, READER, { limit: 30, filter: 'all', viewer: VIEWER as any });
+    expect(page.items.find((item) => item.callId === 'call-a')?.direction).toBe('incoming');
   });
 });
