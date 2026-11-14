@@ -311,13 +311,11 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             // `render(in:)` ne fait tourner aucune animation : l'image de
             // chaque GIF se pose ici, au temps de la frame (#8610).
             StoryRenderer.advanceAnimatedStickers(in: tree, at: time)
-            // Opening transition — only visible during the first
-            // `StoryRenderer.slideTransitionDuration`. The live canvas uses
-            // `CABasicAnimation`, but `layer.render(in:)` doesn't run the
-            // animation engine — it renders the model layer as-is. So we
-            // apply the static state of the opening at the current playhead
-            // directly on the model layer.
+            // Entrée et sortie de la slide, posées au temps de la frame : le
+            // player les joue, `layer.render(in:)` ne fait tourner aucune animation.
             applyStaticOpening(slide.effects.opening, rootLayer: tree, elapsed: time.seconds)
+            applyStaticClosing(slide.effects.closing, rootLayer: tree, elapsed: time.seconds,
+                               totalDuration: slide.computedTotalDuration())
             layer = tree
         }
 
@@ -562,6 +560,18 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             rootLayer.sublayerTransform = StoryRenderer.openingSublayerTransform(
                 effect, progress: progress, canvasWidth: rootLayer.bounds.width)
         }
+    }
+
+    /// La sortie de la slide (#18555), par la fonction même du player
+    /// (`StoryRenderer.applyClosing`). Hors de sa fenêtre elle ne touche à rien :
+    /// sa valeur neutre écraserait l'entrée posée juste avant sur une slide courte.
+    @MainActor
+    static func applyStaticClosing(_ effect: StoryTransitionEffect?,
+                                   rootLayer: CALayer,
+                                   elapsed: Double,
+                                   totalDuration: Double) {
+        guard StoryRenderer.closingProgress(totalDuration: totalDuration, at: elapsed) > 0 else { return }
+        StoryRenderer.applyClosing(effect, rootLayer: rootLayer, elapsed: elapsed, totalDuration: totalDuration)
     }
 
     /// Dernier bitmap de fond décodé, mémoïsé par adresse.

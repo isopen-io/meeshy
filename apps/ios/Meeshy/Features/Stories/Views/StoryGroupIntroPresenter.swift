@@ -23,6 +23,10 @@ final class StoryGroupIntroPresenter: ObservableObject {
     /// whose identity is here is complete from its first frame.
     @Published private(set) var resolved: [String: Intro] = [:]
     private var pending: Task<Void, Never>?
+    /// The incoming author's story plays MUTED under the interlude (#18516).
+    /// Laid before the group swap, so its canvas is born muted; read by the
+    /// reader's render, never observed (the swap re-renders it anyway).
+    private(set) var veilsSound = false
 
     func resolvedIntro(for userId: String) -> Intro? { resolved[userId] }
 
@@ -48,6 +52,20 @@ final class StoryGroupIntroPresenter: ObservableObject {
             guard held, self != nil else { return }
             elapsed()
         }
+    }
+
+    /// `true` when the veil was not laid yet.
+    @discardableResult
+    func veilSound() -> Bool {
+        defer { veilsSound = true }
+        return !veilsSound
+    }
+
+    /// `true` when a veil was laid.
+    @discardableResult
+    func liftSoundVeil() -> Bool {
+        defer { veilsSound = false }
+        return veilsSound
     }
 
     /// The pending hold (and its enrichment) no longer applies.

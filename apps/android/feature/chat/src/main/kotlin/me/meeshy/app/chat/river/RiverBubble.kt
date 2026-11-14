@@ -1,11 +1,6 @@
 package me.meeshy.app.chat.river
 
 import me.meeshy.sdk.model.ForwardAttribution
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import me.meeshy.ui.component.bubble.EphemeralBurnVisibility
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -119,10 +115,10 @@ internal fun RiverBubble(
     modifier: Modifier = Modifier,
 ) {
     val expired by rememberRiverExpiry(content)
-    AnimatedVisibility(
+    EphemeralBurnVisibility(
         visible = !expired,
-        enter = EnterTransition.None,
-        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+        isOutgoing = content.bubble.isViewer,
+        seedKey = content.bubble.messageId,
     ) {
         RiverBubbleBody(content, contentWidth, actions, modifier)
     }

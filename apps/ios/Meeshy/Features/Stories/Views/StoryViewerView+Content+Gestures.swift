@@ -16,7 +16,9 @@ extension StoryViewerView {
     var unifiedDragGesture: some Gesture {
         DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .onChanged { value in
-                guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
+                guard !isDismissing && !isComposerEngaged else { return }
+                // Un glissé pendant une transition la conclut (#18509).
+                transitionLatch.concludeWithoutAnimation()
                 // Yields to the reaction strip (#6083) and the composer (#8431),
                 // then to a rail scrub (#7878): neither cube nor dismiss.
                 guard !drag.isClaimedElsewhere, !isScrubbingRail else { return }
@@ -54,7 +56,8 @@ extension StoryViewerView {
             }
             .onEnded { value in
                 let ended = drag.finish()
-                guard !isDismissing && !isTransitioning && !isComposerEngaged else {
+                transitionLatch.concludeWithoutAnimation()
+                guard !isDismissing && !isComposerEngaged else {
                     snapBackAll()
                     return
                 }
