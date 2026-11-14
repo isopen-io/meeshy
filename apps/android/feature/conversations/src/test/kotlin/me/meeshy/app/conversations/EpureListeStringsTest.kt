@@ -126,11 +126,13 @@ class EpureListeStringsTest {
     }
 
     @Test
-    fun `the solo group hint is one short sentence in the seven languages`() {
-        assertThat(all("values")["new_conversation_group_solo_hint"]).isEqualTo("You can invite people later.")
+    fun `the group switch keeps its label alone, the solo hint has no reader and leaves the seven folders`() {
         folders.forEach { folder ->
-            assertWithMessage(folder).that(all(folder).getValue("new_conversation_group_solo_hint").length).isAtMost(60)
+            assertWithMessage(folder).that(all(folder).keys).doesNotContain("new_conversation_group_solo_hint")
         }
+        assertThat(all("values")["new_conversation_group_toggle"]).isEqualTo("New group")
+        val sheet = File(resDir.parentFile.parentFile, "main/kotlin/me/meeshy/app/conversations/NewConversationSheet.kt").readText()
+        assertThat(sheet).doesNotContain("solo_hint")
     }
 
     @Test
