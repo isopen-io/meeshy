@@ -4,7 +4,6 @@ const deStoriesMine = {
   'storiesMine.title': 'Meine Storys',
   'storiesMine.manage': 'Meine Storys verwalten',
   'storiesMine.empty.title': 'Keine Story gesendet',
-  'storiesMine.empty.subtitle': 'Deine veröffentlichten Storys erscheinen hier, solange sie aktiv sind.',
   'storiesMine.action.open': 'Öffnen',
   'storiesMine.action.edit': 'Bearbeiten',
   'storiesMine.action.delete': 'Löschen',

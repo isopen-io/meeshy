@@ -4,7 +4,6 @@ const enStoriesMine = {
   'storiesMine.title': 'My stories',
   'storiesMine.manage': 'Manage my stories',
   'storiesMine.empty.title': 'No stories sent',
-  'storiesMine.empty.subtitle': 'Your published stories will appear here while they’re active.',
   'storiesMine.action.open': 'Open',
   'storiesMine.action.edit': 'Edit',
   'storiesMine.action.delete': 'Delete',

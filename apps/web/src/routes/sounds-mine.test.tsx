@@ -129,10 +129,13 @@ describe('SoundsMineView — les états', () => {
     expect(host.querySelector('li[data-my-sound="b"]')?.textContent).toContain('2 publications');
   });
 
-  test('VIDE : un état qui dit d’où viennent les sons, jamais un écran blanc', async () => {
+  test('VIDE : un mot, et d’où viennent les sons derrière un (i), jamais un écran blanc', async () => {
     seed();
     const host = await mountScreen();
-    expect(host.querySelector('[data-my-sounds-empty]')?.textContent).toContain('Aucun son dans votre bibliothèque');
+    const empty = host.querySelector('[data-my-sounds-empty]');
+    expect(empty?.querySelector('p')?.textContent).toBe('Aucun son');
+    expect(empty?.querySelector('button')?.getAttribute('aria-label')).toBe('D’où viennent mes sons ?');
+    expect(empty?.textContent).toContain('extraits de vos vidéos');
   });
 
   test('le retour mène aux réglages, nommé, à une cible de 44', async () => {

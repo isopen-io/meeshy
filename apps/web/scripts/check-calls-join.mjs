@@ -142,7 +142,7 @@ try {
       await page.click('[data-keypad-delete]');
       await page.fill('[data-keypad-input]', '+221999');
       check(await waitStatus(page, 'none'), `${label} : un numéro inconnu se dit « Aucun contact trouvé »`);
-      inks['aucun'] = await contrastOf(page, '[data-keypad-status="none"] .text-caption');
+      inks['aucun'] = await contrastOf(page, '[data-keypad-status="none"] .text-body');
 
       // ------------------------------------------------ 3. appeler un résultat
       await page.fill('[data-keypad-input]', 'Amina');

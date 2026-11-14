@@ -162,10 +162,13 @@ describe('la relation servie', () => {
   /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
      appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
      qu'une action a disparu, ou qu'une s'est glissée sans décision. */
-  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer, Signaler', async () => {
+  test('la relation servie « aucune » offre Ajouter et Écrire au repos, Bloquer et Signaler derrière ⋯', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
+    const actions = (): (string | null)[] => [...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'));
+    expect(actions()).toEqual(['add', 'write']);
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-more]')?.click());
+    expect(actions()).toEqual(['add', 'write', 'block', 'report']);
   });
 });
 
@@ -266,8 +269,6 @@ describe('une demande REÇUE', () => {
       'accept',
       'reject',
       'write',
-      'block',
-      'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
   });
@@ -639,6 +640,7 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
   test('le bouton « Signaler » la fait apparaître, avec les HUIT motifs', async () => {
     const el = await mount('kwame-mensah');
 
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-more]')?.click());
     const bouton = el.querySelector<HTMLButtonElement>('[data-profile-action="report"]');
     expect(bouton).not.toBe(null);
     await act(async () => bouton?.click());
@@ -664,6 +666,7 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
   test('elle dit à qui le signalement s’adresse', async () => {
     const el = await mount('kwame-mensah');
 
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-more]')?.click());
     await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-action="report"]')?.click());
     await settle();
 

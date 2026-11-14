@@ -2,11 +2,11 @@
   "views": {
     "about": {
       "total": 1223,
-      "firstScreen": 137
+      "firstScreen": 126
     },
     "account-deletion": {
       "total": 276,
-      "firstScreen": 110
+      "firstScreen": 100
     },
     "admin": {
       "total": 14,
@@ -109,28 +109,28 @@
       "firstScreen": 103
     },
     "calls": {
-      "total": 79,
-      "firstScreen": 79
+      "total": 47,
+      "firstScreen": 47
     },
     "calls-keypad": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 21,
+      "firstScreen": 21
     },
     "chats": {
-      "total": 329,
-      "firstScreen": 137
+      "total": 297,
+      "firstScreen": 105
     },
     "child-safety": {
       "total": 707,
-      "firstScreen": 156
+      "firstScreen": 132
     },
     "communities": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 38,
+      "firstScreen": 38
     },
     "communities-new": {
-      "total": 23,
-      "firstScreen": 23
+      "total": 17,
+      "firstScreen": 17
     },
     "contact": {
       "total": 171,
@@ -141,8 +141,8 @@
       "firstScreen": 83
     },
     "discover": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 38,
+      "firstScreen": 38
     },
     "download": {
       "total": 54,
@@ -150,11 +150,11 @@
     },
     "faq": {
       "total": 875,
-      "firstScreen": 107
+      "firstScreen": 91
     },
     "feed": {
-      "total": 468,
-      "firstScreen": 66
+      "total": 436,
+      "firstScreen": 34
     },
     "forgot-password": {
       "total": 28,
@@ -169,8 +169,8 @@
       "firstScreen": 69
     },
     "links": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 38,
+      "firstScreen": 38
     },
     "links-affiliate": {
       "total": 35,
@@ -190,7 +190,7 @@
     },
     "links-share-new": {
       "total": 95,
-      "firstScreen": 58
+      "firstScreen": 51
     },
     "links-tracking": {
       "total": 37,
@@ -205,12 +205,12 @@
       "firstScreen": 37
     },
     "me": {
-      "total": 122,
-      "firstScreen": 69
+      "total": 96,
+      "firstScreen": 37
     },
     "me-bookmarks": {
-      "total": 98,
-      "firstScreen": 39
+      "total": 97,
+      "firstScreen": 38
     },
     "me-progression": {
       "total": 162,
@@ -245,7 +245,7 @@
       "firstScreen": 69
     },
     "me-progression-regles": {
-      "total": 389,
+      "total": 387,
       "firstScreen": 129
     },
     "me-progression-saison": {
@@ -265,16 +265,16 @@
       "firstScreen": 76
     },
     "me-sounds": {
-      "total": 21,
-      "firstScreen": 21
+      "total": 4,
+      "firstScreen": 4
     },
     "me-starred-messages": {
       "total": 62,
       "firstScreen": 62
     },
     "notifications": {
-      "total": 156,
-      "firstScreen": 133
+      "total": 116,
+      "firstScreen": 93
     },
     "onboarding": {
       "total": 64,
@@ -301,12 +301,12 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 299,
-      "firstScreen": 106
+      "total": 293,
+      "firstScreen": 74
     },
     "settings-appareils-chiffres": {
-      "total": 121,
-      "firstScreen": 121
+      "total": 89,
+      "firstScreen": 89
     },
     "settings-data-export": {
       "total": 5,
@@ -317,20 +317,20 @@
       "firstScreen": 16
     },
     "settings-packs": {
-      "total": 76,
-      "firstScreen": 76
+      "total": 44,
+      "firstScreen": 44
     },
     "settings-securite": {
-      "total": 64,
-      "firstScreen": 64
+      "total": 32,
+      "firstScreen": 32
     },
     "settings-verify-email-change": {
       "total": 20,
       "firstScreen": 20
     },
     "share": {
-      "total": 329,
-      "firstScreen": 137
+      "total": 297,
+      "firstScreen": 105
     },
     "signup": {
       "total": 52,

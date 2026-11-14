@@ -224,7 +224,6 @@ const ptShellLabels = {
   'hashtag.loading': 'Carregando publicações',
   'hashtag.error': 'Não foi possível carregar esta hashtag',
   'hashtag.empty.title': 'Nada em #{tag}',
-  'hashtag.empty.body': 'Nenhuma publicação visível tem esta hashtag.',
   'hashtag.loadMore': 'Carregar mais',
   'hashtag.loadingMore': 'Carregando…',
 } satisfies ShellLabelsCatalogSlice;
