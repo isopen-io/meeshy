@@ -27,12 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -158,10 +159,12 @@ public fun MeeshyColorDots(
             Box(
                 modifier = Modifier
                     .bleed(inset)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
+                        val window = Rect(0f, 0f, this.size.width, this.size.height)
+                        drawIntoCanvas { it.saveLayer(window, Paint()) }
                         drawContent()
                         drawRect(brush = fade(this.size.width), blendMode = BlendMode.DstIn)
+                        drawIntoCanvas { it.restore() }
                     }
                     .horizontalScroll(scrollState)
                     .padding(horizontal = inset),
