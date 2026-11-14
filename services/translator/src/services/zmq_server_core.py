@@ -7,7 +7,6 @@ Architecture: PUB/SUB + REQ/REP avec pool de connexions et traitement asynchrone
 
 import asyncio
 import os
-import json
 import logging
 import uuid
 import zmq
@@ -23,6 +22,7 @@ logger = logging.getLogger(__name__)
 from .zmq_models import TranslationTask
 from .zmq_pool_manager import TranslationPoolManager
 from .zmq_translation_handler import TranslationHandler
+from .zmq_request_frame import parse_request_frame
 from .zmq_audio_handler import AudioHandler
 from .zmq_transcription_handler import TranscriptionHandler
 from .zmq_voice_handler import VoiceHandler
@@ -347,8 +347,9 @@ class ZMQTranslationServer:
         metadata_frame = frames[0]
         binary_frames = frames[1:] if len(frames) > 1 else []
 
-        # Parser le JSON
-        request_data = json.loads(metadata_frame.decode('utf-8'))
+        request_data = parse_request_frame(metadata_frame)
+        if request_data is None:
+            return
         request_type = request_data.get('type', 'translation')
 
         # Router vers le handler approprié EN MODE NON-BLOQUANT
