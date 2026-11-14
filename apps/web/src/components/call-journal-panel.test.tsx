@@ -9,7 +9,6 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import type { CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
-import { CallButton } from './call-glass-button';
 import { CallJournalPanel } from './call-journal-panel';
 
 /**
@@ -61,13 +60,10 @@ describe('CallJournalPanel', () => {
       act(() =>
         root.render(
           <CallJournalPanel
-          Button={CallButton}
             id="call-journal-panel"
             callId={callId}
-            closeGlyph={null}
             language="fr"
             onClose={() => void events.push('close')}
-            back={{ label: 'Retour', onPress: () => void events.push('back') }}
             captions={next}
             notes={options.notes ?? []}
             colorOf={(who) => (who.speakerName === '' ? '#fff' : '#f0a')}
@@ -93,11 +89,51 @@ describe('CallJournalPanel', () => {
     list.scrollTop = box.top;
   };
 
-  test('un panneau « Journal », avec ‹ Retour et Fermer', () => {
+  /* Évolue avec #17928 (P6.3, P9b.4) : ce témoin figeait « ‹ Retour · titre centré · ✕ » dans la pilule. */
+  test('P6.3, P9b.4 (#17928) — dans la pilule, la tête d’iOS : « Journal » au bord de tête, la bascule au bord de fin, ni ‹ ni ✕', () => {
     const view = mount(lines(2));
-    expect(view.find('[data-call-journal-panel] h2')?.textContent).toBe('Journal');
-    expect(view.find('[data-panel-back]')?.getAttribute('aria-label')).toBe('Retour');
+    const title = view.find('[data-call-journal-panel] h2') as HTMLElement;
+    expect(title.textContent).toBe('Journal');
+    expect(title.className).toContain('text-start');
+    expect(title.className).not.toContain('text-center');
+    const head = title.parentElement as HTMLElement;
+    expect(head.firstElementChild).toBe(title);
+    expect(head.lastElementChild?.hasAttribute('data-call-journal-view')).toBe(true);
+    expect(view.find('[data-panel-back]')).toBeNull();
+    expect(view.find('[data-panel-close]')).toBeNull();
     expect(view.find('[data-call-journal]')?.getAttribute('aria-label')).toBe('Journal de l’appel');
+    view.done();
+  });
+
+  test('#17964 (point 3) — « Journal » reste au pied, en disque blanc pressé, sous la liste ; le retoucher referme le journal', () => {
+    const view = mount(lines(2));
+    const toggle = view.find('[data-call-journal-toggle]') as HTMLButtonElement;
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle.textContent).toBe('Journal');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.style.background).toBe('var(--color-on-media)');
+    expect(toggle.style.color).toBe('var(--ios-indigo-950)');
+    expect(toggle.className).toContain('min-h-11');
+    const foot = toggle.closest('[data-call-journal-foot]') as HTMLElement;
+    expect(foot.parentElement?.lastElementChild).toBe(foot);
+    expect(view.find('[data-call-journal]')?.compareDocumentPosition(toggle)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    act(() => toggle.click());
+    expect(view.events).toEqual(['close']);
+    view.done();
+  });
+
+  test('#17964 — à côté de « Journal », le pied dit ce que disent les dernières phrases, comme celui des sous-titres (P6)', () => {
+    const view = mount(lines(3));
+    expect(view.find('[data-call-journal-foot]')?.textContent).toBe('EN → FR · toucher = originalJournal');
+    act(() => (view.all('[data-call-journal-view] button')[1] as HTMLButtonElement).click());
+    expect(view.find('[data-call-journal-foot]')?.textContent).toBe('Journal');
+    view.done();
+  });
+
+  test('#17964 — rien encore dit : « Journal » reste au pied pour refermer', () => {
+    const view = mount([], { listening: false });
+    expect(view.find('[data-call-journal-empty]')).not.toBeNull();
+    expect(view.find('[data-call-journal-toggle]')?.getAttribute('aria-pressed')).toBe('true');
     view.done();
   });
 
@@ -321,12 +357,12 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('Échap et Fermer ferment ; ‹ revient', () => {
+  /* Évolue avec #17964 : « ‹ revient » et « Fermer » cèdent la place à « Journal » en disque blanc. */
+  test('Échap et « Journal » ferment', () => {
     const view = mount(lines(1));
     act(() => view.find('[data-call-journal-panel]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    act(() => (view.find('[data-panel-back]') as HTMLElement).click());
-    act(() => (view.find('[data-panel-close]') as HTMLElement).click());
-    expect(view.events).toEqual(['close', 'back', 'close']);
+    act(() => (view.find('[data-call-journal-toggle]') as HTMLElement).click());
+    expect(view.events).toEqual(['close', 'close']);
     view.done();
   });
 });
