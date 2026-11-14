@@ -565,8 +565,9 @@ describe('updateBannerSchema', () => {
     expect(updateBannerSchema.safeParse({ banner: 'https://cdn.meeshy.me/banner.jpg' }).success).toBe(true);
   });
 
-  it('accepts /api/ paths', () => {
-    expect(updateBannerSchema.safeParse({ banner: '/api/v1/static/banner.jpg' }).success).toBe(true);
+  it('accepts the attachment file route, and no other /api/ path (#16810)', () => {
+    expect(updateBannerSchema.safeParse({ banner: '/api/v1/attachments/file/2026/11/banner.jpg' }).success).toBe(true);
+    expect(updateBannerSchema.safeParse({ banner: '/api/v1/static/banner.jpg' }).success).toBe(false);
   });
 
   it('rejects arbitrary strings', () => {
