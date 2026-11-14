@@ -534,8 +534,7 @@
     <string name="talkie_header_badge_recorded">Recorded</string>
     <string name="talkie_header_badge_relayed">Offline</string>
     <string name="talkie_header_live">Talkie in progress</string>
-    <string name="talkie_info_a11y">About the emergency walkie-talkie</string>
-    <string name="talkie_info_text">Available for your very closest people. Use it only in an extreme emergency: your voice plays on their phone even when Meeshy is in the background.</string>
+    <string name="talkie_info_a11y">When to use the walkie-talkie?</string>
     <string name="talkie_send_connecting">Connecting…</string>
     <string name="talkie_send_e2ee">The walkie-talkie is not end-to-end encrypted: it stays closed with an encrypted conversation.</string>
     <string name="talkie_send_explain">Hold and talk: your voice plays directly on %1$s’s side, no need to pick up.</string>

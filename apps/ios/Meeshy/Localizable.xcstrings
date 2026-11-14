@@ -335814,43 +335814,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حول جهاز اللاسلكي للطوارئ"
+            "value": "متى أستخدم جهاز اللاسلكي؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Über das Notfall-Walkie-Talkie"
+            "value": "Wann das Walkie-Talkie nutzen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About the emergency walkie-talkie"
+            "value": "When to use the walkie-talkie?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acerca del walkie-talkie de urgencia"
+            "value": "¿Cuándo usar el walkie-talkie?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À propos du talkie d’urgence"
+            "value": "Quand utiliser le talkie ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Informazioni sul walkie-talkie d’emergenza"
+            "value": "Quando usare il walkie-talkie?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sobre o walkie-talkie de emergência"
+            "value": "Quando usar o walkie-talkie?"
           }
         }
       }

@@ -9,6 +9,7 @@
     <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل.</string>
     <string name="bring_silent_question">ماذا لو كان هاتفه في الوضع الصامت؟</string>
     <string name="bring_silent_note">قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط.</string>
+    <string name="talkie_info_note">للمقرّبين جدًا فقط، وفي حالات الطوارئ القصوى.</string>
     <string name="talkie_send_voice_copy">الوصول الطارئ غير متاح: تُرسل رسالة صوتية في أحدث محادثة بينكما.</string>
     <string name="voiceProfile_processing_description">المعالجة جارية، بضع دقائق.</string>
     <string name="voiceProfile_recording_description">اقرأ النص بصوت عالٍ: 3 عيّنات على الأقل، 10 ثوانٍ لكل منها.</string>

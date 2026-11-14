@@ -9,6 +9,7 @@
     <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt.</string>
     <string name="bring_silent_question">Und wenn das Telefon lautlos ist?</string>
     <string name="bring_silent_note">Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
+    <string name="talkie_info_note">Nur für deine engsten Vertrauten, im äußersten Notfall.</string>
     <string name="talkie_send_voice_copy">Notfallzugang nicht verfügbar: Eine Sprachnachricht geht in eure letzte Unterhaltung.</string>
     <string name="voiceProfile_processing_description">Verarbeitung läuft, einige Minuten.</string>
     <string name="voiceProfile_recording_description">Text laut lesen: mindestens 3 Proben à 10 Sekunden.</string>

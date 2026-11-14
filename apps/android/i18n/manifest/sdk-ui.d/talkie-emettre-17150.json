@@ -95,12 +95,7 @@
           "androidName": "talkie_send_limit",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.info.text",
-          "androidName": "talkie_info_text",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_info_note", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.info.a11y",

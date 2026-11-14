@@ -539,8 +539,7 @@
     <string name="talkie_header_badge_recorded">Enregistré</string>
     <string name="talkie_header_badge_relayed">Hors ligne</string>
     <string name="talkie_header_live">Talkie en cours</string>
-    <string name="talkie_info_a11y">À propos du talkie d’urgence</string>
-    <string name="talkie_info_text">Disponible pour vos très proches. À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.</string>
+    <string name="talkie_info_a11y">Quand utiliser le talkie ?</string>
     <string name="talkie_send_connecting">Connexion…</string>
     <string name="talkie_send_e2ee">Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée.</string>
     <string name="talkie_send_explain">Maintenez et parlez : votre voix sort directement chez %1$s, sans décrocher.</string>

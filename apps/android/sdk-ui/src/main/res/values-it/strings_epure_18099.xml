@@ -9,6 +9,7 @@
     <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche bloccato.</string>
     <string name="bring_silent_question">E se il suo telefono è in silenzioso?</string>
     <string name="bring_silent_note">In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario.</string>
+    <string name="talkie_info_note">Solo per le persone a te più vicine, in caso di estrema urgenza.</string>
     <string name="talkie_send_voice_copy">Accesso d’emergenza non disponibile: un messaggio vocale parte nella vostra conversazione più recente.</string>
     <string name="voiceProfile_processing_description">Elaborazione in corso, qualche minuto.</string>
     <string name="voiceProfile_recording_description">Leggi il testo ad alta voce: almeno 3 campioni da 10 secondi.</string>

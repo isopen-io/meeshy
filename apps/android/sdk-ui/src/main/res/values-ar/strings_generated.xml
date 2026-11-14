@@ -554,8 +554,7 @@
     <string name="talkie_header_badge_recorded">مسجّل</string>
     <string name="talkie_header_badge_relayed">غير متصل</string>
     <string name="talkie_header_live">الاتصال اللاسلكي جارٍ</string>
-    <string name="talkie_info_a11y">حول جهاز اللاسلكي للطوارئ</string>
-    <string name="talkie_info_text">متاح للمقرّبين جدًا منك. استخدمه فقط في حالات الطوارئ القصوى: يُسمع صوتك لديهم حتى لو كان Meeshy في الخلفية.</string>
+    <string name="talkie_info_a11y">متى أستخدم جهاز اللاسلكي؟</string>
     <string name="talkie_send_connecting">جارٍ الاتصال…</string>
     <string name="talkie_send_e2ee">جهاز اللاسلكي غير مشفّر تشفيرًا تامًا بين الطرفين: يبقى مغلقًا مع محادثة مشفّرة.</string>
     <string name="talkie_send_explain">اضغط مطولًا وتحدّث: يخرج صوتك مباشرةً لدى %1$s دون الحاجة إلى الرد.</string>

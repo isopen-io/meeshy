@@ -539,8 +539,7 @@
     <string name="talkie_header_badge_recorded">Registrato</string>
     <string name="talkie_header_badge_relayed">Offline</string>
     <string name="talkie_header_live">Talkie in corso</string>
-    <string name="talkie_info_a11y">Informazioni sul walkie-talkie d’emergenza</string>
-    <string name="talkie_info_text">Disponibile per le persone a te più vicine. Da usare solo in caso di estrema urgenza: la tua voce esce dal loro telefono anche se Meeshy è in background.</string>
+    <string name="talkie_info_a11y">Quando usare il walkie-talkie?</string>
     <string name="talkie_send_connecting">Connessione…</string>
     <string name="talkie_send_e2ee">Il walkie-talkie non è cifrato end-to-end: resta chiuso con una conversazione cifrata.</string>
     <string name="talkie_send_explain">Tieni premuto e parla: la tua voce esce direttamente da %1$s, senza rispondere.</string>

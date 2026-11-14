@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,7 @@ import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.talkie.TalkieHoldActions
 import me.meeshy.ui.component.talkie.TalkieInfoButton
+import me.meeshy.ui.component.talkie.TalkieInfoNote
 import me.meeshy.ui.component.talkie.TalkieNoticeEffect
 import me.meeshy.ui.component.talkie.TalkieWording
 import me.meeshy.ui.component.talkie.talkieHold
@@ -76,6 +78,7 @@ internal fun ProfileTalkieRow(
     val context = LocalContext.current
     val permissions = rememberPermissionFlow()
     val pressed = remember { mutableStateOf(false) }
+    var infoOpen by remember { mutableStateOf(false) }
     TalkieNoticeEffect(notice, control::present)
     PermissionFlowHost(permissions)
     val actions = remember(control, userId) {
@@ -108,8 +111,9 @@ internal fun ProfileTalkieRow(
                     .weight(1f)
                     .talkieHold(pressed, phase, permissions, actions),
             )
-            TalkieInfoButton()
+            TalkieInfoButton(expanded = infoOpen, onToggle = { infoOpen = !infoOpen })
         }
+        if (infoOpen) TalkieInfoNote()
     }
 }
 

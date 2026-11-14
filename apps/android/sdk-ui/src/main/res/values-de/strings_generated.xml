@@ -534,8 +534,7 @@
     <string name="talkie_header_badge_recorded">Aufnahme</string>
     <string name="talkie_header_badge_relayed">Offline</string>
     <string name="talkie_header_live">Walkie-Talkie läuft</string>
-    <string name="talkie_info_a11y">Über das Notfall-Walkie-Talkie</string>
-    <string name="talkie_info_text">Für deine engsten Vertrauten. Nur im äußersten Notfall verwenden: Deine Stimme ist bei ihnen zu hören, auch wenn Meeshy im Hintergrund ist.</string>
+    <string name="talkie_info_a11y">Wann das Walkie-Talkie nutzen?</string>
     <string name="talkie_send_connecting">Verbinde…</string>
     <string name="talkie_send_e2ee">Das Walkie-Talkie ist nicht Ende-zu-Ende-verschlüsselt: Bei einer verschlüsselten Unterhaltung bleibt es geschlossen.</string>
     <string name="talkie_send_explain">Gedrückt halten und sprechen: Deine Stimme ist bei %1$s sofort zu hören, ohne Abheben.</string>
