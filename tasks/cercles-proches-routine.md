@@ -1155,3 +1155,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `dev` (hérité). iOS (SDK + app) et le centre Android ne compilent qu'en CI : preuve par la CI de `dev` après fusion.
 - Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée. #18205 se ferme avec ce
   lot (serveur, web, iOS, Android).
+
+## 2026-11-14 — réveil de la nuit : la PR #18520 menée à la fusion (#18467, #18205)
+
+- Reprise : la PR #18520 (iOS et Android envoient l'échéance de chaque personne) était ouverte et rouge ; le run a
+  consisté à la fusionner, pas à en ouvrir une autre.
+- `origin/dev` fusionné à la main dans la branche : un seul conflit, `EphemeralBurnLayer.swift`, où la branche et
+  `dev` portaient le MÊME correctif (lectures sorties de la fermeture Sendable de `visualEffect`) ; la version de
+  `dev` a été gardée telle quelle.
+- Rouge hérité de `dev` corrigé au passage : `DirectIconUsageRatchetTest` (sdk-ui) refusait
+  `CallDuoAudioCompactHeightTest.kt` (#18488), qui importait `Icons.Filled.VolumeUp` en direct ; il passe par
+  `MeeshyIcons.VolumeUpFilled` (même icône).
+- CI de la PR sur le dernier commit (`c5b6c1da8`) : Build SDK, Build app, SDK tranches 1, 2, 5 vertes ; Android
+  `:core:model`, `:sdk-core`, `:sdk-ui` verts. Rouges étrangers au lot, hérités de `dev` : SDK tranches 4 et 6
+  (`MeeshyObjectMenu` K18 : instantanés absents et ordre des lignes), Android `:feature:calls` (8 témoins d'appel
+  après les lots Réduire les animations #18459/#18524). Tranche 3 jamais servie par un runner macOS (verte sur le
+  commit précédent, même code du lot).
+- Fusionnée dans `dev` (41ba0a2a5). #18467 et #18205 fermées.
+- Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée.
