@@ -209,7 +209,7 @@ final class EpureCerclesContactsTests: XCTestCase {
         let app = try app()
         XCTAssertEqual(app["circles.pending"]?["fr"], "Demande envoyée · %@")
         XCTAssertEqual(app["circles.pending"]?["en"], "Request sent · %@")
-        XCTAssertEqual(app["circles.requests.outgoing"]?["fr"], "En attente · %@", "sous le titre « Envoyées », le mot court reste")
+        XCTAssertEqual(app["circles.requests.outgoing"]?["fr"], "Niveau %@", "sous le titre « Envoyées », la pastille « En attente » dit l’état : la ligne ne dit que le niveau")
     }
 
     func test_circleSheet_namesWhatTheLevelOpens_belowItsName_withoutAnInfoButton() throws {
