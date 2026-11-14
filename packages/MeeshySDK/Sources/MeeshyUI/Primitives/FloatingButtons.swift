@@ -221,6 +221,7 @@ public struct FreeFloatingButton<Content: View>: View {
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
     @State private var isPressed = false
+    @GestureState private var isHolding = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     private var reduceMotion: Bool {
@@ -258,6 +259,7 @@ public struct FreeFloatingButton<Content: View>: View {
             .frame(width: buttonSize, height: buttonSize)
             .meeshyGlass(in: Circle(), isInteractive: true, isPressed: isPressed)
             .scaleEffect(FloatingButtonPress.dragScale(isDragging: isDragging, reduceMotion: reduceMotion))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
             .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
             .gesture(dragGesture)
             .simultaneousGesture(pressGesture)
@@ -306,7 +308,8 @@ public struct FreeFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()
@@ -532,6 +535,7 @@ public struct LegacyFloatingButton<Content: View>: View {
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
     @State private var isPressed = false
+    @GestureState private var isHolding = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     private var reduceMotion: Bool {
@@ -594,6 +598,7 @@ public struct LegacyFloatingButton<Content: View>: View {
             .scaleEffect(FloatingButtonPress.dragScale(
                 isDragging: isDragging, reduceMotion: reduceMotion, lifted: FloatingButtonPress.legacyLiftScale
             ))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
             .position(x: pos.x + dragOffset.width, y: pos.y + dragOffset.height)
             .gesture(dragGesture(from: pos))
             .simultaneousGesture(pressGesture)
@@ -643,7 +648,8 @@ public struct LegacyFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()
