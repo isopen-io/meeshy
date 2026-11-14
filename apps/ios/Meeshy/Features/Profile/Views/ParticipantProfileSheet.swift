@@ -269,6 +269,8 @@ struct ParticipantProfileSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.deniedAccessibilityLabel(title: capabilitiesTitle(capabilities), noun: capabilityNoun(capability)))
                     .accessibilityIdentifier("participant-profile-denied-\(capability.rawValue)")
                 }
             }
@@ -572,6 +574,9 @@ struct ParticipantProfileSheet: View {
             return String(localized: "participantProfile.capability.canSendLocations", defaultValue: "Position", bundle: .main)
         }
     }
+
+    /// Une rangée de refus lue seule par VoiceOver porte son titre : « Images » seul ne dit pas qu'il est refusé.
+    static func deniedAccessibilityLabel(title: String, noun: String) -> String { "\(title), \(noun)" }
 
     /// « Autoriser » en édition, « Ne peut pas » quand des refus sont listés, « Dans cette conversation » pour « Aucune restriction ».
     private func capabilitiesTitle(_ capabilities: ParticipantEntryCapabilities) -> String {

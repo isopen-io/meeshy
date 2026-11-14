@@ -109,6 +109,10 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
         }
     }
 
+    func test_participantSheet_deniedRow_isReadWithItsTitle() {
+        XCTAssertEqual(ParticipantProfileSheet.deniedAccessibilityLabel(title: "Ne peut pas", noun: "Images"), "Ne peut pas, Images")
+    }
+
     func test_participantSheet_noRestrictionKeepsItsTitleAndLine() throws {
         let source = try appCode(Self.sheet)
         XCTAssertTrue(source.contains("participantProfile.capabilities\""), "« Dans cette conversation » reste pour « Aucune restriction »")
