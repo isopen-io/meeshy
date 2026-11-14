@@ -1,3 +1,4 @@
+import { burnFrontOf } from './ephemeral-burn-front';
 import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
@@ -15,7 +16,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import {
   DESTRUCTION_MS,
   announceDestruction,
-  burnFrontOf,
   destructionWindowMs,
   useEphemeralDestruction,
   type EphemeralDestruction,
