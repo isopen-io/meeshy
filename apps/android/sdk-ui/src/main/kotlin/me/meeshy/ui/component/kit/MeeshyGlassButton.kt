@@ -69,7 +69,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * focus qu'au clavier).
  *
  * Un changement de tenue est un fondu enchaîné : le fond et l'encre se fondent, et le verre de K01 qui part (normal →
- * actif, destructif, doux) s'efface dessous au lieu de disparaître.
+ * actif, destructif, doux) s'efface dessous au lieu de disparaître. Au retour au normal, le disque reste peint au-dessus
+ * du verre, à pleine opacité, tant que ce verre se fond : il n'entre dans le verre qu'une fois celui-ci opaque.
  *
  * Pendant iOS : `MeeshyGlassButtonFace`.
  */
@@ -111,6 +112,8 @@ public fun MeeshyGlassButtonFace(
     val wearsGlass = rest.glass == MeeshyGlassButtonGlassRequest.Neutral
     val glassOpacity = animateFloatAsState(targetValue = if (wearsGlass) 1f else 0f, animationSpec = fadeSpec, label = "meeshyGlassButtonGlass")
     val glassLingers = remember(glassOpacity) { derivedStateOf { glassOpacity.value > 0f } }
+    val glassArriving = remember(glassOpacity) { derivedStateOf { glassOpacity.value < 1f } }
+    val discInsideGlass = wearsGlass && !glassArriving.value
     val ink = animateColorAsState(targetValue = rest.inkColor(themeInk, themeInverse), animationSpec = inkSpec, label = "meeshyGlassButtonInk")
     val lastFill = remember { LastFill() }
     if (rest.fill != MeeshyGlassButtonFill.Clear) lastFill.color = rest.fillColor(themeInk)
@@ -165,10 +168,10 @@ public fun MeeshyGlassButtonFace(
                 interactionSource = if (enabled && wearsGlass) interactionSource else null,
                 pressed = if (enabled && wearsGlass) pressed else null,
             ) {
-                if (wearsGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
+                if (discInsideGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
             }
         }
-        if (!wearsGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
+        if (!discInsideGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
         if (badge != null) {
             Box(Modifier.align(Alignment.TopEnd).clearAndSetSemantics { }) { badge() }
         }

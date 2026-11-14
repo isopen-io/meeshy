@@ -226,7 +226,7 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
   }
 }
 
-type StepTexts = { readonly what: string; readonly means: string; readonly next: string };
+type StepTexts = { readonly what: string; readonly means: string; readonly next: string; readonly short?: string };
 
 /** Les sept étapes de l'intégration : les trois lignes de chacune, dans la langue. */
 const stepTexts = (key: OnboardingStep['key'], language: Language): StepTexts => {
@@ -234,6 +234,7 @@ const stepTexts = (key: OnboardingStep['key'], language: Language): StepTexts =>
     case 'welcome':
       return {
         what: translateGame(language, 'game.guide.step.welcome.what'),
+        short: translateGame(language, 'game.guide.step.welcome.short'),
         means: translateGame(language, 'game.guide.step.welcome.means'),
         next: translateGame(language, 'game.guide.step.welcome.next'),
       };
@@ -295,5 +296,5 @@ export function stepCopy(
   const language = options.language ?? currentInterfaceLanguage();
   const parts = stepTexts(step.key, language);
   const next = options.awaiting === true ? (awaitingNext(step.key, language) ?? parts.next) : parts.next;
-  return { ...parts, next, short: parts.what, action: actionLabel(options.action ?? step.action, language) };
+  return { ...parts, next, short: parts.short ?? parts.what, action: actionLabel(options.action ?? step.action, language) };
 }

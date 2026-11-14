@@ -98,6 +98,36 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNotNil(roster.entry(for: alice))
     }
 
+    func test_roster_deadlinedRecipients_carryTheirDeadlineWhenItFallsBeforeTheTerm() {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .oneHour, now: t0)
+            .adding(userId: bob, precision: .city, duration: .eightHours, now: t0)
+
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0.addingTimeInterval(1.5)), [
+            SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 3599),
+            SharedLocationRecipient(userId: bob, precision: .city, expiresInSeconds: 28799),
+        ])
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0), [
+            SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 3600),
+            SharedLocationRecipient(userId: bob, precision: .city),
+        ])
+    }
+
+    func test_roster_deadlinedRecipients_aLonePersonFollowsTheTerm() {
+        let roster = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .oneHour, now: t0)
+
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0), [SharedLocationRecipient(userId: alice, precision: .exact)])
+    }
+
+    func test_roster_deadlinedRecipients_neverZero_andAPassedPersonNeverLeaves() {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .oneHour, now: t0)
+            .adding(userId: bob, precision: .city, duration: .eightHours, now: t0)
+
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0.addingTimeInterval(3599.8)).first?.expiresInSeconds, 1)
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0.addingTimeInterval(3600)).map(\.userId), [bob])
+    }
+
     // MARK: - Partager
 
     func test_share_sendsTheWholeListWithTheFix() async {
@@ -110,10 +140,52 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(second)
         XCTAssertEqual(emitter.starts.last?.recipients, [
             SharedLocationRecipient(userId: alice, precision: .exact),
-            SharedLocationRecipient(userId: bob, precision: .neighborhood),
+            SharedLocationRecipient(userId: bob, precision: .neighborhood, expiresInSeconds: 3600),
         ])
         XCTAssertEqual(emitter.starts.last?.duration, .eightHours)
         XCTAssertEqual(sut.entry(for: bob)?.until, t0.addingTimeInterval(3600))
+    }
+
+    func test_share_aGatewayBeforeDeadlines_receivesTheSameListWithoutThem() async {
+        let emitter = FakeSharedLocationEmitter()
+        let (sut, _, _, clock) = makeSUT(emitter: emitter)
+        _ = await sut.share(with: bob, precision: .exact, duration: .eightHours)
+        clock.now = t0.addingTimeInterval(1.5)
+        let before = emitter.starts.count
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
+
+        let problem = await sut.share(with: alice, precision: .city, duration: .oneHour)
+
+        XCTAssertNil(problem)
+        let tried = Array(emitter.starts.dropFirst(before))
+        XCTAssertEqual(tried.count, 2)
+        XCTAssertEqual(tried.first?.recipients.map(\.expiresInSeconds), [3600, 28799])
+        XCTAssertEqual(tried.last?.carriesDeadlines, false)
+        XCTAssertEqual(tried.last?.recipients.map(\.userId), [alice, bob])
+        XCTAssertNotNil(sut.entry(for: alice))
+    }
+
+    func test_share_anotherRefusal_isNotReplayedWithoutDeadlines() async {
+        let emitter = FakeSharedLocationEmitter()
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+        _ = await sut.share(with: bob, precision: .exact, duration: .eightHours)
+        let before = emitter.starts.count
+        emitter.queuedStartVerdicts = [.refused(.rateLimited)]
+
+        let problem = await sut.share(with: alice, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .refused(.rateLimited))
+        XCTAssertEqual(emitter.starts.count - before, 1)
+    }
+
+    func test_share_aRefusalWithoutDeadlines_isNotReplayed() async {
+        let emitter = FakeSharedLocationEmitter()
+        emitter.startVerdict = .refused(.invalid)
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+
+        _ = await sut.share(with: alice, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(emitter.starts.count, 1)
     }
 
     func test_share_refusedByTheServer_keepsNothing() async {
@@ -604,6 +676,8 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
     var holdsUpdates = false
     private let lock = NSLock()
     private var recordedStarts: [SharedLocationStartRequest] = []
+    /// Rendus dans l'ordre avant `startVerdict` : une passerelle qui refuse puis accepte.
+    var queuedStartVerdicts: [SharedLocationStartVerdict] = []
     private var recordedUpdates: [SharedLocationFix] = []
     private var recordedStops = 0
     var starts: [SharedLocationStartRequest] { lock.withLock { recordedStarts } }
@@ -618,7 +692,7 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
     func start(_ request: SharedLocationStartRequest) async -> SharedLocationStartVerdict {
         lock.withLock { recordedStarts.append(request) }
         if holdsStarts { await withCheckedContinuation { c in lock.withLock { startGate.append(c) } } }
-        return startVerdict
+        return lock.withLock { queuedStartVerdicts.isEmpty ? nil : queuedStartVerdicts.removeFirst() } ?? startVerdict
     }
 
     func update(_ fix: SharedLocationFix) async -> SharedLocationStartVerdict {

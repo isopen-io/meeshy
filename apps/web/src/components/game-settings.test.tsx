@@ -188,6 +188,12 @@ describe('« Moments à immortaliser »', () => {
 });
 
 describe('qui voit quoi', () => {
+  test('une phrase d’orientation, sans redire les quatre rangées', () => {
+    const page = text(renderToStaticMarkup(<GameSettings {...props()} />));
+    expect(page).toContain('Pour chaque élément du jeu, choisis qui peut le voir.');
+    expect(page).not.toContain('Choisis qui voit ton rang');
+  });
+
   test('quatre sélecteurs : rang et niveau, trésor et Flamme, vitrine, Atlas', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
     expect((html.match(/data-game-visibility/g) ?? []).length).toBe(4);

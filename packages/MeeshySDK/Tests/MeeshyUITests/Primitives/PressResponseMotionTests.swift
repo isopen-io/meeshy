@@ -93,6 +93,18 @@ struct PressResponseMotionTests {
         #expect(!code.contains(".adaptiveGlass(in:Circle(),interactive:true)"), "\(relative) pose un verre interactif hors du kit")
     }
 
+    private static let videoControlFiles = [
+        "Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift",
+        "Sources/MeeshyUI/Media/VideoTransportControls.swift",
+    ]
+
+    @Test(arguments: videoControlFiles)
+    func commandes_video_suivent_l_appui_du_bouton_sans_geste_qui_gene_le_defilement(_ relative: String) throws {
+        let code = try Self.source(relative)
+        #expect(!code.contains(".pressable()"), "\(relative) pose un geste d'appui dans une vidéo qui défile avec son fil")
+        #expect(code.contains("PressableButtonStyle()"), "\(relative) ne suit plus l'appui de son bouton")
+    }
+
     @Test(arguments: guardedFiles)
     func aucun_style_d_appui_prive_a_echelle(_ relative: String) throws {
         let code = try Self.source(relative)

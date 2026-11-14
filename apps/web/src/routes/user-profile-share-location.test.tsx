@@ -40,7 +40,11 @@ function makeCenter({ online = true }: { readonly online?: boolean } = {}): { ce
   const starts: unknown[] = [];
   let stops = 0;
   const memory = new Map<string, string>();
+  /* L'horloge AVANCE entre l'ajout et la publication, comme sur un appareil : le relevé de position s'attend.
+     Lue sur la machine, elle rendait deux fois la même milliseconde hors charge et le témoin ne mesurait rien (#18539). */
+  let clock = Date.now();
   const center = createSharedLocationSharingCenter({
+    now: () => (clock += 5),
     emitter: {
       start: async (payload) => {
         starts.push(payload);

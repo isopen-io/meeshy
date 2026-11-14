@@ -191,8 +191,8 @@ public struct VideoTransportControls: View {
                 .adaptiveSymbolReplace(id: manager.isPlaying)
                 .frame(width: 64, height: 64)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(MeeshyOpacity.intense))
-                .pressable()
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(playPauseLabel)
     }
 
@@ -245,8 +245,8 @@ public struct VideoTransportControls: View {
                 .foregroundColor(manager.isMuted ? accent : .white)
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
-                .pressable()
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isMuted
             ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
             : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
@@ -300,8 +300,8 @@ public struct VideoTransportControls: View {
                 systemImage: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                 tone: railTone,
                 activeTint: manager.isMuted ? accent : nil)
-                .pressable()
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isMuted
             ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
             : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))

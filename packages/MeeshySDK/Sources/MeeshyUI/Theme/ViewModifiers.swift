@@ -50,11 +50,6 @@ public extension View {
 /// le voile répond (K02 § 4).
 public struct PressableButton: ViewModifier {
     @State private var isPressed = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool {
-        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
-    }
 
     nonisolated static func effectiveScale(isPressed: Bool, reduceMotion: Bool) -> CGFloat {
         isPressed && !reduceMotion ? 0.93 : 1
@@ -66,14 +61,40 @@ public struct PressableButton: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(Self.effectiveScale(isPressed: isPressed, reduceMotion: reduceMotion))
-            .brightness(Self.effectiveBrightness(isPressed: isPressed))
-            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
+            .modifier(PressableResponse(isPressed: isPressed))
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in isPressed = true }
                     .onEnded { _ in isPressed = false }
             )
+    }
+}
+
+/// La même réponse que `pressable()`, pilotée par l'état pressé du BOUTON et
+/// non par un geste : un défilement qui part du bouton annule l'appui, et la
+/// liste qui le porte défile librement.
+public struct PressableButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .modifier(PressableResponse(isPressed: configuration.isPressed))
+    }
+}
+
+private struct PressableResponse: ViewModifier {
+    let isPressed: Bool
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(PressableButton.effectiveScale(isPressed: isPressed, reduceMotion: reduceMotion))
+            .brightness(PressableButton.effectiveBrightness(isPressed: isPressed))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
     }
 }
 
