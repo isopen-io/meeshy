@@ -151317,7 +151317,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ficheiros"
+            "value": "Arquivos"
           }
         }
       }
@@ -151334,37 +151334,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotos"
+            "value": "Bilder"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photos"
+            "value": "Images"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotos"
+            "value": "Imágenes"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photos"
+            "value": "Images"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto"
+            "value": "Immagini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotos"
+            "value": "Imagens"
           }
         }
       }
@@ -151469,43 +151469,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكتابة"
+            "value": "الرسائل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schreiben"
+            "value": "Nachrichten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Write"
+            "value": "Messages"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir"
+            "value": "Mensajes"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire"
+            "value": "Messages"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivere"
+            "value": "Messaggi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever"
+            "value": "Mensagens"
           }
         }
       }

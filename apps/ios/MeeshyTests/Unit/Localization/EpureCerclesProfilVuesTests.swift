@@ -47,8 +47,8 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
     private static let participantFrench: [String: String] = [
         "participantProfile.capabilities.cannot": "Ne peut pas",
         "participantProfile.capabilities.allow": "Autoriser",
-        "participantProfile.capability.canSendMessages": "Écrire",
-        "participantProfile.capability.canSendImages": "Photos",
+        "participantProfile.capability.canSendMessages": "Messages",
+        "participantProfile.capability.canSendImages": "Images",
         "participantProfile.capability.canSendFiles": "Fichiers",
         "participantProfile.capability.canSendVideos": "Vidéos",
         "participantProfile.capability.canSendAudios": "Audio",
@@ -66,7 +66,7 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
 
     func test_participantCatalog_isTranslatedInTheSixOtherLanguages_exceptSharedCognates() throws {
         let app = try app()
-        let cognates: Set<String> = ["participantProfile.capability.canSendAudios", "participantProfile.capability.canSendImages", "participantProfile.capability.canSendLinks", "participantProfile.capability.canSendVideos"]
+        let cognates: Set<String> = ["participantProfile.capability.canSendAudios", "participantProfile.capability.canSendImages", "participantProfile.capability.canSendMessages", "participantProfile.capability.canSendLinks", "participantProfile.capability.canSendVideos"]
         for key in Self.participantFrench.keys {
             let values = app[key] ?? [:]
             let french = try XCTUnwrap(values["fr"], key)
@@ -98,6 +98,15 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
         XCTAssertTrue(source.contains("participantProfile.capabilities.cannot"))
         XCTAssertTrue(source.contains("participantProfile.capabilities.allow"))
         XCTAssertFalse(source.contains("allowedLabel(") || source.contains("deniedLabel("), "un seul mot par capacité, en lecture comme en édition")
+    }
+
+    /// Les rangées disent le mot du lexique (link.perm.*) et celui des invitations (invite.perm.*), dans les sept langues.
+    func test_participantCatalog_nounsMatchTheLexiconAndInvitePermissions() throws {
+        let app = try app()
+        let pairs = ["canSendImages": "invite.perm.images", "canSendMessages": "invite.perm.messages", "canSendFiles": "invite.perm.files"]
+        for (capability, inviteKey) in pairs {
+            XCTAssertEqual(app["participantProfile.capability.\(capability)"], app[inviteKey], capability)
+        }
     }
 
     func test_participantSheet_noRestrictionKeepsItsTitleAndLine() throws {

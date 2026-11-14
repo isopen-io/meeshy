@@ -557,9 +557,9 @@ struct ParticipantProfileSheet: View {
         case .canViewHistory:
             return String(localized: "participantProfile.capability.canViewHistory", defaultValue: "Historique avant son arrivée", bundle: .main)
         case .canSendMessages:
-            return String(localized: "participantProfile.capability.canSendMessages", defaultValue: "Écrire", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendMessages", defaultValue: "Messages", bundle: .main)
         case .canSendImages:
-            return String(localized: "participantProfile.capability.canSendImages", defaultValue: "Photos", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendImages", defaultValue: "Images", bundle: .main)
         case .canSendFiles:
             return String(localized: "participantProfile.capability.canSendFiles", defaultValue: "Fichiers", bundle: .main)
         case .canSendVideos:
