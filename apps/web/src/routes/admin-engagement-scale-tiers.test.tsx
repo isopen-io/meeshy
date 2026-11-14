@@ -158,6 +158,6 @@ describe('épure (#18486) — l’orientation reste lisible, le cas limite passe
 
     expect(visibleText(panel)).toContain('Chaque acte a sa propre série et ses paliers.');
     expect(visibleText(panel)).not.toContain('CE geste');
-    expect(visibleText(panel).match(/jours? consécutifs/gi)?.length).toBe(1);
+    expect(visibleText(panel)).not.toContain('jours consécutifs');
   });
 });

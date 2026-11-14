@@ -4,6 +4,7 @@ import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminBarChart } from '@/components/admin/charts/bar-chart';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { EDGE, INK, INK2 } from '@/components/admin/tone';
@@ -245,9 +246,7 @@ export function EmailSection({ language, broadcast, now }: { readonly language: 
               }
             />
           </dl>
-          <p className="text-caption" style={{ color: INK2 }}>
-            {t('admin.broadcast.email.skipped')}
-          </p>
+          <AdminInfoAlone question={t('admin.broadcast.email.skipped.why')} text={t('admin.broadcast.email.skipped')} anchor="email-skipped" />
         </>
       ) : (
         <p data-admin-email-none className="text-body" style={{ color: INK2 }}>

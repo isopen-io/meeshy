@@ -2,6 +2,7 @@ import { ENGAGEMENT_STREAK_ACTS, ENGAGEMENT_STREAK_TIER_LABEL_MAX } from '@meesh
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
@@ -169,9 +170,11 @@ export function StreaksTab({ language, draft, onDraft }: DraftProps) {
 export function LoyaltyTab({ language, draft, onDraft }: DraftProps) {
   return (
     <AdminFicheSection id="scale-loyalty" title={translateAdmin(language, 'admin.scale.loyalty.title')}>
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.scale.loyalty.intro')}
-      </p>
+      <AdminNoted question={translateAdmin(language, 'admin.scale.loyalty.why')} text={translateAdmin(language, 'admin.scale.loyalty.explain')}>
+        <p className="text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.scale.loyalty.intro')}
+        </p>
+      </AdminNoted>
       <div>
         <AdminButton tone="primary" data={{ 'data-scale-loyalty-preset': '' }} onClick={() => onDraft(withLoyaltyYearPreset(draft, translateAdmin(language, 'admin.scale.loyalty.presetLabel')))}>
           {translateAdmin(language, 'admin.scale.loyalty.preset')}

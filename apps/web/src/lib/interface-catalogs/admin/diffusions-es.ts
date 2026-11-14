@@ -105,6 +105,7 @@ const f = {
   'admin.broadcast.email.completedAt': 'Envío terminado',
   'admin.broadcast.email.running': 'En curso',
   'admin.broadcast.email.skipped': 'Las cuentas que desactivaron los correos de difusión se omiten: enviados más fallidos puede ser inferior al número de destinatarios.',
+  'admin.broadcast.email.skipped.why': '¿Por qué menos envíos que destinatarios?',
   'admin.broadcast.section.inApp': 'Entrega en la aplicación',
   'admin.broadcast.inApp.state': 'Estado',
   'admin.broadcast.inApp.state.never': 'Todavía no publicada en la aplicación',

@@ -105,6 +105,7 @@ const f = {
   'admin.broadcast.email.completedAt': 'Sending finished',
   'admin.broadcast.email.running': 'In progress',
   'admin.broadcast.email.skipped': 'Accounts that turned off broadcast e-mails are skipped: sent plus failed can be lower than the number of recipients.',
+  'admin.broadcast.email.skipped.why': 'Why fewer sends than recipients?',
   'admin.broadcast.section.inApp': 'In-app delivery',
   'admin.broadcast.inApp.state': 'State',
   'admin.broadcast.inApp.state.never': 'Not published in the app yet',

@@ -345,6 +345,7 @@ const f = {
   'admin.settings.sovereign.agentReset': 'Restablecer todo el agente',
   'admin.settings.dash.title': 'Contadores del panel',
   'admin.settings.dash.body': 'La plataforma guarda en memoria los contadores del panel durante diez minutos. Recalcúlalos para ver cifras al día de inmediato.',
+  'admin.settings.dash.why': '¿Por qué recalcular los contadores?',
   'admin.settings.dash.action': 'Recalcular ahora',
   'admin.settings.dash.busy': 'Recalculando…',
   'admin.settings.dash.done': 'Contadores recalculados',

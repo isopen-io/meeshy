@@ -343,6 +343,7 @@ const f = {
   'admin.settings.sovereign.agentReset': 'Reset the whole agent',
   'admin.settings.dash.title': 'Dashboard counters',
   'admin.settings.dash.body': 'The platform keeps the dashboard counters in memory for ten minutes. Recompute them to see up-to-date figures right away.',
+  'admin.settings.dash.why': 'Why recompute the counters?',
   'admin.settings.dash.action': 'Recompute now',
   'admin.settings.dash.busy': 'Recomputing…',
   'admin.settings.dash.done': 'Counters recomputed',

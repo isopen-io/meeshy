@@ -348,6 +348,7 @@ const f = {
   'admin.settings.sovereign.agentReset': 'Réinitialiser l’agent en entier',
   'admin.settings.dash.title': 'Compteurs du tableau de bord',
   'admin.settings.dash.body': 'Les compteurs du tableau de bord sont gardés en mémoire par la plateforme pendant dix minutes. Recalculez-les pour voir tout de suite les chiffres à jour.',
+  'admin.settings.dash.why': 'Pourquoi recalculer les compteurs ?',
   'admin.settings.dash.action': 'Recalculer maintenant',
   'admin.settings.dash.busy': 'Recalcul en cours…',
   'admin.settings.dash.done': 'Compteurs recalculés',
