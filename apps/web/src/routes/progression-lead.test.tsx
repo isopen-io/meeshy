@@ -245,9 +245,8 @@ describe('la ligne courte du guide est remontée au héros', () => {
     const { lines, host } = await announced(view({ guideSeen: [] }));
     expect(host.querySelector('[data-game-guide="onboarding.welcome"]')).not.toBeNull();
     const last = lines.at(-1);
-    expect(typeof last).toBe('string');
-    expect((last ?? '').length).toBeGreaterThan(0);
-    expect(host.textContent).toContain(last ?? '\u0000');
+    expect(last).toBe('Le jeu en sept cartes');
+    expect(host.textContent).toContain('Salut, c’est Mee');
   });
 
   test('quand la carte disparaît, la ligne disparaît avec elle', async () => {

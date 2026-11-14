@@ -260,7 +260,11 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
     }
 
     func test_theMessageAndTheCommentTray_mountTheSameZoneAndTile() throws {
+        // Le message monte sa zone dans ConversationView+ComposerAttachments et
+        // sa tuile dans ConversationPendingAttachmentTile (#7171) : les deux
+        // fichiers font UNE surface.
         let message = try source("Views/ConversationView+ComposerAttachments.swift")
+            + source("Views/ConversationPendingAttachmentTile.swift")
         let tray = try source("Views/CommentMediaView.swift")
         for shared in ["ComposerAttachmentZone(", "ComposerAttachmentTile(", "ComposerPlaceTile("] {
             XCTAssertTrue(message.contains(shared), "Le message ne monte plus \(shared)")

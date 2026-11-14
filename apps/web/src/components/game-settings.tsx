@@ -189,11 +189,13 @@ export function GameSettings(props: GameSettingsProps) {
             {gameText('game.settings.atmosphere.body')}
           </p>
           <p data-game-setting-atmosphere-current="" className="text-body font-semibold" style={{ color: GAME_INK }}>
-            {props.atmosphere.current === null ? gameText('game.settings.atmosphere.none') : atmosphereName(props.atmosphere.current)}
+            {atmosphereName(props.atmosphere.current ?? 'afrique')}
           </p>
           <button
             type="button"
+            id="game-settings-atmosphere-action"
             data-game-setting-atmosphere=""
+            aria-labelledby="game-settings-atmosphere-action game-settings-atmosphere-title"
             onClick={props.atmosphere.onChange}
             className="self-start rounded-chip px-4 text-body font-semibold"
             style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}

@@ -100,7 +100,7 @@ struct StarredMessagesView: View {
     static var emptyInfoNote: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "starred.messages.empty.question", defaultValue: "Comment ajouter un message aux favoris ?", bundle: .main),
-            text: String(localized: "starred.messages.empty.subtitle", defaultValue: "Appui long sur un message, puis « Ajouter aux favoris ».", bundle: .main)
+            text: String(localized: "starred.messages.empty.subtitle", defaultValue: "Appui long sur un message, puis « Ajouter aux favoris ».", bundle: .main)
         )
     }
 
