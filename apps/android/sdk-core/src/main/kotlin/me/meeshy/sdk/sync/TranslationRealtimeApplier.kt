@@ -21,8 +21,10 @@ class TranslationRealtimeApplier @Inject constructor(
 
     override fun subscribe(registrar: RelayRegistrar) {
         val lane = OrderedEventLane.Family.ENRICHMENT
-        registrar.relay(socket.translationReceived, lane) {
-            messages.applyTranslation(it.messageId, it.targetLanguage, it.translatedContent)
+        /* La charge IMBRIQUE ses traductions (`TranslationEvent.translations`) : une trame peut en
+           porter plusieurs, et la fusion est idempotente — les appliquer toutes ne régresse rien. */
+        registrar.relay(socket.translationReceived, lane) { event ->
+            event.usable.forEach { messages.applyTranslation(event.messageId, it.targetLanguage, it.translatedContent) }
         }
         registrar.relay(socket.transcriptionReady, lane) { event ->
             val transcript = event.transcription

@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.model.TranscriptionPayload
 import me.meeshy.sdk.model.TranscriptionReadyEvent
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.reaction.ReactionRowStore
@@ -212,7 +213,7 @@ class RealtimeAppliersTest {
     @Test
     fun `traductions, transcriptions et pistes audio passent aux fusions du depot`() = runBlocking<Unit> {
         val registrar = translations()
-        registrar.deliver(translationFlow, TranslationEvent("m1", "c1", "fr", "Bonjour"))
+        registrar.deliver(translationFlow, TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "fr", translatedContent = "Bonjour"))))
         registrar.deliver(
             transcriptionFlow,
             TranscriptionReadyEvent("m1", "c1", "a1", TranscriptionPayload(text = "hello", language = "en")),

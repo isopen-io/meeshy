@@ -111,13 +111,20 @@ internal class ChatTranslationController(
             }
         }
         scope.launch {
+            /* `message:translation` ne porte PAS de `conversationId` — le contrat ne l'a jamais déclaré
+               et l'émetteur ne l'a jamais posé (#18069). Le filtre qui s'y adossait ne gardait donc
+               rien ; la portée vient du dépôt, qui est indexé par `messageId` : `applyTranslation`
+               est un no-op sur un message absent du cache de ce fil, exactement comme le web
+               (`realtime-apply.ts`, `applyMessageTranslation`). */
             messageSocketManager.translationReceived.collectArrived { event ->
-                if (event.conversationId == conversationId) {
-                    mutableFailures.update { it - TranslationRequestFailure.rowKey(event.messageId, event.targetLanguage) }
+                event.usable.forEach { translation ->
+                    mutableFailures.update {
+                        it - TranslationRequestFailure.rowKey(event.messageId, translation.targetLanguage)
+                    }
                     messageRepository.applyTranslation(
                         event.messageId,
-                        event.targetLanguage,
-                        event.translatedContent,
+                        translation.targetLanguage,
+                        translation.translatedContent,
                     )
                 }
             }

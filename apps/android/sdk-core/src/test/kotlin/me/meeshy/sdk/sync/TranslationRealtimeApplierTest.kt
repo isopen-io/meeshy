@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.Test
@@ -30,14 +31,14 @@ class TranslationRealtimeApplierTest {
 
     @Test
     fun `une traduction recue est fusionnee dans sa langue exacte`() = runTest {
-        registrar.deliver(translation, TranslationEvent("m1", "c1", "de", "Hallo"))
+        registrar.deliver(translation, TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "de", translatedContent = "Hallo"))))
         coVerify(exactly = 1) { messages.applyTranslation("m1", "de", "Hallo") }
         coVerify(exactly = 0) { messages.applyTranslation(any(), neq("de"), any()) }
     }
 
     @Test
     fun `la meme traduction rejouee passe deux fois par la fusion idempotente`() = runTest {
-        val event = TranslationEvent("m1", "c1", "de", "Hallo")
+        val event = TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "de", translatedContent = "Hallo")))
         registrar.deliver(translation, event)
         registrar.deliver(translation, event)
         coVerify(exactly = 2) { messages.applyTranslation("m1", "de", "Hallo") }

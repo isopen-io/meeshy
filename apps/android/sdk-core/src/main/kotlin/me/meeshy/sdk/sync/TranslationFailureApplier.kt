@@ -25,7 +25,9 @@ class TranslationFailureApplier @Inject constructor(
 
     override fun subscribe(registrar: RelayRegistrar) {
         val lane = OrderedEventLane.Family.ENRICHMENT
-        registrar.relay(socket.translationReceived, lane) { store.textTranslated(it.messageId, it.targetLanguage) }
+        registrar.relay(socket.translationReceived, lane) { event ->
+            event.usable.forEach { store.textTranslated(event.messageId, it.targetLanguage) }
+        }
         registrar.relay(socket.transcriptionReady, lane) { store.transcribed(it.messageId, it.attachmentId) }
         registrar.relay(socket.audioTranslationReady, lane) { store.audioTranslated(it.messageId, it.attachmentId, it.language) }
         registrar.relay(conversationEvents.events, lane) { event ->

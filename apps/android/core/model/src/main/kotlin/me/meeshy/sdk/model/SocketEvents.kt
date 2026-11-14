@@ -67,7 +67,13 @@ data class TypingEvent(
 data class ReactionUpdateEvent(
     val messageId: String,
     val conversationId: String,
-    val userId: String,
+    /**
+     * Le `User.id` de l'acteur. **Optionnel au contrat** (`types/reaction.ts`), et c'est délibéré :
+     * la passerelle le pose toujours, mais une charge PERSISTÉE puis rejouée hors ligne peut dater
+     * d'avant son ajout. Exigé ici, il faisait lever `MissingFieldException` sur ce rejeu — avalée
+     * par `SocketInboundRoute.guarded`, donc la réaction n'arrivait jamais et rien ne rougissait (#18070).
+     */
+    val userId: String? = null,
     val emoji: String,
     val count: Int = 0,
     /** Le `Participant.id` de l'acteur (clé d'auteur d'un tiers) ; absent d'une vieille passerelle. */
@@ -75,6 +81,14 @@ data class ReactionUpdateEvent(
     /** L'agrégat servi APRÈS l'action : borne autoritaire du nombre de lignes d'un emoji. */
     val aggregation: ReactionEventAggregation? = null,
 )
+
+/**
+ * « Cet écho est-il le mien ? » — site UNIQUE de la question, parce qu'elle a un piège : [userId] est
+ * désormais nullable, et `null == null` rendrait VRAI pour un lecteur anonyme (dont l'identité est nulle
+ * elle aussi) face à la réaction d'un tiers. Un acteur INCONNU n'est jamais moi.
+ */
+fun ReactionUpdateEvent.isOwnEcho(currentUserId: String?): Boolean =
+    userId != null && userId == currentUserId
 
 @Serializable
 data class ReactionEventAggregation(
@@ -110,14 +124,50 @@ data class UserStatusEvent(
     val lastActiveAt: String? = null,
 )
 
+/**
+ * Une traduction de texte servie par `message:translation`.
+ *
+ * Fidèle à `packages/shared/types/socketio-events/translation.ts` (`TranslationData`), dont
+ * `buildTranslationEvent.ts` est l'unique producteur. Seules les clés que les consommateurs
+ * utilisent sont déclarées — `ignoreUnknownKeys = true` tolère les autres (`id`, `cacheKey`,
+ * `cached`, `confidenceScore`, `createdAt`), et les déclarer n'ajouterait que de la dérive à tenir.
+ *
+ * La lecture est INDULGENTE (chaînes vides par défaut) pour la raison de [TranscriptionReadyEvent] :
+ * une trame malformée doit être écartée par la fusion no-op, jamais lever au décodage et emporter
+ * l'événement entier.
+ */
+@Serializable
+data class TranslationEntry(
+    val targetLanguage: String = "",
+    val translatedContent: String = "",
+    val sourceLanguage: String? = null,
+    val translationModel: String? = null,
+)
+
+/**
+ * `message:translation` — le rattrapage du Prisme Linguistique : le pipeline traduit APRÈS la création
+ * (`message:new` porte `translations` VIDE), donc un message reçu reste dans la langue de l'expéditeur
+ * jusqu'à cet événement.
+ *
+ * **La charge IMBRIQUE ses traductions et ne porte PAS de `conversationId`** — le contrat
+ * (`TranslationEvent`, `translation.ts`) et son émetteur unique (`buildTranslationEvent.ts`) sont
+ * formels, et le web le documente à l'identique (`realtime-apply.ts`, `applyMessageTranslation` :
+ * on retrouve le fil en balayant le cache, jamais par un champ de la charge).
+ *
+ * Ce miroir déclarait une forme PLATE — `conversationId`, `targetLanguage`, `translatedContent` à la
+ * racine, tous requis — que la passerelle n'a jamais émise : chaque trame levait
+ * `MissingFieldException`, avalée par `SocketInboundRoute.guarded`. Aucune traduction temps réel
+ * n'atteignait Android, et le Prisme devenait fonction d'un rechargement REST (#18069).
+ */
 @Serializable
 data class TranslationEvent(
     val messageId: String,
-    val conversationId: String,
-    val targetLanguage: String,
-    val translatedContent: String,
-    val translationModel: String? = null,
-)
+    val translations: List<TranslationEntry> = emptyList(),
+) {
+    /** Les traductions EXPLOITABLES : une entrée sans langue ou sans texte ne fusionne rien. */
+    val usable: List<TranslationEntry>
+        get() = translations.filter { it.targetLanguage.isNotBlank() && it.translatedContent.isNotBlank() }
+}
 
 /**
  * A ready voice-note transcript — the payload of `audio:transcription-ready`.
@@ -195,7 +245,12 @@ data class TranslatedAudioPayload(
 data class AttachmentUpdatedEvent(
     val messageId: String,
     val conversationId: String,
-    val attachmentId: String,
+    /**
+     * **Posé CONDITIONNELLEMENT par l'émetteur** (`emitAttachmentUpdated.ts`), donc optionnel au
+     * contrat : un enrichissement qui porte sur le message entier n'en nomme aucune pièce. Exigé
+     * ici, il faisait lever le décodage sur ces trames-là (#18070).
+     */
+    val attachmentId: String? = null,
     val status: String? = null,
     val url: String? = null,
     val thumbnailUrl: String? = null,
