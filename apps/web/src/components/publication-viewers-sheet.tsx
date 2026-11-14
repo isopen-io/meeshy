@@ -237,11 +237,6 @@ function ViewersBody({
         <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
           {translate(lang, 'story.views.empty.title')}
         </p>
-        <p className="text-body" style={MUTED}>
-          {subject === 'publication' && labelsReady
-            ? translateViewerEngagement(lang, 'viewerEngagement.empty.subtitle')
-            : translate(lang, 'story.views.empty.subtitle')}
-        </p>
       </li>
     );
   }

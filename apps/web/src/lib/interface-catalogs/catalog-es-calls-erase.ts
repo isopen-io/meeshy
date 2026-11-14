@@ -12,6 +12,7 @@ const esCallsErase = {
   'calls.clearAll.cancel': 'Cancelar',
   'calls.erase.failed': 'No se pudo borrar. Inténtalo de nuevo.',
   'calls.search': 'Buscar un nombre',
+  'calls.search.placeholder': 'Buscar',
   'calls.search.clear': 'Borrar la búsqueda',
   'calls.search.empty': 'Ninguna llamada coincide con «{query}»',
   'calls.participants.more': '{names} +{count}',

@@ -229,7 +229,6 @@ const frShellLabels = {
   'hashtag.loading': 'Chargement des publications',
   'hashtag.error': 'Impossible de charger ce mot-clé',
   'hashtag.empty.title': 'Rien sous #{tag}',
-  'hashtag.empty.body': 'Aucune publication visible ne porte ce mot-clé.',
   'hashtag.loadMore': 'Charger plus',
   'hashtag.loadingMore': 'Chargement…',
 } as const;
