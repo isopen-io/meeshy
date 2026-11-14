@@ -64,8 +64,24 @@ describe('la ligne du Bring', () => {
     expect(html).toContain('data-bring-send');
     expect(html).toContain('même verrouillé');
     expect(html).not.toContain('même en silencieux');
-    expect(html).toContain('un iPhone en silencieux avec Meeshy fermé ne montre qu’une alerte prioritaire');
+    expect(html).toContain('Pour une urgence extrême : son téléphone sonne, même verrouillé.');
     expect(html).toContain('Restants aujourd’hui : 2');
+  });
+
+  test('les exceptions passent derrière un (i) nommé par sa question, et restent lues par le lecteur d’écran', () => {
+    const html = view({ availability: availability() });
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    const button = host.querySelector('button[aria-controls]');
+    expect(button?.getAttribute('aria-label')).toBe('Quand le Bring ne sonne-t-il pas ?');
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    const note = host.querySelector(`[id="${button?.getAttribute('aria-controls')}"]`);
+    expect(note?.className).toContain('sr-only');
+    expect(note?.textContent).toContain('un iPhone en silencieux avec Meeshy fermé ne montre qu’une alerte prioritaire');
+    expect(note?.textContent).toContain('le web ne sonne qu’onglet ouvert');
+    const orientation = [...host.querySelectorAll('p')].find((node) => node.textContent?.includes('même verrouillé'));
+    expect(orientation?.className).not.toContain('sr-only');
+    expect(orientation?.textContent).not.toContain('Exceptions');
   });
 
   test('illimité (Atome) : « Sans limite aujourd’hui », jamais « null »', () => {

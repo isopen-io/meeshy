@@ -116,7 +116,7 @@ describe('MyStoriesEmpty — l’état vide, mot pour mot iOS', () => {
   test('en français', () => {
     const html = renderToStaticMarkup(<MyStoriesEmpty language="fr" />);
     expect(html).toContain('Aucune story envoyée');
-    expect(html).toContain('Vos stories publiées apparaîtront ici tant qu’elles sont actives.');
+    expect(html).not.toContain('apparaîtront ici');
     expect(html).toContain('href="/stories/new"');
   });
 
