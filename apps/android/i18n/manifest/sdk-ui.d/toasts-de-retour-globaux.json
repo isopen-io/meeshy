@@ -7,7 +7,9 @@
         { "androidName": "post_daily_limit_comment", "status": "android-only" },
         { "androidName": "post_daily_limit_comment_untimed", "status": "android-only" },
         { "androidName": "post_daily_limit_reaction", "status": "android-only" },
-        { "androidName": "post_daily_limit_reaction_untimed", "status": "android-only" }
+        { "androidName": "post_daily_limit_reaction_untimed", "status": "android-only" },
+        { "androidName": "post_daily_limit_note", "status": "android-only" },
+        { "androidName": "post_daily_limit_note_question", "status": "android-only" }
       ]
     }
   }
