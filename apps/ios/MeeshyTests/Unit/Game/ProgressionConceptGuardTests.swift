@@ -131,6 +131,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         return table
     }
 
+    @MainActor
     func test_everyConcept_hasItsNameItsWhyItsHowAndItsTwoTips_inTheSevenLanguages() throws {
         let table = try catalog()
         for concept in concepts {
