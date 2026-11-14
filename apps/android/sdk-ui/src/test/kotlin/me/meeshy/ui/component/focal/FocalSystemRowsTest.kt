@@ -1,7 +1,6 @@
 package me.meeshy.ui.component.focal
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.doubleClick
