@@ -9,7 +9,7 @@ import { useStowFade, type HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import type { CallModerationSlot } from '@/components/call-control-slots';
-import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
+import { useSrcObject } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -269,14 +269,8 @@ function ScreenChip({ zoom, title, stowed, language }: { readonly zoom: number; 
   );
 }
 
-/** L'écran partagé avant que son chunk n'arrive (préchargé avec la grille, il est là d'ordinaire) : l'image entière, sans geste. */
-function ScreenWaiting({ member, stream }: { readonly member: CallMember; readonly stream: MediaStream | undefined }) {
-  return (
-    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-card" data-call-slot={member.userId}>
-      <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={member.name} member={member.userId} />
-    </div>
-  );
-}
+/** L'écran partagé avant que son chunk n'arrive — il se charge avec la grille, il est là d'ordinaire : sa place, réservée. */
+const SCREEN_WAITING = <div className="min-h-0 min-w-0 flex-1 rounded-card" />;
 
 /** Le bandeau des autres, qui sort par son bord au plein écran total (U2b) et revient par lui (U2.10) ; il reste au plein écran (U2). */
 function OthersStrip({ kit, side, hidden, children }: { readonly kit: CallGridKit; readonly side: Filmstrip; readonly hidden: boolean; readonly children: ReactNode }) {
@@ -427,7 +421,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               <Slot {...tile(mine, null, selfLabel, 96)} />
             </div>
           ) : screen ? (
-            <Suspense key={featured.userId} fallback={<ScreenWaiting member={featured} stream={remoteStreams[featured.userId]} />}>
+            <Suspense key={featured.userId} fallback={SCREEN_WAITING}>
               <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} chip={(zoom, title) => <ScreenChip zoom={zoom} title={title} stowed={stowed} language={language} />} color={kit.colorOf(featured.userId)} isDrag={kit.isDrag} />
             </Suspense>
           ) : (
