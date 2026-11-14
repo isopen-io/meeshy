@@ -157,7 +157,6 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// Les phrases qui EXPLIQUENT restent : « Elle n'existe pas… » dit pourquoi, et aucun bouton ne le dit à sa place.
     func test_communityRefusedBody_staysBecauseItExplains() throws {
         XCTAssertNotNil(try kit()["community.detail.refused.body"]?["fr"])
-        XCTAssertNotNil(try app()["story.mine.drafts.empty.subtitle"]?["fr"])
     }
 
     func test_communityLoadFailure_onlyTheRefusalExplains_theTwoRetryableCausesAreJustTitleAndButton() {

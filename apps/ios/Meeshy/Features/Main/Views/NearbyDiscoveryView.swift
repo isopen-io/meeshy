@@ -514,6 +514,8 @@ struct NearbyEmptyStateCard: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    @State private var openNoteID: String?
+
     private var secondaryTitle: String? {
         guard reason == .locationDenied else { return nil }
         return String(localized: "feed.nearby.empty.retry", defaultValue: "Réessayer", bundle: .main)
@@ -531,24 +533,28 @@ struct NearbyEmptyStateCard: View {
                 .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(detail)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if let detail = Self.detail(for: reason, radiusKm: radiusKm) {
+                Text(detail)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if reason == .noneInRadius {
-                Text(
-                    String(
-                        localized: "feed.nearby.empty.none.why",
-                        defaultValue: "Seules les publications dont l'auteur a activé « trouvable à proximité » apparaissent ici. Les publications antérieures à cette option n'y figurent pas.",
-                        bundle: .main
+                MeeshyInfoNoted(note: Self.whyNote, openNoteID: $openNoteID, tint: theme.textMuted) {
+                    Text(
+                        String(
+                            localized: "feed.nearby.empty.none.why",
+                            defaultValue: "Seules les publications « trouvables à proximité » apparaissent ici.",
+                            bundle: .main
+                        )
                     )
-                )
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Button {
@@ -618,18 +624,28 @@ struct NearbyEmptyStateCard: View {
         }
     }
 
-    private var detail: String {
+    /// Pourquoi une publication manque-t-elle ? Le cas limite (l'auteur n'a pas activé l'option, les
+    /// publications antérieures n'y figurent pas) derrière un (i) ; la phrase qui oriente reste au repos.
+    static var whyNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "feed.nearby.empty.none.why.question", defaultValue: "Pourquoi une publication manque-t-elle ?", bundle: .main),
+            text: String(localized: "feed.nearby.empty.none.why.note", defaultValue: "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas.", bundle: .main)
+        )
+    }
+
+    /// Une phrase, ou rien : l'état vide de la carte tient dans son titre.
+    static func detail(for reason: NearbyEmptyReason, radiusKm: Double) -> String? {
         switch reason {
         case .locationDenied:
-            return String(localized: "feed.nearby.empty.denied.detail", defaultValue: "Meeshy n'a pas accès à votre position. Autorisez-la dans les Réglages, ou déplacez la carte à la main.", bundle: .main)
+            return String(localized: "feed.nearby.empty.denied.detail", defaultValue: "Meeshy n'a pas accès à votre position.", bundle: .main)
         case .awaitingLocation:
-            return String(localized: "feed.nearby.empty.awaiting.detail", defaultValue: "Aucun relevé pour l'instant. Réessayez, ou déplacez la carte pour choisir un point de départ.", bundle: .main)
+            return String(localized: "feed.nearby.empty.awaiting.detail", defaultValue: "Déplacez la carte pour choisir un point de départ.", bundle: .main)
         case .offline:
             return String(localized: "feed.nearby.empty.offline.detail", defaultValue: "Reconnectez-vous pour explorer autour de vous.", bundle: .main)
         case .signInRequired:
             return String(localized: "feed.nearby.empty.signin.detail", defaultValue: "La recherche à proximité demande un compte Meeshy.", bundle: .main)
         case .serviceUnavailable:
-            return String(localized: "feed.nearby.empty.unavailable.detail", defaultValue: "Le serveur n'a pas pu répondre. Ce n'est pas votre rayon de recherche — réessayez dans un instant.", bundle: .main)
+            return String(localized: "feed.nearby.empty.unavailable.detail", defaultValue: "Le serveur n'a pas répondu.", bundle: .main)
         case .noneInRadius:
             return String(
                 localized: "feed.nearby.empty.none.detail",
@@ -637,7 +653,7 @@ struct NearbyEmptyStateCard: View {
                 bundle: .main
             )
         case .nothingOnTheMap:
-            return String(localized: "feed.map.empty.detail", defaultValue: "Les posts partagés avec une position apparaîtront ici", bundle: .main)
+            return nil
         }
     }
 

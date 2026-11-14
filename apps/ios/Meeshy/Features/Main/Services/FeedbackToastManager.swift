@@ -153,10 +153,10 @@ enum DailyGestureLimitNotice {
             switch limit.gesture {
             case .comment:
                 return String(localized: "post.daily_limit.comment.untimed",
-                              defaultValue: "Vous avez fait tous les commentaires permis aujourd'hui. La limite compte vos gestes, jamais vos points.", bundle: .main)
+                              defaultValue: "Limite de commentaires atteinte — vos étincelles ne bougent pas.", bundle: .main)
             case .reaction:
                 return String(localized: "post.daily_limit.reaction.untimed",
-                              defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points.", bundle: .main)
+                              defaultValue: "Limite de réactions atteinte — vos étincelles ne bougent pas.", bundle: .main)
             case .unlinkedRecipients:
                 return onlyUnlinkedRecipientsText
             }
@@ -165,13 +165,13 @@ enum DailyGestureLimitNotice {
         switch limit.gesture {
         case .comment:
             return String(localized: "post.daily_limit.comment",
-                          defaultValue: "Vous avez fait tous les commentaires permis aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez recommenter à \(time).",
+                          defaultValue: "Limite de commentaires atteinte — vos étincelles ne bougent pas. Reprise à \(time).",
                           bundle: .main)
         case .unlinkedRecipients:
             return onlyUnlinkedRecipientsText
         case .reaction:
             return String(localized: "post.daily_limit.reaction",
-                          defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez réagir de nouveau à \(time).",
+                          defaultValue: "Limite de réactions atteinte — vos étincelles ne bougent pas. Reprise à \(time).",
                           bundle: .main)
         }
     }
@@ -180,7 +180,7 @@ enum DailyGestureLimitNotice {
     /// cadence ni une heure — l'auteur retire ces personnes, ou revient demain.
     static var onlyUnlinkedRecipientsText: String {
         String(localized: "post.audience.only_unlinked_limit",
-               defaultValue: "Trop de personnes choisies n’ont encore aucun lien avec vous aujourd’hui. Retirez-les de la liste, ou réessayez demain.",
+               defaultValue: "Trop de personnes sans lien avec vous aujourd’hui. Retirez-en, ou réessayez demain.",
                bundle: .main)
     }
 

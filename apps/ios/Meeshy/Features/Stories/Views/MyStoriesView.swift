@@ -484,9 +484,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "square.and.pencil",
-                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon"),
-                subtitle: String(localized: "story.mine.drafts.empty.subtitle",
-                                 defaultValue: "Une story fermée sans être publiée vous attend ici.")
+                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon")
             )
         } else {
             draftsContent
@@ -757,13 +755,13 @@ struct MyStoriesView: View {
                     isReposting = false
                     viewModel.applyRepublishedStory(post)
                     FeedbackToastManager.shared.showSuccess(
-                        String(localized: "story.mine.repost.success", defaultValue: "Story republiée"))
+                        String(localized: "story.mine.repost.success", defaultValue: "Story repartagée"))
                 }
             } catch {
                 await MainActor.run {
                     isReposting = false
                     FeedbackToastManager.shared.showError(
-                        String(localized: "story.mine.repost.error", defaultValue: "Échec de la republication"))
+                        String(localized: "story.mine.repost.error", defaultValue: "Échec du repartage"))
                 }
             }
         }

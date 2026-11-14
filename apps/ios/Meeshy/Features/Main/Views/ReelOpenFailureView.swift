@@ -28,10 +28,7 @@ struct ReelOpenFailureView: View {
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.mediaChromeForeground)
                     .multilineTextAlignment(.center)
-                Text(failure.message)
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
-                    .multilineTextAlignment(.center)
+                ContentFetchFailureMessage(message: failure.message, tint: MeeshyColors.mediaChromeTertiary)
                 if failure.offersRetry {
                     retryButton
                 }

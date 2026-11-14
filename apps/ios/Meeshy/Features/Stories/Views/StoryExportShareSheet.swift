@@ -17,6 +17,7 @@ struct StoryExportShareSheet: View {
     /// — jamais le lecteur devant la story d'un autre (#9953, #10536).
     /// `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
     var author: StoryExportAuthor? = nil
+    @State private var openNoteID: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -90,11 +91,9 @@ struct StoryExportShareSheet: View {
                 .font(MeeshyFont.fixedGlyph(36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
                 .accessibilityHidden(true)
-            Text(String(localized: "story.export.share.subtitle",
-                        defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."))
-            .font(MeeshyFont.relative(MeeshyFont.labelSize))
-            .multilineTextAlignment(.center)
-            .foregroundColor(.secondary)
+            MeeshyInfoNoted(note: StoryExportShareCopy.infoNote, openNoteID: $openNoteID, tint: .secondary) {
+                EmptyView()
+            }
         }
         .padding(.top, MeeshySpacing.sm)
     }

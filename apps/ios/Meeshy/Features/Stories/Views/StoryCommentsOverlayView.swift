@@ -93,7 +93,7 @@ struct StoryCommentsOverlayView: View {
     /// consultables, mais on signale que la story n'est plus accessible.
     private var expiredStoryBanner: some View {
         Label {
-            Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
+            Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .lineLimit(1)
         } icon: {
@@ -296,9 +296,6 @@ struct StoryCommentsOverlayView: View {
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

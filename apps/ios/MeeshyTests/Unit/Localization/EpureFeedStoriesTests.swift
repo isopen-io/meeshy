@@ -187,7 +187,7 @@ final class EpureFeedStoriesTests: XCTestCase {
     func test_contentFetchFailureViews_renderTheMessageOnlyWhenThereIsOne() throws {
         for path in [Self.views + "PostDetailView+AbsenceStates.swift", Self.views + "ReelOpenFailureView.swift"] {
             let source = try code(path)
-            XCTAssertTrue(source.contains("if let message"), "\(path) : pas de texte vide quand la cause n'explique rien")
+            XCTAssertTrue(source.contains("ContentFetchFailureMessage("), "\(path) : pas de texte vide quand la cause n'explique rien")
         }
     }
 
@@ -240,8 +240,8 @@ final class EpureFeedStoriesTests: XCTestCase {
         XCTAssertFalse(menu.contains("Listing des vues"))
         let rail = try code(Self.stories + "StoryViewerView+Sidebar.swift")
         XCTAssertTrue(rail.contains("defaultValue: \"Repartager\""))
-        XCTAssertFalse(rail.contains("Republi"), "plus aucun « Republi… » sur le lecteur de stories")
-        XCTAssertFalse(try code(Self.stories + "MyStoriesView.swift").contains("Republi"))
+        XCTAssertFalse(rail.contains("defaultValue: \"Republi"), "plus aucun libellé « Republi… » sur le lecteur de stories")
+        XCTAssertFalse(try code(Self.stories + "MyStoriesView.swift").contains("defaultValue: \"Republi"))
         let english = try app()["story.viewer.action.repost"]?["en"]
         XCTAssertEqual(english, try app()["feed.post.repost"]?["en"], "le rail dit le mot du fil")
     }

@@ -125370,53 +125370,6 @@
         }
       }
     },
-    "feed.map.empty.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا المنشورات المشاركة بموقع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beiträge mit geteiltem Standort erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Posts shared with a location will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las publicaciones compartidas con ubicación aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les posts partagés avec une position apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I post condivisi con una posizione appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os posts compartilhados com localização aparecerão aqui"
-          }
-        }
-      }
-    },
     "feed.map.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -125940,43 +125893,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يوجد تحديد للموقع بعد. أعد المحاولة، أو حرّك الخريطة لاختيار نقطة انطلاق."
+            "value": "حرّك الخريطة لاختيار نقطة انطلاق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Ortung. Versuche es erneut oder verschiebe die Karte, um einen Startpunkt zu wählen."
+            "value": "Verschiebe die Karte, um einen Startpunkt zu wählen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No fix yet. Try again, or move the map to pick a starting point."
+            "value": "Move the map to pick a starting point."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no hay lectura. Inténtalo de nuevo o mueve el mapa para elegir un punto de partida."
+            "value": "Mueve el mapa para elegir un punto de partida."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun relevé pour l'instant. Réessayez, ou déplacez la carte pour choisir un point de départ."
+            "value": "Déplacez la carte pour choisir un point de départ."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun rilevamento per ora. Riprova o sposta la mappa per scegliere un punto di partenza."
+            "value": "Sposta la mappa per scegliere un punto di partenza."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma leitura por enquanto. Tente novamente ou mova o mapa para escolher um ponto de partida."
+            "value": "Mova o mapa para escolher um ponto de partida."
           }
         }
       }
@@ -126081,43 +126034,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن لـ Meeshy الوصول إلى موقعك. اسمح بذلك من الإعدادات، أو حرّك الخريطة يدويًا."
+            "value": "لا يمكن لـ Meeshy الوصول إلى موقعك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy hat keinen Zugriff auf deinen Standort. Erlaube ihn in den Einstellungen oder verschiebe die Karte von Hand."
+            "value": "Meeshy hat keinen Zugriff auf deinen Standort."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy has no access to your location. Allow it in Settings, or move the map by hand."
+            "value": "Meeshy has no access to your location."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy no tiene acceso a tu ubicación. Permítelo en Ajustes o mueve el mapa manualmente."
+            "value": "Meeshy no tiene acceso a tu ubicación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy n'a pas accès à votre position. Autorisez-la dans les Réglages, ou déplacez la carte à la main."
+            "value": "Meeshy n'a pas accès à votre position."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy non ha accesso alla tua posizione. Consentilo nelle Impostazioni o sposta la mappa a mano."
+            "value": "Meeshy non ha accesso alla tua posizione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Meeshy não tem acesso à sua localização. Permita nos Ajustes ou mova o mapa manualmente."
+            "value": "O Meeshy não tem acesso à sua localização."
           }
         }
       }
@@ -126316,43 +126269,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تظهر هنا فقط المنشورات التي فعّل صاحبها خيار «قابل للاكتشاف بالقرب». المنشورات السابقة لهذا الخيار غير مدرجة."
+            "value": "تظهر هنا فقط المنشورات «القابلة للاكتشاف بالقرب»."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hier erscheinen nur Beiträge, deren Autor „in der Nähe auffindbar“ aktiviert hat. Beiträge von vor dieser Option sind nicht dabei."
+            "value": "Hier erscheinen nur Beiträge, die „in der Nähe auffindbar“ sind."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only posts whose author turned on “discoverable nearby” appear here. Posts published before that option are not listed."
+            "value": "Only posts marked “discoverable nearby” appear here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aquí solo aparecen las publicaciones cuyo autor activó «localizable en las cercanías». Las publicaciones anteriores a esa opción no figuran."
+            "value": "Aquí solo aparecen las publicaciones «localizables en las cercanías»."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seules les publications dont l'auteur a activé « trouvable à proximité » apparaissent ici. Les publications antérieures à cette option n'y figurent pas."
+            "value": "Seules les publications « trouvables à proximité » apparaissent ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Qui compaiono solo i post il cui autore ha attivato «individuabile nelle vicinanze». I post precedenti a questa opzione non sono inclusi."
+            "value": "Qui compaiono solo i post «individuabili nelle vicinanze»."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aqui aparecem apenas as publicações cujo autor ativou «localizável por perto». As publicações anteriores a essa opção não constam."
+            "value": "Aqui aparecem apenas as publicações «localizáveis por perto»."
+          }
+        }
+      }
+    },
+    "feed.nearby.empty.none.why.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا لا يظهر منشور؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum fehlt ein Beitrag?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why is a post missing?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué falta una publicación?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi une publication manque-t-elle ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché manca un post?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que uma publicação não aparece?"
+          }
+        }
+      }
+    },
+    "feed.nearby.empty.none.why.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب أن يكون صاحب المنشور قد فعّل «قابل للاكتشاف بالقرب». المنشورات السابقة لهذا الخيار غير مدرجة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Autor muss „in der Nähe auffindbar“ aktiviert haben. Beiträge von vor dieser Option sind nicht dabei."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The author must have turned on “discoverable nearby”. Posts published before that option are not listed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El autor debe haber activado «localizable en las cercanías». Las publicaciones anteriores a esa opción no figuran."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'autore deve aver attivato «individuabile nelle vicinanze». I post precedenti a questa opzione non sono inclusi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O autor precisa ter ativado «localizável por perto». As publicações anteriores a essa opção não constam."
           }
         }
       }
@@ -126598,43 +126645,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر على الخادم الاستجابة. الأمر لا يتعلق بنطاق بحثك — أعد المحاولة بعد قليل."
+            "value": "لم يستجب الخادم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Server konnte nicht antworten. Es liegt nicht an deinem Suchradius – versuche es gleich noch einmal."
+            "value": "Der Server hat nicht geantwortet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The server could not answer. This is not about your search radius — try again in a moment."
+            "value": "The server did not answer."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El servidor no pudo responder. No es por tu radio de búsqueda: inténtalo de nuevo en un momento."
+            "value": "El servidor no respondió."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le serveur n'a pas pu répondre. Ce n'est pas votre rayon de recherche — réessayez dans un instant."
+            "value": "Le serveur n'a pas répondu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il server non ha potuto rispondere. Non dipende dal tuo raggio di ricerca: riprova tra un istante."
+            "value": "Il server non ha risposto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O servidor não conseguiu responder. Não é o seu raio de busca — tente novamente em instantes."
+            "value": "O servidor não respondeu."
           }
         }
       }
@@ -128359,53 +128406,6 @@
         }
       }
     },
-    "feed.post.detail.loadFailed.body": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحقّق من اتصالك ثم أعد المحاولة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prüfe deine Verbindung und versuche es erneut."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Check your connection, then try again."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comprueba tu conexión e inténtalo de nuevo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vérifiez votre connexion, puis réessayez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Controlla la connessione e riprova."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifique sua conexão e tente novamente."
-          }
-        }
-      }
-    },
     "feed.post.detail.loadFailed.retry": {
       "extractionState": "manual",
       "localizations": {
@@ -128496,53 +128496,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "O Meeshy não conseguiu carregar este conteúdo"
-          }
-        }
-      }
-    },
-    "feed.post.detail.serverFailed.body": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المشكلة من جهتنا. أعد المحاولة بعد قليل."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Problem liegt bei uns. Versuche es gleich noch einmal."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The problem is on our side. Try again in a moment."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El problema es de nuestra parte. Inténtalo de nuevo en un momento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le problème vient de notre côté. Réessayez dans un instant."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il problema è da parte nostra. Riprova tra un attimo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O problema é do nosso lado. Tente novamente em instantes."
           }
         }
       }
@@ -133770,43 +133723,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصوت مكتوم — افتح ملء الشاشة لسماعه"
+            "value": "الصوت مكتوم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton aus – für den Ton in den Vollbildmodus wechseln"
+            "value": "Ton aus"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sound off — open full screen to hear it"
+            "value": "Sound off"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sonido desactivado: abre en pantalla completa para oírlo"
+            "value": "Sonido desactivado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Son coupé — ouvrir en plein écran pour l'entendre"
+            "value": "Son coupé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio disattivato — apri a schermo intero per sentirlo"
+            "value": "Audio disattivato"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Som desativado — abra em tela cheia para ouvir"
+            "value": "Som desativado"
+          }
+        }
+      }
+    },
+    "feed.scene.sound.muted.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "افتح ملء الشاشة لسماعه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Vollbildmodus öffnen, um den Ton zu hören"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open full screen to hear it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre en pantalla completa para oírlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir en plein écran pour l'entendre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri a schermo intero per sentirlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra em tela cheia para ouvir"
           }
         }
       }
@@ -155619,43 +155619,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عدد كبير من الأشخاص الذين اخترتهم ليست لهم أي صلة بك بعد اليوم. أزلهم من القائمة، أو أعد المحاولة غدًا."
+            "value": "عدد كبير من الأشخاص بلا صلة بك اليوم. أزل بعضهم، أو أعد المحاولة غدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zu viele der ausgewählten Personen haben heute noch keine Verbindung zu dir. Entferne sie aus der Liste oder versuche es morgen erneut."
+            "value": "Zu viele Personen ohne Verbindung zu dir heute. Entferne einige oder versuche es morgen erneut."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Too many of the people you chose have no connection with you yet today. Remove them from the list, or try again tomorrow."
+            "value": "Too many people without a connection to you today. Remove some, or try again tomorrow."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demasiadas personas elegidas aún no tienen ningún vínculo contigo hoy. Quítalas de la lista o inténtalo de nuevo mañana."
+            "value": "Demasiadas personas sin vínculo contigo hoy. Quita algunas o inténtalo de nuevo mañana."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trop de personnes choisies n’ont encore aucun lien avec vous aujourd’hui. Retirez-les de la liste, ou réessayez demain."
+            "value": "Trop de personnes sans lien avec vous aujourd’hui. Retirez-en, ou réessayez demain."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Troppe persone scelte non hanno ancora alcun legame con te oggi. Rimuovile dall’elenco o riprova domani."
+            "value": "Troppe persone senza legame con te oggi. Rimuovine alcune o riprova domani."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muitas das pessoas escolhidas ainda não têm nenhum vínculo com você hoje. Remova-as da lista ou tente novamente amanhã."
+            "value": "Muitas pessoas sem vínculo com você hoje. Remova algumas ou tente novamente amanhã."
           }
         }
       }
@@ -191949,6 +191949,53 @@
         }
       }
     },
+    "story.export.share.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يتضمن التصدير؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was enthält der Export?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does the export contain?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué contiene la exportación?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que contient l'export ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa contiene l'esportazione?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que a exportação contém?"
+          }
+        }
+      }
+    },
     "story.export.share.subtitle": {
       "extractionState": "manual",
       "localizations": {
@@ -193312,53 +193359,6 @@
         }
       }
     },
-    "story.mine.drafts.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أي قصة أُغلقت دون نشر ستنتظرك هنا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine geschlossene, unveröffentlichte Story wartet hier auf dich."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A story closed without being published will wait for you here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una historia cerrada sin publicar te esperará aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une story fermée sans être publiée vous attend ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una storia chiusa senza essere pubblicata ti aspetterà qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uma story fechada sem ser publicada esperará por você aqui."
-          }
-        }
-      }
-    },
     "story.mine.drafts.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -193553,43 +193553,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم تُنشر هذه القصة قط: هذه نسختها الأخيرة وستضيع نهائيًا. «استئناف» يحوّلها إلى مسودة بدلًا من ذلك."
+            "value": "لم تُنشر هذه القصة قط: ستضيع نسختها الأخيرة نهائيًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Story wurde nie veröffentlicht: Dies ist ihre letzte Kopie, sie geht endgültig verloren. „Fortsetzen“ wandelt sie stattdessen in einen Entwurf um."
+            "value": "Diese Story wurde nie veröffentlicht: Ihre letzte Kopie geht endgültig verloren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This story was never published: this is its last copy and it will be lost forever. “Resume” converts it into a draft instead."
+            "value": "This story was never published: its last copy will be lost forever."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta historia nunca se publicó: es su última copia y se perderá para siempre. «Retomar» permite convertirla en borrador."
+            "value": "Esta historia nunca se publicó: su última copia se perderá para siempre."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette story n'a jamais été publiée : c'est sa dernière copie, elle sera définitivement perdue. « Reprendre » permet plutôt de la convertir en brouillon."
+            "value": "Cette story n'a jamais été publiée : sa dernière copie sera définitivement perdue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa storia non è mai stata pubblicata: è la sua ultima copia e andrà persa per sempre. «Riprendi» la converte invece in una bozza."
+            "value": "Questa storia non è mai stata pubblicata: la sua ultima copia andrà persa per sempre."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta story nunca foi publicada: é sua última cópia e será perdida para sempre. “Retomar” a converte em rascunho."
+            "value": "Esta story nunca foi publicada: sua última cópia será perdida para sempre."
           }
         }
       }
@@ -194211,13 +194211,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعادة النشر"
+            "value": "إعادة نشر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erneut posten"
+            "value": "Erneut teilen"
           }
         },
         "en": {
@@ -194235,19 +194235,19 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Republier"
+            "value": "Repartager"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricondividi"
+            "value": "Ripubblica"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repostar"
+            "value": "Republicar"
           }
         }
       }
@@ -194282,7 +194282,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Échec de la republication"
+            "value": "Échec du repartage"
           }
         },
         "it": {
@@ -194329,7 +194329,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story republiée"
+            "value": "Story repartagée"
           }
         },
         "it": {
@@ -195198,43 +195198,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "قائمة المشاهدات"
+            "value": "المشاهدات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aufrufliste"
+            "value": "Aufrufe"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Views list"
+            "value": "Views"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lista de vistas"
+            "value": "Vistas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Listing des vues"
+            "value": "Vues"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elenco delle visualizzazioni"
+            "value": "Visualizzazioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lista de visualizações"
+            "value": "Visualizações"
           }
         }
       }
@@ -196350,7 +196350,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Échec de la republication"
+            "value": "Échec du repartage"
           }
         },
         "it": {
@@ -196538,7 +196538,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Republié dans ton feed"
+            "value": "Repartagé dans ton feed"
           }
         },
         "it": {
@@ -196585,7 +196585,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Republié dans tes réels"
+            "value": "Repartagé dans tes réels"
           }
         },
         "it": {
@@ -196608,43 +196608,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن لإصدار التطبيق لديك عرضها بعد. لم تُفقد: ستظهر تمامًا كما أنشأها صاحبها بعد التحديث."
+            "value": "حدّث التطبيق لتراها تمامًا كما أنشأها صاحبها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Version der App kann sie noch nicht darstellen. Sie ist nicht verloren: Nach dem Update erscheint sie genau so, wie ihr Autor sie gestaltet hat."
+            "value": "Aktualisiere die App, um sie so zu sehen, wie ihr Autor sie gestaltet hat."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your version of the app can't paint it yet. It isn't lost: it will appear exactly as its author composed it once you update."
+            "value": "Update the app to see it as its author composed it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu versión de la aplicación aún no sabe pintarla. No se ha perdido: se mostrará tal y como la compuso su autor después de la actualización."
+            "value": "Actualiza la aplicación para verla tal y como la compuso su autor."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre version de l'application ne sait pas encore la peindre. Elle n'est pas perdue : elle s'affichera telle que son auteur l'a composée après la mise à jour."
+            "value": "Mettez l'application à jour pour la voir telle que son auteur l'a composée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua versione dell'app non sa ancora disegnarla. Non è persa: dopo l'aggiornamento apparirà esattamente come l'ha composta il suo autore."
+            "value": "Aggiorna l'app per vederla esattamente come l'ha composta il suo autore."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua versão do aplicativo ainda não sabe desenhá-la. Ela não está perdida: será exibida exatamente como seu autor a compôs após a atualização."
+            "value": "Atualize o aplicativo para vê-la exatamente como seu autor a compôs."
           }
         }
       }
@@ -198214,7 +198214,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Republish"
+            "value": "Repost"
           }
         },
         "es": {
@@ -198226,13 +198226,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Republier"
+            "value": "Repartager"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricondividi"
+            "value": "Ripubblica"
           }
         },
         "pt-BR": {
@@ -198478,52 +198478,6 @@
         }
       }
     },
-    "story.viewer.comments.beFirst": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كن أول من يعلّق!"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sei der Erste, der kommentiert!"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Be the first to comment!"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¡Sé el primero en comentar!"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Soyez le premier à commenter !"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sii il primo a commentare!"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seja o primeiro a comentar!"
-          }
-        }
-      }
-    },
     "story.viewer.comments.empty": {
       "localizations": {
         "ar": {
@@ -198669,43 +198623,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انتهت القصة — تبقى التعليقات ظاهرة"
+            "value": "انتهت القصة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story abgelaufen — Kommentare bleiben sichtbar"
+            "value": "Story abgelaufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story expired — comments remain visible"
+            "value": "Story expired"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Historia caducada — los comentarios siguen visibles"
+            "value": "Historia caducada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story expirée — les commentaires restent visibles"
+            "value": "Story expirée"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Storia scaduta — i commenti restano visibili"
+            "value": "Storia scaduta"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story expirado — os comentários permanecem visíveis"
+            "value": "Story expirado"
           }
         }
       }
@@ -305623,43 +305577,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا: يمكنك التعليق مجددًا عند الساعة %@."
+            "value": "بلغتَ حدّ التعليقات — شراراتك لا تتغيّر. يُستأنف عند الساعة %@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken: Ab %@ kannst du wieder kommentieren."
+            "value": "Kommentarlimit erreicht – deine Funken bleiben unberührt. Weiter ab %@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve made all the comments allowed today. The limit counts your actions, never your sparks: you can comment again at %@."
+            "value": "Comment limit reached — your sparks are untouched. Resumes at %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has hecho todos los comentarios permitidos hoy. El límite cuenta tus gestos, nunca tus chispas: podrás volver a comentar a las %@."
+            "value": "Límite de comentarios alcanzado: tus chispas no se tocan. Se reanuda a las %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez recommenter à %@."
+            "value": "Limite de commentaires atteinte — vos étincelles ne bougent pas. Reprise à %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai fatto tutti i commenti consentiti oggi. Il limite conta i tuoi gesti, mai le tue scintille: potrai commentare di nuovo alle %@."
+            "value": "Limite di commenti raggiunto — le tue scintille restano intatte. Si riprende alle %@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você fez todos os comentários permitidos hoje. O limite conta seus gestos, nunca suas faíscas: poderá comentar novamente às %@."
+            "value": "Limite de comentários atingido — suas faíscas não mudam. Retoma às %@."
           }
         }
       }
@@ -305670,43 +305624,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا: يمكنك التفاعل مجددًا عند الساعة %@."
+            "value": "بلغتَ حدّ التفاعلات — شراراتك لا تتغيّر. يُستأنف عند الساعة %@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken: Ab %@ kannst du wieder reagieren."
+            "value": "Reaktionslimit erreicht – deine Funken bleiben unberührt. Weiter ab %@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve made all the reactions allowed today. The limit counts your actions, never your sparks: you can react again at %@."
+            "value": "Reaction limit reached — your sparks are untouched. Resumes at %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus chispas: podrás volver a reaccionar a las %@."
+            "value": "Límite de reacciones alcanzado: tus chispas no se tocan. Se reanuda a las %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez réagir de nouveau à %@."
+            "value": "Limite de réactions atteinte — vos étincelles ne bougent pas. Reprise à %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai le tue scintille: potrai reagire di nuovo alle %@."
+            "value": "Limite di reazioni raggiunto — le tue scintille restano intatte. Si riprende alle %@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca suas faíscas: poderá reagir novamente às %@."
+            "value": "Limite de reações atingido — suas faíscas não mudam. Retoma às %@."
           }
         }
       }
@@ -305717,43 +305671,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا."
+            "value": "بلغتَ حدّ التعليقات — شراراتك لا تتغيّر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken."
+            "value": "Kommentarlimit erreicht – deine Funken bleiben unberührt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve made all the comments allowed today. The limit counts your actions, never your sparks."
+            "value": "Comment limit reached — your sparks are untouched."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has hecho todos los comentarios permitidos hoy. El límite cuenta tus gestos, nunca tus chispas."
+            "value": "Límite de comentarios alcanzado: tus chispas no se tocan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles."
+            "value": "Limite de commentaires atteinte — vos étincelles ne bougent pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai fatto tutti i commenti consentiti oggi. Il limite conta i tuoi gesti, mai le tue scintille."
+            "value": "Limite di commenti raggiunto — le tue scintille restano intatte."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você fez todos os comentários permitidos hoje. O limite conta seus gestos, nunca suas faíscas."
+            "value": "Limite de comentários atingido — suas faíscas não mudam."
           }
         }
       }
@@ -305764,43 +305718,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا."
+            "value": "بلغتَ حدّ التفاعلات — شراراتك لا تتغيّر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken."
+            "value": "Reaktionslimit erreicht – deine Funken bleiben unberührt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve made all the reactions allowed today. The limit counts your actions, never your sparks."
+            "value": "Reaction limit reached — your sparks are untouched."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus chispas."
+            "value": "Límite de reacciones alcanzado: tus chispas no se tocan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles."
+            "value": "Limite de réactions atteinte — vos étincelles ne bougent pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai le tue scintille."
+            "value": "Limite di reazioni raggiunto — le tue scintille restano intatte."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca suas faíscas."
+            "value": "Limite de reações atingido — suas faíscas não mudam."
           }
         }
       }
@@ -328116,43 +328070,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هناك مسودة مفتوحة بالفعل في المحرر: انشرها أو أفرغها أولاً."
+            "value": "أنهِ المسودة الجارية أولاً."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Editor ist bereits ein Entwurf offen: Veröffentliche oder leere ihn zuerst."
+            "value": "Beende zuerst den laufenden Entwurf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A draft is already open in the composer: publish or clear it first."
+            "value": "Finish the draft in progress first."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ya hay un borrador abierto en el editor: publícalo o vacíalo primero."
+            "value": "Termina primero el borrador en curso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un brouillon est déjà en cours dans le composeur : publiez-le ou videz-le d'abord."
+            "value": "Terminez d'abord le brouillon en cours."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "C'è già una bozza aperta nell'editor: pubblicala o svuotala prima."
+            "value": "Termina prima la bozza in corso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Já há um rascunho aberto no editor: publique-o ou limpe-o primeiro."
+            "value": "Termine primeiro o rascunho em andamento."
           }
         }
       }
