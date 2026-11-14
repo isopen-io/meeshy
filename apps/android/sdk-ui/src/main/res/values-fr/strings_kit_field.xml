@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Champ de feuille du kit (K08 MeeshyField), mêmes clés que le catalogue iOS kit.field.*. -->
+    <string name="kit_field_clear">Effacer</string>
+    <string name="kit_field_count">%1$s caractères sur %2$s</string>
+    <string name="kit_field_limit_reached">Limite de caractères atteinte</string>
+    <string name="kit_field_busy">En cours</string>
+</resources>
