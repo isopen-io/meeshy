@@ -110,6 +110,24 @@
   }
 }
 
+.onb-profile-banner,
+.onb-profile-avatar {
+  transition: transform 180ms var(--onb-spring);
+}
+
+.onb-profile-banner:active:not(:disabled),
+.onb-profile-avatar:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-profile-banner:active:not(:disabled),
+  .onb-profile-avatar:active:not(:disabled) {
+    transform: none;
+    opacity: var(--press-reduced-opacity);
+  }
+}
+
 .onb-profile-banner:focus-visible,
 .onb-profile-avatar:focus-visible {
   outline: 3px solid var(--ios-indigo-500);
