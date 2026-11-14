@@ -141,6 +141,7 @@
     <string name="shared_location_share_sheet_title">Ma position pour %1$s</string>
     <string name="shared_location_share_stop">Arrêter</string>
     <string name="shared_location_share_stop_a11y">Arrêter de partager ma position avec %1$s</string>
+    <string name="shared_location_share_stop_pending">Le partage s\'arrêtera dès le retour du réseau</string>
     <string name="shared_location_share_unavailable">Position introuvable pour le moment, réessaie</string>
     <string name="user_stats_activity">ACTIVITÉ</string>
     <string name="user_stats_badges">BADGES</string>

@@ -24,6 +24,8 @@ enum SharedLocationShareProblem: Equatable {
     case locationDenied
     case locationUnavailable
     case refused(SharedLocationSendOutcome)
+    /// « Arrêter » n'a pas pu partir : l'intention est gardée, et le centre la fait partir dès le retour du réseau.
+    case withdrawalPending
 }
 
 /// Réveille le centre après un délai : l'échéance de la personne la plus proche, ou le rejeu d'une échéance qui n'a pas
@@ -87,7 +89,8 @@ private final class SharedLocationSerialGate {
 ///   rallume rien ;
 /// - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
 ///   garde « Arrêter » pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder est
-///   rejouée, et à chaque socket accrochée.
+///   rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente, gardé et
+///   rejoué de la même façon (#18204).
 @MainActor
 final class SharedLocationSharingCenter: ObservableObject {
 
@@ -143,7 +146,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             .store(in: &socketWatch)
         lane.store(in: &socketWatch)
         guard !restored.isEmpty else { return }
-        startFollowing()
+        if restored.hasRecipients { startFollowing() }
         scheduleDeadline()
     }
 
@@ -174,28 +177,36 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
-    /// Ne plus montrer ma position à cette personne ; les autres gardent la leur.
+    /// Ne plus montrer ma position à cette personne ; les autres gardent la leur. Si l'arrêt ne peut pas partir, la
+    /// personne sort quand même de la liste et son retrait part dès que le réseau revient : on ne retouche jamais.
     @discardableResult
     func stopSharing(with userId: String) async -> SharedLocationShareProblem? {
-        await locked { await self.republish(self.roster.pruned(now: self.now()).removing(userId: userId)) }
+        await locked {
+            let problem = await self.republish(self.roster.pruned(now: self.now()).removing(userId: userId))
+            guard problem != nil, self.isLive, self.roster.entry(for: userId) != nil else { return problem }
+            self.adopt(self.roster.withdrawing(userId: userId, now: self.now()))
+            self.scheduleDeadline()
+            if !self.roster.hasRecipients { self.stopFollowingDevice() }
+            return .withdrawalPending
+        }
     }
 
-    /// Une échéance est passée : la retirer du partage serveur, et rejouer plus tard si ça n'a pas pu se faire.
+    /// Une échéance est passée ou un retrait attend : le faire partir, et rejouer plus tard si ça n'a pas pu se faire.
     func reconcile() async {
         _ = await locked {
-            let pruned = self.roster.pruned(now: self.now())
-            guard pruned != self.roster else { return nil }
-            let problem = await self.republish(pruned)
+            guard !self.roster.isSettled(now: self.now()) else { return nil }
+            let problem = await self.republish(self.roster.pruned(now: self.now()))
             if problem != nil, self.isLive { self.arm(after: Self.retryDelay) }
             return problem
         }
     }
 
-    /// Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera.
+    /// Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. Rien ne
+    /// part tant qu'un retrait attend : le serveur sert peut-être encore la personne retirée.
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
         defer { gate.leave() }
-        guard isLive, !roster.isEmpty, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        guard isLive, roster.hasRecipients, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
         if isLive, case .refused(.notSharing) = verdict { wipe() }
@@ -229,15 +240,18 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon celle de
     /// l'appareil. Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne
     /// dépend jamais de la localisation.
-    private func republish(_ next: SharedLocationRoster) async -> SharedLocationShareProblem? {
-        guard !next.isEmpty else { return await stopAll() }
+    private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
+        let next = wanted.settled
+        guard next.hasRecipients else { return await stopAll() }
         if let last = lastSent?.fix { return await publish(next, fix: last, previous: roster) }
         guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
     }
 
-    private func publish(_ next: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
+    /// La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
+    private func publish(_ wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
+        let next = wanted.settled
         guard let request = SharedLocationStartRequest(recipients: next.recipients, duration: next.serverDuration(now: now()), fix: fix) else {
             return .refused(.invalid)
         }
@@ -287,12 +301,15 @@ final class SharedLocationSharingCenter: ObservableObject {
         lane.store(in: &following)
     }
 
+    /// L'échéance la plus proche réveille le centre ; un retrait en attente le réveille au rythme du rejeu, au plus tard.
     private func scheduleDeadline() {
-        guard let at = roster.nextDeadline else {
+        let untilDeadline = roster.nextDeadline.map { max(0, $0.timeIntervalSince(now())) + Self.deadlineSlack }
+        let untilRetry: TimeInterval? = roster.hasPendingWithdrawals ? Self.retryDelay : nil
+        guard let delay = [untilDeadline, untilRetry].compactMap({ $0 }).min() else {
             deadline = nil
             return
         }
-        arm(after: max(0, at.timeIntervalSince(now())) + Self.deadlineSlack)
+        arm(after: delay)
     }
 
     /// Le minuteur ne fait que réveiller : la réconciliation tourne à part, pour qu'un nouveau minuteur ne l'annule pas.
@@ -305,8 +322,12 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     private func wipe() {
         adopt(.empty)
-        lastSent = nil
         deadline = nil
+        stopFollowingDevice()
+    }
+
+    private func stopFollowingDevice() {
+        lastSent = nil
         following = []
         fixes.stopFollowing()
     }

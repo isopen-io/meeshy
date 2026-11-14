@@ -143,16 +143,97 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `un arret qui n'est pas confirme garde la liste pour que Arreter reste a un geste`() = runTest {
+    fun `un arret hors ligne garde l'intention et part a la socket suivante sans qu'on retouche`() = runTest {
         val rig = Rig(this)
         rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
         rig.stopConfirmed = false
 
         val problem = rig.center.stopSharing(alice)
+        runCurrent()
 
-        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.center.roster.value.entry(alice)).isNull()
+        assertThat(SharedLocationRoster.fromStored(rig.saved["me"]).isWithdrawalPending(alice)).isTrue()
+
+        rig.stopConfirmed = true
+        rig.connected.value = true
+        runCurrent()
+
+        assertThat(rig.stops).isEqualTo(2)
+        assertThat(rig.saved["me"]).isNull()
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `un arret d'une personne hors ligne est rejoue a 30 s et aucune mise a jour ne part entre deux`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        runCurrent()
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE)
+
+        val problem = rig.center.stopSharing(bob)
+        advanceTimeBy(6_000L)
+        rig.stream.emit(LiveLocationFix(48.8566 + 0.01, 2.3522))
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.updates).isEmpty()
         assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+
+        rig.startVerdict = SharedLocationStartVerdict.Started(0L)
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(rig.center.roster.value.hasPendingWithdrawals).isFalse()
         rig.center.clear()
+    }
+
+    @Test
+    fun `un accuse perdu en arretant une personne garde l'intention et la rejoue`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+        assertThat(rig.center.roster.value.isWithdrawalPending(bob)).isTrue()
+
+        rig.startVerdict = SharedLocationStartVerdict.Started(0L)
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(rig.center.roster.value.hasPendingWithdrawals).isFalse()
+        rig.center.clear()
+    }
+
+    @Test
+    fun `un retrait en attente garde d'un lancement precedent part sans fiche et jamais pour un autre compte`() = runTest {
+        val pending = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .withdrawing(alice, nowMillis = 0L)
+            .stored()
+        val other = Rig(this, account = "other")
+        other.saved["me"] = pending
+        other.connected.value = true
+        runCurrent()
+        assertThat(other.stops).isEqualTo(0)
+        assertThat(other.saved["me"]).isEqualTo(pending)
+
+        val rig = Rig(this)
+        rig.saved["me"] = pending
+        rig.connected.value = true
+        runCurrent()
+
+        assertThat(rig.following).isEqualTo(0)
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.saved["me"]).isNull()
     }
 
     @Test
