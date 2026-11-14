@@ -365,3 +365,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : passerelle `unit/routes` + `unit/services` + `routes/__tests__` + `security` + cliquet `tsc-never-loaded-tests-ratchet` 1587/1588 suites (26 507 tests) — le rouge restant est `UploadProcessor.heif-conversion` (binaire natif absent sous `--ignore-scripts`, hors lot) ; `tsc --noEmit` vert.
 - Pas de revue adversariale : resserrement d'une validation d'entrée sur la règle de #16811, ni permission ni migration.
 - Prochain lot recommandé : #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; sinon #16741 ou #16879 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 39 (11:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048).
+- Lot réservé : #18435 (première tranche de #16857) — `community:updated`.
