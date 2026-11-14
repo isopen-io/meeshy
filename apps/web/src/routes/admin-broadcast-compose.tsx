@@ -135,6 +135,8 @@ export function BroadcastComposerSheet({
               <TextField
                 id={fieldId('subject')}
                 label={t('admin.broadcast.compose.field.subject')}
+                hint={t('admin.broadcast.compose.field.subject.hint')}
+                hintQuestion={t('admin.broadcast.compose.field.subject.hintQuestion')}
                 error={errorOf('subject')}
                 value={form.subject}
                 onChange={(subject) => patch({ subject })}

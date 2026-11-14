@@ -34,6 +34,8 @@ const f = {
   'admin.broadcast.compose.field.name.hint': 'Te ayuda a encontrarla en la lista: los destinatarios nunca lo ven.',
   'admin.broadcast.compose.field.name.hintQuestion': '¿Quién ve este nombre?',
   'admin.broadcast.compose.field.subject': 'Asunto',
+  'admin.broadcast.compose.field.subject.hint': 'El asunto del correo y el título de la notificación.',
+  'admin.broadcast.compose.field.subject.hintQuestion': '¿Dónde aparece el asunto?',
   'admin.broadcast.compose.field.body': 'Mensaje',
   'admin.broadcast.compose.field.body.hint': 'Escrito en el idioma de abajo; se traduce a los demás idiomas cuando lo prepara.',
   'admin.broadcast.compose.field.body.hintQuestion': '¿Cómo se traduce el mensaje?',
