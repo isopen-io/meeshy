@@ -1,0 +1,569 @@
+{
+ "composant": "MeeshyDragTargets",
+ "cle": "K25",
+ "recette": {
+  "diametre": 60,
+  "echelleChaude": 1.25,
+  "glyphe": 26,
+  "objet": {
+   "echelle": 0.57,
+   "opacite": 0.75
+  },
+  "anneau": {
+   "largeur": 6,
+   "opacite": 0.3
+  },
+  "durees": {
+   "apparition": 0.2,
+   "sortie": 0.15,
+   "fondu": 0.15
+  },
+  "apparitionEchelle": 0.8,
+  "ressort": {
+   "reponse": 0.3,
+   "amortissement": 0.7
+  },
+  "rayons": {
+   "capture": 37.5,
+   "sortie": 43.5
+  }
+ },
+ "contraste": {
+  "duplicationChaude": 15.99,
+  "poubelleChaude": 3.76,
+  "tolerance": 0.05
+ },
+ "emplacements": [
+  {
+   "nom": "defaut-deux-cibles",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": null,
+   "bas": null,
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   }
+  },
+  {
+   "nom": "fentes-de-la-planche",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": [
+    20,
+    84,
+    350,
+    44
+   ],
+   "bas": [
+    20,
+    752,
+    350,
+    64
+   ],
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "centres": {
+    "duplicate": [
+     195,
+     114
+    ],
+    "remove": [
+     195,
+     784
+    ]
+   }
+  },
+  {
+   "nom": "fente-decalee",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    0,
+    0
+   ],
+   "haut": [
+    100,
+    84,
+    100,
+    44
+   ],
+   "bas": null,
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "centres": {
+    "duplicate": [
+     150,
+     114
+    ],
+    "remove": [
+     195,
+     798
+    ]
+   }
+  },
+  {
+   "nom": "poubelle-seule",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": null,
+   "bas": null,
+   "offertes": [
+    "remove"
+   ],
+   "centres": {
+    "remove": [
+     195,
+     764
+    ]
+   }
+  },
+  {
+   "nom": "duplication-seule",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": null,
+   "bas": null,
+   "offertes": [
+    "duplicate"
+   ],
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ]
+   }
+  },
+  {
+   "nom": "fente-non-finie",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": [
+    "nan",
+    84,
+    350,
+    44
+   ],
+   "bas": null,
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   }
+  },
+  {
+   "nom": "aucune-offerte",
+   "taille": [
+    390,
+    844
+   ],
+   "sures": [
+    47,
+    34
+   ],
+   "haut": null,
+   "bas": null,
+   "offertes": [],
+   "centres": {}
+  }
+ ],
+ "suites": [
+  {
+   "nom": "entree-sortie-hysteresis",
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "medium",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      300
+     ],
+     "survole": null,
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      130.5
+     ],
+     "survole": "duplicate",
+     "tics": 1
+    },
+    {
+     "doigt": [
+      195,
+      135
+     ],
+     "survole": "duplicate",
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      136.5
+     ],
+     "survole": "duplicate",
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      137
+     ],
+     "survole": null,
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      135
+     ],
+     "survole": null,
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      125
+     ],
+     "survole": "duplicate",
+     "tics": 1
+    }
+   ]
+  },
+  {
+   "nom": "poubelle-puis-ailleurs",
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "medium",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 1
+    },
+    {
+     "doigt": [
+      230,
+      764
+     ],
+     "survole": "remove",
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      400
+     ],
+     "survole": null,
+     "tics": 0
+    }
+   ]
+  },
+  {
+   "nom": "d-une-cible-a-l-autre",
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "medium",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      93
+     ],
+     "survole": "duplicate",
+     "tics": 1
+    },
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 1
+    }
+   ]
+  },
+  {
+   "nom": "point-non-fini",
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "medium",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 1
+    },
+    {
+     "doigt": [
+      "nan",
+      764
+     ],
+     "survole": null,
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 1
+    },
+    {
+     "doigt": [
+      "inf",
+      764
+     ],
+     "survole": null,
+     "tics": 0
+    }
+   ]
+  },
+  {
+   "nom": "sans-haptique",
+   "centres": {
+    "duplicate": [
+     195,
+     93
+    ],
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "none",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      93
+     ],
+     "survole": "duplicate",
+     "tics": 0
+    }
+   ]
+  },
+  {
+   "nom": "cible-non-offerte",
+   "centres": {
+    "remove": [
+     195,
+     764
+    ]
+   },
+   "haptique": "medium",
+   "etapes": [
+    {
+     "doigt": [
+      195,
+      93
+     ],
+     "survole": null,
+     "tics": 0
+    },
+    {
+     "doigt": [
+      195,
+      764
+     ],
+     "survole": "remove",
+     "tics": 1
+    }
+   ]
+  }
+ ],
+ "issues": [
+  {
+   "nom": "lache-sur-la-poubelle",
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "doigt": [
+    195,
+    764
+   ],
+   "fin": "end",
+   "rend": "remove",
+   "rappels": [
+    "remove"
+   ]
+  },
+  {
+   "nom": "lache-sur-la-duplication",
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "doigt": [
+    195,
+    93
+   ],
+   "fin": "end",
+   "rend": "duplicate",
+   "rappels": [
+    "duplicate"
+   ]
+  },
+  {
+   "nom": "lache-ailleurs",
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "doigt": [
+    195,
+    400
+   ],
+   "fin": "end",
+   "rend": null,
+   "rappels": []
+  },
+  {
+   "nom": "annule-sur-la-poubelle",
+   "offertes": [
+    "duplicate",
+    "remove"
+   ],
+   "doigt": [
+    195,
+    764
+   ],
+   "fin": "cancel",
+   "rend": null,
+   "rappels": []
+  },
+  {
+   "nom": "poubelle-seule-lache-sur-la-duplication",
+   "offertes": [
+    "remove"
+   ],
+   "doigt": [
+    195,
+    93
+   ],
+   "fin": "end",
+   "rend": null,
+   "rappels": []
+  },
+  {
+   "nom": "duplication-seule-lache-dessus",
+   "offertes": [
+    "duplicate"
+   ],
+   "doigt": [
+    195,
+    93
+   ],
+   "fin": "end",
+   "rend": "duplicate",
+   "rappels": [
+    "duplicate"
+   ]
+  }
+ ]
+}
