@@ -49,7 +49,7 @@
     <string name="game2_settings_friends_league_question">What does “Opt me out” remove?</string>
     <string name="game2_settings_friends_league_effects">The switch removes you from their ranking and them from yours: both directions.</string>
     <string name="reveal_badge_axis_subtitle">One more tier on this axis.</string>
-    <string name="game_rules_1_body">Every real exchange makes sparks fly: write, talk, post, react, invite.</string>
+    <string name="game_rules_1_body">Writing, talking, posting, reacting, inviting: every real exchange counts.</string>
     <string name="game_rules_1_question">What makes more sparks fly?</string>
     <string name="game_rules_1_more">A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move.</string>
     <string name="game_rules_3_body" formatted="false">A Meesh is minted by hand: it binds part of your light.</string>

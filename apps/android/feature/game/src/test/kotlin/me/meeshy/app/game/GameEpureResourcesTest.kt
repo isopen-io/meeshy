@@ -384,7 +384,7 @@ class GameEpureResourcesTest {
 
     @Test
     fun `la regle des etincelles et celle de la frappe se lisent en une phrase, le calcul derriere un i`() {
-        assertThat(text(R.string.game_rules_1_body)).isEqualTo("Chaque vrai échange fait jaillir des étincelles : écrire, parler, publier, réagir, inviter.")
+        assertThat(text(R.string.game_rules_1_body)).isEqualTo("Écrire, parler, publier, réagir, inviter : chaque vrai échange compte.")
         assertThat(text(R.string.game_rules_1_question)).isEqualTo("Qu’est-ce qui fait jaillir plus d’étincelles ?")
         assertThat(text(R.string.game_rules_1_more)).contains("communauté ou amis").contains("Flamme")
         assertThat(text(R.string.game_rules_3_body)).isEqualTo("Une Meesh se frappe à la main : elle fige une part de ta lumière.")
@@ -393,6 +393,14 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game2_league_consent_how_question)).isEqualTo("Comment suis-je placé ?")
         assertThat(text(R.string.game_concept_league_use))
             .isEqualTo("Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.")
+    }
+
+    @Test
+    fun `le corps de la regle des etincelles nomme les gestes sans redire son titre, dans les sept langues`() {
+        retiredLanguages.forEach { folder ->
+            val titleTail = valueIn(folder, "game_rules_1_title").trim().split(Regex("""\s+""")).last()
+            assertThat(valueIn(folder, "game_rules_1_body")).doesNotContain(titleTail)
+        }
     }
 
     @Test

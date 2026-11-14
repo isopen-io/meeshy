@@ -49,7 +49,7 @@
     <string name="game2_settings_friends_league_question">O que «Me retirar» remove?</string>
     <string name="game2_settings_friends_league_effects">O interruptor tira você da classificação deles e eles da sua: os dois sentidos.</string>
     <string name="reveal_badge_axis_subtitle">Mais um nível neste eixo.</string>
-    <string name="game_rules_1_body">Cada troca de verdade faz saltar faíscas: escrever, falar, publicar, reagir, convidar.</string>
+    <string name="game_rules_1_body">Escrever, falar, publicar, reagir, convidar: cada troca de verdade conta.</string>
     <string name="game_rules_1_question">O que faz saltar mais faíscas?</string>
     <string name="game_rules_1_more">Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto.</string>
     <string name="game_rules_3_body" formatted="false">Uma Meesh se cunha à mão: ela fixa uma parte da sua luz.</string>

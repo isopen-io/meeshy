@@ -49,7 +49,7 @@
     <string name="game2_settings_friends_league_question">Que retire « Me retirer » ?</string>
     <string name="game2_settings_friends_league_effects">L’interrupteur te retire de leur classement et les retire du tien : les deux sens.</string>
     <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe.</string>
-    <string name="game_rules_1_body">Chaque vrai échange fait jaillir des étincelles : écrire, parler, publier, réagir, inviter.</string>
+    <string name="game_rules_1_body">Écrire, parler, publier, réagir, inviter : chaque vrai échange compte.</string>
     <string name="game_rules_1_question">Qu’est-ce qui fait jaillir plus d’étincelles ?</string>
     <string name="game_rules_1_more">Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.</string>
     <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : elle fige une part de ta lumière.</string>
