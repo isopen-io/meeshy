@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">Limite de comentários atingido</string>
     <string name="post_daily_limit_reaction">Limite de reações atingido: retoma às %1$s</string>
     <string name="post_daily_limit_reaction_untimed">Limite de reações atingido</string>
-    <string name="post_daily_limit_note_question">Este limite afeta as minhas faíscas?</string>
+    <string name="post_daily_limit_note_question">Esse limite afeta minhas faíscas?</string>
     <string name="post_daily_limit_note">Conta seus gestos, nunca suas faíscas.</string>
     <string name="bubble_failed_attachment_right">Este tipo de anexo ainda não é permitido aqui.</string>
     <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado.</string>
