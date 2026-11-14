@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.talkie
 
+import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,7 +16,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +39,7 @@ class TalkieInfoButtonTest {
     val compose = createComposeRule()
 
     private val question = "When to use the walkie-talkie?"
-    private val note = "Only for your very closest people, in an extreme emergency."
+    private val note: String get() = ApplicationProvider.getApplicationContext<Context>().getString(R.string.talkie_info_note)
 
     private fun show() {
         compose.setContent {
