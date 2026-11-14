@@ -261,7 +261,6 @@
     <string name="settings_media_capture_original_title">Salva l\'originale</string>
     <string name="settings_media_download">Download automatico</string>
     <string name="settings_media_outgoing_header">All\'invio</string>
-    <string name="settings_media_outgoing_location_subtitle">Per impostazione predefinita, la posizione GPS viene rimossa da ogni foto prima dell\'invio.</string>
     <string name="settings_media_outgoing_location_title">Mantieni la posizione delle foto</string>
     <string name="settings_new_message_notifications">Nuovi messaggi</string>
     <string name="settings_notif_cat_calls">Chiamate</string>

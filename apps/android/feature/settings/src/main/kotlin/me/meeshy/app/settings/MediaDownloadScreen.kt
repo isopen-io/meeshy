@@ -134,6 +134,7 @@ fun MediaDownloadScreen(
                 OutgoingSection(
                     keepsLocation = state.keepsPhotoLocation,
                     onKeepsLocation = viewModel::setKeepsPhotoLocation,
+                    noteHost = noteHost,
                 )
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
@@ -279,7 +280,6 @@ internal fun CaptureToggleRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    subtitle: String? = null,
     note: MeeshyInfoNote? = null,
     noteHost: NoteHost? = null,
 ) {
@@ -308,13 +308,6 @@ internal fun CaptureToggleRow(
                         fontWeight = FontWeight.Medium,
                         color = MeeshyTheme.tokens.textPrimary,
                     )
-                    if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
                 }
                 Switch(checked = checked, onCheckedChange = null)
             }
@@ -372,7 +365,7 @@ private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) 
 }
 
 @Composable
-private fun OutgoingSection(keepsLocation: Boolean, onKeepsLocation: (Boolean) -> Unit) {
+private fun OutgoingSection(keepsLocation: Boolean, onKeepsLocation: (Boolean) -> Unit, noteHost: NoteHost) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -395,9 +388,13 @@ private fun OutgoingSection(keepsLocation: Boolean, onKeepsLocation: (Boolean) -
         CaptureToggleRow(
             icon = MeeshyIcons.Location,
             title = stringResource(R.string.settings_media_outgoing_location_title),
-            subtitle = stringResource(R.string.settings_media_outgoing_location_subtitle),
             checked = keepsLocation,
             onCheckedChange = onKeepsLocation,
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.settings_media_outgoing_location_question),
+                text = stringResource(R.string.settings_media_outgoing_location_note),
+            ),
+            noteHost = noteHost,
         )
     }
 }

@@ -253,6 +253,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "settings_media_outgoing_location_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_outgoing_location_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "settings_media_autosave_note",
           "status": "android-only"
         },
