@@ -132,7 +132,7 @@ describe('ProfileStatsSection — le défaut d’iOS qu’on ne copie pas', () =
 
 describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un COMPTE', () => {
   const empty = (filter: 'all' | 'posts' | 'reels') =>
-    parse(renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter={filter} />));
+    parse(renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter={filter} onClear={() => undefined} />));
 
   test('sans filtre, c’est le compte qui ne publie rien', () => {
     const el = empty('all');
@@ -149,7 +149,10 @@ describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un
     const reels = empty('reels');
     expect(reels.textContent).toContain('Aucun réel');
     expect(reels.textContent).not.toContain('Aucune publication');
-    expect(reels.textContent).toContain('Touchez à nouveau la tuile');
+    expect(reels.textContent).not.toContain('Touchez à nouveau');
+    expect(reels.querySelectorAll('p').length).toBe(1);
+    expect(reels.querySelector('[data-profile-posts-clear]')?.textContent).toBe('Tout afficher');
+    expect(empty('all').querySelector('[data-profile-posts-clear]')).toBeNull();
     expect(empty('posts').textContent).toContain('Aucun poste');
   });
 });
