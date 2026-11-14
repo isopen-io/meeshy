@@ -38,7 +38,7 @@ enum MintCeremonyCopy {
         switch reason {
         case .shadow:
             String(localized: "game.mint.blocked.debt_plain",
-                   defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont.", bundle: .main)
+                   defaultValue: "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera.", bundle: .main)
         case .locked:
             String(localized: "game.frappe.refused.locked",
                    defaultValue: "Ton Héritage attend un rang plus haut. Ta gloire l’ouvrira, et on frappera.", bundle: .main)

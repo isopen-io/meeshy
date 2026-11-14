@@ -764,12 +764,15 @@ final class GameEpureTests: XCTestCase {
     func test_shadowRefusal_isOneSentence_readByOneKey() throws {
         let catalog = try Self.catalog()
         XCTAssertNil(catalog["game.frappe.refused.shadow"], "supprimée de toutes les langues")
-        XCTAssertEqual(catalog["game.mint.blocked.debt_plain"]?["fr"], "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont.")
+        XCTAssertEqual(catalog["game.mint.blocked.debt_plain"]?["fr"], "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera.",
+                       "le refus dit ce que le geste n'a pas fait et quand il se fera, comme les autres refus (« puis on frappera »)")
+        XCTAssertEqual(GameMintCostCopy.debtText(0), MintCeremonyCopy.refused(.shadow), "une seule phrase pour l'ombre, où qu'elle se lise")
         XCTAssertFalse(try code("Meeshy/Features/Game/Choreography/MintCeremonyLayers.swift").contains("game.frappe.refused.shadow"))
         XCTAssertNotNil(catalog["game.mint.blocked.debt"]?["fr"], "le message qui garde le nombre d'étincelles reste")
-        for language in Self.otherLanguages {
-            let value = try XCTUnwrap(catalog["game.mint.blocked.debt_plain"]?[language], language)
+        let french = try XCTUnwrap(catalog["game.mint.blocked.debt_plain"]?["fr"])
+        for (language, value) in try XCTUnwrap(catalog["game.mint.blocked.debt_plain"]) where language != "fr" {
             XCTAssertEqual(value.components(separatedBy: ". ").count, 1, "\(language) : une phrase")
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
         }
     }
 

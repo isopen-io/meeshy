@@ -273109,55 +273109,55 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont."
+            "value": "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A shadow veils your light: your next sparks will clear it."
+            "value": "A shadow veils your light: your sparks will clear it, then we’ll mint."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una sombra cubre tu luz: tus próximas chispas la disiparán."
+            "value": "Una sombra cubre tu luz: tus chispas la disiparán, y luego acuñaremos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben."
+            "value": "Ein Schatten verhüllt dein Licht: Deine Funken vertreiben ihn, dann prägen wir."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno."
+            "value": "Un’ombra vela la tua luce: le tue scintille la dissiperanno, poi conieremo."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma dívida de faíscas bloqueia a cunhagem: os teus próximos ganhos saldam-na primeiro."
+            "value": "Uma sombra cobre a tua luz: as tuas faíscas vão dissipá-la, depois cunharemos."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma sombra cobre sua luz: suas próximas faíscas vão dissipá-la."
+            "value": "Uma sombra cobre sua luz: suas faíscas vão dissipá-la, depois a gente cunha."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ظلّ يحجب نورك: شراراتك القادمة ستبدّده."
+            "value": "ظلّ يحجب نورك: شراراتك ستبدّده، ثم نسكّ."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "火花欠款阻止了铸造：你接下来的收益会先偿还它。"
+            "value": "阴影遮住了你的光芒：你的火花会驱散它，然后我们再铸造。"
           }
         }
       }

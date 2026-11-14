@@ -497,7 +497,7 @@ enum GameCopy {
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
         case .mintBlockedByDebt:
-            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont.", bundle: .main)
+            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera.", bundle: .main)
         case .treasuryLocked:
             String(localized: "game.error.treasury_locked", defaultValue: "Ce contenant de ton Héritage s’ouvre avec un rang plus haut.", bundle: .main)
         case .freezeAtMaximum:
