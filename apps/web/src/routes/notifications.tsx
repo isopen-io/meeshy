@@ -236,7 +236,7 @@ export function NotificationCategoryRail({
         expanded={open}
         withGlyph={hiddenSelected && !open}
         dataAttributes={{ 'data-category-more': true }}
-        {...(hiddenSelected && !open ? { ariaLabel: `${moreLabel} : ${categoryLabel(language, selected)}` } : {})}
+        {...(hiddenSelected && !open ? { ariaLabel: translate(language, 'notifications.categories.moreActive', { category: categoryLabel(language, selected) }) } : {})}
         onPress={() => setOpen(!open)}
       />
       {open ? RAIL_SECONDARY.map(pill) : null}

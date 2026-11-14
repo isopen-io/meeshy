@@ -291,6 +291,7 @@ const en = {
   'notifications.category.system': 'System',
   'notifications.categories': 'Notification categories',
   'action.more': 'More',
+  'notifications.categories.moreActive': 'More: {category}',
   'notifications.markAllRead': 'Mark all read',
   'notifications.unreadCount.one': '{count} unread',
   'notifications.unreadCount.other': '{count} unread',

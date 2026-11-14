@@ -291,6 +291,7 @@ const it = {
   'notifications.category.system': 'Sistema',
   'notifications.categories': 'Categorie di notifiche',
   'action.more': 'Altro',
+  'notifications.categories.moreActive': 'Altro: {category}',
   'notifications.markAllRead': 'Segna tutte come lette',
   'notifications.unreadCount.one': '{count} non letta',
   'notifications.unreadCount.other': '{count} non lette',

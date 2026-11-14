@@ -280,6 +280,7 @@ const fr = {
   'notifications.category.system': 'Système',
   'notifications.categories': 'Catégories de notifications',
   'action.more': 'Plus',
+  'notifications.categories.moreActive': 'Plus : {category}',
   'notifications.markAllRead': 'Tout lire',
   'notifications.unreadCount.one': '{count} non lue',
   'notifications.unreadCount.other': '{count} non lues',

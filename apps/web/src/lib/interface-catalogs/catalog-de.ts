@@ -291,6 +291,7 @@ const de = {
   'notifications.category.system': 'System',
   'notifications.categories': 'Mitteilungskategorien',
   'action.more': 'Mehr',
+  'notifications.categories.moreActive': 'Mehr: {category}',
   'notifications.markAllRead': 'Alle gelesen',
   'notifications.unreadCount.one': '{count} ungelesen',
   'notifications.unreadCount.other': '{count} ungelesen',

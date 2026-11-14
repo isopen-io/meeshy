@@ -295,6 +295,7 @@ const pt = {
   'notifications.category.system': 'Sistema',
   'notifications.categories': 'Categorias de notificações',
   'action.more': 'Mais',
+  'notifications.categories.moreActive': 'Mais: {category}',
   'notifications.markAllRead': 'Marcar tudo como lido',
   'notifications.unreadCount.one': '{count} não lida',
   'notifications.unreadCount.other': '{count} não lidas',

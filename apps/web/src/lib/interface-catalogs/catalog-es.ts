@@ -291,6 +291,7 @@ const es = {
   'notifications.category.system': 'Sistema',
   'notifications.categories': 'Categorías de notificaciones',
   'action.more': 'Más',
+  'notifications.categories.moreActive': 'Más: {category}',
   'notifications.markAllRead': 'Marcar todo como leído',
   'notifications.unreadCount.one': '{count} no leída',
   'notifications.unreadCount.other': '{count} no leídas',

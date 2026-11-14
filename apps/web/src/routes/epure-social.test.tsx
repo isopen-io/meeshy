@@ -135,6 +135,15 @@ describe('/notifications : trois pastilles et « Plus »', () => {
     expect(html).toContain('aria-label="Plus : Mentions"');
   });
 
+  test('ce nom se dit avec la ponctuation de chaque langue, jamais l’espace française devant les deux-points', async () => {
+    await loadInterfaceCatalog('en');
+    await loadInterfaceCatalog('ar');
+    const en = renderToStaticMarkup(<NotificationCategoryRail language="en" selected="mentions" onSelect={noop} />);
+    const ar = renderToStaticMarkup(<NotificationCategoryRail language="ar" selected="mentions" onSelect={noop} />);
+    expect(en).toContain('aria-label="More: Mentions"');
+    expect(ar).not.toContain(' : ');
+  });
+
   test('« Plus » rend atteintes les neuf autres catégories, et choisir en referme la liste', async () => {
     const chosen: string[] = [];
     const host = await mount(<NotificationCategoryRail language="fr" selected="all" onSelect={(category) => chosen.push(category)} />);

@@ -291,6 +291,7 @@ const ar = {
   'notifications.category.system': 'النظام',
   'notifications.categories': 'فئات الإشعارات',
   'action.more': 'المزيد',
+  'notifications.categories.moreActive': 'المزيد: {category}',
   'notifications.markAllRead': 'قراءة الكل',
   'notifications.unreadCount.one': '{count} غير مقروء',
   'notifications.unreadCount.other': '{count} غير مقروءة',
