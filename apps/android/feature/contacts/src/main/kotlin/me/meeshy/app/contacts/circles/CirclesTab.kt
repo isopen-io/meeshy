@@ -124,6 +124,7 @@ private fun CirclesList(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         item(key = "banner") { Banner(state = state, onRetry = { viewModel.load(forceNetwork = true) }) }
+        item(key = "shared-locations") { SharedLocationsMapSection() }
         if (state.incomingRaises.isNotEmpty() || state.outgoingRaises.isNotEmpty()) {
             item(key = "requests-header") {
                 Text(

@@ -107,8 +107,11 @@ describe('« Montre-toi » — le conseil et l’aperçu', () => {
     const host = await mount(element);
     expect(host.querySelector('[data-onb-card]')?.getAttribute('data-onb-card')).toBe('profile');
     expect(host.textContent).toContain('Montre-toi');
-    expect(host.textContent).toContain('Plus de visibilité');
-    expect(host.textContent).toContain('Plus de contacts');
+    expect(host.textContent).toContain('Un visage et une bannière : on te reconnaît plus vite.');
+    expect(host.textContent).not.toContain('demandes de contact');
+    expect(host.textContent).not.toContain('Plus de visibilité');
+    expect(host.textContent).not.toContain('Plus de contacts');
+    expect(host.querySelector('.onb-profile-perks')).toBeNull();
     expect(host.textContent).toContain('@maya');
     expect(picker(host, 'banner')?.getAttribute('aria-label')).toBe('Choisir une bannière');
     expect(picker(host, 'avatar')?.getAttribute('aria-label')).toBe('Choisir une photo de profil');

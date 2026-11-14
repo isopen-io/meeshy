@@ -346,6 +346,17 @@ extension iPadRootView {
         )
     }
 
+    /// Certaines anciennes notifications sociales ne portent que la conversation : jamais un tap muet.
+    private func openSocialNotification(_ ctx: RootView.NotificationNavContext) {
+        guard let postId = ctx.postId, !postId.isEmpty else {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId)
+            }
+            return
+        }
+        openSocialContent(ctx, postId: postId)
+    }
+
     func navigateFromNotification(_ ctx: RootView.NotificationNavContext) {
         switch ctx.type {
         case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
@@ -413,14 +424,7 @@ extension iPadRootView {
              .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            guard let postId = ctx.postId, !postId.isEmpty else {
-                // Certaines anciennes notifications sociales ne portent que la conversation : jamais un tap muet.
-                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                    navigateToConversationById(conversationId)
-                }
-                return
-            }
-            openSocialContent(ctx, postId: postId)
+            openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Le palier se CÉLÈBRE d'abord (#5809) — `nil` quand la charge ne dit pas lequel (push) — puis la fiche

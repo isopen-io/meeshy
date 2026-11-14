@@ -50,6 +50,17 @@ const POST_REACTION_RATE_LIMIT = {
   keyPrefix: 'socket:post:reaction',
 } as const;
 
+/**
+ * Suivre un post (rejoindre, quitter, resynchroniser) a son propre seau : un
+ * défilement émet trois de ces gestes par post visible, une reconnexion un par
+ * salle suivie. Partagé avec les réactions, il refusait le like suivant (#18100).
+ */
+const POST_ROOM_RATE_LIMIT = {
+  maxRequests: 600,
+  windowMs: 60_000,
+  keyPrefix: 'socket:post:room',
+} as const;
+
 const reactionRateLimiter = new SocketRateLimiter();
 
 export interface PostReactionHandlerDependencies {
@@ -441,7 +452,7 @@ export class PostReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
-      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_ROOM_RATE_LIMIT);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
@@ -512,7 +523,7 @@ export class PostReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
-      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_ROOM_RATE_LIMIT);
       if (!joinAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
@@ -575,7 +586,7 @@ export class PostReactionHandler {
         return;
       }
 
-      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_REACTION_RATE_LIMIT);
+      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_ROOM_RATE_LIMIT);
       if (!leaveAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;

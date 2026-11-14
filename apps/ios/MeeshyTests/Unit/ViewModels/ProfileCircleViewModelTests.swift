@@ -199,6 +199,28 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(rig.sut.shownLevel, .acquaintance)
     }
 
+    // MARK: - Partager ma position, dès Ami (#16983)
+
+    func test_offersSharedLocation_anAcquaintance_isNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        rig.relations.linkResult = .success(link("a", .acquaintance))
+
+        await rig.sut.load()
+
+        XCTAssertFalse(rig.sut.offersSharedLocation)
+    }
+
+    func test_offersSharedLocation_aFriend_isOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersSharedLocation)
+    }
+
     // MARK: - Le Bring entre deux comptes de l'équipe (#16623)
 
     func test_offersBring_aServedAccessLevelOfBloodWithoutALink_offersIt_withoutShowingACircle() async {

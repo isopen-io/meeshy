@@ -82,6 +82,19 @@ struct RootNotificationNavigator {
         }
     }
 
+    /// Une notification sociale ouvre son contenu par le MÊME site que la mention hors conversation : la
+    /// surface en cours se referme, puis la cible s'ouvre (#10543). Sans entité à ouvrir (certains anciens
+    /// pushs ne portent que la conversation), la conversation — jamais un tap muet.
+    private func openSocialNotification(_ ctx: NotificationNavContext) {
+        guard let postId = ctx.postId, !postId.isEmpty else {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                conversationOpener.navigateToConversationById(conversationId)
+            }
+            return
+        }
+        openSocialContent(ctx, postId: postId)
+    }
+
     func navigateFromNotification(_ ctx: NotificationNavContext) {
         switch ctx.type {
         case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
@@ -163,17 +176,7 @@ struct RootNotificationNavigator {
              .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            guard let postId = ctx.postId, !postId.isEmpty else {
-                // No entity to open — some legacy social pushes only carry the
-                // conversation. Never a dead end.
-                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                    conversationOpener.navigateToConversationById(conversationId)
-                }
-                return
-            }
-            // Le MÊME site que la mention hors conversation : la surface en
-            // cours se referme, puis la cible s'ouvre (#10543).
-            openSocialContent(ctx, postId: postId)
+            openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Un palier annoncé ouvre le tableau de bord qui le RESTITUE

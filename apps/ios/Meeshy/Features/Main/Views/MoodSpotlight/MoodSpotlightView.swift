@@ -18,7 +18,10 @@ struct MoodSpotlightView: View {
     @FocusState private var replyFocused: Bool
 
     init(statusId: String) {
-        _viewModel = StateObject(wrappedValue: MoodSpotlightViewModel(statusId: statusId))
+        _viewModel = StateObject(wrappedValue: MoodSpotlightViewModel(
+            statusId: statusId,
+            reactionHandler: { StatusBubbleController.shared.reactionHandler }
+        ))
     }
 
     var body: some View {
@@ -44,15 +47,25 @@ struct MoodSpotlightView: View {
         }
         .safeAreaInset(edge: .top) { header }
         .safeAreaInset(edge: .bottom) {
-            if viewModel.canReply {
-                MoodSpotlightReplyBar(
-                    text: $viewModel.replyText,
-                    authorName: viewModel.entry?.username ?? "",
-                    isSending: viewModel.replyState == .sending,
-                    canSend: viewModel.canSend,
-                    focus: $replyFocused,
-                    onSend: { Task { await viewModel.sendReply() } }
-                )
+            VStack(spacing: MeeshySpacing.xs) {
+                if viewModel.canReact {
+                    MoodQuickReactionRow(
+                        placed: viewModel.reactions.placed,
+                        tint: .white,
+                        onReact: { emoji in Task { await viewModel.react(with: emoji) } }
+                    )
+                    .padding(.horizontal, MeeshySpacing.md)
+                }
+                if viewModel.canReply {
+                    MoodSpotlightReplyBar(
+                        text: $viewModel.replyText,
+                        authorName: viewModel.entry?.username ?? "",
+                        isSending: viewModel.replyState == .sending,
+                        canSend: viewModel.canSend,
+                        focus: $replyFocused,
+                        onSend: { Task { await viewModel.sendReply() } }
+                    )
+                }
             }
         }
         .navigationBarHidden(true)

@@ -51,9 +51,16 @@ describe('rel-demandes — la loi d’une demande', () => {
     expect(request({ targetLevel: 'FRIEND', currentLevel: 'FRIEND' })).toEqual({ allowed: false, code: 'RELATION_PHASE_SKIP' });
   });
 
-  it('Public -> Ami est un saut : l’ancien « demande d’ami » sans niveau n’échappe plus à la loi', () => {
-    expect(request({ currentLevel: 'PUBLIC' })).toEqual({ allowed: false, code: 'RELATION_PHASE_SKIP' });
+  it('une demande d’ami rend Ami directement depuis Public ou Communauté (#18101), Connaissance restant demandable', () => {
+    expect(request({ currentLevel: 'PUBLIC' })).toEqual({ allowed: true });
+    expect(request({ currentLevel: 'COMMUNITY' })).toEqual({ allowed: true });
     expect(request({ currentLevel: 'PUBLIC', targetLevel: 'ACQUAINTANCE' })).toEqual({ allowed: true });
+  });
+
+  it('le raccourci vers Ami ne s’étend ni à Proche ni à Sang, et ne contourne pas le cool-down', () => {
+    expect(request({ currentLevel: 'PUBLIC', targetLevel: 'CLOSE', eligibleFor: 'CLOSE' })).toEqual({ allowed: false, code: 'RELATION_PHASE_SKIP' });
+    expect(request({ currentLevel: 'COMMUNITY', targetLevel: 'BLOOD', eligibleFor: 'BLOOD' })).toEqual({ allowed: false, code: 'RELATION_PHASE_SKIP' });
+    expect(request({ currentLevel: 'PUBLIC', cooldownUntil: new Date(NOW.getTime() + DAY) })).toEqual({ allowed: false, code: 'RELATION_COOLDOWN' });
   });
 
   it('Proche exige l’éligibilité Proche, Sang l’éligibilité Sang', () => {

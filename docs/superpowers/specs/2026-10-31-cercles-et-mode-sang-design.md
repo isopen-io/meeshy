@@ -24,7 +24,7 @@ Chaque lot commence par l'**inventaire de l'existant** (à étendre · à modifi
 | 6 | `ATOM` | Atome | ⚛️ | lien parent/tuteur vérifié — **hors MVP** (modèle prêt, aucune route) |
 
 Règles de passage :
-- **Cran par cran.** Le serveur refuse toute demande qui saute un niveau.
+- **Cran par cran, sauf Ami.** Le serveur refuse toute demande qui saute un niveau, à une exception : une demande d'ami simple fait passer **Ami directement** depuis Public, Communauté ou Connaissance (décision porteur du 2026-11-13, #18101 — sans elle, une demande d'ami normale échouait en `RELATION_PHASE_SKIP`). Proche et Sang restent cran par cran.
 - **Pas de plafond** pour Proche ni pour Sang.
 - **Libellés, icônes et seuils** viennent d'une config localisable (7 langues). Ils sont abaissables sur staging.
 - **Niveau effectif** = minimum des niveaux accordés par chacun (RG-01). **Aucun accès à sens unique.**

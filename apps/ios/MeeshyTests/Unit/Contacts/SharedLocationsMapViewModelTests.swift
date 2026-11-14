@@ -20,6 +20,10 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         var served: [SharedLocationChanged] = []
     }
 
+    final class PresenceBoard: @unchecked Sendable {
+        var states: [String: PresenceState] = ["alice": .online]
+    }
+
     private struct Rig {
         let sut: SharedLocationsMapViewModel
         let live: SharedLocationsLive
@@ -146,6 +150,34 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         let byId = Dictionary(uniqueKeysWithValues: rig.sut.pins.map { ($0.id, $0) })
         XCTAssertNil(byId["alice"]?.presence)
         XCTAssertEqual(byId["bob"]?.presence, .online)
+    }
+
+    /// Une épingle posée garde sa position des heures : sa pastille suit le battement de présence, sans attendre
+    /// qu'une position bouge (#11412).
+    func test_aPresenceBeat_repaintsThePinnedRing_withoutAPositionChange() {
+        let board = PresenceBoard()
+        let beat = PassthroughSubject<Void, Never>()
+        let live = SharedLocationsLive(
+            viewerId: { "me" },
+            snapshot: { _ in [] },
+            changedEvents: Empty().eraseToAnyPublisher(),
+            endedEvents: Empty().eraseToAnyPublisher(),
+            connected: Empty().eraseToAnyPublisher(),
+            now: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+        let sut = SharedLocationsMapViewModel(
+            live: live,
+            people: FakeCirclePeople([]),
+            presence: { board.states[$0] },
+            presenceRefresh: beat.eraseToAnyPublisher()
+        )
+        live.receive(served("alice"))
+        XCTAssertEqual(sut.pins.first?.presence, .online)
+
+        board.states["alice"] = .away
+        beat.send(())
+
+        XCTAssertEqual(sut.pins.first?.presence, .away)
     }
 
     // MARK: - Rattrapage

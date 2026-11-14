@@ -35,10 +35,10 @@ function world(options: {
   const actor = options.actor === undefined ? { username: 'paul', displayName: 'Paul', avatar: 'https://cdn/p.jpg' } : options.actor;
   const recipients = options.recipients ?? [recipient(ANNA, 'fr'), recipient(BOB, 'en')];
   const prisma = {
-    community: { findFirst: jest.fn(async () => community) },
+    community: { findFirst: jest.fn(async (_args: { where: Record<string, unknown> }) => community) },
     user: {
       findUnique: jest.fn(async () => actor),
-      findMany: jest.fn(async (args: { where: { id: { in: string[] } } }) =>
+      findMany: jest.fn(async (args: { where: { id: { in: string[] } } & Record<string, unknown>; select: Record<string, unknown> }) =>
         recipients.filter((r) => args.where.id.in.includes(r.id))),
     },
   };
@@ -83,7 +83,7 @@ describe('announceAddedToCommunity', () => {
     await announceAddedToCommunity(deps, { communityId: COMMUNITY, actorId: ACTOR, recipientIds: [ANNA] });
 
     expect(sent(createNotification)[0]?.content).toBe('Añadido a la comunidad Jardins & Potagers');
-    const select = (prisma.user.findMany.mock.calls[0]?.[0] as { select: Record<string, unknown> }).select;
+    const select = prisma.user.findMany.mock.calls[0]?.[0]?.select;
     expect(select).toMatchObject({ systemLanguage: true, regionalLanguage: true, customDestinationLanguage: true, deviceLocale: true });
   });
 
@@ -111,7 +111,7 @@ describe('announceAddedToCommunity', () => {
 
     await announceAddedToCommunity(deps, { communityId: COMMUNITY, actorId: ACTOR, recipientIds: [ANNA] });
 
-    const where = (prisma.user.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
+    const where = prisma.user.findMany.mock.calls[0]?.[0]?.where;
     expect(where).toMatchObject({ isActive: true, deactivatedAt: null, deletedAt: null });
   });
 
@@ -122,7 +122,7 @@ describe('announceAddedToCommunity', () => {
 
     expect(count).toBe(0);
     expect(createNotification).not.toHaveBeenCalled();
-    expect((prisma.community.findFirst.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where)
+    expect(prisma.community.findFirst.mock.calls[0]?.[0]?.where)
       .toMatchObject({ id: COMMUNITY, isActive: true });
   });
 

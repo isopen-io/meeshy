@@ -26,7 +26,8 @@ import type {
   VoiceAPIRequest,
   VoiceProfileRequest,
   CacheForgetRequest,
-  TranslationSkippedPayload
+  TranslationSkippedPayload,
+  TranslationErrorPayload
 } from './types';
 import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -253,6 +254,10 @@ export class ZmqTranslationClient extends EventEmitter {
     this.cbOpenedAt = null;
   }
 
+  private _isPendingNonTranslationRequest(taskId: string): boolean {
+    return this.requestSender.hasPendingRequest(taskId) && !this.requestSender.hasPendingTranslationRequest(taskId);
+  }
+
   private _cbRecordError(): void {
     this.cbConsecutiveErrors++;
     if (this.cbConsecutiveErrors >= CB_FAILURE_THRESHOLD && this.cbOpenedAt === null) {
@@ -328,14 +333,30 @@ export class ZmqTranslationClient extends EventEmitter {
       }
     });
 
-    this.messageHandler.on('translationError', (event) => {
+    this.messageHandler.on('translationError', (event: TranslationErrorPayload) => {
+      // Le translator ne publie `translation_error` que pour une traduction
+      // TEXTE. Sous le taskId d'une requête audio, transcription ou voix encore
+      // en attente, l'erreur est mal adressée (#18063) : la solder désarmait
+      // deadman et retry d'une requête qui ne revenait plus, la compter
+      // poussait le disjoncteur pour une panne qui n'en est pas une, et la
+      // relayer devenait un `translation:failed` diffusé pour le message audio —
+      // l'échec d'une traduction texte jamais demandée. Elle ne fait donc rien
+      // d'autre qu'une ligne de journal ; la requête garde son propre chemin
+      // d'échec (`audioProcessError`, `voiceAPIError`, deadman).
+      if (event.taskId && this._isPendingNonTranslationRequest(event.taskId)) {
+        logger.warn(`⚠️ translation_error ignoré : taskId=${event.taskId} vise une requête non texte encore en attente`);
+        return;
+      }
+
       // Une langue sans code NLLB-200 ne se servira JAMAIS : la relancer cinq
       // fois puis annoncer l'échec (`translation:failed`) était l'incident du
       // 2026-11-01. Seule SA langue se solde, sans compter d'échec au disjoncteur ;
       // son lecteur reçoit l'original.
       if (event.errorCode === UNSUPPORTED_LANGUAGE_ERROR_CODE && event.targetLanguage) {
-        const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
-        if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        if (event.taskId) {
+          const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
+          if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        }
         this.emit('translationUnsupported', event);
         return;
       }
@@ -368,11 +389,13 @@ export class ZmqTranslationClient extends EventEmitter {
       // sinon personne ne l'apprend jamais.
       if (event.error === 'translation pool full') {
         this.stats.pool_full_rejections++;
-        if (this.requestSender.hasPendingRequest(event.taskId)) return;
+        if (event.taskId && this.requestSender.hasPendingRequest(event.taskId)) return;
       }
 
-      this.retryCount.delete(event.taskId);
-      this.requestSender.removePendingRequest(event.taskId);
+      if (event.taskId) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
       this.emit('translationError', event);
     });
 

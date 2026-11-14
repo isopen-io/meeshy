@@ -63,6 +63,7 @@ final class SharedLocationsMapViewModel: ObservableObject {
         live: SharedLocationsLive,
         people: CirclePeopleResolving,
         presence: @escaping (String) -> PresenceState?,
+        presenceRefresh: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
         calm: Duration = .milliseconds(300)
     ) {
         self.live = live
@@ -71,6 +72,9 @@ final class SharedLocationsMapViewModel: ObservableObject {
         self.calm = calm
         live.$byUser
             .sink { [weak self] byUser in self?.project(byUser) }
+            .store(in: &cancellables)
+        presenceRefresh
+            .sink { [weak self] _ in self?.repaintPresence() }
             .store(in: &cancellables)
     }
 
@@ -102,6 +106,10 @@ final class SharedLocationsMapViewModel: ObservableObject {
         let unnamed = byUser.keys.filter { known[$0] == nil }
         guard !unnamed.isEmpty else { return }
         Task { [weak self] in await self?.name(Array(unnamed)) }
+    }
+
+    private func repaintPresence() {
+        project(live.byUser)
     }
 
     private func name(_ ids: [String]) async {
