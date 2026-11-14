@@ -106,3 +106,28 @@ dans une autre unité que celle où la phrase est écrite.
 Corollaire mesuré : **lancer un geste d'ordre sans l'attendre ne rétrécit la
 fenêtre que de façon non déterministe**, ce qui est pire qu'une fenêtre
 franche — le défaut devient intermittent, donc attribué au réseau.
+
+---
+
+## Et le troisième, trouvé en allant chercher un verdict
+
+Le lot D du même cycle (#18399) n'a pas été cherché : il s'est présenté en
+allant lire le résultat de CI du lot C. `dev` était rouge depuis vingt minutes,
+pour un gate web sans rapport avec le temps réel.
+
+La cause est de la même famille, vue d'un troisième angle : **le PÉRIMÈTRE
+d'un balayage est une affirmation, et personne ne le relit.**
+`check-utilities.mjs` annonce « toute classe employée a une règle dans la
+feuille qui la sert » et lisait les TÉMOINS — 2 440 fichiers sur 5 995. Une
+classe inventée par un test pour servir de marqueur à une assertion ne peint
+rien et ne peut avoir aucune règle : la question n'a pas de réponse juste.
+
+> Avant de croire ce qu'un balayage AFFIRME, demander **ce qu'il LIT**. Un
+> inventaire vide ne prouve rien si le périmètre est trop large (faux rouges
+> qui bloquent tout le monde) ni si le périmètre est trop étroit (faux verts
+> que personne ne voit). Un témoin de balayage vérifie donc les DEUX bornes.
+
+Et la leçon de METTRE LE REMÈDE AU BON ENDROIT, déjà écrite par le lot qui a
+corrigé la même famille deux mois plus tôt (#5960) : devant un faux positif,
+retirer le BRUIT du périmètre, jamais exempter la VALEUR qui rougit. Une
+exemption par valeur gèle le symptôme et laisse la suivante rougir.
