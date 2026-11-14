@@ -554,18 +554,6 @@
       "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
       "issue": 18238
     },
-    "conversations-new": {
-      "de": {
-        "total": 54,
-        "firstScreen": 54
-      },
-      "a": {
-        "total": 70,
-        "firstScreen": 70
-      },
-      "motif": "La ligne du mode de chiffrement retenu se lit au repos, sous le résumé et au-dessus de la phrase d'irréversibilité, et dit ce que le mode Serveur garde (« traduction, transcription et recherche fonctionnent » : ce qui le distingue du bout en bout, règle 7). +6 mots vus ; le relevé en compte 12 parce qu'il compte aussi la même ligne dans le <details> replié",
-      "issue": 18361
-    },
     "c-conversation": {
       "de": {
         "total": 136,

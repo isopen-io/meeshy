@@ -1,3 +1,4 @@
+import type { GameAttention } from '@meeshy/shared/utils/game/attention';
 import type { GlyphName } from '@/components/glyphs';
 import type { FloatingGlyphName } from '@/components/glyphs-floating';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -64,6 +65,12 @@ export type FloatingDestination = {
    * reste pure : c'est l'échelle qui résout la valeur au rendu.
    */
   readonly badge?: 'unreadNotifications' | 'pendingFriendRequests';
+  /**
+   * Le SIGNAL sans chiffre que le barreau porte en point — miroir de `RootMenuLadderEntry.signalsGameAttention`
+   * (iOS) et `RootMenuLadderEntry.signalsGameAttention` (Android) : seul « Ma Légende » le porte, quand l'Offrande
+   * est prête ou la Flamme en danger (#18165). La table reste pure : l'échelle lit le signal au rendu.
+   */
+  readonly signal?: 'gameAttention';
 };
 
 /**
@@ -140,6 +147,7 @@ export const GAME_DESTINATION: FloatingDestination = {
   // harmony-exempt: miroir de RootMenuLadderEntry.swift (.game), à remonter dans le SDK (#8879)
   tint: '#F97316',
   glyph: { set: 'socle', name: 'trophy' },
+  signal: 'gameAttention',
 };
 
 /** Les SEPT barreaux, dans l'ordre d'iOS. */
@@ -251,3 +259,20 @@ export const PROFILE_DESTINATION: FloatingDestination = {
 export function allFloatingDestinations(): readonly FloatingDestination[] {
   return [FEED_DESTINATION, CONVERSATIONS_DESTINATION, ...MENU_LADDER, ADMIN_DESTINATION, PROFILE_DESTINATION];
 }
+
+/**
+ * **LE NOM DU BARREAU QUI SIGNALE** (#18165) — « Ma Légende, Offrande prête », « Ma Légende, Flamme en danger », ou les
+ * deux. Une phrase entière par cas, jamais une concaténation : l'arabe et l'allemand ne joignent pas comme le français.
+ * `null` : rien à signaler, le barreau garde son nom.
+ */
+export function gameRungLabelKey(attention: GameAttention): GameRungLabelKey | null {
+  if (attention.chestReady && attention.flameAtRisk) return 'a11y.floating.rung.game.both';
+  if (attention.chestReady) return 'a11y.floating.rung.game.chest-ready';
+  if (attention.flameAtRisk) return 'a11y.floating.rung.game.flame-at-risk';
+  return null;
+}
+
+export type GameRungLabelKey =
+  | 'a11y.floating.rung.game.both'
+  | 'a11y.floating.rung.game.chest-ready'
+  | 'a11y.floating.rung.game.flame-at-risk';

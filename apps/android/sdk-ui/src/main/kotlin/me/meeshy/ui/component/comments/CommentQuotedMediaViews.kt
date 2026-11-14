@@ -1,6 +1,9 @@
 package me.meeshy.ui.component.comments
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +42,8 @@ import me.meeshy.sdk.model.CommentQuotedMedia
 import me.meeshy.sdk.model.legend
 import me.meeshy.ui.R
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -78,7 +83,10 @@ public fun CommentQuotedMediaBanner(citation: CommentQuotedMedia, accent: Color,
     }
 }
 
-/** La puce au-dessus du champ : « À propos de » + la légende, et la croix qui retire la citation. Rien si [citation] est nulle. */
+/**
+ * La puce au-dessus du champ : « À propos de » + la légende, et la croix qui retire la citation. Rien si [citation] est
+ * nulle ; retirée, la puce sort avec sa dernière citation.
+ */
 @Composable
 public fun CommentQuotationChip(
     citation: CommentQuotedMedia?,
@@ -86,8 +94,13 @@ public fun CommentQuotationChip(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(visible = citation != null, modifier = modifier) {
-        val shown = citation ?: return@AnimatedVisibility
+    MeeshyAnimatedVisibility(
+        value = citation,
+        modifier = modifier,
+        enter = fadeIn(MeeshyMotion.springDefault()) + expandIn(MeeshyMotion.springDefault()),
+        exit = shrinkOut(MeeshyMotion.springDefault()) + fadeOut(MeeshyMotion.springDefault()),
+        label = "comment-quotation-chip",
+    ) { shown ->
         val legend = shown.legendText()
         val removeLabel = stringResource(R.string.comment_quote_remove)
         Row(

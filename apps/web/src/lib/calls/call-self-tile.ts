@@ -57,20 +57,6 @@ export const selfTileRestingFactor = (chosen: SelfTileScale, chromeVisible: bool
 /** Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur, dessiné à sa taille de petite vignette. */
 export const selfTileCounterScaled = (length: number, factor: number): number => (Number.isFinite(factor) && factor > 0 ? length / factor : length);
 
-const clampScale = (value: number): SelfTileScale => (value <= 1 ? 1 : value >= 3 ? 3 : 2);
-
-const pinchSteps = (ratio: number): number => {
-  if (ratio >= 1.8) return 2;
-  if (ratio >= 1.15) return 1;
-  if (ratio <= 0.55) return -2;
-  if (ratio <= 0.87) return -1;
-  return 0;
-};
-
-export const scaleAfterPinch = (scale: SelfTileScale, ratio: number): SelfTileScale => clampScale(scale + pinchSteps(ratio));
-
-export const scaleAfterWheel = (scale: SelfTileScale, deltaY: number): SelfTileScale => clampScale(scale + Math.sign(-deltaY));
-
 /**
  * **ELLE SE GLISSE DE COIN EN COIN** (#8747, miroir de `pipCenter` /
  * `nearestCorner` dans `CallView+SelfView.swift`) — quatre coins à 16 px du
@@ -109,8 +95,6 @@ export const SELF_TILE_BOTTOM_LANDSCAPE = 130;
 /** Ce que ma vignette laisse libre sous la zone sûre, en haut et en bas, selon la forme de la fenêtre — ce que la pile des bandeaux AJOUTE au-dessus est `selfTileClearance` (`call-top-banners.ts`). */
 export const selfTileCornerInsets = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
   isLandscapeWindow(viewport) ? { top: SELF_TILE_TOP_LANDSCAPE, bottom: SELF_TILE_BOTTOM_LANDSCAPE } : { top: SELF_TILE_TOP, bottom: SELF_TILE_BOTTOM };
-
-const DRAG_THRESHOLD = 8;
 
 export type TileBox = TileSize & { readonly x: number; readonly y: number };
 
@@ -196,17 +180,6 @@ export function nearestSelfCorner({ center, size, viewport, topInset = 0, bleed 
     return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
   };
   return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);
-}
-
-export const isTileDrag = ({ dx, dy }: { readonly dx: number; readonly dy: number }): boolean => Math.hypot(dx, dy) >= DRAG_THRESHOLD;
-
-const cornerOf = (top: boolean, left: boolean): SelfTileCorner => `${top ? 'top' : 'bottom'}-${left ? 'left' : 'right'}`;
-
-export function cornerAfterArrow(corner: SelfTileCorner, key: string): SelfTileCorner | null {
-  const top = onTop(corner);
-  const left = onLeft(corner);
-  const next = key === 'ArrowUp' ? cornerOf(true, left) : key === 'ArrowDown' ? cornerOf(false, left) : key === 'ArrowLeft' ? cornerOf(top, true) : key === 'ArrowRight' ? cornerOf(top, false) : null;
-  return next === corner ? null : next;
 }
 
 type SelfTileState = { readonly callId: string | null; readonly scale: SelfTileScale; readonly corner: SelfTileCorner };

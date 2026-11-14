@@ -13,11 +13,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * **LA QUALITÉ D'UN APPEL, VUE** (#8047) — miroir de `CallSignalGlyph.swift` et
  * du `CallQualityOverlay` du legacy : quatre barres dans l'en-tête de l'écran
  * d'appel, qui s'ouvrent sur le détail du dernier relevé (perte, latence,
- * gigue, débits — dans les unités de la langue, `Intl.NumberFormat`), et les
- * alertes d'un pair (`call:quality-alert`, `call:screen-capture-alert`) dans
- * une région vivante : la capture d'écran est une ALERTE, un lien instable se
- * dit poliment. Le détail, ouvert d'un toucher, est un chunk à part
- * (`call-quality-detail.tsx`) : l'écran d'appel n'en paie que l'`import()`.
+ * gigue, débits — dans les unités de la langue, `Intl.NumberFormat`). Les
+ * alertes d'un pair (`call:quality-alert`, `call:screen-capture-alert`) vivent
+ * avec les bandeaux du haut (`call-share-banner.tsx`) : la capture d'écran est
+ * une ALERTE, un lien instable se dit poliment. Le détail, ouvert d'un toucher,
+ * est un chunk à part (`call-quality-detail.tsx`) : l'écran d'appel n'en paie
+ * que l'`import()`.
  */
 
 const CallQualityDetail = lazy(() => import('./call-quality-detail').then((module) => ({ default: module.CallQualityDetail })));
@@ -131,17 +132,3 @@ export function CallQualityChip({ capsule, clock, quality, language, prominent }
 
 /** Quelqu'un capture l'écran : la capsule de capture (R1, loi 13) prend sa place dans la pile des bandeaux ; elle vit avec le bandeau de partage (`call-share-banner.tsx`, chunk `call_top_banners`). */
 export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);
-
-export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
-  return (
-    <div className="flex flex-col items-center gap-1 px-4" aria-live="polite">
-      {Object.values(members)
-        .filter((member) => member.weakNetwork)
-        .map((member) => (
-          <span key={`network-${member.userId}`} className="glass-call rounded-full px-3 py-1 text-mini" data-call-alert="weak-network">
-            {translate(language, 'call.alert.weakNetwork', { name: member.name })}
-          </span>
-        ))}
-    </div>
-  );
-}

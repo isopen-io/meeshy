@@ -942,3 +942,29 @@ socket jusqu'au client.
 1. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 27 — 2026-11-14
+
+- **Base** : `origin/dev` @ `8ab427ff`. Le lot du cycle 26 (#18232) y est fusionné.
+- **Branche** : `claude/determined-volta-c27utf8`.
+- **Objectif** : #17205. Un premier frame multipart qui n'est pas de l'UTF-8, ou qui n'est pas un objet JSON, est refusé proprement par le traducteur.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le routage par `type`) :
+  - **`zmq_request_frame.parse_request_frame`** (nouveau) : une fonction pure qui rend le `dict` ou `None`. Elle attrape `UnicodeDecodeError` et `JSONDecodeError`, et refuse un JSON qui n'est pas un objet. Sa seule ligne `[TRANSLATOR]` ne nomme que le type.
+  - **Le routeur `zmq_server_core`** décodait le frame sans garde, et il le fait avant le handler. Le défaut y était plus large que ce que décrivait l'issue : un `b'\xff\xfe'` remontait jusqu'à la boucle de réception, qui loguait `{e}` puis imprimait une traceback. Le routeur et le handler passent maintenant tous deux par la fonction, et sortent sur `None`.
+  - **`_handle_cache_forget`** : décision d'aligner le log sur `type(error).__name__`. Les quatre sites de levée actuels ne portent aucun identifiant, mais un site futur pourrait en porter. Le refus reste fail-closed.
+- **Tests** : `tests/test_zmq_non_utf8_frame.py` (15). Ils couvrent le routeur, le handler, la vraie boucle `start()` et l'oubli non confirmé, avec un secret placé dans le frame.
+  - **Rouge avant le correctif** : `14 failed, 1 passed`. La QA l'a reproduit avec le code de `origin/dev`.
+  - **Vert** : relancé par moi, `59 passed` sur le nouveau fichier et trois voisins. Sur la QA, 16 fichiers `test_*zmq*`, `test_*handler*` et `test_*forget*` donnent `376 passed, 6 skipped, 5 errors` avant comme après, avec une liste d'échecs identique. Les 5 erreurs, préexistantes, viennent de `TestRealTranslatorIntegration`.
+  - **Mutations QA** : 8 sur 8 font rougir les témoins.
+- **Environnement** : venv uv jetable (recette du cycle 20), lancé par `python -m pytest -p no:cacheprovider -o addopts=""`.
+- **QA** : favorable avec réserves. Les trois réserves vont dans #18436 :
+  - R2 : la boucle de réception logue encore `{e}` et imprime une traceback pour les autres exceptions.
+  - R1 : la branche `except JSONDecodeError` du handler est morte.
+  - R3 : un avertissement `never awaited` apparaît dans le test.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
+2. #17132, #17133, #18154 et #18371.
+3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

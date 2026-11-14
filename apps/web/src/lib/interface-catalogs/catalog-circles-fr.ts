@@ -198,6 +198,7 @@ const fr = {
   'shareLocation.offline': 'Le partage de position a besoin du réseau.',
   'shareLocation.rateLimited': 'Trop d’envois, réessayez dans un instant.',
   'shareLocation.failed': 'Le partage de position n’est pas parti, réessayez.',
+  'shareLocation.stopPending': 'Le partage s’arrêtera dès le retour du réseau.',
 } as const;
 
 export default fr;

@@ -1,10 +1,9 @@
-import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Arrives } from '@/components/call-arrives';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
-import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import type { CallGridKit } from '@/components/call-grid';
@@ -13,14 +12,9 @@ import { StageBleed, StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
-import { useFlip } from '@/lib/use-flip';
-import { useTileDrag, type TileOffset } from '@/components/use-tile-drag';
-import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import {
-  cornerAfterArrow,
   isLandscapeWindow,
-  isTileDrag,
   nearestSelfCorner,
   SCREEN_SELF_TILE,
   SELF_TILE_MARGIN,
@@ -40,9 +34,9 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
-import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
-import type { CornerSight } from '@/components/call-duo-corner';
+import type { CornerPlace, CornerSight } from '@/components/call-duo-corner';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -68,6 +62,7 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
  * - Elle se GLISSE (#8747) vers l'un des quatre coins, où elle s'aimante ; un
  *   toucher reste un toucher, les flèches la déplacent quand elle a le focus,
  *   et son coin tient pour l'appel. Ses rangées la suivent pendant le geste.
+ *   Ces gestes vivent avec elle (`call-duo-corner.tsx`, #17930).
  * - Le micro coupé du pair (#8787) se voit SUR son image — grande ou en
  *   vignette — et se dit dans le libellé de la scène, chrome masqué ou non.
  * - Ma vignette ne porte AUCUNE commande (#17327) : Caméra, Retourner, Effets
@@ -107,7 +102,10 @@ const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({
  * se connecter, et la grille n'est que la disposition d'un appel connecté) ;
  * arrivée, elle se dessine dans le même rendu que la scène.
  */
-export const callGridView = preloadedView(() => import('./call-grid').then((module) => module.CallGrid));
+/** L'écran partagé à la une d'un groupe (U2), chargé à part et AVEC la grille : un groupe sans partage ne paie pas son code dans la grille. */
+const groupScreenView = preloadedView(() => import('./call-grid-screen').then((module) => module.GroupSharedScreen));
+
+export const callGridView = preloadedView(() => Promise.all([import('./call-grid'), groupScreenView.load()]).then(([module]) => module.CallGrid));
 const CallGrid = callGridView.View;
 
 export const CALL_GRID_KIT: CallGridKit = {
@@ -122,14 +120,16 @@ export const CALL_GRID_KIT: CallGridKit = {
   useStageFlip,
   Arrives,
   HeldSwap,
+  CameraOff: CameraOffStage,
+  SharedScreen: groupScreenView.View,
 };
 
 /**
  * LA SURFACE QUI ZOOME L'ÉCRAN REÇU EN DUO (P15.11), CHARGÉE À PART : le crochet du zoom et ses lois ne pèsent plus sur
  * `call_overlay`. L'écran la précharge avec l'appel (`PREFETCH`) ; pas encore là, l'écran reçu se montre entier.
  */
-export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.ScreenZoomSurface));
-const ScreenZoomSurface = screenZoomSurfaceView.View;
+export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.DuoSharedScreen));
+const DuoScreenView = screenZoomSurfaceView.View;
 
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
@@ -147,8 +147,9 @@ type StageProps = {
   readonly language: InterfaceLanguage;
   readonly choice: SpotlightChoice;
   readonly onChoose: (choice: SpotlightChoice) => void;
-  readonly immersive: boolean;
-  readonly onToggleImmersive: () => void;
+  /** Le plein écran de la scène (loi 15, #17961) : un duo n'a qu'un niveau, la une d'un groupe en a deux pour un écran partagé. */
+  readonly fullScreen: FullScreenLevel;
+  readonly onFullScreen: (level: FullScreenLevel) => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
   /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
@@ -157,9 +158,6 @@ type StageProps = {
   /** La largeur que la scène laisse à la colonne du journal (W1) : en duo vidéo, l'image de l'autre s'y prolonge en flou. Absent : 0. */
   readonly bleedEnd?: number;
 };
-
-/** Le tempo d'un changement de coin : celui de l'ancienne transition. */
-const SELF_TILE_FLIP_MS = 300;
 
 const screenCorner = { top: `calc(env(safe-area-inset-top) + ${SCREEN_SELF_TILE.y}px)`, right: SELF_TILE_MARGIN, width: SCREEN_SELF_TILE.width, height: SCREEN_SELF_TILE.height } as const;
 
@@ -176,13 +174,6 @@ function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, v
 /** Le liseré de ma vignette, à sa taille de petite vignette quand elle est rangée (`CallSelfTileScale.counterScaled`, iOS). */
 const TILE_RIM = 2;
 
-const both =
-  <E,>(first: (event: E) => void, second: (event: E) => void) =>
-  (event: E): void => {
-    first(event);
-    second(event);
-  };
-
 /** Sous la rangée des pastilles, au centre : entre les rangées d'une vignette de coin. */
 const peerMutedTop = { top: 'calc(env(safe-area-inset-top) + 7rem)' } as const;
 
@@ -196,59 +187,35 @@ function PeerMuted() {
 }
 
 
-function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
+const ScreenButton = (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => <CallButton {...props} tone="glass" prominent />;
+
+/**
+ * L'écran reçu en duo (P15) vit avec sa surface de zoom, dans son chunk chargé avec la vignette du coin dès que le duo
+ * sonne (`duoCornerView`) : il est là bien avant qu'un écran ne soit partagé.
+ */
+function DuoScreen({ call, language, fullScreen, onFullScreen }: Pick<StageProps, 'call' | 'language' | 'fullScreen' | 'onFullScreen'>) {
   const sharer = screenSharer(call.members);
-  const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
-  const screen = <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />;
+  const immersive = fullScreen !== 'off';
   return (
-    <div className="absolute inset-0" data-call-shared-screen="">
-      {/* L'écran reçu se zoome (P15.11) : la surface des gestes et son calque GPU ne portent QUE l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais. */}
-      <Suspense fallback={screen}>
-        <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isTileDrag}>
-          {screen}
-        </ScreenZoomSurface>
-      </Suspense>
-      {call.cameraOn && !immersive ? (
-        <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
-          <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
-        </div>
-      ) : null}
-      <div className="absolute bottom-4 right-4 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }} data-call-chrome-fade="">
-        <CallButton
-          label={translate(language, immersive ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
-          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[immersive ? 'cornersIn' : 'cornersOut']} size={20} />}
-          onPress={onToggleImmersive}
-          tone="glass"
-          prominent
-          size={44}
-          data={{ 'data-call-fullscreen': '' }}
-        />
-      </div>
-    </div>
+    <Suspense fallback={null}>
+      <DuoScreenView call={call} sharer={sharer} language={language} immersive={immersive} onToggleImmersive={() => onFullScreen(immersive ? 'off' : 'full')} mirrored={selfPreviewMirrored(call)} corner={screenCorner} Button={ScreenButton} />
+    </Suspense>
   );
 }
 
-type TileInput = { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly swapped: boolean; readonly shown: boolean; readonly chromeVisible: boolean; readonly topInset: number; readonly bleedEnd: number; readonly railsOpen: boolean };
+type TileInput = { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly shown: boolean; readonly chromeVisible: boolean; readonly topInset: number; readonly bleedEnd: number; readonly railsOpen: boolean };
 
 /**
- * OÙ SE TIENT MA VIGNETTE, ET COMMENT ELLE BOUGE : son palier et son coin retenus pour l'appel, le pincement, le glissé
- * de coin en coin et les flèches, le pas de côté qui cède le coin au rail en paysage (L2.8), et le FLIP qui joue tout
- * changement de place — jamais left/top/width/height.
+ * OÙ SE TIENT MA VIGNETTE : son palier et son coin retenus pour l'appel, le pas de côté qui cède le coin au rail en
+ * paysage (L2.8), la forme que joue le FLIP, et le coin où un glissé la pose. Les GESTES (pincer, glisser, les flèches)
+ * et le FLIP vivent avec la vignette, dans son chunk (`call-duo-corner.tsx`, #17930) : la scène ne lui remet que sa place.
  */
-function useSelfTilePlace({ call, language, swapped, shown, chromeVisible, topInset, bleedEnd, railsOpen }: TileInput) {
+function useSelfTilePlace({ call, language, shown, chromeVisible, topInset, bleedEnd, railsOpen }: TileInput): CornerPlace & { readonly size: TileSize; readonly said: string } {
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
   const corner = useStore(selfTileStore, (state) => selfTileCornerFor(state, callId));
   const [said, setSaid] = useState('');
-  const pinch = useTilePinch(scale, (next) => {
-    setSelfTileScale(callId, next);
-    setSaid(translateCallControls(language, `callControls.selfTile.${TILE_SAID[next - 1] ?? 'medium'}`));
-  });
-  const moveTo = (next: SelfTileCorner): void => {
-    setSelfTileCorner(callId, next);
-    setSaid(translateCallControls(language, `callControls.selfTile.corner.${next}`));
-  };
   const screen = useCallViewport();
   /* G1.11 : le cadre garde la taille du palier choisi ; rangée, la vignette s'y met à l'échelle de sa petite taille depuis son coin — une transformation, jamais une mise en page. */
   const size = selfTileSize(scale, screen);
@@ -258,42 +225,28 @@ function useSelfTilePlace({ call, language, swapped, shown, chromeVisible, topIn
   const seen = { width: size.width * restFactor, height: size.height * restFactor };
   const seenX = box.x + railShift + (corner.endsWith('left') ? 0 : box.width - seen.width);
   const seenY = corner.startsWith('top') ? box.y : box.y + box.height - seen.height;
-  const drag = useTileDrag(({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd });
-    if (next !== corner) moveTo(next);
-  });
-  const offset = swapped ? null : drag.offset;
-  const gestures = {
-    onPointerDown: both(pinch.onPointerDown, drag.onPointerDown),
-    onPointerMove: both(pinch.onPointerMove, drag.onPointerMove),
-    onPointerUp: both(pinch.onPointerUp, drag.onPointerUp),
-    onPointerCancel: both(pinch.onPointerCancel, drag.onPointerCancel),
-    onClickCapture: both(pinch.onClickCapture, drag.onClickCapture),
-    onWheel: pinch.onWheel,
-  };
-  const frame = useRef<HTMLDivElement>(null);
-  /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non, coin cédé au rail), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
-  useFlip(frame, {
-    key: shown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${railShift}:${offset === null}` : null,
-    origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
-    held: offset !== null,
-    duration: SELF_TILE_FLIP_MS,
-    reducedDuration: STOW_REDUCED_MS,
-    easing: 'ease-out',
-    /* W1.20 : la colonne qui entre ou repart fait glisser la scène vers son nouveau centre (`useFollowInline`, `call-screen.tsx`) ; elle porte ma vignette d'une part du chemin, le FLIP n'en joue que le reste. */
-    carrier: '[data-call-stage-surface]',
-  });
-  const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    const next = swapped ? null : cornerAfterArrow(corner, event.key);
-    if (next === null) return;
-    event.preventDefault();
-    moveTo(next);
-  };
   const origin = selfTileOrigin(corner);
-  const place = { ...cornerPlace(corner, size, topInset, screen, railShift), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: origin, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` };
   /* Rangée par une échelle, la vignette contre-met à l'échelle son liseré, ses coins et sa plaque : ils gardent leur taille de petite vignette. */
   const look = { rim: selfTileCounterScaled(TILE_RIM, restFactor), radius: `calc(var(--radius-card) / ${restFactor})`, plate: selfTileCounterScaled(1, restFactor), origin, avatar: Math.round(size.width / 2) };
-  return { scale, corner, size, offset, gestures, pinchStyle: pinch.style, frame, place, look, onArrow, said };
+  return {
+    scale,
+    corner,
+    size,
+    said,
+    place: { ...cornerPlace(corner, size, topInset, screen, railShift), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: origin },
+    look,
+    /* La clé dit la FORME (palier, fenêtre couchée ou debout, colonne du journal ouverte ou non, coin cédé au rail), jamais les pixels de la fenêtre : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
+    shape: shown ? `${corner}:${scale}:${isLandscapeWindow(screen)}:${topInset}:${bleedEnd}:${railShift}` : null,
+    dropAt: ({ dx, dy }) => nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd }),
+    onScale: (next) => {
+      setSelfTileScale(callId, next);
+      setSaid(translateCallControls(language, `callControls.selfTile.${TILE_SAID[next - 1] ?? 'medium'}`));
+    },
+    onCorner: (next) => {
+      setSelfTileCorner(callId, next);
+      setSaid(translateCallControls(language, `callControls.selfTile.corner.${next}`));
+    },
+  };
 }
 
 /**
@@ -301,7 +254,7 @@ function useSelfTilePlace({ call, language, swapped, shown, chromeVisible, topIn
  * L'écran la précharge dès qu'un duo se montre (il sonne avant de se connecter) et avec l'appel (`PREFETCH`) ; elle se
  * rend dans le même rendu une fois là.
  */
-export const duoCornerView = preloadedView(() => import('./call-duo-corner').then((module) => module.DuoCorner));
+export const duoCornerView = preloadedView(() => Promise.all([import('./call-duo-corner'), screenZoomSurfaceView.load()]).then(([module]) => module.DuoCorner));
 const DuoCornerView = duoCornerView.View;
 
 /** La couleur de qui se montre : la mienne sans identifiant est le neutre de l'écran, jamais une couleur inventée. */
@@ -326,7 +279,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const cornerShown = swapped || selfOn;
   /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
   const composed = self.tileHidden === true && !swapped;
-  const tile = useSelfTilePlace({ call, language, swapped, shown: cornerShown, chromeVisible, topInset: self.topInset ?? 0, bleedEnd, railsOpen: self.railsOpen === true });
+  const tile = useSelfTilePlace({ call, language, shown: cornerShown, chromeVisible, topInset: self.topInset ?? 0, bleedEnd, railsOpen: self.railsOpen === true });
   /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
   const pressed = usePressedChrome(chromeVisible);
   const tap = (): void => (pressed.release() ? onRevealChrome() : self.onToggle());
@@ -383,7 +336,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
  * qu'il contient : passer de 2 × 3 à 3 × 2 ne le redimensionne pas, aucune boucle. Avant sa première mesure
  * (rendu serveur, scène encore sans taille), la fenêtre.
  */
-function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
+function GroupStage({ call, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const viewport = useCallViewport();
   const [frame, measured] = useElementSize();
@@ -398,8 +351,8 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
           self={{ id: me?.id ?? null, stream: selfCameraStream(call), cameraOn: selfCameraShown(call), mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
           onChoose={onChoose}
-          immersive={immersive}
-          onToggleImmersive={onToggleImmersive}
+          fullScreen={fullScreen}
+          onFullScreen={onFullScreen}
           moderation={moderation}
           language={language}
           chromeVisible={chromeVisible}
@@ -413,9 +366,9 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
-  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} immersive={immersive} onToggleImmersive={onToggleImmersive} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
-  if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
+export function CallStage({ call, layout, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} fullScreen={fullScreen} onFullScreen={onFullScreen} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
+  if (layout === 'screen') return <DuoScreen call={call} language={language} fullScreen={fullScreen} onFullScreen={onFullScreen} />;
   if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;
 }

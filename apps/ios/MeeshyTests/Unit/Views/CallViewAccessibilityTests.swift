@@ -576,25 +576,26 @@ final class CallViewAccessibilityTests: XCTestCase {
         // `pulsingAvatar` already hides its avatar because the remote user's
         // name is rendered as a Text directly below it — without this, VoiceOver
         // reads the avatar initial, then "Vous", then the full name as three
-        // disjoint stops. `audioCallLayout` (the established audio-call screen)
-        // has the exact same avatar-then-name shape but was missing the guard.
+        // disjoint stops. P9b.15 (#18206) : the established audio-call screen
+        // now poses ONE avatar for the rest and the compact header
+        // (`CallAudioStage`), the same guard follows it there.
         let source = try callViewSource()
-        guard let layoutRange = source.range(of: "var audioCallLayout: some View {") else {
-            XCTFail("CallView must define audioCallLayout")
+        guard let layoutRange = source.range(of: "private var duoLayout: some View {") else {
+            XCTFail("CallView must define duoLayout")
             return
         }
         guard let avatarRange = source.range(
-            of: "callAvatarPair(size: 120)",
+            of: "audioAvatarPair(isCompact: pillText.compactsAudioLayout)",
             range: layoutRange.upperBound..<source.endIndex
         ) else {
-            XCTFail("audioCallLayout must call callAvatarPair(size: 120)")
+            XCTFail("duoLayout must pose audioAvatarPair(isCompact:) in its audio stage")
             return
         }
-        let end = source.index(avatarRange.upperBound, offsetBy: 60, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(avatarRange.upperBound, offsetBy: 80, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[avatarRange.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHidden(true)"),
-            "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
+            "the audio stage's avatar must carry .accessibilityHidden(true) " +
             "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
         )
     }

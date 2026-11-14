@@ -14,11 +14,14 @@ struct CallFeedbackLayer: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .bottom) {
-                if let prompt = viewModel.prompt, isAtRest {
-                    CallFeedbackCard(viewModel: viewModel, prompt: prompt)
-                        .padding(.bottom, 88)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                ZStack {
+                    if let prompt = viewModel.prompt, isAtRest {
+                        CallFeedbackCard(viewModel: viewModel, prompt: prompt)
+                            .padding(.bottom, 88)
+                            .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.prompt != nil && isAtRest)
             }
             .adaptiveOnChange(of: callManager?.callState) { oldValue, newValue in
                 observe(from: oldValue, to: newValue)

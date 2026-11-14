@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,7 +72,9 @@ internal fun callGroupTileSpeech(tile: GroupCallStageTile, title: String?): Call
  * lit sur la puce de la scène, U2.5) ; un
  * liseré à SA couleur, et, tant qu'il parle (moi compris), un halo de cette couleur et un liseré épaissi et plein
  * (#13751, P11.5). Le halo et le liseré fondent au rythme du fondu de l'image ([CallRemoteVideoFade]), plus court sous
- * « Réduire les animations » : jamais de bascule sèche.
+ * « Réduire les animations » : jamais de bascule sèche. Loi 17.12 : sa caméra coupée ou rallumée, l'image et l'avatar passent
+ * l'un à l'autre en fondu — l'avatar est un VOILE opaque dont l'opacité se lit au dessin, l'image (gelée si la piste est
+ * déjà partie) reste montée dessous jusqu'à ce qu'il la couvre : une `SurfaceView` ne se fond pas elle-même.
  * Muette pour l'accessibilité : l'hôte la nomme et la rend actionnable.
  */
 @Composable
@@ -104,7 +108,11 @@ internal fun CallGroupTile(
             .border(ringWidth, accent.copy(alpha = ringAlpha), shape)
             .clearAndSetSemantics { },
     ) {
-        if (track != null) {
+        val veil = animateFloatAsState(if (track != null) 0f else 1f, fade, label = "tileVeil")
+        val keepsImage by remember(track) { derivedStateOf { CallRemoteVideoFade.keepsTileImage(track != null, veil.value) } }
+        val showsAvatar by remember { derivedStateOf { CallRemoteVideoFade.showsVeil(veil.value) } }
+        val avatarSide = avatarSize(minOf(maxWidth, maxHeight))
+        if (keepsImage) {
             VideoRenderer(
                 track = track,
                 eglContext = eglContext,
@@ -112,14 +120,19 @@ internal fun CallGroupTile(
                 fit = fit,
                 modifier = Modifier.fillMaxSize().then(videoLayer),
             )
-        } else {
-            CallAvatarDisc(
-                name = tile.displayName.ifBlank { "?" },
-                size = avatarSize(minOf(maxWidth, maxHeight)),
-                avatarUrl = tile.avatarUrl,
-                modifier = Modifier.align(Alignment.Center),
-                faceHex = accentHex,
-            )
+        }
+        if (showsAvatar) {
+            Box(
+                Modifier.fillMaxSize().graphicsLayer { alpha = veil.value }.background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                CallAvatarDisc(
+                    name = tile.displayName.ifBlank { "?" },
+                    size = avatarSide,
+                    avatarUrl = tile.avatarUrl,
+                    faceHex = accentHex,
+                )
+            }
         }
         CallGroupTilePlate(tile, Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.sm))
     }

@@ -9,6 +9,9 @@ struct ThemedActionButton: View {
     let label: String
     let hint: String
     var badge: Int = 0
+    /// Le point de coin sans chiffre (#18165) : « quelque chose t'attend ici ». Même coin et même blanc que la pastille,
+    /// qu'il ne double jamais — une pastille de compte prend la place.
+    var showsDot: Bool = false
     var size: CGFloat = 46
     /// `false` = glow ET pulse ÉTEINTS. L'échelle de menu (`menuLadder`) reste
     /// MONTÉE menu fermé (opacité 0 via `menuAnimation`, zIndex −1) pour que le
@@ -55,6 +58,15 @@ struct ThemedActionButton: View {
                     .foregroundStyle(Color.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
+
+                if showsDot && badge <= 0 {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: Color.black.opacity(0.25), radius: 1.5, y: 1)
+                        .offset(x: size * 0.33, y: -size * 0.33)
+                        .accessibilityHidden(true)
+                }
 
                 if badge > 0 {
                     Text(NotificationBadge.displayed(badge))

@@ -11,6 +11,10 @@ import MeeshySDK
 // vient de l'écrire (`engagementSnapshotPersisted`) et au retour de l'app au premier plan.
 //
 // « Jeu masqué » : la loi rend `nil` — et le magasin ne relit rien tant que le jeu est masqué.
+//
+// La MÊME lecture sert le point du barreau « Ma Légende » (#18165) : l'Offrande prête et la Flamme en danger, lues par
+// `GameAttention` (#17796) dans le même bloc. Le magasin du bandeau ne se revalide que pendant son ouverture ; celui-ci
+// suit chaque écriture du cache, donc le point reste juste sur tout écran à menus.
 
 @MainActor
 final class MenuActsRingStore: ObservableObject {
@@ -18,6 +22,8 @@ final class MenuActsRingStore: ObservableObject {
 
     /// Les actes du jour lus dans le dernier bloc connu, MÊME périmé — `nil` sans bloc ou sans acte ouvert.
     @Published private(set) var ring: GameActsRing?
+    /// Ce que le jeu signale au barreau « Ma Légende » — `.none` sans bloc, ou sous « Jeu masqué ».
+    @Published private(set) var attention: GameAttention = .none
 
     private let source: PlayerBannerSourcing
     private var subscriptions = Set<AnyCancellable>()
@@ -33,6 +39,7 @@ final class MenuActsRingStore: ObservableObject {
     func activate(hidden: Bool) async {
         guard !hidden else {
             ring = nil
+            attention = .none
             return
         }
         subscribeOnce()
@@ -44,6 +51,8 @@ final class MenuActsRingStore: ObservableObject {
         guard let game = await source.cached() else { return }
         let next = GameActsRing.of(game, hidden: false)
         if next != ring { ring = next }
+        let signaled = GameAttention.of(game, hidden: false)
+        if signaled != attention { attention = signaled }
     }
 
     /// Une écriture du cache vient d'être annoncée : relire, en remplaçant la relecture précédente.

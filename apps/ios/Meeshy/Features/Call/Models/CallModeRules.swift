@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import MeeshySDK
+import SwiftUI
 
 nonisolated enum CallModeCarouselRule {
     static let selectedScale: CGFloat = 1

@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +35,7 @@ import me.meeshy.ui.R
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.ReactionStripChrome
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
 import me.meeshy.ui.component.fullscreen.FullscreenActionRail
 import me.meeshy.ui.component.fullscreen.FullscreenActionStyle
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
@@ -205,12 +206,16 @@ internal fun BoxScope.AudioFullscreenActionOverlays(
         }
     }
     if (pickerOpen) {
-        ModalBottomSheet(onDismissRequest = { pickerOpen = false }, containerColor = MeeshyTheme.tokens.backgroundPrimary) {
+        MeeshyModalSheet(
+            onDismissRequest = { pickerOpen = false },
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
             EmojiFullPicker(
                 onSelect = { emoji ->
                     actions.react(source, emoji)
                     haptics.success()
-                    pickerOpen = false
+                    dismiss()
                 },
                 accentColor = accent,
                 quickReactions = actions.quickReactions(),

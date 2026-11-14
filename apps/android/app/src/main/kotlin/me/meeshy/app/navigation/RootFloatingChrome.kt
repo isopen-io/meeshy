@@ -1,6 +1,9 @@
 package me.meeshy.app.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -30,6 +33,7 @@ import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.chrome.FloatingMenuLadder
+import me.meeshy.sdk.model.game.GameAttention
 import me.meeshy.ui.component.auth.AnimatedBrandLogo
 import me.meeshy.ui.component.chrome.FloatingButtonSemantics
 import me.meeshy.ui.component.chrome.FloatingButtonSize
@@ -37,6 +41,8 @@ import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
 import me.meeshy.ui.component.chrome.MeeshyMenuLadder
 import me.meeshy.ui.component.chrome.MeeshyMenuVeil
 import me.meeshy.ui.component.chrome.RadialMenuItem
+import me.meeshy.ui.component.kit.MeeshyGlassRecipe
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyIconSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
@@ -64,12 +70,13 @@ internal fun MeeshyFloatingChrome(
     val pendingFriendRequests by chromeViewModel.pendingFriendRequests.collectAsStateWithLifecycle()
     val gameHidden by chromeViewModel.gameHidden.collectAsStateWithLifecycle()
     val actsRing by chromeViewModel.actsRing.collectAsStateWithLifecycle()
+    val gameAttention by chromeViewModel.gameAttention.collectAsStateWithLifecycle()
     val leftStorage by floatingButtonPositions.leftStorage.collectAsStateWithLifecycle()
     val rightStorage by floatingButtonPositions.rightStorage.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val feedOpen = currentRoute == Routes.FEED
-    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests, gameHidden)
+    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests, gameHidden, gameAttention)
     val navigateToProfile: () -> Unit = {
         floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
@@ -139,6 +146,10 @@ internal fun MeeshyFloatingChrome(
 /** Le degrade du disque Flux : erreur -> indigo300, du haut-gauche au bas-droite. */
 internal fun feedButtonGradientColors(): List<Color> = listOf(MeeshyPalette.Error, MeeshyPalette.Indigo300)
 
+/** Le fondu enchaîné du visage Flux (K13 : 200 ms) ; sous « Réduire les animations », le changement est immédiat. */
+internal fun feedButtonFaceSpec(reduce: Boolean): FiniteAnimationSpec<Float> =
+    meeshySpec(reduce, tween(MeeshyGlassRecipe.TONE_FADE_MILLIS))
+
 /** Le disque Flux : cercle plein degrade, pile blanche — le logo anime quand le Flux est ouvert. */
 @Composable
 private fun FeedButtonFace(feedOpen: Boolean) {
@@ -148,20 +159,26 @@ private fun FeedButtonFace(feedOpen: Boolean) {
             .background(Brush.linearGradient(feedButtonGradientColors()), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        if (feedOpen) {
-            AnimatedBrandLogo(
-                modifier = Modifier.size(MeeshyIconSize.xxxl),
-                color = MeeshyPalette.White,
-                lineWidth = 3.dp,
-                continuous = true,
-            )
-        } else {
-            Icon(
-                imageVector = FeedButtonIcon,
-                contentDescription = null,
-                tint = MeeshyPalette.White,
-                modifier = Modifier.size(MeeshyIconSize.xxl),
-            )
+        Crossfade(
+            targetState = feedOpen,
+            animationSpec = feedButtonFaceSpec(FeedOverlayTransition.reduceMotion),
+            label = "feedButtonFace",
+        ) { open ->
+            if (open) {
+                AnimatedBrandLogo(
+                    modifier = Modifier.size(MeeshyIconSize.xxxl),
+                    color = MeeshyPalette.White,
+                    lineWidth = 3.dp,
+                    continuous = true,
+                )
+            } else {
+                Icon(
+                    imageVector = FeedButtonIcon,
+                    contentDescription = null,
+                    tint = MeeshyPalette.White,
+                    modifier = Modifier.size(MeeshyIconSize.xxl),
+                )
+            }
         }
     }
 }
@@ -179,6 +196,15 @@ private fun RootMenuLadderEntry.label(): String = stringResource(
         RootMenuLadderEntry.SETTINGS -> R.string.menu_settings
     },
 )
+
+/** Le nom de « Ma Legende » quand le jeu signale quelque chose (#18165) ; `null` = le nom du barreau. */
+@Composable
+private fun RootMenuLadderEntry.attentionLabel(attention: GameAttention): String? = when (attentionLabelKey(attention)) {
+    "a11y_floating_rung_game_both" -> stringResource(R.string.a11y_floating_rung_game_both)
+    "a11y_floating_rung_game_chest_ready" -> stringResource(R.string.a11y_floating_rung_game_chest_ready)
+    "a11y_floating_rung_game_flame_at_risk" -> stringResource(R.string.a11y_floating_rung_game_flame_at_risk)
+    else -> null
+}
 
 private fun NavController.openLadderEntry(entry: RootMenuLadderEntry) {
     when (entry) {
@@ -200,16 +226,18 @@ private fun rememberMenuLadderItems(
     unreadNotifications: Int,
     pendingFriendRequests: Int,
     gameHidden: Boolean,
+    gameAttention: GameAttention,
 ): List<RadialMenuItem> {
     val entries = remember(gameHidden) { rootMenuLadderEntries(gameHidden = gameHidden) }
-    val labels = entries.map { it.label() }
-    return remember(labels, unreadNotifications, pendingFriendRequests) {
+    val labels = entries.map { it.attentionLabel(gameAttention) ?: it.label() }
+    return remember(labels, unreadNotifications, pendingFriendRequests, gameAttention) {
         entries.mapIndexed { index, entry ->
             RadialMenuItem(
                 icon = entry.icon(),
                 label = labels[index],
                 color = hexColor(entry.colorHex),
                 badgeCount = entry.badgeCount(unreadNotifications, pendingFriendRequests),
+                dot = entry.showsAttentionDot(gameAttention),
                 onSelect = { navController.openLadderEntry(entry) },
             )
         }
