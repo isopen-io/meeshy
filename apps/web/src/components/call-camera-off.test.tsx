@@ -59,7 +59,7 @@ afterAll(async () => {
 });
 
 const self = { full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null };
-const stage = (active: ActiveCall) => <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible />;
+const stage = (active: ActiveCall) => <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={self} chromeVisible />;
 
 const mount = (active: ActiveCall, { reducedMotion = false }: { readonly reducedMotion?: boolean } = {}) => {
   selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });

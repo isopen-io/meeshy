@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { choiceAfterSharerChange, resolveSpotlight, type SpotlightChoice } from './call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf } from './call-spotlight-gestures';
+import { choiceAfterSharerChange, fullScreenLevelFor, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from './call-spotlight';
+import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, loweredFullScreen, raisedFullScreen, spotlightCapsuleButtons } from './call-spotlight-gestures';
 import { SCREEN_MAX_ZOOM, screenPanAfterDrag, screenPanClamp, screenZoomAfterPinch, screenZoomAfterWheel, screenZoomResets, screenZoomTransform } from './screen-zoom';
 import type { CallMember } from './call-store';
 
@@ -115,10 +115,89 @@ describe('« Grille » ne vaut que pour CE partage (U2.1, `GroupCallSpotlight.ch
     expect(choiceAfterSharerChange(null, 'kofi', null)).toBeNull();
   });
 
+  test('ma tuile épinglée reste quand le partage FINIT, comme une vignette', () => {
+    expect(choiceAfterSharerChange(chooseSelf(), 'kofi', null)).toEqual(chooseSelf());
+  });
+
   test('X congédie son partage, l’arrête, puis repartage : son écran remonte seul', () => {
     const dismissed = chooseGrid('kofi');
     const afterStop = choiceAfterSharerChange(dismissed, 'kofi', null);
     expect(view([awa, sharing], afterStop)?.featured).toEqual(sharing);
+  });
+});
+
+/**
+ * U2.1 (#18180, loi 15) — un partage qui COMMENCE prend la une, même après un choix manuel : mêmes vecteurs que
+ * `GroupCallSpotlightTest` › « a share that begins takes the spotlight even after a manual choice » d'Android (#18248).
+ */
+describe('un partage qui commence prend la une, même après un choix manuel (U2.1, #18180)', () => {
+  const lina = chooseMember('lina');
+
+  test('Lina mise à la une à la main, Karim commence à partager : le choix tombe', () => {
+    expect(choiceAfterSharerChange(lina, null, 'karim')).toBeNull();
+    expect(choiceAfterSharerChange(lina, 'alice', 'karim')).toBeNull();
+    expect(choiceAfterSharerChange(chooseSelf(), null, 'karim')).toBeNull();
+  });
+
+  test('le même partage qui continue ne change rien : Lina reste à la une', () => {
+    expect(choiceAfterSharerChange(lina, 'karim', 'karim')).toEqual(lina);
+  });
+
+  test('appel à quatre : l’écran de Karim prend la une, Lina retourne au bandeau', () => {
+    const linaMember = member('lina');
+    const karim = member('karim', { screenSharing: true });
+    const four = [awa, linaMember, karim, bintou];
+    const after = choiceAfterSharerChange(lina, null, 'karim');
+    expect(view(four, after, { karim: liveVideo })).toEqual({ featured: karim, others: [awa, linaMember, bintou], screen: true, automatic: true });
+  });
+});
+
+/**
+ * U2.2 (#17961, loi 15) — deux niveaux de plein écran pour un écran partagé, un seul pour une caméra : mêmes vecteurs
+ * que `GroupCallSpotlightTest` d'Android (`raised`, `lowered`, `capsuleButtons`, `levelAfter`, `filmstrip`).
+ */
+describe('les niveaux du plein écran de la une (U2.2, #17961)', () => {
+  const levels: readonly FullScreenLevel[] = ['off', 'full', 'total'];
+
+  test('« Plein écran » monte d’un niveau à chaque appui : un écran partagé jusqu’au total, une caméra une seule fois', () => {
+    expect(raisedFullScreen('off', true)).toBe('full');
+    expect(raisedFullScreen('full', true)).toBe('total');
+    expect(raisedFullScreen('total', true)).toBe('total');
+    expect(raisedFullScreen('off', false)).toBe('full');
+    expect(raisedFullScreen('full', false)).toBe('full');
+  });
+
+  test('« Quitter » redescend d’un niveau', () => {
+    expect(loweredFullScreen('total')).toBe('full');
+    expect(loweredFullScreen('full')).toBe('off');
+    expect(loweredFullScreen('off')).toBe('off');
+  });
+
+  test('le niveau total est réservé à un écran partagé : une caméra à la une n’en a qu’un', () => {
+    expect(fullScreenLevelFor('total', true)).toBe('total');
+    expect(fullScreenLevelFor('total', false)).toBe('full');
+    expect(fullScreenLevelFor('full', false)).toBe('full');
+    expect(fullScreenLevelFor('off', true)).toBe('off');
+  });
+
+  test('la capsule : « Revenir à la grille », puis le niveau suivant s’il y en a un, puis la descente (U1, U2, U2b)', () => {
+    expect(spotlightCapsuleButtons('off', true)).toEqual(['grid', 'full-screen']);
+    expect(spotlightCapsuleButtons('off', false)).toEqual(['grid', 'full-screen']);
+    expect(spotlightCapsuleButtons('full', true)).toEqual(['grid', 'total-full-screen', 'exit-full-screen']);
+    expect(spotlightCapsuleButtons('full', false)).toEqual(['grid', 'exit-full-screen']);
+    expect(spotlightCapsuleButtons('total', true)).toEqual(['grid', 'exit-total-full-screen']);
+  });
+
+  test('chaque bouton mène à son niveau, « Revenir à la grille » sort de tout', () => {
+    expect(fullScreenLevelAfter('full-screen', 'off', true)).toBe('full');
+    expect(fullScreenLevelAfter('total-full-screen', 'full', true)).toBe('total');
+    expect(fullScreenLevelAfter('exit-total-full-screen', 'total', true)).toBe('full');
+    expect(fullScreenLevelAfter('exit-full-screen', 'full', true)).toBe('off');
+    expect(levels.map((level) => fullScreenLevelAfter('grid', level, true))).toEqual(['off', 'off', 'off']);
+  });
+
+  test('le bandeau des autres reste au plein écran (U2), seul le plein écran total le retire (U2b)', () => {
+    expect(levels.map(fullScreenHidesStrip)).toEqual([false, false, true]);
   });
 });
 
