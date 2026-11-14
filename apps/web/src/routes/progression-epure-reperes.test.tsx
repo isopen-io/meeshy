@@ -6,7 +6,7 @@ import { GameLeague } from '@/components/game-league';
 import { GameSettings, type GameSettingsProps } from '@/components/game-settings';
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { leagueWeekFixture } from '@/lib/api/game-v2-queries-fixture';
-import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { loadGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { stepCopy } from '@/lib/view/game-guide-copy';
 import { createActMounter } from '@/test-support/act-mount';
@@ -143,10 +143,12 @@ describe('Mon atmosphère', () => {
     expect(host.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Changer');
   });
 
-  test('sept langues : « Choisir » suit le lexique', async () => {
+  test('sept langues : « Choisir » suit le lexique, « Changer » est traduit', () => {
     const expected: Record<string, string> = { fr: 'Choisir', en: 'Choose', es: 'Elegir', pt: 'Escolher', de: 'Auswählen', it: 'Scegli', ar: 'اختيار' };
-    const { gameText } = await import('@/lib/view/game-copy');
-    expect(gameText('game.settings.atmosphere.choose')).toBe('Choisir');
-    expect(Object.keys(expected)).toHaveLength(SUPPORTED_INTERFACE_LANGUAGES.length);
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(translateGame(language, 'game.settings.atmosphere.choose')).toBe(expected[language] as string);
+      if (language !== 'fr') expect(translateGame(language, 'game.settings.atmosphere.change')).not.toBe('Changer');
+      expect(translateGame(language, 'game.league.about', { size: '30', promoted: '7', relegated: '5' })).toContain('30');
+    }
   });
 });

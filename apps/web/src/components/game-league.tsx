@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 
 import type { GameLeagueBlock, LeagueWeekEntry, LeagueWeekResponse } from '@meeshy/shared/types/game';
-import { LEAGUE_MIN_LEVEL, type LeagueKey, type LeagueZone } from '@meeshy/shared/utils/game/league';
+import { LEAGUE_GROUP_SIZE, LEAGUE_MIN_LEVEL, LEAGUE_PROMOTED, LEAGUE_RELEGATED, type LeagueKey, type LeagueZone } from '@meeshy/shared/utils/game/league';
 
 import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
@@ -70,7 +70,8 @@ function StandingRow({ entry, league }: { readonly entry: LeagueWeekEntry; reado
         </span>
       )}
       <span className="shrink-0 text-caption font-semibold tabular-nums" style={{ color: GAME_INK }}>
-        {pointsLabel(entry.weekPoints)}
+        <span aria-hidden="true">{formatCount(entry.weekPoints)}</span>
+        <span className="sr-only">{pointsLabel(entry.weekPoints)}</span>
       </span>
       </GameTouch>
     </li>
@@ -212,6 +213,13 @@ export function GameLeague(props: GameLeagueProps) {
           {weekLabel(league.weekKey)}
         </h2>
         <PlacedHeader league={league} now={now} />
+        <p data-game-league-about="" className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.league.about', {
+            size: formatCount(LEAGUE_GROUP_SIZE),
+            promoted: formatCount(LEAGUE_PROMOTED),
+            relegated: formatCount(LEAGUE_RELEGATED),
+          })}
+        </p>
       </GameCard>
 
       <GameCard labelledBy="game-league-standings-title">
