@@ -76,6 +76,12 @@ describe('Analytique > Langues : la note du tableau passe derrière un (i)', () 
     expect(noteOf(host, button)?.textContent).toContain('variation du nombre de messages');
     expect(visibleText(host)).not.toContain('variation du nombre de messages');
   });
+
+  test('le lecteur d’écran annonce le tableau par le titre de SON bloc, « Détail par langue »', async () => {
+    const host = await mount(<LanguagesDetailTable language="fr" rows={[{ code: 'fr', messageCount: 10, userCount: 3, percentage: 80, growth: 12 }]} />);
+
+    expect(host.querySelector('table caption')?.textContent).toBe('Détail par langue');
+  });
 });
 
 describe('Diffusions : l’état vide tient en une ligne et une action', () => {
