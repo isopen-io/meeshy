@@ -37,7 +37,26 @@ class EpureCommunityStringsTest {
         "community_invite_empty_subtitle",
         "community_detail_posts_empty_action",
         "community_add_channel_conversation_fallback_name",
+        "community_create_error_title",
+        "community_settings_error_title",
+        "community_common_error",
     )
+
+    private val kotlinDir: File = File(resDir.parentFile, "kotlin")
+
+    @Test
+    fun `a failure dialog shows the message alone with its OK, no Erreur title`() {
+        val sources = kotlinDir.walkTopDown().filter { it.extension == "kt" }.map { it.readText() }.joinToString("\n")
+        listOf("community_create_error_title", "community_settings_error_title", "community_common_error")
+            .forEach { assertThat(sources).doesNotContain("R.string.$it") }
+    }
+
+    @Test
+    fun `the failure messages and the OK button stay`() {
+        val fr = all("values-fr")
+        listOf("community_create_error_default", "community_settings_error_default", "community_common_ok")
+            .forEach { assertThat(fr[it]).isNotEmpty() }
+    }
 
     @Test
     fun `a label with no reader left is gone from the seven folders`() {
