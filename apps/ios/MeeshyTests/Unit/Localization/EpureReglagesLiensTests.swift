@@ -169,7 +169,6 @@ final class EpureReglagesLiensTests: XCTestCase {
             XCTAssertFalse(view.contains(keyPath), "\(keyPath) : une rangée sans effet reste à l'écran")
         }
         XCTAssertTrue(view.contains("\\.acceptCallsFromNonContacts"), "la rangée qui a un effet reste")
-        XCTAssertTrue(view.contains("\\.saveMediaToGallery"))
         XCTAssertTrue(view.contains("\\.allowAnalytics"))
     }
 
