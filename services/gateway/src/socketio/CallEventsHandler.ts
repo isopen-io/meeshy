@@ -70,6 +70,8 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
 import { isInvitedToCall } from '../services/calls/callInvitation';
+import { markCallParticipantsAnswered } from '../services/calls/callParticipantAnswered';
+import { withCallSummaryParticipantNames } from '../services/calls/callSummaryParticipantNames';
 import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
 import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
@@ -1581,7 +1583,10 @@ export class CallEventsHandler {
     const MAX_ATTEMPTS = 3;
     const BASE_DELAY_MS = 1000;
     try {
-      const result = await this.callService.createCallSummaryMessage(callId);
+      // #18242 — la dernière tentative sert le résumé sans participants plutôt que de le perdre.
+      const result = await (attempt < MAX_ATTEMPTS
+        ? this.callService.createCallSummaryMessage(callId)
+        : this.callService.createCallSummaryMessage(callId, { participantsBestEffort: true }));
       if (!result || (await this.sealedByObsolescence(result.message))) {
         return;
       }
@@ -1594,7 +1599,8 @@ export class CallEventsHandler {
       if (!broadcaster) {
         return;
       }
-      await broadcaster(result.message, result.message.conversationId);
+      const [served] = await withCallSummaryParticipantNames(this.prisma, [result.message]);
+      await broadcaster(served, result.message.conversationId);
     } catch (error) {
       logger.error('[CallEventsHandler] Failed to post call summary message', {
         callId,
@@ -3066,6 +3072,8 @@ export class CallEventsHandler {
           // identifies the FIRST answer (never a later renegotiation answer,
           // e.g. enabling video mid-call, which would already have it set).
           const isFirstAnswer = !callSession.answeredAt;
+          // #18242 B1 — le décroché se porte par ligne : celui qui répond et l'offrant qu'il rejoint.
+          await markCallParticipantsAnswered(this.prisma, [senderParticipant, targetParticipant]);
           // #11468 — l'appareil qui répond devient la seule socket de son utilisateur dans la room.
           await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));

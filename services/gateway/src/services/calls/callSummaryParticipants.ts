@@ -2,68 +2,36 @@
  * QUI A PRIS PART À L'APPEL, POUR LA CARTE DU FIL (#17868, planche A1) — la
  * ligne « Awa, Karim, Lina et vous » sous le titre du résumé d'appel.
  *
- * Même notion que le journal de l'historique (`callHistoryParticipants.ts`) :
- * ceux qui ont REJOINT (`CallParticipant`), dans l'ordre d'arrivée. Elle en
- * diffère par deux choix : le lecteur n'est PAS retiré (le résumé est un seul
- * message pour tous ses lecteurs, chacun se retire par `userId`), et le nom
- * suit la loi de lecture de la conversation (`resolveParticipantDisplayName` :
- * copie du participant, puis nom du compte, puis « Prénom Nom », puis pseudo).
+ * Ceux qui ont DÉCROCHÉ (`answeredCallRoster`, #18242 B1), dans l'ordre
+ * d'arrivée, lecteur compris (le résumé est un seul message pour tous ses
+ * lecteurs, chacun se retire par `userId`). Seul le COMPTE est lu : le nom se
+ * compose à la lecture du message (`callSummaryParticipantNames.ts`, B2), pour
+ * suivre un renommage ou une purge.
  *
- * Rien d'autre que `userId` + `displayName` n'est lu : ni e-mail, ni numéro,
- * ni présence. Une panne de lecture rend la liste vide — le résumé part sans
- * la ligne, jamais perdu.
+ * Une panne de lecture REMONTE : `postCallSummary` reprend, et seule sa
+ * dernière tentative sert le résumé sans la ligne (`CallService`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { CallSummaryParticipant } from '@meeshy/shared/utils/call-summary';
-import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { accountDisplayName } from '../participantNameSnapshots';
-import { logger } from '../../utils/logger';
+import { answeredCallRoster } from './answeredCallRoster';
 
-type JoinedRow = {
-  readonly participant: {
-    readonly userId: string | null;
-    readonly displayName: string;
-    readonly user: {
-      readonly displayName: string | null;
-      readonly firstName: string | null;
-      readonly lastName: string | null;
-      readonly username: string;
-    } | null;
-  } | null;
+type JoinedLine = {
+  readonly role: string | null;
+  readonly answeredAt: Date | null;
+  readonly participant: { readonly userId: string | null } | null;
 };
 
-const readableName = (row: NonNullable<JoinedRow['participant']>): string =>
-  resolveParticipantDisplayName(row) ?? (row.user === null ? '' : accountDisplayName(row.user));
+const accountOf = ({ participant }: JoinedLine): ReadonlyArray<string> =>
+  participant?.userId ? [participant.userId] : [];
 
-const toSummaryParticipant = ({ participant }: JoinedRow): ReadonlyArray<CallSummaryParticipant> =>
-  participant === null || participant.userId === null
-    ? []
-    : [{ userId: participant.userId, displayName: readableName(participant) }];
-
-export async function resolveCallSummaryParticipants(
+export async function resolveCallSummaryParticipantIds(
   prisma: Pick<PrismaClient, 'callParticipant'>,
-  callId: string
-): Promise<ReadonlyArray<CallSummaryParticipant>> {
-  try {
-    const rows: ReadonlyArray<JoinedRow> = await prisma.callParticipant.findMany({
-      where: { callSessionId: callId },
-      orderBy: { joinedAt: 'asc' },
-      select: {
-        participant: {
-          select: {
-            userId: true,
-            displayName: true,
-            user: { select: { displayName: true, firstName: true, lastName: true, username: true } }
-          }
-        }
-      }
-    });
-    return rows.flatMap(toSummaryParticipant);
-  } catch (error) {
-    logger.warn('Failed to read call summary participants', {
-      callId,
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return [];
-  }
+  call: { readonly id: string; readonly answeredAt: Date | null }
+): Promise<ReadonlyArray<string>> {
+  if (!call.answeredAt) return [];
+  const lines: ReadonlyArray<JoinedLine> = await prisma.callParticipant.findMany({
+    where: { callSessionId: call.id },
+    orderBy: { joinedAt: 'asc' },
+    select: { role: true, answeredAt: true, participant: { select: { userId: true } } }
+  });
+  return [...new Set(answeredCallRoster(lines, true).flatMap(accountOf))];
 }

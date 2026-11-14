@@ -30,6 +30,22 @@ const NETWORK_QUALITIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Un participant du résumé d'appel tel que la passerelle le SERT (#17868) :
+ * son compte et le nom que la conversation montre AUJOURD'HUI pour lui —
+ * jamais un e-mail ni un numéro. Le nom n'est pas persisté (#18242 B2) : la
+ * passerelle le compose à la lecture depuis `userId`.
+ */
+export type CallSummaryParticipant = {
+  readonly userId: string;
+  readonly displayName: string;
+};
+
+/** Ce que `Message.metadata` PERSISTE d'un participant : son compte, seul. */
+export type StoredCallSummaryParticipant = {
+  readonly userId: string;
+};
+
+/**
  * Structured, machine-readable facts about a terminated call, persisted on the
  * call-summary `Message.metadata` so clients (iOS/web) can render a rich,
  * actionable bubble WITHOUT re-fetching the call: direction is derived per
@@ -43,13 +59,6 @@ const NETWORK_QUALITIES: ReadonlySet<string> = new Set([
  * `'call'` degrade to their plain-text system bubble on `'call-live'` — by
  * design, no enum they decode strictly is ever extended.
  */
-export interface CallSummaryParticipant {
-  /** Compte de la personne — le lecteur se retire de la liste par cet id. */
-  readonly userId: string;
-  /** Le nom que la conversation montre déjà pour elle : jamais un e-mail ni un numéro. */
-  readonly displayName: string;
-}
-
 export interface CallSummaryMetadata {
   readonly kind: 'call' | 'call-live';
   /** CallSession id — lets the client re-join an active call or call back. */
@@ -79,15 +88,25 @@ export interface CallSummaryMetadata {
    */
   readonly endedByInitiator?: true;
   /**
-   * Tous ceux qui ont REJOINT l'appel, dans l'ordre d'arrivée, lecteur compris
-   * (planche A1 : « Awa, Karim, Lina et vous »). Le résumé est UN message pour
-   * tous ses lecteurs : c'est le lecteur qui se retire par `userId`, puis
-   * s'ajoute en « vous » s'il figure dans la liste. Clé ABSENTE quand rien
-   * n'est connu — les anciens clients l'ignorent, les nouveaux n'affichent
-   * aucune ligne (#9223).
+   * Ceux qui ont DÉCROCHÉ (`CallParticipant.answeredAt`, l'initiateur d'un
+   * appel décroché compris), dans l'ordre d'arrivée, lecteur compris (planche
+   * A1 : « Awa, Karim, Lina et vous »). Le résumé est UN message pour tous ses
+   * lecteurs : c'est le lecteur qui se retire par `userId`, puis s'ajoute en
+   * « vous » s'il figure dans la liste. Clé ABSENTE quand rien n'est connu —
+   * les anciens clients l'ignorent, les nouveaux n'affichent aucune ligne
+   * (#9223). Forme SERVIE ; la forme persistée est `StoredCallSummaryMetadata`.
    */
   readonly participants?: ReadonlyArray<CallSummaryParticipant>;
 }
+
+/**
+ * La métadonnée telle que les constructeurs la PERSISTENT : les participants
+ * n'y portent que leur `userId` (#18242 B2 — un nom figé ne suivrait ni un
+ * renommage ni une purge).
+ */
+export type StoredCallSummaryMetadata = Omit<CallSummaryMetadata, 'participants'> & {
+  readonly participants?: ReadonlyArray<StoredCallSummaryParticipant>;
+};
 
 export interface CallSummaryInput {
   /** Terminal `CallStatus` (e.g. 'ended' | 'missed' | 'rejected' | 'failed'). */
@@ -241,27 +260,43 @@ export interface CallSummaryMetadataInput extends CallSummaryInput {
   readonly answeredAt?: Date | string | null;
   /** User id recorded as having ended the call (`CallSession.metadata.endedBy`). */
   readonly endedById?: string | null;
-  /** Ceux qui ont rejoint l'appel, dans l'ordre d'arrivée (voir `CallSummaryMetadata.participants`). */
-  readonly participants?: ReadonlyArray<CallSummaryParticipant> | null;
+  /** Les comptes de ceux qui ont décroché, dans l'ordre d'arrivée (voir `CallSummaryMetadata.participants`). */
+  readonly participantUserIds?: ReadonlyArray<string> | null;
+}
+
+const trimmedUserId = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const distinctUserIds = (values: ReadonlyArray<unknown>): ReadonlyArray<string> =>
+  values.reduce<ReadonlyArray<string>>((kept, value) => {
+    const userId = trimmedUserId(value);
+    return userId === '' || kept.includes(userId) ? kept : [...kept, userId];
+  }, []);
+
+/**
+ * Ne PERSISTE que les comptes (`{ userId }`) : rogne les espaces, écarte les
+ * vides, retire les doublons (première arrivée gagnante). Rend un objet à
+ * répandre : VIDE quand rien ne reste, pour que la clé soit absente.
+ */
+export function callSummaryParticipantsField(
+  userIds?: ReadonlyArray<string> | null
+): { readonly participants?: ReadonlyArray<StoredCallSummaryParticipant> } {
+  const kept = distinctUserIds(userIds ?? []);
+  return kept.length === 0 ? {} : { participants: kept.map((userId) => ({ userId })) };
 }
 
 /**
- * Ne garde que `userId` + `displayName` (jamais une coordonnée qui aurait
- * voyagé dans l'objet), rogne les espaces, écarte les entrées sans id ou sans
- * nom lisible, retire les doublons (première arrivée gagnante). Rend un objet
- * à répandre : VIDE quand rien ne reste, pour que la clé soit absente.
+ * Les comptes qu'un résumé d'appel TERMINAL a persistés, dans l'ordre — ce que
+ * la passerelle réhydrate à la lecture. Un ancien résumé qui portait le nom
+ * figé se lit pareil : le nom persisté est ignoré. Tout autre message, un
+ * message vivant ou une liste mal formée ne rendent rien.
  */
-export function callSummaryParticipantsField(
-  participants?: ReadonlyArray<CallSummaryParticipant> | null
-): { readonly participants?: ReadonlyArray<CallSummaryParticipant> } {
-  const kept = (participants ?? []).reduce<ReadonlyArray<CallSummaryParticipant>>((acc, entry) => {
-    const userId = typeof entry?.userId === 'string' ? entry.userId.trim() : '';
-    const displayName = typeof entry?.displayName === 'string' ? entry.displayName.trim() : '';
-    return userId === '' || displayName === '' || acc.some((known) => known.userId === userId)
-      ? acc
-      : [...acc, { userId, displayName }];
-  }, []);
-  return kept.length === 0 ? {} : { participants: kept };
+export function storedCallSummaryParticipantIds(metadata: unknown): ReadonlyArray<string> {
+  if (metadata === null || typeof metadata !== 'object') return [];
+  const { kind, participants } = metadata as { readonly kind?: unknown; readonly participants?: unknown };
+  if (kind !== 'call' || !Array.isArray(participants)) return [];
+  return distinctUserIds(participants.map((entry: unknown) =>
+    entry !== null && typeof entry === 'object' ? (entry as { readonly userId?: unknown }).userId : undefined
+  ));
 }
 
 /** Approximate per-second byte rates per direction, used to ESTIMATE data spent
@@ -329,7 +364,7 @@ const wasCancelledByInitiator = (
 function metadataFromSummary(
   summary: CallSummary,
   input: CallSummaryMetadataInput
-): CallSummaryMetadata {
+): StoredCallSummaryMetadata {
   const { bytesTotal, bytesEstimated } = resolveDataSpent(
     summary.outcome,
     summary.callType,
@@ -348,7 +383,7 @@ function metadataFromSummary(
     bytesEstimated,
     networkQuality: normalizeQuality(input.networkQuality),
     ...(wasCancelledByInitiator(summary.outcome, input) ? { endedByInitiator: true as const } : {}),
-    ...callSummaryParticipantsField(input.participants)
+    ...callSummaryParticipantsField(input.participantUserIds)
   };
 }
 
@@ -359,7 +394,7 @@ function metadataFromSummary(
  */
 export function buildCallSummaryMetadata(
   input: CallSummaryMetadataInput
-): CallSummaryMetadata | null {
+): StoredCallSummaryMetadata | null {
   const summary = buildCallSummary(input);
   return summary === null ? null : metadataFromSummary(summary, input);
 }
@@ -372,7 +407,7 @@ export function buildCallSummaryMetadata(
  */
 export function buildCallSummaryWithMetadata(
   input: CallSummaryMetadataInput
-): { summary: CallSummary; metadata: CallSummaryMetadata } | null {
+): { summary: CallSummary; metadata: StoredCallSummaryMetadata } | null {
   const summary = buildCallSummary(input);
   if (summary === null) {
     return null;
@@ -388,8 +423,8 @@ export interface LiveCallInput {
 }
 
 export interface GarbageCollectedConversionInput extends LiveCallInput {
-  /** Ceux qui ont rejoint un appel décroché avant son ramassage (voir `CallSummaryMetadata.participants`). */
-  readonly participants?: ReadonlyArray<CallSummaryParticipant> | null;
+  /** Les comptes de ceux qui ont décroché avant le ramassage (voir `CallSummaryMetadata.participants`). */
+  readonly participantUserIds?: ReadonlyArray<string> | null;
 }
 
 /**
@@ -434,7 +469,7 @@ export function buildLiveCallMetadata(
  */
 export function buildGarbageCollectedConversion(
   input: GarbageCollectedConversionInput
-): { summary: CallSummary; metadata: CallSummaryMetadata } {
+): { summary: CallSummary; metadata: StoredCallSummaryMetadata } {
   const callType = normalizeMediaType(input.callType);
   return {
     summary: {
@@ -454,7 +489,7 @@ export function buildGarbageCollectedConversion(
       bytesTotal: null,
       bytesEstimated: false,
       networkQuality: null,
-      ...callSummaryParticipantsField(input.participants)
+      ...callSummaryParticipantsField(input.participantUserIds)
     }
   };
 }

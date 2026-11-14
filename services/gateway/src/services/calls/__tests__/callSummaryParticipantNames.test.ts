@@ -13,7 +13,7 @@ jest.mock('../../../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
-import { withCallSummaryParticipantNames } from '../callSummaryParticipantNames';
+import { callSummariesWithParticipantNames, withCallSummaryParticipantNames } from '../callSummaryParticipantNames';
 
 const CONV = '6650000000000000000000c1';
 const OTHER_CONV = '6650000000000000000000c2';
@@ -170,5 +170,15 @@ describe('withCallSummaryParticipantNames — le nom suit le compte, jamais le m
     expect('participants' in (served.metadata as object)).toBe(false);
     expect(served.metadata).toMatchObject({ kind: 'call', callId: 'c1', outcome: 'completed' });
     expect(served.content).toBe(stored.content);
+  });
+
+  it('la ligne de liste reçoit, par `id`, les seuls résumés d\'appel nommés', async () => {
+    const { prisma } = prismaWith([member('u_awa', { displayName: 'Awa' })]);
+    const plain = { id: 'm-1', conversationId: CONV, metadata: null };
+
+    const named = await callSummariesWithParticipantNames(prisma, [plain, summary([{ userId: 'u_awa' }])]);
+
+    expect([...named.keys()]).toEqual(['m-call']);
+    expect(servedOf(named.get('m-call')!)).toEqual([{ userId: 'u_awa', displayName: 'Awa' }]);
   });
 });

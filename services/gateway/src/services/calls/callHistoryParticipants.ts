@@ -1,12 +1,14 @@
 /**
  * QUI ÉTAIT DANS UN APPEL DE GROUPE (#8066) — le journal nomme les
  * participants d'un appel de groupe dans sa ligne et sa fiche. La liste dit
- * qui a REJOINT l'appel (`CallParticipant`), sans le lecteur, dans l'ordre
- * d'arrivée ; elle ne porte aucune présence (ni `isOnline` ni `lastActiveAt`)
- * ni aucun moyen de contact : la visibilité de la présence n'en est pas touchée.
+ * qui a DÉCROCHÉ (`answeredCallRoster`, #18242 B1 : une ligne existe dès la
+ * sonnerie, elle ne suffit pas), sans le lecteur, dans l'ordre d'arrivée ;
+ * elle ne porte aucune présence (ni `isOnline` ni `lastActiveAt`) ni aucun
+ * moyen de contact : la visibilité de la présence n'en est pas touchée.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallHistoryParticipant } from '../callHistory';
+import { answeredCallRoster, type CallRosterLine } from './answeredCallRoster';
 
 type RosterParticipant = {
   id: string;
@@ -16,7 +18,9 @@ type RosterParticipant = {
   user: { username: string; displayName: string | null; avatar: string | null } | null;
 };
 
-type RosterRow = { callSessionId: string; participant: RosterParticipant | null };
+type RosterRow = CallRosterLine & { callSessionId: string; participant: RosterParticipant | null };
+
+export type JournalCall = { readonly id: string; readonly answeredAt: Date | null };
 
 const toHistoryParticipant = (participant: RosterParticipant): CallHistoryParticipant => ({
   participantId: participant.id,
@@ -38,15 +42,17 @@ const appendOnce = (
 
 export async function resolveGroupCallParticipants(
   prisma: PrismaClient,
-  callIds: readonly string[],
+  calls: ReadonlyArray<JournalCall>,
   readerId: string
 ): Promise<ReadonlyMap<string, readonly CallHistoryParticipant[]>> {
-  if (callIds.length === 0) return new Map();
+  if (calls.length === 0) return new Map();
   const rows: RosterRow[] = await prisma.callParticipant.findMany({
-    where: { callSessionId: { in: [...callIds] } },
+    where: { callSessionId: { in: calls.map((call) => call.id) } },
     orderBy: { joinedAt: 'asc' },
     select: {
       callSessionId: true,
+      role: true,
+      answeredAt: true,
       participant: {
         select: {
           id: true,
@@ -58,7 +64,10 @@ export async function resolveGroupCallParticipants(
       }
     }
   });
-  return rows.reduce<ReadonlyMap<string, readonly CallHistoryParticipant[]>>((byCall, row) => {
+  const tookPart = calls.flatMap((call) =>
+    answeredCallRoster(rows.filter((row) => row.callSessionId === call.id), call.answeredAt instanceof Date)
+  );
+  return tookPart.reduce<ReadonlyMap<string, readonly CallHistoryParticipant[]>>((byCall, row) => {
     if (!row.participant || row.participant.userId === readerId) return byCall;
     return appendOnce(byCall, row.callSessionId, toHistoryParticipant(row.participant));
   }, new Map());

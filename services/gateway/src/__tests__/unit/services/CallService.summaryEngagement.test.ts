@@ -47,6 +47,7 @@ function build(existing: { id: string; metadata: unknown } | null) {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 })
     },
     participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'p-init' }) },
+    callParticipant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: {
       findFirst: jest.fn<any>().mockResolvedValue(existing),
       create: jest.fn<any>().mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID }),

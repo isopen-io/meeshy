@@ -38,6 +38,8 @@ const createMockPrisma = () => ({
     updateMany: (jest.fn() as MockFn).mockResolvedValue({ count: 1 })
   },
   participant: { findFirst: jest.fn() as MockFn },
+  // #18242 — un appel décroché relit ses participants ; une panne de lecture remonte.
+  callParticipant: { findMany: (jest.fn() as MockFn).mockResolvedValue([]) },
   message: {
     create: jest.fn() as MockFn,
     // Upsert lookup — defaults to "no existing message" (create branch).

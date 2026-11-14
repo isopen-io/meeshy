@@ -258,8 +258,8 @@ export async function listCallHistory(
     for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
   }
 
-  const groupCallIds = page.filter((r) => r.conversation.type !== 'direct').map((r) => r.id);
-  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCallIds, userId);
+  const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
+  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCalls, userId);
 
   const items = page.map((row) =>
     buildCallHistoryItem(

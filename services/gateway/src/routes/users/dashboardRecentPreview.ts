@@ -50,6 +50,7 @@ import {
 import { loadListEphemeralExpiries, loadListInheritedExpiries } from '../conversations/utils/list-ephemeral-expiry';
 import { resolvePreviewProtection } from '../conversations/utils/last-message-nature';
 import { projectListLastMessageBody } from '../conversations/utils/list-last-message-body';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
@@ -154,7 +155,8 @@ export async function resolveDashboardPreviews(
 
   // #11381 — l'aperçu d'une conversation `server`/`hybrid` lit le clair, ou
   // sort SCELLÉ en le disant. Une seule passe pour la page.
-  const opened = await revealAtRestRows(kept.map((k) => k.row), gatewayKeyring(prisma));
+  // #18242 B2 — le nom des participants d'un résumé d'appel se lit à la lecture.
+  const opened = await withCallSummaryParticipantNames(prisma, await revealAtRestRows(kept.map((k) => k.row), gatewayKeyring(prisma)));
   const rows = kept.map((entry, index) => ({ ...entry, row: (asRow(opened[index]) ?? entry.row) }));
 
   const readerOf = (conversationId: string): string | undefined => readerParticipantByConversation.get(conversationId);
