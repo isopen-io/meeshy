@@ -92,6 +92,26 @@ class MeeshyCoverTest {
     }
 
     @Test
+    fun `a cover whose properties refuse the system back stays open on back`() {
+        var dismissed = 0
+        compose.setContent {
+            MeeshyCoverDialog(
+                onDismissRequest = { dismissed++ },
+                properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false),
+            ) {
+                Text(CONTENT)
+            }
+        }
+        compose.waitForIdle()
+
+        compose.runOnUiThread { dialog().onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        assertThat(dismissed).isEqualTo(0)
+        compose.onNodeWithText(CONTENT).assertExists()
+    }
+
+    @Test
     fun `the dialog window has no system animation, only the content rises`() {
         showCover(Record())
 

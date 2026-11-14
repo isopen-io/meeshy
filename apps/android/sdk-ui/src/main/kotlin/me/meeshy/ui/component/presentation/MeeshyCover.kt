@@ -58,7 +58,8 @@ public class MeeshyCoverScope internal constructor(private val leave: () -> Unit
  * **Le plein écran Meeshy dans sa propre fenêtre** (visionneuses) : il monte du bas et redescend, comme CoverSheet. La
  * fenêtre perd son animation système, si bien que seule la montée du contenu joue. Le retour système et
  * [MeeshyCoverScope.dismiss] jouent la sortie ; [onDismissRequest] n'est appelé qu'une fois la sortie au repos, et une
- * seule fois. Un hôte qui retire le dialogue de lui-même le coupe sans sortie.
+ * seule fois. `dismissOnBackPress = false` dans [properties] laisse le retour système sans effet. Un hôte qui retire le
+ * dialogue de lui-même le coupe sans sortie.
  */
 @Composable
 public fun MeeshyCoverDialog(
@@ -78,7 +79,7 @@ public fun MeeshyCoverDialog(
     Dialog(onDismissRequest = scope::dismiss, properties = properties) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setWindowAnimations(0) }
-        BackHandler(onBack = scope::dismiss)
+        BackHandler(enabled = properties.dismissOnBackPress, onBack = scope::dismiss)
         AnimatedVisibility(visibleState = visibility, enter = enter, exit = exit) {
             scope.content()
         }
