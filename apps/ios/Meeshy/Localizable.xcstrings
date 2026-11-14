@@ -114276,49 +114276,96 @@
         }
       }
     },
+    "conversation.role.creator": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المنشئ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersteller"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creator"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créateur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creatore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criador"
+          }
+        }
+      }
+    },
     "conversation.role.moderator": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشرف"
+            "value": "مُنظّم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mod"
+            "value": "Moderator"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mod"
+            "value": "Moderator"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mod"
+            "value": "Moderador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modo"
+            "value": "Modérateur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mod"
+            "value": "Moderatore"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mod"
+            "value": "Moderador"
           }
         }
       }
@@ -144578,7 +144625,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rétrograder Membre"
+            "value": "Rétrograder en membre"
           }
         },
         "it": {
@@ -144672,7 +144719,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Promouvoir administrateur"
+            "value": "Promouvoir admin"
           }
         },
         "it": {
@@ -144719,7 +144766,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Promouvoir Modérateur"
+            "value": "Promouvoir modérateur"
           }
         },
         "it": {
@@ -144873,147 +144920,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Opções para %@"
-          }
-        }
-      }
-    },
-    "member-management.role.admin": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مدير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admin"
-          }
-        }
-      }
-    },
-    "member-management.role.creator": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المنشئ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ersteller"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Creator"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Creador"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créateur"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Creatore"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criador"
-          }
-        }
-      }
-    },
-    "member-management.role.moderator": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مشرف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moderator"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moderator"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moderador"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modérateur"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moderatore"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moderador"
           }
         }
       }
@@ -154078,7 +153984,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Promouvoir administrateur"
+            "value": "Promouvoir admin"
           }
         },
         "it": {

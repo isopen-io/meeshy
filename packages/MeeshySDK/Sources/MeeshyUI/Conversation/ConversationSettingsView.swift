@@ -300,10 +300,15 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    MeeshyInfoNoted(note: ConversationSettingsNotes.announcement, openNoteID: $openNoteID, tint: theme.textMuted) {
-                        Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
-                            .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
-                            .foregroundStyle(theme.textPrimary)
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        MeeshyInfoNoted(note: ConversationSettingsNotes.announcement, openNoteID: $openNoteID, tint: theme.textMuted) {
+                            Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
+                                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
+                                .foregroundStyle(theme.textPrimary)
+                        }
+                        Text(String(localized: "conversation.settings.permissions.announcement.rule", defaultValue: "Seuls les admins écrivent.", bundle: .module))
+                            .meeshyScaledFont(MeeshyFont.footnoteSize, weight: .regular, design: .rounded)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                     Toggle(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module), isOn: $viewModel.isAnnouncementChannel)
@@ -469,7 +474,7 @@ public struct ConversationSettingsView: View {
         case .moderator:
             HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "checkmark.shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modérateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundStyle(MeeshyColors.success)
         case .member:
             EmptyView()
@@ -498,17 +503,17 @@ public struct ConversationSettingsView: View {
         if let accountId = participant.userId {
             if viewModel.currentUserRole == .creator && targetRole < .admin {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "ADMIN") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir admin", bundle: .module), systemImage: "shield.fill")
                 }
             }
             if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MODERATOR") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Modérateur", bundle: .module), systemImage: "checkmark.shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir modérateur", bundle: .module), systemImage: "checkmark.shield.fill")
                 }
             }
             if viewModel.currentUserRole > targetRole && targetRole > .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MEMBER") } } label: {
-                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Rétrograder Membre", bundle: .module), systemImage: "person.fill")
+                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Rétrograder en membre", bundle: .module), systemImage: "person.fill")
                 }
             }
         }
@@ -870,7 +875,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 conversationId: conversationId,
                 key: key
             )
-            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulse", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulsé", bundle: .module), isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription

@@ -13,7 +13,7 @@ public enum ConversationSettingsNotes {
     public static var announcement: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "conversation.settings.permissions.announcement.question", defaultValue: "Que change le mode annonce ?", bundle: .module),
-            text: String(localized: "conversation.settings.permissions.announcement.note", defaultValue: "Seuls les admins peuvent écrire : « Qui peut écrire » est alors verrouillé.", bundle: .module)
+            text: String(localized: "conversation.settings.permissions.announcement.note", defaultValue: "« Qui peut écrire » est alors verrouillé.", bundle: .module)
         )
     }
 }

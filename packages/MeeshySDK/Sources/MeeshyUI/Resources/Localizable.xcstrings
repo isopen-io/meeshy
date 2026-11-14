@@ -15986,7 +15986,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modo"
+            "value": "Modérateur"
           }
         },
         "it": {
@@ -17114,7 +17114,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Rétrograder Membre"
+            "value": "Rétrograder en membre"
           }
         },
         "it": {
@@ -17208,7 +17208,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Promouvoir Admin"
+            "value": "Promouvoir admin"
           }
         },
         "it": {
@@ -17255,7 +17255,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Promouvoir Modérateur"
+            "value": "Promouvoir modérateur"
           }
         },
         "it": {
@@ -17456,6 +17456,53 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Modo de anúncio"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.rule": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المشرفون وحدهم يكتبون."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Admins schreiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only admins write."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo los administradores escriben."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuls les admins écrivent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo gli amministratori scrivono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas administradores escrevem."
           }
         }
       }
@@ -18477,7 +18524,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Membre expulse"
+            "value": "Membre expulsé"
           }
         },
         "it": {
@@ -83332,43 +83379,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المشرفون وحدهم يمكنهم الكتابة: يُقفَل عندئذٍ خيار «من يمكنه الكتابة»."
+            "value": "يُقفَل عندئذٍ خيار «من يمكنه الكتابة»."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Admins können schreiben: „Wer schreiben darf“ ist dann gesperrt."
+            "value": "„Wer schreiben darf“ ist dann gesperrt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only admins can write: “Who can write” is then locked."
+            "value": "“Who can write” is then locked."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo los administradores pueden escribir: «Quién puede escribir» queda bloqueado."
+            "value": "«Quién puede escribir» queda bloqueado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seuls les admins peuvent écrire : « Qui peut écrire » est alors verrouillé."
+            "value": "« Qui peut écrire » est alors verrouillé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo gli amministratori possono scrivere: «Chi può scrivere» è quindi bloccato."
+            "value": "«Chi può scrivere» è quindi bloccato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apenas administradores podem escrever: “Quem pode escrever” fica bloqueado."
+            "value": "“Quem pode escrever” fica bloqueado."
           }
         }
       }

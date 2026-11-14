@@ -492,13 +492,13 @@
         },
         {
           "catalog": "app",
-          "iosKey": "member-management.role.admin",
+          "iosKey": "conversation.role.admin",
           "androidName": "community_role_admin",
           "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "member-management.role.creator",
+          "iosKey": "conversation.role.creator",
           "androidName": "community_role_creator",
           "status": "adopted"
         },
@@ -508,7 +508,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "member-management.role.moderator",
+          "iosKey": "conversation.role.moderator",
           "androidName": "community_role_moderator",
           "status": "adopted"
         },
