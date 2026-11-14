@@ -107,4 +107,49 @@ class SharedLocationSendingTest {
         assertThat(SharedLocationOfferRule.offers(RelationLevel.FRIEND)).isTrue()
         assertThat(SharedLocationOfferRule.offers(RelationLevel.BLOOD)).isTrue()
     }
+
+    @Test
+    fun `l'echeance d'une personne part dans la charge, bornee par le contrat, et s'oublie pour une passerelle d'avant`() {
+        val request = SharedLocationStartRequest.of(
+            listOf(
+                SharedLocationRecipient(alice, SharedLocationPrecision.EXACT, expiresInSeconds = 600),
+                SharedLocationRecipient(bob, SharedLocationPrecision.CITY, expiresInSeconds = 99_999),
+            ),
+            SharedLocationShareDuration.EIGHT_HOURS,
+            paris,
+        )!!
+
+        assertThat(request.wire()["recipients"]).isEqualTo(
+            listOf(
+                mapOf("userId" to alice, "precision" to "exact", "expiresInSeconds" to 600),
+                mapOf("userId" to bob, "precision" to "city", "expiresInSeconds" to SharedLocationContract.RECIPIENT_DEADLINE_MAX_SECONDS),
+            ),
+        )
+        assertThat(request.carriesDeadlines).isTrue()
+        val legacy = request.withoutDeadlines()
+        assertThat(legacy.carriesDeadlines).isFalse()
+        assertThat(legacy.wire()["recipients"]).isEqualTo(
+            listOf(mapOf("userId" to alice, "precision" to "exact"), mapOf("userId" to bob, "precision" to "city")),
+        )
+        assertThat(legacy.duration).isEqualTo(request.duration)
+        assertThat(legacy.fix).isEqualTo(request.fix)
+    }
+
+    @Test
+    fun `une echeance nulle vaut une seconde, et un doublon garde sa derniere echeance`() {
+        val request = SharedLocationStartRequest.of(
+            listOf(
+                SharedLocationRecipient(alice, SharedLocationPrecision.EXACT, expiresInSeconds = 0),
+                SharedLocationRecipient(bob, SharedLocationPrecision.CITY, expiresInSeconds = 60),
+                SharedLocationRecipient(bob.uppercase(), SharedLocationPrecision.CITY, expiresInSeconds = 120),
+            ),
+            SharedLocationShareDuration.ONE_HOUR,
+            paris,
+        )!!
+
+        assertThat(request.recipients).containsExactly(
+            SharedLocationRecipient(alice, SharedLocationPrecision.EXACT, expiresInSeconds = 1),
+            SharedLocationRecipient(bob, SharedLocationPrecision.CITY, expiresInSeconds = 120),
+        ).inOrder()
+    }
 }

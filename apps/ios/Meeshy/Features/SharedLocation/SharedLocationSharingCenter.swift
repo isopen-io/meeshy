@@ -276,11 +276,13 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     private func publish(_ wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
-        guard let request = SharedLocationStartRequest(recipients: next.recipients, duration: next.serverDuration(now: now()), fix: fix) else {
+        let instant = now()
+        let recipients = next.deadlinedRecipients(now: instant)
+        guard let request = SharedLocationStartRequest(recipients: recipients, duration: next.serverDuration(now: instant), fix: fix) else {
             return .refused(.invalid)
         }
         guard isLive else { return .refused(.failed) }
-        let verdict = await emitter.start(request)
+        let verdict = await startTolerant(request)
         guard isLive else { return .refused(.failed) }
         switch verdict {
         case .started:
@@ -292,6 +294,14 @@ final class SharedLocationSharingCenter: ObservableObject {
         case .refused(let outcome):
             return .refused(outcome)
         }
+    }
+
+    /// Une passerelle d'avant #18205 refuse l'échéance par personne (`INVALID`) : la même liste repart sans, une fois, et
+    /// le centre retire chacun à son échéance, comme avant.
+    private func startTolerant(_ request: SharedLocationStartRequest) async -> SharedLocationStartVerdict {
+        let verdict = await emitter.start(request)
+        guard verdict == .refused(.invalid), request.carriesDeadlines, isLive else { return verdict }
+        return await emitter.start(request.withoutDeadlines)
     }
 
     private func stopAll() async -> SharedLocationShareProblem? {

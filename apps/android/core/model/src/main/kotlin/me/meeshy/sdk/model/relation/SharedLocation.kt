@@ -24,6 +24,9 @@ public object SharedLocationContract {
 
     /** `sharedLocationPositionSchema.accuracy` : au-delà, le rayon servi n'a plus de sens. */
     public const val MAX_RADIUS_METERS: Double = 100_000.0
+
+    /** `SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS` : l'échéance d'une personne ne dépasse jamais 8 h (#18205). */
+    public const val RECIPIENT_DEADLINE_MAX_SECONDS: Int = 8 * 3_600
 }
 
 /** `SHARED_LOCATION_PRECISIONS` : ce que l'émetteur a choisi de me montrer. */
