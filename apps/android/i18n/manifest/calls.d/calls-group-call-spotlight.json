@@ -57,6 +57,14 @@
           "iosKey": "call.group.tile.reconnecting",
           "androidName": "call_group_tile_reconnecting",
           "status": "adopted"
+        },
+        {
+          "androidName": "call_spotlight_total_enter",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spotlight_total_exit",
+          "status": "android-only"
         }
       ]
     }

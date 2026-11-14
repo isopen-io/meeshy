@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +40,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Le journal entre et sort en fondu glissé depuis la bulle par `graphicsLayer` (opacité + translation, lues à la phase de
  * dessin : aucune recomposition par image, aucune taille animée — A1.4), et « Réduire les animations » le réduit à un fondu
  * court ([FocalCallJournalMotion]). La bascule se range du côté de la carte, comme ce qu'iOS pose sous elle (`BubbleCallNoticeView`) : à droite pour un
- * appel sortant, à gauche pour un entrant (côtés logiques, droite à gauche compris).
+ * appel sortant, à gauche pour un entrant (côtés logiques, droite à gauche compris). TalkBack lit l'état de la bascule
+ * (« Replié » / « Déplié », A1.3), comme iOS (`accessibilityValue`) et le web (`aria-expanded`).
  */
 @Composable
 internal fun FocalCallJournalUnderBubble(
@@ -50,13 +53,15 @@ internal fun FocalCallJournalUnderBubble(
     var open by rememberSaveable(request.callId) { mutableStateOf(false) }
     val reduceMotion = LocalReduceMotion.current
     val label = stringResource(if (open) R.string.focal_call_journal_hide else R.string.focal_call_journal_show)
+    val state = stringResource(focalCallJournalToggleState(open))
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         TextButton(
             onClick = { open = !open },
             modifier = Modifier
                 .align(if (alignEnd) Alignment.End else Alignment.Start)
                 .padding(horizontal = MeeshySpacing.lg)
-                .heightIn(min = 48.dp),
+                .heightIn(min = 48.dp)
+                .semantics { stateDescription = state },
         ) {
             Text(text = label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = request.accent)
         }
@@ -81,3 +86,7 @@ internal fun FocalCallJournalUnderBubble(
         }
     }
 }
+
+/** A1.3 — le mot que TalkBack lit avec la bascule : « Déplié » journal ouvert, « Replié » sinon (déjà en sept langues). */
+internal fun focalCallJournalToggleState(open: Boolean): Int =
+    if (open) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed

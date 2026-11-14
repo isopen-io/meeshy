@@ -11,15 +11,16 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
-import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
+import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 import { useViewer } from '@/lib/view/use-viewer';
 import { quotedAudioOf } from '@/lib/view/quoted-audio';
 
-import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
-import { GLYPHS, type GlyphName } from './glyphs';
+import { Glyph, GlyphSvg } from './glyph';
+import type { GlyphName } from './glyphs';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 import { SendProgressMark } from './send-progress-pastille';
 import { QuoteFrame } from './quote-frame';
+import { QUOTE_GLYPH } from './quote-glyphs';
 import { QuoteAudioPreview, QuoteOpenZone, QuoteVideoStill } from './quote-media';
 
 /**
@@ -650,21 +651,6 @@ export function EditedMark({ onBrandBubble, byModerator = false }: { readonly on
   );
 }
 
-/**
- * LE GLYPHE D'UN GENRE CITÉ — miroir `previewGlyph`
- * (`BubbleQuotedReply.swift:452-476`), qui nomme un TYPE. Décoratif ici (le
- * bouton entier SAUTE au message cité, il n'ouvre aucun média) : `GlyphSvg`
- * sans `title` pose donc `aria-hidden`, et le genre reste dit à l'oreille par
- * `inventory` sur le nom accessible du bouton.
- */
-const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
-  image: GLYPHS.image,
-  video: THREAD_STATES_GLYPHS.videoCamera,
-  audio: GLYPHS.microphone,
-  file: GLYPHS.file,
-  contact: GLYPHS.user,
-};
-
 /** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */
 const QUOTE_THUMBNAIL_PX = 36;
 
@@ -845,29 +831,27 @@ export function Quote({
           {...(media === null ? {} : { 'data-quote-media': media.kind })}
           aria-label={label}
         >
-          <span className="font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
-            {quote.sender?.displayName ?? ''}{' '}
-          </span>
-          {media !== null && media.frame === null && !hasThumb && !preview.isProtected ? (
-            <GlyphSvg
-              glyph={QUOTE_GLYPH[media.kind]}
-              size={11}
-              className="me-1 inline-block align-baseline"
-              style={{ color: ink }}
-            />
-          ) : null}
-          <span
-            className="line-clamp-2"
-            style={{ color: ink }}
-            {...(preview.language === '' ? {} : { lang: preview.language })}
-          >
-            {preview.text}
-          </span>
-          {media !== null && media.more > 0 && !hasThumb ? (
-            <span data-quote-more={media.more} aria-hidden className="ms-1 font-semibold" style={{ color: ink }}>
-              +{media.more}
+          <span className="line-clamp-2">
+            <span className="font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
+              {quote.sender?.displayName ?? ''}{' '}
             </span>
-          ) : null}
+            {media !== null && media.frame === null && !hasThumb && !preview.isProtected ? (
+              <GlyphSvg
+                glyph={QUOTE_GLYPH[media.kind]}
+                size={11}
+                className="me-1 inline-block align-baseline"
+                style={{ color: ink }}
+              />
+            ) : null}
+            <span style={{ color: ink }} {...(preview.language === '' ? {} : { lang: preview.language })}>
+              {preview.text}
+            </span>
+            {media !== null && media.more > 0 && !hasThumb ? (
+              <span data-quote-more={media.more} aria-hidden className="ms-1 font-semibold" style={{ color: ink }}>
+                +{media.more}
+              </span>
+            ) : null}
+          </span>
           {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
               .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
               qu'un « 0:00 » qu'on croirait. La capsule d'un vocal porte la sienne. */}

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { ComposerEphemeralRail, ComposerTopRow } from './composer-top-row';
+import { ComposerReplyBand } from './composer-reply-band';
 import { QUICK_EMOJI_FRAME_WIDTH, QuickEmojiFrame } from './composer-quick-emoji';
 import { Glyph } from './glyph';
 import { MentionFieldPanel } from './mention-suggestions';
@@ -44,6 +45,7 @@ import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protecti
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
+import type { ReplyToPreview } from '@/lib/view/use-reply-preview';
 import { useComposerInserts } from '@/lib/view/composer-insert';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import type { SharedPlace } from '@/lib/send/shared-place';
@@ -178,7 +180,7 @@ export const Composer = memo(function Composer({
    * pas ANNONCÉ à qui l'affiche. `bubble.tsx:180` et `focal-row.tsx:263`
    * posent déjà `lang={rendered.language}` pour la même raison.
    */
-  replyTo?: { author: string; excerpt: string; language?: string; more?: number };
+  replyTo?: ReplyToPreview;
   onCancelReply?: () => void;
   /** CE QUE LE MESSAGE CITÉ IMPOSE À LA RÉPONSE (#8557) — `imposedReplyProtection`
    * de `@meeshy/shared`, calculé par l'hôte (`useThreadCompose`). Il RECOUVRE
@@ -688,40 +690,7 @@ export const Composer = memo(function Composer({
     <div data-composer className="relative flex flex-col pb-safe" style={chromeAccentStyle}>
       <MentionFieldPanel field={mention} language={uiLanguage} />
 
-      {replyTo ? (
-        <div
-          data-composer-reply
-          className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"
-          style={{ backgroundColor: 'var(--color-ios-card)' }}
-        >
-          <span className="w-1 self-stretch rounded-full" style={{ backgroundColor: 'var(--accent)' }} aria-hidden />
-          <span className="min-w-0 flex-1 text-title">
-            <span className="font-semibold" style={{ color: 'var(--accent)' }}>
-              {replyTo.author}{' '}
-            </span>
-            <span
-              className="truncate"
-              style={{ color: 'var(--color-ios-ink-2)' }}
-              {...(replyTo.language ? { lang: replyTo.language } : {})}
-            >
-              {replyTo.excerpt}
-            </span>
-            {replyTo.more !== undefined && replyTo.more > 0 ? (
-              <span data-composer-reply-more={replyTo.more} aria-hidden className="ms-1 font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                +{replyTo.more}
-              </span>
-            ) : null}
-          </span>
-          <button
-            type="button"
-            onClick={onCancelReply}
-            className="grid size-11 shrink-0 place-items-center"
-            aria-label={translate(uiLanguage, 'composer.reply.cancel')}
-          >
-            <Glyph name="x" size={14} style={{ color: 'var(--color-ios-ink-2)' }} />
-          </button>
-        </div>
-      ) : null}
+      {replyTo ? <ComposerReplyBand replyTo={replyTo} language={uiLanguage} onCancel={onCancelReply} /> : null}
 
       {/* AU-DESSUS DE LA RANGÉE, sous la citation — la place qu'iOS donne à
           `customAttachmentsPreview` (`+Layout.swift:165-171`) : ce qui DÉCRIT
