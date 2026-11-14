@@ -95,7 +95,7 @@ class EpureComposantsPartagesStringsTest {
     @Test
     fun `les libelles du talkie, du profil vocal et du consentement sont raccourcis`() {
         assertThat(text("fr", "talkie_send_voice_copy"))
-            .isEqualTo("Accès d’urgence indisponible : un message vocal part dans votre dernière conversation.")
+            .isEqualTo("Accès d’urgence indisponible : un message vocal part dans votre dernière conversation avec cette personne.")
         assertThat(text("fr", "voiceProfile_processing_description")).isEqualTo("Traitement en cours, quelques minutes.")
         assertThat(text("fr", "voiceProfile_recording_description"))
             .isEqualTo("Lisez le texte à voix haute : 3 échantillons de 10 secondes au moins.")

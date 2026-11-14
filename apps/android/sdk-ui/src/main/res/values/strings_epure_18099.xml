@@ -9,7 +9,7 @@
     <string name="bring_explain">For an extreme emergency: their phone rings, even when locked.</string>
     <string name="bring_silent_question">What if their phone is on silent?</string>
     <string name="bring_silent_note">Depending on settings, an iPhone on silent may only show a priority alert.</string>
-    <string name="talkie_send_voice_copy">Emergency access unavailable: a voice message goes to your latest conversation.</string>
+    <string name="talkie_send_voice_copy">Emergency access unavailable: a voice message goes to your latest conversation with them.</string>
     <string name="voiceProfile_processing_description">Processing, a few minutes.</string>
     <string name="voiceProfile_recording_description">Read the text aloud: at least 3 samples of 10 seconds.</string>
     <string name="audio_consent_notice_message">Enable voice consent to transcribe and translate your audio.</string>
