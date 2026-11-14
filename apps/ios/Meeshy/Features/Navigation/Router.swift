@@ -471,6 +471,13 @@ final class Router: ObservableObject {
         }
     }
 
+    /// La fiche d'un profil demandée par-dessus une surface — l'auteur d'un
+    /// réel, l'expéditeur d'une notification : elle monte une fois la surface
+    /// partie, jamais dessous.
+    func presentProfileSheet(_ user: ProfileSheetUser) {
+        present(afterPresentedSurfacesLeave: { [weak self] in self?.deepLinkProfileUser = user })
+    }
+
     /// Le compte des départs en cours : chaque `clearPresentedSurfaces` qui a
     /// refermé quelque chose ouvre une fenêtre, que la feuille du post attend.
     /// Un lien profond referme d'ABORD puis pousse le post : sans ce compte, la

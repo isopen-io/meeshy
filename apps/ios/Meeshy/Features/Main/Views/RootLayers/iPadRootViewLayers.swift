@@ -361,9 +361,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     // Le lecteur est une surface déclarée (`.reels`) : le routeur le referme, et le
                     // profil ou la story ne montent qu'une fois sa sortie finie (#18443).
                     onOpenProfile: { userId, username in
-                        router.present(afterPresentedSurfacesLeave: {
-                            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-                        })
+                        router.presentProfileSheet(ProfileSheetUser(userId: userId, username: username))
                     },
                     onOpenStory: { userId in
                         router.present(afterPresentedSurfacesLeave: {

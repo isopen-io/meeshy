@@ -1,6 +1,7 @@
 import XCTest
 import Combine
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Le détail d'un post s'ouvre en FEUILLE, et plus jamais en écran empilé
@@ -186,16 +187,44 @@ final class PostDetailSheetRoutingTests: XCTestCase {
         XCTAssertEqual(ran, ["communauté"])
     }
 
-    func test_present_aPresentationThatPushes_isNotCancelledByItsOwnPlace() async {
+    /// La présentation en attente est oubliée AVANT de s'exécuter : celle
+    /// qu'elle demande à son tour, retenue par la fiche qu'elle vient de
+    /// refermer, survit à sa propre fin au lieu d'être effacée derrière elle.
+    func test_present_aPresentationThatPushesAndPresents_isNotCancelledByItsOwnRun() async {
         let router = makeRouterWithStory()
 
         router.present(afterPresentedSurfacesLeave: {
             router.push(.settings)
+            router.deepLinkProfileUser = ProfileSheetUser(userId: "0000000000000000000000f1", username: "alice")
             router.push(.postDetail("p1"))
         })
 
         await awaitPresentedPost(router, id: "p1")
         XCTAssertEqual(router.path, [.settings])
+        XCTAssertNil(router.deepLinkProfileUser, "la fiche refermée ne remonte pas avec le post")
+    }
+
+    // MARK: - La fiche d'un profil, une fois la surface partie (#18443)
+
+    func test_presentProfileSheet_underAStory_mountsOnceTheStoryHasLeft() async {
+        let router = makeRouterWithStory()
+        let user = ProfileSheetUser(userId: "0000000000000000000000f1", username: "alice")
+
+        router.presentProfileSheet(user)
+
+        XCTAssertNil(router.deepLinkProfileUser, "la fiche ne monte pas pendant que la story descend")
+        let mounted = expectation(description: "la fiche monte une fois la story partie")
+        let watch = router.$deepLinkProfileUser.first { $0?.userId == user.userId }.sink { _ in mounted.fulfill() }
+        await fulfillment(of: [mounted], timeout: 2)
+        watch.cancel()
+    }
+
+    func test_presentProfileSheet_withNothingPresented_mountsAtOnce() {
+        let router = makeRouter()
+
+        router.presentProfileSheet(ProfileSheetUser(userId: "0000000000000000000000f1", username: "alice"))
+
+        XCTAssertEqual(router.deepLinkProfileUser?.userId, "0000000000000000000000f1")
     }
 
     // MARK: - Fermer
