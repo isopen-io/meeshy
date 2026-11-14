@@ -555,7 +555,7 @@ const ar = {
   'community.create.privacy.question': 'من يمكنه الانضمام؟',
   'community.create.privacy.private.description': 'يمكن للأعضاء المدعوين فقط الانضمام',
   'community.create.privacy.public.description': 'يمكن للجميع اكتشافه والانضمام إليه',
-  'community.create.button': 'إنشاء المجتمع',
+  'community.create.button': 'إنشاء',
   'community.create.inprogress': 'جارٍ الإنشاء…',
   'community.create.error.name': 'أعطه اسمًا لا يتجاوز 100 حرف.',
   'community.create.error.identifier': 'أحرف وأرقام وشرطات وشرطات سفلية فقط، 50 على الأكثر.',

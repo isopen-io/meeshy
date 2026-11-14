@@ -16,7 +16,7 @@ const enActivation = {
   'activation.email.failed': 'The code couldn’t be sent. Please try again.',
   'activation.email.done': 'Email verified ✓',
   'activation.phone.label': 'Add a phone number to secure and recover your account',
-  'activation.phone.add': 'Add my number',
+  'activation.phone.add': 'Add',
   'activation.phone.field': 'Phone number',
   'activation.phone.hint': 'In international format, for example +1 415 555 0123',
   'activation.phone.send': 'Send the code',

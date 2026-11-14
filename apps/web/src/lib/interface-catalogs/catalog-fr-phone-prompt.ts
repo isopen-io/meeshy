@@ -5,7 +5,7 @@
  */
 const frPhonePrompt = {
   'phonePrompt.title': 'Ajoutez votre numéro',
-  'phonePrompt.body': 'Vos proches qui ont votre numéro dans leurs contacts vous retrouveront sur Meeshy, et vous pourrez vous connecter avec.',
+  'phonePrompt.body': 'Vos proches qui ont votre numéro dans leurs contacts vous retrouveront sur Meeshy ; vous pourrez aussi vous connecter par numéro.',
   'phonePrompt.later': 'Plus tard',
   'phonePrompt.done': 'Numéro ajouté : vos proches peuvent vous retrouver.',
 };

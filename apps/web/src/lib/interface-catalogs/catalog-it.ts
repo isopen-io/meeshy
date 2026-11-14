@@ -557,7 +557,7 @@ const it = {
   'community.create.privacy.question': 'Chi può unirsi?',
   'community.create.privacy.private.description': 'Solo i membri invitati possono unirsi',
   'community.create.privacy.public.description': 'Chiunque può scoprirla e unirsi',
-  'community.create.button': 'Crea la community',
+  'community.create.button': 'Crea',
   'community.create.inprogress': 'Creazione…',
   'community.create.error.name': 'Dalle un nome di al massimo 100 caratteri.',
   'community.create.error.identifier': 'Solo lettere, cifre, trattini e trattini bassi, al massimo 50.',

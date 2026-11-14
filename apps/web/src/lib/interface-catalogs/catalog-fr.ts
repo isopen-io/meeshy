@@ -554,7 +554,7 @@ const fr = {
   'community.create.privacy.question': 'Qui peut rejoindre ?',
   'community.create.privacy.private.description': 'Seuls les membres invités peuvent rejoindre',
   'community.create.privacy.public.description': 'Tout le monde peut la découvrir et la rejoindre',
-  'community.create.button': 'Créer la communauté',
+  'community.create.button': 'Créer',
   'community.create.inprogress': 'Création…',
   'community.create.error.name': 'Donnez-lui un nom, 100 caractères au plus.',
   'community.create.error.identifier': 'Lettres, chiffres, tirets et tirets bas seulement, 50 au plus.',

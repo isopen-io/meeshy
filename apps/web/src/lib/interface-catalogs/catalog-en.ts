@@ -557,7 +557,7 @@ const en = {
   'community.create.privacy.question': 'Who can join?',
   'community.create.privacy.private.description': 'Only invited members can join',
   'community.create.privacy.public.description': 'Anyone can discover and join it',
-  'community.create.button': 'Create community',
+  'community.create.button': 'Create',
   'community.create.inprogress': 'Creating…',
   'community.create.error.name': 'Give it a name, 100 characters at most.',
   'community.create.error.identifier': 'Letters, digits, hyphens and underscores only, 50 at most.',

@@ -557,7 +557,7 @@ const de = {
   'community.create.privacy.question': 'Wer kann beitreten?',
   'community.create.privacy.private.description': 'Nur eingeladene Mitglieder können beitreten',
   'community.create.privacy.public.description': 'Alle können sie entdecken und beitreten',
-  'community.create.button': 'Community anlegen',
+  'community.create.button': 'Erstellen',
   'community.create.inprogress': 'Wird erstellt…',
   'community.create.error.name': 'Gib ihr einen Namen mit höchstens 100 Zeichen.',
   'community.create.error.identifier': 'Nur Buchstaben, Ziffern, Binde- und Unterstriche, höchstens 50.',

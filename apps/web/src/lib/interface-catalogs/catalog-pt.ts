@@ -561,7 +561,7 @@ const pt = {
   'community.create.privacy.question': 'Quem pode entrar?',
   'community.create.privacy.private.description': 'Somente membros convidados podem entrar',
   'community.create.privacy.public.description': 'Qualquer pessoa pode descobri-la e entrar',
-  'community.create.button': 'Criar a comunidade',
+  'community.create.button': 'Criar',
   'community.create.inprogress': 'Criando…',
   'community.create.error.name': 'Dê um nome com no máximo 100 caracteres.',
   'community.create.error.identifier': 'Somente letras, números, hifens e sublinhados, no máximo 50.',

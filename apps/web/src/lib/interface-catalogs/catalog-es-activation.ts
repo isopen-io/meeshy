@@ -16,7 +16,7 @@ const esActivation = {
   'activation.email.failed': 'No se pudo enviar el código. Inténtalo de nuevo.',
   'activation.email.done': 'Correo verificado ✓',
   'activation.phone.label': 'Añade un número para proteger y recuperar tu cuenta',
-  'activation.phone.add': 'Añadir mi número',
+  'activation.phone.add': 'Añadir',
   'activation.phone.field': 'Número de teléfono',
   'activation.phone.hint': 'En formato internacional, por ejemplo +34 612 34 56 78',
   'activation.phone.send': 'Enviar el código',
