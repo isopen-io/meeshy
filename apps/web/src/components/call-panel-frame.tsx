@@ -9,7 +9,9 @@ import { ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
  * Ajouter, Journal. Chacun s'ouvre DANS le cadre de la pilule et REMPLACE les
  * rangées d'actions (une chose à la fois), sous un petit en-tête (‹ Retour ·
  * titre centré · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
- * plus clair le distingue ; ‹ et ✕ sont des disques de verre de 44, comme chaque
+ * plus clair le distingue. Le journal fait exception : sa tête est celle d'iOS,
+ * « Journal » au bord de tête et la bascule au bord de fin, sans ‹ ni ✕, et
+ * « Journal » en disque blanc à son pied le referme (#17928, #17964). ‹ et ✕ sont des disques de verre de 44, comme chaque
  * bouton de la pilule : c'est le MÊME bouton, `CallButton` ton `disc` (#17345, G3.6),
  * un voile et un liseré (`.glass-call-disc`) sans flou à eux, donc sans verre dans le
  * verre. L'écran le REMET (`Button`), comme il remet le glyphe de Fermer : il vit dans
@@ -57,6 +59,9 @@ export type PillPanelHead = {
 /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942) : sa tête est « titre à gauche, bascule à droite », sans ‹ ni ✕ (W1.9, #17932) — la colonne se referme par « Journal », par Échap. */
 export type ColumnPanelHead = { readonly fill: true };
 
+/** Le journal DANS la pilule a la tête de la colonne, celle d'iOS (`CallJournalPanel`) : « titre à gauche, bascule à droite », sans ‹ ni ✕ (P6.3, P9b.4, #17928) — « Journal », à son pied, le referme (#17964). */
+export type PlainPillPanelHead = { readonly fill?: false; readonly plain: true };
+
 type FrameProps = {
   readonly id: string;
   readonly title: string;
@@ -65,7 +70,7 @@ type FrameProps = {
   readonly data: Readonly<Record<`data-${string}`, string>>;
   /** Ce qui se pose dans l'en-tête, avant ✕ (la bascule Traduit / Original du journal, loi 7). */
   readonly trailing?: ReactNode;
-} & (ColumnPanelHead | (PillPanelHead & { readonly fill?: false }));
+} & (ColumnPanelHead | PlainPillPanelHead | (PillPanelHead & { readonly fill?: false; readonly plain?: false }));
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
 
@@ -89,6 +94,18 @@ function PillHead({ head, titleId, title, trailing, onClose }: { readonly head: 
       </h2>
       {trailing}
       <Button label={head.closeLabel} glyph={head.closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...head.closeData }} />
+    </div>
+  );
+}
+
+/** « Titre à gauche, bascule à droite » : la tête sans ‹ ni ✕, en colonne comme dans la pilule. */
+function PlainHead({ titleId, title, trailing }: { readonly titleId: string; readonly title: string; readonly trailing: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 ps-3">
+      <h2 id={titleId} className="min-w-0 flex-1 truncate text-start text-body font-semibold">
+        {title}
+      </h2>
+      {trailing}
     </div>
   );
 }
@@ -118,16 +135,7 @@ export function CallPanelFrame(props: FrameProps) {
       style={props.fill === true ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      {props.fill === true ? (
-        <div className="flex items-center gap-2 ps-3">
-          <h2 id={titleId} className="min-w-0 flex-1 truncate text-start text-body font-semibold">
-            {title}
-          </h2>
-          {trailing}
-        </div>
-      ) : (
-        <PillHead head={props} titleId={titleId} title={title} trailing={trailing} onClose={onClose} />
-      )}
+      {'Button' in props ? <PillHead head={props} titleId={titleId} title={title} trailing={trailing} onClose={onClose} /> : <PlainHead titleId={titleId} title={title} trailing={trailing} />}
       {children}
     </div>
   );

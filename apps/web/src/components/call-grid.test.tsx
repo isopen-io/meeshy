@@ -95,8 +95,8 @@ describe('CallGrid', () => {
     expect(html).toMatch(new RegExp(`border-color:${speakerColor('u-me')}[^>]*data-call-tile-self=""`));
   });
 
-  test('l’étiquette de nom d’une vignette est un verre d’appel', () => {
-    expect(grid()).toMatch(/class="glass-call[^"]*"[^>]*>Awa/);
+  test('l’étiquette de nom d’une vignette est la plaque partagée, sur le verre du kit (#17982, comme ma vignette du duo et l’appel réduit)', () => {
+    expect(grid()).toMatch(/data-call-tile-plate=""[^>]*data-glass-tone="deep"[^>]*class="glass-tone[^"]*"[^>]*>Awa/);
   });
 
   test('à la une : le participant choisi occupe la scène, les autres passent en bandeau, Grille ramène', () => {
@@ -410,7 +410,7 @@ describe('CallGrid — droite à gauche : capsule et plaque se posent au coin de
 
   test('la plaque de nom d’une vignette est ancrée au coin de début, jamais à gauche en dur', () => {
     const html = grid();
-    expect(html).toMatch(/glass-call absolute bottom-2 start-2/);
+    expect(html).toMatch(/glass-tone absolute bottom-2 start-2/);
     expect(html).not.toContain('left-2');
   });
 });

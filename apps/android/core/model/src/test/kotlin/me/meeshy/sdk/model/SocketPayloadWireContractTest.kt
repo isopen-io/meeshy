@@ -164,12 +164,19 @@ class SocketPayloadWireContractTest {
      */
     @Test
     fun `a reaction replayed without userId decodes`() {
+        /* La charge de `ReactionService.createUpdateEvent`, copiée clé par clé — `userId` retiré,
+           puisque c'est le rejeu hors ligne que ce témoin décrit. Elle ne porte AUCUN `count` :
+           l'agrégat voyage sous `aggregation`, et le `count` que ce témoin posait autrefois
+           n'existait sur aucun fil (#18159). */
         val raw = """
             {
               "messageId": "m1",
               "conversationId": "c1",
+              "participantId": "p1",
               "emoji": "❤️",
-              "count": 2
+              "action": "add",
+              "aggregation": { "emoji": "❤️", "count": 2, "participantIds": ["p1", "p2"] },
+              "timestamp": "2026-11-14T06:00:00.000Z"
             }
         """.trimIndent()
 
@@ -177,7 +184,8 @@ class SocketPayloadWireContractTest {
 
         assertThat(event.userId).isNull()
         assertThat(event.emoji).isEqualTo("❤️")
-        assertThat(event.count).isEqualTo(2)
+        assertThat(event.participantId).isEqualTo("p1")
+        assertThat(event.aggregation?.count).isEqualTo(2)
     }
 
     /**
