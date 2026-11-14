@@ -606,4 +606,64 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(actions.contains("Label(reason"), "la phrase de protection reste lisible sans clic")
         XCTAssertTrue(actions.contains("MeeshyInfoNoted"))
     }
+
+    // MARK: - Passe 2 (#18078) : un mot par rôle, un verbe par geste, le mode annonce dit sa règle au repos
+
+    private static let moderatorBadge = [
+        "fr": "Modérateur", "en": "Moderator", "es": "Moderador", "it": "Moderatore",
+        "de": "Moderator", "pt-BR": "Moderador", "ar": "مُنظّم"
+    ]
+
+    func test_roleBadges_sayModerator_inFullOnBothCatalogs_andCreatorAdminModeratorHaveOneKeySet() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        let ui = try Self.catalog(Self.uiCatalogPath)
+        XCTAssertEqual(ui["conversation.role.moderator"]?["fr"], "Modérateur", "« Modo » n'est pas le mot du sélecteur « Modérateurs »")
+        for (language, word) in Self.moderatorBadge {
+            XCTAssertEqual(app["conversation.role.moderator"]?[language], word, "badge de rôle, \(language)")
+        }
+        for role in ["creator", "admin", "moderator"] {
+            XCTAssertNil(app["member-management.role.\(role)"], "member-management.role.\(role) doublonnait conversation.role.\(role)")
+            for language in ["fr"] + Self.otherLanguages {
+                XCTAssertFalse((app["conversation.role.\(role)"]?[language] ?? "").isEmpty, "conversation.role.\(role) manque en \(language)")
+            }
+        }
+        let section = try code("Meeshy/Features/Main/Components/MemberManagementSection.swift")
+        XCTAssertFalse(section.contains("member-management.role."))
+        for role in ["creator", "admin", "moderator"] {
+            XCTAssertTrue(section.contains("conversation.role.\(role)\""), "la rangée de membre lit conversation.role.\(role)")
+        }
+    }
+
+    func test_memberMenu_usesOneVerbAndOneCasePerGesture_inFrench() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        let ui = try Self.catalog(Self.uiCatalogPath)
+        XCTAssertEqual(ui["conversation.settings.member.promoteAdmin"]?["fr"], "Promouvoir admin")
+        XCTAssertEqual(ui["conversation.settings.member.promoteModerator"]?["fr"], "Promouvoir modérateur")
+        XCTAssertEqual(ui["conversation.settings.member.demoteMember"]?["fr"], "Rétrograder en membre")
+        XCTAssertEqual(app["participants.promote.admin"]?["fr"], "Promouvoir admin")
+        XCTAssertEqual(app["member-management.action.promote-admin"]?["fr"], "Promouvoir admin")
+        XCTAssertEqual(app["member-management.action.promote-moderator"]?["fr"], "Promouvoir modérateur")
+        XCTAssertEqual(app["member-management.action.demote-member"]?["fr"], app["participants.demote.member"]?["fr"])
+    }
+
+    func test_announcementMode_saysItsRuleAtRest_theLockingDetailStaysBehindTheInfo() throws {
+        let ui = try Self.catalog(Self.uiCatalogPath)
+        XCTAssertEqual(ui["conversation.settings.permissions.announcement.rule"]?["fr"], "Seuls les admins écrivent.")
+        for language in Self.otherLanguages {
+            let rule = ui["conversation.settings.permissions.announcement.rule"]?[language] ?? ""
+            XCTAssertFalse(rule.isEmpty, "la règle du mode annonce manque en \(language)")
+            XCTAssertNotEqual(rule, ui["conversation.settings.permissions.announcement.rule"]?["fr"], "traduite, jamais copiée du français (\(language))")
+        }
+        let view = try uiCode("Conversation/ConversationSettingsView.swift")
+        XCTAssertTrue(view.contains("conversation.settings.permissions.announcement.rule"), "la phrase est lue au repos, sans ouvrir le (i)")
+        let note = ConversationSettingsNotes.announcement
+        XCTAssertFalse(note.text.contains("Seuls les admins"), "le (i) ne répète pas la règle visible")
+        XCTAssertTrue(note.text.contains("Qui peut écrire"), "le (i) garde le verrouillage du sélecteur")
+        XCTAssertTrue(Self.endsAsQuestion(note.question))
+    }
+
+    func test_memberExpelledToast_isSpelledWithItsAccent() throws {
+        let ui = try Self.catalog(Self.uiCatalogPath)
+        XCTAssertEqual(ui["conversation.settings.toast.memberExpelled"]?["fr"], "Membre expulsé")
+    }
 }
