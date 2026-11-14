@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
@@ -58,4 +60,36 @@ private fun String.withoutEmptyArguments(): String {
         .filter { it.isNotEmpty() && !it.endsWith("=") }
         .sorted()
     return if (query.isEmpty()) path else path + "?" + query.joinToString("&")
+}
+
+/**
+ * Ouvre une conversation depuis le bouton de l'écran [entry], par le routeur ([AppNavigator.openConversationFrom]) : les
+ * surfaces présentées se referment d'abord. Hors de [MeeshyApp] (aperçus, tests), une poussée gardée en tient lieu.
+ */
+@Composable
+internal fun rememberConversationOpener(navController: NavHostController, entry: NavBackStackEntry): (String, String?) -> Unit {
+    val navigator = LocalAppNavigator.current
+    return remember(navigator, navController, entry) {
+        { conversationId, highlightMessageId ->
+            if (navigator != null) {
+                navigator.openConversationFrom(entry, conversationId, highlightMessageId)
+            } else {
+                navController.pushFrom(entry, Routes.chat(conversationId, highlightMessageId))
+            }
+        }
+    }
+}
+
+/**
+ * Ouvre une conversation depuis un calque sans entrée (feuille de partage, accueil) : par le routeur, qui referme
+ * d'abord les surfaces présentées ; hors de [MeeshyApp], par [navigateSingleTop].
+ */
+@Composable
+internal fun rememberRootConversationOpener(navController: NavHostController): (String) -> Unit {
+    val navigator = LocalAppNavigator.current
+    return remember(navigator, navController) {
+        { conversationId ->
+            if (navigator != null) navigator.openConversation(conversationId) else navController.navigateSingleTop(Routes.chat(conversationId))
+        }
+    }
 }
