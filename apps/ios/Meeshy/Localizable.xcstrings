@@ -111331,7 +111331,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Master PIN incorrect"
+            "value": "Code PIN principal incorrect"
           }
         },
         "it": {
@@ -111425,7 +111425,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saisissez votre master PIN pour autoriser le verrouillage"
+            "value": "Saisissez votre code PIN principal pour autoriser le verrouillage"
           }
         },
         "it": {
@@ -111519,7 +111519,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous"
+            "value": "Choisissez un code PIN principal à 6 chiffres pour sécuriser vos verrous"
           }
         },
         "it": {
@@ -111566,7 +111566,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez un nouveau master PIN à 6 chiffres"
+            "value": "Choisissez un nouveau code PIN principal à 6 chiffres"
           }
         },
         "it": {
@@ -111660,7 +111660,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saisissez votre master PIN pour confirmer la suppression"
+            "value": "Saisissez votre code PIN principal pour confirmer la suppression"
           }
         },
         "it": {
@@ -111801,7 +111801,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saisissez votre master PIN actuel"
+            "value": "Saisissez votre code PIN principal actuel"
           }
         },
         "it": {
@@ -111895,7 +111895,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirmer le master PIN"
+            "value": "Confirmer le code PIN principal"
           }
         },
         "it": {
@@ -112036,7 +112036,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer le master PIN"
+            "value": "Créer le code PIN principal"
           }
         },
         "it": {
@@ -112130,7 +112130,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau master PIN"
+            "value": "Nouveau code PIN principal"
           }
         },
         "it": {
@@ -112177,7 +112177,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supprimer le master PIN"
+            "value": "Supprimer le code PIN principal"
           }
         },
         "it": {
@@ -112318,7 +112318,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vérifier le master PIN"
+            "value": "Vérifier le code PIN principal"
           }
         },
         "it": {
@@ -114846,43 +114846,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكنك بعد إرسال هذا النوع من المرفقات في هذه المحادثة."
+            "value": "هذا النوع من المرفقات غير مسموح به هنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kannst diese Art von Anhang in dieser Unterhaltung noch nicht senden."
+            "value": "Diese Art von Anhang ist hier nicht erlaubt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You can’t send this type of attachment in this conversation yet."
+            "value": "This type of attachment isn’t allowed here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no puedes enviar este tipo de archivo adjunto en esta conversación."
+            "value": "Este tipo de archivo adjunto no está permitido aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation."
+            "value": "Ce type de pièce jointe n’est pas autorisé ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non puoi ancora inviare questo tipo di allegato in questa conversazione."
+            "value": "Questo tipo di allegato non è consentito qui."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você ainda não pode enviar este tipo de anexo nesta conversa."
+            "value": "Este tipo de anexo não é permitido aqui."
           }
         }
       }
@@ -321853,43 +321853,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة تمامًا بين الطرفين: أجهزة المشاركين وحدها تقرأ الرسائل"
+            "value": "مشفّرة تمامًا بين الطرفين: المشاركون وحدهم يقرؤون"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende-verschlüsselt: Nur die Geräte der Teilnehmenden können die Nachrichten lesen"
+            "value": "Ende-zu-Ende-verschlüsselt: Nur Teilnehmende lesen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encrypted: only the participants’ devices can read the messages"
+            "value": "End-to-end encrypted: only participants can read"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada de extremo a extremo: solo los dispositivos de los participantes leen los mensajes"
+            "value": "Cifrada de extremo a extremo: solo los participantes leen"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages"
+            "value": "Chiffrée de bout en bout : seuls les participants lisent"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata end-to-end: solo i dispositivi dei partecipanti leggono i messaggi"
+            "value": "Crittografata end-to-end: solo i partecipanti leggono"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada de ponta a ponta: só os aparelhos dos participantes leem as mensagens"
+            "value": "Criptografada de ponta a ponta: só os participantes leem"
           }
         }
       }
@@ -322323,43 +322323,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث."
+            "value": "تُشفَّر رسائلك على خوادمنا، ويمكنها قراءتها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren."
+            "value": "Deine Nachrichten werden auf unseren Servern verschlüsselt, die sie lesen können."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your messages are encrypted on our servers. Translation, transcription and search work."
+            "value": "Your messages are encrypted on our servers, which can read them."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan."
+            "value": "Tus mensajes se cifran en nuestros servidores, que pueden leerlos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent."
+            "value": "Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano."
+            "value": "I tuoi messaggi sono crittografati sui nostri server, che possono leggerli."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam."
+            "value": "Suas mensagens são criptografadas em nossos servidores, que podem lê-las."
           }
         }
       }
@@ -322605,43 +322605,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا تعرض الإشعارات نص الرسالة: فالخادم لا يعرفه."
+            "value": "لا تعرض الإشعارات النص: فالخادم لا يعرفه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Benachrichtigungen zeigen den Nachrichtentext nicht an: Der Server kennt ihn nicht."
+            "value": "Benachrichtigungen zeigen den Text nicht an: Der Server kennt ihn nicht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notifications don’t show the message text: the server doesn’t know it."
+            "value": "Notifications don’t show the text: the server doesn’t know it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las notificaciones no muestran el texto del mensaje: el servidor no lo conoce."
+            "value": "Las notificaciones no muestran el texto: el servidor no lo conoce."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas."
+            "value": "Les notifications n’affichent pas le texte : le serveur ne le connaît pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le notifiche non mostrano il testo del messaggio: il server non lo conosce."
+            "value": "Le notifiche non mostrano il testo: il server non lo conosce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As notificações não mostram o texto da mensagem: o servidor não o conhece."
+            "value": "As notificações não mostram o texto: o servidor não o conhece."
           }
         }
       }
@@ -322793,43 +322793,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "دون اتصال، لا تُوضع الرسالة في قائمة الانتظار: أعد إرسالها بعد الاتصال."
+            "value": "دون اتصال، لا تُوضع الرسالة في قائمة الانتظار."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline wird eine Nachricht nicht vorgemerkt: Sende sie erneut, sobald du verbunden bist."
+            "value": "Offline wird eine Nachricht nicht vorgemerkt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline, a message isn’t queued: resend it once you’re connected."
+            "value": "Offline, a message isn’t queued."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin conexión, el mensaje no queda en espera: reenvíalo cuando tengas conexión."
+            "value": "Sin conexión, el mensaje no queda en espera."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors connexion, un message n’est pas mis en attente : renvoyez-le une fois connecté."
+            "value": "Hors connexion, un message n’est pas mis en attente."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline un messaggio non viene messo in coda: rinvialo quando sei connesso."
+            "value": "Offline un messaggio non viene messo in coda."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sem conexão, a mensagem não fica na fila: reenvie quando estiver conectado."
+            "value": "Sem conexão, a mensagem não fica na fila."
           }
         }
       }
@@ -322840,90 +322840,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن بعد إرسال الصور والفيديوهات والملفات والرسائل الصوتية والمواقع والملصقات."
+            "value": "لا صور ولا فيديوهات ولا ملفات ولا رسائل صوتية ولا مواقع ولا ملصقات بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotos, Videos, Dateien, Sprachnachrichten, Standorte und Sticker können noch nicht gesendet werden."
+            "value": "Noch keine Fotos, Videos, Dateien, Sprachnachrichten, Standorte oder Sticker."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photos, videos, files, voice messages, locations and stickers can’t be sent yet."
+            "value": "No photos, videos, files, voice messages, locations or stickers yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no se pueden enviar fotos, vídeos, archivos, audios, ubicaciones ni stickers."
+            "value": "Aún sin fotos, vídeos, archivos, audios, ubicaciones ni stickers."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés."
+            "value": "Pas encore de photos, vidéos, fichiers, vocaux, lieux ni stickers."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto, video, file, vocali, posizioni e sticker non possono ancora essere inviati."
+            "value": "Ancora niente foto, video, file, vocali, posizioni né sticker."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotos, vídeos, arquivos, áudios, locais e figurinhas ainda não podem ser enviados."
-          }
-        }
-      }
-    },
-    "conversation.encryption.fact.notYetDecryptedNotifications": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "فكّ تشفير الإشعارات على الجهاز لعرض نصها غير متاح بعد."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Entschlüsseln von Benachrichtigungen auf dem Gerät, um ihren Text anzuzeigen, ist noch nicht verfügbar."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Decrypting notifications on the device, to show their text, isn’t available yet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún no está disponible descifrar las notificaciones en el dispositivo para mostrar su texto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La decrittografia delle notifiche sul dispositivo, per mostrarne il testo, non è ancora disponibile."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A descriptografia das notificações no aparelho, para mostrar o texto, ainda não está disponível."
+            "value": "Ainda sem fotos, vídeos, arquivos, áudios, locais nem figurinhas."
           }
         }
       }
@@ -322934,43 +322887,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التشفير التام بين الطرفين للمجموعات غير متاح بعد في التطبيق."
+            "value": "لا تشفير تام بين الطرفين للمجموعات بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende-Verschlüsselung für Gruppen ist in der App noch nicht verfügbar."
+            "value": "Noch keine Ende-zu-Ende-Verschlüsselung für Gruppen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption for groups isn’t available in the app yet."
+            "value": "No end-to-end encryption for groups yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo de los grupos aún no está disponible en la app."
+            "value": "Aún sin cifrado de extremo a extremo para los grupos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout des groupes n’est pas encore disponible dans l’application."
+            "value": "Pas encore de chiffrement de bout en bout pour les groupes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end dei gruppi non è ancora disponibile nell’app."
+            "value": "Ancora nessuna crittografia end-to-end per i gruppi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta dos grupos ainda não está disponível no app."
+            "value": "Ainda sem criptografia de ponta a ponta para grupos."
           }
         }
       }
@@ -323028,43 +322981,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التحقق من أرقام الأمان مع جهات اتصالك غير متاح بعد."
+            "value": "التحقق من أرقام الأمان غير متاح بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Überprüfen der Sicherheitsnummern mit deinen Kontakten ist noch nicht verfügbar."
+            "value": "Das Überprüfen der Sicherheitsnummern ist noch nicht verfügbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verifying safety numbers with your contacts isn’t available yet."
+            "value": "Verifying safety numbers isn’t available yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La verificación de los números de seguridad con tus contactos aún no está disponible."
+            "value": "La verificación de los números de seguridad aún no está disponible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La vérification des numéros de sécurité avec vos contacts n’est pas encore disponible."
+            "value": "La vérification des numéros de sécurité n’est pas encore disponible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La verifica dei numeri di sicurezza con i tuoi contatti non è ancora disponibile."
+            "value": "La verifica dei numeri di sicurezza non è ancora disponibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A verificação dos números de segurança com seus contatos ainda não está disponível."
+            "value": "A verificação dos números de segurança ainda não está disponível."
           }
         }
       }
@@ -335216,7 +335169,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saisissez votre master PIN"
+            "value": "Saisissez votre code PIN principal"
           }
         },
         "it": {

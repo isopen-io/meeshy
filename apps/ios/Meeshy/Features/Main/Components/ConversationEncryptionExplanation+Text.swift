@@ -42,7 +42,6 @@ extension ConversationEncryptionExplanation.Fact {
         case .noForward: "arrowshape.turn.up.right"
         case .noOfflineSending: "wifi.slash"
         case .notYetAttachments: "paperclip"
-        case .notYetDecryptedNotifications: "bell"
         case .notYetGroups: "person.3"
         case .groupSendingUnavailable: "person.3.fill"
         case .notYetSafetyNumbers: "checkmark.shield"
@@ -68,7 +67,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .storedWithoutEncryption:
             String(localized: "conversation.encryption.fact.storedWithoutEncryption", defaultValue: "Ses messages sont stockés sans chiffrement.", bundle: .main)
         case .encryptedOnServerServerReads:
-            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.", bundle: .main)
+            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire.", bundle: .main)
         case .hybridIsServerToday:
             String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride n’est pas du bout en bout : nos serveurs lisent les messages pour la traduction et la recherche.", bundle: .main)
         case .onlyParticipantsRead:
@@ -80,7 +79,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .noServerTranscription:
             String(localized: "conversation.encryption.fact.noServerTranscription", defaultValue: "Le serveur ne transcrit pas les messages vocaux.", bundle: .main)
         case .noNotificationPreview:
-            String(localized: "conversation.encryption.fact.noNotificationPreview", defaultValue: "Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas.", bundle: .main)
+            String(localized: "conversation.encryption.fact.noNotificationPreview", defaultValue: "Les notifications n’affichent pas le texte : le serveur ne le connaît pas.", bundle: .main)
         case .noSearch:
             String(localized: "conversation.encryption.fact.noSearch", defaultValue: "La recherche du serveur ne trouve pas ces messages.", bundle: .main)
         case .noEdit:
@@ -95,17 +94,15 @@ extension ConversationEncryptionExplanation.Fact {
     private var limitText: String? {
         switch self {
         case .noOfflineSending:
-            String(localized: "conversation.encryption.fact.noOfflineSending", defaultValue: "Hors connexion, un message n’est pas mis en attente : renvoyez-le une fois connecté.", bundle: .main)
+            String(localized: "conversation.encryption.fact.noOfflineSending", defaultValue: "Hors connexion, un message n’est pas mis en attente.", bundle: .main)
         case .notYetAttachments:
-            String(localized: "conversation.encryption.fact.notYetAttachments", defaultValue: "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés.", bundle: .main)
-        case .notYetDecryptedNotifications:
-            String(localized: "conversation.encryption.fact.notYetDecryptedNotifications", defaultValue: "Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetAttachments", defaultValue: "Pas encore de photos, vidéos, fichiers, vocaux, lieux ni stickers.", bundle: .main)
         case .notYetGroups:
-            String(localized: "conversation.encryption.fact.notYetGroups", defaultValue: "Le chiffrement de bout en bout des groupes n’est pas encore disponible dans l’application.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetGroups", defaultValue: "Pas encore de chiffrement de bout en bout pour les groupes.", bundle: .main)
         case .groupSendingUnavailable:
             String(localized: "conversation.encryption.fact.groupSendingUnavailable", defaultValue: "Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré.", bundle: .main)
         case .notYetSafetyNumbers:
-            String(localized: "conversation.encryption.fact.notYetSafetyNumbers", defaultValue: "La vérification des numéros de sécurité avec vos contacts n’est pas encore disponible.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetSafetyNumbers", defaultValue: "La vérification des numéros de sécurité n’est pas encore disponible.", bundle: .main)
         case .oneKeyPerDevice:
             String(localized: "conversation.encryption.fact.oneKeyPerDevice", defaultValue: "Chaque appareil a sa propre clé, qui ne le quitte jamais.", bundle: .main)
         case .deviceLimit:

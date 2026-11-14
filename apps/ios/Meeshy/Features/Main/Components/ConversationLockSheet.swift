@@ -228,16 +228,16 @@ struct ConversationLockSheet: View {
         switch mode {
         case .setupMasterPin:
             return step == 0
-                ? String(localized: "conversation.lock.title.createMasterPin", defaultValue: "Créer le master PIN", bundle: .main)
-                : String(localized: "conversation.lock.title.confirmMasterPin", defaultValue: "Confirmer le master PIN", bundle: .main)
+                ? String(localized: "conversation.lock.title.createMasterPin", defaultValue: "Créer le code PIN principal", bundle: .main)
+                : String(localized: "conversation.lock.title.confirmMasterPin", defaultValue: "Confirmer le code PIN principal", bundle: .main)
         case .changeMasterPin:
-            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le master PIN", bundle: .main) }
-            if step == 1 { return String(localized: "conversation.lock.title.newMasterPin", defaultValue: "Nouveau master PIN", bundle: .main) }
+            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le code PIN principal", bundle: .main) }
+            if step == 1 { return String(localized: "conversation.lock.title.newMasterPin", defaultValue: "Nouveau code PIN principal", bundle: .main) }
             return String(localized: "conversation.lock.title.confirmNewPin", defaultValue: "Confirmer le nouveau PIN", bundle: .main)
         case .removeMasterPin:
-            return String(localized: "conversation.lock.title.removeMasterPin", defaultValue: "Supprimer le master PIN", bundle: .main)
+            return String(localized: "conversation.lock.title.removeMasterPin", defaultValue: "Supprimer le code PIN principal", bundle: .main)
         case .lockConversation:
-            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le master PIN", bundle: .main) }
+            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le code PIN principal", bundle: .main) }
             if step == 1 { return String(localized: "conversation.lock.title.conversationCode", defaultValue: "Code de la conversation", bundle: .main) }
             return String(localized: "conversation.lock.title.confirmCode", defaultValue: "Confirmer le code", bundle: .main)
         case .unlockConversation:
@@ -251,20 +251,20 @@ struct ConversationLockSheet: View {
         }
     }
 
-    /// Un sous-titre qui répète le titre n'existe pas (épure #18078, règle 2) : « Confirmer le master PIN » se suffit.
+    /// Un sous-titre qui répète le titre n'existe pas (épure #18078, règle 2) : « Confirmer le code PIN principal » se suffit.
     private var subtitleText: String? {
         switch mode {
         case .setupMasterPin:
-            if step == 0 { return String(localized: "conversation.lock.subtitle.chooseMasterPin", defaultValue: "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous", bundle: .main) }
+            if step == 0 { return String(localized: "conversation.lock.subtitle.chooseMasterPin", defaultValue: "Choisissez un code PIN principal à 6 chiffres pour sécuriser vos verrous", bundle: .main) }
             return nil
         case .changeMasterPin:
-            if step == 0 { return String(localized: "conversation.lock.subtitle.enterCurrentMasterPin", defaultValue: "Saisissez votre master PIN actuel", bundle: .main) }
-            if step == 1 { return String(localized: "conversation.lock.subtitle.chooseNewMasterPin", defaultValue: "Choisissez un nouveau master PIN à 6 chiffres", bundle: .main) }
+            if step == 0 { return String(localized: "conversation.lock.subtitle.enterCurrentMasterPin", defaultValue: "Saisissez votre code PIN principal actuel", bundle: .main) }
+            if step == 1 { return String(localized: "conversation.lock.subtitle.chooseNewMasterPin", defaultValue: "Choisissez un nouveau code PIN principal à 6 chiffres", bundle: .main) }
             return nil
         case .removeMasterPin:
-            return String(localized: "conversation.lock.subtitle.confirmRemoval", defaultValue: "Saisissez votre master PIN pour confirmer la suppression", bundle: .main)
+            return String(localized: "conversation.lock.subtitle.confirmRemoval", defaultValue: "Saisissez votre code PIN principal pour confirmer la suppression", bundle: .main)
         case .lockConversation:
-            if step == 0 { return String(localized: "conversation.lock.subtitle.authorizeLock", defaultValue: "Saisissez votre master PIN pour autoriser le verrouillage", bundle: .main) }
+            if step == 0 { return String(localized: "conversation.lock.subtitle.authorizeLock", defaultValue: "Saisissez votre code PIN principal pour autoriser le verrouillage", bundle: .main) }
             if step == 1 {
                 return String(format: String(localized: "conversation.lock.subtitle.chooseCode", defaultValue: "Choisissez un code à 4 chiffres pour %@", bundle: .main), conversationName)
             }
@@ -274,9 +274,9 @@ struct ConversationLockSheet: View {
         case .openConversation:
             return String(format: String(localized: "conversation.lock.subtitle.enterCodeToOpen", defaultValue: "Saisissez le code pour accéder à %@", bundle: .main), conversationName)
         case .unlockAll:
-            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre master PIN", bundle: .main)
+            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre code PIN principal", bundle: .main)
         case .enableBiometricUnlock:
-            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre master PIN", bundle: .main)
+            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre code PIN principal", bundle: .main)
         }
     }
 
@@ -286,7 +286,7 @@ struct ConversationLockSheet: View {
         String(localized: "conversation.lock.error.pinMismatch", defaultValue: "Les PIN ne correspondent pas", bundle: .main)
     }
     private var errMasterPinIncorrect: String {
-        String(localized: "conversation.lock.error.masterPinIncorrect", defaultValue: "Master PIN incorrect", bundle: .main)
+        String(localized: "conversation.lock.error.masterPinIncorrect", defaultValue: "Code PIN principal incorrect", bundle: .main)
     }
     private var errCodeMismatch: String {
         String(localized: "conversation.lock.error.codeMismatch", defaultValue: "Les codes ne correspondent pas", bundle: .main)

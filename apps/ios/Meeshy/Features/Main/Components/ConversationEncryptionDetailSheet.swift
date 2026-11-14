@@ -51,7 +51,25 @@ struct ConversationEncryptionDetailSheet: View {
 
     /// Ce que la fiche explique de la conversation ouverte (#12880).
     private var explanation: ConversationEncryptionExplanation {
-        ConversationEncryptionExplanation(mode: displayedMode, isDirect: isDirect)
+        ConversationEncryptionExplanation(mode: displayedMode, isDirect: isDirect, offersModeSwitch: offersModeSwitch)
+    }
+
+    /// La fiche porte l'action de bascule : le pied à côté d'elle dit que le bout en bout ne se désactive plus.
+    private var offersModeSwitch: Bool {
+        switch detailContent {
+        case .active(let offers): offers
+        case .activation: true
+        case .loading, .inactiveReadOnly: false
+        }
+    }
+
+    private var detailContent: ConversationEncryptionDetailContent {
+        ConversationEncryptionDetailContent.resolve(
+            isLoading: isLoading,
+            isEncrypted: displayedMode != nil,
+            isEndToEnd: ConversationEncryptionRegime(mode: displayedMode) == .endToEnd,
+            mayToggle: mayToggle
+        )
     }
 
     private static let logger = MeeshyLog.logger(.conversationEncryption)
@@ -59,12 +77,7 @@ struct ConversationEncryptionDetailSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                switch ConversationEncryptionDetailContent.resolve(
-                    isLoading: isLoading,
-                    isEncrypted: displayedMode != nil,
-                    isEndToEnd: explanation.regime == .endToEnd,
-                    mayToggle: mayToggle
-                ) {
+                switch detailContent {
                 case .loading:
                     Section {
                         HStack {
@@ -76,7 +89,7 @@ struct ConversationEncryptionDetailSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                case .active(let offersModeSwitch):
+                case .active:
                     let mode = displayedMode.flatMap(ConversationEncryptionModeChoice.init(rawValue:))
                     if let status, let mode {
                         activeStateSections(mode: mode, status: status)
@@ -85,7 +98,9 @@ struct ConversationEncryptionDetailSheet: View {
                     if explanation.regime == .endToEnd, let peer { readableDirectSection(peer) }
                     pairEndToEndSection
                     if offersModeSwitch, let mode { modeSwitchSection(from: mode) }
-                    ConversationEncryptionExplanationSections(explanation: explanation, openNoteID: $openNoteID)
+                    ConversationEncryptionExplanationSections(
+                        explanation: explanation, omitting: offersModeSwitch ? [.switching] : [], openNoteID: $openNoteID
+                    )
                 case .activation:
                     inactiveStateSection
                     pairEndToEndSection
@@ -219,6 +234,7 @@ struct ConversationEncryptionDetailSheet: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("encryption-switch-\(target.rawValue)")
             }
+            ConversationEncryptionFactRow(fact: .switchKeepsHistory, openNoteID: $openNoteID)
         } header: {
             Text(String(localized: "conversation.encryption.detail.switchHeader",
                         defaultValue: "Changer de mode",

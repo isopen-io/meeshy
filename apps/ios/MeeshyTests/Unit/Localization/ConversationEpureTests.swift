@@ -856,7 +856,7 @@ final class ConversationEpureTests: XCTestCase {
         let sheet = try code("Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
         XCTAssertEqual(sheet.components(separatedBy: "conversation.encryption.detail.switchHeader").count - 1, 1)
         XCTAssertTrue(sheet.contains("offersModeSwitch:"))
-        XCTAssertTrue(sheet.contains("omitting: [.switching]"), "la section d'explication homonyme est fondue dans celle de la bascule")
+        XCTAssertTrue(sheet.contains("omitting: offersModeSwitch ? [.switching] : []"), "la section d'explication homonyme est fondue dans celle de la bascule")
         let sections = try code("Meeshy/Features/Main/Components/ConversationEncryptionExplanationSections.swift")
         XCTAssertTrue(sections.contains("omitting"))
     }

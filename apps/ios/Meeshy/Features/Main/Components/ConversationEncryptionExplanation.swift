@@ -36,7 +36,7 @@ enum ConversationEncryptionRegime: Equatable {
                    defaultValue: "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles", bundle: .main)
         case .endToEnd:
             String(localized: "conversation.encryption.summary.endToEnd",
-                   defaultValue: "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages", bundle: .main)
+                   defaultValue: "Chiffrée de bout en bout : seuls les participants lisent", bundle: .main)
         }
     }
 }
@@ -70,7 +70,7 @@ struct ConversationEncryptionExplanation: Equatable {
         case transitProtected, storedWithoutEncryption, encryptedOnServerServerReads, hybridIsServerToday
         case onlyParticipantsRead, everyServerFeature, translatedOnDevice
         case noServerTranscription, noNotificationPreview, noSearch, noEdit, noForward, noOfflineSending
-        case notYetAttachments, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
+        case notYetAttachments, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
         case oneKeyPerDevice, deviceLimit, restoredDeviceIsNew
         case whoMayToggle, switchKeepsHistory, switchIsShownInThread, endToEndIsFinal
         case endToEndNeverTurnedOff, endToEndNeverTurnedOffDirect, serverCannotTurnItOff
@@ -94,20 +94,23 @@ struct ConversationEncryptionExplanation: Equatable {
     let regime: ConversationEncryptionRegime
     let sections: [Section]
 
-    init(mode: String?, isDirect: Bool) {
+    /// `offersModeSwitch` : la fiche porte l'action de bascule, dont le pied dit déjà que le bout en bout ne se
+    /// désactive plus (#12949) ; le fait « définitif » ne se redit pas sous le même titre (épure #18078).
+    init(mode: String?, isDirect: Bool, offersModeSwitch: Bool = false) {
         let regime = ConversationEncryptionRegime(mode: mode)
         self.regime = regime
-        sections = Self.sections(for: regime, isDirect: isDirect).filter { !$0.facts.isEmpty }
+        sections = Self.sections(for: regime, isDirect: isDirect, offersModeSwitch: offersModeSwitch).filter { !$0.facts.isEmpty }
     }
 
-    private static func sections(for regime: ConversationEncryptionRegime, isDirect: Bool) -> [Section] {
+    private static func sections(for regime: ConversationEncryptionRegime, isDirect: Bool, offersModeSwitch: Bool) -> [Section] {
+        let switching = offersModeSwitch ? [Fact.switchKeepsHistory] : switchingFacts
         switch regime {
         case .none:
-            return readable(whoReads: [.transitProtected, .storedWithoutEncryption])
+            return readable(whoReads: [.transitProtected, .storedWithoutEncryption], switching: switching)
         case .server:
-            return readable(whoReads: [.transitProtected, .encryptedOnServerServerReads])
+            return readable(whoReads: [.transitProtected, .encryptedOnServerServerReads], switching: switching)
         case .hybrid:
-            return readable(whoReads: [.transitProtected, .encryptedOnServerServerReads, .hybridIsServerToday])
+            return readable(whoReads: [.transitProtected, .encryptedOnServerServerReads, .hybridIsServerToday], switching: switching)
         case .endToEnd:
             return endToEnd(isDirect: isDirect)
         }
@@ -117,11 +120,11 @@ struct ConversationEncryptionExplanation: Equatable {
     /// qui peut basculer et l'avis dans le fil derrière un (i), jamais « définitif » (revue #18078).
     private static let switchingFacts: [Fact] = [.switchKeepsHistory, .endToEndIsFinal]
 
-    private static func readable(whoReads: [Fact]) -> [Section] {
+    private static func readable(whoReads: [Fact], switching: [Fact]) -> [Section] {
         [
             Section(topic: .whoReads, facts: whoReads),
             Section(topic: .available, facts: [.everyServerFeature]),
-            Section(topic: .switching, facts: switchingFacts),
+            Section(topic: .switching, facts: switching),
         ]
     }
 
@@ -130,9 +133,7 @@ struct ConversationEncryptionExplanation: Equatable {
             Section(topic: .whoReads, facts: [.onlyParticipantsRead]),
             Section(topic: .available, facts: [.translatedOnDevice]),
             Section(topic: .absent, facts: [.noServerTranscription, .noNotificationPreview, .noSearch, .noEdit, .noForward, .noOfflineSending]),
-            Section(topic: .notYet, facts: [.notYetAttachments, .notYetDecryptedNotifications]
-                + (isDirect ? [.notYetGroups] : [.notYetGroups, .groupSendingUnavailable])
-                + [.notYetSafetyNumbers]),
+            Section(topic: .notYet, facts: [.notYetAttachments, isDirect ? .notYetGroups : .groupSendingUnavailable, .notYetSafetyNumbers]),
             Section(topic: .devices, facts: [.oneKeyPerDevice]),
             Section(topic: .permanence, facts: [isDirect ? .endToEndNeverTurnedOffDirect : .endToEndNeverTurnedOff, .serverCannotTurnItOff]),
         ]
