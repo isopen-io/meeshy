@@ -339,6 +339,7 @@ struct CallReturnPointRoot: View {
 
     var body: some View {
         CallBubbleView(callManager: callManager, isMainScreenCovered: coverage.isMainScreenCovered)
+            .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: callManager.displayMode)
             .onPreferenceChange(CallReturnPointFrameKey.self) { frameSink.update($0) }
     }
 }

@@ -20,18 +20,24 @@ struct RetainedFeedHost<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @State private var isRetained = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
 
     var body: some View {
+        let pose = FeedRetention.presentation(
+            isShown: isShown,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+        )
         ZStack {
             if FeedRetention.isMounted(isShown: isShown, isRetained: isRetained) {
                 content()
-                    .opacity(isShown ? 1 : 0)
-                    .scaleEffect(isShown ? 1 : FeedRetention.hiddenScale)
-                    .offset(y: isShown ? 0 : FeedRetention.hiddenDrop)
+                    .opacity(pose.opacity)
+                    .scaleEffect(pose.scale)
+                    .offset(y: pose.drop)
                     .allowsHitTesting(isShown)
                     .accessibilityHidden(!isShown)
                     .environment(\.feedIsShown, isShown)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(pose.slides ? .move(edge: .bottom).combined(with: .opacity) : .opacity)
             }
         }
         .adaptiveOnChange(of: isShown, initial: true) { _, shown in
@@ -59,7 +65,8 @@ nonisolated enum FeedRetention {
     /// retiré vers le bas — ou, sous « Réduire les animations », seulement
     /// effacé, sans échelle ni déplacement.
     static func presentation(isShown: Bool, reduceMotion: Bool) -> FeedPresentation {
-        guard !isShown else { return FeedPresentation(scale: 1, drop: 0, opacity: 1, slides: true) }
+        guard !isShown else { return FeedPresentation(scale: 1, drop: 0, opacity: 1, slides: !reduceMotion) }
+        guard !reduceMotion else { return FeedPresentation(scale: 1, drop: 0, opacity: 0, slides: false) }
         return FeedPresentation(scale: hiddenScale, drop: hiddenDrop, opacity: 0, slides: true)
     }
 
