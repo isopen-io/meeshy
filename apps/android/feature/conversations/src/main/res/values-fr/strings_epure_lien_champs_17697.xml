@@ -2,7 +2,7 @@
 <resources>
     <string name="shareLink_detail_nameField">Nom du lien</string>
     <string name="share_link_name_question">Qui voit ce nom ?</string>
-    <string name="share_link_name_note">Vous seul le voyez ; les invités ne le voient pas.</string>
+    <string name="share_link_name_note">Toi seul le vois ; les invités ne le voient pas.</string>
     <string name="shareLink_detail_messageField">Message d\'invitation</string>
     <string name="share_link_message_question">Qui lit ce message ?</string>
     <string name="share_link_message_note">Il est affiché aux invités qui ouvrent le lien.</string>

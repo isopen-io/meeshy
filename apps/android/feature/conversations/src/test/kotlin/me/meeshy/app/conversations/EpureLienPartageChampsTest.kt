@@ -93,7 +93,7 @@ class EpureLienPartageChampsTest {
     fun theLongLabelsAreGoneFromTheSevenFolders() {
         val expected = mapOf(
             "values" to Triple("Link name", "Invitation message", "Only you see it; guests don't."),
-            "values-fr" to Triple("Nom du lien", "Message d'invitation", "Vous seul le voyez ; les invités ne le voient pas."),
+            "values-fr" to Triple("Nom du lien", "Message d'invitation", "Toi seul le vois ; les invités ne le voient pas."),
         )
         folders.forEach { folder ->
             val strings = all(folder)
