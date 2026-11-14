@@ -7,7 +7,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events/message';
 
 import { isAfterReadMessage } from '@/lib/view/after-read';
-import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destruction';
+import { announceDestruction, destructionWindowMs } from '@/lib/view/ephemeral-destruction';
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
 import { inheritedQuoteDeathMs } from '@/lib/view/quote-cascade';
 
@@ -127,7 +127,7 @@ export function applyMessageExpired(
     patchThreadMessages(queryClient, data.conversationId, (messages) =>
       messages.some((m) => m.id === data.messageId) ? messages.filter((m) => m.id !== data.messageId) : messages,
     );
-  }, DESTRUCTION_MS);
+  }, destructionWindowMs());
 }
 
 /**
