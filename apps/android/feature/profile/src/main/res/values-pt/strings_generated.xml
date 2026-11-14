@@ -141,6 +141,7 @@
     <string name="shared_location_share_sheet_title">Minha localização para %1$s</string>
     <string name="shared_location_share_stop">Parar</string>
     <string name="shared_location_share_stop_a11y">Parar de compartilhar minha localização com %1$s</string>
+    <string name="shared_location_share_stop_pending">O compartilhamento vai parar assim que a conexão voltar</string>
     <string name="shared_location_share_unavailable">Localização indisponível no momento, tente novamente</string>
     <string name="user_stats_activity">ATIVIDADE</string>
     <string name="user_stats_badges">SELOS</string>
