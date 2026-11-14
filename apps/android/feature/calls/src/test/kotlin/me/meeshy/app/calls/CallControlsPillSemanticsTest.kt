@@ -200,6 +200,19 @@ class CallControlsPillSemanticsTest {
         assertThat(taps).containsExactly("mute")
     }
 
+    /** #17964 · P9b.3 — the journal open in the pill leaves (…) AT REST: it offers « Show actions », never « Hide actions »; « Journal » closes the journal. */
+    @Test
+    fun `the open journal leaves the more button at rest, offering Show actions`() {
+        setPill(
+            layer = CallScreenLayer.Panel(CallScreenPanel.Journal),
+            disposition = CallControlsDisposition.Rails,
+            pillText = CallPillText.Journal,
+            panelContent = { Text("Journal du direct") },
+        )
+        rule.onNodeWithContentDescription("Show actions").assertHasClickAction()
+        rule.onNodeWithContentDescription("Hide actions").assertDoesNotExist()
+    }
+
     @Test
     @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
     fun `on a wide screen the pill that carries text stops at 560 dp and the resting pill at 440 dp (#17343)`() {

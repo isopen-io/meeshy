@@ -146,6 +146,18 @@ class CallChromeControllerTest {
         assertThat(chrome.state.value.layer.pillPanel).isEqualTo(CallScreenPanel.Journal)
     }
 
+    /** G1 (#17964 point 4, iOS `test_opening_theOpenJournalAgain_keepsItOpen`) — pill stowed by a touch over an open journal: « Journal » in the captions glass gives the controls back WITH the journal, never the menu. */
+    @Test
+    fun `the journal button of the stowed captions gives the controls back with the open journal`() {
+        val chrome = controller()
+        chrome.open(CallScreenPanel.Journal)
+        chrome.onSceneTap(true, false)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isFalse()
+        chrome.open(CallScreenPanel.Journal)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isTrue()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Panel(CallScreenPanel.Journal))
+    }
+
     @Test
     fun `the menu over an open journal stows it and closing the menu gives it back`() {
         val chrome = controller()
