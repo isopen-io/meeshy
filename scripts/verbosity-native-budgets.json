@@ -583,8 +583,8 @@
       "explanations": 1
     },
     "ios:Meeshy/links": {
-      "labels": 14,
-      "words": 64,
+      "labels": 13,
+      "words": 59,
       "long": 0,
       "explanations": 4
     },
@@ -883,8 +883,8 @@
       "explanations": 0
     },
     "ios:Meeshy/sessions": {
-      "labels": 42,
-      "words": 161,
+      "labels": 41,
+      "words": 159,
       "long": 0,
       "explanations": 0
     },

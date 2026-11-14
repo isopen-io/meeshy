@@ -56546,53 +56546,6 @@
         }
       }
     },
-    "affiliate.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ رابطًا لدعوة أصدقائك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstelle einen Link, um deine Freunde einzuladen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a link to invite your friends"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un enlace para invitar a tus amigos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créez un lien pour inviter vos amis"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un link per invitare i tuoi amici"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crie um link para convidar seus amigos"
-          }
-        }
-      }
-    },
     "affiliate.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -56636,6 +56589,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum link de indicação"
+          }
+        }
+      }
+    },
+    "affiliate.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ceux qui s'inscrivent par votre lien de parrainage vous sont rattachés."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "People who sign up through your referral link are attached to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quienes se registran con tu enlace de recomendación quedan vinculados a ti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem se cadastra pelo seu link de indicação fica vinculado a você."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer sich über deinen Empfehlungslink anmeldet, wird dir zugeordnet."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi si iscrive con il tuo link di referral viene collegato a te."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل من يسجّل عبر رابط الإحالة الخاص بك يُنسب إليك."
           }
         }
       }
@@ -140666,43 +140666,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء رابط تسويق بالعمولة"
+            "value": "إنشاء رابط إحالة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliate-Link erstellen"
+            "value": "Empfehlungslink erstellen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create an affiliate link"
+            "value": "Create a referral link"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crear un enlace de afiliado"
+            "value": "Crear un enlace de recomendación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer un lien affilié"
+            "value": "Créer un lien de parrainage"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea un link di affiliazione"
+            "value": "Crea un link di referral"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criar um link de afiliado"
+            "value": "Criar um link de indicação"
           }
         }
       }
@@ -140713,43 +140713,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حقّق دخلًا من شبكتك عبر رموز العمولة"
+            "value": "ادعُ وتابع من يسجّل عبر روابطك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monetarisiere dein Netzwerk mit Affiliate-Tokens"
+            "value": "Lade ein und sieh, wer sich über deine Links anmeldet"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monetise your network with affiliate tokens"
+            "value": "Invite people and see who signs up through your links"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monetiza tu red con tokens de afiliado"
+            "value": "Invita y mira quién se registra con tus enlaces"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monétisez votre réseau avec des tokens d'affiliation"
+            "value": "Invitez et suivez qui s'inscrit par vos liens"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monetizza la tua rete con token di affiliazione"
+            "value": "Invita e guarda chi si iscrive con i tuoi link"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monetize sua rede com tokens de afiliado"
+            "value": "Convide e veja quem se cadastra pelos seus links"
           }
         }
       }
@@ -140760,137 +140760,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "روابط العمولة"
+            "value": "الإحالة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliate-Links"
+            "value": "Empfehlung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliate links"
+            "value": "Referral"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enlaces de afiliado"
+            "value": "Referidos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Liens affiliés"
+            "value": "Parrainage"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Link di affiliazione"
+            "value": "Referral"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Links de afiliado"
-          }
-        }
-      }
-    },
-    "links.hub.banner.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "شارك وتابع واربح من جمهورك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Teile, verfolge und monetarisiere dein Publikum"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share, track and monetise your audience"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparte, mide y monetiza tu audiencia"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partagez, suivez et monétisez votre audience"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Condividi, monitora e monetizza il tuo pubblico"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compartilhe, acompanhe e monetize seu público"
-          }
-        }
-      }
-    },
-    "links.hub.banner.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أدر روابطك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verwalte deine Links"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manage your links"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gestiona tus enlaces"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gérez vos liens"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gestisci i tuoi link"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gerencie seus links"
+            "value": "Indicação"
           }
         }
       }
@@ -141177,6 +141083,53 @@
         }
       }
     },
+    "links.row.created": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créé le %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creado el %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criado em %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellt am %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creato il %@"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُنشئ في %@"
+          }
+        }
+      }
+    },
     "links.hub.tracking.create.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -141207,7 +141160,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer un lien de tracking"
+            "value": "Créer un lien de suivi"
           }
         },
         "it": {
@@ -172087,53 +172040,6 @@
         }
       }
     },
-    "sessions_current_badge": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الجهاز"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses Gerät"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este dispositivo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cet appareil"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo dispositivo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este aparelho"
-          }
-        }
-      }
-    },
     "sessions_empty": {
       "extractionState": "manual",
       "localizations": {
@@ -178973,19 +178879,19 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Correo electrónico"
+            "value": "Correo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email"
+            "value": "E-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email"
+            "value": "E-mail"
           }
         },
         "pt-BR": {
@@ -180547,53 +180453,6 @@
         }
       }
     },
-    "settings.privacy.block_screenshots": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حظر لقطات الشاشة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Screenshots blockieren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block screenshots"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquear capturas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquer les captures"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blocca gli screenshot"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquear capturas"
-          }
-        }
-      }
-    },
     "settings.privacy.calls": {
       "extractionState": "manual",
       "localizations": {
@@ -180923,190 +180782,49 @@
         }
       }
     },
-    "settings.privacy.coming_soon": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قريبًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demnächst verfügbar"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coming soon"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Próximamente"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bientôt disponible"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presto disponibile"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Em breve"
-          }
-        }
-      }
-    },
-    "settings.privacy.coming_soon.a11y": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قريبًا، بلا أثر حاليًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "demnächst verfügbar, derzeit ohne Wirkung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "coming soon, currently has no effect"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "próximamente, actualmente sin efecto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "bientôt disponible, actuellement sans effet"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "presto disponibile, attualmente senza effetto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "em breve, atualmente sem efeito"
-          }
-        }
-      }
-    },
-    "settings.privacy.contact_requests": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "طلبات جهات الاتصال"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kontaktanfragen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contact requests"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solicitudes de contacto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demandes de contact"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Richieste di contatto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pedidos de contato"
-          }
-        }
-      }
-    },
     "settings.privacy.contacts_groups": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهات الاتصال والمجموعات"
+            "value": "جهات الاتصال"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kontakte & Gruppen"
+            "value": "Kontakte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts & groups"
+            "value": "Contacts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contactos y grupos"
+            "value": "Contactos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts et groupes"
+            "value": "Contacts"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatti e gruppi"
+            "value": "Contatti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatos e grupos"
+            "value": "Contatos"
           }
         }
       }
@@ -181201,53 +180919,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criptografia — em breve, atualmente desativada"
-          }
-        }
-      }
-    },
-    "settings.privacy.group_invites": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "دعوات المجموعات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gruppeneinladungen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Group invitations"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invitaciones de grupo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invitations de groupe"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inviti di gruppo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convites de grupo"
           }
         }
       }
@@ -181765,53 +181436,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Salvar mídia"
-          }
-        }
-      }
-    },
-    "settings.privacy.share_data": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مشاركة البيانات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Datenfreigabe"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Data sharing"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uso compartido de datos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partage données"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Condivisione dei dati"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compartilhamento de dados"
           }
         }
       }
@@ -182733,19 +182357,19 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Correo electrónico"
+            "value": "Correo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email"
+            "value": "E-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email"
+            "value": "E-mail"
           }
         },
         "pt-BR": {
@@ -182786,13 +182410,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email actuel"
+            "value": "E-mail actuel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email attuale"
+            "value": "E-mail attuale"
           }
         },
         "pt-BR": {
@@ -182833,13 +182457,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouvel email"
+            "value": "Nouvel e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nuova email"
+            "value": "Nuova e-mail"
           }
         },
         "pt-BR": {
@@ -182927,13 +182551,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Renvoyer l'email"
+            "value": "Renvoyer l'e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Invia di nuovo l'email"
+            "value": "Invia di nuovo l'e-mail"
           }
         },
         "pt-BR": {
@@ -182974,13 +182598,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de renvoyer l'email"
+            "value": "Impossible de renvoyer l'e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile inviare di nuovo l'email"
+            "value": "Impossibile inviare di nuovo l'e-mail"
           }
         },
         "pt-BR": {
@@ -183021,13 +182645,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email de vérification envoyé"
+            "value": "E-mail de vérification envoyé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email di verifica inviata"
+            "value": "E-mail di verifica inviata"
           }
         },
         "pt-BR": {
@@ -184642,43 +184266,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شاراتك ومستواك وسلسلة أيامك النشطة"
+            "value": "أوسمتك ومستواك ولهبك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ihre Abzeichen, Ihr Level und Ihre Serie aktiver Tage"
+            "value": "Ihre Medaillen, Ihr Level und Ihre Flamme"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your badges, your level and your active-day streak"
+            "value": "Your medals, your level and your Flame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus insignias, tu nivel y tu racha de días activos"
+            "value": "Tus medallas, tu nivel y tu Llama"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos badges, votre niveau et votre série de jours actifs"
+            "value": "Vos médailles, votre niveau et votre Flamme"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi badge, il tuo livello e la tua serie di giorni attivi"
+            "value": "Le tue medaglie, il tuo livello e la tua Fiamma"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus emblemas, seu nível e sua sequência de dias ativos"
+            "value": "Suas medalhas, seu nível e sua Chama"
           }
         }
       }
@@ -207661,7 +207285,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau lien de tracking"
+            "value": "Nouveau lien de suivi"
           }
         },
         "it": {
@@ -209165,7 +208789,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer un lien de tracking"
+            "value": "Créer un lien de suivi"
           }
         },
         "it": {
@@ -209178,53 +208802,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criar um link de rastreamento"
-          }
-        }
-      }
-    },
-    "tracking.links.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ رابطًا لتتبُّع نقراتك وحملاتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstelle einen Link, um Klicks und Kampagnen zu verfolgen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a link to track your clicks and campaigns"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un enlace para seguir tus clics y campañas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créez un lien pour suivre vos clics et campagnes"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un link per monitorare clic e campagne"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crie um link para acompanhar seus cliques e campanhas"
           }
         }
       }
@@ -209259,7 +208836,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun lien de tracking"
+            "value": "Aucun lien de suivi"
           }
         },
         "it": {
@@ -209272,6 +208849,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum link de rastreamento"
+          }
+        }
+      }
+    },
+    "tracking.links.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un lien de suivi compte les clics et dit d'où ils viennent."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A tracking link counts clicks and shows where they come from."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un enlace de seguimiento cuenta los clics y dice de dónde vienen."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um link de rastreamento conta os cliques e diz de onde eles vêm."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Tracking-Link zählt die Klicks und zeigt, woher sie kommen."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un link di tracciamento conta i clic e dice da dove arrivano."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رابط التتبّع يحصي النقرات ويبيّن من أين جاءت."
           }
         }
       }
@@ -209582,6 +209206,53 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "tracking.links.row.lastClick": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernier clic %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last click %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último clic %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último clique %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzter Klick %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimo clic %@"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخر نقرة %@"
           }
         }
       }
@@ -291369,43 +291040,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeu : duo, ligue, saison"
+            "value": "Jeu : duo, joute, voyage"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Game: duo, league, season"
+            "value": "Game: duo, joust, journey"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Juego: dúo, liga, temporada"
+            "value": "Juego: dúo, justa, viaje"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spiel: Duo, Liga, Saison"
+            "value": "Spiel: Duo, Turnier, Reise"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gioco: duo, lega, stagione"
+            "value": "Gioco: duo, torneo, viaggio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jogo: duo, liga, temporada"
+            "value": "Jogo: duo, torneio, viagem"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اللعبة: ثنائي، دوري، موسم"
+            "value": "اللعبة: ثنائي، مبارزة، رحلة"
           }
         }
       }

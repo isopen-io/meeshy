@@ -34,12 +34,9 @@ struct LinksHubView: View {
                     Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                     VStack(spacing: MeeshySpacing.xl) {
-                        headerBanner
-                            .padding(.horizontal, MeeshySpacing.lg)
-                            .padding(.top, MeeshySpacing.sm)
-
                         linkCategoryCards
                             .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.sm)
                     }
                     .padding(.bottom, 40)
                 }
@@ -83,38 +80,6 @@ struct LinksHubView: View {
         }
     }
 
-    // MARK: - Header Banner
-
-    private var headerBanner: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "link.badge.plus")
-                    .font(.title.weight(.bold))
-                    .foregroundColor(MeeshyColors.communityAccent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "links.hub.banner.subtitle", defaultValue: "Partagez, suivez et monétisez votre audience", bundle: .main))
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
-                }
-                Spacer()
-            }
-        }
-        .padding(MeeshySpacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                        .stroke(theme.border(tint: MeeshyColors.communityAccentHex), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
-    }
-
     // MARK: - Category Cards
 
     private var linkCategoryCards: some View {
@@ -135,7 +100,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
                 accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,
-                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main),
+                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
                 onCreate: { showCreateTrackingLink = true }
             )
 
@@ -150,11 +115,11 @@ struct LinksHubView: View {
 
             linkCard(
                 icon: "dollarsign.circle.fill",
-                title: String(localized: "links.hub.affiliate.title", defaultValue: "Liens affiliés", bundle: .main),
-                description: String(localized: "links.hub.affiliate.description", defaultValue: "Monétisez votre réseau avec des tokens d'affiliation", bundle: .main),
+                title: String(localized: "links.hub.affiliate.title", defaultValue: "Parrainage", bundle: .main),
+                description: String(localized: "links.hub.affiliate.description", defaultValue: "Invitez et suivez qui s'inscrit par vos liens", bundle: .main),
                 accentHex: MeeshyColors.successHex,
                 route: .affiliate,
-                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien affilié", bundle: .main),
+                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien de parrainage", bundle: .main),
                 onCreate: { showCreateAffiliate = true }
             )
         }

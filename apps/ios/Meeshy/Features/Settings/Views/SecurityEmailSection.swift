@@ -21,7 +21,7 @@ struct SecurityEmailSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            SecuritySectionHeader(title: String(localized: "settings.security.email", defaultValue: "Email", bundle: .main), icon: "envelope.fill", color: accentColor)
+            SecuritySectionHeader(title: String(localized: "settings.security.email", defaultValue: "E-mail", bundle: .main), icon: "envelope.fill", color: accentColor)
 
             VStack(spacing: 0) {
                 currentEmailRow
@@ -60,7 +60,7 @@ struct SecurityEmailSection: View {
             SecurityFieldIcon("envelope.fill", color: accentColor)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(String(localized: "settings.security.email.current", defaultValue: "Email actuel", bundle: .main))
+                Text(String(localized: "settings.security.email.current", defaultValue: "E-mail actuel", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(theme.textMuted)
 
@@ -127,7 +127,7 @@ struct SecurityEmailSection: View {
             HStack(spacing: MeeshySpacing.md) {
                 SecurityFieldIcon("at", color: accentColor)
 
-                TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel email", bundle: .main), text: $newEmail)
+                TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel e-mail", bundle: .main), text: $newEmail)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(theme.textPrimary)
                     .textContentType(.emailAddress)
@@ -186,7 +186,7 @@ struct SecurityEmailSection: View {
                 Image(systemName: "envelope.badge.fill")
                     .font(.subheadline)
                     .foregroundStyle(MeeshyColors.success)
-                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de vérification envoyé", bundle: .main))
+                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "E-mail de vérification envoyé", bundle: .main))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MeeshyColors.success)
             }
@@ -201,7 +201,7 @@ struct SecurityEmailSection: View {
             } label: {
                 Text(resendCooldown > 0
                      ? "\(String(localized: "settings.security.email.resend", defaultValue: "Renvoyer", bundle: .main)) (\(resendCooldown)s)"
-                     : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'email", bundle: .main))
+                     : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'e-mail", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
@@ -246,7 +246,7 @@ struct SecurityEmailSection: View {
                 startResendCooldown()
             } catch {
                 HapticFeedback.error()
-                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'email", bundle: .main)
+                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'e-mail", bundle: .main)
             }
         }
     }

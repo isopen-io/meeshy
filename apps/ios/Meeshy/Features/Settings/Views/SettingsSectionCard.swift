@@ -132,7 +132,7 @@ enum SettingsOrientation {
     }
 
     static var progression: String {
-        String(localized: "settings.tools.progression.hint", defaultValue: "Vos badges, votre niveau et votre série de jours actifs", bundle: .main)
+        String(localized: "settings.tools.progression.hint", defaultValue: "Vos médailles, votre niveau et votre Flamme", bundle: .main)
     }
 
     static var affiliate: String {

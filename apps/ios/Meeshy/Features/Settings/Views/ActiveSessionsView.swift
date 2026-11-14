@@ -281,21 +281,10 @@ struct ActiveSessionsView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Text(row.title)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundStyle(theme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if row.isCurrent {
-                            Text(String(localized: "sessions_current_badge", defaultValue: "Cet appareil", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                                .foregroundStyle(Color.white)
-                                .padding(.horizontal, MeeshySpacing.xsPlus)
-                                .padding(.vertical, MeeshySpacing.xxs)
-                                .background(Capsule().fill(MeeshyColors.success))
-                        }
-                    }
+                    Text(row.title)
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     ForEach(details, id: \.self) { line in
                         Text(line)

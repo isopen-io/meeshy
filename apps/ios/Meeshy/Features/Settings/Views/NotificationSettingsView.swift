@@ -62,7 +62,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.pushEnabled)
 
-            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: MeeshyColors.infoHex,
+            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "E-mail", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.emailEnabled)
 
             notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: MeeshyColors.brandPrimaryHex,
@@ -174,7 +174,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "person.2.fill", title: String(localized: "settings.notifications.friend_content", defaultValue: "Contenus des amis", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.friendContentEnabled)
 
-            notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, ligue, saison", bundle: .main), color: MeeshyColors.warningHex,
+            notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, joute, voyage", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.gameEnabled)
         }
     }

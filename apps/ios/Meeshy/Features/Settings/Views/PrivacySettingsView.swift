@@ -119,20 +119,10 @@ struct PrivacySettingsView: View {
 
     private var contactsSection: some View {
         section(
-            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts et groupes", bundle: .main),
+            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts", bundle: .main),
             icon: "person.2.fill",
             color: MeeshyColors.brandPrimaryHex,
             specs: [
-                ToggleSpec(
-                    id: "contactRequests", icon: "person.badge.plus",
-                    title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main),
-                    color: MeeshyColors.brandPrimaryHex, keyPath: \.allowContactRequests
-                ),
-                ToggleSpec(
-                    id: "groupInvites", icon: "person.3.fill",
-                    title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main),
-                    color: MeeshyColors.infoHex, keyPath: \.allowGroupInvites
-                ),
                 ToggleSpec(
                     id: "callsNonContacts", icon: "phone.arrow.down.left",
                     title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
@@ -146,9 +136,6 @@ struct PrivacySettingsView: View {
     /// Les réglages de partage de position — la MÊME vue que celle qu'ouvre le
     /// `(i)` du sélecteur de lieu. Une seule source, deux surfaces : ce sont
     /// des préférences applicatives, pas propres à une conversation.
-    ///
-    /// Contrairement aux autres sections de cet écran, celle-ci est pleinement
-    /// fonctionnelle — pas de « Bientôt disponible ».
     private var locationSection: some View {
         LocationSharingSettingsSection(accentColor: accentColor)
     }
@@ -169,16 +156,6 @@ struct PrivacySettingsView: View {
                     title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
                     color: MeeshyColors.infoHex, keyPath: \.allowAnalytics,
                     note: SettingsInfoNotes.analytics
-                ),
-                ToggleSpec(
-                    id: "shareData", icon: "arrow.triangle.branch",
-                    title: String(localized: "settings.privacy.share_data", defaultValue: "Partage données", bundle: .main),
-                    color: MeeshyColors.tileAmethystHex, keyPath: \.shareUsageData
-                ),
-                ToggleSpec(
-                    id: "blockScreenshots", icon: "camera.fill",
-                    title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer les captures", bundle: .main),
-                    color: MeeshyColors.tileCoralHex, keyPath: \.blockScreenshots
                 ),
             ]
         )
@@ -259,64 +236,22 @@ struct PrivacySettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func privacyToggle(_ spec: ToggleSpec) -> some View {
-        if Self.isComingSoon(spec.keyPath) {
-            SettingsRow(icon: spec.icon, title: spec.title, color: spec.color) {
-                Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .opacity(0.55)
-            .allowsHitTesting(false)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(spec.title) — \(String(localized: "settings.privacy.coming_soon.a11y", defaultValue: "bientôt disponible, actuellement sans effet", bundle: .main))")
-        } else {
-            SettingsRow(
-                icon: spec.icon,
-                title: spec.title,
-                subtitle: spec.summary,
-                color: spec.color,
-                note: spec.note,
-                openNoteID: $openNoteID
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.privacy[keyPath: spec.keyPath] },
-                    set: { val in prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val } }
-                ))
-                .labelsHidden()
-                .tint(Color(hex: accentColor))
-                .accessibilityLabel(spec.title)
-            }
+        SettingsRow(
+            icon: spec.icon,
+            title: spec.title,
+            subtitle: spec.summary,
+            color: spec.color,
+            note: spec.note,
+            openNoteID: $openNoteID
+        ) {
+            Toggle("", isOn: Binding(
+                get: { prefs.privacy[keyPath: spec.keyPath] },
+                set: { val in prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val } }
+            ))
+            .labelsHidden()
+            .tint(Color(hex: accentColor))
+            .accessibilityLabel(spec.title)
         }
     }
-
-    /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
-    /// côté gateway (`blockScreenshots` n'a pas d'API publique iOS pour
-    /// réellement bloquer une capture ;
-    /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
-    /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
-    /// gateway avant la création d'une demande de contact
-    /// (`routes/friends.ts`) ou l'ajout d'un membre à un groupe
-    /// (`routes/conversations/participants.ts`) — `PrivacyPreferencesService`
-    /// ne les expose aujourd'hui qu'à `PresenceVisibilityService`/l'accusé de
-    /// lecture, jamais à ces deux flux).
-    /// Grisées avec "Bientôt disponible" plutôt que persistées sans effet
-    /// (faux sentiment de confidentialité) — cf.
-    /// tasks/audit-backlog-2026-07-20.md LANE Réglages, item P1. Retirer un
-    /// cas dès qu'une application réelle existe pour ce champ.
-    /// `nonisolated`: pure Set membership check, no actor-isolated state.
-    nonisolated static func isComingSoon(_ keyPath: WritableKeyPath<PrivacyPreferences, Bool>) -> Bool {
-        Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
-    }
-
-    private nonisolated static var comingSoonPrivacyKeyPaths: Set<AnyKeyPath> {
-        [
-            \PrivacyPreferences.blockScreenshots,
-            \PrivacyPreferences.shareUsageData,
-            \PrivacyPreferences.allowContactRequests,
-            \PrivacyPreferences.allowGroupInvites,
-        ]
-    }
-
 }
