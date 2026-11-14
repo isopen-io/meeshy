@@ -191,6 +191,12 @@ describe('Sheet — mouvement', () => {
     expect(readFileSync(new URL('./sheet.tsx', import.meta.url), 'utf8')).toContain("import '@/styles/sheet-motion.css'");
   });
 
+  test('le voile d’un fantôme ne prend aucun toucher, hors de toute préférence de mouvement', () => {
+    const css = readFileSync(new URL('../styles/sheet-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const outside = css.slice(0, css.indexOf('@media'));
+    expect(outside).toMatch(/\[data-dialog-ghost\]::backdrop\s*\{[^}]*pointer-events\s*:\s*none/);
+  });
+
   test('la feuille du jeu ne porte plus sa propre animation de feuille', () => {
     const css = readFileSync(new URL('../styles/game.css', import.meta.url), 'utf8');
     expect(css).not.toContain('data-sheet-presentation');
