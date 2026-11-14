@@ -56,6 +56,16 @@ class GameEpureResourcesTest {
         "game_missions_offline",
         "game_mint_offline",
         "game2_door_prestige",
+        "game_atlas_treasury_line",
+        "game_atlas_flames_line",
+        "reveal_level_subtitle",
+        "game2_settings_notifications_title",
+        "game2_settings_notifications_body",
+        "game2_settings_notifications_switch",
+        "game_photo_kicker_new_lap",
+        "progression_a11y_bar_streak",
+        "progression_a11y_tier_pending",
+        "progression_a11y_tier_reached",
     ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
         .map { "game_rules_concept_${it}_body" }
 
@@ -191,8 +201,6 @@ class GameEpureResourcesTest {
 
     @Test
     fun `les reglages du jeu nomment et ne repetent pas`() {
-        assertThat(text(R.string.game2_settings_notifications_body)).isEqualTo("Une par jour au plus, sur tous tes appareils.")
-        assertThat(text(R.string.game2_settings_notifications_switch)).isEqualTo("Notifications")
         assertThat(text(R.string.game2_settings_friends_league_body))
             .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine.")
         assertThat(text(R.string.game2_settings_friends_league_question)).isEqualTo("Que retire « Me retirer » ?")
@@ -223,6 +231,49 @@ class GameEpureResourcesTest {
     @Test
     fun `la chronique vide tient en une ligne`() {
         assertThat(text(R.string.game_notebook_empty)).isEqualTo("Chaque signe de tes aïeux peut devenir une photo ici.")
+    }
+
+    @Test
+    fun `la regle des etincelles ne redit ni les epreuves ni les phases ni les plafonds que le carnet dit ailleurs`() {
+        assertThat(text(R.string.game_rules_2_body)).isEqualTo(
+            "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. " +
+                "Un million d’étincelles pour le niveau 100. Chaque niveau demande un peu plus que le précédent.",
+        )
+        assertThat(text(R.string.game_rules_concept_steps_body)).contains("Tant qu’elle n’est pas réussie")
+        assertThat(text(R.string.game_atlas_tiers_line)).contains("Vingt états")
+    }
+
+    @Test
+    fun `le reve dit ses actes une fois et l Offrande dit seule sa condition`() {
+        assertThat(context.getString(R.string.game_state_missions_progress, "1", "3")).isEqualTo("Le rêve de cette nuit : 1 sur 3 actes.")
+        assertThat(text(R.string.game_chest_locked)).isEqualTo("Réalise les trois actes du rêve pour la faire apparaître.")
+    }
+
+    @Test
+    fun `la serie revelee dit ses jours et plus l explication de la flamme`() {
+        assertThat(context.getString(R.string.reveal_streak_subtitle, 7)).isEqualTo("7 jours d’affilée.")
+    }
+
+    @Test
+    fun `le parcours sans saison tient en une ligne`() {
+        assertThat(text(R.string.game2_season_none)).isEqualTo("Aucun voyage en cours.")
+    }
+
+    @Test
+    fun `les textes raccourcis du lot jeu sont traduits dans les sept langues sans copier le francais`() {
+        listOf("game_rules_2_body", "game_state_missions_progress", "reveal_streak_subtitle", "game2_season_none").forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_state_missions_progress")).doesNotContain("%3\$s")
+            assertThat(valueIn(folder, "game_rules_2_body").length).isAtMost(valueIn("values", "game_rules_2_body").length + 40)
+        }
+        assertThat(valueIn("values", "game2_season_none")).isEqualTo("No journey under way.")
+        assertThat(valueIn("values", "reveal_streak_subtitle")).isEqualTo("%1\$d days in a row.")
     }
 
     @Test

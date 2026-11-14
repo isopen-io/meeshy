@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.game.engagement.EngagementRevealPlan
 import me.meeshy.sdk.model.game.engagement.RevealBanner
 import me.meeshy.sdk.model.game.engagement.RevealOccasion
 import me.meeshy.sdk.model.game.engagement.RevealRim
+import me.meeshy.sdk.model.game.engagement.RevealSubtitle
 import me.meeshy.sdk.model.game.engagement.RevealTitle
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -125,5 +126,21 @@ class RevealCopyTest {
         assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, RevealRim.Line.Measured(AchievementRarity.Legendary, 1.0))).isEqualTo("$bare. Légendaire")
         assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, RevealRim.Line.Measuring)).isEqualTo(bare)
         assertThat(RevealCopy.spoken(res, Locale.FRENCH, plan, null)).isEqualTo(bare)
+    }
+
+    @Test
+    fun `a level says its banner and its title and has no subtitle, a streak says only its days`() {
+        val res = resourcesIn("fr")
+        assertThat(RevealCopy.subtitle(res, RevealSubtitle.Level)).isNull()
+        assertThat(RevealCopy.subtitle(res, RevealSubtitle.Streak(7))).isEqualTo("7 jours d’affilée.")
+    }
+
+    @Test
+    fun `the spoken sentence of a level carries no empty sentence`() {
+        val res = resourcesIn("fr")
+        val plan = EngagementRevealPlan.of(EngagementReveal.Level(4), RevealOccasion.Celebration)
+        val spoken = RevealCopy.spoken(res, Locale.FRENCH, plan)
+        assertThat(spoken).doesNotContain(". .")
+        assertThat(spoken).endsWith("Niveau 4")
     }
 }

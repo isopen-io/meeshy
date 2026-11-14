@@ -101,4 +101,11 @@ class GameRulesAtlasComposeTest {
         compose.onNodeWithText(context.getString(R.string.game_atlas_tiers_cap_none, rank(GloryRank.Oracle))).assertExists()
         compose.onNodeWithText(context.getString(R.string.game_atlas_tiers_prestige, "100")).assertExists()
     }
+
+    @Test
+    fun `the Legacy and the Flames open on their title alone, the glossary of the same page says the rest`() {
+        assertThat(AtlasCopy.family(AtlasFamily.Treasury).line).isNull()
+        assertThat(AtlasCopy.family(AtlasFamily.Flames).line).isNull()
+        assertThat(AtlasCopy.family(AtlasFamily.Tiers).line).isNotNull()
+    }
 }
