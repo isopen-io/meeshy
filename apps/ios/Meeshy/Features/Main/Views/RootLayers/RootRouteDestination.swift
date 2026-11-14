@@ -148,8 +148,7 @@ struct RootRouteDestination: View {
         case .progressionSection(let section):
             // `navigationBarHidden(true)` comme ses voisines : la page porte son
             // propre chrome (le `<` de verre et le compte). Le glissement depuis
-            // le bord reste servi — c'est `NavigationStack` qui le donne, et il
-            // survit à une barre masquée ; c'était la FEUILLE qui l'empêchait.
+            // le bord est rendu par `restoresEdgeSwipe(for:)`, posé sur `body`.
             ProgressionSectionPage(section: section)
                 .navigationBarHidden(true)
         case .progressionRules(let rule, let section):
@@ -188,7 +187,7 @@ struct RootRouteDestination: View {
         case .bookmarks:
             // Barre masquée comme ses voisines : l'écran porte désormais
             // l'en-tête partagé, son titre ET son retour en verre (#6481).
-            // Le glissement depuis le bord survit à la barre masquée.
+            // Le glissement depuis le bord vient de `restoresEdgeSwipe(for:)`.
             BookmarksView()
                 .navigationBarHidden(true)
         case .starredMessages:
