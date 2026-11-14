@@ -22,11 +22,16 @@ public nonisolated struct FloatingMenuLadderFollow: Equatable, Sendable {
     public static let discScale: CGFloat = 1.15
     /// Ce que chaque rang retire à l'échelle du précédent.
     public static let scaleStepPerRung: CGFloat = 0.03
-    /// Le ressort du premier barreau.
-    public static let firstRungResponse: Double = 0.22
-    /// Le retard que chaque rang ajoute au ressort du précédent.
-    public static let responseStepPerRung: Double = 0.03
-    public static let dampingFraction: Double = 0.72
+    /// Le ressort du premier barreau : il colle presque au disque.
+    public static let firstRungResponse: Double = 0.24
+    /// Le retard que chaque rang ajoute au ressort du précédent. C'est lui qui
+    /// fait l'ÉLASTIQUE : le bout de l'échelle traîne franchement derrière le
+    /// disque, comme une échelle qu'on tire par un bout (retour porteur du
+    /// 2026-11-14 sur 0,03 : « un peu plus prononcé »).
+    public static let responseStepPerRung: Double = 0.065
+    /// Sous-amorti : chaque barreau dépasse un peu sa place puis revient — le
+    /// rebond que l'œil lit comme de l'élasticité.
+    public static let dampingFraction: Double = 0.62
 
     /// Vrai quand la chaîne et l'échelle sont servies.
     public let isDecorated: Bool
