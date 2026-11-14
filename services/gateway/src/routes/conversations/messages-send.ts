@@ -9,7 +9,8 @@
 import { signReaderAttachmentsIn, type SignableAttachment } from '../../services/attachments/signedAttachmentUrls';
 import { withSubmittedClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
-import { protectionOfFullMessageRow } from '../../socketio/readerSignedDelivery';
+import { protectionOfFullMessageRow, quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
+import type { QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MessagingService } from '../../services/messaging/MessagingService';
@@ -541,6 +542,7 @@ export function registerSendMessageRoute(
 
       // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
       // #13100 — et ses pièces protégées ou scellées au repos, sous SES adresses signées.
+      const rawQuote = result.data ? quotedRowOf(result.data) : null;
       const served = await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined);
       // #17058 — SECOND transport du même défaut, que l'issue ne nommait pas.
       // La réponse rend la LIGNE, donc son `clientMessageId` : sur un hit de
@@ -549,7 +551,7 @@ export function registerSendMessageRoute(
       // clientMessageId », si bien que la seconde bulle était absorbée par la
       // ligne du premier message et disparaissait. Une réponse d'envoi ne nomme
       // que le message qu'on lui a soumis.
-      return sendSuccess(reply, served ? withSubmittedClientMessageId(withAttachmentsSignedForSender(served), clientMessageId) : served);
+      return sendSuccess(reply, served ? withSubmittedClientMessageId(withAttachmentsSignedForSender(served, rawQuote), clientMessageId) : served);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
@@ -561,15 +563,26 @@ export function registerSendMessageRoute(
 /**
  * #13100 — la réponse d'envoi rend à l'expéditeur ses pièces sous l'adresse
  * que la route signée lui servira : une pièce scellée au repos (ou protégée)
- * n'a pas d'adresse nue lisible. Les autres pièces passent telles quelles.
+ * n'a pas d'adresse nue lisible — celles de sa CITATION comprises (#18470), dont
+ * la protection se lit sur la ligne citée BRUTE (`quoted`, relue avant que la
+ * citation soit servie à l'expéditeur). Les autres pièces passent telles quelles.
  */
-function withAttachmentsSignedForSender<M extends { readonly senderId?: string | null; readonly attachments?: unknown }>(message: M): M {
-  if (!Array.isArray(message.attachments) || !message.senderId) return message;
+function withAttachmentsSignedForSender<M extends { readonly senderId?: string | null; readonly attachments?: unknown; readonly replyTo?: unknown }>(
+  message: M,
+  quoted: QuotedMessageRow | null
+): M {
+  if (!message.senderId) return message;
+  const signer = readerFileUrlSignerFromEnv(new Date());
+  const reply = message.replyTo;
+  const withQuote = quoted && typeof reply === 'object' && reply !== null
+    ? { ...message, replyTo: signedQuotedReply(reply, { quoted, participantId: message.senderId, signer }) }
+    : message;
+  if (!Array.isArray(message.attachments)) return withQuote;
   const attachments = signReaderAttachmentsIn(message.attachments as SignableAttachment[], {
     message: protectionOfFullMessageRow(message),
     readerParticipantId: message.senderId,
-    signer: readerFileUrlSignerFromEnv(new Date()),
+    signer,
   });
-  return { ...message, attachments };
+  return { ...withQuote, attachments };
 }
 

@@ -374,6 +374,7 @@ export function RowActions({
    */
   const { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, handleKey } = useRovingMenu({
     itemCount: entries.length,
+    layer: false,
     onScroll: () => setOpen(false),
     onResize: () => setOpen(false),
   });

@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -141,12 +142,15 @@ private fun BoxScope.BrandSignature(
  * (top bar first), fading in as they grow — the Compose take on iOS `AnimatedLogoView`'s
  * `.trim(from: 0, to:)` stroke reveal. Geometry + stagger timing live in the pure, tested
  * [SplashLogoGeometry]; this only drives a single `0f..1f` [Animatable] and hands the current
- * value to [StackedDashesMark].
+ * value to [StackedDashesMark]. Under « Reduire les animations » the bars are drawn whole at once,
+ * like iOS `AnimatedLogoView`.
  */
 @Composable
 private fun SplashLogo(color: Color, modifier: Modifier = Modifier) {
-    val progress = remember { Animatable(0f) }
+    val reduceMotion = LocalReduceMotion.current
+    val progress = remember { Animatable(if (reduceMotion) 1f else 0f) }
     LaunchedEffect(Unit) {
+        if (reduceMotion) return@LaunchedEffect
         progress.animateTo(
             targetValue = 1f,
             animationSpec = tween(durationMillis = LOGO_ANIMATION_DURATION_MS, easing = LinearOutSlowInEasing),

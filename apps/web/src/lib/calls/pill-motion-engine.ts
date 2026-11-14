@@ -1,6 +1,7 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 import { bannerCloseKeyframes, GLASS_REGULAR_DENSITY, glassToneKeyframes, glassToneMs, glassVeil, followKeyframes, inlineSlideKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
+import { type WindowFrom, windowMotionOf, windowOrigin, windowSwapKeyframes } from './call-window-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -167,6 +168,62 @@ export function playViewSwap(element: HTMLElement, entering: boolean, previous: 
   const shown = resumed ? { ...from, opacity: seen.opacity, ...(reduced ? {} : { transform: seen.transform || 'none' }) } : from;
   previous?.cancel();
   return quiet(element.animate([shown, to], { duration: viewSwapMs(entering, reduced), easing: EASING, fill: entering ? 'none' : 'forwards' }));
+}
+
+/**
+ * L'ÉCRAN D'APPEL SE CONTRACTE VERS L'APPEL RÉDUIT ET S'EN REDÉPLOIE (P18.4, P18.8 ; `call-window-motion.ts`) : vers la
+ * capsule au dixième, ancré en haut au centre ; depuis la bulle, de son centre mesuré. L'ancre est posée avant le
+ * mouvement ; un mouvement repris en route la garde, et part de l'opacité et de la transformation affichées.
+ */
+export function playWindowSwap(element: HTMLElement, entering: boolean, previous: Animation | null, from: WindowFrom): Animation | null {
+  if (typeof element.animate !== 'function') return null;
+  const reduced = prefersReducedMotion();
+  const motion = windowMotionOf(from, reduced);
+  const seen = getComputedStyle(element);
+  const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
+  if (!resumed) element.style.transformOrigin = windowOrigin(motion);
+  const [start = {}, end = {}] = windowSwapKeyframes(entering, motion, resumed ? 'none' : seen.transform || 'none');
+  const shown = resumed ? { ...start, opacity: seen.opacity, ...(motion.scale === 1 ? {} : { transform: seen.transform || 'none' }) } : start;
+  previous?.cancel();
+  return quiet(element.animate([shown, end], { duration: viewSwapMs(entering, reduced), easing: EASING, fill: entering ? 'none' : 'forwards' }));
+}
+
+/** Où flotte la bulle de l'appel réduit à cet instant, dans l'écran que l'appel occupe ; sans bulle, la capsule. */
+export function bubbleFrom(): WindowFrom {
+  const rect = document.querySelector('[data-call-bubble]')?.getBoundingClientRect();
+  if (rect === undefined) return { kind: 'capsule' };
+  return { kind: 'bubble', center: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, size: { width: window.innerWidth, height: window.innerHeight } };
+}
+
+/**
+ * UN TOUCHER SUR LA VUE QUI REPART LA REPREND (P18.8, loi 17.11 ; `CallPipMorph.interruptContraction` d'iOS) : tant
+ * que `reviver` rend de quoi la rendre, un appui la rend sans déclencher le contrôle touché, dont le clic qui suit
+ * est retenu. Rend de quoi cesser d'écouter.
+ */
+export function reviveOnTouch(element: HTMLElement, reviver: () => (() => void) | undefined): () => void {
+  let swallow = false;
+  const down = (event: Event): void => {
+    const revive = reviver();
+    swallow = revive !== undefined;
+    if (revive === undefined) return;
+    event.stopPropagation();
+    revive();
+  };
+  const key = (): void => void (swallow = false);
+  const click = (event: Event): void => {
+    if (!swallow) return;
+    swallow = false;
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  element.addEventListener('pointerdown', down, true);
+  element.addEventListener('keydown', key, true);
+  element.addEventListener('click', click, true);
+  return () => {
+    element.removeEventListener('pointerdown', down, true);
+    element.removeEventListener('keydown', key, true);
+    element.removeEventListener('click', click, true);
+  };
 }
 
 const SLIDING = new WeakMap<Element, Animation>();

@@ -161,6 +161,15 @@
   --default-transition-timing-function: ease;
 }
 
+/* La duree d'une animation sous « Reduire les animations » (regle 32) : un
+   instant, sauf la ou un fondu court est declare (loi 17.10). Sans heritage :
+   le fondu d'un panneau ne s'etend pas a ce qu'il porte. */
+@property --reduced-fade {
+  syntax: '<time>';
+  inherits: false;
+  initial-value: 0.01ms;
+}
+
 @layer base {
   html {
     /* La pile NATIVE : aucune @font-face, aucune requete de police.
@@ -226,12 +235,15 @@
      porte `transition-property: all` par defaut, et une duree non nulle
      ferait de CHAQUE changement de style une transition dont toute lecture
      de la meme tache voit la valeur de depart (#12893). Les animations
-     gardent 0.01ms : leur `animationend` doit encore arriver. */
+     gardent 0.01ms (`--reduced-fade`, plus bas) : leur `animationend` doit
+     encore arriver. Une animation dont la variante reduite n'est qu'un
+     FONDU (l'appel, loi 17.10) pose sa duree courte dans `--reduced-fade`,
+     que rien n'herite : elle reste un fondu court, jamais un instant. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
+      animation-duration: var(--reduced-fade, 0.01ms) !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0s !important;
       scroll-behavior: auto !important;

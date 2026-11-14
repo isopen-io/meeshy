@@ -50,6 +50,7 @@ import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '.
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
+import { quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
 import type {
   AttachmentAudioTranslationEntry,
   CurrentUserConsumption,
@@ -643,7 +644,9 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
           // — sans lui, une citation d'un message géolocalisé n'affiche
           // jamais sa position, même si la liste principale la restitue.
-          mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
+          // #18470 — les pièces de la citation sous les adresses de CE lecteur :
+          // un fichier scellé au repos n'a pas d'adresse nue lisible.
+          mappedMessage.replyTo = signedQuotedReply(hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             // #4945 — même projection JSON → tableau que la racine, même filtre
@@ -669,7 +672,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          }));
+          })), { quoted: quotedRowOf(message), participantId: currentParticipantId, signer: ctx.readerFileUrlSigner });
         }
 
         return mappedMessage;

@@ -1,13 +1,14 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - La loi des puces
+// MARK: - La loi de la puce
 
-/// Ce que disent les deux puces posées sur la forme d'onde (#18421) : au début
-/// la durée totale, à la fin « temps lu · pourcentage ». Une loi pure : la vue
-/// ne compose aucun texte elle-même.
+/// Ce que dit la puce posée au début de la forme d'onde (#18421) : au repos la
+/// durée totale ; une fois la lecture partie, cette durée DÉCOMPTE et le pourcentage lu la suit, séparé d'une
+/// simple espace (« 0:07 21 % »). Aucun compteur de temps lu. Une loi pure : la
+/// vue ne compose aucun texte elle-même.
 nonisolated public enum AudioWaveformChipLaw {
-    public static let separator = " · "
+    public static let separator = " "
 
     /// `nil` quand la durée est inconnue : la puce ne dit pas « 0:00 ».
     public static func durationLabel(total: TimeInterval, locale: Locale = .current) -> String? {
@@ -15,12 +16,32 @@ nonisolated public enum AudioWaveformChipLaw {
         return MediaFormat.duration(total, locale: locale)
     }
 
-    /// Le pourcentage est borné à 0…100 et formaté par la locale (« 45 % » en
-    /// français, « 45% » en anglais) ; le temps lu garde la forme d'horloge.
-    public static func progressLabel(elapsed: TimeInterval, fraction: Double, locale: Locale = .current) -> String {
+    /// Le temps qui RESTE, puis le pourcentage borné à 0…100 et formaté par la
+    /// locale (« 45 % » en français, « 45% » en anglais), une espace entre eux.
+    public static func countdownLabel(total: TimeInterval, elapsed: TimeInterval, fraction: Double, locale: Locale = .current) -> String {
         let percent = Double(percentage(fraction)) / 100
         let formatted = percent.formatted(.percent.precision(.fractionLength(0)).locale(locale))
-        return MediaFormat.duration(elapsed, locale: locale) + separator + formatted
+        return MediaFormat.duration(remaining(total: total, elapsed: elapsed), locale: locale) + separator + formatted
+    }
+
+    /// Ce qui reste à lire, jamais négatif ; une durée inconnue rend zéro.
+    public static func remaining(total: TimeInterval, elapsed: TimeInterval) -> TimeInterval {
+        guard total.isFinite, elapsed.isFinite else { return 0 }
+        return max(0, total - max(0, elapsed))
+    }
+
+    /// La lecture a commencé dès qu'un avancement existe : c'est là que la
+    /// durée se met à décompter, et elle redevient la durée totale au retour à zéro.
+    public static func isCountingDown(elapsed: TimeInterval, fraction: Double) -> Bool {
+        (fraction.isFinite && fraction > 0) || (elapsed.isFinite && elapsed > 0)
+    }
+
+    /// Le libellé servi : la durée au repos, le décompte et le pourcentage en lecture.
+    public static func label(total: TimeInterval, elapsed: TimeInterval, fraction: Double, locale: Locale = .current) -> String? {
+        guard isCountingDown(elapsed: elapsed, fraction: fraction) else {
+            return durationLabel(total: total, locale: locale)
+        }
+        return countdownLabel(total: total, elapsed: elapsed, fraction: fraction, locale: locale)
     }
 
     /// Le pourcentage entier que la puce affiche et que le lecteur d'écran dit :
@@ -55,12 +76,12 @@ struct AudioWaveformChip: View, Equatable {
     }
 }
 
-// MARK: - Les deux puces sur l'onde
+// MARK: - La puce sur l'onde
 
-/// Les deux puces de la forme d'onde : la durée au bord de début, l'avancement
-/// au bord de fin. La durée ne prend aucun doigt (le scrub passe dessous) ;
-/// l'avancement ouvre le plein écran quand l'hôte le permet — c'est la même
-/// affordance que l'ancienne pastille de pourcentage, à sa nouvelle place.
+/// La puce de la forme d'onde, au bord de début : la durée au repos, le
+/// décompte suivi du pourcentage en lecture. Elle ouvre le plein écran quand
+/// l'hôte le permet — la même affordance que l'ancienne pastille de
+/// pourcentage ; sans hôte, elle ne prend aucun doigt (le scrub passe dessous).
 struct AudioWaveformChipsOverlay: View, Equatable {
     let total: TimeInterval
     let elapsed: TimeInterval
@@ -78,23 +99,16 @@ struct AudioWaveformChipsOverlay: View, Equatable {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            if let durationText = AudioWaveformChipLaw.durationLabel(total: total) {
-                AudioWaveformChip(text: durationText, isEmphasized: false, isCompact: isCompact, accent: accent)
-                    .accessibilityLabel(durationText)
-                    .allowsHitTesting(false)
+            if let text = AudioWaveformChipLaw.label(total: total, elapsed: elapsed, fraction: fraction) {
+                chip(text)
             }
             Spacer(minLength: 0)
-            progressChip
         }
     }
 
-    private var progressText: String {
-        AudioWaveformChipLaw.progressLabel(elapsed: elapsed, fraction: fraction)
-    }
-
     @ViewBuilder
-    private var progressChip: some View {
-        let chip = AudioWaveformChip(text: progressText, isEmphasized: isLive, isCompact: isCompact, accent: accent)
+    private func chip(_ text: String) -> some View {
+        let chip = AudioWaveformChip(text: text, isEmphasized: isLive, isCompact: isCompact, accent: accent)
         if let onProgressTap {
             let percent = AudioWaveformChipLaw.percentage(fraction)
             Button(action: onProgressTap) { chip }
@@ -107,7 +121,7 @@ struct AudioWaveformChipsOverlay: View, Equatable {
                                           bundle: .module))
         } else {
             chip
-                .accessibilityLabel(progressText)
+                .accessibilityLabel(text)
                 .allowsHitTesting(false)
         }
     }

@@ -443,7 +443,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
   /* Le Montage qui repart redescend par le bas avant de se démonter (C1.12) ; Effets se démonte à l'instant. */
-  const held = useModeHold(chrome.mode, ['montage']);
+  const held = useModeHold(chrome.mode, ['montage', 'effects']);
   const disposition = controlsDisposition({ participantCount: participantCountOf(call, layout), showsGroupGrid: layout === 'grid' });
   const rails = railRows(disposition, set, shown);
   const viewport = useCallViewport();
@@ -715,6 +715,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         startOn={looksStart}
         hold={liveFrameHold(call, liveFrame)}
         onOpenFrames={offer.montage ? () => send({ type: 'enter-mode', mode: 'montage' }) : undefined}
+        leaving={held.leaving}
+        onGone={held.gone}
       />
     ) : held.mode === 'montage' ? (
       <CallMontageMode language={language} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} leaving={held.leaving} onGone={held.gone} colorAvailable={support.color} blurAvailable={support.blur} onAddLook={offer.effects ? openEffectsOn : undefined} />
@@ -753,7 +755,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
           {stage}
         </div>
       ) : null}
-      <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
+      <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} bleed={bleedEnd} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         <HeldSwap value={chrome.header ? true : null} shape="top" className={headerFloats ? 'pointer-events-none absolute inset-x-0 top-2 z-20 [&_button]:pointer-events-auto' : 'relative z-20'} data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="" data-call-header-slot="" {...(headerFloats ? { 'data-call-header-floats': '' } : {})}>
@@ -790,7 +792,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div ref={controlsPlane} className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
+          <div ref={controlsPlane} className={`relative z-20 flex flex-col gap-3 pb-6 ${mode === null ? '' : 'min-h-0 [@media(max-height:480px)]:pb-2'}`} style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions() : null}
             <HeldSwap value={chrome.mode === null ? true : null} shape="bottom" className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
               {() => (

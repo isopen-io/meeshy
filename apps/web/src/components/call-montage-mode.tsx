@@ -26,7 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { LiveFrameHoldOption, type LiveFrameHold } from './call-live-frame-hold-option';
-import { appliedLabel, applyNow, EffectsBar, FacesRow, SettingsGlass, STACKED, useEffectsBarMode } from './call-effects-bar';
+import { appliedLabel, applyNow, EffectsBar, FacesRow, MODE_FIT, RIDER_FIT, SettingsGlass, STACKED, useEffectsBarMode, useRiderAtBar } from './call-effects-bar';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
 import { useMontageLayers } from './use-montage-layers';
@@ -167,6 +167,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
   const preview = useRef<HTMLCanvasElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
+  useRiderAtBar(rider);
   const looks = useSwapPresence<HTMLDivElement>(showsCarousel(bar.mode));
   const puces = useSwapPresence<HTMLDivElement>(showsLooks(bar.mode));
   const panel = useSwapPresence<HTMLDivElement>(settings);
@@ -378,7 +379,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
   const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
-    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage" {...leavingAttributes}>
+    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className={`flex w-full flex-col items-center gap-3 ${MODE_FIT}`} data-call-mode="montage" {...leavingAttributes}>
       <div ref={backdrop} className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
         <canvas
           ref={preview}
@@ -391,9 +392,9 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
         />
       </div>
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3" data-call-montage-controls="">
+      <div ref={controls} className={`relative z-10 flex w-full flex-col items-center gap-3 ${MODE_FIT}`} data-call-montage-controls="">
         <CaptureStatus status={studio.status} />
-        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+        <div ref={rider} className={`flex w-full flex-col items-center gap-3 ${RIDER_FIT}`} data-call-mode-rider="">
           <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
             {looks.mounted ? (
               <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${showsCarousel(bar.mode) ? '' : 'pointer-events-none'}`} style={STACKED} data-call-montage-looks="">
