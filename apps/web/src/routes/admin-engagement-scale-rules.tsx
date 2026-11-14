@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { INK2 } from '@/components/admin/tone';
 import {
   ABUSE_FIELDS,
@@ -45,11 +46,14 @@ function RuleSection({
   id,
   title,
   intro,
+  detail,
   children,
 }: {
   readonly id: string;
   readonly title: string;
   readonly intro?: string;
+  /** Le détail SECONDAIRE de la règle, derrière un (i) : la phrase d'orientation reste visible. */
+  readonly detail?: { readonly question: string; readonly text: string };
   readonly children: ReactNode;
 }) {
   return (
@@ -59,6 +63,7 @@ function RuleSection({
           {intro}
         </p>
       )}
+      {detail === undefined ? null : <AdminInfoAlone question={detail.question} text={detail.text} anchor={`${id}-detail`} />}
       {children}
     </AdminFicheSection>
   );
@@ -70,6 +75,7 @@ export function LinkVisitSection({ language, draft, onDraft }: DraftProps) {
       id="scale-links"
       title={translateAdmin(language, 'admin.scale.links.title')}
       intro={translateAdmin(language, 'admin.scale.links.intro')}
+      detail={{ question: translateAdmin(language, 'admin.scale.links.question'), text: translateAdmin(language, 'admin.scale.links.detail') }}
     >
       <div className="grid gap-3 @2xl:grid-cols-2">
         {LINK_VISIT_FIELDS.map((field) => {
@@ -97,6 +103,7 @@ export function AbuseSection({ language, draft, onDraft }: DraftProps) {
       id="scale-abuse"
       title={translateAdmin(language, 'admin.scale.abuse.title')}
       intro={translateAdmin(language, 'admin.scale.abuse.intro')}
+      detail={{ question: translateAdmin(language, 'admin.scale.abuse.question'), text: translateAdmin(language, 'admin.scale.abuse.detail') }}
     >
       <div className="grid gap-3 @2xl:grid-cols-2">
         {ABUSE_FIELDS.map((field) => {

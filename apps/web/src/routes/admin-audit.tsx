@@ -198,7 +198,7 @@ export function AdminAuditPanel({ language, deps = apiDeps, now = defaultNow }: 
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.audit.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.audit.list.empty'), hint: translateAdmin(language, 'admin.audit.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.audit.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.audit.list.filteredEmpty') }}
       />
       {selected === null ? null : <AuditDetailSheet language={language} entry={selected} now={clock} onClose={() => setSelected(null)} />}

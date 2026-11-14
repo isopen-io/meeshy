@@ -58,7 +58,7 @@ export function AgentQueueDetail({ language, deps, now }: { readonly language: A
           <AdminErrorState language={language} onRetry={() => void queue.refetch()} />
         )
       ) : items.length === 0 ? (
-        <AdminEmptyState title={translateAdmin(language, 'admin.agentPanel.queue.empty')} hint={translateAdmin(language, 'admin.agentPanel.queue.emptyHint')} glyph="hourglass" />
+        <AdminEmptyState title={translateAdmin(language, 'admin.agentPanel.queue.empty')} glyph="hourglass" />
       ) : (
         <div className="grid gap-3">
           <p className="text-caption font-medium" style={{ color: INK2 }}>

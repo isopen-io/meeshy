@@ -1,5 +1,6 @@
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { INK2 } from '@/components/admin/tone';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -32,10 +33,11 @@ export function AgentResetDetail({ language, deps }: { readonly language: AdminL
 
   return (
     <AdminFicheSection id="agent-reset" title={translateAdmin(language, 'admin.agentPanel.card.reset')}>
-      <ul className="grid list-disc gap-2 ps-5 text-body" style={{ color: INK2 }}>
-        <li>{translateAdmin(language, 'admin.agentPanel.reset.conversationHint')}</li>
-        <li>{translateAdmin(language, 'admin.agentPanel.reset.userHint')}</li>
-      </ul>
+      <AdminInfoAlone
+        question={translateAdmin(language, 'admin.agentPanel.reset.whereQuestion')}
+        text={`${translateAdmin(language, 'admin.agentPanel.reset.conversationHint')} ${translateAdmin(language, 'admin.agentPanel.reset.userHint')}`}
+        anchor="agent-reset-where"
+      />
       {reach.isSovereign ? (
         <div className="grid gap-2" data-agent-reset-all-block>
           <p className="max-w-prose text-caption" style={{ color: INK2 }}>

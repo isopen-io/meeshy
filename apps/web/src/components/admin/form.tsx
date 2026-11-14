@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 
+import { ADMIN_GLYPHS } from '@/components/glyphs-admin';
 import { Field } from '@/components/field';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { Sheet } from '@/components/sheet';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
@@ -151,6 +153,7 @@ export function AdminField({
   id,
   label,
   note,
+  noteQuestion,
   noteTone = 'neutral',
   noteData,
   error,
@@ -160,21 +163,36 @@ export function AdminField({
   readonly id: string;
   readonly label?: string | undefined;
   readonly note?: string | undefined;
+  /** La QUESTION à laquelle `note` répond : avec elle, la note passe derrière un (i) posé après le libellé — lue, jamais affichée au repos. */
+  readonly noteQuestion?: string | undefined;
   readonly noteTone?: 'neutral' | 'danger';
   readonly noteData?: AdminData;
   readonly error?: string | undefined;
   readonly errorData?: AdminData | undefined;
   readonly children: ReactNode;
 }) {
+  const info = useInfoHint(`${id}-note`);
+  const folded = hintNote(note, noteQuestion);
+  const labelNode =
+    label === undefined ? null : (
+      <label htmlFor={id} className="text-caption font-medium" style={CAPTION_LABEL}>
+        {label}
+      </label>
+    );
   return (
     <div className="grid gap-1">
-      {label === undefined ? null : (
-        <label htmlFor={id} className="text-caption font-medium" style={CAPTION_LABEL}>
-          {label}
-        </label>
+      {folded === undefined ? (
+        labelNode
+      ) : (
+        <div className="flex min-w-0 items-center gap-1">
+          {labelNode}
+          <InfoHintButton hint={folded} state={info} />
+        </div>
       )}
       {children}
-      {note === undefined ? null : (
+      {folded !== undefined ? (
+        <InfoHintText hint={folded} state={info} />
+      ) : note === undefined ? null : (
         <p {...noteData} id={`${id}-note`} className="text-caption tabular-nums" style={{ color: noteTone === 'danger' ? 'var(--color-danger)' : INK2 }}>
           {note}
         </p>
@@ -388,6 +406,9 @@ export function AdminSelect({
   return label === undefined ? control : <AdminField id={id} label={label}>{control}</AdminField>;
 }
 
+const hintNote = (text: string | undefined, question: string | undefined): InfoHint | undefined =>
+  text === undefined || question === undefined ? undefined : { text, label: question, glyph: ADMIN_GLYPHS.info };
+
 /**
  * **UNE BASCULE** (`role="switch"`) — l'état se lit dans `aria-checked`, jamais dans la
  * seule couleur. La piste dessinée fait 28 px ; le BOUTON qui la porte en fait 44 sur
@@ -399,6 +420,7 @@ export function AdminSwitch({
   id,
   label,
   hint,
+  hintQuestion,
   checked,
   onToggle,
   disabled = false,
@@ -409,6 +431,8 @@ export function AdminSwitch({
   readonly id: string;
   readonly label?: string;
   readonly hint?: string;
+  /** La QUESTION à laquelle `hint` répond : avec elle, la note passe derrière un (i) — lue, jamais affichée au repos. */
+  readonly hintQuestion?: string;
   readonly ariaLabelledBy?: string;
   readonly ariaDescribedBy?: string;
   readonly checked: boolean;
@@ -417,6 +441,8 @@ export function AdminSwitch({
   readonly data?: AdminData;
 }) {
   const hintId = `${id}-hint`;
+  const info = useInfoHint(hintId);
+  const note = hintNote(hint, hintQuestion);
   const control = (
     <button
       {...data}
@@ -444,13 +470,18 @@ export function AdminSwitch({
   return (
     <div className="flex min-h-11 items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <label htmlFor={id} className="text-body" style={{ color: INK }}>
-          {label}
-        </label>
-        {hint === undefined ? null : (
+        <div className="flex min-w-0 items-center gap-1">
+          <label htmlFor={id} className="text-body" style={{ color: INK }}>
+            {label}
+          </label>
+          {note === undefined ? null : <InfoHintButton hint={note} state={info} />}
+        </div>
+        {hint === undefined ? null : note === undefined ? (
           <p id={hintId} className="text-caption" style={{ color: INK2 }}>
             {hint}
           </p>
+        ) : (
+          <InfoHintText hint={note} state={info} />
         )}
       </div>
       {control}
@@ -468,6 +499,7 @@ export function AdminCheckbox({
   id,
   label,
   hint,
+  hintQuestion,
   checked,
   onToggle,
   disabled = false,
@@ -476,14 +508,18 @@ export function AdminCheckbox({
   readonly id: string;
   readonly label: string;
   readonly hint?: string;
+  readonly hintQuestion?: string;
   readonly checked: boolean;
   readonly onToggle: (next: boolean) => void;
   readonly disabled?: boolean;
   readonly data?: AdminData;
 }) {
   const hintId = `${id}-hint`;
+  const info = useInfoHint(hintId);
+  const note = hintNote(hint, hintQuestion);
   return (
     <div className="grid gap-1">
+      <div className="flex min-w-0 items-center gap-1">
       <label htmlFor={id} className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: INK }}>
         <input
           {...data}
@@ -498,10 +534,14 @@ export function AdminCheckbox({
         />
         <span>{label}</span>
       </label>
-      {hint === undefined ? null : (
+      {note === undefined ? null : <InfoHintButton hint={note} state={info} />}
+      </div>
+      {hint === undefined ? null : note === undefined ? (
         <p id={hintId} className="text-caption" style={{ color: INK2 }}>
           {hint}
         </p>
+      ) : (
+        <InfoHintText hint={note} state={info} />
       )}
     </div>
   );

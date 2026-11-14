@@ -5,6 +5,8 @@ import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminFormError, AdminSwitch } from '@/components/admin/form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { ADMIN_GLYPHS } from '@/components/glyphs-admin';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import {
   changesOf,
   draftOf,
@@ -278,15 +280,14 @@ export function AgentField({
   const hint = hintOf(spec, language);
   const described = [help === null ? null : `${id}-help`, hint === null ? null : `${id}-hint`, problem === null ? null : `${id}-problem`].filter(Boolean).join(' ');
   const describedBy = described === '' ? {} : { 'aria-describedby': described };
+  const info = useInfoHint(`${id}-help`);
+  const helpHint: InfoHint | null = help === null ? null : { text: help, label: translateAdmin(language, 'admin.kit.info.field'), glyph: ADMIN_GLYPHS.info };
+  const helpButton = helpHint === null ? null : <InfoHintButton hint={helpHint} state={info} />;
   const wide = spec.kind === 'list' || spec.kind === 'set' || (spec.kind === 'text' && spec.multiline === true);
 
   const notes = (
     <>
-      {help === null ? null : (
-        <span id={`${id}-help`} className="text-caption" style={{ color: INK2 }}>
-          {help}
-        </span>
-      )}
+      {helpHint === null ? null : <InfoHintText hint={helpHint} state={info} inline />}
       {hint === null ? null : (
         <span id={`${id}-hint`} data-agent-field-hint={spec.key} className="text-caption tabular-nums" style={{ color: INK2 }}>
           {hint}
@@ -305,8 +306,11 @@ export function AgentField({
     return (
       <div className="grid content-start gap-1">
         <div className="flex items-center justify-between gap-3" style={{ minHeight: 44 }}>
-          <span id={`${id}-label`} className="min-w-0 break-words text-body" style={{ color: INK }}>
-            {label}
+          <span className="flex min-w-0 items-center gap-1">
+            <span id={`${id}-label`} className="min-w-0 break-words text-body" style={{ color: INK }}>
+              {label}
+            </span>
+            {helpButton}
           </span>
           <AdminSwitch
             id={id}
@@ -328,6 +332,7 @@ export function AgentField({
       <fieldset {...anchor} className="grid gap-1 @lg:col-span-2" {...describedBy}>
         <legend className="text-caption font-medium" style={{ color: INK2 }}>
           {label}
+          {helpButton}
         </legend>
         <div className="flex flex-wrap gap-x-4">
           {optionsWith(spec.options, chosen).map((option) => (
@@ -404,9 +409,12 @@ export function AgentField({
 
   return (
     <div className={`grid content-start gap-1 ${wide ? '@lg:col-span-2' : ''}`.trim()}>
-      <label htmlFor={id} className="text-caption font-medium" style={{ color: INK2 }}>
-        {label}
-      </label>
+      <div className="flex items-center gap-1">
+        <label htmlFor={id} className="text-caption font-medium" style={{ color: INK2 }}>
+          {label}
+        </label>
+        {helpButton}
+      </div>
       {control}
       {notes}
     </div>

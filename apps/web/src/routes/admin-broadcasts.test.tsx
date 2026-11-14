@@ -241,8 +241,8 @@ describe('les états', () => {
     const host = await open(deps);
 
     const empty = host.querySelector('[data-admin-empty]');
-    expect(empty?.textContent).toContain('Aucune diffusion pour l’instant');
-    expect(empty?.textContent).toContain('brouillon');
+    expect(empty?.querySelector('p')?.textContent).toBe('Aucune diffusion.');
+    expect(empty?.querySelector('[data-admin-action="new-empty"]')?.textContent).toContain('Écrire une diffusion');
   });
 
   test('aucun résultat pour un filtre : l’état vide filtré et « Réinitialiser »', async () => {
@@ -327,6 +327,17 @@ describe('« Nouvelle diffusion » — la feuille de composition', () => {
       expect(labels.some((label) => label.includes(expected))).toBe(true);
     }
     expect(host.querySelector('dialog h2')?.textContent).toBe('Nouvelle diffusion');
+  });
+
+  test('l’« Objet » dit, derrière son (i), qu’il est aussi le titre de la notification', async () => {
+    const { deps } = scripted({ list: () => page(ROWS) });
+    const host = await openComposer(deps);
+
+    const button = host.querySelector<HTMLButtonElement>('[data-admin-compose] button[aria-label="Où l’objet apparaît-il ?"]');
+    expect(button).not.toBeNull();
+    const note = host.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+    expect(note?.textContent).toBe('L’objet de l’e-mail et le titre de la notification.');
+    expect(host.querySelector('[id$="-subject"]')?.getAttribute('aria-describedby')).toContain(note?.id ?? 'absent');
   });
 
   test('la langue du message est NOMMÉE, jamais un code', async () => {

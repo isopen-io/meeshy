@@ -37,12 +37,14 @@ function FieldFrame({
   id,
   label,
   hint,
+  hintQuestion,
   error,
   children,
 }: {
   readonly id: string;
   readonly label: string;
   readonly hint?: string;
+  readonly hintQuestion?: string;
   readonly error?: string | null;
   readonly children: ReactNode;
 }) {
@@ -52,6 +54,7 @@ function FieldFrame({
         id={id}
         label={label}
         note={hint}
+        noteQuestion={hintQuestion}
         error={error === null ? undefined : error}
         errorData={{ 'data-admin-field-error': '' }}
       >
@@ -65,6 +68,7 @@ export function TextField({
   id,
   label,
   hint,
+  hintQuestion,
   error,
   value,
   onChange,
@@ -74,6 +78,8 @@ export function TextField({
   readonly id: string;
   readonly label: string;
   readonly hint?: string;
+  /** La QUESTION à laquelle `hint` répond : la note passe derrière un (i). */
+  readonly hintQuestion?: string;
   readonly error?: string | null;
   readonly value: string;
   readonly onChange: (value: string) => void;
@@ -92,7 +98,7 @@ export function TextField({
   } as const;
 
   return (
-    <FieldFrame id={id} label={label} {...(hint === undefined ? {} : { hint })} {...(error === undefined ? {} : { error })}>
+    <FieldFrame id={id} label={label} {...(hint === undefined ? {} : { hint })} {...(hintQuestion === undefined ? {} : { hintQuestion })} {...(error === undefined ? {} : { error })}>
       {rows === undefined ? (
         /* `onInput`, la convention des champs texte du dépôt (voir `sheet.tsx`) : un `onChange` n'y est jamais rappelé sous happy-dom. */
         <input {...common} type="text" {...(inputMode === undefined ? {} : { inputMode })} onInput={(event) => onChange(event.currentTarget.value)} onChange={() => undefined} />

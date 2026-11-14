@@ -2,13 +2,13 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './diffusions-fr';
 
 const f = {
-  'admin.broadcast.list.subtitle': 'The messages you write to every account, or to some of them: by e-mail, in the app, or both.',
+  'admin.broadcast.list.subtitle': 'To every account or to some of them.',
   'admin.broadcast.list.caption': 'Broadcast list',
   'admin.broadcast.list.search': 'Search by name or subject',
   'admin.broadcast.list.count': '{count} broadcasts',
   'admin.broadcast.list.countOne': '1 broadcast',
-  'admin.broadcast.list.empty': 'No broadcast yet',
-  'admin.broadcast.list.emptyHint': 'Write a first message to your members: it is saved as a draft first, and nothing is sent before you confirm.',
+  'admin.broadcast.list.empty': 'No broadcast.',
+  'admin.broadcast.list.emptyAction': 'Write a broadcast',
   'admin.broadcast.list.filteredEmpty': 'No broadcast for these filters',
   'admin.broadcast.filter.status': 'Status',
   'admin.broadcast.col.name': 'Name',
@@ -32,10 +32,13 @@ const f = {
   'admin.broadcast.compose.section.audience': 'Audience',
   'admin.broadcast.compose.field.name': 'Broadcast name',
   'admin.broadcast.compose.field.name.hint': 'It helps you find it in the list: recipients never see it.',
+  'admin.broadcast.compose.field.name.hintQuestion': 'Who sees this name?',
   'admin.broadcast.compose.field.subject': 'Subject',
   'admin.broadcast.compose.field.subject.hint': 'The e-mail subject and the notification title.',
+  'admin.broadcast.compose.field.subject.hintQuestion': 'Where does the subject appear?',
   'admin.broadcast.compose.field.body': 'Message',
   'admin.broadcast.compose.field.body.hint': 'Written in the language below; it is translated for the other languages when you prepare it.',
+  'admin.broadcast.compose.field.body.hintQuestion': 'How is the message translated?',
   'admin.broadcast.compose.field.sourceLanguage': 'Message language',
   'admin.broadcast.compose.activity': 'Account activity',
   'admin.broadcast.compose.activity.all': 'All accounts',
@@ -69,7 +72,6 @@ const f = {
 
   'admin.broadcast.fiche.loading': 'Loading the broadcast',
   'admin.broadcast.fiche.notFound': 'This broadcast no longer exists',
-  'admin.broadcast.fiche.notFoundHint': 'It was deleted, or the address is wrong.',
   'admin.broadcast.fiche.back': 'Back to broadcasts',
   'admin.broadcast.fiche.created': 'Created {when}',
   'admin.broadcast.fiche.createdBy': 'Created {when} by {author}',
@@ -105,6 +107,7 @@ const f = {
   'admin.broadcast.email.completedAt': 'Sending finished',
   'admin.broadcast.email.running': 'In progress',
   'admin.broadcast.email.skipped': 'Accounts that turned off broadcast e-mails are skipped: sent plus failed can be lower than the number of recipients.',
+  'admin.broadcast.email.skipped.why': 'Why fewer sends than recipients?',
   'admin.broadcast.section.inApp': 'In-app delivery',
   'admin.broadcast.inApp.state': 'State',
   'admin.broadcast.inApp.state.never': 'Not published in the app yet',
@@ -129,7 +132,7 @@ const f = {
   'admin.broadcast.notice.failedNoMessage': 'Sending failed, and the gateway gave no error message.',
   'admin.broadcast.notice.sending': 'Sending in progress: this page updates by itself every 10 seconds.',
   'admin.broadcast.notice.inAppRunning': 'Publishing in progress: this page updates by itself every 10 seconds.',
-  'admin.broadcast.notice.noRecipients': 'No account matches this audience: there is nobody to write to. Delete this broadcast and create it again with another targeting.',
+  'admin.broadcast.notice.noRecipients': 'No account matches this audience: create the broadcast again with another targeting.',
 
   'admin.broadcast.gesture.edit': 'Edit',
   'admin.broadcast.gesture.prepare': 'Translate and prepare the send',
@@ -167,8 +170,8 @@ const f = {
   'admin.broadcast.audience.inAppRecipients': 'Accounts reachable in the app',
   'admin.broadcast.audience.emailRecipients': 'Accounts reachable by e-mail (verified address)',
   'admin.broadcast.notice.inAppFailed': 'The in-app publication failed: {message}',
-  'admin.broadcast.notice.inAppFailedNoMessage': 'The in-app publication failed: no notification was delivered.',
-  'admin.broadcast.notice.noEmailRecipients': 'No account in this audience has a verified e-mail address: sending by e-mail would reach nobody. Publishing in the app remains possible.',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'In-app publication failed: nothing was delivered.',
+  'admin.broadcast.notice.noEmailRecipients': 'No account in this audience has a verified e-mail: only publishing in the app is possible.',
   'admin.broadcast.confirm.inApp.bodyUncounted': 'Audience: {audience}. The number of accounts reachable in the app is only counted at preparation, and this page no longer holds it. Each one receives a notification in their notification center, with a push. It cannot be withdrawn, and is published only once.',
 } satisfies AdminCatalogFragment<typeof fr>;
 

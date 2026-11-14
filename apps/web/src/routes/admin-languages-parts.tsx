@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
 import { accuracyConfidenceText, accuracyQuality, growthView, languageTitle, pairConfidenceText, pairLabel } from '@/lib/admin/languages-view';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
@@ -104,7 +105,7 @@ export function LanguagesDetailTable({ language, rows }: { readonly language: Ad
     <div className="grid gap-2">
       <StaticTable
         id="languages"
-        caption={translateAdmin(language, 'admin.lang.detail.caption')}
+        caption={translateAdmin(language, 'admin.lang.detail.title')}
         rows={rows}
         rowKey={(row) => row.code}
         columns={[
@@ -119,9 +120,7 @@ export function LanguagesDetailTable({ language, rows }: { readonly language: Ad
           { id: 'growth', header: translateAdmin(language, 'admin.lang.detail.growth'), align: 'end', cell: (row) => <Growth language={language} growth={row.growth} /> },
         ]}
       />
-      <p className="px-1 text-caption" style={{ color: INK3 }}>
-        {translateAdmin(language, 'admin.lang.detail.note')}
-      </p>
+      <AdminInfoAlone question={translateAdmin(language, 'admin.kit.info.table')} text={translateAdmin(language, 'admin.lang.detail.note')} anchor="languages-detail" />
     </div>
   );
 }
@@ -131,7 +130,7 @@ export function LanguagePairsTable({ language, rows }: { readonly language: Admi
   return (
     <StaticTable
       id="pairs"
-      caption={translateAdmin(language, 'admin.lang.pairs.caption')}
+      caption={translateAdmin(language, 'admin.lang.pairs.title')}
       rows={rows}
       rowKey={(row) => `${row.from}>${row.to}`}
       columns={[

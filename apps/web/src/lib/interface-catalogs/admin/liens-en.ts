@@ -3,11 +3,9 @@ import type fr from './liens-fr';
 
 const f = {
   // ── Contact requests ───────────────────────────────────────────────────────
-  'admin.invitation.subtitle': 'The friend requests members send each other: who asked whom, and where each request stands.',
   'admin.invitation.list.caption': 'Contact requests',
   'admin.invitation.list.count': '{count} requests',
   'admin.invitation.list.empty': 'No contact requests',
-  'admin.invitation.list.emptyHint': 'Friend requests sent between members will appear here.',
   'admin.invitation.list.filteredEmpty': 'No request matches these filters',
   'admin.invitation.list.onSender': 'Requests sent by {name}',
   'admin.invitation.list.onSenderGeneric': 'Requests sent by a single member',
@@ -37,7 +35,6 @@ const f = {
   'admin.invitation.chart.quiet': 'No request sent over the last 7 days',
   'admin.invitation.fiche.loading': 'Loading the request',
   'admin.invitation.fiche.notFound': 'This request no longer exists',
-  'admin.invitation.fiche.notFoundHint': 'It may have disappeared along with one of the two accounts.',
   'admin.invitation.fiche.back': 'Back to requests',
   'admin.invitation.fiche.secondary': 'Contact request sent {when}',
   'admin.invitation.strip.sent': 'Sent',
@@ -58,15 +55,14 @@ const f = {
   'admin.invitation.gesture.cancel': 'Cancel the request',
   'admin.invitation.confirm.cancel.title': 'Cancel this request?',
   'admin.invitation.confirm.cancel.body':
-    'The request will become “Declined”: {receiver} will no longer see it as pending. No friendship is created. The gesture is recorded in the audit log.',
+    'The request will become “Declined”: {receiver} will no longer see it as pending. No friendship is created.',
   'admin.invitation.done.cancelled': 'Request cancelled',
 
   // ── Share links ────────────────────────────────────────────────────────────
-  'admin.shareLink.subtitle': 'The links that open a conversation to guests: who created them, how many people came in, and until when they hold.',
+  'admin.shareLink.subtitle': 'Links that open a conversation to guests.',
   'admin.shareLink.list.caption': 'Share links',
   'admin.shareLink.list.count': '{count} links',
   'admin.shareLink.list.empty': 'No share links',
-  'admin.shareLink.list.emptyHint': 'The links members create to invite people to a conversation will appear here.',
   'admin.shareLink.list.filteredEmpty': 'No link matches these filters',
   'admin.shareLink.search.label': 'Search a link by its name',
   'admin.shareLink.filter.openness': 'Openness',
@@ -85,7 +81,6 @@ const f = {
   'admin.shareLink.usage.unlimited': '{used}, no limit',
   'admin.shareLink.fiche.loading': 'Loading the link',
   'admin.shareLink.fiche.notFound': 'This link no longer exists',
-  'admin.shareLink.fiche.notFoundHint': 'It may have disappeared along with its conversation.',
   'admin.shareLink.fiche.back': 'Back to links',
   'admin.shareLink.fiche.secondary': 'Created by {creator} {when}',
   'admin.shareLink.strip.uses': 'Uses',
@@ -95,6 +90,7 @@ const f = {
   'admin.shareLink.strip.sessions': 'Unique sessions',
   'admin.shareLink.section.conversation': 'Conversation',
   'admin.shareLink.section.permissions': 'What guests can do',
+  'admin.shareLink.section.permissions.intro': 'What a guest can do in the conversation, fixed on arrival.',
   'admin.shareLink.section.requirements': 'What the link requires',
   'admin.shareLink.section.restrictions': 'Access restrictions',
   'admin.shareLink.section.guests': 'Recent guests',
@@ -134,13 +130,13 @@ const f = {
   'admin.shareLink.gesture.reveal': 'Reveal the secret',
   'admin.shareLink.confirm.close.title': 'Close this link?',
   'admin.shareLink.confirm.close.body':
-    'Guests who came in through this link lose access to the conversation right away, and nobody else can come in through it. The link is not deleted: you can reopen it, but removed guests do not come back on their own. The gesture is recorded in the audit log.',
+    'Guests who came in through this link lose access to the conversation right away, and nobody else can come in through it. The link is not deleted: you can reopen it, but removed guests do not come back on their own.',
   'admin.shareLink.confirm.reopen.title': 'Reopen this link?',
   'admin.shareLink.confirm.reopen.body':
-    'The link becomes reachable again with its current address: new arrivals can come in. Guests removed when it was closed are not restored. The gesture is recorded in the audit log.',
+    'The link becomes reachable again with its current address: new arrivals can come in. Guests removed when it was closed are not restored.',
   'admin.shareLink.confirm.reveal.title': 'Reveal this link’s secret?',
-  'admin.shareLink.confirm.reveal.body':
-    'The keys about to be shown open the conversation: anyone who holds them can come in. They are shown once and kept nowhere in the administration. This gesture is reserved for the platform creator; it requires a written reason and is recorded in the audit log.',
+  'admin.shareLink.confirm.reveal.body': 'These keys open the conversation and are shown only once.',
+  'admin.shareLink.confirm.reveal.detail': 'Anyone who holds them can enter the conversation; they are kept nowhere in the administration. This gesture is reserved for the platform creator and requires a written reason.',
   'admin.shareLink.confirm.reveal.motive': 'Reason (recorded in the audit log)',
   'admin.shareLink.done.closed': 'Link closed',
   'admin.shareLink.done.reopened': 'Link reopened',
@@ -154,11 +150,10 @@ const f = {
   'admin.shareLink.secret.close': 'Close',
 
   // ── Tracking links ─────────────────────────────────────────────────────────
-  'admin.tracking.subtitle': 'The campaigns: every tracked link, what it points to, who placed it and how many clicks it brings.',
+  'admin.tracking.subtitle': 'Tracked links and the clicks they bring.',
   'admin.tracking.list.caption': 'Tracking links',
   'admin.tracking.list.count': '{count} links',
   'admin.tracking.list.empty': 'No tracking links',
-  'admin.tracking.list.emptyHint': 'The tracking links members create will appear here with their clicks.',
   'admin.tracking.list.filteredEmpty': 'No tracking link matches these filters',
   'admin.tracking.list.onCreator': 'Links created by {name}',
   'admin.tracking.list.onCreatorGeneric': 'Links created by a single member',
@@ -184,7 +179,6 @@ const f = {
   'admin.tracking.lastClick.never': 'No click',
   'admin.tracking.fiche.loading': 'Loading the tracking link',
   'admin.tracking.fiche.notFound': 'This tracking link no longer exists',
-  'admin.tracking.fiche.notFoundHint': 'It may have been deleted.',
   'admin.tracking.fiche.back': 'Back to tracking links',
   'admin.tracking.strip.clicks': 'Clicks',
   'admin.tracking.strip.unique': 'Unique visitors',
@@ -243,10 +237,10 @@ const f = {
   'admin.tracking.gesture.reactivate': 'Reactivate the link',
   'admin.tracking.confirm.deactivate.title': 'Deactivate this tracking link?',
   'admin.tracking.confirm.deactivate.body':
-    'Visitors who open this link are no longer redirected to the destination. Statistics already collected are kept, and you can reactivate it. The gesture is recorded in the audit log.',
+    'Visitors who open this link are no longer redirected to the destination. Statistics already collected are kept, and you can reactivate it.',
   'admin.tracking.confirm.reactivate.title': 'Reactivate this tracking link?',
   'admin.tracking.confirm.reactivate.body':
-    'The link redirects visitors to its destination again and starts counting clicks once more. The gesture is recorded in the audit log.',
+    'The link redirects visitors to its destination again and starts counting clicks once more.',
   'admin.tracking.confirm.motive': 'Reason (optional, recorded in the audit log)',
   'admin.tracking.done.deactivated': 'Tracking link deactivated',
   'admin.tracking.done.reactivated': 'Tracking link reactivated',

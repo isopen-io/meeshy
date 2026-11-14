@@ -7,11 +7,9 @@ import type fr from './moderation-fr';
  * languages start from this text until their translation pass.
  */
 const f = {
-  'admin.moderation.subtitle': 'Os conteúdos e membros que a comunidade denunciou: assuma, decida, registre.',
   'admin.moderation.list.caption': 'Lista de denúncias',
   'admin.moderation.list.count': '{count} denúncia(s)',
   'admin.moderation.list.empty': 'Nenhuma denúncia',
-  'admin.moderation.list.emptyHint': 'Quando um membro denuncia um conteúdo ou uma conta, aparece aqui.',
   'admin.moderation.list.filteredEmpty': 'Nenhuma denúncia corresponde a esses filtros',
   'admin.moderation.list.onEntity': 'Denúncias sobre um único item: remova o filtro para voltar a ver toda a fila.',
   'admin.moderation.list.onEntityReset': 'Ver toda a fila',
@@ -55,7 +53,6 @@ const f = {
   'admin.moderation.fiche.loading': 'Carregando a denúncia',
   'admin.moderation.fiche.received': 'Denunciado por {reporter} · {when}',
   'admin.moderation.fiche.notFound': 'Esta denúncia não existe mais',
-  'admin.moderation.fiche.notFoundHint': 'Talvez tenha sido excluída por outro moderador.',
   'admin.moderation.fiche.back': 'Voltar às denúncias',
 
   'admin.moderation.stat.received': 'Recebida',
@@ -93,7 +90,7 @@ const f = {
   'admin.moderation.handling.action': 'Ação registrada',
   'admin.moderation.handling.actionNone': 'Nenhuma ação registrada',
   'admin.moderation.handling.actionChoice': 'Ação a registrar com a decisão',
-  'admin.moderation.handling.actionHint': 'Registrada no dossiê: esta escolha não faz nada por si só. O banimento, a remoção ou a suspensão são feitos nas fichas vinculadas abaixo.',
+  'admin.moderation.handling.actionHint': 'Esta escolha fica registrada; ela não bane nem remove nada.',
 
   'admin.moderation.timeline.received': 'Recebida',
   'admin.moderation.timeline.taken': 'Assumida por {moderator}',
@@ -104,7 +101,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'Ver as {count} denúncias',
   'admin.moderation.siblings.error': 'As outras denúncias não puderam ser carregadas.',
 
-  'admin.moderation.actions.hint': 'Estes links abrem a ficha relevante: a denúncia em si não bane nem remove nada.',
   'admin.moderation.actions.memberSecurity': 'Banir ou suspender este membro',
   'admin.moderation.actions.authorSecurity': 'Examinar o autor: {name}',
   'admin.moderation.actions.post': 'Abrir a publicação para removê-la',

@@ -1,3 +1,4 @@
+import { AdminNoted } from '@/components/admin/info-note';
 import type { ReactNode } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
@@ -21,19 +22,24 @@ export function MonitoringSection({
   id,
   title,
   hint,
+  info,
   children,
 }: {
   readonly id: string;
   readonly title: string;
   readonly hint?: string;
+  /** Le détail SECONDAIRE : sa question en nom du (i), sa note lue du lecteur d'écran. */
+  readonly info?: { readonly question: string; readonly text: string };
   readonly children: ReactNode;
 }) {
   return (
     <section aria-labelledby={`admin-monitoring-${id}`} data-admin-monitoring-section={id} className="grid gap-3">
       <div className="grid gap-1">
-        <h2 id={`admin-monitoring-${id}`} className="text-title font-semibold" style={{ color: INK }}>
-          {title}
-        </h2>
+        <AdminNoted question={info?.question ?? ''} text={info?.text}>
+          <h2 id={`admin-monitoring-${id}`} className="text-title font-semibold" style={{ color: INK }}>
+            {title}
+          </h2>
+        </AdminNoted>
         {hint === undefined ? null : (
           <p className="text-caption" style={{ color: INK2 }}>
             {hint}

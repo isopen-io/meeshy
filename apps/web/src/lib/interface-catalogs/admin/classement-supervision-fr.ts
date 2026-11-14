@@ -6,7 +6,6 @@
  * conversations de groupe, jamais des communautés.
  */
 const f = {
-  'admin.ranking.subtitle': 'Les plus actifs de la plateforme : membres, conversations, messages et liens, sur la période choisie.',
 
   'admin.ranking.entity.label': 'Ce qu’on classe',
   'admin.ranking.entity.users': 'Membres',
@@ -61,6 +60,7 @@ const f = {
   'admin.ranking.period.all': 'Depuis toujours',
   'admin.ranking.periodNone': 'Ce critère porte sur tout l’historique : la période ne s’applique pas.',
   'admin.ranking.periodCreation': 'La période retient les liens créés pendant cette durée, quelle que soit la date des clics.',
+  'admin.ranking.periodQuestion': 'Que filtre la période ?',
 
   'admin.ranking.limit.label': 'Nombre de lignes',
   'admin.ranking.limit.option': 'Top {count}',
@@ -91,7 +91,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Rien n’a encore été compté pour ce critère.',
   'admin.ranking.widen': 'Voir toute la période',
 
-  'admin.monitoring.subtitle': 'La santé de la plateforme en un coup d’œil, et l’usage réel des adresses de l’API.',
   'admin.monitoring.tabs.label': 'Sections de la supervision',
   'admin.monitoring.tab.health': 'Santé',
   'admin.monitoring.tab.routes': 'Usage des routes',
@@ -147,13 +146,13 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'Depuis quand ces statistiques sont comptées.',
 
   'admin.monitoring.breakers.title': 'Coupe-circuits',
-  'admin.monitoring.breakers.intro': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse.',
+  'admin.monitoring.breakers.intro': 'Ils protègent la plateforme d’un service en panne.',
+  'admin.monitoring.breakers.detail': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse.',
   'admin.monitoring.breakers.failures': 'Échecs',
   'admin.monitoring.breakers.successes': 'Succès',
   'admin.monitoring.breakers.lastFailure': 'Dernier échec',
   'admin.monitoring.breakers.never': 'Aucun échec',
   'admin.monitoring.breakers.empty': 'Aucun coupe-circuit enregistré',
-  'admin.monitoring.breakers.emptyHint': 'Ils apparaissent dès qu’un service protégé est appelé.',
 
   'admin.monitoring.presence.title': 'Présence',
   'admin.monitoring.presence.total': 'Mises à jour demandées',
@@ -168,7 +167,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Lignes du détail',
   'admin.monitoring.routes.limit.option': '{count} lignes',
   'admin.monitoring.routes.notInstrumented': 'La mesure n’est pas installée sur cette instance : les zéros ci-dessous ne prouvent rien.',
-  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons n’ont pas été ventilés par plateforme et version. Les totaux des routes surveillées restent exacts.',
+  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons non ventilés par plateforme et version.',
   'admin.monitoring.routes.truncated': '{shown} lignes affichées sur {total}. Affinez le filtre pour voir les autres.',
   'admin.monitoring.routes.observingSince': 'Observation depuis',
   'admin.monitoring.routes.observedFor': 'Durée observée',
@@ -228,7 +227,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Autre limite signalée',
 
   'admin.monitoring.backups.title': 'Sauvegardes',
-  'admin.monitoring.backups.hint': 'Une sauvegarde complète — base vérifiée, médias, configuration — part chaque nuit ; « Prochaine sauvegarde » dit quand. Un contrôle à 5 h, heure de Paris, prévient les administrateurs en cas de problème.',
+  'admin.monitoring.backups.hint': 'Sauvegarde complète chaque nuit.',
+  'admin.monitoring.backups.detail': 'Une sauvegarde complète — base vérifiée, médias, configuration — part chaque nuit ; « Prochaine sauvegarde » dit quand. Un contrôle à 5 h, heure de Paris, prévient les administrateurs en cas de problème.',
   'admin.monitoring.backups.state.ok': 'Réussie',
   'admin.monitoring.backups.state.failed': 'En échec',
   'admin.monitoring.backups.state.stale': 'Trop ancienne',

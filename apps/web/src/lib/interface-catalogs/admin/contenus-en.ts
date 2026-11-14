@@ -3,7 +3,6 @@ import type fr from './contenus-fr';
 
 const f = {
   /* ─── Posts: the list ─── */
-  'admin.posts.subtitle': 'Posts, stories, reels and statuses from the whole platform: spot, understand and remove what has to go.',
   'admin.posts.caption': 'Platform posts',
   'admin.posts.tabs.label': 'Post type',
   'admin.posts.tab.all': 'All',
@@ -38,7 +37,6 @@ const f = {
   'admin.posts.col.state': 'State',
   'admin.posts.col.published': 'Published',
   'admin.posts.empty': 'No posts',
-  'admin.posts.empty.hint': 'Posts, stories, reels and statuses will appear here as soon as they are published.',
   'admin.posts.filtered': 'No posts match these filters',
   'admin.posts.restricted': 'Restricted-audience content',
   'admin.posts.noText': 'No text',
@@ -62,7 +60,6 @@ const f = {
 
   /* ─── Posts: the record ─── */
   'admin.posts.notFound': 'This post cannot be found',
-  'admin.posts.notFound.hint': 'It no longer exists, or the address is wrong.',
   'admin.posts.publishedOn': 'Published on {date}',
   'admin.posts.stat.likes': 'Likes',
   'admin.posts.stat.comments': 'Comments',
@@ -130,7 +127,6 @@ const f = {
   'admin.posts.remove.already': 'This post had already been removed.',
 
   /* ─── Communities: the list ─── */
-  'admin.community.subtitle': 'The platform’s communities: who runs them, how many people are still in, and what they contain.',
   'admin.community.caption': 'Platform communities',
   'admin.community.search': 'Search (name, identifier, description)',
   'admin.community.count': 'Results: {count}',
@@ -149,7 +145,6 @@ const f = {
   'admin.community.col.state': 'State',
   'admin.community.col.created': 'Created',
   'admin.community.empty': 'No communities',
-  'admin.community.empty.hint': 'Communities will appear here as soon as someone creates one.',
   'admin.community.filtered': 'No communities match these filters',
   'admin.community.visibility.private': 'Private',
   'admin.community.visibility.private.explain': 'Out of search: it can only be joined by invitation, and its page is readable by its members only.',
@@ -161,7 +156,6 @@ const f = {
 
   /* ─── Communities: the record ─── */
   'admin.community.notFound': 'This community cannot be found',
-  'admin.community.notFound.hint': 'It no longer exists, or the address is wrong.',
   'admin.community.banner': 'Community banner',
   'admin.community.stat.members': 'Active members',
   'admin.community.stat.left': 'Departures',

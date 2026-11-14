@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { AdminFormActions, AdminFormError, AdminFormStatus, AdminTextArea } from '@/components/admin/form';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { hasIssues, draftOfRow, editBody, validateDraft, type DraftIssues, type SeasonDraft, ADMIN_SEASON_CALENDAR_QUERY_KEY } from '@/lib/admin/game-season-form';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -163,9 +164,11 @@ export function SeasonEditor({
           void save();
         }}
       >
-        <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {translateAdmin(language, 'admin.gameSeasons.editor.hint')}
-        </p>
+        <AdminInfoAlone
+          question={translateAdmin(language, 'admin.gameSeasons.editor.question')}
+          text={translateAdmin(language, 'admin.gameSeasons.editor.hint')}
+          anchor="gameseasons-editor"
+        />
         <SeasonFields language={language} draft={draft} onDraft={edit} issues={issues} now={list.now} showStatus idPrefix="gameseasons-edit" />
         <AdminFormError text={phase === 'error' ? message : ''} data={{ 'data-gameseasons-error': '' }} />
         <AdminFormError text={phase === 'idle' ? message : ''} tone="neutral" data={{ 'data-gameseasons-notice': '' }} />

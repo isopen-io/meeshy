@@ -3,6 +3,7 @@ import { SEASON_COPY_LOCALES, SEASON_STEP_POINTS_MAX, SEASON_STEP_POINTS_MIN, SE
 import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
 
 import { AdminSelect, AdminTextArea, AdminTextInput } from '@/components/admin/form';
+import { AdminNoted } from '@/components/admin/info-note';
 import { INK2 } from '@/components/admin/tone';
 import {
   COPY_FIELDS,
@@ -221,9 +222,11 @@ export function SeasonFields({
         <h3 id={`${idPrefix}-copy-title`} className="text-body font-semibold">
           {translateAdmin(language, 'admin.gameSeasons.copy.title')}
         </h3>
-        <p className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.gameSeasons.copy.hint')}
-        </p>
+        <AdminNoted question={translateAdmin(language, 'admin.gameSeasons.copy.question')} text={translateAdmin(language, 'admin.gameSeasons.copy.detail')}>
+          <span className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.gameSeasons.copy.hint')}
+          </span>
+        </AdminNoted>
         {SEASON_COPY_LOCALES.map((locale) => (
           <CopyLocaleFields key={locale} language={language} locale={locale} draft={draft} issues={issues} onDraft={onDraft} idPrefix={idPrefix} disabled={disabled} />
         ))}

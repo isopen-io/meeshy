@@ -5,6 +5,7 @@ import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph } from './admin-glyph';
+import { AdminInfoAlone } from './info-note';
 import { AdminFormError, motiveState } from './form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 
@@ -55,6 +56,8 @@ export function AdminConfirmSheet({
   language,
   title,
   body,
+  detail,
+  audited = true,
   confirmLabel,
   tone,
   motive: requested,
@@ -66,6 +69,10 @@ export function AdminConfirmSheet({
   readonly language: AdminLanguage;
   readonly title: string;
   readonly body: string;
+  /** Le détail SECONDAIRE de la conséquence, derrière un (i) : la phrase de `body` reste la seule lue d'emblée. */
+  readonly detail?: { readonly question: string; readonly text: string };
+  /** La ligne commune « ce geste est consigné au journal d'audit » — dite UNE fois ici, jamais dans les corps. */
+  readonly audited?: boolean;
   readonly confirmLabel: string;
   readonly tone: 'danger' | 'primary';
   readonly motive?: {
@@ -129,9 +136,17 @@ export function AdminConfirmSheet({
           >
             <AdminGlyph name={tone === 'danger' ? 'warning' : 'info'} size={24} />
           </span>
-          <p className="min-w-0 flex-1 pt-1 text-body" style={{ color: INK }}>
-            {body}
-          </p>
+          <div className="grid min-w-0 flex-1 gap-1 pt-1">
+            <p className="text-body" style={{ color: INK }}>
+              {body}
+            </p>
+            {detail === undefined ? null : <AdminInfoAlone question={detail.question} text={detail.text} anchor="confirm-detail" />}
+            {audited ? (
+              <p data-admin-confirm-audited className="text-caption" style={{ color: INK2 }}>
+                {translateAdmin(language, 'admin.kit.confirm.audited')}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         {motive === undefined ? null : (

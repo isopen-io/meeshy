@@ -7,13 +7,13 @@
  * comptes », sauf les deux libellés du bouton d’envoi (singulier, pluriel).
  */
 const f = {
-  'admin.broadcast.list.subtitle': 'Les messages que vous écrivez à tous les comptes, ou à une partie d’entre eux : par e-mail, dans l’application, ou les deux.',
+  'admin.broadcast.list.subtitle': 'À tous les comptes ou à une partie d’entre eux.',
   'admin.broadcast.list.caption': 'Liste des diffusions',
   'admin.broadcast.list.search': 'Rechercher par nom ou objet',
   'admin.broadcast.list.count': '{count} diffusions',
   'admin.broadcast.list.countOne': '1 diffusion',
-  'admin.broadcast.list.empty': 'Aucune diffusion pour l’instant',
-  'admin.broadcast.list.emptyHint': 'Écrivez un premier message à vos membres : il est d’abord enregistré comme brouillon, et rien ne part avant votre confirmation.',
+  'admin.broadcast.list.empty': 'Aucune diffusion.',
+  'admin.broadcast.list.emptyAction': 'Écrire une diffusion',
   'admin.broadcast.list.filteredEmpty': 'Aucune diffusion pour ces filtres',
   'admin.broadcast.filter.status': 'Statut',
   'admin.broadcast.col.name': 'Nom',
@@ -37,10 +37,13 @@ const f = {
   'admin.broadcast.compose.section.audience': 'Audience',
   'admin.broadcast.compose.field.name': 'Nom de la diffusion',
   'admin.broadcast.compose.field.name.hint': 'Il sert à la retrouver dans la liste : les destinataires ne le voient pas.',
+  'admin.broadcast.compose.field.name.hintQuestion': 'Qui voit ce nom ?',
   'admin.broadcast.compose.field.subject': 'Objet',
   'admin.broadcast.compose.field.subject.hint': 'L’objet de l’e-mail et le titre de la notification.',
+  'admin.broadcast.compose.field.subject.hintQuestion': 'Où l’objet apparaît-il ?',
   'admin.broadcast.compose.field.body': 'Message',
   'admin.broadcast.compose.field.body.hint': 'Écrit dans la langue ci-dessous ; il est traduit pour les autres langues à la préparation.',
+  'admin.broadcast.compose.field.body.hintQuestion': 'Comment le message est-il traduit ?',
   'admin.broadcast.compose.field.sourceLanguage': 'Langue du message',
   'admin.broadcast.compose.activity': 'Activité des comptes',
   'admin.broadcast.compose.activity.all': 'Tous les comptes',
@@ -74,7 +77,6 @@ const f = {
 
   'admin.broadcast.fiche.loading': 'Chargement de la diffusion',
   'admin.broadcast.fiche.notFound': 'Cette diffusion n’existe plus',
-  'admin.broadcast.fiche.notFoundHint': 'Elle a été supprimée, ou l’adresse est erronée.',
   'admin.broadcast.fiche.back': 'Retour aux diffusions',
   'admin.broadcast.fiche.created': 'Créée {when}',
   'admin.broadcast.fiche.createdBy': 'Créée {when} par {author}',
@@ -110,6 +112,7 @@ const f = {
   'admin.broadcast.email.completedAt': 'Envoi terminé',
   'admin.broadcast.email.running': 'En cours',
   'admin.broadcast.email.skipped': 'Les comptes qui ont désactivé les e-mails de diffusion sont ignorés : le nombre d’envois et d’échecs peut être inférieur au nombre de destinataires.',
+  'admin.broadcast.email.skipped.why': 'Pourquoi moins d’envois que de destinataires ?',
   'admin.broadcast.section.inApp': 'Livraison dans l’application',
   'admin.broadcast.inApp.state': 'État',
   'admin.broadcast.inApp.state.never': 'Pas encore publiée dans l’application',
@@ -134,7 +137,7 @@ const f = {
   'admin.broadcast.notice.failedNoMessage': 'L’envoi a échoué, et la passerelle n’a donné aucun message d’erreur.',
   'admin.broadcast.notice.sending': 'Envoi en cours : cette page se met à jour toute seule, toutes les 10 secondes.',
   'admin.broadcast.notice.inAppRunning': 'Publication en cours : cette page se met à jour toute seule, toutes les 10 secondes.',
-  'admin.broadcast.notice.noRecipients': 'Aucun compte ne correspond à cette audience : il n’y a personne à qui écrire. Supprimez cette diffusion et recréez-la avec un autre ciblage.',
+  'admin.broadcast.notice.noRecipients': 'Aucun compte ne correspond à cette audience : recréez la diffusion avec un autre ciblage.',
 
   'admin.broadcast.gesture.edit': 'Modifier',
   'admin.broadcast.gesture.prepare': 'Traduire et préparer l’envoi',
@@ -172,8 +175,8 @@ const f = {
   'admin.broadcast.audience.inAppRecipients': 'Comptes joignables dans l’application',
   'admin.broadcast.audience.emailRecipients': 'Comptes joignables par e-mail (adresse vérifiée)',
   'admin.broadcast.notice.inAppFailed': 'La publication dans l’application a échoué : {message}',
-  'admin.broadcast.notice.inAppFailedNoMessage': 'La publication dans l’application a échoué, sans qu’aucune notification ne soit livrée.',
-  'admin.broadcast.notice.noEmailRecipients': 'Aucun compte de cette audience n’a d’adresse e-mail vérifiée : l’envoi par e-mail ne toucherait personne. La publication dans l’application reste possible.',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'Publication dans l’application échouée : rien n’a été livré.',
+  'admin.broadcast.notice.noEmailRecipients': 'Aucun compte de cette audience n’a d’e-mail vérifié : seule la publication dans l’application est possible.',
   'admin.broadcast.confirm.inApp.bodyUncounted': 'Audience : {audience}. Le nombre de comptes joignables dans l’application n’est compté qu’à la préparation, et cette page ne l’a pas en mémoire. Chacun reçoit une notification dans son centre de notifications, avec un envoi push. Elle ne peut pas être retirée, et ne se publie qu’une fois.',
 } as const;
 

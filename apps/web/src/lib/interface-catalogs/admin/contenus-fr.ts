@@ -12,7 +12,6 @@
  */
 const f = {
   /* ─── Publications : la liste ─── */
-  'admin.posts.subtitle': 'Publications, stories, reels et statuts de toute la plateforme : repérez, comprenez et retirez ce qui doit l’être.',
   'admin.posts.caption': 'Publications de la plateforme',
   'admin.posts.tabs.label': 'Type de publication',
   'admin.posts.tab.all': 'Toutes',
@@ -47,7 +46,6 @@ const f = {
   'admin.posts.col.state': 'État',
   'admin.posts.col.published': 'Publiée',
   'admin.posts.empty': 'Aucune publication',
-  'admin.posts.empty.hint': 'Les publications, stories, reels et statuts apparaîtront ici dès qu’ils seront publiés.',
   'admin.posts.filtered': 'Aucune publication pour ces filtres',
   'admin.posts.restricted': 'Contenu à audience restreinte',
   'admin.posts.noText': 'Sans texte',
@@ -71,7 +69,6 @@ const f = {
 
   /* ─── Publications : la fiche ─── */
   'admin.posts.notFound': 'Cette publication est introuvable',
-  'admin.posts.notFound.hint': 'Elle n’existe plus, ou l’adresse est incorrecte.',
   'admin.posts.publishedOn': 'Publiée le {date}',
   'admin.posts.stat.likes': 'J’aime',
   'admin.posts.stat.comments': 'Commentaires',
@@ -139,7 +136,6 @@ const f = {
   'admin.posts.remove.already': 'Cette publication était déjà retirée.',
 
   /* ─── Communautés : la liste ─── */
-  'admin.community.subtitle': 'Les communautés de la plateforme : qui les dirige, combien de personnes y sont encore, et ce qu’elles contiennent.',
   'admin.community.caption': 'Communautés de la plateforme',
   'admin.community.search': 'Rechercher (nom, identifiant, description)',
   'admin.community.count': 'Résultats : {count}',
@@ -158,7 +154,6 @@ const f = {
   'admin.community.col.state': 'État',
   'admin.community.col.created': 'Création',
   'admin.community.empty': 'Aucune communauté',
-  'admin.community.empty.hint': 'Les communautés apparaîtront ici dès qu’une personne en créera une.',
   'admin.community.filtered': 'Aucune communauté pour ces filtres',
   'admin.community.visibility.private': 'Privée',
   'admin.community.visibility.private.explain': 'Hors de la recherche : on ne la rejoint que sur invitation, et sa page n’est lisible que de ses membres.',
@@ -170,7 +165,6 @@ const f = {
 
   /* ─── Communautés : la fiche ─── */
   'admin.community.notFound': 'Cette communauté est introuvable',
-  'admin.community.notFound.hint': 'Elle n’existe plus, ou l’adresse est incorrecte.',
   'admin.community.banner': 'Bannière de la communauté',
   'admin.community.stat.members': 'Membres actifs',
   'admin.community.stat.left': 'Départs',

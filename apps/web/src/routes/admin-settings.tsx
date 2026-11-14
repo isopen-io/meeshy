@@ -41,7 +41,6 @@ export function AdminSettingsPanel({ language, reach, deps = apiDeps }: Settings
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.settings')}
-        subtitle={translateAdmin(language, 'admin.settings.subtitle')}
         place={{ section: 'settings' }}
       />
       <AdminOfflineNotice language={language} />

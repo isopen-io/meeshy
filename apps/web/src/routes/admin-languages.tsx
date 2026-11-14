@@ -111,7 +111,7 @@ function PeriodBody({ language, block, period }: { readonly language: AdminLangu
 
   if (block.state === 'ready' && languages.length === 0) {
     return (
-      <AdminEmptyState title={translateAdmin(language, 'admin.lang.empty.title')} hint={translateAdmin(language, 'admin.lang.empty.hint')} glyph="translate" />
+      <AdminEmptyState title={translateAdmin(language, 'admin.lang.empty.title')} glyph="translate" />
     );
   }
 
@@ -196,13 +196,13 @@ export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly lan
         </StatsBlock>
       </StatsSection>
 
-      <StatsSection id="language-users" title={translateAdmin(language, 'admin.lang.users.title')} note={translateAdmin(language, 'admin.lang.users.hint')}>
+      <StatsSection id="language-users" title={translateAdmin(language, 'admin.lang.users.title')} note={translateAdmin(language, 'admin.lang.users.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.measure.question')}>
         <StatsBlock language={language} query={stats}>
           {(block) => <UsersChart language={language} block={block} />}
         </StatsBlock>
       </StatsSection>
 
-      <StatsSection id="language-pairs" title={translateAdmin(language, 'admin.lang.pairs.title')} note={`${translateAdmin(language, 'admin.lang.pairs.hint')} ${windowNote(language, period)}`}>
+      <StatsSection id="language-pairs" title={translateAdmin(language, 'admin.lang.pairs.title')} windowNote={windowNote(language, period)} note={translateAdmin(language, 'admin.lang.pairs.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.measure.question')}>
         <StatsBlock language={language} query={stats} groupError>
           {(block) =>
             block.state === 'ready' && (block.data?.pairs.length ?? 0) === 0 ? (
@@ -216,13 +216,13 @@ export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly lan
         </StatsBlock>
       </StatsSection>
 
-      <StatsSection id="language-timeline" title={translateAdmin(language, 'admin.lang.timeline.title')} note={`${translateAdmin(language, 'admin.lang.timeline.hint')} ${windowNote(language, timelinePeriod)}`}>
+      <StatsSection id="language-timeline" title={translateAdmin(language, 'admin.lang.timeline.title')} windowNote={windowNote(language, timelinePeriod)} note={translateAdmin(language, 'admin.lang.timeline.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.measure.question')}>
         <StatsBlock language={language} query={timeline}>
           {(block) => <TimelineChart language={language} block={block} />}
         </StatsBlock>
       </StatsSection>
 
-      <StatsSection id="language-accuracy" title={translateAdmin(language, 'admin.lang.accuracy.title')} note={translateAdmin(language, 'admin.lang.accuracy.hint')}>
+      <StatsSection id="language-accuracy" title={translateAdmin(language, 'admin.lang.accuracy.title')} note={translateAdmin(language, 'admin.lang.accuracy.hint')} noteQuestion={translateAdmin(language, 'admin.kit.info.table')}>
         <StatsBlock language={language} query={accuracy} groupError>
           {(block) =>
             block.state === 'ready' && (block.data?.length ?? 0) === 0 ? (

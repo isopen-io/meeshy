@@ -174,7 +174,7 @@ export function AgentTrackedList({
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.tracked.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.empty'), hint: translateAdmin(language, 'admin.agentPanel.tracked.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.filteredEmpty') }}
         pageSizes={ADMIN_AGENT_PAGE_SIZES}
       />
@@ -385,7 +385,7 @@ export function AgentLogList({
             </div>
           </div>
         }
-        empty={{ title: translateAdmin(language, 'admin.agentPanel.logs.empty'), hint: translateAdmin(language, 'admin.agentPanel.logs.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.agentPanel.logs.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.logs.filteredEmpty') }}
         pageSizes={ADMIN_AGENT_PAGE_SIZES}
       />

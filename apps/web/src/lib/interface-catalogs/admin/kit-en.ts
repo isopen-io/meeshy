@@ -3,6 +3,19 @@ import type fr from './kit-fr';
 
 const f = {
   'admin.group.overview': 'Overview',
+  'admin.kit.info.setting': 'What does this setting change?',
+  'admin.kit.info.capability': 'What does this capability allow?',
+  'admin.kit.info.blindSpot': 'Why this blind spot?',
+  'admin.kit.info.action': 'What happened?',
+  'admin.kit.info.table': 'How to read this table?',
+  'admin.kit.info.stat': 'What does this figure measure?',
+  'admin.kit.info.edit': 'How do I edit?',
+  'admin.kit.info.secret': 'Why are these keys sensitive?',
+  'admin.kit.info.purge': 'What does this cleanup remove?',
+  'admin.kit.info.backup': 'How does the backup work?',
+  'admin.kit.info.breaker': 'What is a circuit breaker?',
+  'admin.kit.info.field': 'What is this setting for?',
+  'admin.kit.confirm.audited': 'This action is recorded in the audit log.',
   'admin.group.people': 'People',
   'admin.group.exchanges': 'Exchanges',
   'admin.group.content': 'Content',
@@ -149,7 +162,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Creator only',
 
   'admin.enum.encryption.e2ee': 'End-to-end encrypted',
-  'admin.enum.encryption.e2ee.explain': 'The server does not read the messages: no automatic translation.',
+  'admin.enum.encryption.e2ee.explain': 'The server neither reads nor translates the messages: each device translates them, and this encryption can never be turned off.',
   'admin.enum.encryption.server': 'Encrypted on the server',
   'admin.enum.encryption.hybrid': 'Hybrid',
   'admin.enum.encryption.none': 'Not encrypted',

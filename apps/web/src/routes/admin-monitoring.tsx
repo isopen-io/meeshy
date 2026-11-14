@@ -43,7 +43,6 @@ export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNo
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.monitoring')}
-        subtitle={translateAdmin(language, 'admin.monitoring.subtitle')}
         place={{ section: 'monitoring' }}
       />
       <AdminOfflineNotice language={language} />

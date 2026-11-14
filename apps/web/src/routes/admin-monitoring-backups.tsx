@@ -27,7 +27,7 @@ export function BackupsSection({ language, backups, now }: { readonly language: 
   const contents = backups.lastSuccess;
 
   return (
-    <MonitoringSection id="backups" title={t('admin.monitoring.backups.title')} hint={t('admin.monitoring.backups.hint')}>
+    <MonitoringSection id="backups" title={t('admin.monitoring.backups.title')} hint={t('admin.monitoring.backups.hint')} info={{ question: t('admin.kit.info.backup'), text: t('admin.monitoring.backups.detail') }}>
       <div data-admin-backups data-admin-backups-state={state.raw} className="grid gap-3">
         <span className="flex flex-wrap items-center gap-2">
           <AdminInterpretedBadge value={state} />

@@ -119,6 +119,7 @@ export function BroadcastComposerSheet({
                 id={fieldId('name')}
                 label={t('admin.broadcast.compose.field.name')}
                 hint={t('admin.broadcast.compose.field.name.hint')}
+                hintQuestion={t('admin.broadcast.compose.field.name.hintQuestion')}
                 error={errorOf('name')}
                 value={form.name}
                 onChange={(name) => patch({ name })}
@@ -135,6 +136,7 @@ export function BroadcastComposerSheet({
                 id={fieldId('subject')}
                 label={t('admin.broadcast.compose.field.subject')}
                 hint={t('admin.broadcast.compose.field.subject.hint')}
+                hintQuestion={t('admin.broadcast.compose.field.subject.hintQuestion')}
                 error={errorOf('subject')}
                 value={form.subject}
                 onChange={(subject) => patch({ subject })}
@@ -143,6 +145,7 @@ export function BroadcastComposerSheet({
                 id={fieldId('body')}
                 label={t('admin.broadcast.compose.field.body')}
                 hint={t('admin.broadcast.compose.field.body.hint')}
+                hintQuestion={t('admin.broadcast.compose.field.body.hintQuestion')}
                 error={errorOf('body')}
                 value={form.body}
                 rows={9}

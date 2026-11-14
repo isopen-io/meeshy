@@ -404,8 +404,63 @@ describe('qui entre dans les réglages — canAccessAdmin', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Réglages');
-    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Votre accès');
+    expect(host.querySelector('[data-admin-page-header] p')).toBeNull();
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Système');
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).not.toContain('Opérations');
+  });
+});
+
+const visibleText = (root: Element): string => {
+  const copy = root.cloneNode(true) as Element;
+  copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+};
+
+describe('épure (#18486) — la capacité se nomme, son explication est derrière un (i)', () => {
+  test('chaque capacité : un (i) « Que permet cette capacité ? » dont la note reste lue du lecteur d’écran', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+
+    for (const key of CAPABILITY_KEYS) {
+      const row = capability(host, key);
+      const button = row?.querySelector<HTMLButtonElement>('button[aria-label="Que permet cette capacité ?"]');
+      expect(button).not.toBeNull();
+      const note = row?.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+      expect((note?.textContent ?? '').length).toBeGreaterThan(10);
+      expect(note?.classList.contains('sr-only')).toBe(true);
+    }
+    expect(visibleText(capability(host, 'canManageTranslations') as Element)).not.toContain('aucune section d’administration n’en dépend');
+  });
+
+  test('« Menu latéral replié » : la bascule se lit seule, la précision est derrière un (i)', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+    const block = host.querySelector('[data-admin-fiche-section="settings-space"]') as Element;
+
+    expect(visibleText(block)).not.toContain('propre à ce navigateur');
+    const button = block.querySelector<HTMLButtonElement>('button[aria-label="Que change ce réglage ?"]');
+    expect(button).not.toBeNull();
+    expect(block.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`)?.textContent).toContain('propre à ce navigateur');
+  });
+
+  test('« Compteurs du tableau de bord » : le titre et le bouton suffisent, la durée de mémoire est derrière un (i)', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+    const block = host.querySelector('[data-admin-fiche-section="settings-dashboard"]') as Element;
+
+    expect(visibleText(block)).not.toContain('gardés en mémoire');
+    expect(block.querySelector('[data-admin-action="recompute-dashboard"]')?.textContent).toContain('Recalculer maintenant');
+    const button = block.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi recalculer les compteurs ?"]');
+    expect(button).not.toBeNull();
+    const note = block.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+    expect(note?.textContent).toBe('Les compteurs du tableau de bord sont gardés en mémoire par la plateforme pendant dix minutes. Recalculez-les pour voir tout de suite les chiffres à jour.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+  });
+
+  test('l’en-tête ne répète plus le titre', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+
+    expect(visibleText(host)).not.toContain('le recalcul des compteurs du tableau de bord et vos préférences d’affichage');
   });
 });

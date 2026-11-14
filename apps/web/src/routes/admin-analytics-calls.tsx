@@ -186,7 +186,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
             anchor="total-calls"
             label={translateAdmin(language, 'admin.analytics.calls.total')}
             value={(calls) => formatCount(calls.totalCalls, language)}
-            caption={() => translateAdmin(language, 'admin.analytics.calls.total.caption')}
+            note={() => translateAdmin(language, 'admin.analytics.calls.total.caption')}
           />
           <Metric
             language={language}
@@ -223,7 +223,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
             anchor="setup-time"
             label={translateAdmin(language, 'admin.analytics.calls.setup')}
             value={(calls) => formatDuration(calls.avgSetupTimeMs, 'ms', language)}
-            caption={() => translateAdmin(language, 'admin.analytics.calls.setup.caption')}
+            note={() => translateAdmin(language, 'admin.analytics.calls.setup.caption')}
           />
           <Metric
             language={language}
@@ -284,7 +284,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
             anchor="network-transitions"
             label={translateAdmin(language, 'admin.analytics.calls.transitions')}
             value={(calls) => formatDecimal(calls.avgNetworkTransitions, language)}
-            caption={() => translateAdmin(language, 'admin.analytics.calls.transitions.caption')}
+            note={() => translateAdmin(language, 'admin.analytics.calls.transitions.caption')}
           />
         </AdminStatGrid>
         <div className="grid gap-4 @4xl:grid-cols-2">
@@ -302,7 +302,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
         </div>
       </StatsSection>
 
-      <StatsSection id="calls-reasons" title={translateAdmin(language, 'admin.analytics.calls.reasons.title')} note={translateAdmin(language, 'admin.analytics.calls.reasons.hint')}>
+      <StatsSection id="calls-reasons" title={translateAdmin(language, 'admin.analytics.calls.reasons.title')} note={translateAdmin(language, 'admin.analytics.calls.reasons.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.calls.reasons.question')}>
         <CountChart
           language={language}
           id="call-reasons"

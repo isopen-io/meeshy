@@ -252,7 +252,7 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.conversation.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.conversation.list.empty'), hint: translateAdmin(language, 'admin.conversation.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.conversation.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.conversation.list.filteredEmpty') }}
       />
     </div>

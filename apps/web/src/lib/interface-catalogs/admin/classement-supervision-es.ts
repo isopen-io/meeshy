@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './classement-supervision-fr';
 
 const f = {
-  'admin.ranking.subtitle': 'Lo más activo de la plataforma: miembros, conversaciones, mensajes y enlaces, durante el período elegido.',
 
   'admin.ranking.entity.label': 'Qué clasificar',
   'admin.ranking.entity.users': 'Miembros',
@@ -57,6 +56,7 @@ const f = {
   'admin.ranking.period.all': 'Desde siempre',
   'admin.ranking.periodNone': 'Este criterio cubre todo el historial: el período no se aplica.',
   'admin.ranking.periodCreation': 'El período conserva los enlaces creados durante él, sea cual sea la fecha de los clics.',
+  'admin.ranking.periodQuestion': '¿Qué filtra el período?',
 
   'admin.ranking.limit.label': 'Número de filas',
   'admin.ranking.limit.option': 'Top {count}',
@@ -87,7 +87,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Todavía no se ha contado nada para este criterio.',
   'admin.ranking.widen': 'Ver desde siempre',
 
-  'admin.monitoring.subtitle': 'La salud de la plataforma de un vistazo y el uso real de las direcciones de la API.',
   'admin.monitoring.tabs.label': 'Secciones de supervisión',
   'admin.monitoring.tab.health': 'Salud',
   'admin.monitoring.tab.routes': 'Uso de las rutas',
@@ -143,13 +142,13 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'Desde hace cuánto se cuentan estas estadísticas.',
 
   'admin.monitoring.breakers.title': 'Cortacircuitos',
-  'admin.monitoring.breakers.intro': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera.',
+  'admin.monitoring.breakers.intro': 'Protegen la plataforma de un servicio averiado.',
+  'admin.monitoring.breakers.detail': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera.',
   'admin.monitoring.breakers.failures': 'Fallos',
   'admin.monitoring.breakers.successes': 'Aciertos',
   'admin.monitoring.breakers.lastFailure': 'Último fallo',
   'admin.monitoring.breakers.never': 'Ningún fallo',
   'admin.monitoring.breakers.empty': 'Ningún cortacircuitos registrado',
-  'admin.monitoring.breakers.emptyHint': 'Aparecen en cuanto se llama a un servicio protegido.',
 
   'admin.monitoring.presence.title': 'Presencia',
   'admin.monitoring.presence.total': 'Actualizaciones solicitadas',
@@ -164,7 +163,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Filas de detalle',
   'admin.monitoring.routes.limit.option': '{count} filas',
   'admin.monitoring.routes.notInstrumented': 'La medición no está instalada en esta instancia: los ceros de abajo no demuestran nada.',
-  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras no se desglosaron por plataforma ni versión. Los totales de las rutas vigiladas siguen siendo exactos.',
+  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras sin desglosar por plataforma ni versión.',
   'admin.monitoring.routes.truncated': '{shown} filas mostradas de {total}. Acota el filtro para ver las demás.',
   'admin.monitoring.routes.observingSince': 'Observando desde',
   'admin.monitoring.routes.observedFor': 'Tiempo observado',
@@ -224,7 +223,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Otro límite señalado',
 
   'admin.monitoring.backups.title': 'Copias de seguridad',
-  'admin.monitoring.backups.hint': 'Cada noche se hace una copia completa — base verificada, medios, configuración —; «Próxima copia» indica cuándo. Un control a las 5 h, hora de París, avisa a los administradores si algo falla.',
+  'admin.monitoring.backups.hint': 'Copia completa cada noche.',
+  'admin.monitoring.backups.detail': 'Cada noche se hace una copia completa — base verificada, medios, configuración —; «Próxima copia» indica cuándo. Un control a las 5 h, hora de París, avisa a los administradores si algo falla.',
   'admin.monitoring.backups.state.ok': 'Correcta',
   'admin.monitoring.backups.state.failed': 'Fallida',
   'admin.monitoring.backups.state.stale': 'Demasiado antigua',

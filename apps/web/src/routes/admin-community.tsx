@@ -297,7 +297,7 @@ export function AdminCommunityPanel({
         ) : failure instanceof ApiError && failure.status === 403 ? (
           <AdminDeniedInline language={language} />
         ) : failure instanceof ApiError && failure.status === 404 ? (
-          <AdminEmptyState title={translateAdmin(language, 'admin.community.notFound')} hint={translateAdmin(language, 'admin.community.notFound.hint')} glyph="usersThree" />
+          <AdminEmptyState title={translateAdmin(language, 'admin.community.notFound')} glyph="usersThree" />
         ) : (
           <AdminErrorState language={language} onRetry={() => void query.refetch()} />
         )}

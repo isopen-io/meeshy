@@ -158,7 +158,7 @@ export function AdminBroadcastsPanel({ language, deps = apiDeps, now = defaultNo
             data-admin-action="new"
             disabled={!online}
             onClick={compose}
-            className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97] disabled:opacity-40"
             style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
           >
             <AdminGlyph name="plus" size={16} />
@@ -192,7 +192,22 @@ export function AdminBroadcastsPanel({ language, deps = apiDeps, now = defaultNo
             {...(count === undefined ? {} : { trailing: count })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.broadcast.list.empty'), hint: translateAdmin(language, 'admin.broadcast.list.emptyHint') }}
+        empty={{
+          title: translateAdmin(language, 'admin.broadcast.list.empty'),
+          action: (
+            <button
+              type="button"
+              data-admin-action="new-empty"
+              disabled={!online}
+              onClick={compose}
+              className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97] disabled:opacity-40"
+              style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
+            >
+              <AdminGlyph name="plus" size={16} />
+              {translateAdmin(language, 'admin.broadcast.list.emptyAction')}
+            </button>
+          ),
+        }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.broadcast.list.filteredEmpty') }}
       />
       {composing ? (

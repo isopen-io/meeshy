@@ -3,7 +3,7 @@ import type fr from './ergonomie-fr';
 
 const f = {
   'admin.quickEdit.title': 'Quick edit',
-  'admin.quickEdit.subtitle': 'Tap a detail to change it: it is saved as soon as you leave it.',
+  'admin.quickEdit.note': 'Tap a detail to change it: it is saved as soon as you leave it.',
   'admin.quickEdit.fold': 'Collapse quick edit',
   'admin.quickEdit.unfold': 'Expand quick edit',
   'admin.quickEdit.birthDate': 'Date of birth',

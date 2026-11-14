@@ -1,6 +1,7 @@
 import { useQuery, type QueryKey, type UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminStatCard } from '@/components/admin/stat-card';
 import { AdminDeniedInline, AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { INK, INK2 } from '@/components/admin/tone';
@@ -100,6 +101,7 @@ export function Metric<T>({
   label,
   value,
   caption,
+  note,
 }: {
   readonly language: AdminLanguage;
   readonly block: Block<T>;
@@ -107,6 +109,8 @@ export function Metric<T>({
   readonly label: string;
   readonly value: (data: T) => string;
   readonly caption?: (data: T) => string;
+  /** L'explication de la mesure, DERRIÈRE le (i) de la carte : la valeur seule au repos. */
+  readonly note?: (data: T) => string;
 }) {
   const data = block.data;
   return (
@@ -118,6 +122,7 @@ export function Metric<T>({
       onRetry={block.retry}
       value={data === undefined ? '—' : value(data)}
       {...(data === undefined || caption === undefined ? {} : { caption: caption(data) })}
+      {...(data === undefined || note === undefined ? {} : { note: { question: translateAdmin(language, 'admin.kit.info.stat'), text: note(data) } })}
     />
   );
 }
@@ -127,20 +132,33 @@ export function StatsSection({
   id,
   title,
   note,
+  noteQuestion,
+  windowNote: periodNote,
   children,
 }: {
   readonly id: string;
   readonly title: string;
+  /** La mention de PÉRIODE, toujours lue : c'est un repère, pas une explication. */
+  readonly windowNote?: string;
   readonly note?: string;
+  /** La QUESTION à laquelle `note` répond : avec elle, la note passe derrière un (i). */
+  readonly noteQuestion?: string;
   readonly children: ReactNode;
 }) {
   return (
     <section aria-labelledby={`${id}-title`} data-admin-stats-section={id} className="grid gap-3">
       <div className="grid gap-1">
-        <h2 id={`${id}-title`} className="text-title font-semibold" style={{ color: INK }}>
-          {title}
-        </h2>
-        {note === undefined ? null : (
+        <AdminNoted question={noteQuestion ?? ''} text={noteQuestion === undefined ? undefined : note}>
+          <h2 id={`${id}-title`} className="text-title font-semibold" style={{ color: INK }}>
+            {title}
+          </h2>
+        </AdminNoted>
+        {periodNote === undefined ? null : (
+          <p className="text-caption" style={{ color: INK2 }}>
+            {periodNote}
+          </p>
+        )}
+        {note === undefined || noteQuestion !== undefined ? null : (
           <p className="text-caption" style={{ color: INK2 }}>
             {note}
           </p>

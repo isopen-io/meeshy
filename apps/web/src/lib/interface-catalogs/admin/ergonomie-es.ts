@@ -3,7 +3,7 @@ import type fr from './ergonomie-fr';
 
 const f = {
   'admin.quickEdit.title': 'Edición rápida',
-  'admin.quickEdit.subtitle': 'Toca un dato para cambiarlo: se guarda en cuanto lo dejas.',
+  'admin.quickEdit.note': 'Toca un dato para cambiarlo: se guarda en cuanto lo dejas.',
   'admin.quickEdit.fold': 'Plegar la edición rápida',
   'admin.quickEdit.unfold': 'Desplegar la edición rápida',
   'admin.quickEdit.birthDate': 'Fecha de nacimiento',

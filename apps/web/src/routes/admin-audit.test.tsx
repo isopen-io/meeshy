@@ -358,7 +358,7 @@ describe('les états dessinés', () => {
 
     const empty = host.querySelector('[data-admin-list] [data-admin-empty]')?.textContent ?? '';
     expect(empty).toContain('Aucune trace pour l’instant');
-    expect(empty).toContain('apparaîtront ici');
+    expect(empty).not.toContain('apparaîtront ici');
   });
 
   test('vide filtré : le dit, et « Réinitialiser » retire les filtres', async () => {
@@ -407,7 +407,9 @@ describe('la feuille de détail — tout ce qu’il faut pour comprendre un gest
     const host = await open(deps);
     const sheet = await openDetail(host, OBJECT_ID(1));
 
-    expect(sheet.querySelector('[data-admin-audit-explain]')?.textContent).toBe('Le rôle d’un membre, donc ses droits d’administration, a changé.');
+    const explain = sheet.querySelector<HTMLButtonElement>('[data-admin-info="audit-explain"] button');
+    expect(explain?.getAttribute('aria-label')).toBe('Que s’est-il passé ?');
+    expect(sheet.querySelector(`[id="${explain?.getAttribute('aria-controls') ?? ''}"]`)?.textContent).toBe('Le rôle d’un membre, donc ses droits d’administration, a changé.');
     expect(sheet.querySelector('[data-admin-meta="reason"]')?.textContent).toContain('Promotion validée par le comité');
     expect(sheet.querySelector('[data-admin-meta="admin"]')?.textContent).toContain('Awa Diop');
     expect(sheet.querySelector('[data-admin-meta="when"]')?.textContent).toContain('il y a 20 minutes');
@@ -669,7 +671,7 @@ describe('l’en-tête', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Journal d’audit');
-    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Qui a fait quoi, à qui et pourquoi');
+    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Chaque geste d’administration et chaque lecture du privé laissent une trace.');
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Modération');
   });
 });

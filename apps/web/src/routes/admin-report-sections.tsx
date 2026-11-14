@@ -387,9 +387,6 @@ export function ActionsSection({ language, report, reach }: { readonly language:
 
   return (
     <AdminFicheSection id="actions" title={translateAdmin(language, 'admin.moderation.section.actions')}>
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.moderation.actions.hint')}
-      </p>
       {links.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, 'admin.moderation.actions.none')}

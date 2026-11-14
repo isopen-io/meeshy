@@ -2,9 +2,10 @@ import { useId, useState } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminSwitch } from '@/components/admin/form';
 import { AdminInlineNotice } from '@/components/admin/states';
-import { BRAND, INK2 } from '@/components/admin/tone';
+import { BRAND } from '@/components/admin/tone';
 import { readSidebarFolded, writeSidebarFolded } from '@/lib/admin/admin-space';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -65,22 +66,21 @@ export function DashboardBlock({
 
   return (
     <AdminFicheSection id="settings-dashboard" title={translateAdmin(language, 'admin.settings.dash.title')}>
-      <p className="text-body" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.settings.dash.body')}
-      </p>
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          data-admin-action="recompute-dashboard"
-          disabled={!online || running}
-          aria-busy={running}
-          onClick={() => void recompute()}
-          className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
-          style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
-        >
-          <AdminGlyph name="arrowClockwise" size={16} />
-          {translateAdmin(language, running ? 'admin.settings.dash.busy' : 'admin.settings.dash.action')}
-        </button>
+        <AdminNoted question={translateAdmin(language, 'admin.settings.dash.why')} text={translateAdmin(language, 'admin.settings.dash.body')}>
+          <button
+            type="button"
+            data-admin-action="recompute-dashboard"
+            disabled={!online || running}
+            aria-busy={running}
+            onClick={() => void recompute()}
+            className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+            style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
+          >
+            <AdminGlyph name="arrowClockwise" size={16} />
+            {translateAdmin(language, running ? 'admin.settings.dash.busy' : 'admin.settings.dash.action')}
+          </button>
+        </AdminNoted>
         {action.state.phase === 'done' ? (
           <span data-admin-dashboard-done className="inline-flex items-center gap-1 text-caption font-medium" style={{ color: 'var(--color-success)' }}>
             <AdminGlyph name="checkCircle" size={14} />
@@ -117,6 +117,7 @@ export function SpaceBlock({ language, announce }: { readonly language: AdminLan
         id={switchId}
         label={translateAdmin(language, 'admin.settings.space.folded')}
         hint={translateAdmin(language, 'admin.settings.space.foldedHint')}
+        hintQuestion={translateAdmin(language, 'admin.kit.info.setting')}
         checked={folded}
         onToggle={toggle}
         data={{ 'data-admin-action': 'toggle-folded-sidebar' }}

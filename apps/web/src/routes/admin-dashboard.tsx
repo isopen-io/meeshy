@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminOfflineNotice } from '@/components/admin/states';
 import { AdminSummaryGrid } from '@/components/admin/summary-card';
-import { INK2 } from '@/components/admin/tone';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -60,12 +60,23 @@ const ZONES = ['now', 'platform', 'usage', 'trends', 'todo', 'people', 'system']
 type Zone = (typeof ZONES)[number];
 
 /** La phrase d'aide d'une zone, en tête de sa modale. */
-function Hint({ text }: { readonly text: string }) {
-  return (
-    <p className="text-caption" style={{ color: INK2 }}>
-      {text}
-    </p>
-  );
+const ZONE_QUESTIONS = {
+  now: 'admin.dash.zone.refresh.question',
+  platform: 'admin.dash.zone.refresh.question',
+  usage: 'admin.dash.zone.usage.question',
+  trends: 'admin.dash.zone.trends.question',
+} as const;
+
+const ZONE_NOTES = {
+  now: 'admin.dash.zone.now.hint',
+  platform: 'admin.dash.zone.platform.hint',
+  usage: 'admin.dash.zone.usage.hint',
+  trends: 'admin.dash.zone.trends.hint',
+} as const;
+
+/** Le détail d'une zone, DERRIÈRE un (i) (épure #17584, règle 1) : la question dit ce qu'il répond, la note reste lue. */
+function ZoneNote({ language, zone }: { readonly language: AdminLanguage; readonly zone: keyof typeof ZONE_NOTES }) {
+  return <AdminInfoAlone question={translateAdmin(language, ZONE_QUESTIONS[zone])} text={translateAdmin(language, ZONE_NOTES[zone])} anchor={`zone-${zone}`} />;
 }
 
 export function AdminDashboardPanel({
@@ -129,28 +140,28 @@ export function AdminDashboardPanel({
       {detail(
         'now',
         <>
-          <Hint text={translateAdmin(language, 'admin.dash.zone.now.hint')} />
+          <ZoneNote language={language} zone="now" />
           <NowBlock {...context} />
         </>,
       )}
       {detail(
         'platform',
         <>
-          <Hint text={translateAdmin(language, 'admin.dash.zone.platform.hint')} />
+          <ZoneNote language={language} zone="platform" />
           <PlatformBlock {...context} />
         </>,
       )}
       {detail(
         'usage',
         <>
-          <Hint text={translateAdmin(language, 'admin.dash.zone.usage.hint')} />
+          <ZoneNote language={language} zone="usage" />
           <UsageBlock {...context} />
         </>,
       )}
       {detail(
         'trends',
         <>
-          <Hint text={translateAdmin(language, 'admin.dash.zone.trends.hint')} />
+          <ZoneNote language={language} zone="trends" />
           <VolumeChart {...context} />
           <div className="grid items-start gap-4 @4xl:grid-cols-2">
             <HourlyChart {...context} />
