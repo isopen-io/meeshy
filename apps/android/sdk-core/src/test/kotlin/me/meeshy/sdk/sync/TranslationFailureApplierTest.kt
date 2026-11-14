@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.ConversationSocketEvent
 import me.meeshy.sdk.model.TranscriptionFailedEvent
 import me.meeshy.sdk.model.TranscriptionPayload
 import me.meeshy.sdk.model.TranscriptionReadyEvent
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.TranslationFailedEvent
 import me.meeshy.sdk.socket.ConversationSocketEventsManager
@@ -37,7 +38,7 @@ class TranslationFailureApplierTest {
     fun `un echec de traduction pose l'etat puis la traduction recue l'efface`() = runTest {
         registrar.deliver(conversation, TranslationFailedEvent("m1", "c1", "boom"))
         assertThat(store.ledger.value.hasFailure("m1")).isTrue()
-        registrar.deliver(translation, TranslationEvent("m1", "c1", "fr", "Bonjour"))
+        registrar.deliver(translation, TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "fr", translatedContent = "Bonjour"))))
         assertThat(store.ledger.value.hasFailure("m1")).isFalse()
     }
 
@@ -52,7 +53,7 @@ class TranslationFailureApplierTest {
     @Test
     fun `l'echec d'un message ne touche pas un autre message`() = runTest {
         registrar.deliver(conversation, TranslationFailedEvent("m1", "c1"))
-        registrar.deliver(translation, TranslationEvent("m2", "c1", "fr", "Salut"))
+        registrar.deliver(translation, TranslationEvent("m2", listOf(TranslationEntry(targetLanguage = "fr", translatedContent = "Salut"))))
         assertThat(store.ledger.value.hasFailure("m1")).isTrue()
     }
 }
