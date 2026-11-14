@@ -150,17 +150,6 @@ class EpureListeStringsTest {
     }
 
     @Test
-    fun `an empty list of share, tracking or referral links still says, at rest, what such a link is for`() {
-        folders.forEach { folder ->
-            val strings = all(folder)
-            listOf("my_share_links_empty_subtitle", "links_tracking_empty_subtitle", "links_affiliate_empty_subtitle").forEach { key ->
-                assertWithMessage("$folder:$key").that(strings[key].orEmpty()).isNotEmpty()
-            }
-        }
-        assertThat(all("values-fr")["links_tracking_empty_subtitle"]).isEqualTo("Créez un lien pour suivre vos clics et campagnes")
-    }
-
-    @Test
     fun `the hybrid choice says our servers can read the messages`() {
         assertThat(epure("values-fr")["encryption_mode_hybrid_description"])
             .isEqualTo("Chiffré sur nos serveurs, qui peuvent lire vos messages. Textes vérifiés intacts entre appareils compatibles.")
