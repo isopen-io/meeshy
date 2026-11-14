@@ -27,6 +27,8 @@ const esActivation = {
   'activation.phone.failed': 'No se pudo guardar este número. Inténtalo de nuevo.',
   'activation.phone.codeInvalid': 'Código no válido o caducado',
   'activation.phone.done': 'Número verificado ✓',
+  'activation.phone.edit': 'Cambiar el número',
+  'activation.phone.resend': 'Reenviar el código',
   'activation.complete': 'Tu cuenta está validada. ¡Gracias!',
   'activation.later': 'Más tarde',
   'activation.close': 'Cerrar',

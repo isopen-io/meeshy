@@ -27,6 +27,8 @@ const arActivation = {
   'activation.phone.failed': 'تعذّر حفظ هذا الرقم. حاول مرة أخرى.',
   'activation.phone.codeInvalid': 'رمز غير صالح أو منتهي الصلاحية',
   'activation.phone.done': 'تم تأكيد الرقم ✓',
+  'activation.phone.edit': 'تعديل الرقم',
+  'activation.phone.resend': 'إعادة إرسال الرمز',
   'activation.complete': 'تم تأكيد حسابك. شكرًا!',
   'activation.later': 'لاحقًا',
   'activation.close': 'إغلاق',

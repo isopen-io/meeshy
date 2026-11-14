@@ -27,6 +27,8 @@ const ptActivation = {
   'activation.phone.failed': 'Não foi possível salvar este número. Tente novamente.',
   'activation.phone.codeInvalid': 'Código inválido ou expirado',
   'activation.phone.done': 'Número verificado ✓',
+  'activation.phone.edit': 'Alterar o número',
+  'activation.phone.resend': 'Reenviar o código',
   'activation.complete': 'Sua conta está validada. Obrigado!',
   'activation.later': 'Mais tarde',
   'activation.close': 'Fechar',
