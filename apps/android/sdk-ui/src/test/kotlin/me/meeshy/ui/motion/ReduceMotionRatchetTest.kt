@@ -15,8 +15,9 @@ import org.junit.Test
  * jamais la réduction (ni `LocalReduceMotion`, ni `rememberCallReduceMotion`, ni le mot `reduce`).
  * Limite assumée : la règle juge le fichier, pas la branche ; les témoins de comportement tiennent le reste.
  * (2) `echelle-systeme` : `ANIMATOR_DURATION_SCALE` lu en direct, qui ignore le réglage de l'app.
- * (3) `ressort-litteral` : un ressort aux paramètres locaux au lieu des jetons de `MeeshyMotion` ou de `motionSpec`.
- * (4) `tween-litteral` : une durée en chiffres au lieu d'une constante nommée.
+ * (3) `ressort-litteral` : un ressort aux paramètres locaux (nommés ou positionnels) au lieu des jetons de `MeeshyMotion`
+ * ou de `motionSpec`.
+ * (4) `tween-litteral` : une durée en chiffres (positionnelle ou `durationMillis =`) au lieu d'une constante nommée.
  *
  * Les quatre nombres ne font que DESCENDRE : un lot qui migre abaisse le plafond dans le même commit ; un ajout fait
  * rougir ce test et nomme chaque fichier.
@@ -32,8 +33,8 @@ class ReduceMotionRatchetTest {
     )
     private val readsReduction = Regex("""LocalReduceMotion|rememberCallReduceMotion|reduce""")
     private val systemScale = Regex("""\bANIMATOR_DURATION_SCALE\b""")
-    private val literalSpring = Regex("""\bspring(<[^>()]*>)?\(\s*(dampingRatio|stiffness)|\bSpring\.Stiffness\w+""")
-    private val literalTween = Regex("""\btween(<[^>()]*>)?\(\s*\d""")
+    private val literalSpring = Regex("""\bspring(<[^>()]*>)?\(\s*(dampingRatio|stiffness|\d)|\bSpring\.Stiffness\w+""")
+    private val literalTween = Regex("""\btween(<[^>()]*>)?\(\s*(durationMillis\s*=\s*)?\d""")
 
     private fun androidRoot(): File {
         val start = File("").absoluteFile
@@ -110,10 +111,14 @@ class ReduceMotionRatchetTest {
         assertThat(literalSpringsIn("spring(dampingRatio = 0.7f, stiffness = 300f)")).isEqualTo(1)
         assertThat(literalSpringsIn("spring<Float>(stiffness = Spring.StiffnessLow)")).isEqualTo(2)
         assertThat(literalSpringsIn("MeeshyMotion.springFast<Float>()\nspring()")).isEqualTo(0)
+        assertThat(literalSpringsIn("scaleIn(spring(0.72f, 380f))")).isEqualTo(1)
+        assertThat(literalSpringsIn("spring<Float>(visibilityThreshold = 0.01f)")).isEqualTo(0)
 
         assertThat(literalTweensIn("tween(300)")).isEqualTo(1)
         assertThat(literalTweensIn("tween<Float>( 120, easing = LinearEasing)")).isEqualTo(1)
-        assertThat(literalTweensIn("tween(FADE_MILLIS)\ntween(durationMillis = 150)")).isEqualTo(0)
+        assertThat(literalTweensIn("tween(durationMillis = 150)")).isEqualTo(1)
+        assertThat(literalTweensIn("tween<Float>(durationMillis=1_000, easing = LinearEasing)")).isEqualTo(1)
+        assertThat(literalTweensIn("tween(FADE_MILLIS)\ntween(durationMillis = FADE_MILLIS)")).isEqualTo(0)
     }
 
     @Test
@@ -163,10 +168,16 @@ class ReduceMotionRatchetTest {
         /** 11 le 2026-11-14 sur 4afe432feb, 9 apres le lot des feuilles, 4 apres #18459. Abaisser, jamais relever. */
         const val SYSTEM_SCALE_CEILING = 4
 
-        /** 120 le 2026-11-14 avant #18459, 111 apres. Abaisser, jamais relever. */
-        const val LITERAL_SPRING_CEILING = 111
+        /**
+         * 120 le 2026-11-14 avant #18459, 111 apres. Rebase de 115 a la relecture (le meme jour) : la regle compte aussi
+         * les ressorts positionnels (`spring(0.72f, 380f)`), qui la contournaient. Abaisser, jamais relever.
+         */
+        const val LITERAL_SPRING_CEILING = 115
 
-        /** 89 le 2026-11-14 avant #18459, 72 apres. Abaisser, jamais relever. */
-        const val LITERAL_TWEEN_CEILING = 72
+        /**
+         * 89 le 2026-11-14 avant #18459, 72 apres. Rebase de 86 a la relecture (le meme jour) : la regle compte aussi
+         * `tween(durationMillis = 150)`, qui la contournait. Abaisser, jamais relever.
+         */
+        const val LITERAL_TWEEN_CEILING = 86
     }
 }
