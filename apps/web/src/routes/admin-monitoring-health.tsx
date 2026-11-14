@@ -183,7 +183,7 @@ function HealthBody({ language, monitoring, now }: { readonly language: AdminLan
 
       <MonitoringSection id="breakers" title={t('admin.monitoring.breakers.title')} hint={t('admin.monitoring.breakers.intro')} info={{ question: t('admin.kit.info.breaker'), text: t('admin.monitoring.breakers.detail') }}>
         {monitoring.circuitBreakers.length === 0 ? (
-          <AdminEmptyState title={t('admin.monitoring.breakers.empty')} hint={t('admin.monitoring.breakers.emptyHint')} glyph="lightning" />
+          <AdminEmptyState title={t('admin.monitoring.breakers.empty')} glyph="lightning" />
         ) : (
           <ul className="grid gap-3">
             {monitoring.circuitBreakers.map((breaker) => (

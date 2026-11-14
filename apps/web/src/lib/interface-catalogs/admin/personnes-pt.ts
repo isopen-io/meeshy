@@ -463,6 +463,7 @@ const f = {
   'admin.people.password.motiveShort': 'Pelo menos dez caracteres, ou deixe vazio.',
   'admin.people.password.notify': 'Avisar o membro por e-mail',
   'admin.people.password.notifyHint': 'Recebe um alerta de segurança no seu idioma; a nova senha não aparece nele.',
+  'admin.people.password.notifyQuestion': 'O que o membro recebe?',
   'admin.people.session.expired': 'Expirada',
   'admin.people.session.trusted': 'Dispositivo confiável',
   'admin.people.session.closedOn': 'Encerrada em {date}',

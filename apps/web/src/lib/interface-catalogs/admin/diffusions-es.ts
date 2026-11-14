@@ -2,7 +2,7 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './diffusions-fr';
 
 const f = {
-  'admin.broadcast.list.subtitle': 'Los mensajes que escribes a todas las cuentas, o a algunas: por correo electrónico, en la aplicación, o por ambos.',
+  'admin.broadcast.list.subtitle': 'A todas las cuentas o a algunas de ellas.',
   'admin.broadcast.list.caption': 'Lista de difusiones',
   'admin.broadcast.list.search': 'Buscar por nombre o asunto',
   'admin.broadcast.list.count': '{count} difusiones',
@@ -32,10 +32,11 @@ const f = {
   'admin.broadcast.compose.section.audience': 'Audiencia',
   'admin.broadcast.compose.field.name': 'Nombre de la difusión',
   'admin.broadcast.compose.field.name.hint': 'Te ayuda a encontrarla en la lista: los destinatarios nunca lo ven.',
+  'admin.broadcast.compose.field.name.hintQuestion': '¿Quién ve este nombre?',
   'admin.broadcast.compose.field.subject': 'Asunto',
-  'admin.broadcast.compose.field.subject.hint': 'El asunto del correo y el título de la notificación.',
   'admin.broadcast.compose.field.body': 'Mensaje',
   'admin.broadcast.compose.field.body.hint': 'Escrito en el idioma de abajo; se traduce a los demás idiomas cuando lo prepara.',
+  'admin.broadcast.compose.field.body.hintQuestion': '¿Cómo se traduce el mensaje?',
   'admin.broadcast.compose.field.sourceLanguage': 'Idioma del mensaje',
   'admin.broadcast.compose.activity': 'Actividad de las cuentas',
   'admin.broadcast.compose.activity.all': 'Todas las cuentas',
@@ -69,7 +70,6 @@ const f = {
 
   'admin.broadcast.fiche.loading': 'Cargando la difusión',
   'admin.broadcast.fiche.notFound': 'Esta difusión ya no existe',
-  'admin.broadcast.fiche.notFoundHint': 'Se eliminó, o la dirección es incorrecta.',
   'admin.broadcast.fiche.back': 'Volver a las difusiones',
   'admin.broadcast.fiche.created': 'Creada {when}',
   'admin.broadcast.fiche.createdBy': 'Creada {when} por {author}',
@@ -129,7 +129,7 @@ const f = {
   'admin.broadcast.notice.failedNoMessage': 'El envío ha fallado y la pasarela no dio ningún mensaje de error.',
   'admin.broadcast.notice.sending': 'Envío en curso: esta página se actualiza sola cada 10 segundos.',
   'admin.broadcast.notice.inAppRunning': 'Publicación en curso: esta página se actualiza sola cada 10 segundos.',
-  'admin.broadcast.notice.noRecipients': 'Ninguna cuenta coincide con esta audiencia: no hay a quién escribir. Elimina esta difusión y créala de nuevo con otra segmentación.',
+  'admin.broadcast.notice.noRecipients': 'Ninguna cuenta coincide con esta audiencia: crea la difusión de nuevo con otra segmentación.',
 
   'admin.broadcast.gesture.edit': 'Editar',
   'admin.broadcast.gesture.prepare': 'Traducir y preparar el envío',
@@ -167,8 +167,8 @@ const f = {
   'admin.broadcast.audience.inAppRecipients': 'Cuentas alcanzables en la aplicación',
   'admin.broadcast.audience.emailRecipients': 'Cuentas alcanzables por correo (dirección verificada)',
   'admin.broadcast.notice.inAppFailed': 'La publicación en la aplicación falló: {message}',
-  'admin.broadcast.notice.inAppFailedNoMessage': 'La publicación en la aplicación falló: no se entregó ninguna notificación.',
-  'admin.broadcast.notice.noEmailRecipients': 'Ninguna cuenta de esta audiencia tiene una dirección de correo verificada: el envío por correo no llegaría a nadie. La publicación en la aplicación sigue siendo posible.',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'Publicación en la aplicación fallida: no se entregó nada.',
+  'admin.broadcast.notice.noEmailRecipients': 'Ninguna cuenta de esta audiencia tiene un correo verificado: solo es posible la publicación en la aplicación.',
   'admin.broadcast.confirm.inApp.bodyUncounted': 'Audiencia: {audience}. El número de cuentas alcanzables en la aplicación solo se cuenta en la preparación, y esta página ya no lo conserva. Cada una recibe una notificación en su centro de notificaciones, con un aviso push. No se puede retirar y solo se publica una vez.',
 } satisfies AdminCatalogFragment<typeof fr>;
 

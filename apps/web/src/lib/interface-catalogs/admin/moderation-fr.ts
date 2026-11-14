@@ -10,7 +10,6 @@ const f = {
   'admin.moderation.list.caption': 'Liste des signalements',
   'admin.moderation.list.count': '{count} signalement(s)',
   'admin.moderation.list.empty': 'Aucun signalement',
-  'admin.moderation.list.emptyHint': 'Quand un membre signale un contenu ou un compte, il arrive ici.',
   'admin.moderation.list.filteredEmpty': 'Aucun signalement pour ces filtres',
   'admin.moderation.list.onEntity': 'Signalements qui visent un seul élément : retirez le filtre pour revoir toute la file.',
   'admin.moderation.list.onEntityReset': 'Voir toute la file',
@@ -54,7 +53,6 @@ const f = {
   'admin.moderation.fiche.loading': 'Chargement du signalement',
   'admin.moderation.fiche.received': 'Signalé par {reporter} · {when}',
   'admin.moderation.fiche.notFound': 'Ce signalement n’existe plus',
-  'admin.moderation.fiche.notFoundHint': 'Il a peut-être été supprimé par un autre modérateur.',
   'admin.moderation.fiche.back': 'Retour aux signalements',
 
   'admin.moderation.stat.received': 'Reçu',

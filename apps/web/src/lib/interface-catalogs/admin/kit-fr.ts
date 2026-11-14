@@ -11,6 +11,7 @@ const f = {
   'admin.kit.info.blindSpot': 'Pourquoi cet angle mort ?',
   'admin.kit.info.action': 'Que s’est-il passé ?',
   'admin.kit.info.table': 'Comment lire ce tableau ?',
+  'admin.kit.info.stat': 'Que mesure ce chiffre ?',
   'admin.kit.info.edit': 'Comment modifier ?',
   'admin.kit.info.secret': 'Pourquoi ces clés sont-elles sensibles ?',
   'admin.kit.info.purge': 'Que supprime ce nettoyage ?',

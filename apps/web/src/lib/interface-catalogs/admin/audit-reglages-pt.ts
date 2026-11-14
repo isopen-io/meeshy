@@ -5,11 +5,10 @@ import type fr from './audit-reglages-fr';
    traduction du lot « audit-reglages ». Les clés sont celles du fragment français, ni plus ni moins. */
 const f = {
   // ── Audit log: the screen ──────────────────────────────────────────────────
-  'admin.audit.subtitle': 'Quem fez o quê, a quem e por quê: cada gesto de administração e cada leitura de conteúdo privado deixa um rastro aqui.',
+  'admin.audit.subtitle': 'Cada gesto de administração e cada leitura de conteúdo privado deixa um rastro.',
   'admin.audit.list.caption': 'Registro de auditoria',
   'admin.audit.list.count': '{count} entradas',
   'admin.audit.list.empty': 'Nenhum rastro por enquanto',
-  'admin.audit.list.emptyHint': 'Os gestos de administração e as leituras de conteúdo privado aparecerão aqui assim que houver.',
   'admin.audit.list.filteredEmpty': 'Nenhum rastro corresponde a esses filtros',
   'admin.audit.list.onAdmin': 'Ações de {name}',
   'admin.audit.list.onAdminGeneric': 'Ações de um único administrador',
@@ -306,7 +305,7 @@ const f = {
 
   // ── Settings ───────────────────────────────────────────────────────────────
   'admin.settings.access.title': 'Seu acesso',
-  'admin.settings.access.intro': 'O que o seu papel permite que você faça na administração. Os direitos são decididos pela plataforma, não por esta tela.',
+  'admin.settings.access.intro': 'O que o seu papel permite que você faça.',
   'admin.settings.access.role': 'Seu papel',
   'admin.settings.access.granted': 'Concedido',
   'admin.settings.access.denied': 'Não concedido',

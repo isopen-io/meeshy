@@ -2,7 +2,7 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './operations-fr';
 
 const f = {
-  'admin.ops.shared': 'Shared host: staging and production run on this machine. What the charts show applies to both.',
+  'admin.ops.shared': 'Shared host: staging and production run on this machine.',
   'admin.ops.environment': 'Environment: {name} · host {host}',
   'admin.ops.live': 'Live',
   'admin.ops.polling': 'Refreshed every 5 s',
@@ -70,7 +70,7 @@ const f = {
   'admin.ops.dash.title': 'The machine',
   'admin.ops.dash.more': 'See operations',
   'admin.ops.containers.title': 'Containers',
-  'admin.ops.containers.subtitle': 'The containers of this environment, read every minute. Tap one to see its usage and networks.',
+  'admin.ops.containers.subtitle': 'Read every minute; tap one for details.',
   'admin.ops.containers.measuredAt': 'Read {when}',
   'admin.ops.containers.summary': '{running} running out of {total}',
   'admin.ops.containers.none': 'The relay has published no container for this environment.',

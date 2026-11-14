@@ -8,13 +8,11 @@ import type fr from './conversations-agent-fr';
  * `admin.enum.*` labels it relies on live in the kit.
  */
 const f = {
-  'admin.conversation.subtitle':
-    'Every conversation on the platform: who is in it, where it stands, which community it belongs to. Message content can only be read with a written reason, from the sheet.',
+  'admin.conversation.subtitle': 'Message content can only be read with a written reason, from the sheet.',
   'admin.conversation.search': 'Search by title or identifier',
   'admin.conversation.list.caption': 'List of conversations',
   'admin.conversation.list.count': '{count} conversation(s)',
   'admin.conversation.list.empty': 'No conversation',
-  'admin.conversation.list.emptyHint': 'Conversations created on the platform appear here.',
   'admin.conversation.list.filteredEmpty': 'No conversation matches these filters',
   'admin.conversation.list.onCommunity': 'Conversations of a single community: remove the filter to see every conversation again.',
   'admin.conversation.list.onCommunityNamed': 'Conversations of the “{name}” community: remove the filter to see every conversation again.',
@@ -37,7 +35,6 @@ const f = {
 
   'admin.conversation.fiche.loading': 'Loading the conversation',
   'admin.conversation.fiche.notFound': 'This conversation no longer exists',
-  'admin.conversation.fiche.notFoundHint': 'It was deleted, or the address is wrong.',
   'admin.conversation.fiche.back': 'Back to conversations',
   'admin.conversation.fiche.configure': 'Configure',
 
@@ -106,10 +103,11 @@ const f = {
   'admin.conversation.members.remove.done': 'Member removed',
 
   'admin.conversation.reading.title': 'Read the conversation',
-  'admin.conversation.reading.hint':
-    'Message content can only be read with a written reason, recorded with your name in the audit log. The thread is shown in your reading languages, as in the app.',
+  'admin.conversation.reading.hint': 'Reading under a written reason, recorded in your name.',
+  'admin.conversation.reading.langNote': 'The thread is shown in your reading languages, as in the app.',
+  'admin.conversation.reading.langQuestion': 'Which language is the thread shown in?',
 
-  'admin.agentPanel.subtitle': 'The conversations where the agent takes part: follow its activity, relaunch it, set its model, its topics and its delivery queue.',
+  'admin.agentPanel.subtitle': 'The conversations where the agent takes part.',
   'admin.agentPanel.stat.tracked': 'Conversations under control',
   'admin.agentPanel.stat.trackedCaption': 'out of {total} configured',
   'admin.agentPanel.stat.users': 'Controlled members',
@@ -119,7 +117,6 @@ const f = {
   'admin.agentPanel.tracked.search': 'Search a conversation',
   'admin.agentPanel.tracked.count': '{count} conversation(s)',
   'admin.agentPanel.tracked.empty': 'No tracked conversation',
-  'admin.agentPanel.tracked.emptyHint': 'When the agent is set up for a conversation, it appears here.',
   'admin.agentPanel.tracked.filteredEmpty': 'No conversation for this search',
   'admin.agentPanel.tracked.col.conversation': 'Conversation',
   'admin.agentPanel.tracked.col.state': 'State',
@@ -135,7 +132,6 @@ const f = {
   'admin.agentPanel.logs.caption': 'Agent scan log',
   'admin.agentPanel.logs.count': '{count} scan(s)',
   'admin.agentPanel.logs.empty': 'No scan recorded',
-  'admin.agentPanel.logs.emptyHint': 'Every pass of the agent over a conversation leaves a line here.',
   'admin.agentPanel.logs.filteredEmpty': 'No scan for these filters',
   'admin.agentPanel.logs.filter.outcome': 'Outcome',
   'admin.agentPanel.logs.filter.trigger': 'Trigger',
@@ -189,7 +185,9 @@ const f = {
   'admin.conversation.card.agent.users': 'Driven members',
   'admin.conversation.card.agent.scanning': 'The agent is analysing the conversation right now.',
   'admin.conversation.card.links.none': 'No share link',
-  'admin.conversation.card.links.hint': 'This conversation has {count} share link(s). Each one is read and closed from the share links section.',
+  'admin.conversation.card.links.hint': '{count} share link(s)',
+  'admin.conversation.card.links.whereNote': 'Each one is read and closed from the share links section.',
+  'admin.conversation.card.links.whereQuestion': 'Where do I manage these links?',
   'admin.conversation.card.links.open': 'See share links',
   'admin.conversation.members.nickname': 'Nickname: {nickname}',
   'admin.conversation.members.state.banned': 'Banned',
@@ -382,7 +380,6 @@ const f = {
   'admin.agentPanel.archetype.hustler': 'The hustler',
 
   'admin.agentPanel.queue.empty': 'Nothing waiting to be published',
-  'admin.agentPanel.queue.emptyHint': 'What the agent prepares appears here before it is published.',
   'admin.agentPanel.queue.count': '{count} item(s) waiting',
   'admin.agentPanel.queue.note': 'The gateway does not reschedule: a message is corrected or cancelled.',
   'admin.agentPanel.queue.message': 'Message',
@@ -435,6 +432,7 @@ const f = {
 
   'admin.agentPanel.reset.conversationHint': 'A conversation is reset from its settings, in the list of tracked conversations.',
   'admin.agentPanel.reset.userHint': 'A member is reset from the driven members of a conversation.',
+  'admin.agentPanel.reset.whereQuestion': 'Where do I reset a conversation or a member?',
   'admin.agentPanel.reset.all': 'Reset everything',
   'admin.agentPanel.reset.allBody': 'Erases across the WHOLE platform: every conversation configuration, every role of driven members, every summary, all analytics, every global profile and the whole agent cache. Messages already published remain. The action cannot be undone.',
   'admin.agentPanel.reset.allDone': 'The whole agent state has been erased.',

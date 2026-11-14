@@ -153,6 +153,7 @@ export function AdminField({
   id,
   label,
   note,
+  noteQuestion,
   noteTone = 'neutral',
   noteData,
   error,
@@ -162,21 +163,36 @@ export function AdminField({
   readonly id: string;
   readonly label?: string | undefined;
   readonly note?: string | undefined;
+  /** La QUESTION à laquelle `note` répond : avec elle, la note passe derrière un (i) posé après le libellé — lue, jamais affichée au repos. */
+  readonly noteQuestion?: string | undefined;
   readonly noteTone?: 'neutral' | 'danger';
   readonly noteData?: AdminData;
   readonly error?: string | undefined;
   readonly errorData?: AdminData | undefined;
   readonly children: ReactNode;
 }) {
+  const info = useInfoHint(`${id}-note`);
+  const folded = hintNote(note, noteQuestion);
+  const labelNode =
+    label === undefined ? null : (
+      <label htmlFor={id} className="text-caption font-medium" style={CAPTION_LABEL}>
+        {label}
+      </label>
+    );
   return (
     <div className="grid gap-1">
-      {label === undefined ? null : (
-        <label htmlFor={id} className="text-caption font-medium" style={CAPTION_LABEL}>
-          {label}
-        </label>
+      {folded === undefined ? (
+        labelNode
+      ) : (
+        <div className="flex min-w-0 items-center gap-1">
+          {labelNode}
+          <InfoHintButton hint={folded} state={info} />
+        </div>
       )}
       {children}
-      {note === undefined ? null : (
+      {folded !== undefined ? (
+        <InfoHintText hint={folded} state={info} />
+      ) : note === undefined ? null : (
         <p {...noteData} id={`${id}-note`} className="text-caption tabular-nums" style={{ color: noteTone === 'danger' ? 'var(--color-danger)' : INK2 }}>
           {note}
         </p>

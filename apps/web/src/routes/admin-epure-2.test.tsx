@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { AdminStatCard } from '@/components/admin/stat-card';
 import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog, type AdminInterfaceCatalog, type AdminLanguage } from '@/lib/i18n-admin-catalog';
@@ -94,7 +95,6 @@ const ADDED = [
   "admin.agentPanel.reset.whereQuestion",
   "admin.broadcast.compose.field.name.hintQuestion",
   "admin.broadcast.compose.field.body.hintQuestion",
-  "admin.settings.space.foldedQuestion",
   "admin.people.password.notifyQuestion",
   "admin.dash.zone.refresh.question",
   "admin.dash.zone.usage.question",
@@ -128,7 +128,7 @@ describe('les textes qui répètent ou qui n’apprennent rien sont supprimés d
         else if (/\.tsx?$/.test(item.name) && !/\.test\.tsx?$/.test(item.name) && !dir.includes('interface-catalogs')) files.push(join(dir, item.name));
       }
     };
-    walk(join(import.meta.dir, '..'));
+    walk(fileURLToPath(new URL('..', import.meta.url)));
     const source = files.map((file) => readFileSync(file, 'utf8')).join('\n');
     for (const key of REMOVED) expect({ key, read: source.includes(`'${key}'`) }).toEqual({ key, read: false });
   });
@@ -208,7 +208,7 @@ describe('une section de statistiques : la période reste lue, la définition pa
       </StatsSection>,
     );
 
-    expect(visibleText(host)).toBe('Paires Période : 7 jours');
+    expect(visibleText(host)).toBe('PairesPériode : 7 jours');
     const button = infoButton(host, 'Que montre cette section ?');
     expect(noteOf(host, button)?.textContent).toBe('Les traductions produites.');
   });

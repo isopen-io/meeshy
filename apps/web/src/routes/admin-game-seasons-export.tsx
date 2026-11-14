@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { AdminFormActions, AdminFormError } from '@/components/admin/form';
 import { INK2 } from '@/components/admin/tone';
 import { copyText, downloadTextFile } from '@/lib/admin/download-text';
@@ -44,9 +45,11 @@ export function ExportSection({ language, deps }: { readonly language: AdminLang
 
   return (
     <AdminFicheSection id="gameseasons-export" title={translateAdmin(language, 'admin.gameSeasons.export.title')}>
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.gameSeasons.export.hint')}
-      </p>
+      <AdminInfoAlone
+        question={translateAdmin(language, 'admin.gameSeasons.export.question')}
+        text={translateAdmin(language, 'admin.gameSeasons.export.hint')}
+        anchor="gameseasons-export"
+      />
       <AdminFormActions
         language={language}
         primary={{

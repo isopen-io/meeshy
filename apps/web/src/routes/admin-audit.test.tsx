@@ -358,7 +358,7 @@ describe('les états dessinés', () => {
 
     const empty = host.querySelector('[data-admin-list] [data-admin-empty]')?.textContent ?? '';
     expect(empty).toContain('Aucune trace pour l’instant');
-    expect(empty).toContain('apparaîtront ici');
+    expect(empty).not.toContain('apparaîtront ici');
   });
 
   test('vide filtré : le dit, et « Réinitialiser » retire les filtres', async () => {
@@ -671,7 +671,7 @@ describe('l’en-tête', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Journal d’audit');
-    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Qui a fait quoi, à qui et pourquoi');
+    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Chaque geste d’administration et chaque lecture du privé laissent une trace.');
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Modération');
   });
 });

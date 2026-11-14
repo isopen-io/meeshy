@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 import { AdminFilterChips, AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
@@ -204,7 +205,13 @@ export function AdminRankingPanel({ language, deps = apiDeps, now = defaultNow }
           {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.ranking.count', { count: formatCount(total, language) }) })}
         />
         {scope === 'none' ? <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.ranking.periodNone')} /> : null}
-        {scope === 'creation' ? <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.ranking.periodCreation')} /> : null}
+        {scope === 'creation' ? (
+          <AdminInfoAlone
+            question={translateAdmin(language, 'admin.ranking.periodQuestion')}
+            text={translateAdmin(language, 'admin.ranking.periodCreation')}
+            anchor="ranking-period"
+          />
+        ) : null}
         {query.data !== undefined && query.isError ? (
           <AdminInlineNotice
             tone="warning"

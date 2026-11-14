@@ -10,13 +10,11 @@
  * celles des écrans qui les portent déjà.
  */
 const f = {
-  'admin.conversation.subtitle':
-    'Toutes les conversations de la plateforme : qui les compose, où elles en sont, à quelle communauté elles appartiennent. Le contenu des messages ne se lit que sous motif écrit, depuis la fiche.',
+  'admin.conversation.subtitle': 'Le contenu des messages ne se lit que sous motif écrit, depuis la fiche.',
   'admin.conversation.search': 'Rechercher par titre ou identifiant',
   'admin.conversation.list.caption': 'Liste des conversations',
   'admin.conversation.list.count': '{count} conversation(s)',
   'admin.conversation.list.empty': 'Aucune conversation',
-  'admin.conversation.list.emptyHint': 'Les conversations créées sur la plateforme apparaissent ici.',
   'admin.conversation.list.filteredEmpty': 'Aucune conversation pour ces filtres',
   'admin.conversation.list.onCommunity': 'Conversations d’une seule communauté : retirez le filtre pour revoir toutes les conversations.',
   'admin.conversation.list.onCommunityNamed': 'Conversations de la communauté « {name} » : retirez le filtre pour revoir toutes les conversations.',
@@ -39,7 +37,6 @@ const f = {
 
   'admin.conversation.fiche.loading': 'Chargement de la conversation',
   'admin.conversation.fiche.notFound': 'Cette conversation n’existe plus',
-  'admin.conversation.fiche.notFoundHint': 'Elle a été supprimée, ou l’adresse est incorrecte.',
   'admin.conversation.fiche.back': 'Retour aux conversations',
   'admin.conversation.fiche.configure': 'Configurer',
 
@@ -108,10 +105,11 @@ const f = {
   'admin.conversation.members.remove.done': 'Membre retiré',
 
   'admin.conversation.reading.title': 'Lire la conversation',
-  'admin.conversation.reading.hint':
-    'Le contenu des messages ne se lit que sous un motif écrit, consigné avec votre nom dans le journal d’audit. Le fil s’affiche dans vos langues de lecture, comme dans l’application.',
+  'admin.conversation.reading.hint': 'Lecture sous motif écrit, consignée à votre nom.',
+  'admin.conversation.reading.langNote': 'Le fil s’affiche dans vos langues de lecture, comme dans l’application.',
+  'admin.conversation.reading.langQuestion': 'Dans quelle langue le fil s’affiche-t-il ?',
 
-  'admin.agentPanel.subtitle': 'Les conversations où l’agent intervient : suivez son activité, relancez-le, réglez son modèle, ses sujets et sa file de livraison.',
+  'admin.agentPanel.subtitle': 'Les conversations où l’agent intervient.',
   'admin.agentPanel.stat.tracked': 'Conversations pilotées',
   'admin.agentPanel.stat.trackedCaption': 'sur {total} configurées',
   'admin.agentPanel.stat.users': 'Membres pilotés',
@@ -121,7 +119,6 @@ const f = {
   'admin.agentPanel.tracked.search': 'Rechercher une conversation',
   'admin.agentPanel.tracked.count': '{count} conversation(s)',
   'admin.agentPanel.tracked.empty': 'Aucune conversation suivie',
-  'admin.agentPanel.tracked.emptyHint': 'Quand l’agent est configuré pour une conversation, elle apparaît ici.',
   'admin.agentPanel.tracked.filteredEmpty': 'Aucune conversation pour cette recherche',
   'admin.agentPanel.tracked.col.conversation': 'Conversation',
   'admin.agentPanel.tracked.col.state': 'État',
@@ -137,7 +134,6 @@ const f = {
   'admin.agentPanel.logs.caption': 'Journal des scans de l’agent',
   'admin.agentPanel.logs.count': '{count} scan(s)',
   'admin.agentPanel.logs.empty': 'Aucun scan enregistré',
-  'admin.agentPanel.logs.emptyHint': 'Chaque passage de l’agent sur une conversation laisse une ligne ici.',
   'admin.agentPanel.logs.filteredEmpty': 'Aucun scan pour ces filtres',
   'admin.agentPanel.logs.filter.outcome': 'Issue',
   'admin.agentPanel.logs.filter.trigger': 'Déclencheur',
@@ -191,7 +187,9 @@ const f = {
   'admin.conversation.card.agent.users': 'Membres pilotés',
   'admin.conversation.card.agent.scanning': 'L’agent analyse la conversation en ce moment.',
   'admin.conversation.card.links.none': 'Aucun lien de partage',
-  'admin.conversation.card.links.hint': 'Cette conversation compte {count} lien(s) de partage. Chacun se lit et se ferme depuis la section des liens de partage.',
+  'admin.conversation.card.links.hint': '{count} lien(s) de partage',
+  'admin.conversation.card.links.whereNote': 'Chacun se lit et se ferme depuis la section des liens de partage.',
+  'admin.conversation.card.links.whereQuestion': 'Où gérer ces liens ?',
   'admin.conversation.card.links.open': 'Voir les liens de partage',
   'admin.conversation.members.nickname': 'Surnom : {nickname}',
   'admin.conversation.members.state.banned': 'Banni',
@@ -384,7 +382,6 @@ const f = {
   'admin.agentPanel.archetype.hustler': 'Le débrouillard',
 
   'admin.agentPanel.queue.empty': 'Rien en attente de publication',
-  'admin.agentPanel.queue.emptyHint': 'Ce que l’agent prépare apparaît ici avant d’être publié.',
   'admin.agentPanel.queue.count': '{count} élément(s) en attente',
   'admin.agentPanel.queue.note': 'La passerelle ne reprogramme pas : un message se corrige ou s’annule.',
   'admin.agentPanel.queue.message': 'Message',
@@ -437,6 +434,7 @@ const f = {
 
   'admin.agentPanel.reset.conversationHint': 'Une conversation se remet à zéro depuis ses réglages, dans la liste des conversations suivies.',
   'admin.agentPanel.reset.userHint': 'Un membre se remet à zéro depuis les membres pilotés d’une conversation.',
+  'admin.agentPanel.reset.whereQuestion': 'Où remettre à zéro une conversation ou un membre ?',
   'admin.agentPanel.reset.all': 'Tout remettre à zéro',
   'admin.agentPanel.reset.allBody': 'Efface sur TOUTE la plateforme : toutes les configurations de conversation, tous les rôles des membres pilotés, tous les résumés, toute l’analytique, tous les profils globaux et tout le cache de l’agent. Les messages déjà publiés restent. Le geste ne se défait pas.',
   'admin.agentPanel.reset.allDone': 'Tout l’état de l’agent a été effacé.',

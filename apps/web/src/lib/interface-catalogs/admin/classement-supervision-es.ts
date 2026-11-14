@@ -56,6 +56,7 @@ const f = {
   'admin.ranking.period.all': 'Desde siempre',
   'admin.ranking.periodNone': 'Este criterio cubre todo el historial: el período no se aplica.',
   'admin.ranking.periodCreation': 'El período conserva los enlaces creados durante él, sea cual sea la fecha de los clics.',
+  'admin.ranking.periodQuestion': '¿Qué filtra el período?',
 
   'admin.ranking.limit.label': 'Número de filas',
   'admin.ranking.limit.option': 'Top {count}',
@@ -148,7 +149,6 @@ const f = {
   'admin.monitoring.breakers.lastFailure': 'Último fallo',
   'admin.monitoring.breakers.never': 'Ningún fallo',
   'admin.monitoring.breakers.empty': 'Ningún cortacircuitos registrado',
-  'admin.monitoring.breakers.emptyHint': 'Aparecen en cuanto se llama a un servicio protegido.',
 
   'admin.monitoring.presence.title': 'Presencia',
   'admin.monitoring.presence.total': 'Actualizaciones solicitadas',
@@ -163,7 +163,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Filas de detalle',
   'admin.monitoring.routes.limit.option': '{count} filas',
   'admin.monitoring.routes.notInstrumented': 'La medición no está instalada en esta instancia: los ceros de abajo no demuestran nada.',
-  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras no se desglosaron por plataforma ni versión. Los totales de las rutas vigiladas siguen siendo exactos.',
+  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras sin desglosar por plataforma ni versión.',
   'admin.monitoring.routes.truncated': '{shown} filas mostradas de {total}. Acota el filtro para ver las demás.',
   'admin.monitoring.routes.observingSince': 'Observando desde',
   'admin.monitoring.routes.observedFor': 'Tiempo observado',

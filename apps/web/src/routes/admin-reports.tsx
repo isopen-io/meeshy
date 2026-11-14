@@ -181,7 +181,7 @@ export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.moderation.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.moderation.list.empty'), hint: translateAdmin(language, 'admin.moderation.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.moderation.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.moderation.list.filteredEmpty') }}
       />
       <AdminAnnouncement text={announcer.text} />

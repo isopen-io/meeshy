@@ -429,7 +429,7 @@ describe('quels gestes, dans quel état', () => {
 
     expect(gesture(host, 'send')?.disabled).toBe(true);
     expect(gesture(host, 'publishInApp')?.disabled).toBe(false);
-    expect(host.textContent).toContain('Aucun compte de cette audience n’a d’adresse e-mail vérifiée');
+    expect(host.textContent).toContain('Aucun compte de cette audience n’a d’e-mail vérifié');
     expect(host.textContent).not.toContain('Aucun compte ne correspond à cette audience');
   });
 

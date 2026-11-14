@@ -466,6 +466,7 @@ const f = {
   'admin.people.password.motiveShort': 'Au moins dix caractères, ou laissez vide.',
   'admin.people.password.notify': 'Prévenir le membre par e-mail',
   'admin.people.password.notifyHint': 'Il reçoit une alerte de sécurité dans sa langue ; le nouveau mot de passe n’y figure pas.',
+  'admin.people.password.notifyQuestion': 'Que reçoit le membre ?',
   'admin.people.session.expired': 'Expirée',
   'admin.people.session.trusted': 'Appareil de confiance',
   'admin.people.session.closedOn': 'Fermée le {date}',

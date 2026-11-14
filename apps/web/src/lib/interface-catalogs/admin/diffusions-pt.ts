@@ -2,7 +2,7 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './diffusions-fr';
 
 const f = {
-  'admin.broadcast.list.subtitle': 'As mensagens que escreve a todas as contas, ou a algumas: por e-mail, no aplicativo, ou por ambos.',
+  'admin.broadcast.list.subtitle': 'A todas as contas ou a algumas delas.',
   'admin.broadcast.list.caption': 'Lista de difusões',
   'admin.broadcast.list.search': 'Buscar por nome ou assunto',
   'admin.broadcast.list.count': '{count} difusões',
@@ -32,10 +32,11 @@ const f = {
   'admin.broadcast.compose.section.audience': 'Audiência',
   'admin.broadcast.compose.field.name': 'Nome da difusão',
   'admin.broadcast.compose.field.name.hint': 'Ajuda-o a encontrá-la na lista: os destinatários nunca a veem.',
+  'admin.broadcast.compose.field.name.hintQuestion': 'Quem vê este nome?',
   'admin.broadcast.compose.field.subject': 'Assunto',
-  'admin.broadcast.compose.field.subject.hint': 'O assunto do e-mail e o título da notificação.',
   'admin.broadcast.compose.field.body': 'Mensagem',
   'admin.broadcast.compose.field.body.hint': 'Escrita no idioma abaixo; é traduzida para os outros idiomas quando a prepara.',
+  'admin.broadcast.compose.field.body.hintQuestion': 'Como a mensagem é traduzida?',
   'admin.broadcast.compose.field.sourceLanguage': 'Idioma da mensagem',
   'admin.broadcast.compose.activity': 'Atividade das contas',
   'admin.broadcast.compose.activity.all': 'Todas as contas',
@@ -69,7 +70,6 @@ const f = {
 
   'admin.broadcast.fiche.loading': 'Carregando a difusão',
   'admin.broadcast.fiche.notFound': 'Esta difusão não existe mais',
-  'admin.broadcast.fiche.notFoundHint': 'Foi excluída, ou o endereço está errado.',
   'admin.broadcast.fiche.back': 'Voltar às difusões',
   'admin.broadcast.fiche.created': 'Criada {when}',
   'admin.broadcast.fiche.createdBy': 'Criada {when} por {author}',
@@ -129,7 +129,7 @@ const f = {
   'admin.broadcast.notice.failedNoMessage': 'O envio falhou e o gateway não deu nenhuma mensagem de erro.',
   'admin.broadcast.notice.sending': 'Envio em andamento: esta página se atualiza sozinha, a cada 10 segundos.',
   'admin.broadcast.notice.inAppRunning': 'Publicação em andamento: esta página se atualiza sozinha, a cada 10 segundos.',
-  'admin.broadcast.notice.noRecipients': 'Nenhuma conta corresponde a esta audiência: não há ninguém a quem escrever. Exclua esta difusão e crie-a novamente com outra segmentação.',
+  'admin.broadcast.notice.noRecipients': 'Nenhuma conta corresponde a esta audiência: crie a difusão novamente com outra segmentação.',
 
   'admin.broadcast.gesture.edit': 'Editar',
   'admin.broadcast.gesture.prepare': 'Traduzir e preparar o envio',
@@ -167,8 +167,8 @@ const f = {
   'admin.broadcast.audience.inAppRecipients': 'Contas alcançáveis no aplicativo',
   'admin.broadcast.audience.emailRecipients': 'Contas alcançáveis por e-mail (endereço verificado)',
   'admin.broadcast.notice.inAppFailed': 'A publicação no aplicativo falhou: {message}',
-  'admin.broadcast.notice.inAppFailedNoMessage': 'A publicação no aplicativo falhou: nenhuma notificação foi entregue.',
-  'admin.broadcast.notice.noEmailRecipients': 'Nenhuma conta desta audiência tem endereço de e-mail verificado: o envio por e-mail não alcançaria ninguém. A publicação no aplicativo continua possível.',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'Publicação no aplicativo falhou: nada foi entregue.',
+  'admin.broadcast.notice.noEmailRecipients': 'Nenhuma conta desta audiência tem e-mail verificado: só é possível a publicação no aplicativo.',
   'admin.broadcast.confirm.inApp.bodyUncounted': 'Audiência: {audience}. O número de contas alcançáveis no aplicativo só é contado na preparação, e esta página não o guarda mais. Cada uma recebe uma notificação no seu centro de notificações, com um envio push. Não pode ser retirada e só é publicada uma vez.',
 } satisfies AdminCatalogFragment<typeof fr>;
 

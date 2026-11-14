@@ -105,7 +105,7 @@ export function LanguagesDetailTable({ language, rows }: { readonly language: Ad
     <div className="grid gap-2">
       <StaticTable
         id="languages"
-        caption={translateAdmin(language, 'admin.lang.detail.caption')}
+        caption={translateAdmin(language, 'admin.lang.overview.title')}
         rows={rows}
         rowKey={(row) => row.code}
         columns={[
@@ -130,7 +130,7 @@ export function LanguagePairsTable({ language, rows }: { readonly language: Admi
   return (
     <StaticTable
       id="pairs"
-      caption={translateAdmin(language, 'admin.lang.pairs.caption')}
+      caption={translateAdmin(language, 'admin.lang.pairs.title')}
       rows={rows}
       rowKey={(row) => `${row.from}>${row.to}`}
       columns={[

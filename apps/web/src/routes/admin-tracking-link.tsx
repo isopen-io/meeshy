@@ -94,7 +94,6 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
         <AdminEmptyState
           glyph="target"
           title={translateAdmin(language, 'admin.tracking.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.tracking.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}

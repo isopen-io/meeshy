@@ -151,7 +151,7 @@ export function AdminInvitationsPanel({ language, deps = apiDeps, now = defaultN
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.invitation.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.invitation.list.empty'), hint: translateAdmin(language, 'admin.invitation.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.invitation.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.invitation.list.filteredEmpty') }}
       />
     </div>

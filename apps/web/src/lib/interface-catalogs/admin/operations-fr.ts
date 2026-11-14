@@ -3,7 +3,7 @@
  * direct, Docker, le GPU, la sauvegarde et la purge des images. Préfixe exclusif : `admin.ops.`.
  */
 const f = {
-  'admin.ops.shared': 'Hôte partagé : le staging et la production tournent sur cette machine. Ce que montrent les graphes vaut pour les deux.',
+  'admin.ops.shared': 'Hôte partagé : staging et production tournent sur cette machine.',
   'admin.ops.environment': 'Environnement : {name} · hôte {host}',
   'admin.ops.live': 'En direct',
   'admin.ops.polling': 'Relu toutes les 5 s',
@@ -71,7 +71,7 @@ const f = {
   'admin.ops.dash.title': 'La machine',
   'admin.ops.dash.more': 'Voir les opérations',
   'admin.ops.containers.title': 'Conteneurs',
-  'admin.ops.containers.subtitle': 'Les conteneurs de cet environnement, relevés chaque minute. Touchez-en un pour voir sa consommation et ses réseaux.',
+  'admin.ops.containers.subtitle': 'Relevés chaque minute ; touchez-en un pour le détail.',
   'admin.ops.containers.measuredAt': 'Relevé {when}',
   'admin.ops.containers.summary': '{running} en marche sur {total}',
   'admin.ops.containers.none': 'Le relais n’a publié aucun conteneur pour cet environnement.',

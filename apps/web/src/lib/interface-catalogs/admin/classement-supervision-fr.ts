@@ -60,6 +60,7 @@ const f = {
   'admin.ranking.period.all': 'Depuis toujours',
   'admin.ranking.periodNone': 'Ce critère porte sur tout l’historique : la période ne s’applique pas.',
   'admin.ranking.periodCreation': 'La période retient les liens créés pendant cette durée, quelle que soit la date des clics.',
+  'admin.ranking.periodQuestion': 'Que filtre la période ?',
 
   'admin.ranking.limit.label': 'Nombre de lignes',
   'admin.ranking.limit.option': 'Top {count}',
@@ -152,7 +153,6 @@ const f = {
   'admin.monitoring.breakers.lastFailure': 'Dernier échec',
   'admin.monitoring.breakers.never': 'Aucun échec',
   'admin.monitoring.breakers.empty': 'Aucun coupe-circuit enregistré',
-  'admin.monitoring.breakers.emptyHint': 'Ils apparaissent dès qu’un service protégé est appelé.',
 
   'admin.monitoring.presence.title': 'Présence',
   'admin.monitoring.presence.total': 'Mises à jour demandées',
@@ -167,7 +167,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Lignes du détail',
   'admin.monitoring.routes.limit.option': '{count} lignes',
   'admin.monitoring.routes.notInstrumented': 'La mesure n’est pas installée sur cette instance : les zéros ci-dessous ne prouvent rien.',
-  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons n’ont pas été ventilés par plateforme et version. Les totaux des routes surveillées restent exacts.',
+  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons non ventilés par plateforme et version.',
   'admin.monitoring.routes.truncated': '{shown} lignes affichées sur {total}. Affinez le filtre pour voir les autres.',
   'admin.monitoring.routes.observingSince': 'Observation depuis',
   'admin.monitoring.routes.observedFor': 'Durée observée',

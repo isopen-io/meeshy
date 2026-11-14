@@ -164,7 +164,7 @@ export function AdminTrackingLinksPanel({ language, deps = apiDeps, now = defaul
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.tracking.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.tracking.list.empty'), hint: translateAdmin(language, 'admin.tracking.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.tracking.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.tracking.list.filteredEmpty') }}
       />
     </div>

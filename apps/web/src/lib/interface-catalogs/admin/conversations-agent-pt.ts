@@ -8,13 +8,11 @@ import type fr from './conversations-agent-fr';
  * reference for meaning; the `admin.enum.*` labels it relies on live in the kit.
  */
 const f = {
-  'admin.conversation.subtitle':
-    'Todas as conversas da plataforma: quem as compõe, em que ponto estão e a que comunidade pertencem. O conteúdo das mensagens só se lê com um motivo escrito, a partir da ficha.',
+  'admin.conversation.subtitle': 'O conteúdo das mensagens só se lê com um motivo escrito, a partir da ficha.',
   'admin.conversation.search': 'Pesquisar por título ou identificador',
   'admin.conversation.list.caption': 'Lista de conversas',
   'admin.conversation.list.count': '{count} conversa(s)',
   'admin.conversation.list.empty': 'Nenhuma conversa',
-  'admin.conversation.list.emptyHint': 'As conversas criadas na plataforma aparecem aqui.',
   'admin.conversation.list.filteredEmpty': 'Nenhuma conversa com estes filtros',
   'admin.conversation.list.onCommunity': 'Conversas de uma única comunidade: remova o filtro para voltar a ver todas as conversas.',
   'admin.conversation.list.onCommunityNamed': 'Conversas da comunidade «{name}»: remova o filtro para voltar a ver todas as conversas.',
@@ -37,7 +35,6 @@ const f = {
 
   'admin.conversation.fiche.loading': 'Carregando a conversa',
   'admin.conversation.fiche.notFound': 'Esta conversa não existe mais',
-  'admin.conversation.fiche.notFoundHint': 'Foi excluída, ou o endereço está incorreto.',
   'admin.conversation.fiche.back': 'Voltar às conversas',
   'admin.conversation.fiche.configure': 'Configurar',
 
@@ -107,9 +104,11 @@ const f = {
   'admin.conversation.members.remove.done': 'Membro removido',
 
   'admin.conversation.reading.title': 'Ler a conversa',
-  'admin.conversation.reading.hint': 'O conteúdo das mensagens só se lê com um motivo escrito, registrado com o seu nome no registro de auditoria. O fio é mostrado nos seus idiomas de leitura, como no aplicativo.',
+  'admin.conversation.reading.hint': 'Leitura com motivo escrito, registrada em seu nome.',
+  'admin.conversation.reading.langNote': 'O fio é mostrado nos seus idiomas de leitura, como no aplicativo.',
+  'admin.conversation.reading.langQuestion': 'Em que idioma o fio é mostrado?',
 
-  'admin.agentPanel.subtitle': 'As conversas em que o agente intervém: acompanhe a atividade dele, relance-o, ajuste seu modelo, seus temas e sua fila de entrega.',
+  'admin.agentPanel.subtitle': 'As conversas em que o agente intervém.',
   'admin.agentPanel.stat.tracked': 'Conversas controladas',
   'admin.agentPanel.stat.trackedCaption': 'de {total} configuradas',
   'admin.agentPanel.stat.users': 'Membros controlados',
@@ -119,7 +118,6 @@ const f = {
   'admin.agentPanel.tracked.search': 'Pesquisar uma conversa',
   'admin.agentPanel.tracked.count': '{count} conversa(s)',
   'admin.agentPanel.tracked.empty': 'Nenhuma conversa acompanhada',
-  'admin.agentPanel.tracked.emptyHint': 'Quando o agente é configurado para uma conversa, ela aparece aqui.',
   'admin.agentPanel.tracked.filteredEmpty': 'Nenhuma conversa para esta pesquisa',
   'admin.agentPanel.tracked.col.conversation': 'Conversa',
   'admin.agentPanel.tracked.col.state': 'Estado',
@@ -135,7 +133,6 @@ const f = {
   'admin.agentPanel.logs.caption': 'Registro das análises do agente',
   'admin.agentPanel.logs.count': '{count} análise(s)',
   'admin.agentPanel.logs.empty': 'Nenhuma análise registrada',
-  'admin.agentPanel.logs.emptyHint': 'Cada passagem do agente por uma conversa deixa uma linha aqui.',
   'admin.agentPanel.logs.filteredEmpty': 'Nenhuma análise com estes filtros',
   'admin.agentPanel.logs.filter.outcome': 'Resultado',
   'admin.agentPanel.logs.filter.trigger': 'Acionador',
@@ -189,7 +186,9 @@ const f = {
   'admin.conversation.card.agent.users': 'Membros pilotados',
   'admin.conversation.card.agent.scanning': 'O agente está analisando a conversa neste momento.',
   'admin.conversation.card.links.none': 'Nenhum link de compartilhamento',
-  'admin.conversation.card.links.hint': 'Esta conversa tem {count} link(s) de compartilhamento. Cada um se consulta e se fecha na seção de links de compartilhamento.',
+  'admin.conversation.card.links.hint': '{count} link(s) de compartilhamento',
+  'admin.conversation.card.links.whereNote': 'Cada um se consulta e se fecha na seção de links de compartilhamento.',
+  'admin.conversation.card.links.whereQuestion': 'Onde gerenciar esses links?',
   'admin.conversation.card.links.open': 'Ver os links de compartilhamento',
   'admin.conversation.members.nickname': 'Apelido: {nickname}',
   'admin.conversation.members.state.banned': 'Banido',
@@ -382,7 +381,6 @@ const f = {
   'admin.agentPanel.archetype.hustler': 'O desenrolado',
 
   'admin.agentPanel.queue.empty': 'Nada aguardando publicação',
-  'admin.agentPanel.queue.emptyHint': 'O que o agente prepara aparece aqui antes de ser publicado.',
   'admin.agentPanel.queue.count': '{count} item(ns) aguardando',
   'admin.agentPanel.queue.note': 'O gateway não reprograma: uma mensagem se corrige ou se cancela.',
   'admin.agentPanel.queue.message': 'Mensagem',
@@ -435,6 +433,7 @@ const f = {
 
   'admin.agentPanel.reset.conversationHint': 'Uma conversa é reiniciada a partir dos seus ajustes, na lista de conversas acompanhadas.',
   'admin.agentPanel.reset.userHint': 'Um membro é reiniciado a partir dos membros conduzidos de uma conversa.',
+  'admin.agentPanel.reset.whereQuestion': 'Onde redefinir uma conversa ou um membro?',
   'admin.agentPanel.reset.all': 'Reiniciar tudo',
   'admin.agentPanel.reset.allBody': 'Apaga na plataforma INTEIRA: todas as configurações de conversa, todos os papéis dos membros conduzidos, todos os resumos, toda a análise, todos os perfis globais e todo o cache do agente. As mensagens já publicadas permanecem. A ação não pode ser desfeita.',
   'admin.agentPanel.reset.allDone': 'Todo o estado do agente foi apagado.',

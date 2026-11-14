@@ -233,7 +233,7 @@ describe('les avis — avant tout chiffre', () => {
 
     const notice = normalized(host.querySelector('[data-admin-notice="warning"]')?.textContent ?? '');
     expect(notice).toContain('1 234 échantillons');
-    expect(notice).toContain('Les totaux des routes surveillées restent exacts');
+    expect(notice).toContain('non ventilés par plateforme et version');
   });
 
   test('un détail tronqué : combien de lignes sur combien', async () => {

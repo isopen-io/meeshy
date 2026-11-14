@@ -8,11 +8,10 @@
  */
 const f = {
   // ── Journal d’audit : l’écran ──────────────────────────────────────────────
-  'admin.audit.subtitle': 'Qui a fait quoi, à qui et pourquoi : chaque geste d’administration et chaque lecture du privé laissent une trace ici.',
+  'admin.audit.subtitle': 'Chaque geste d’administration et chaque lecture du privé laissent une trace.',
   'admin.audit.list.caption': 'Journal d’audit',
   'admin.audit.list.count': '{count} entrées',
   'admin.audit.list.empty': 'Aucune trace pour l’instant',
-  'admin.audit.list.emptyHint': 'Les gestes d’administration et les lectures du privé apparaîtront ici dès qu’il y en aura.',
   'admin.audit.list.filteredEmpty': 'Aucune trace ne correspond à ces filtres',
   'admin.audit.list.onAdmin': 'Actions de {name}',
   'admin.audit.list.onAdminGeneric': 'Actions d’un seul administrateur',
@@ -309,7 +308,7 @@ const f = {
 
   // ── Réglages ───────────────────────────────────────────────────────────────
   'admin.settings.access.title': 'Votre accès',
-  'admin.settings.access.intro': 'Ce que votre rôle vous permet de faire dans l’administration. Les droits sont décidés par la plateforme, pas par cet écran.',
+  'admin.settings.access.intro': 'Ce que votre rôle vous permet de faire.',
   'admin.settings.access.role': 'Votre rôle',
   'admin.settings.access.granted': 'Accordée',
   'admin.settings.access.denied': 'Non accordée',

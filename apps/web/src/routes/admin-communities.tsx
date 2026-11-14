@@ -131,7 +131,7 @@ export function AdminCommunitiesPanel({
         rowKey={(row) => row.id}
         rowTarget={(row) => ({ kind: 'entity', entity: 'community', id: row.id })}
         caption={translateAdmin(language, 'admin.community.caption')}
-        empty={{ title: translateAdmin(language, 'admin.community.empty'), hint: translateAdmin(language, 'admin.community.empty.hint') }}
+        empty={{ title: translateAdmin(language, 'admin.community.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.community.filtered') }}
         toolbar={
           <AdminListToolbar

@@ -10,7 +10,6 @@ const f = {
   'admin.moderation.list.caption': 'Lista de denuncias',
   'admin.moderation.list.count': '{count} denuncia(s)',
   'admin.moderation.list.empty': 'Ninguna denuncia',
-  'admin.moderation.list.emptyHint': 'Cuando un miembro denuncia un contenido o una cuenta, aparece aquí.',
   'admin.moderation.list.filteredEmpty': 'Ninguna denuncia coincide con estos filtros',
   'admin.moderation.list.onEntity': 'Denuncias sobre un único elemento: quita el filtro para volver a ver toda la cola.',
   'admin.moderation.list.onEntityReset': 'Ver toda la cola',
@@ -54,7 +53,6 @@ const f = {
   'admin.moderation.fiche.loading': 'Cargando la denuncia',
   'admin.moderation.fiche.received': 'Denunciado por {reporter} · {when}',
   'admin.moderation.fiche.notFound': 'Esta denuncia ya no existe',
-  'admin.moderation.fiche.notFoundHint': 'Es posible que otro moderador la haya eliminado.',
   'admin.moderation.fiche.back': 'Volver a las denuncias',
 
   'admin.moderation.stat.received': 'Recibida',

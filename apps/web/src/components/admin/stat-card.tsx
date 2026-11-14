@@ -8,6 +8,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminSparkline } from './charts/sparkline';
 import { AdminGlyph } from './admin-glyph';
 import { AdminLink } from './entity-chip';
+import { AdminNoted } from './info-note';
 import { BRAND, EDGE, INK, INK2, INK3, SURFACE, TONE_COLOR } from './tone';
 
 export type AdminDelta = {
@@ -65,6 +66,7 @@ export function AdminStatCard({
   label,
   value,
   caption,
+  note,
   delta,
   trend,
   target,
@@ -76,6 +78,8 @@ export function AdminStatCard({
   readonly label: string;
   readonly value: string;
   readonly caption?: string;
+  /** L'explication de la mesure, derrière un (i) à côté du libellé (épure #17584, règle 5) : la valeur seule au repos. Ignorée sur une carte-lien, où un bouton n'a pas sa place. */
+  readonly note?: { readonly question: string; readonly text: string };
   readonly delta?: AdminDelta | null;
   readonly trend?: readonly number[];
   readonly target?: AdminTarget;
@@ -120,9 +124,11 @@ export function AdminStatCard({
   const last = trend?.[trend.length - 1];
   const body: ReactNode = (
     <>
-      <span className="text-caption" style={{ color: INK2 }}>
-        {label}
-      </span>
+      <AdminNoted question={note?.question ?? ''} text={target === undefined ? note?.text : undefined}>
+        <span className="text-caption" style={{ color: INK2 }}>
+          {label}
+        </span>
+      </AdminNoted>
       <span className="flex items-end justify-between gap-3">
         <span className="min-w-0 break-words text-screen font-bold tabular-nums" style={{ color: INK }}>
           {value}

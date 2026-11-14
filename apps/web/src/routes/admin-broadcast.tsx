@@ -117,7 +117,6 @@ export function AdminBroadcastPanel({ language, broadcastId, deps = apiDeps, now
         <AdminEmptyState
           glyph="megaphone"
           title={translateAdmin(language, 'admin.broadcast.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.broadcast.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}

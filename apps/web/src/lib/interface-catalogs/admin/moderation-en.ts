@@ -10,7 +10,6 @@ const f = {
   'admin.moderation.list.caption': 'List of reports',
   'admin.moderation.list.count': '{count} report(s)',
   'admin.moderation.list.empty': 'No reports',
-  'admin.moderation.list.emptyHint': 'When a member reports content or an account, it lands here.',
   'admin.moderation.list.filteredEmpty': 'No reports match these filters',
   'admin.moderation.list.onEntity': 'Reports about a single item: remove the filter to see the whole queue again.',
   'admin.moderation.list.onEntityReset': 'See the whole queue',
@@ -54,7 +53,6 @@ const f = {
   'admin.moderation.fiche.loading': 'Loading the report',
   'admin.moderation.fiche.received': 'Reported by {reporter} · {when}',
   'admin.moderation.fiche.notFound': 'This report no longer exists',
-  'admin.moderation.fiche.notFoundHint': 'Another moderator may have deleted it.',
   'admin.moderation.fiche.back': 'Back to reports',
 
   'admin.moderation.stat.received': 'Received',

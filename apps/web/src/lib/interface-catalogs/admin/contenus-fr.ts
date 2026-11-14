@@ -46,7 +46,6 @@ const f = {
   'admin.posts.col.state': 'État',
   'admin.posts.col.published': 'Publiée',
   'admin.posts.empty': 'Aucune publication',
-  'admin.posts.empty.hint': 'Les publications, stories, reels et statuts apparaîtront ici dès qu’ils seront publiés.',
   'admin.posts.filtered': 'Aucune publication pour ces filtres',
   'admin.posts.restricted': 'Contenu à audience restreinte',
   'admin.posts.noText': 'Sans texte',
@@ -70,7 +69,6 @@ const f = {
 
   /* ─── Publications : la fiche ─── */
   'admin.posts.notFound': 'Cette publication est introuvable',
-  'admin.posts.notFound.hint': 'Elle n’existe plus, ou l’adresse est incorrecte.',
   'admin.posts.publishedOn': 'Publiée le {date}',
   'admin.posts.stat.likes': 'J’aime',
   'admin.posts.stat.comments': 'Commentaires',
@@ -156,7 +154,6 @@ const f = {
   'admin.community.col.state': 'État',
   'admin.community.col.created': 'Création',
   'admin.community.empty': 'Aucune communauté',
-  'admin.community.empty.hint': 'Les communautés apparaîtront ici dès qu’une personne en créera une.',
   'admin.community.filtered': 'Aucune communauté pour ces filtres',
   'admin.community.visibility.private': 'Privée',
   'admin.community.visibility.private.explain': 'Hors de la recherche : on ne la rejoint que sur invitation, et sa page n’est lisible que de ses membres.',
@@ -168,7 +165,6 @@ const f = {
 
   /* ─── Communautés : la fiche ─── */
   'admin.community.notFound': 'Cette communauté est introuvable',
-  'admin.community.notFound.hint': 'Elle n’existe plus, ou l’adresse est incorrecte.',
   'admin.community.banner': 'Bannière de la communauté',
   'admin.community.stat.members': 'Membres actifs',
   'admin.community.stat.left': 'Départs',

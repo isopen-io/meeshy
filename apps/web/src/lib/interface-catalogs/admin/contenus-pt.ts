@@ -41,7 +41,6 @@ const f = {
   'admin.posts.col.state': 'Estado',
   'admin.posts.col.published': 'Publicada',
   'admin.posts.empty': 'Nenhuma publicação',
-  'admin.posts.empty.hint': 'As publicações, stories, reels e estados aparecerão aqui assim que forem publicados.',
   'admin.posts.filtered': 'Nenhuma publicação com estes filtros',
   'admin.posts.restricted': 'Conteúdo de audiência restrita',
   'admin.posts.noText': 'Sem texto',
@@ -65,7 +64,6 @@ const f = {
 
   /* ─── Posts: the record ─── */
   'admin.posts.notFound': 'Esta publicação não foi encontrada',
-  'admin.posts.notFound.hint': 'Ela não existe mais ou o endereço está errado.',
   'admin.posts.publishedOn': 'Publicada em {date}',
   'admin.posts.stat.likes': 'Curtidas',
   'admin.posts.stat.comments': 'Comentários',
@@ -151,7 +149,6 @@ const f = {
   'admin.community.col.state': 'Estado',
   'admin.community.col.created': 'Criada',
   'admin.community.empty': 'Nenhuma comunidade',
-  'admin.community.empty.hint': 'As comunidades aparecerão aqui assim que alguém criar uma.',
   'admin.community.filtered': 'Nenhuma comunidade corresponde a estes filtros',
   'admin.community.visibility.private': 'Privada',
   'admin.community.visibility.private.explain': 'Fora da pesquisa: só se entra por convite e só os seus membros podem ler a sua página.',
@@ -163,7 +160,6 @@ const f = {
 
   /* ─── Communities: the record ─── */
   'admin.community.notFound': 'Esta comunidade não foi encontrada',
-  'admin.community.notFound.hint': 'Ela não existe mais ou o endereço está errado.',
   'admin.community.banner': 'Banner da comunidade',
   'admin.community.stat.members': 'Membros ativos',
   'admin.community.stat.left': 'Saídas',

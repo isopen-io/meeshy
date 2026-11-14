@@ -2,7 +2,7 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './operations-fr';
 
 const f = {
-  'admin.ops.shared': 'Servidor compartilhado: staging e produção rodam nesta máquina. O que os gráficos mostram vale para os dois.',
+  'admin.ops.shared': 'Servidor compartilhado: staging e produção rodam nesta máquina.',
   'admin.ops.environment': 'Ambiente: {name} · servidor {host}',
   'admin.ops.live': 'Ao vivo',
   'admin.ops.polling': 'Atualizado a cada 5 s',
@@ -70,7 +70,7 @@ const f = {
   'admin.ops.dash.title': 'A máquina',
   'admin.ops.dash.more': 'Ver as operações',
   'admin.ops.containers.title': 'Contêineres',
-  'admin.ops.containers.subtitle': 'Os contêineres deste ambiente, lidos a cada minuto. Toque em um para ver seu consumo e suas redes.',
+  'admin.ops.containers.subtitle': 'Lidos a cada minuto; toque em um para ver o detalhe.',
   'admin.ops.containers.measuredAt': 'Lido {when}',
   'admin.ops.containers.summary': '{running} em execução de {total}',
   'admin.ops.containers.none': 'O relé não publicou nenhum contêiner para este ambiente.',

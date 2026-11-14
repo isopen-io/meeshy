@@ -3,11 +3,10 @@ import type fr from './audit-reglages-fr';
 
 const f = {
   // ── Audit log: the screen ──────────────────────────────────────────────────
-  'admin.audit.subtitle': 'Who did what, to whom and why: every administration gesture and every read of private content leaves a trace here.',
+  'admin.audit.subtitle': 'Every administration gesture and every read of private content leaves a trace.',
   'admin.audit.list.caption': 'Audit log',
   'admin.audit.list.count': '{count} entries',
   'admin.audit.list.empty': 'No trace yet',
-  'admin.audit.list.emptyHint': 'Administration gestures and reads of private content will appear here as soon as there are any.',
   'admin.audit.list.filteredEmpty': 'No trace matches these filters',
   'admin.audit.list.onAdmin': 'Actions by {name}',
   'admin.audit.list.onAdminGeneric': 'Actions by a single administrator',
@@ -304,7 +303,7 @@ const f = {
 
   // ── Settings ───────────────────────────────────────────────────────────────
   'admin.settings.access.title': 'Your access',
-  'admin.settings.access.intro': 'What your role lets you do in the administration. Rights are decided by the platform, not by this screen.',
+  'admin.settings.access.intro': 'What your role lets you do.',
   'admin.settings.access.role': 'Your role',
   'admin.settings.access.granted': 'Granted',
   'admin.settings.access.denied': 'Not granted',

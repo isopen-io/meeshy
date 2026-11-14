@@ -8,6 +8,7 @@ const f = {
   'admin.kit.info.blindSpot': 'Por que este ponto cego?',
   'admin.kit.info.action': 'O que aconteceu?',
   'admin.kit.info.table': 'Como ler esta tabela?',
+  'admin.kit.info.stat': 'O que mede este número?',
   'admin.kit.info.edit': 'Como editar?',
   'admin.kit.info.secret': 'Por que essas chaves são sensíveis?',
   'admin.kit.info.purge': 'O que esta limpeza remove?',

@@ -6,6 +6,7 @@ import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
@@ -141,9 +142,11 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
   const status = query.error instanceof ApiError ? query.error.status : 0;
   const reading = (
     <AdminFicheSection id="reading" title={translateAdmin(language, 'admin.conversation.reading.title')}>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translateAdmin(language, 'admin.conversation.reading.hint')}
-      </p>
+      <AdminNoted question={translateAdmin(language, 'admin.conversation.reading.langQuestion')} text={translateAdmin(language, 'admin.conversation.reading.langNote')}>
+        <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translateAdmin(language, 'admin.conversation.reading.hint')}
+        </span>
+      </AdminNoted>
       <AdminConversationReading
         conversationId={conversationId}
         language={language}
@@ -176,7 +179,6 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
         <AdminEmptyState
           glyph="chats"
           title={translateAdmin(language, 'admin.conversation.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.conversation.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}
@@ -273,9 +275,14 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
       case 'links':
         return (
           <div className="grid gap-3" data-admin-conversation-links>
-            <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translateAdmin(language, 'admin.conversation.card.links.hint', { count: formatCount(fiche.shareLinkCount, language) })}
-            </p>
+            <AdminNoted
+              question={translateAdmin(language, 'admin.conversation.card.links.whereQuestion')}
+              text={translateAdmin(language, 'admin.conversation.card.links.whereNote')}
+            >
+              <span className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {translateAdmin(language, 'admin.conversation.card.links.hint', { count: formatCount(fiche.shareLinkCount, language) })}
+              </span>
+            </AdminNoted>
             {reach.opens('shareLinks') ? (
               <AdminLink
                 target={{ kind: 'section', section: 'shareLinks' }}

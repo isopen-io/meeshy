@@ -8,7 +8,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import type { KpiPeriod } from '@/lib/api/admin-analytics';
 import { PLAYBACK_PAGE_VITALS, loadPlaybackQoe, playbackKey, type PlaybackCell, type PlaybackQoe, type QuantilePair } from '@/lib/api/admin-analytics-playback';
 import { playbackText, usePlaybackTexts, type PlaybackTexts } from '@/lib/admin/playback-texts';
-import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Metric, StaleDataNotice, StatsBlock, StatsSection, useStatsQuery, type Block } from './admin-analytics-parts';
 
@@ -65,7 +65,7 @@ function VitalsTable({ language, texts, cells }: { readonly language: AdminLangu
     ms(cell.longFrameWorstMs, 'p95', language),
   ]);
   return (
-    <StatsSection id="playback-page-vitals" title={playbackText(texts, 'admin.analytics.playback.vitals.title')} note={playbackText(texts, 'admin.analytics.playback.vitals.hint')}>
+    <StatsSection id="playback-page-vitals" title={playbackText(texts, 'admin.analytics.playback.vitals.title')} note={playbackText(texts, 'admin.analytics.playback.vitals.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.measure.question')}>
       <div data-admin-playback-vitals-table>
         <AdminChartTable table={{ caption: playbackText(texts, 'admin.analytics.playback.vitals.title'), columns, rows }} />
       </div>
@@ -96,7 +96,7 @@ function PlaybackBody({ language, texts, block }: { readonly language: AdminLang
       {data?.sampled === true ? (
         <AdminInlineNotice tone="warning" text={playbackText(texts, 'admin.analytics.playback.sampled')} data={{ 'data-admin-playback-sampled': '' }} />
       ) : null}
-      <StatsSection id="playback-overview" title={playbackText(texts, 'admin.analytics.playback.title')} note={playbackText(texts, 'admin.analytics.playback.hint')}>
+      <StatsSection id="playback-overview" title={playbackText(texts, 'admin.analytics.playback.title')} note={playbackText(texts, 'admin.analytics.playback.hint')} noteQuestion={translateAdmin(language, 'admin.analytics.measure.question')}>
         <AdminStatGrid columns={2}>
           <Metric
             language={language}

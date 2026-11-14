@@ -3,6 +3,7 @@ import { peakOf } from '@/components/admin/charts/chart-scale';
 import { AdminShareChart } from '@/components/admin/charts/share-chart';
 import { AdminTimelineChart } from '@/components/admin/charts/timeline-chart';
 import { AdminStatGrid } from '@/components/admin/stat-card';
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { INK3 } from '@/components/admin/tone';
 import { interpretActivityBucket, interpretMessageType } from '@/lib/admin/interpret/enums';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
@@ -112,9 +113,11 @@ function DistributionChart({ language, block }: { readonly language: AdminLangua
         state={block.state}
         onRetry={block.retry}
       />
-      <p className="px-1 text-caption" style={{ color: INK3 }}>
-        {translateAdmin(language, 'admin.analytics.activity.distribution.hint')}
-      </p>
+      <AdminInfoAlone
+        question={translateAdmin(language, 'admin.analytics.activity.distribution.question')}
+        text={translateAdmin(language, 'admin.analytics.activity.distribution.hint')}
+        anchor="activity-distribution"
+      />
     </div>
   );
 }
@@ -257,9 +260,11 @@ export function AdminActivityTab({ language, deps, now, period }: TabProps) {
             <StatsBlock language={language} query={hourly}>
               {(block) => <HourlyChart language={language} block={block} />}
             </StatsBlock>
-            <p className="px-1 text-caption" style={{ color: INK3 }}>
-              {translateAdmin(language, 'admin.analytics.activity.hourly.hint')}
-            </p>
+            <AdminInfoAlone
+              question={translateAdmin(language, 'admin.analytics.activity.hourly.question')}
+              text={translateAdmin(language, 'admin.analytics.activity.hourly.hint')}
+              anchor="activity-hourly"
+            />
           </div>
           <StatsBlock language={language} query={distribution}>
             {(block) => <DistributionChart language={language} block={block} />}
