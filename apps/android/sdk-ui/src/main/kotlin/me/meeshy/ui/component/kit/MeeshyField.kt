@@ -188,7 +188,7 @@ public fun MeeshyField(
     val onTextChange: (TextFieldValue) -> Unit = { next ->
         val (newLedger, edit) = ledger.receive(next.text, limit)
         ledger = newLedger
-        field = if (edit?.wasTruncated == true) TextFieldValue(edit.value, TextRange(edit.value.length)) else next
+        field = edit?.takeIf { it.wasTruncated }?.let { TextFieldValue(it.value, TextRange(it.value.length)) } ?: next
         if (edit != null && edit.emits) {
             currentOnChange(edit.value)
             val ceiling = limit
