@@ -32,7 +32,7 @@ class ShareLinkGuestScopeTest {
         compose.setContent { MeeshyTheme { ShareLinkConfigurationCard(link = link, onEdit = {}) } }
 
         compose.onNodeWithText("What anonymous guests can do").assertIsDisplayed()
-        compose.onNodeWithText("What visitors must provide in order to join").assertIsDisplayed()
+        compose.onNodeWithText("What guests must provide").assertIsDisplayed()
     }
 
     @Test
@@ -54,6 +54,6 @@ class ShareLinkGuestScopeTest {
         }
 
         compose.onNodeWithText("What anonymous guests can do").assertExists()
-        compose.onNodeWithText("What visitors must provide in order to join").assertExists()
+        compose.onNodeWithText("What guests must provide").assertExists()
     }
 }
