@@ -55,8 +55,8 @@ public nonisolated enum MeeshySnapGuidesRule {
     public static func enteredCount(from previous: MeeshySnapLines, to next: MeeshySnapLines) -> Int {
         let before = sanitized(previous)
         let after = sanitized(next)
-        return after.vertical.filter { !contains(before.vertical, $0) }.count
-            + after.horizontal.filter { !contains(before.horizontal, $0) }.count
+        return after.vertical.filter { !Self.contains(before.vertical, $0) }.count
+            + after.horizontal.filter { !Self.contains(before.horizontal, $0) }.count
     }
 
     /// Un tic `light` par nouvelle ligne, jamais en continu, jamais à la sortie ;
