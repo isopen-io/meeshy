@@ -10,7 +10,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { FloatingMenus } from './floating-menus';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
-import { MENU_LADDER } from '@/lib/view/floating-menu';
+import { MENU_LADDER, floatingLadderExitMs } from '@/lib/view/floating-menu';
 
 /**
  * LES DEUX MENUS FLOTTANTS (#6104) — ce que la capture ne prouve pas.
@@ -67,7 +67,9 @@ function monter(routeKey = 'list'): HTMLDivElement {
 }
 
 const boutonMenu = () => container.querySelector('[data-floating-menu]') as HTMLButtonElement;
-const barreaux = () => [...container.querySelectorAll('[role="menuitem"]')] as HTMLAnchorElement[];
+/* Les barreaux ATTEIGNABLES : pendant sa sortie, l'échelle reste peinte mais inerte (#18460). */
+const barreaux = () => [...container.querySelectorAll('[role="menuitem"]')].filter((rung) => rung.closest('[inert]') === null) as HTMLAnchorElement[];
+const barreauxPeints = () => [...container.querySelectorAll('.floating-rung')] as HTMLAnchorElement[];
 
 /**
  * LES MENUS DANS LA LANGUE D'INTERFACE (#6206) — écrit en ALLEMAND : en
@@ -588,4 +590,85 @@ describe('le barreau « Administration » (#6458)', () => {
     expect(barreaux()).toHaveLength(0);
     expect(boutonMenu().getAttribute('aria-expanded')).toBe('false');
   });
+});
+
+/**
+ * **L'ÉCHELLE REPART EN MOUVEMENT** (#18460) — `menuAnimation` d'iOS joue
+ * l'aller et le retour ; le web entrait en cascade et disparaissait d'un coup.
+ */
+describe('la sortie de l’échelle', () => {
+  const avecReduction = (reduit: boolean, run: () => void | Promise<void>) => async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: reduit && query.includes('reduce'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await run();
+    } finally {
+      window.matchMedia = original;
+    }
+  };
+
+  test(
+    'fermée, l’échelle reste peinte, en sortie et inerte, jusqu’au terme de la cascade',
+    avecReduction(false, async () => {
+      monter();
+      act(() => {
+        boutonMenu().click();
+      });
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      const pendant = {
+        peints: barreauxPeints().length,
+        enSortie: barreauxPeints().every((rung) => rung.hasAttribute('data-leaving')),
+        inerte: container.querySelector('[role="menu"]')?.hasAttribute('inert'),
+      };
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, floatingLadderExitMs(MENU_LADDER.length) + 40));
+      });
+      expect({ pendant, apres: barreauxPeints().length }).toEqual({
+        pendant: { peints: MENU_LADDER.length, enSortie: true, inerte: true },
+        apres: 0,
+      });
+    }),
+  );
+
+  test(
+    'sous Réduire les animations, les barreaux partent tout de suite',
+    avecReduction(true, () => {
+      monter();
+      act(() => {
+        boutonMenu().click();
+      });
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(barreauxPeints()).toHaveLength(0);
+    }),
+  );
+
+  test(
+    'une seule entrée d’historique par ouverture',
+    avecReduction(false, () => {
+      let pushes = 0;
+      const original = window.history.pushState.bind(window.history);
+      window.history.pushState = (...args: Parameters<History['pushState']>) => {
+        pushes += 1;
+        original(...args);
+      };
+      try {
+        monter();
+        act(() => {
+          boutonMenu().click();
+        });
+        expect(pushes).toBe(1);
+      } finally {
+        window.history.pushState = original;
+      }
+    }),
+  );
 });
