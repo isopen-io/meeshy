@@ -64,6 +64,24 @@ class CallLiveFrameControllerTest {
     }
 
     @Test
+    fun `relacher un cadre que l'autre a accepte emet le retrait, et le retrait recu fait tomber le cadre partage`() = run { controller ->
+        controller.apply(frame)
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", frame, CallLiveFrameTexts(name = "Bob"), CallLiveFrameReply.ACCEPTED))
+
+        controller.apply(null)
+
+        assertThat(controller.state.value.frameId).isNull()
+        coVerify(exactly = 1) { social.selectCallLiveFrame("call-1", null, null, null) }
+
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
+        controller.accept()
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", null, null))
+
+        assertThat(controller.state.value.frameId).isNull()
+        coVerify(exactly = 1) { social.selectCallLiveFrame("call-1", null, null, null) }
+    }
+
+    @Test
     fun `refuser garde mon affichage et le dit a l'autre`() = run { controller ->
         incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, null))
         controller.decline()
