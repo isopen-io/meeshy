@@ -190,7 +190,7 @@ extension Route {
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
-            return String(localized: "route.title.affiliate", defaultValue: "Affiliation", bundle: .main)
+            return String(localized: "route.title.affiliate", defaultValue: "Parrainage", bundle: .main)
         case .trackingLinks:
             return String(localized: "route.title.tracking_links", defaultValue: "Liens de suivi", bundle: .main)
         case .shareLinks:

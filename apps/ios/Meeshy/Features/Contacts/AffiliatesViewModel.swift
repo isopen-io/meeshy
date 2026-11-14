@@ -78,12 +78,19 @@ final class AffiliatesViewModel: ObservableObject {
             await bestEffort("affiliatesViewModel.affiliates.save", category: .cache) { try await CacheCoordinator.shared.affiliates.save(referrals, for: cacheKey) }
         } catch {
             loadState = referrals.isEmpty
-                ? .error(String(localized: "contacts.affiliates.load-error", defaultValue: "Impossible de charger les affiliés", bundle: .main))
+                ? .error(String(localized: "contacts.affiliates.load-error", defaultValue: "Impossible de charger les filleuls", bundle: .main))
                 : .loaded
         }
     }
 
     // MARK: - Actions
+
+    /// Le lien à partager depuis l'état vide : le premier lien de parrainage servi. Aucun lien : `nil`, et l'écran
+    /// « Parrainage », où l'on en crée un, prend le relais.
+    func referralLinkToShare() async -> URL? {
+        let tokens = (try? await affiliateService.listTokens(offset: 0, limit: 20)) ?? []
+        return tokens.lazy.compactMap { $0.affiliateLink }.compactMap(URL.init(string:)).first
+    }
 
     /// « Lui écrire » — ouvre la conversation directe avec un filleul.
     func startConversation(with referral: AffiliateReferral) async -> Conversation? {

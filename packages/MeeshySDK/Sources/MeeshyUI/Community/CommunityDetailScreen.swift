@@ -68,7 +68,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 }
             }
         } message: {
-            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous ne pourrez plus accéder aux channels de cette communauté.", bundle: .module))
+            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux conversations de cette communauté.", bundle: .module))
         }
         .sheet(isPresented: $showAddChannel) {
             addChannelSheet { Task { await viewModel.load() } }
@@ -446,8 +446,8 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             if viewModel.conversations.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
-                    title: String(localized: "community.detail.channels.empty.title", defaultValue: "No Channels Yet", bundle: .module),
-                    actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer un Channel", bundle: .module),
+                    title: String(localized: "community.detail.channels.empty.title", defaultValue: "Aucune conversation pour l’instant", bundle: .module),
+                    actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer une conversation", bundle: .module),
                     onAction: { showAddChannel = true }
                 )
                 .frame(height: 200)

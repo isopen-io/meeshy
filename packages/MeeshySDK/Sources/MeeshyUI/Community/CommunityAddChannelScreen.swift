@@ -34,7 +34,7 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
                     conversationList
                 }
             }
-            .navigationTitle(String(localized: "community.addChannel.title", defaultValue: "Ajouter un channel", bundle: .module))
+            .navigationTitle(String(localized: "community.addChannel.title", defaultValue: "Ajouter une conversation", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.searchText, prompt: String(localized: "community.addChannel.search.prompt", defaultValue: "Rechercher une conversation...", bundle: .module))
             .toolbar {

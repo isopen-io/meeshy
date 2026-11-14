@@ -74925,43 +74925,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النسخ النصي محفوظ على هذا الجهاز فقط: في محادثة مشفّرة من طرف إلى طرف لا يغادره شيء — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+            "value": "النسخ النصي محفوظ على هذا الجهاز فقط: لا يغادر شيء محادثة مشفّرة من طرف إلى طرف."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkription nur auf diesem Gerät gespeichert: In einer Ende-zu-Ende-verschlüsselten Unterhaltung verlässt nichts das Gerät — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+            "value": "Transkription nur auf diesem Gerät gespeichert: Aus einer Ende-zu-Ende-verschlüsselten Unterhaltung verlässt nichts das Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcript kept on this device only: in an end-to-end encrypted conversation, nothing leaves it — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+            "value": "Transcript kept on this device only: nothing leaves an end-to-end encrypted conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcripción guardada solo en este dispositivo: en una conversación cifrada de extremo a extremo, nada sale de él — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+            "value": "Transcripción guardada solo en este dispositivo: nada sale de una conversación cifrada de extremo a extremo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription gardée sur cet appareil seulement : dans une conversation chiffrée de bout en bout, rien ne le quitte — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+            "value": "Transcription gardée sur cet appareil seulement : rien ne quitte une conversation chiffrée de bout en bout."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrizione conservata solo su questo dispositivo: in una conversazione cifrata end-to-end, nulla lo lascia — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+            "value": "Trascrizione conservata solo su questo dispositivo: nulla esce da una conversazione cifrata end-to-end."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrição guardada somente neste dispositivo: em uma conversa com criptografia de ponta a ponta, nada sai dele — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
+            "value": "Transcrição guardada somente neste dispositivo: nada sai de uma conversa com criptografia de ponta a ponta."
+          }
+        }
+      }
+    },
+    "call.transcript.disclaimer.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أين توجد هذه النسخة النصية؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo findet sich diese Transkription noch?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where can this transcript be found?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Dónde se puede encontrar esta transcripción?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où se retrouve cette transcription ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dove si ritrova questa trascrizione?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onde mais esta transcrição aparece?"
+          }
+        }
+      }
+    },
+    "call.transcript.disclaimer.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قد تظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. وتشمل كلام محدّثك كما ورد أثناء المكالمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie kann in einem iCloud- oder Finder-Backup dieses Geräts enthalten sein. Sie enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It may be included in this device's iCloud or Finder backup. It includes your interlocutor's words, as received during the call."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puede incluirse en una copia de seguridad de iCloud o Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elle peut figurer dans une sauvegarde iCloud ou Finder de cet appareil. Elle inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Può comparire in un backup iCloud o Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pode constar em um backup do iCloud ou do Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
           }
         }
       }
@@ -74973,43 +75067,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النسخ النصي محفوظ على هذا الجهاز، كما يحتفظ خادم Meeshy بالجمل النهائية للمكالمة من أجل هذا السجل — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+            "value": "النسخ النصي محفوظ على هذا الجهاز، وللجمل النهائية على خادم Meeshy."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkription auf diesem Gerät gespeichert; der Meeshy-Server speichert für dieses Protokoll außerdem die endgültigen Sätze des Anrufs — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+            "value": "Transkription auf diesem Gerät gespeichert und, für die endgültigen Sätze, auf dem Meeshy-Server."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcript kept on this device; the Meeshy server also keeps the call's final sentences for this log — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+            "value": "Transcript kept on this device and, for the final sentences, on the Meeshy server."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcripción guardada en este dispositivo; el servidor de Meeshy también guarda las frases finales de la llamada para este registro — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+            "value": "Transcripción guardada en este dispositivo y, para las frases finales, en el servidor de Meeshy."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription gardée sur cet appareil ; le serveur Meeshy garde aussi les phrases finales de l'appel pour ce journal — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+            "value": "Transcription gardée sur cet appareil et, pour les phrases finales, sur le serveur Meeshy."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrizione conservata su questo dispositivo; il server Meeshy conserva anche le frasi finali della chiamata per questo registro — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+            "value": "Trascrizione conservata su questo dispositivo e, per le frasi finali, sul server Meeshy."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrição guardada neste dispositivo; o servidor do Meeshy também guarda as frases finais da chamada para este registro — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
+            "value": "Transcrição guardada neste dispositivo e, para as frases finais, no servidor do Meeshy."
           }
         }
       }
@@ -99529,7 +99623,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun affilié"
+            "value": "Aucun filleul"
           }
         },
         "it": {
@@ -99542,53 +99636,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum indicado"
-          }
-        }
-      }
-    },
-    "contacts.affiliates.empty-hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "شارك رابط الإحالة الخاص بك لترى هنا من ينضم إليك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Teile deinen Empfehlungslink, um hier zu sehen, wer sich dir anschließt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share your referral link to see who joins you here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparte tu enlace de referidos para ver aquí a quienes se unan a ti"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partage ton lien d'affiliation pour retrouver ici ceux qui te rejoignent"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Condividi il tuo link di invito per vedere qui chi si unisce a te"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compartilhe seu link de indicação para ver aqui quem se junta a você"
           }
         }
       }
@@ -99623,7 +99670,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de charger les affiliés"
+            "value": "Impossible de charger les filleuls"
           }
         },
         "it": {
@@ -99693,43 +99740,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "البحث عن شريك"
+            "value": "البحث عن مُحال"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partner suchen"
+            "value": "Empfohlene suchen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search for an affiliate"
+            "value": "Search for a referral"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Buscar un afiliado"
+            "value": "Buscar un referido"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rechercher un affilié"
+            "value": "Rechercher un filleul"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cerca un affiliato"
+            "value": "Cerca un invitato"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Buscar um afiliado"
+            "value": "Buscar um indicado"
           }
         }
       }
@@ -100986,7 +101033,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliés"
+            "value": "Filleuls"
           }
         },
         "it": {
@@ -101520,49 +101567,49 @@
         }
       }
     },
-    "contacts.phonebook.empty-hint": {
+    "contacts.phonebook.empty.action": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "زامن دفتر عناوينك للعثور على جهات اتصالك على Meeshy"
+            "value": "مزامنة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synchronisiere dein Adressbuch, um deine Kontakte auf Meeshy zu finden"
+            "value": "Synchronisieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sync your address book to find your contacts on Meeshy"
+            "value": "Sync"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sincroniza tu agenda para encontrar tus contactos en Meeshy"
+            "value": "Sincronizar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synchronise ton carnet d'adresses pour retrouver tes contacts sur Meeshy"
+            "value": "Synchroniser"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sincronizza la tua rubrica per trovare i tuoi contatti su Meeshy"
+            "value": "Sincronizza"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sincronize sua agenda de contatos para encontrar seus contatos no Meeshy"
+            "value": "Sincronizar"
           }
         }
       }
@@ -118247,31 +118294,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "See my affiliations"
+            "value": "See my referrals"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver mis afiliaciones"
+            "value": "Ver mis referidos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir mes affiliations"
+            "value": "Voir mes filleuls"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vedi le mie affiliazioni"
+            "value": "Vedi i miei invitati"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver minhas afiliações"
+            "value": "Ver minhas indicações"
           }
         }
       }
@@ -157537,53 +157584,6 @@
         }
       }
     },
-    "profile.posts.empty.filter.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المس المربع مرة أخرى لعرض كل شيء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tippe erneut auf die Kachel, um alles zu sehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap the tile again to see everything"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca de nuevo el mosaico para verlo todo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez à nouveau la tuile pour tout revoir"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca di nuovo il riquadro per rivedere tutto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque no bloco novamente para ver tudo"
-          }
-        }
-      }
-    },
     "profile.posts.empty.posts": {
       "extractionState": "manual",
       "localizations": {
@@ -157674,6 +157674,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum reel"
+          }
+        }
+      }
+    },
+    "profile.posts.empty.filter.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الكل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See all"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver todo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout voir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi tutto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver tudo"
           }
         }
       }
@@ -169658,37 +169705,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partnerprogramm"
+            "value": "Empfehlung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliate"
+            "value": "Referral"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afiliación"
+            "value": "Referidos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliation"
+            "value": "Parrainage"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiliazione"
+            "value": "Referral"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afiliação"
+            "value": "Indicação"
           }
         }
       }
@@ -170956,52 +171003,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pesquisar em tudo..."
-          }
-        }
-      }
-    },
-    "search.global.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الرسائل والمنشورات والمستخدمون"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nachrichten, Beiträge, Benutzer"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages, posts, users"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensajes, publicaciones, usuarios"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages, posts, utilisateurs"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaggi, post, utenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensagens, posts, usuários"
           }
         }
       }
@@ -231011,90 +231012,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد مكالمة تطابق «%@»"
+            "value": "لا توجد مكالمة في الأشهر الثلاثة الأخيرة لـ «%@»"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kein Anruf entspricht „%@“"
+            "value": "Kein Anruf in den letzten drei Monaten für „%@“"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No call matches “%@”"
+            "value": "No calls in the last three months for “%@”"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ninguna llamada coincide con «%@»"
+            "value": "Ninguna llamada en los últimos tres meses para «%@»"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun appel ne correspond à « %@ »"
+            "value": "Aucun appel sur les trois derniers mois pour « %@ »"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna chiamata corrisponde a «%@»"
+            "value": "Nessuna chiamata negli ultimi tre mesi per «%@»"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma chamada corresponde a “%@”"
-          }
-        }
-      }
-    },
-    "calls.search.empty.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يغطي السجل الأشهر الثلاثة الأخيرة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Protokoll umfasst die letzten drei Monate."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The log covers the last three months."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El registro abarca los últimos tres meses."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le journal couvre les trois derniers mois."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il registro copre gli ultimi tre mesi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O histórico cobre os últimos três meses."
+            "value": "Nenhuma chamada nos últimos três meses para “%@”"
           }
         }
       }

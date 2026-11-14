@@ -426,12 +426,9 @@ struct GlobalSearchView: View {
             } else {
                 EmptyStateView(
                     icon: "magnifyingglass",
-                    title: String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy"),
-                    subtitle: String(localized: "search.global.subtitle", defaultValue: "Messages, posts, utilisateurs")
+                    title: String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy")
                 )
                 .padding(.top, 60)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy") + ". " + String(localized: "search.global.subtitle", defaultValue: "Messages, posts, utilisateurs"))
             }
         }
     }

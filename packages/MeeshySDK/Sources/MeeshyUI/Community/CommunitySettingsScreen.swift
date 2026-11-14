@@ -70,7 +70,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.", bundle: .module))
+            Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. Tous les membres et conversations seront supprimés définitivement.", bundle: .module))
         }
         .alert(String(localized: "community.settings.privacy.confirm.title", defaultValue: "Rendre la communauté privée ?", bundle: .module), isPresented: $viewModel.showPrivacyConfirm) {
             Button(String(localized: "community.settings.privacy.confirm.button", defaultValue: "Rendre privée", bundle: .module), role: .destructive) {
@@ -90,7 +90,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux canaux et messages de cette communauté.", bundle: .module))
+            Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux conversations de cette communauté.", bundle: .module))
         }
         .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }

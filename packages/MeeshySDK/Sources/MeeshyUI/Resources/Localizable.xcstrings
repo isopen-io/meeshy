@@ -10980,43 +10980,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إضافة قناة"
+            "value": "إضافة محادثة"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Kanal hinzufügen"
+            "state": "translated",
+            "value": "Unterhaltung hinzufügen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Add a channel"
+            "state": "translated",
+            "value": "Add a conversation"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Añadir un canal"
+            "state": "translated",
+            "value": "Añadir una conversación"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Ajouter un channel"
+            "state": "translated",
+            "value": "Ajouter une conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi un canale"
+            "value": "Aggiungi una conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Adicionar um canal"
+            "state": "translated",
+            "value": "Adicionar uma conversa"
           }
         }
       }
@@ -12108,43 +12108,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء قناة"
+            "value": "إنشاء محادثة"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Kanal erstellen"
+            "state": "translated",
+            "value": "Unterhaltung erstellen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Create a Channel"
+            "state": "translated",
+            "value": "Create a conversation"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Crear un canal"
+            "state": "translated",
+            "value": "Crear una conversación"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Créer un Channel"
+            "state": "translated",
+            "value": "Créer une conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea un canale"
+            "value": "Crea una conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Criar um canal"
+            "state": "translated",
+            "value": "Criar uma conversa"
           }
         }
       }
@@ -12155,25 +12155,25 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد قنوات بعد"
+            "value": "لا توجد محادثات بعد"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Noch keine Kanäle"
+            "state": "translated",
+            "value": "Noch keine Unterhaltungen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "No Channels Yet"
+            "state": "translated",
+            "value": "No conversations yet"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sin canales aún"
+            "state": "translated",
+            "value": "Aún no hay conversaciones"
           }
         },
         "fr": {
@@ -12185,13 +12185,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ancora nessun canale"
+            "value": "Ancora nessuna conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ainda sem canais"
+            "state": "translated",
+            "value": "Ainda sem conversas"
           }
         }
       }
@@ -12249,43 +12249,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتمكّن بعد الآن من الوصول إلى قنوات هذا المجتمع."
+            "value": "لن يكون لديك بعد الآن وصول إلى محادثات هذا المجتمع."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Kanäle dieser Community."
+            "state": "translated",
+            "value": "Sie haben keinen Zugriff mehr auf die Unterhaltungen dieser Community."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to this community's channels."
+            "state": "translated",
+            "value": "You will no longer have access to this community's conversations."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los canales de esta comunidad."
+            "state": "translated",
+            "value": "Ya no tendrás acceso a las conversaciones de esta comunidad."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous ne pourrez plus accéder aux channels de cette communauté."
+            "state": "translated",
+            "value": "Vous n'aurez plus accès aux conversations de cette communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non potrai più accedere ai canali di questa community."
+            "value": "Non avrai più accesso alle conversazioni di questa community."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso aos canais desta comunidade."
+            "state": "translated",
+            "value": "Você não terá mais acesso às conversas desta comunidade."
           }
         }
       }
@@ -13800,43 +13800,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الإجراء لا رجعة فيه. سيُحذف جميع الأعضاء والقنوات والرسائل نهائيًا."
+            "value": "هذا الإجراء لا رجعة فيه. سيُحذف جميع الأعضاء والمحادثات نهائيًا."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Diese Aktion ist unwiderruflich. Alle Mitglieder, Kanäle und Nachrichten werden dauerhaft gelöscht."
+            "state": "translated",
+            "value": "Diese Aktion ist unwiderruflich. Alle Mitglieder und Unterhaltungen werden dauerhaft gelöscht."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "This action is irreversible. All members, channels and messages will be permanently deleted."
+            "state": "translated",
+            "value": "This action is irreversible. All members and conversations will be permanently deleted."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta acción es irreversible. Todos los miembros, canales y mensajes serán eliminados."
+            "state": "translated",
+            "value": "Esta acción es irreversible. Todos los miembros y conversaciones serán eliminados."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement."
+            "state": "translated",
+            "value": "Cette action est irréversible. Tous les membres et conversations seront supprimés définitivement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa azione è irreversibile. Tutti i membri, i canali e i messaggi saranno eliminati definitivamente."
+            "value": "Questa azione è irreversibile. Tutti i membri e le conversazioni saranno eliminati definitivamente."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta ação é irreversível. Todos os membros, canais e mensagens serão excluídos."
+            "state": "translated",
+            "value": "Esta ação é irreversível. Todos os membros e conversas serão excluídos."
           }
         }
       }
@@ -14223,43 +14223,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن يكون لديك بعد الآن وصول إلى قنوات هذا المجتمع ورسائله."
+            "value": "لن يكون لديك بعد الآن وصول إلى محادثات هذا المجتمع."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Kanäle und Nachrichten dieser Community."
+            "state": "translated",
+            "value": "Sie haben keinen Zugriff mehr auf die Unterhaltungen dieser Community."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to the channels and messages of this community."
+            "state": "translated",
+            "value": "You will no longer have access to this community's conversations."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los canales y mensajes de esta comunidad."
+            "state": "translated",
+            "value": "Ya no tendrás acceso a las conversaciones de esta comunidad."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous n'aurez plus accès aux canaux et messages de cette communauté."
+            "state": "translated",
+            "value": "Vous n'aurez plus accès aux conversations de cette communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non avrai più accesso ai canali e ai messaggi di questa community."
+            "value": "Non avrai più accesso alle conversazioni di questa community."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso aos canais e mensagens desta comunidade."
+            "state": "translated",
+            "value": "Você não terá mais acesso às conversas desta comunidade."
           }
         }
       }
