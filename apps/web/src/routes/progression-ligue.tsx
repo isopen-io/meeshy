@@ -244,10 +244,7 @@ export default function ProgressionLigueScreen() {
     <ProgressionPage
       titre={gameText('game.league.title')}
       teinte={GAME_BRAND}
-      compte={(p) => {
-        const current = p.game?.league?.current;
-        return current === undefined || current === null ? null : `${current.rank} / ${current.groupSize}`;
-      }}
+      compte={() => null}
     >
       {(progress) => <LigueFocusScreenBody progress={progress} />}
     </ProgressionPage>

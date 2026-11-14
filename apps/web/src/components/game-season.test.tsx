@@ -143,7 +143,7 @@ describe('le Sceau', () => {
     const page = text(host.innerHTML);
     expect(page).toContain('Tu as 3 Meeshes');
     expect(page).toContain('Il faut 10 Meeshes');
-    expect(page).toContain('Il manque 7 Meeshes');
+    expect(page).not.toContain('Il manque');
   });
 
   test('avant l’achat : les Meeshes en poche et le prix — jamais ce qui restera (#9705, #11178)', () => {

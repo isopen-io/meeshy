@@ -6,7 +6,7 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 import type { GameDetailFact } from '@/lib/game/detail-families';
 import { detailStore } from '@/lib/view/detail-store';
 import { factDetail, type ElementDetail } from '@/lib/view/game-detail';
-import { formatCount, gameText, levelsLabel } from '@/lib/view/game-copy';
+import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { PRESS } from './game-press';
 import { GAME_INK, GAME_INK_2 } from './game-surface';
@@ -168,7 +168,7 @@ export type GameSpendLineProps = {
   /** Une donnée de plus entre le solde et le prix : la part du solde qui paie (les points à convertir). */
   readonly between?: GameFactChip;
   /** Ce qu'il manque, dit avec son but : aucun geste ne dit « Il manque » sans dire pour quoi. */
-  readonly missing: GameMissingLine;
+  readonly missing?: GameMissingLine | undefined;
 };
 
 /**
@@ -186,7 +186,7 @@ export function GameSpendLine({ concept, held, cost, spendable, format, formatMi
   return (
     <>
       <GameFactChips concept={concept} chips={chips} marker="data-game-spend" />
-      {spend.affordable ? null : <MissingLine concept={concept} fact={missing.fact} line={missing.line(formatMissing(spend.missing))} amount={formatMissing(spend.missing)} />}
+      {spend.affordable || missing === undefined ? null : <MissingLine concept={concept} fact={missing.fact} line={missing.line(formatMissing(spend.missing))} amount={formatMissing(spend.missing)} />}
     </>
   );
 }
@@ -201,23 +201,22 @@ export type GameRequirementLineProps = {
 
 export function GameRequirementLine({ concept, current, required, record = false }: GameRequirementLineProps) {
   const requirement = requirementPreview({ current, required });
-  const chips: readonly GameFactChip[] = [
-    record
-      ? { fact: 'level_record', label: gameText('game.fact.record'), value: formatCount(requirement.current) }
-      : { fact: 'level_now', label: gameText('game.mint.row.level'), value: formatCount(requirement.current) },
-    { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) },
-  ];
+  const reached = { fact: record ? 'level_record' : 'level_now', label: record ? gameText('game.fact.record') : gameText('game.mint.row.level'), value: formatCount(requirement.current) } as const;
+  const needed = { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) } as const;
   return (
-    <>
-      <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />
-      {requirement.met ? null : (
-        <MissingLine
-          concept={concept}
-          fact="spend_missing"
-          line={gameText('game.spend.missing.unlock', { missing: levelsLabel(requirement.missing) })}
-          amount={levelsLabel(requirement.missing)}
-        />
-      )}
-    </>
+    <div data-game-requirement="" className="flex items-center gap-1.5">
+      <GameTouch
+        detail={factDetail(concept, needed.fact, needed.label, needed.value)}
+        className="flex min-h-[44px] items-center rounded-chip px-2.5 py-1 text-check font-bold"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: GAME_INK }}
+      >
+        <span>
+          <span className="sr-only">{reached.label} </span>
+          {`${reached.value} / `}
+          <span className="sr-only">{needed.label} </span>
+          {needed.value}
+        </span>
+      </GameTouch>
+    </div>
   );
 }

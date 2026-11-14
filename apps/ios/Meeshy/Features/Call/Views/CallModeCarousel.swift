@@ -1,11 +1,17 @@
 import SwiftUI
+import UIKit
 import CoreGraphics
 import MeeshyUI
 import MeeshySDK
 
 enum CallModeCopy {
     static var carouselHint: String {
-        String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour choisir", bundle: .main)
+        String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour parcourir, touchez deux fois pour appliquer", bundle: .main)
+    }
+
+    static func carouselPosition(_ ordinal: CallModeCarouselOrdinal) -> String {
+        String(format: String(localized: "call.mode.carousel.position", defaultValue: "%1$lld sur %2$lld", bundle: .main),
+               ordinal.rank, ordinal.count)
     }
 
     static var effectsTitle: String {
@@ -103,6 +109,16 @@ enum CallModeCopy {
     }
 }
 
+/// #18192 — les déclinaisons d'un élément, que la voix parcourt sans les appliquer : la liste
+/// (l'élément nu, puis ses déclinaisons), celle qui est posée, leur nom et les deux actions.
+struct CallModeCarouselVariants<Item> {
+    let of: (Item) -> [Item]
+    let current: (Item) -> Item
+    let name: (Item) -> String
+    let next: String
+    let previous: String
+}
+
 struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     let items: [Item]
     @Binding var selection: Item
@@ -114,16 +130,21 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     var hint: String?
     var onCapturePhoto: (() -> Void)?
     var onStartRecording: (() -> Void)?
+    var onConfirm: (() -> Void)?
+    var variants: CallModeCarouselVariants<Item>?
     @ViewBuilder let cell: (Item, Bool) -> Cell
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// #8736 — l'élément au centre, qui suit le doigt ; `selection` n'est
     /// posée qu'au repos.
     @State private var centred: Item? = nil
+    /// #18192 — la position que VoiceOver parcourt, distincte de `selection` (l'effet appliqué).
+    @State private var browse = CallModeCarouselBrowse<Item>()
+    @AccessibilityFocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Text(name(centred ?? selection))
+            Text(browse.isBrowsing ? announcedName : name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
@@ -146,7 +167,7 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue(isRecording ? CallModeCopy.recording : name(selection))
+        .accessibilityValue(isRecording ? CallModeCopy.recording : spokenValue)
         .accessibilityHint(CallModeCopy.carouselHint)
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -155,11 +176,43 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
             @unknown default: return
             }
         }
+        .accessibilityAction { activate() }
+        .accessibilityActions { variantActions }
+        .accessibilityFocused($isFocused)
+        .adaptiveOnChange(of: isFocused) { _, focused in
+            guard !focused else { return }
+            browse.leave()
+        }
+        .adaptiveOnChange(of: selection) { _, _ in
+            browse.leave()
+        }
         .modifier(CallModeShotActions(
             isEnabled: !isRecording,
             onCapturePhoto: onCapturePhoto,
             onStartRecording: onStartRecording
         ))
+    }
+
+    private var position: Item {
+        browse.position(applied: selection)
+    }
+
+    private var announcedName: String {
+        guard let variant = browse.variant, let variants else { return name(position) }
+        return variants.name(variant)
+    }
+
+    private var spokenValue: String {
+        guard let ordinal = CallModeCarouselRule.ordinal(of: position, in: items) else { return announcedName }
+        return "\(announcedName), \(CallModeCopy.carouselPosition(ordinal))"
+    }
+
+    @ViewBuilder
+    private var variantActions: some View {
+        if let variants, variants.of(position).count > 1 {
+            Button(variants.next) { stepVariant(1, in: variants) }
+            Button(variants.previous) { stepVariant(-1, in: variants) }
+        }
     }
 
     @ViewBuilder
@@ -188,11 +241,31 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         }
     }
 
+    /// #18192 — un balayage VoiceOver PARCOURT : la voix annonce le look, rien n'est appliqué.
     private func step(_ offset: Int) {
-        let next = CallModeCarouselRule.stepping(selection, in: items, by: offset)
-        guard next != selection else { return }
-        selection = next
+        guard browse.step(by: offset, in: items, applied: selection) else { return }
         HapticFeedback.light()
+    }
+
+    private func stepVariant(_ offset: Int, in variants: CallModeCarouselVariants<Item>) {
+        guard browse.stepVariant(by: offset, applied: selection, variants: variants.of, current: variants.current) else { return }
+        HapticFeedback.light()
+        UIAccessibility.post(notification: .announcement, argument: spokenValue)
+    }
+
+    /// #18192 — le double-tap de VoiceOver applique ce qui est annoncé ; sur l'effet déjà posé, il
+    /// ne réapplique rien et rend le menu de base.
+    private func activate() {
+        let current: (Item) -> Item = variants?.current ?? { $0 }
+        let activation = browse.activation(applied: selection, current: current)
+        browse.leave()
+        switch activation {
+        case .apply(let item):
+            selection = item
+            HapticFeedback.light()
+        case .confirm:
+            onConfirm?()
+        }
     }
 }
 

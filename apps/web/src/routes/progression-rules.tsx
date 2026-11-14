@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ONBOARDING_STEPS } from '@meeshy/shared/utils/game/guide';
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { GameBird } from '@/components/game';
+import { GameFold, useOneOpen } from '@/components/game-fold';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { guideBirds } from '@/lib/game-guide/card';
 import { formatCount, gameText } from '@/lib/view/game-copy';
@@ -23,6 +24,12 @@ import { BADGES_SECTION_ID, isBadgesSection } from '@/lib/game/medal';
  * l'intégration en entier : chacune peut se passer, le carnet les garde toutes.
  * Sous les huit règles, « Chaque concept, en clair » (#10540) : aucun concept que
  * Progression affiche n'est absent du carnet.
+ *
+ * Épure (#17584, #18148) : le carnet ne se déroule plus d'un bloc. Les seize concepts,
+ * les neuf familles dessinées, la section des médailles et les sept cartes sont des
+ * rangées repliées, un seul concept (ou une seule famille) ouvert à la fois ; la section
+ * des médailles s'ouvre par `?section=badges` (« Comprendre les médailles »). Replié, le
+ * texte reste dans le document : rien n'est retiré, tout reste atteignable.
  *
  * Une page qui EXPLIQUE, sans geste : aucun bouton n'y agit, rien n'y est
  * promis qui ne soit dit ailleurs. Pas de lecture réseau : elle s'ouvre
@@ -74,6 +81,9 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
  * animations.
  */
 export function RulesBody({ target, badges = false }: { readonly target?: number; readonly badges?: boolean }) {
+  const concepts = useOneOpen();
+  const [badgesOpen, setBadgesOpen] = useState(badges);
+  const [stepsOpen, setStepsOpen] = useState(false);
   useEffect(() => {
     if (target === undefined) return;
     document.getElementById(`regle-${target}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
@@ -82,6 +92,7 @@ export function RulesBody({ target, badges = false }: { readonly target?: number
   /* « Comprendre les badges » (#9639) : la fiche d'un badge et la page des badges ouvrent le carnet ICI. */
   useEffect(() => {
     if (!badges) return;
+    setBadgesOpen(true);
     document.getElementById(BADGES_SECTION_ID)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
   }, [badges]);
 
@@ -132,36 +143,31 @@ export function RulesBody({ target, badges = false }: { readonly target?: number
         <h2 id="concepts-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
           {gameText('game.rules.section_concepts')}
         </h2>
-        <p className="text-body" style={{ color: GAME_INK_2 }}>
-          {gameText('game.rules.concepts_intro')}
-        </p>
-        <dl className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
           {rulesGlossary().map((entry) => (
-            <div key={entry.key} data-rules-concept={entry.key} className="flex flex-col gap-0.5 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
-              <dt className="text-body font-bold" style={{ color: GAME_INK }}>
-                {entry.name}
-              </dt>
-              <dd className="text-body" style={{ color: GAME_INK_2 }}>
-                {entry.body}
-              </dd>
-            </div>
+            <li key={entry.key} data-rules-concept={entry.key} className="rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
+              <GameFold id={`concept-${entry.key}`} open={concepts.isOpen(entry.key)} onToggle={() => concepts.toggle(entry.key)} title={entry.name}>
+                <p className="text-body" style={{ color: GAME_INK_2 }}>
+                  {entry.body}
+                </p>
+              </GameFold>
+            </li>
           ))}
-        </dl>
+        </ul>
       </section>
 
-      <RulesBadges />
+      <RulesBadges open={badgesOpen} onToggle={() => setBadgesOpen((open) => !open)} />
 
       <RulesAtlas />
 
-      <section aria-labelledby="etapes-titre" className="flex flex-col gap-2">
-        <h2 id="etapes-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.rules.section_steps')}
-        </h2>
-        <ol className="flex flex-col gap-2">
-          {ONBOARDING_STEPS.map((step) => (
-            <StepCard key={step.key} step={step} />
-          ))}
-        </ol>
+      <section aria-labelledby="etapes-titre" className="rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
+        <GameFold id="etapes" level={2} headingId="etapes-titre" open={stepsOpen} onToggle={() => setStepsOpen((open) => !open)} title={gameText('game.rules.steps_fold')}>
+          <ol className="flex flex-col gap-2">
+            {ONBOARDING_STEPS.map((step) => (
+              <StepCard key={step.key} step={step} />
+            ))}
+          </ol>
+        </GameFold>
       </section>
     </div>
   );
