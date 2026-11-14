@@ -25,6 +25,11 @@ public nonisolated struct MeeshyDragTargetsDiscRecipe: Equatable, Sendable {
     public let shadow: MeeshyGlassButtonShadow?
     let button: MeeshyGlassButtonRecipe
 
+    /// Le glyphe en points, figé comme le disque (Dynamic Type ne le grossit pas).
+    public var glyphFont: Font {
+        Font.system(size: CGFloat(glyphSize), weight: .semibold)
+    }
+
     public func fillColor(isDark: Bool) -> Color {
         isHot ? button.fillColor(isDark: isDark) : .clear
     }

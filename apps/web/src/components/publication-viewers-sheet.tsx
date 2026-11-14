@@ -97,7 +97,7 @@ export function PublicationViewersSheet({
   const count = query.data?.viewCount ?? viewCount ?? query.data?.pagination.total;
   const visitors = query.data?.anonymousViewCount ?? anonymousViewCount ?? 0;
   const title =
-    count === undefined
+    count === undefined || count === 0
       ? translate(lang, 'story.action.views')
       : translate(lang, count === 1 ? 'story.views.count.one' : 'story.views.count.other', { count: String(count) });
 

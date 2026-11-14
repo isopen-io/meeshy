@@ -1,5 +1,6 @@
 import { useStore } from 'zustand/react';
 
+import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
 import { callActions } from '@/lib/calls/call-actions';
 import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
 import type { StartCallRequest } from '@/lib/calls/engine';
@@ -11,10 +12,9 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
  * par `call-layer.tsx` quand un rappel attend son geste. Le navigateur bloque
  * le son d'un onglet que personne n'a touché : l'appel partirait muet. Le
  * toucher « Appeler » compose DANS le geste, ce qui débloque la sonnerie et la
- * voix ; « Annuler » oublie le rappel.
+ * voix ; « Annuler » oublie le rappel. Sur le verre du kit (loi 18.1, #18223), comme l'appel réduit.
  */
 
-const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
 const ANSWER = 'var(--ios-success)';
 
 export type CallBackPromptPanelProps = {
@@ -31,11 +31,12 @@ export function CallBackPromptPanel({ request, language, onCall, onCancel }: Cal
       ? translate(language, video ? 'call.action.video' : 'call.action.audio')
       : translate(language, video ? 'callBackPrompt.video' : 'callBackPrompt.audio', { name: request.title });
   return (
-    <div
+    <MeeshyGlass
       role="alertdialog"
       aria-label={question}
-      className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
+      density="dense"
+      className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3"
+      style={{ color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-back-prompt={request.media}
     >
       <p className="min-w-0 flex-1 truncate text-body font-semibold">{question}</p>
@@ -51,7 +52,7 @@ export function CallBackPromptPanel({ request, language, onCall, onCancel }: Cal
       >
         {translate(language, 'callBackPrompt.call')}
       </button>
-    </div>
+    </MeeshyGlass>
   );
 }
 

@@ -51,3 +51,13 @@ describe('la confirmation du rappel (#8199)', () => {
     expect(render(request({ title: '', media: 'video' }))).toContain('aria-label="Appel vidéo"');
   });
 });
+
+describe('l’invite de rappel est en verre du kit (loi 18.1, #18223)', () => {
+  test('le verre partagé du kit, jamais une teinte opaque posée à la main', () => {
+    const panel = render(request()).match(/<[^>]*role="alertdialog"[^>]*>/)?.[0] ?? '';
+    expect(panel).toMatch(/class="[^"]*\bglass-tone\b/);
+    expect(panel).toContain('data-glass-tone="deep"');
+    expect(panel).not.toContain('color-mix');
+    expect(panel).not.toMatch(/\bshadow-lg\b/);
+  });
+});

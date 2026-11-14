@@ -44,6 +44,12 @@ const STAT_ITEMS = [
   { key: 'shareCount', glyph: 'shareNetwork', labelKey: 'feed.post.action.share' },
 ] as const satisfies readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly labelKey: InterfaceCatalogKey }[];
 
+/* Règle 5 de l'épure (#17584) : un compteur à 0 est un texte en trop — le
+   glyphe, qui porte le nom accessible, suffit. */
+function StatCount({ value }: { readonly value: number }) {
+  return value > 0 ? <span className="text-check font-medium">{value}</span> : null;
+}
+
 /**
  * La rangée des cinq statistiques — `tone` bascule l'encre entre la carte
  * (POST, en-dessous du média) et le scrim d'un RÉEL (blanc, sur le média).
@@ -95,7 +101,7 @@ export function FeedActionsRow({
               style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
               <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
+              <StatCount value={stats[item.key]} />
             </button>
           );
         }
@@ -113,7 +119,7 @@ export function FeedActionsRow({
               style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
               <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
+              <StatCount value={stats[item.key]} />
             </button>
           );
         }
@@ -132,7 +138,7 @@ export function FeedActionsRow({
               style={{ color: pressed ? 'var(--color-ok)' : ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
               <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
+              <StatCount value={stats[item.key]} />
             </button>
           );
         }
@@ -141,7 +147,7 @@ export function FeedActionsRow({
           return (
             <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
               <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
+              <StatCount value={stats[item.key]} />
             </span>
           );
         }
@@ -163,7 +169,7 @@ export function FeedActionsRow({
             <span className="grid place-items-center" {...(pressed ? { 'data-feed-glyph-filled': '' } : {})}>
               <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={label} />
             </span>
-            <span className="text-check font-medium">{stats[item.key]}</span>
+            <StatCount value={stats[item.key]} />
           </button>
         );
       })}

@@ -7,7 +7,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
-import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
+import { MeeshyGlass, meeshyGlassRecipe } from '@/components/kit/meeshy-glass-tone';
 import { callActions } from '@/lib/calls/call-actions';
 import {
   bubbleOrigin,
@@ -61,7 +61,8 @@ const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module)
    mesurés au bas de sa course par `check-calls-during.mjs` (#8145), que 96
    recouvrait de 18. La zone sûre du système s'y AJOUTE en CSS. */
 const INSETS = { top: 64, bottom: 120 };
-const BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+/* Le verre du kit (loi 18.1, #18223), celui de la capsule de l'appel réduit : la recette, pas le composant, pour que l'étiquette posée sur l'image garde son propre verre au lieu de devenir un verre imbriqué transparent. */
+const BUBBLE_GLASS = meeshyGlassRecipe({ tone: 'deep', density: 'dense' });
 /** Le liseré à la couleur de l'autre (P18.4) et le fondu qui efface la bulle pendant l'image dans l'image (P18.9) : la transformation et l'opacité seules ; « Réduire les animations » garde ce fondu court. */
 const RING_WIDTH = 2;
 const AWAY_FADE = 'opacity 200ms ease-out';
@@ -196,14 +197,14 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
       <div
         role="group"
         aria-label={`${call.title} · ${translate(language, 'call.bubble.ongoing')}`}
-        className="fixed z-[190] flex flex-col overflow-hidden rounded-card shadow-lg"
+        className={`fixed z-[190] flex flex-col overflow-hidden rounded-card ${BUBBLE_GLASS.className}`}
+        {...BUBBLE_GLASS.attributes}
         style={{
           width: size.width,
           height: size.height,
           left: 0,
           top: 0,
           translate: bubbleTranslate({ origin, drag }),
-          background: BG,
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
           transformOrigin: placement.edge === 'left' ? 'left center' : 'right center',
