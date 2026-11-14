@@ -103,14 +103,17 @@ const PRECISIONS: ReadonlySet<string> = new Set(SHARED_LOCATION_PRECISIONS);
 const OBJECT_ID = /^[a-f0-9]{24}$/;
 
 /*
- * La clé des retraits n'est pas un identifiant : une version d'avant #18388 relit la même liste en la sautant (elle
- * perd le retrait en attente, jamais une personne), et une liste d'avant se relit sans retrait.
+ * Les retraits vivent sous une clé À PART (`<clé>.withdrawals`) : un onglet d'une version d'avant #18388 ne la lit ni ne
+ * l'écrit, donc ne peut pas l'effacer en réécrivant la liste ; la liste elle-même garde le format d'avant.
  */
-const WITHDRAWALS_KEY = 'withdrawals';
+export const sharedLocationWithdrawalsKey = (storageKey: string): string => `${storageKey}.withdrawals`;
 
-/** Ce qui survit au rechargement : identifiants, précisions, échéances et bornes de retrait — jamais une position. */
-export const encodeSharedLocationRoster = (roster: SharedLocationRoster): string =>
-  JSON.stringify(rosterOps.hasPendingWithdrawals(roster) ? { ...roster.entries, [WITHDRAWALS_KEY]: roster.withdrawals } : roster.entries);
+/** Ce qui survit au rechargement : identifiants, précisions et échéances — jamais une position. */
+export const encodeSharedLocationRoster = (roster: SharedLocationRoster): string => JSON.stringify(roster.entries);
+
+/** Les retraits en attente : identifiants et bornes, `null` s'il n'y en a aucun. */
+export const encodeSharedLocationWithdrawals = (roster: SharedLocationRoster): string | null =>
+  rosterOps.hasPendingWithdrawals(roster) ? JSON.stringify(roster.withdrawals) : null;
 
 const objectOf = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -118,16 +121,17 @@ const objectOf = (value: unknown): Record<string, unknown> | null =>
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 /** Tolérant et fermé : une ligne illisible se saute, une précision inconnue se relit à la ville (on ouvre plus, jamais l'inverse). */
-export function decodeSharedLocationRoster(text: string | null): SharedLocationRoster {
-  if (text === null) return EMPTY_ROSTER;
-  let parsed: unknown;
+const parsedObject = (text: string | null): Record<string, unknown> => {
+  if (text === null) return {};
   try {
-    parsed = JSON.parse(text);
+    return objectOf(JSON.parse(text)) ?? {};
   } catch {
-    return EMPTY_ROSTER;
+    return {};
   }
-  const raw = objectOf(parsed);
-  if (raw === null) return EMPTY_ROSTER;
+};
+
+export function decodeSharedLocationRoster(text: string | null, withdrawalsText: string | null = null): SharedLocationRoster {
+  const raw = parsedObject(text);
   const entries = Object.fromEntries(
     Object.entries(raw).flatMap(([id, value]) => {
       const entry = objectOf(value);
@@ -137,7 +141,7 @@ export function decodeSharedLocationRoster(text: string | null): SharedLocationR
     }),
   );
   const withdrawals = Object.fromEntries(
-    Object.entries(objectOf(raw[WITHDRAWALS_KEY]) ?? {}).flatMap(([id, until]) => (OBJECT_ID.test(id) && finite(until) ? [[id, until] as const] : [])),
+    Object.entries(parsedObject(withdrawalsText)).flatMap(([id, until]) => (OBJECT_ID.test(id) && finite(until) ? [[id, until] as const] : [])),
   );
   return rosterOf(entries, withdrawals);
 }

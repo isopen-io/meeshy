@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeSharedLocationRoster, encodeSharedLocationRoster, EMPTY_ROSTER, rosterOps } from './shared-location-roster';
+import { decodeSharedLocationRoster, encodeSharedLocationRoster, encodeSharedLocationWithdrawals, EMPTY_ROSTER, rosterOps } from './shared-location-roster';
 
 /**
  * **À QUI JE MONTRE MA POSITION, ET JUSQU'À QUAND** (#18345, iso `SharedLocationRoster.swift`) —
@@ -124,18 +124,24 @@ describe('le retrait en attente (#18388, iso #18204)', () => {
 
   test('le retrait survit au rechargement, sans position, et une liste d’avant se relit sans retrait', () => {
     const roster = rosterOps.withdrawing(both, AMI, NOW);
-    const text = encodeSharedLocationRoster(roster);
-    expect(text).not.toContain('latitude');
-    expect(decodeSharedLocationRoster(text)).toEqual(roster);
+    const withdrawals = encodeSharedLocationWithdrawals(roster);
+    expect(withdrawals).not.toContain('latitude');
+    expect(decodeSharedLocationRoster(encodeSharedLocationRoster(roster), withdrawals)).toEqual(roster);
+    expect(encodeSharedLocationWithdrawals(both)).toBeNull();
     const before = JSON.stringify({ [AUTRE]: { precision: 'exact', until: NOW + HOUR } });
     expect(rosterOps.hasPendingWithdrawals(decodeSharedLocationRoster(before))).toBe(false);
     expect(rosterOps.entry(decodeSharedLocationRoster(before), AUTRE)).not.toBeNull();
   });
 
-  test('une version d’avant relit la liste gardée sans se tromper de personnes : la clé des retraits n’est pas un identifiant', () => {
+  test('la liste gardée garde le format d’avant : une version d’avant n’y voit que les personnes, et ne peut pas effacer les retraits', () => {
     const text = encodeSharedLocationRoster(rosterOps.withdrawing(both, AMI, NOW));
-    const raw = JSON.parse(text) as Record<string, unknown>;
-    const ids = Object.keys(raw).filter((key) => /^[a-f0-9]{24}$/.test(key));
-    expect(ids).toEqual([AUTRE]);
+    expect(Object.keys(JSON.parse(text) as Record<string, unknown>)).toEqual([AUTRE]);
+  });
+
+  test('des retraits gardés sans liste (une version d’avant l’a effacée) se relisent quand même', () => {
+    const withdrawals = encodeSharedLocationWithdrawals(rosterOps.withdrawing(both, AMI, NOW));
+    const roster = decodeSharedLocationRoster(null, withdrawals);
+    expect(rosterOps.isWithdrawalPending(roster, AMI)).toBe(true);
+    expect(rosterOps.hasRecipients(roster)).toBe(false);
   });
 });

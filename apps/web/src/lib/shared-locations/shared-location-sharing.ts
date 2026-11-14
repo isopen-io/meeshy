@@ -3,7 +3,12 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { SafeStorage } from '@/lib/storage';
 
-import { decodeSharedLocationRoster, encodeSharedLocationRoster, EMPTY_ROSTER, rosterOps, type SharedLocationRoster, type SharedLocationRosterEntry } from './shared-location-roster';
+import {
+  decodeSharedLocationRoster,
+  encodeSharedLocationRoster,
+  encodeSharedLocationWithdrawals,
+  sharedLocationWithdrawalsKey,
+  EMPTY_ROSTER, rosterOps, type SharedLocationRoster, type SharedLocationRosterEntry } from './shared-location-roster';
 import {
   SHARED_LOCATION_UPDATE_GATE,
   sharedLocationStartPayloadOf,
@@ -131,7 +136,9 @@ export function createSharedLocationSharingCenter({
   readonly owner: string;
   readonly currentAccount: () => string | null;
 }): SharedLocationSharingCenter {
-  const restored = decodeSharedLocationRoster(storage.getItem(storageKey));
+  const withdrawalsKey = sharedLocationWithdrawalsKey(storageKey);
+  const load = (): SharedLocationRoster => decodeSharedLocationRoster(storage.getItem(storageKey), storage.getItem(withdrawalsKey));
+  const restored = load();
   const store = createStore<SharedLocationSharingState>(() => ({ roster: restored, busy: false }));
   const gate = createSerialGate();
   let abandoned = false;
@@ -143,9 +150,22 @@ export function createSharedLocationSharingCenter({
   /* Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte courant. */
   const isLive = (): boolean => !abandoned && owner !== '' && currentAccount() === owner;
 
+  /*
+   * Une écriture refusée (quota, stockage bloqué) ne casse pas la révocation : la liste reste en mémoire, le minuteur
+   * tient, et la liste gardée — désormais en retard — n'est plus relue tant qu'une écriture n'a pas repris.
+   */
+  let storageBehind = false;
   const persist = (next: SharedLocationRoster): void => {
-    if (rosterOps.isEmpty(next)) storage.removeItem(storageKey);
-    else storage.setItem(storageKey, encodeSharedLocationRoster(next));
+    const withdrawals = encodeSharedLocationWithdrawals(next);
+    try {
+      if (rosterOps.hasRecipients(next)) storage.setItem(storageKey, encodeSharedLocationRoster(next));
+      else storage.removeItem(storageKey);
+      if (withdrawals === null) storage.removeItem(withdrawalsKey);
+      else storage.setItem(withdrawalsKey, withdrawals);
+      storageBehind = false;
+    } catch {
+      storageBehind = true;
+    }
   };
 
   const adopt = (next: SharedLocationRoster): void => {
@@ -155,7 +175,8 @@ export function createSharedLocationSharingCenter({
 
   /* La liste gardée fait foi : un autre onglet du même compte a pu arrêter ou ajouter quelqu'un. */
   const reread = (): void => {
-    const kept = decodeSharedLocationRoster(storage.getItem(storageKey));
+    if (storageBehind) return;
+    const kept = load();
     if (rosterOps.equals(kept, roster())) return;
     store.setState({ roster: kept });
     if (!rosterOps.hasRecipients(kept)) {
@@ -216,11 +237,23 @@ export function createSharedLocationSharingCenter({
     unfollow = fixes.follow((fix) => void didMove(fix));
   };
 
-  const engage = (next: SharedLocationRoster, fix: SharedLocationFix): void => {
+  /*
+   * Un autre onglet du même compte a pu mettre une personne en retrait PENDANT que ce démarrage attendait son accusé :
+   * la liste servie la contient encore. Le retrait gagne (dans le doute, on arrête) et se rejoue aussitôt.
+   */
+  const withKeptWithdrawals = (next: SharedLocationRoster): SharedLocationRoster =>
+    Object.entries((storageBehind ? EMPTY_ROSTER : load()).withdrawals)
+      .filter(([id]) => rosterOps.entry(next, id) !== null)
+      .reduce((folded, [id, until]) => rosterOps.union(rosterOps.withdrawing(folded, id, now()), { entries: {}, withdrawals: { [id]: until } }), next);
+
+  const engage = (served: SharedLocationRoster, fix: SharedLocationFix): void => {
+    const next = withKeptWithdrawals(served);
     adopt(next);
     lastSent = { fix, at: now() };
-    startFollowing();
-    scheduleDeadline();
+    if (rosterOps.hasRecipients(next)) startFollowing();
+    else stopFollowing();
+    if (rosterOps.equals(next, served)) scheduleDeadline();
+    else arm(0);
   };
 
   /* La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */

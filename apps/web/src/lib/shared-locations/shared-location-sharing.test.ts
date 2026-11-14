@@ -126,7 +126,7 @@ function makeWorld({
     updateQueue,
     source,
     memory,
-    stored: () => decodeSharedLocationRoster(memory.get('roster') ?? null),
+    stored: () => decodeSharedLocationRoster(memory.get('roster') ?? null, memory.get('roster.withdrawals') ?? null),
     advance,
   };
 }
@@ -508,5 +508,62 @@ describe('un « Arrêter » hors ligne part au retour du réseau (#18388, iso #1
     expect(tabB.center.entry(AMI)).toBeNull();
     await tabB.center.reconcile();
     expect(tabB.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+  });
+
+  test('audit : un démarrage en vol dans un autre onglet ne ressuscite pas une personne mise en retrait pendant l’attente', async () => {
+    const memory = new Map<string, string>();
+    const tabB = makeWorld({ memory });
+    await tabB.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabA = makeWorld({ memory });
+    const pending = deferred<SharedLocationVerdict>();
+    tabB.startQueue.push(() => pending.promise);
+    const sharing = tabB.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    await flush();
+    tabA.stopQueue.push(async () => false);
+    tabA.startQueue.push(async () => ({ kind: 'refused', outcome: 'offline' }));
+    expect(await tabA.center.stopSharing(AMI)).toBe('withdrawal-pending');
+    tabB.center.refresh();
+    pending.resolve(STARTED);
+    await sharing;
+    expect(tabB.center.entry(AMI)).toBeNull();
+    expect(rosterOps.isWithdrawalPending(tabB.stored(), AMI)).toBe(true);
+    await tabB.advance(0);
+    expect(tabB.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+    expect(rosterOps.hasPendingWithdrawals(tabB.stored())).toBe(false);
+  });
+
+  test('audit : une version d’avant qui réécrit la liste n’efface pas le retrait en attente', async () => {
+    const memory = new Map<string, string>();
+    const world = makeWorld({ memory });
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'offline' }));
+    await world.center.stopSharing(AMI);
+    memory.set('roster', JSON.stringify({ [AUTRE]: { precision: 'city', until: T0 + HOUR } }));
+    world.center.refresh();
+    expect(rosterOps.isWithdrawalPending(world.stored(), AMI)).toBe(true);
+  });
+
+  test('audit : une écriture refusée par le stockage ne casse ni l’arrêt ni son rejeu', async () => {
+    const world = makeWorld();
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    world.memory.set = () => {
+      throw new Error('QuotaExceededError');
+    };
+    world.stopQueue.push(async () => false);
+    expect(await world.center.stopSharing(AMI)).toBe('withdrawal-pending');
+    await world.advance(SHARED_LOCATION_RETRY_MS);
+    expect(world.stops()).toBe(2);
+  });
+
+  test('partager de nouveau avec la personne en retrait, dans le même onglet, annule le retrait', async () => {
+    const world = makeWorld();
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    world.stopQueue.push(async () => false);
+    await world.center.stopSharing(AMI);
+    expect(await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 })).toBeNull();
+    expect(world.center.entry(AMI)?.precision).toBe('exact');
+    expect(rosterOps.hasPendingWithdrawals(world.stored())).toBe(false);
+    expect(world.source.following).toBe(1);
   });
 });

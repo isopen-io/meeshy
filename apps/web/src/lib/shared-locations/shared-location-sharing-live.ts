@@ -6,6 +6,7 @@ import type { SocketClient } from '@/lib/net/socket';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { readSharedLocationAck, sharedLocationFixOf, sharedLocationStopAccepted, type SharedLocationVerdict } from './shared-location-sending';
+import { sharedLocationWithdrawalsKey } from './shared-location-roster';
 import { createSharedLocationSharingCenter, type SharedLocationEmitter, type SharedLocationFixSource, type SharedLocationSharingCenter } from './shared-location-sharing';
 
 /**
@@ -138,7 +139,7 @@ export function createSharedLocationSharingHolder({
     });
     const key = rosterKey(userId);
     const onStorage = (event: StorageEvent): void => {
-      if (event.key === key || event.key === null) center.refresh();
+      if (event.key === null || event.key === key || event.key === sharedLocationWithdrawalsKey(key)) center.refresh();
     };
     globalThis.addEventListener?.('storage', onStorage);
     const unwatchSocket = watch((live) => {
