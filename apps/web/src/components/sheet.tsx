@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from 'react';
 
+import '@/styles/sheet-motion.css';
+
 import { Glyph } from './glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -139,6 +142,9 @@ export function Sheet({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const restoreRef = useRef(restoreFocusTo ?? null);
+  /* La sortie (#18362) : le ✕, le chevron et le voile passent par `leave` ; Échap et le démontage par
+     l'hôte (retour, `dismissAllLayers`, choix, changement de route) jouent le même fantôme d'office. */
+  const { leave } = useDialogExit(ref, { kind: presentation });
 
   /**
    * LE RETOUR MATÉRIEL FERME LA FEUILLE, PAS L'ÉCRAN (correction de revue,
@@ -185,7 +191,7 @@ export function Sheet({
      `<dialog>` lui-même, hors de son contenu. */
   const onBackdrop = basse || !centree
     ? (event: MouseEvent<HTMLDialogElement>) => {
-        if (event.target === event.currentTarget) ref.current?.close();
+        if (event.target === event.currentTarget) leave();
       }
     : undefined;
 
@@ -199,6 +205,7 @@ export function Sheet({
       {...(onBackdrop === undefined ? {} : { onClick: onBackdrop })}
       className={centree ? `${cadre} overflow-hidden p-0 backdrop:bg-veil` : pleinEcran}
       style={{
+        ...DIALOG_MOTION_STYLE,
         border: 0,
         backgroundColor: 'var(--color-ios-surface)',
         color: 'var(--color-ios-ink)',
@@ -210,7 +217,7 @@ export function Sheet({
           {backLabel === undefined ? (
             <button
               type="button"
-              onClick={() => ref.current?.close()}
+              onClick={leave}
               data-sheet-close=""
               className="grid place-items-center rounded-chip"
               style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
@@ -221,7 +228,7 @@ export function Sheet({
           ) : (
             <button
               type="button"
-              onClick={() => ref.current?.close()}
+              onClick={leave}
               data-sheet-back=""
               className="grid place-items-center rounded-chip"
               style={{ minHeight: 44, minWidth: 44, color: 'var(--color-primary)' }}
