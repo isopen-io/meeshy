@@ -64,10 +64,19 @@ describe('l’onglet se recale sur le partage servi', () => {
     expect(rosterOps.hasPendingWithdrawals(world.center.store.getState().roster)).toBe(false);
   });
 
-  test('la plus proche des deux échéances gagne, et la précision est celle que le serveur sert', async () => {
-    const world = worldWith(storedOf({ [AMI]: { precision: 'exact', until: T0 + HOUR / 4 } }), servedOf([AMI, 'city', T0 + HOUR]));
+  test('l’échéance et la précision servies l’emportent : une prolongation faite ailleurs n’est pas défaite ici', async () => {
+    const world = worldWith(storedOf({ [AMI]: { precision: 'exact', until: T0 + HOUR / 4 } }), servedOf([AMI, 'city', T0 + 8 * HOUR]));
     await world.center.sync();
-    expect(world.center.entry(AMI)).toEqual({ precision: 'city', until: T0 + HOUR / 4 });
+    expect(world.center.entry(AMI)).toEqual({ precision: 'city', until: T0 + 8 * HOUR });
+  });
+
+  test('un ajout d’ici dont l’accusé s’est perdu et que le serveur ne sert pas sort de la liste : dans le doute, on montre moins', async () => {
+    const world = worldWith(storedOf({}), servedOf());
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'unconfirmed' }));
+    await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    expect(world.center.entry(AMI)).not.toBeNull();
+    await world.center.sync();
+    expect(world.center.entry(AMI)).toBeNull();
   });
 
   test('plus aucun partage servi : la liste se vide et la position n’est plus suivie', async () => {
@@ -108,5 +117,70 @@ describe('l’onglet se recale sur le partage servi', () => {
     const world = worldWith(storedOf({}), servedOf([AMI, 'exact', T0 - 1]));
     await world.center.sync();
     expect(world.center.entry(AMI)).toBeNull();
+  });
+});
+
+describe('l’appareil qui REÇOIT la liste d’un autre ne publie jamais sa propre position', () => {
+  const recu = () => {
+    const world = worldWith(storedOf({}), servedOf([AMI, 'exact', T0 + HOUR / 2], [AUTRE, 'city', T0 + HOUR]));
+    return world;
+  };
+
+  test('à l’échéance d’une personne, il la retire de SA liste sans rien envoyer : la passerelle tient l’échéance', async () => {
+    const world = recu();
+    await world.center.sync();
+    await world.advance(HOUR / 2 + 2_000);
+    expect(world.center.entry(AMI)).toBeNull();
+    expect(world.center.entry(AUTRE)).not.toBeNull();
+    expect(world.starts).toEqual([]);
+    expect(world.stops()).toBe(0);
+    expect(world.source.prompts).toBe(0);
+    expect(world.source.following).toBe(0);
+  });
+
+  test('rechargé, il ne se remet pas à suivre la position', async () => {
+    const memory = new Map<string, string>();
+    const world = makeWorld({ memory, served: servedOf([AMI, 'exact', T0 + HOUR]) });
+    await world.center.sync();
+    const reloaded = makeWorld({ memory, served: servedOf([AMI, 'exact', T0 + HOUR]) });
+    await reloaded.advance(0);
+    expect(reloaded.center.entry(AMI)).not.toBeNull();
+    expect(reloaded.source.following).toBe(0);
+  });
+
+  test('« Arrêter » d’ici part (intention explicite), sans se mettre ensuite à suivre la position', async () => {
+    const world = recu();
+    await world.center.sync();
+    expect(await world.center.stopSharing(AMI)).toBeNull();
+    expect(world.starts.at(-1)?.recipients.map((r) => r.userId)).toEqual([AUTRE]);
+    expect(world.source.following).toBe(0);
+  });
+
+  test('partager d’ici en fait l’appareil qui publie : il suit sa position', async () => {
+    const world = recu();
+    await world.center.sync();
+    await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 });
+    expect(world.source.following).toBe(1);
+  });
+
+  test('un onglet qui publiait déjà reste celui qui publie après un recalage', async () => {
+    const world = worldWith(storedOf({}), servedOf());
+    await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+  });
+});
+
+describe('deux onglets du même navigateur qui partage', () => {
+  test('le recalage d’un second onglet ne fait pas taire celui qui publie', async () => {
+    const memory = new Map<string, string>();
+    const publie = makeWorld({ memory, served: servedOf() });
+    await publie.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    const second = makeWorld({ memory, granted: false, served: servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]) });
+    await second.center.sync();
+    publie.center.refresh();
+    expect(publie.source.following).toBe(1);
+    expect(memory.has('roster.received')).toBe(false);
   });
 });

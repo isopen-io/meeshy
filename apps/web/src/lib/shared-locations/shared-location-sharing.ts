@@ -49,8 +49,13 @@ import {
  * c'est lui qui fait foi. `sync()` relit ce qu'elle sert (à chaque socket accrochée et à chaque
  * `location:share-own-changed`) et s'y recale, retraits en attente d'ici gagnants
  * (`rosterOps.withServed`) : un retrait fait ailleurs s'applique ici, un ajout fait ailleurs
- * n'est plus effacé par la liste périmée de cet onglet. Un partage démarré ailleurs ne fait
- * pas suivre la position d'ici : un seul appareil publie.
+ * n'est plus effacé par la liste périmée de cet onglet.
+ *
+ * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien) ne
+ * fait jamais partir la position d'ici : pas de suivi, pas même au rechargement (marque
+ * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
+ * l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
+ * quelque chose ; « Partager » fait de cet onglet celui qui publie.
  */
 
 export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: SharedLocationFix } | { readonly kind: 'denied' } | { readonly kind: 'unavailable' };
@@ -151,6 +156,7 @@ export function createSharedLocationSharingCenter({
   readonly served?: () => Promise<SharedLocationOwnSnapshot | null>;
 }): SharedLocationSharingCenter {
   const withdrawalsKey = sharedLocationWithdrawalsKey(storageKey);
+  const receivedKey = `${storageKey}.received`;
   const load = (): SharedLocationRoster => decodeSharedLocationRoster(storage.getItem(storageKey), storage.getItem(withdrawalsKey));
   const restored = load();
   const store = createStore<SharedLocationSharingState>(() => ({ roster: restored, busy: false }));
@@ -159,6 +165,17 @@ export function createSharedLocationSharingCenter({
   let lastSent: SharedLocationSent | null = null;
   let unfollow: (() => void) | null = null;
   let cancelDeadline: (() => void) | null = null;
+  /* La liste vient d'un autre appareil : cet onglet ne publie pas sa position (#18389). */
+  let received = storage.getItem(receivedKey) === '1';
+  const markReceived = (next: boolean): void => {
+    received = next;
+    try {
+      if (next) storage.setItem(receivedKey, '1');
+      else storage.removeItem(receivedKey);
+    } catch {
+      /* En mémoire, la marque tient : au pire, un rechargement reprendrait le suivi, comme avant #18389. */
+    }
+  };
 
   const roster = (): SharedLocationRoster => store.getState().roster;
   /* Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte courant. */
@@ -193,7 +210,8 @@ export function createSharedLocationSharingCenter({
     const kept = load();
     if (rosterOps.equals(kept, roster())) return;
     store.setState({ roster: kept });
-    if (!rosterOps.hasRecipients(kept)) {
+    received = storage.getItem(receivedKey) === '1';
+    if (!rosterOps.hasRecipients(kept) || received) {
       lastSent = null;
       stopFollowing();
     }
@@ -212,6 +230,7 @@ export function createSharedLocationSharingCenter({
 
   const wipe = (): void => {
     adopt(EMPTY_ROSTER);
+    markReceived(false);
     lastSent = null;
     disarm();
     stopFollowing();
@@ -264,7 +283,7 @@ export function createSharedLocationSharingCenter({
     const next = withKeptWithdrawals(served);
     adopt(next);
     lastSent = { fix, at: now() };
-    if (rosterOps.hasRecipients(next)) startFollowing();
+    if (rosterOps.hasRecipients(next) && !received) startFollowing();
     else stopFollowing();
     if (rosterOps.equals(next, served)) scheduleDeadline();
     else arm(0);
@@ -355,6 +374,7 @@ export function createSharedLocationSharingCenter({
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';
         if (!isLive()) return 'failed';
+        markReceived(false);
         const previous = roster();
         const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
         return publish(next, current.fix, previous);
@@ -380,7 +400,14 @@ export function createSharedLocationSharingCenter({
         const pruned = rosterOps.pruned(roster(), now());
         if (rosterOps.isEmpty(pruned) && !rosterOps.hasRecipients(roster())) {
           adopt(EMPTY_ROSTER);
+          markReceived(false);
           disarm();
+          return null;
+        }
+        if (received && !rosterOps.hasPendingWithdrawals(pruned)) {
+          if (rosterOps.isEmpty(pruned)) wipe();
+          else adopt(pruned);
+          scheduleDeadline();
           return null;
         }
         const problem = await withdrawingRepublish(pruned);
@@ -395,13 +422,15 @@ export function createSharedLocationSharingCenter({
       await locked(async () => {
         const truth = await served().catch(() => null);
         if (truth === null || !isLive()) return null;
-        const next = rosterOps.withServed(roster(), truth, now());
-        if (rosterOps.equals(next, roster())) return null;
+        const before = roster();
+        const next = rosterOps.withServed(before, truth, now());
+        if (rosterOps.equals(next, before)) return null;
         adopt(next);
         if (!rosterOps.hasRecipients(next)) {
           lastSent = null;
           stopFollowing();
-        }
+          markReceived(false);
+        } else if (!rosterOps.hasRecipients(before)) markReceived(true);
         scheduleDeadline();
         return null;
       });
@@ -417,7 +446,7 @@ export function createSharedLocationSharingCenter({
   if (!rosterOps.isEmpty(restored) && isLive()) {
     scheduleDeadline();
     void fixes.isGranted().then((granted) => {
-      if (granted && isLive() && rosterOps.hasRecipients(roster())) startFollowing();
+      if (granted && isLive() && !received && rosterOps.hasRecipients(roster())) startFollowing();
     });
   }
   return center;

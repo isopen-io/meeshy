@@ -77,9 +77,9 @@ export const rosterOps = {
     ),
   /**
    * La liste recalée sur le partage que la passerelle SERT (#18389) : elle seule sait ce qu'un autre appareil du
-   * compte a ajouté ou retiré. Ses personnes, à la précision servie, avec la plus proche des deux échéances ; une
-   * personne en retrait ICI n'est jamais reprise (le retrait se rejoue), et un retrait que le serveur ne sert déjà
-   * plus est soldé. Une personne servie déjà échue n'est pas reprise.
+   * compte a ajouté, prolongé ou retiré. Ses personnes, à la précision et à l'échéance servies ; une personne en
+   * retrait ICI n'est jamais reprise (le retrait se rejoue), et un retrait que le serveur ne sert déjà plus est
+   * soldé. Une personne servie déjà échue n'est pas reprise.
    */
   withServed: (roster: SharedLocationRoster, served: SharedLocationOwnSnapshot, now: number): SharedLocationRoster => {
     const servedIds = new Set(served.recipients.map((recipient) => recipient.userId.toLowerCase()));
@@ -88,9 +88,8 @@ export const rosterOps = {
         const id = recipient.userId.toLowerCase();
         const until = Date.parse(recipient.expiresAt);
         if (!OBJECT_ID.test(id) || !Number.isFinite(until) || until <= now || id in roster.withdrawals) return [];
-        const mine = roster.entries[id];
         const precision = PRECISIONS.has(recipient.precision) ? recipient.precision : 'city';
-        return [[id, { precision, until: mine === undefined ? until : Math.min(mine.until, until) }] as const];
+        return [[id, { precision, until }] as const];
       }),
     );
     return rosterOf(entries, filtered(roster.withdrawals, (id) => servedIds.has(id)));
