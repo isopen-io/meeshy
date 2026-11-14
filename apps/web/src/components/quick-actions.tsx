@@ -156,7 +156,7 @@ function PrimaryAction({ action, quiet, onRun }: { readonly action: QuickAction;
   const state = useInfoHint();
   const hint = action.hintQuestion === undefined ? null : { text: action.hint, label: action.hintQuestion, glyph: SETTINGS_GLYPHS.info };
   return (
-    <div className="grid gap-1" data-quick-action-primary={quiet ? 'quiet' : 'hero'}>
+    <div className="relative grid gap-1" data-quick-action-primary={quiet ? 'quiet' : 'hero'}>
       <div className="flex items-center gap-1">
         <button
           type="button"

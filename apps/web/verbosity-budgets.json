@@ -106,7 +106,7 @@
     },
     "c-conversation": {
       "total": 136,
-      "firstScreen": 103
+      "firstScreen": 104
     },
     "calls": {
       "total": 47,
@@ -565,6 +565,18 @@
       },
       "motif": "La ligne du mode de chiffrement retenu se lit au repos, sous le résumé et au-dessus de la phrase d'irréversibilité, et dit ce que le mode Serveur garde (« traduction, transcription et recherche fonctionnent » : ce qui le distingue du bout en bout, règle 7). +6 mots vus ; le relevé en compte 12 parce qu'il compte aussi la même ligne dans le <details> replié",
       "issue": 18361
+    },
+    "c-conversation": {
+      "de": {
+        "total": 136,
+        "firstScreen": 103
+      },
+      "a": {
+        "total": 136,
+        "firstScreen": 104
+      },
+      "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
+      "issue": 18392
     }
   }
 }
