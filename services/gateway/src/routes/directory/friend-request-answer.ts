@@ -6,8 +6,7 @@ import { withMutationVerdict } from '../../utils/withMutationLog';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { recordLevel, startCooldown, cooldownEnd, type RelationWriteOutcome } from '../../services/relations/userRelationWriter';
-import { judgeRelationRequest, thresholdsNow, unnamedRequestRung } from '../../services/relations/relationRequestGate';
-import { niveauEffectif } from '../../services/friendship';
+import { judgeRelationRequest, thresholdsNow } from '../../services/relations/relationRequestGate';
 import { emitRelationLevelRaised, relationIoOf } from '../../socketio/relationEvents';
 import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
@@ -27,16 +26,9 @@ export type DemandeARepondre = {
   readonly targetLevel?: string | null;
 };
 
-/**
- * Le cran qu'ACCEPTER une demande pose. Nommé, c'est le sien. Sans niveau (demande
- * antérieure aux cercles), c'est le cran suivant du lien d'aujourd'hui, borné à Ami
- * (#18108) : la lire « Ami » la rendait inacceptable entre deux inconnus.
- */
-async function niveauAAccepter(fastify: FastifyInstance, demande: DemandeARepondre): Promise<RelationRequestLevel> {
-  const nomme = parseRequestLevel(demande.targetLevel);
-  if (nomme !== null) return nomme;
-  return unnamedRequestRung(await niveauEffectif(fastify.prisma, demande.senderId, demande.receiverId)) ?? 'FRIEND';
-}
+/** Le cran qu'une demande vise : absent, c'est FRIEND, le sens historique. */
+export const niveauVise = (demande: Pick<DemandeARepondre, 'targetLevel'>): RelationRequestLevel =>
+  parseRequestLevel(demande.targetLevel) ?? 'FRIEND';
 
 type Statut = 'accepted' | 'rejected';
 
@@ -246,7 +238,7 @@ async function accepterAuNiveau(
   demande: DemandeARepondre,
   acteurId: string
 ): Promise<Resultat<Record<string, unknown>>> {
-  const niveau = await niveauAAccepter(fastify, demande);
+  const niveau = niveauVise(demande);
   if (niveau === 'BLOOD') {
     return { refus: { code: 409, message: 'Le Sang passe par le rituel', codeMetier: 'RELATION_RITUAL_REQUIRED' } };
   }
@@ -257,8 +249,8 @@ async function accepterAuNiveau(
     return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
   }
 
-  // Une demande SANS niveau (antérieure aux cercles) s'accepte au cran suivant
-  // (`niveauAAccepter`, #18108) et suit la même loi que toutes : aucun saut (D-5).
+  // Une demande SANS niveau (antérieure aux cercles) vise Ami, et suit la même loi
+  // que toutes : aucune exception, aucun saut de cran (D-5).
   const jugement = await judgeRelationRequest(fastify.prisma, {
     requesterId: demande.senderId, otherId: demande.receiverId, targetLevel: niveau, now: new Date(), ignoreCooldown: true,
   });

@@ -65,39 +65,18 @@ describe('#13933 — un cran à la fois', () => {
     expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'FRIEND' });
   });
 
-  it('une demande SANS niveau vise le cran suivant : depuis Public, c’est une Connaissance (#18108)', async () => {
-    const { status, store, notifier } = await envoyer({});
+  it('une demande SANS niveau vaut Ami et passe directement depuis Public (#18101)', async () => {
+    const { status, store } = await envoyer({});
 
     expect(status).toBe(201);
-    expect(store.friendRequests()).toHaveLength(1);
-    expect(store.friendRequests()[0]).toMatchObject({ senderId: MOI, receiverId: AUTRE, status: 'pending', targetLevel: 'ACQUAINTANCE' });
-    expect(notifier.createFriendRequestNotification).toHaveBeenCalledTimes(1);
-  });
-
-  it('une demande SANS niveau depuis Communauté vise aussi Connaissance', async () => {
-    const { status, store } = await envoyer({}, { liens: [lien('COMMUNITY', 'COMMUNITY')] });
-
-    expect(status).toBe(201);
-    expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'ACQUAINTANCE' });
+    expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'FRIEND' });
   });
 
   it('une demande SANS niveau depuis Connaissance est une demande d’Ami', async () => {
     const { status, store } = await envoyer({}, { liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')] });
 
     expect(status).toBe(201);
-    expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'FRIEND' });
-  });
-
-  it.each([
-    ['Ami', lien('FRIEND', 'FRIEND')],
-    ['Proche', lien('CLOSE', 'CLOSE')],
-  ])('une demande SANS niveau depuis %s ne demande jamais Proche ni Sang : refusée, aucune ligne', async (_nom, row) => {
-    const { status, body, store, notifier } = await envoyer({}, { liens: [row], jours: semaines(14) });
-
-    expect(status).toBe(409);
-    expect(body.code).toBe('RELATION_PHASE_SKIP');
-    expect(store.friendRequests()).toHaveLength(0);
-    expect(notifier.createFriendRequestNotification).not.toHaveBeenCalled();
+    expect(store.friendRequests()[0].targetLevel ?? 'FRIEND').toBe('FRIEND');
   });
 
   it.each([

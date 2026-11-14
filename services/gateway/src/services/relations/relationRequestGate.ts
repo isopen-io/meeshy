@@ -25,16 +25,6 @@ export type RelationRequestJudgement =
 
 const COOLDOWN_SELECT = { id: true, userLowId: true, userHighId: true, levelSince: true, cooldownLowUntil: true, cooldownHighUntil: true } as const;
 
-/**
- * Le cran d'une demande qui n'en NOMME aucun (#18108) : le suivant, borné à Ami.
- * « Ajouter » depuis Public vise Connaissance, depuis Connaissance vise Ami ;
- * au-delà, Proche et Sang ne se demandent que nommés — `null`.
- */
-export const unnamedRequestRung = (currentLevel: RelationLevel): RelationRequestLevel | null => {
-  const next = relationRungAfter(currentLevel);
-  return next === 'ACQUAINTANCE' || next === 'FRIEND' ? next : null;
-};
-
 export const thresholdsNow = () => relationThresholdsFor(process.env.DEPLOY_ENV ?? process.env.NODE_ENV);
 
 export async function judgeRelationRequest(

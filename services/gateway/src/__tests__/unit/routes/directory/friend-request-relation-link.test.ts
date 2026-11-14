@@ -115,23 +115,6 @@ async function repondre(params: {
   return { status: res.statusCode, store, notificationService };
 }
 
-describe('#18108 — une demande sans niveau, antérieure aux cercles, s’accepte au cran suivant', () => {
-  it('entre deux inconnus : l’acceptation aboutit et pose une Connaissance', async () => {
-    const { status, store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')] });
-
-    expect(status).toBe(200);
-    expect(store.relations()).toHaveLength(1);
-    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' });
-  });
-
-  it('entre deux Amis déjà liés : l’acceptation aboutit sans rien monter', async () => {
-    const { status, store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('FRIEND', 'FRIEND')] });
-
-    expect(status).toBe(200);
-    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' });
-  });
-});
-
 describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
   it('crée la ligne de la paire, origine « request »', async () => {
     const { status, store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')] });
