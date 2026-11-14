@@ -111,6 +111,9 @@ public final class ReaderAudioMixer {
     /// fondu qui la voit changer sait qu'il ne parle plus à SA passe (#9867).
     var playbackEpoch: UInt64 = 0
 
+    /// L'arrêt des nœuds en cours sur sa file (`ReaderAudioMixer+NodeRetirement`).
+    var nodeRetirement = ReaderAudioNodeRetirement()
+
     // MARK: Default background envelope (RC4.7)
 
     /// Fade-in floor — the default envelope ramps the background from 30 % to
@@ -258,6 +261,7 @@ public final class ReaderAudioMixer {
     /// rejouer son fichier depuis zéro.
     @discardableResult
     public func play(originHost: UInt64, slideKey: String, slideElapsed: Double = 0) throws -> Bool {
+        nodeRetirement.settle()
         logger.info("ReaderAudioMixer.play slideKey=\(slideKey, privacy: .public) entries=\(self.entries.count) bg=\(self.backgroundEntry == nil ? "nil" : "set") resume=\(self.startedSlideKey == slideKey)")
         if startedSlideKey == slideKey {
             // HORS de toute correction #6580 : une reprise à clé identique reste
@@ -352,6 +356,7 @@ public final class ReaderAudioMixer {
         // Une story qui sonnait rend la main au bout de ≈ 3 s de pause ; sa
         // reprise réactive la session et annule la libération (#11040, j).
         if isPlaying, isSounding { MediaSessionCoordinator.shared.releaseAfterUserPause() }
+        nodeRetirement.settle()
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
         // Jalon posé AVANT la remise à `false` : `slideElapsedSeconds` se gèle
@@ -381,8 +386,7 @@ public final class ReaderAudioMixer {
     }
 
     public func stop() {
-        for entry in entries.values { entry.node.stop() }
-        backgroundEntry?.player.stop()
+        retireScheduledNodes()
         playbackStartHostTime = nil
         pausedAtHostTime = nil
         startedSlideKey = nil
@@ -508,6 +512,7 @@ public final class ReaderAudioMixer {
     }
 
     private func teardown() {
+        nodeRetirement.settle()
         for entry in entries.values {
             entry.node.stop()
             engine.detach(entry.node)

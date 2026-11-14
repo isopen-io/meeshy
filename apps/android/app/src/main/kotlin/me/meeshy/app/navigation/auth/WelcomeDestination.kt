@@ -58,6 +58,8 @@ internal fun WelcomeHost(
             Box(Modifier.fillMaxSize()) {
                 SignupScreen(
                     onClose = { viewModel.onEvent(WelcomeUiEvent.SignupClosed) },
+                    // « Se connecter » solde l'accueil ; la connexion, composée dessous, adopte l'adresse tapée maintenant.
+                    onSignIn = { authViewModel.adoptPendingHandoffs(); viewModel.onEvent(WelcomeUiEvent.SignInTapped) },
                     onRegistered = {
                         authViewModel.onExternalSessionOpened()
                         viewModel.onEvent(WelcomeUiEvent.AccountCreated)
