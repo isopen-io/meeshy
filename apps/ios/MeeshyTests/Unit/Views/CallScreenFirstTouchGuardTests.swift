@@ -84,7 +84,7 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         let connected = try view("CallView+Connected.swift")
         let duo = try block("private var duoLayout: some View {", until: "private var swipeDownToLeaveGesture: some Gesture {", in: connected)
         XCTAssertTrue(duo.contains(".onTapGesture { if exposesTheTapToggle { toggleControls() } }"), "Le fond de l'audio est la scène")
-        XCTAssertTrue(duo.contains("CallAudioStage(isCompact: pillText.compactsAudioLayout"), "L'avatar compact suit le journal servi, rangé ou non (P9b.15 : par morphisme)")
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"), "L'avatar compact suit le journal servi, rangé ou non (P9b.15 : par morphisme)")
         let exposes = try block("private var exposesTheTapToggle: Bool {", until: "\n    }\n", in: connected)
         XCTAssertTrue(exposes.contains("CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
         let stage = try block("private var isTapStage: Bool {", until: "\n    }\n", in: connected)

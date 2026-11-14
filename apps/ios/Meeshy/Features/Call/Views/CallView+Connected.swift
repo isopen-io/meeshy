@@ -117,13 +117,15 @@ extension CallView {
                     // aucun panneau ne remplace l'avatar ; le journal le resserre,
                     // par morphisme d'UN avatar (P9b.15).
                     // Le fond est la scène (loi 11, #17945) : l'avatar reprend 120 pt.
-                    CallAudioStage(isCompact: pillText.compactsAudioLayout, compactTopInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) {
-                        audioAvatarPair(isCompact: pillText.compactsAudioLayout)
+                    // #18488 — la scène cède sa place à la pilule : à hauteur courte, elle prend la forme compacte.
+                    CallAudioStage(isJournalOpen: pillText.compactsAudioLayout, compactTopInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { isCompact in
+                        audioAvatarPair(isCompact: isCompact)
                             .accessibilityHidden(true)
-                    } compact: {
+                    } compact: { showsStatuses in
                         CallCompactAudioHeader(name: peerDisplayName,
                                                duration: { callManager.formattedDuration },
-                                               spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
+                                               spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail,
+                                               statuses: showsStatuses ? CallAudioStatuses(callManager: callManager) : nil)
                     } rest: {
                         audioCallLayout
                     }
@@ -361,14 +363,8 @@ extension CallView {
             }
             .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
-            CallAudioStatusRow(isReconnecting: isReconnectingCall, isMuted: callManager.isMuted, isPeerMuted: !callManager.isRemoteAudioEnabled,
-                               isSpeaker: callManager.isSpeaker, isSignalingDegraded: callManager.isSignalingDegraded)
+            CallAudioStatusRow(statuses: CallAudioStatuses(callManager: callManager))
         }
-    }
-
-    private var isReconnectingCall: Bool {
-        if case .reconnecting = callManager.callState { return true }
-        return false
     }
 
     // MARK: - Connection Quality (glyphe signal)
@@ -691,40 +687,50 @@ private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
 /// compact pendant que le nom et la durée la rejoignent en fondu, ≈ 200 ms, puis le chemin inverse.
 /// « Réduire les animations » : chaque disposition est une vue à part, qui se fond sur place.
 struct CallAudioStage<Avatar: View, Compact: View, Rest: View>: View {
-    let isCompact: Bool
+    let isJournalOpen: Bool
     let compactTopInset: CGFloat
-    let avatar: Avatar
-    let compact: Compact
+    let avatar: (Bool) -> Avatar
+    let compact: (Bool) -> Compact
     let rest: Rest
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var stageHeight: CGFloat = 0
 
-    init(isCompact: Bool, compactTopInset: CGFloat, @ViewBuilder avatar: () -> Avatar,
-         @ViewBuilder compact: () -> Compact, @ViewBuilder rest: () -> Rest) {
-        self.isCompact = isCompact
+    init(isJournalOpen: Bool, compactTopInset: CGFloat, @ViewBuilder avatar: @escaping (Bool) -> Avatar,
+         @ViewBuilder compact: @escaping (Bool) -> Compact, @ViewBuilder rest: () -> Rest) {
+        self.isJournalOpen = isJournalOpen
         self.compactTopInset = compactTopInset
-        self.avatar = avatar()
-        self.compact = compact()
+        self.avatar = avatar
+        self.compact = compact
         self.rest = rest()
     }
 
     var body: some View {
-        ZStack {
-            arrangement
-                .id(CallAudioStageLayout.identity(isCompact: isCompact, reduceMotion: reduceMotion))
+        let form = CallAudioStageLayout.form(isJournalOpen: isJournalOpen, stageHeight: stageHeight, topClearance: compactTopInset)
+        return ZStack {
+            arrangement(form)
+                .id(CallAudioStageLayout.identity(form: form, reduceMotion: reduceMotion))
                 .transition(.opacity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: isCompact)
+        // #18488 — plancher nul : la scène cède sa place à la pilule, qui reste entière dans la fenêtre ;
+        // ce qui déborde est rogné, jamais posé sur la pilule.
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .background(GeometryReader { stage in
+            Color.clear.preference(key: CallAudioStageHeightKey.self, value: stage.size.height)
+        })
+        .onPreferenceChange(CallAudioStageHeightKey.self) { stageHeight = $0 }
+        .clipped()
+        .animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: form.isCompact)
     }
 
-    private var arrangement: some View {
+    private func arrangement(_ form: CallAudioStageLayout.Form) -> some View {
+        let isCompact = form.isCompact
         let layout = isCompact ? AnyLayout(HStackLayout(spacing: MeeshySpacing.md)) : AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))
         return layout {
-            avatar
+            avatar(isCompact)
                 .padding(.bottom, isCompact ? 0 : MeeshySpacing.sm)
             if isCompact {
-                compact.transition(.opacity)
+                compact(form.showsStatuses).transition(.opacity)
             } else {
                 rest.transition(.opacity)
             }
@@ -732,6 +738,14 @@ struct CallAudioStage<Avatar: View, Compact: View, Rest: View>: View {
         .padding(.horizontal, isCompact ? MeeshySpacing.lg : 0)
         .padding(.top, isCompact ? compactTopInset : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isCompact ? .topLeading : .center)
+    }
+}
+
+private nonisolated struct CallAudioStageHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -743,6 +757,8 @@ struct CallCompactAudioHeader: View {
     let duration: () -> String
     let spokenDuration: () -> String
     @Binding var showsQualityDetail: Bool
+    /// #18488 — à hauteur courte seulement : les états de l'appel restent sous la durée.
+    var statuses: CallAudioStatuses?
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -763,36 +779,54 @@ struct CallCompactAudioHeader: View {
                     .accessibilityAddTraits(.updatesFrequently)
             }
             .callQualityDetailTrigger(isPresented: $showsQualityDetail)
+
+            if let statuses {
+                CallAudioStatusRow(statuses: statuses)
+            }
         }
     }
 }
 
-/// Les états de l'appel audio sous la durée (reconnexion, micro coupé, contact en sourdine,
-/// haut-parleur, serveur déconnecté) : une vue feuille qui ne reçoit que des primitives.
-struct CallAudioStatusRow: View {
+/// Les états de l'appel audio, tels que la rangée du repos et l'en-tête compact les portent.
+struct CallAudioStatuses: Equatable {
     let isReconnecting: Bool
     let isMuted: Bool
     let isPeerMuted: Bool
     let isSpeaker: Bool
     let isSignalingDegraded: Bool
 
+    @MainActor
+    init(callManager: CallManager) {
+        if case .reconnecting = callManager.callState { isReconnecting = true } else { isReconnecting = false }
+        isMuted = callManager.isMuted
+        isPeerMuted = !callManager.isRemoteAudioEnabled
+        isSpeaker = callManager.isSpeaker
+        isSignalingDegraded = callManager.isSignalingDegraded
+    }
+}
+
+/// Les états de l'appel audio sous la durée (reconnexion, micro coupé, contact en sourdine,
+/// haut-parleur, serveur déconnecté) : une vue feuille qui ne reçoit que des primitives.
+struct CallAudioStatusRow: View {
+    let statuses: CallAudioStatuses
+
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             // §4.3 — reconnexion ICE en cours : une pill compacte, plutôt qu'un bandeau
             // plein-écran, au même endroit que les autres indicateurs de statut.
-            if isReconnecting {
+            if statuses.isReconnecting {
                 CallStatusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
             }
-            if isMuted {
+            if statuses.isMuted {
                 CallStatusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
             }
-            if isPeerMuted {
+            if statuses.isPeerMuted {
                 CallStatusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
             }
-            if isSpeaker {
+            if statuses.isSpeaker {
                 CallStatusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
             }
-            if isSignalingDegraded {
+            if statuses.isSignalingDegraded {
                 CallStatusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
             }
         }

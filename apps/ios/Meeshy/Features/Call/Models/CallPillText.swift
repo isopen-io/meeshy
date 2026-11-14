@@ -89,6 +89,38 @@ nonisolated enum CallAudioStageLayout {
         guard !morphs(reduceMotion: reduceMotion) else { return 0 }
         return isCompact ? 2 : 1
     }
+
+    /// #18488 — la hauteur qu'il faut au repos sous la rangée d'en-tête : l'avatar de 120 pt et son
+    /// marge, le nom, la durée, la rangée d'états et leurs trois interlignes.
+    static let restContentHeight: CGFloat = 270
+
+    /// #18488 — la forme de la scène audio : celle du repos, celle du journal ouvert dans la pilule
+    /// (P9b), ou la même forme compacte quand c'est la HAUTEUR qui manque (iPad en fenêtre basse).
+    nonisolated enum Form: Equatable, Sendable {
+        case rest, journal, lowHeight
+
+        var isCompact: Bool { self != .rest }
+
+        /// Hauteur courte seulement : les états (micro coupé, reconnexion…) restent sous la durée. Sous
+        /// le journal, P9b.2 n'en pose aucune.
+        var showsStatuses: Bool { self == .lowHeight }
+    }
+
+    /// Le journal ouvert garde sa forme. Sinon la scène passe à la forme compacte dès qu'elle ne tient
+    /// plus sous la rangée d'en-tête (`stageHeight` : celle de la scène, mesurée ; 0 = pas encore mesurée).
+    static func form(isJournalOpen: Bool, stageHeight: CGFloat, topClearance: CGFloat) -> Form {
+        guard !isJournalOpen else { return .journal }
+        guard stageHeight > 0, stageHeight < topClearance + restContentHeight else { return .rest }
+        return .lowHeight
+    }
+
+    static func avatarSize(form: Form) -> CGFloat { avatarSize(isCompact: form.isCompact) }
+
+    static func faceScale(form: Form) -> CGFloat { faceScale(isCompact: form.isCompact) }
+
+    static func identity(form: Form, reduceMotion: Bool) -> Int {
+        identity(isCompact: form.isCompact, reduceMotion: reduceMotion)
+    }
 }
 
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre
@@ -123,6 +155,31 @@ enum CallJournalSizing {
 
     static func height(windowHeight: CGFloat) -> CGFloat {
         min(max(windowHeight * share, minimum), maximum)
+    }
+
+    /// #18488 — ce que le journal du duo audio laisse aux autres : l'espace entre l'avatar compact et le
+    /// journal, son titre et son pied (« Journal » en disque blanc), la rangée de base et l'encart bas.
+    static let compactHeaderGap: CGFloat = MeeshySpacing.md
+    static let panelChrome: CGFloat = 84
+    static let baseRowHeight: CGFloat = 68
+    /// Plancher lisible quand la fenêtre est basse : environ deux phrases, jamais zéro.
+    static let compactMinimum: CGFloat = 56
+
+    static func reservedAround(topClearance: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        topClearance + CallAudioStageLayout.compactAvatarSize + compactHeaderGap + panelChrome + baseRowHeight + bottomInset
+    }
+
+    /// Le journal ne prend que ce qu'il reste dans la fenêtre : la pilule entière, (…) compris, y
+    /// reste ; seul le plancher lisible peut la dépasser.
+    static func height(windowHeight: CGFloat, reservedAround: CGFloat) -> CGFloat {
+        max(compactMinimum, min(height(windowHeight: windowHeight), windowHeight - reservedAround))
+    }
+
+    /// Le groupe garde la part de la fenêtre (sa grille a sa propre loi) ; le duo audio ne prend que ce
+    /// qu'il reste autour de l'avatar compact et de la pilule.
+    static func listHeight(isGroup: Bool, windowHeight: CGFloat, topClearance: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        guard !isGroup else { return height(windowHeight: windowHeight) }
+        return height(windowHeight: windowHeight, reservedAround: reservedAround(topClearance: topClearance, bottomInset: bottomInset))
     }
 }
 
