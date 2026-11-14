@@ -349,10 +349,12 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     /// Une fiche de profil posée hors du routeur ne referme rien de ce qui est
-    /// présenté : elle passe par `Router.present(afterPresentedSurfacesLeave:)`.
+    /// présenté : elle passe par `Router.presentProfileSheet(_:)`. Base mesurée
+    /// sur le code masqué : 4 (fenêtre détachée, réels de l'iPhone, relais
+    /// de la notification `openProfileSheet`, aiguillage des notifications de l'iPad).
     func test_ratchet_profileSheetWritesOutsideTheRouter_neverRise() throws {
         let sources = try maskedSources(under: "") { !["Router.swift", "RouterCommands.swift"].contains($0) }
-        XCTAssertLessThanOrEqual(count("deepLinkProfileUser = ProfileSheetUser(", in: sources), 6)
+        XCTAssertLessThanOrEqual(count("deepLinkProfileUser = ProfileSheetUser(", in: sources), 4)
     }
 
     /// Le panneau de l'iPad se ferme par `router.pop()`, qui anime et rend le

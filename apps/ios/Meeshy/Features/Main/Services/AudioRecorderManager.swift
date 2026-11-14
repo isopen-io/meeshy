@@ -115,6 +115,12 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     private var startAttempt = 0
 
     /// La session est prête : l'enregistreur démarre.
+    ///
+    /// #18489 — `record()` lance le matériel audio (jusqu'à 1,5 s sur iPhone,
+    /// hang MetricKit relevé sur l'iPhone du porteur) : il part sur `startQueue`, et le
+    /// fil principal ne fait que créer l'objet et publier l'état. Au retour, la
+    /// tentative a pu changer (arrêt, annulation) : `RecorderStartOutcome`
+    /// tranche, et un démarrage périmé s'arrête et jette son fichier.
     private func startRecorder() {
         // A3 — from here on, the session is active. Any failure path MUST
         // deactivate it to avoid leaking the microphone indicator + battery
@@ -122,15 +128,12 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         // session active indefinitely).
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
+        let started: AVAudioRecorder
         do {
             // Dictionnaire dérivé du codec via la source unique du SDK
             // (`AudioRecordingSettings.avRecorderSettings`) — le défaut `.aac`
             // reproduit l'ancien dictionnaire AAC/M4A à l'identique.
-            recorder = try AVAudioRecorder(url: url, settings: settings.avRecorderSettings)
-            recorder?.isMeteringEnabled = true
-            recorder?.record()
-            recordedFileURL = url
+            started = try AVAudioRecorder(url: url, settings: settings.avRecorderSettings)
         } catch {
             // A3 — rollback the AVAudioSession we just activated so the OS
             // releases the microphone hardware and turns off the indicator.
@@ -138,22 +141,51 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
             deactivateAudioSessionAfterFailure()
             return
         }
-
-        RecorderCallGuard.shared.register(self)
-
-        // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
-        // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz ;
-        // en arrière-plan le lien ne tire plus, l'îlot relève lui-même le niveau.
-        displayLink?.invalidate()
-        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { [weak self] link in
-            guard let self else {
-                link.invalidate()
-                return
-            }
-            self.updateMetering()
+        started.isMeteringEnabled = true
+        recorder = started
+        recordedFileURL = url
+        let attempt = startAttempt
+        let handoff = TeardownBox(started)
+        Self.startQueue.async { [weak self] in
+            let running = handoff.read { $0.prepareToRecord() && $0.record() }
+            Task { @MainActor in self?.recorderDidStart(running, attempt: attempt, handoff: handoff) }
         }
-        link.add(to: .main, forMode: .common)
-        displayLink = link
+    }
+
+    /// Le fil qui démarre le matériel audio, jamais le principal (#18489).
+    private static let startQueue = DispatchQueue(label: "me.meeshy.audio-recorder.start", qos: .userInitiated)
+
+    private func recorderDidStart(_ running: Bool, attempt: Int, handoff: TeardownBox<AVAudioRecorder>) {
+        switch RecorderStartOutcome.resolve(attemptAtStart: attempt, attemptNow: startAttempt, started: running) {
+        case .stale:
+            // Arrêt ou annulation pendant le démarrage : ce qui a pu partir s'arrête,
+            // son fichier ne reste pas dans `tmp`.
+            handoff.release(on: Self.startQueue) { recorder in
+                recorder.stop()
+                FileManager.default.removeItemLogging(at: recorder.url, context: "stale recorder start cleanup", logger: Logger.audioRecorder)
+            }
+        case .failed:
+            isRecording = false
+            recorder = nil
+            recordedFileURL = nil
+            FileManager.default.removeItemLogging(at: handoff.read(\.url), context: "failed recorder start cleanup", logger: Logger.audioRecorder)
+            deactivateAudioSessionAfterFailure()
+        case .live:
+            RecorderCallGuard.shared.register(self)
+            // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
+            // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz ;
+            // en arrière-plan le lien ne tire plus, l'îlot relève lui-même le niveau.
+            displayLink?.invalidate()
+            let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { [weak self] link in
+                guard let self else {
+                    link.invalidate()
+                    return
+                }
+                self.updateMetering()
+            }
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
     }
 
     /// Tranche la permission micro AVANT toute activation de session.

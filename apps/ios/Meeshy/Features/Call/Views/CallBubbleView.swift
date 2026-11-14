@@ -113,22 +113,7 @@ struct CallBubbleView: View {
 
             shareStopSlot(size: size)
 
-            if isCircleRegion {
-                // #18458 — au palier cercle, l'appel réduit est le disque rogné aimanté au
-                // bord : ses cercles disent la ligne, la durée continue dessus, le réseau
-                // ne s'y montre que dégradé. Pas d'étiquette sous lui.
-                CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)
-            } else {
-                CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
-                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                    .overlay(alignment: .topTrailing) { signalBadge }
-                    .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
-                    .overlay(alignment: .top) {
-                        tierControlBar
-                            .opacity(controlOpacity)
-                            .allowsHitTesting(controlOpacity > 0.5)
-                    }
-            }
+            participantVisual(size: size, cornerRadius: cornerRadius, controlOpacity: controlOpacity)
         }
         // Le cadre touchable de la fenêtre passe-plat, mesuré AVANT les
         // décalages pour les suivre : élargi au glyphe de signal, et aux
@@ -178,6 +163,27 @@ struct CallBubbleView: View {
         }
         .accessibilityAdjustableAction { direction in
             adjustTier(direction)
+        }
+    }
+
+    /// #18458 — au palier cercle, l'appel réduit est le disque rogné aimanté au
+    /// bord : ses cercles disent la ligne, la durée continue dessus, le réseau
+    /// ne s'y montre que dégradé, et aucune étiquette ne vit sous lui. Aux
+    /// paliers rectangle, la vignette garde son badge, son étiquette et sa barre.
+    @ViewBuilder
+    private func participantVisual(size: CGSize, cornerRadius: CGFloat, controlOpacity: Double) -> some View {
+        if isCircleRegion {
+            CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)
+        } else {
+            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                .overlay(alignment: .topTrailing) { signalBadge }
+                .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
+                .overlay(alignment: .top) {
+                    tierControlBar
+                        .opacity(controlOpacity)
+                        .allowsHitTesting(controlOpacity > 0.5)
+                }
         }
     }
 
