@@ -550,6 +550,20 @@ describe('la livraison', () => {
     expect(email?.textContent).toContain('ont désactivé les e-mails de diffusion');
   });
 
+  test('épure (#18486) : la précision sur les comptes ignorés est derrière un (i), sous les compteurs', async () => {
+    const host = await open(fakeServer({ broadcast: servedBroadcast({ status: 'SENT', totalRecipients: 900, sentCount: 850, failedCount: 7, sentAt: '2026-09-29T12:00:00.000Z', completedAt: '2026-09-29T12:20:00.000Z' }) }), { section: 'email' });
+    const email = section(host, 'email') as Element;
+    const copy = email.cloneNode(true) as Element;
+    copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+
+    expect(copy.textContent).not.toContain('ont désactivé les e-mails de diffusion');
+    const button = email.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi moins d’envois que de destinataires ?"]');
+    expect(button).not.toBeNull();
+    const note = email.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+    expect(note?.textContent).toBe('Les comptes qui ont désactivé les e-mails de diffusion sont ignorés : le nombre d’envois et d’échecs peut être inférieur au nombre de destinataires.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+  });
+
   test('en cours : la progression est partielle et la fin est « En cours »', async () => {
     const host = await open(
       fakeServer({ broadcast: servedBroadcast({ status: 'SENDING', totalRecipients: 200, sentCount: 40, failedCount: 10, sentAt: '2026-09-30T11:30:00.000Z' }) }),

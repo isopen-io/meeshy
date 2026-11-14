@@ -443,6 +443,20 @@ describe('épure (#18486) — la capacité se nomme, son explication est derriè
     expect(block.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`)?.textContent).toContain('propre à ce navigateur');
   });
 
+  test('« Compteurs du tableau de bord » : le titre et le bouton suffisent, la durée de mémoire est derrière un (i)', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+    const block = host.querySelector('[data-admin-fiche-section="settings-dashboard"]') as Element;
+
+    expect(visibleText(block)).not.toContain('gardés en mémoire');
+    expect(block.querySelector('[data-admin-action="recompute-dashboard"]')?.textContent).toContain('Recalculer maintenant');
+    const button = block.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi recalculer les compteurs ?"]');
+    expect(button).not.toBeNull();
+    const note = block.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+    expect(note?.textContent).toBe('Les compteurs du tableau de bord sont gardés en mémoire par la plateforme pendant dix minutes. Recalculez-les pour voir tout de suite les chiffres à jour.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+  });
+
   test('l’en-tête ne répète plus le titre', async () => {
     const { deps } = scripted();
     const host = await open(deps);
