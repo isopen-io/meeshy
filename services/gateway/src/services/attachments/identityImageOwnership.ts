@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { profileImageStorageKey } from '@meeshy/shared/utils/profile-image-reference';
+import { isAbsoluteHttpReference, isMeeshyMediaUrl, meeshyMediaHostsFromEnv } from './meeshyMediaHosts';
 
 /**
  * UNE IMAGE D'IDENTITÉ NE DÉSIGNE QU'UN FICHIER DE CELUI QUI LA POSE (#16811).
@@ -10,12 +11,15 @@ import { profileImageStorageKey } from '@meeshy/shared/utils/profile-image-refer
  * devenait l'image publique de qui la recopiait.
  *
  * La référence est acceptée quand :
- * - elle ne désigne aucun fichier du volume (hôte tiers : l'affaire de #16809) ;
  * - elle est la valeur DÉJÀ posée (`current`) — rien ne change, et une valeur
- *   stockée avant cette garde n'est jamais refusée à son propriétaire ;
- * - une ligne `MessageAttachment` de type image, TÉLÉVERSÉE par l'appelant,
- *   porte ce fichier (colonne disque `filePath` ou colonne d'adresse
- *   `fileUrl`, qui portait la route de flux avant le 2026-09-16).
+ *   stockée avant cette garde n'est jamais refusée à son propriétaire, même
+ *   vers un hôte tiers (lecture tolérante, écriture stricte) ;
+ * - sinon, quand elle désigne un fichier du volume — une adresse absolue
+ *   seulement sur un hôte Meeshy (`meeshyMediaHosts.ts`, #16809 : un hôte
+ *   tiers recevrait l'IP de chaque lecteur) — et qu'une ligne
+ *   `MessageAttachment` de type image, TÉLÉVERSÉE par l'appelant, porte ce
+ *   fichier (colonne disque `filePath` ou colonne d'adresse `fileUrl`, qui
+ *   portait la route de flux avant le 2026-09-16).
  *
  * C'est la règle que `PUT /admin/users/:userId/profile-images/:kind` applique
  * déjà à sa source `upload` (#8217). Une lecture qui échoue lève : la route
@@ -27,6 +31,7 @@ export type IdentityImageOwnershipQuery = {
   readonly userId: string;
   readonly reference: string;
   readonly current?: string | null;
+  readonly mediaHosts?: ReadonlySet<string>;
 };
 
 type AttachmentReader = Pick<PrismaClient, 'messageAttachment'>;
@@ -36,8 +41,11 @@ export async function identityImageIsCallers(
   query: IdentityImageOwnershipQuery,
 ): Promise<boolean> {
   if (query.current !== undefined && query.current !== null && query.reference === query.current) return true;
+  if (isAbsoluteHttpReference(query.reference) && !isMeeshyMediaUrl(query.reference, query.mediaHosts ?? meeshyMediaHostsFromEnv())) {
+    return false;
+  }
   const key = profileImageStorageKey(query.reference);
-  if (key === null) return true;
+  if (key === null) return false;
   const upload = await prisma.messageAttachment.findFirst({
     where: {
       uploadedBy: query.userId,
