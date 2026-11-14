@@ -13,6 +13,7 @@
         <item quantity="one">%1$s+ Mitglied</item>
         <item quantity="other">%1$s+ Mitglieder</item>
     </plurals>
+    <string name="conversation_members_action_failed">Aktion abgelehnt</string>
     <string name="members_sheet_error_ok">OK</string>
     <string name="members_sheet_swipe_remove">Entfernen</string>
     <string name="add_participant_failed">Dieses Mitglied konnte nicht hinzugefügt werden.</string>

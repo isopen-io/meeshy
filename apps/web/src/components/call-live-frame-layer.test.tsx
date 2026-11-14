@@ -81,6 +81,18 @@ describe('la carte de proposition (C2)', () => {
     view.done();
   });
 
+  test('C2.2 — « Non merci » est le disque de verre dessiné des boutons d’un verre (#17345, `callChipGlass` iOS), jamais un fond uni ; sans flou à lui : la carte porte le seul flou', () => {
+    const view = mountNode(status({ proposal: { frameId: 'jovial.confettis', from: 'Awa' }, answer: null, notice: null }, spy()));
+    const classes = view.find('[data-call-live-frame-decline]')?.className.split(' ') ?? [];
+    expect(classes).toContain('glass-call-disc');
+    expect(classes).not.toContain('bg-media-fill');
+    expect(classes).not.toContain('glass-call');
+    expect(classes).not.toContain('glass-call-prominent');
+    expect(classes).toContain('min-h-11');
+    expect(classes).toContain('flex-1');
+    view.done();
+  });
+
   test('sans prénom partagé, « Votre correspondant » ; un cadre inconnu du catalogue ne pose aucune carte', () => {
     const anonymous = mountNode(status({ proposal: { frameId: 'jovial.confettis', from: null }, answer: null, notice: null }, spy()));
     expect(anonymous.find('[data-call-live-frame-proposal]')?.textContent).toContain('Votre correspondant vous propose le cadre « Jovial »');
