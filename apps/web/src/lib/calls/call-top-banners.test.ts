@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_SLOT_MIN, recordingBannerPresent, recordingSlotHeight, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE, TOP_BANNER_LANDSCAPE_MIN, TOP_BANNER_MARGIN, topBannerSpan, topBannerStackMaxWidth } from './call-top-banners';
+import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_CARD_MAX_WIDTH, RECORDING_SLOT_MIN, recordingBannerPresent, recordingSlotHeight, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE, TOP_BANNER_LANDSCAPE_MIN, TOP_BANNER_MARGIN, topBannerNeighborOf, topBannerSpan, topBannerStackMaxWidth } from './call-top-banners';
 
 /**
  * LA PILE DES BANDEAUX DU HAUT (P16.7, `CallTopBannerStack.ordered` d'iOS) — ordre fixe, quel que
@@ -142,5 +142,24 @@ describe('l’en-tête du groupe sur la grille (P11.1)', () => {
 
   test('plein écran : la zone sûre, que l’en-tête flotte ou non', () => {
     for (const headerFloats of [true, false]) expect(groupStageTop({ headerFloats, hasBanners: false, isStageFullScreen: true })).toBe('safe-area');
+  });
+});
+
+describe('ma vignette vue de la pile (L1.8)', () => {
+  test('dans un coin du haut : sa largeur et sa distance au bord de son coin, rail compris', () => {
+    expect(topBannerNeighborOf({ corner: 'top-right', x: 706, width: 130 }, 852)).toEqual({ width: 130, edgeDistance: 16 });
+    expect(topBannerNeighborOf({ corner: 'top-right', x: 642, width: 130 }, 852)).toEqual({ width: 130, edgeDistance: 80 });
+    expect(topBannerNeighborOf({ corner: 'top-left', x: 16, width: 130 }, 852)).toEqual({ width: 130, edgeDistance: 16 });
+  });
+
+  test('dans un coin du bas, ou absente, elle ne gêne pas la pile', () => {
+    expect(topBannerNeighborOf({ corner: 'bottom-right', x: 706, width: 130 }, 852)).toBeNull();
+    expect(topBannerNeighborOf(null, 852)).toBeNull();
+  });
+
+  test('la carte d’accord du web garde sa largeur (`max-w-md`, 448)', async () => {
+    const layer = await Bun.file(new URL('../../components/call-recording-layer.tsx', import.meta.url)).text();
+    expect(layer).toContain('mx-auto max-w-md');
+    expect(RECORDING_CARD_MAX_WIDTH).toBe(448);
   });
 });

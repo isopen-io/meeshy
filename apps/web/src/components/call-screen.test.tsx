@@ -861,7 +861,14 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('duo vidéo : ma vignette descend sous la capsule d’enregistrement, puis sous la carte d’accord à sa hauteur mesurée, et remonte quand tout est dit (R3.10)', () => {
+  /* L1.8 (#17965) : le témoin se pose DEBOUT — couchée, ma vignette garde désormais son coin à côté de la pile (`call-screen-top-of-screen.test.tsx`) ; la fenêtre par défaut de happy-dom, 1024 × 768, est couchée. */
+  test('duo vidéo, debout : ma vignette descend sous la capsule d’enregistrement, puis sous la carte d’accord à sa hauteur mesurée, et remonte quand tout est dit (R3.10)', () => {
+    const window0 = { width: window.innerWidth, height: window.innerHeight };
+    const windowOf = (width: number, height: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+    };
+    windowOf(390, 844);
     const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
     const top = () => Number(/\+ (\d+(?:\.\d+)?)px\)$/.exec((view.find('[data-call-corner-frame]') as HTMLElement).style.top)?.[1]);
     const rest = top();
@@ -878,6 +885,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     });
     expect(top()).toBe(rest);
     view.done();
+    windowOf(window0.width, window0.height);
   });
 
   test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {

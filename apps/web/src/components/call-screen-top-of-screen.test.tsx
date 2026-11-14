@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -169,6 +171,25 @@ describe('L1.8 — en paysage, la pile des bannières est bornée à 560 et cent
     windowOf(852, 393);
     const view = await mount({ screenSharing: true, cameraOn: false, media: 'audio', members: { 'u-peer': member() } });
     expect(view.find('[data-call-banner-stack]')?.style.getPropertyValue('--call-banner-max')).toBe('584px');
+    view.done();
+    windowOf(real.width, real.height);
+  });
+
+  test('couchée, la capsule d’enregistrement puis la carte d’accord se posent à côté de ma vignette, qui garde son coin (R3.10 debout seulement)', async () => {
+    windowOf(852, 393);
+    const view = await mount({});
+    const rest = topOf(view);
+    act(() => callRecordingStore.setState({ view: { kind: 'recording', callId: 'call-top', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null }));
+    expect(topOf(view)).toBe(rest);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'pending', callId: 'call-top', recordingKind: 'audio', recordingId: 'rec-2', requesterId: 'u-peer', mine: false, mustAnswer: true }, notice: null });
+      callChromeStore.setState({ recordingCard: 132 });
+    });
+    expect(topOf(view)).toBe(rest);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
+      callChromeStore.setState({ recordingCard: 0 });
+    });
     view.done();
     windowOf(real.width, real.height);
   });
