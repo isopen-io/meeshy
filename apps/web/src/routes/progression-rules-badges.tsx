@@ -25,7 +25,7 @@ export function RulesBadges({ open, onToggle }: { readonly open: boolean; readon
   const language = currentInterfaceLanguage();
   const families = badgeGuidesByFamily(ENGAGEMENT_AXES.map((axisKey) => badgeGuide({ axisKey, count: 0 })));
   return (
-    <section id={BADGES_SECTION_ID} aria-labelledby={`${BADGES_SECTION_ID}-titre`} className="scroll-mt-4 rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
+    <section id={BADGES_SECTION_ID} data-rules-section="badges" aria-labelledby={`${BADGES_SECTION_ID}-titre`} className="scroll-mt-20 rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
       <GameFold id="medailles" level={2} headingId={`${BADGES_SECTION_ID}-titre`} open={open} onToggle={onToggle} title={gameText('game.rules.badges.title')}>
       <p className="text-body" style={{ color: GAME_INK }}>
         {gameText('game.rules.badges.intro')}

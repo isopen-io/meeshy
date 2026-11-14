@@ -74,6 +74,9 @@ function createMockPrisma(rows: AnyRecord[], espion: Espion): PrismaClient {
     adminAuditLog: {
       create: jest.fn(async () => ({ id: 'audit-1' })),
     },
+    participant: {
+      findMany: jest.fn(async () => [{ conversationId: CONVERSATION_ID, userId: 'u-awa', displayName: 'Awa', nickname: null, user: null }]),
+    },
   } as unknown as PrismaClient;
 }
 
@@ -726,5 +729,21 @@ describe('GET /admin/conversations/:id/messages — une PIÈCE protégée seule'
     expect(piece.isProtected).toBe(true);
     expect(piece.fileUrl).toBeNull();
     expect(piece.transcription).toBeUndefined();
+  });
+});
+
+describe('GET /admin/conversations/:id/messages — participants d\'un résumé d\'appel (#18242)', () => {
+  const CALL = { kind: 'call', callId: 'c1', initiatorId: 'u-awa', callType: 'audio', outcome: 'completed', participants: [{ userId: 'u-awa' }] };
+
+  it('le résumé d\'appel sert ses participants NOMMÉS, comme la vue du produit', async () => {
+    const ligne = await premiereLigne([messageFixture({ messageType: 'system', metadata: CALL })]);
+
+    expect((ligne.metadata as AnyRecord).participants).toEqual([{ userId: 'u-awa', displayName: 'Awa' }]);
+  });
+
+  it('un résumé d\'appel CITÉ ne sert pas la forme stockée `{ userId }`', async () => {
+    const ligne = await premiereLigne([messageFixture({ replyToId: 'm-0', replyTo: citationFixture({ messageType: 'system', metadata: CALL }) })]);
+
+    expect((ligne.replyTo as AnyRecord).metadata).not.toHaveProperty('participants');
   });
 });

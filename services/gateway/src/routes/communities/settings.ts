@@ -18,6 +18,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImagesAreCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -173,6 +174,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
         );
       }
+      scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId: id });
 
       return sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {
