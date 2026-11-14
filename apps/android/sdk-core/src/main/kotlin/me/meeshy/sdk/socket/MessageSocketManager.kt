@@ -28,7 +28,6 @@ import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
-import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationEncryptionChangedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
@@ -88,7 +87,6 @@ class MessageSocketManager @Inject constructor(
     private val _translationShared = SocketInboundRoute.subject<MessageTranslationSharedEvent>()
     private val _transcriptionReady = SocketInboundRoute.subject<TranscriptionReadyEvent>()
     private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
-    private val _attachmentUpdated = SocketInboundRoute.subject<AttachmentUpdatedEvent>()
     private val _conversationUpdated = SocketInboundRoute.subject<ConversationUpdatedSocketEvent>()
     private val _encryptionChanged = SocketInboundRoute.subject<ConversationEncryptionChangedSocketEvent>()
     private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
@@ -147,7 +145,6 @@ class MessageSocketManager @Inject constructor(
     val translationShared: SharedFlow<MessageTranslationSharedEvent> = _translationShared.exposed()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.exposed()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.exposed()
-    val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.exposed()
     val conversationUpdated: SharedFlow<ConversationUpdatedSocketEvent> = _conversationUpdated.exposed()
     /** `conversation:encryption-changed` (#12956) — `EndToEndRegimeBinding` en retient l'activation e2ee. */
     val encryptionChanged: SharedFlow<ConversationEncryptionChangedSocketEvent> = _encryptionChanged.exposed()
@@ -234,7 +231,6 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.MESSAGE_TRANSLATION_SHARED, _translationShared)
         route(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
         route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
-        route(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
         route(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
         route(SocketEventNames.CONVERSATION_ENCRYPTION_CHANGED, _encryptionChanged)
         route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)

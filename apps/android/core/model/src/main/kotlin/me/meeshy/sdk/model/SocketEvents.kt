@@ -255,27 +255,6 @@ data class TranslatedAudioPayload(
     val speakerCount: Int? = null,
 )
 
-@Serializable
-data class AttachmentUpdatedEvent(
-    val messageId: String,
-    val conversationId: String,
-    /**
-     * **Posé CONDITIONNELLEMENT par l'émetteur** (`emitAttachmentUpdated.ts`), donc optionnel au
-     * contrat : un enrichissement qui porte sur le message entier n'en nomme aucune pièce. Exigé
-     * ici, le décodage de ces trames-là échouait pour de bon (#18070).
-     *
-     * **Sans effet OBSERVABLE pour autant, et il faut le dire** : le flux que ce miroir alimente
-     * (`MessageSocketManager.attachmentUpdated`) n'a aucun collecteur — le miroir VIVANT de
-     * `message:attachment-updated` est `MessageAttachmentUpdatedEvent`, qui portait déjà la clé en
-     * optionnel. Ce correctif retire donc du bruit de journal, pas une panne. La jumelle morte est
-     * suivie par #18115.
-     */
-    val attachmentId: String? = null,
-    val status: String? = null,
-    val url: String? = null,
-    val thumbnailUrl: String? = null,
-)
-
 /**
  * `conversation:encryption-changed` (#12522) — la bascule du régime d'une conversation. Aucun
  * contenu n'y voyage. Tous les modes repeignent la conversation en cache (#13794) ; l'activation du bout en
