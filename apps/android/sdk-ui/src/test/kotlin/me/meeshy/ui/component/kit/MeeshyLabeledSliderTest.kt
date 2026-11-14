@@ -5,7 +5,6 @@ import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonArray
@@ -32,7 +31,7 @@ class MeeshyLabeledSliderTest {
         rows.forEach { row ->
             val name = row.string("nom")
             val rule = MeeshyLabeledSliderRule(range = range(row), step = row.floatOrNull("step"))
-            val rtl = row.booleanOrNull("rtl") ?: false
+            val rtl = row.optionalBool("rtl") ?: false
             val expected = when {
                 row.has("attendu") -> row.float("attendu")
                 row.has("tic") -> row.bool("tic").asOne()
@@ -76,7 +75,7 @@ class MeeshyLabeledSliderTest {
         assertThat(rows).isNotEmpty()
         rows.forEach { row ->
             val interaction = interaction(row)
-            val rtl = row.booleanOrNull("rtl") ?: false
+            val rtl = row.optionalBool("rtl") ?: false
             val current = row.optionalFloat("de") ?: 0f
             val effects = when (row.string("geste")) {
                 "drag" -> interaction.drag(
