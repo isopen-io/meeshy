@@ -9,6 +9,7 @@ import {
   formatCallDataSize,
   callSummaryClientMessageId,
   callContentKey,
+  storedCallSummaryParticipantIds,
   type CallSummaryInput,
   type CallSummaryMetadataInput
 } from '../utils/call-summary';
@@ -390,54 +391,32 @@ describe('buildGarbageCollectedConversion — live message reaped as failed', ()
 });
 
 describe('participants du résumé d\'appel (#17868, planche A1)', () => {
-  const awa = { userId: 'user_awa', displayName: 'Awa' };
-  const karim = { userId: 'user_karim', displayName: 'Karim' };
-  const lina = { userId: 'user_lina', displayName: 'Lina' };
-
   it('laisse la clé ABSENTE quand aucun participant n\'est connu (anciens clients inchangés)', () => {
     expect('participants' in buildCallSummaryMetadata(makeMetaInput())!).toBe(false);
-    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participants: [] }))!).toBe(false);
-    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participants: undefined }))!).toBe(false);
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participantUserIds: [] }))!).toBe(false);
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participantUserIds: undefined }))!).toBe(false);
   });
 
-  it('sert la liste dans l\'ordre d\'arrivée, lecteur compris (le lecteur se retire lui-même)', () => {
-    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [awa, karim, lina] }));
-    expect(meta?.participants).toEqual([awa, karim, lina]);
+  it('ne PERSISTE que les identifiants, dans l\'ordre d\'arrivée : aucun nom figé dans le message (#18242 B2)', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({ participantUserIds: ['user_awa', 'user_karim', 'user_lina'] }));
+    expect(meta?.participants).toEqual([{ userId: 'user_awa' }, { userId: 'user_karim' }, { userId: 'user_lina' }]);
+    expect(JSON.stringify(meta)).not.toMatch(/displayName/);
   });
 
-  it('ne sert que userId et displayName — ni e-mail, ni numéro, ni aucune autre clé', () => {
-    const wide = { ...awa, email: 'awa@example.com', phoneNumber: '+33600000000', username: 'awa' };
-    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [wide] }));
-    expect(meta?.participants).toEqual([awa]);
-    expect(JSON.stringify(meta)).not.toMatch(/awa@example|\+33600000000/);
-  });
-
-  it('écarte les entrées sans identifiant ou sans nom lisible, et rogne les espaces', () => {
+  it('écarte les identifiants vides, rogne les espaces et retire les doublons (première arrivée gagnante)', () => {
     const meta = buildCallSummaryMetadata(makeMetaInput({
-      participants: [
-        { userId: '', displayName: 'Fantôme' },
-        { userId: 'user_x', displayName: '   ' },
-        { userId: 'user_karim', displayName: '  Karim  ' }
-      ]
+      participantUserIds: ['', '   ', '  user_karim  ', 'user_awa', 'user_karim']
     }));
-    expect(meta?.participants).toEqual([karim]);
-  });
-
-  it('retire les doublons d\'un même userId en gardant la première arrivée', () => {
-    const meta = buildCallSummaryMetadata(makeMetaInput({
-      participants: [awa, karim, { userId: 'user_awa', displayName: 'Awa (autre appareil)' }]
-    }));
-    expect(meta?.participants).toEqual([awa, karim]);
+    expect(meta?.participants).toEqual([{ userId: 'user_karim' }, { userId: 'user_awa' }]);
   });
 
   it('laisse la clé absente quand toutes les entrées sont écartées', () => {
-    const meta = buildCallSummaryMetadata(makeMetaInput({ participants: [{ userId: '', displayName: '' }] }));
-    expect('participants' in meta!).toBe(false);
+    expect('participants' in buildCallSummaryMetadata(makeMetaInput({ participantUserIds: [' '] }))!).toBe(false);
   });
 
   it('les participants voyagent avec le résumé ET avec la métadonnée combinée', () => {
-    const built = buildCallSummaryWithMetadata(makeMetaInput({ participants: [awa, karim] }));
-    expect(built?.metadata.participants).toEqual([awa, karim]);
+    const built = buildCallSummaryWithMetadata(makeMetaInput({ participantUserIds: ['user_awa', 'user_karim'] }));
+    expect(built?.metadata.participants).toEqual([{ userId: 'user_awa' }, { userId: 'user_karim' }]);
   });
 
   it('un appel jamais terminé en direct (call-live) ne porte aucun participant', () => {
@@ -447,9 +426,29 @@ describe('participants du résumé d\'appel (#17868, planche A1)', () => {
 
   it('la conversion GC d\'un message vivant les porte aussi quand on les lui donne', () => {
     const converted = buildGarbageCollectedConversion({
-      callId: 'c', initiatorId: 'u', callType: 'audio', participants: [awa]
+      callId: 'c', initiatorId: 'u', callType: 'audio', participantUserIds: ['user_awa']
     });
-    expect(converted.metadata.participants).toEqual([awa]);
+    expect(converted.metadata.participants).toEqual([{ userId: 'user_awa' }]);
     expect('participants' in buildGarbageCollectedConversion({ callId: 'c', initiatorId: 'u' }).metadata).toBe(false);
+  });
+});
+
+describe('storedCallSummaryParticipantIds — ce que la lecture réhydrate (#18242 B2)', () => {
+  it('lit les identifiants persistés d\'un résumé terminal, dans l\'ordre', () => {
+    expect(storedCallSummaryParticipantIds({ kind: 'call', participants: [{ userId: 'a' }, { userId: 'b' }] })).toEqual(['a', 'b']);
+  });
+
+  it('lit un ANCIEN résumé qui portait le nom figé, en ignorant le nom', () => {
+    expect(storedCallSummaryParticipantIds({
+      kind: 'call', participants: [{ userId: 'a', displayName: 'Ancien nom' }]
+    })).toEqual(['a']);
+  });
+
+  it('ne rend rien pour un autre message, un message vivant ou une liste mal formée', () => {
+    expect(storedCallSummaryParticipantIds(null)).toEqual([]);
+    expect(storedCallSummaryParticipantIds({ kind: 'member-joined', participants: [{ userId: 'a' }] })).toEqual([]);
+    expect(storedCallSummaryParticipantIds({ kind: 'call-live', participants: [{ userId: 'a' }] })).toEqual([]);
+    expect(storedCallSummaryParticipantIds({ kind: 'call', participants: 'a' })).toEqual([]);
+    expect(storedCallSummaryParticipantIds({ kind: 'call', participants: [null, { userId: 3 }, { userId: ' ' }, { userId: 'b' }] })).toEqual(['b']);
   });
 });

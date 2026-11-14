@@ -17,7 +17,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 const READER = '507f1f77bcf86cd799439022';
 const VIEWER = { userId: READER, role: 'USER' } as const;
 
-const rosterRow = (callSessionId: string, participant: Record<string, unknown>) => ({ callSessionId, participant });
+const rosterRow = (callSessionId: string, participant: Record<string, unknown>, line: Record<string, unknown> = {}) => ({ callSessionId, participant, ...line });
+const ANSWERED_AT = new Date('2026-09-20T10:00:05Z');
+const answered = (id: string) => ({ id, answeredAt: ANSWERED_AT });
 
 const alice = {
   id: 'p-alice',
@@ -42,7 +44,7 @@ describe('resolveGroupCallParticipants', () => {
       rosterRow('call-g', bob),
       rosterRow('call-g', alice),
     ]);
-    const byCall = await resolveGroupCallParticipants(prisma, ['call-g'], READER);
+    const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g')], READER);
     expect(byCall.get('call-g')).toEqual([
       { participantId: 'p-alice', userId: 'u-alice', username: 'alice', displayName: 'Alice', avatar: 'https://cdn/alice.png' },
       { participantId: 'p-bob', userId: null, username: null, displayName: 'Bob (invité)', avatar: 'https://cdn/bob.png' },
@@ -51,6 +53,31 @@ describe('resolveGroupCallParticipants', () => {
     expect(query.where).toEqual({ callSessionId: { in: ['call-g'] } });
     expect(query.orderBy).toEqual({ joinedAt: 'asc' });
     expect(JSON.stringify(query.select)).not.toMatch(/isOnline|lastActiveAt|phoneNumber|email/);
+  });
+
+  it('#18242 B1 — groupe de trois : Karim sonne puis refuse, Awa décroche ⇒ le journal ne nomme pas Karim', async () => {
+    const awa = { ...alice, id: 'p-awa', userId: 'u-awa', user: { username: 'awa', displayName: 'Awa', avatar: null } };
+    const karim = { ...alice, id: 'p-karim', userId: 'u-karim', user: { username: 'karim', displayName: 'Karim', avatar: null } };
+    const { prisma } = prismaWithRoster([
+      rosterRow('call-g', reader, { role: 'initiator', answeredAt: null }),
+      rosterRow('call-g', karim, { role: 'participant', answeredAt: null, leftAt: new Date('2026-09-20T10:00:02Z') }),
+      rosterRow('call-g', awa, { role: 'participant', answeredAt: ANSWERED_AT }),
+    ]);
+    const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g')], 'u-awa');
+    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Me']);
+  });
+
+  it('#18242 B1 — une sonnerie ignorée ou un refus tardif ne font pas un participant ; un appel non décroché n\'en a aucun', async () => {
+    const karim = { ...alice, id: 'p-karim', userId: 'u-karim', user: { username: 'karim', displayName: 'Karim', avatar: null } };
+    const { prisma, findMany } = prismaWithRoster([
+      rosterRow('call-g', alice, { role: 'participant', answeredAt: ANSWERED_AT }),
+      rosterRow('call-g', karim, { role: 'participant', answeredAt: null, leftAt: new Date('2026-09-20T10:05:00Z') }),
+      rosterRow('call-m', karim, { role: 'participant', answeredAt: null }),
+    ]);
+    const byCall = await resolveGroupCallParticipants(prisma, [answered('call-g'), { id: 'call-m', answeredAt: null }], READER);
+    expect(byCall.get('call-g')?.map((p) => p.displayName)).toEqual(['Alice']);
+    expect(byCall.get('call-m') ?? []).toEqual([]);
+    expect(JSON.stringify(findMany.mock.calls[0][0].select)).toMatch(/answeredAt/);
   });
 
   it('ne lit rien quand la page ne porte aucun appel de groupe', async () => {

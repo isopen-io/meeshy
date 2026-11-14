@@ -328,3 +328,70 @@ describe('CallEventsHandler — postCallSummary retry', () => {
     expect(mockCreateCallSummaryMessage).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('CallEventsHandler — postCallSummary et les participants du résumé (#18242)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+    mockEndCall.mockResolvedValue(makeCallSession());
+    mockGetCallSession.mockResolvedValue({
+      participants: [{ participantId: PARTICIPANT_ID, leftAt: null, participant: { userId: CALLER_ID } }],
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('les tentatives 1 et 2 laissent remonter une panne de lecture ; seule la dernière sert sans la ligne', async () => {
+    mockCreateCallSummaryMessage.mockRejectedValue(new Error('participants read failed'));
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(makePrisma());
+    handler.setMessageBroadcaster(jest.fn<any>().mockResolvedValue(undefined));
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+
+    const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, jest.fn());
+    handler.destroy();
+    await jest.advanceTimersByTimeAsync(10_000);
+    await handlerPromise;
+
+    expect(mockCreateCallSummaryMessage.mock.calls).toEqual([
+      [CALL_ID],
+      [CALL_ID],
+      [CALL_ID, { participantsBestEffort: true }],
+    ]);
+  });
+
+  it('la diffusion `message:new` porte le nom que la conversation montre AUJOURD\'HUI, jamais un nom figé', async () => {
+    const summary = {
+      id: 'msg-call',
+      conversationId: CONV_ID,
+      metadata: { kind: 'call', callId: CALL_ID, participants: [{ userId: 'u-awa', displayName: 'Awa (figé)' }] },
+    };
+    mockCreateCallSummaryMessage.mockResolvedValue({ kind: 'created', message: summary });
+    const prisma = makePrisma();
+    (prisma.participant.findMany as jest.MockedFunction<any>).mockResolvedValue([
+      { conversationId: CONV_ID, userId: 'u-awa', displayName: 'Awa Renommée', nickname: null, user: null },
+    ]);
+    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setMessageBroadcaster(messageBroadcaster);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+
+    const handlerPromise = handlers[CALL_EVENTS.END](END_DATA, jest.fn());
+    handler.destroy();
+    await jest.advanceTimersByTimeAsync(1_000);
+    await handlerPromise;
+
+    expect(messageBroadcaster).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ participants: [{ userId: 'u-awa', displayName: 'Awa Renommée' }] }) }),
+      CONV_ID,
+    );
+  });
+});

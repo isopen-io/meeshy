@@ -325,3 +325,59 @@ describe('CallEventsHandler — call:signal answer emits ALREADY_ANSWERED (reloc
     expect(calls[0][1]).toEqual({ callId: CALL_ID });
   });
 });
+
+describe('CallEventsHandler — une réponse SDP marque QUI a décroché (#18242 B1)', () => {
+  const ANSWERED_BEFORE = new Date('2026-11-14T10:00:05.000Z');
+
+  const sessionWithRows = (rows: { caller?: Date | null; callee?: Date | null } = {}) => ({
+    ...makeSignalSession({ answeredAt: null, initiatorId: CALLER_ID }),
+    participants: [
+      { id: CALLER_PARTICIPANT_ROW_ID, participantId: CALLER_PARTICIPANT_ROW_ID, leftAt: null, answeredAt: rows.caller ?? null, participant: { userId: CALLER_ID } },
+      { id: CALLEE_PARTICIPANT_ROW_ID, participantId: CALLEE_PARTICIPANT_ROW_ID, leftAt: null, answeredAt: rows.callee ?? null, participant: { userId: CALLEE_ID } },
+    ],
+  });
+
+  const prismaWithRows = () => {
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 2 });
+    const prisma = {
+      callSession: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: CALLEE_PARTICIPANT_ROW_ID }) },
+      callParticipant: { updateMany },
+    } as unknown as PrismaClient;
+    return { prisma, updateMany };
+  };
+
+  const answer = async (prisma: PrismaClient) => {
+    const { socket, handlers } = makeSocket();
+    const { io, fetchSockets } = makeIo();
+    fetchSockets.mockResolvedValue([{ id: 'caller-socket', leave: jest.fn() }]);
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, (sid: string) => (sid === 'caller-socket' ? CALLER_ID : CALLEE_ID));
+    await handlers[CALL_EVENTS.SIGNAL](makeAnswerSignal(CALLEE_ID, CALLER_ID), jest.fn());
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('marque celui qui répond ET l\'offrant qu\'il rejoint, par une écriture gardée', async () => {
+    mockGetCallSession.mockResolvedValue(sessionWithRows());
+    const { prisma, updateMany } = prismaWithRows();
+
+    await answer(prisma);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [CALLEE_PARTICIPANT_ROW_ID, CALLER_PARTICIPANT_ROW_ID] }, answeredAt: null },
+      data: { answeredAt: expect.any(Date) },
+    });
+  });
+
+  it('une renégociation entre deux bouts déjà marqués n\'écrit rien', async () => {
+    mockGetCallSession.mockResolvedValue(sessionWithRows({ caller: ANSWERED_BEFORE, callee: ANSWERED_BEFORE }));
+    const { prisma, updateMany } = prismaWithRows();
+
+    await answer(prisma);
+
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+});
