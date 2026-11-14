@@ -31832,53 +31832,6 @@
         }
       }
     },
-    "emailVerification.provenElsewhere.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم تأكيد العنوان ✓"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adresse bestätigt ✓"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Address confirmed ✓"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dirección confirmada ✓"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adresse confirmée ✓"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indirizzo confermato ✓"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Endereço confirmado ✓"
-          }
-        }
-      }
-    },
     "exit.preview.ephemeral": {
       "comment": "Aperçu d'une flamme à durée publié HORS de sa conversation (widget, résultat de recherche) : son texte n'en sort pas (#9622).",
       "extractionState": "manual",
@@ -38471,43 +38424,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أظهِر نفسك"
+            "value": "قصتك الأولى"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeig dich"
+            "value": "Deine erste Story"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show yourself"
+            "value": "Your first story"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muéstrate"
+            "value": "Tu primera story"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Montre-toi"
+            "value": "Ta première story"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fatti vedere"
+            "value": "La tua prima storia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostre quem você é"
+            "value": "Sua primeira story"
           }
         }
       }
@@ -59024,43 +58977,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رمز التحقق بخطوتين"
+            "value": "رمز من 6 أرقام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bestätigungscode für Zwei-Faktor-Authentifizierung"
+            "value": "6-stelliger Code"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Two-factor verification code"
+            "value": "6-digit code"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de verificación de doble factor"
+            "value": "Código de 6 dígitos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code de vérification double facteur"
+            "value": "Code à 6 chiffres"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codice di verifica a due fattori"
+            "value": "Codice a 6 cifre"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de verificação de dois fatores"
+            "value": "Código de 6 dígitos"
           }
         }
       }
@@ -59071,43 +59024,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رمز التحقق"
+            "value": "رمز من 6 أرقام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bestätigungscode"
+            "value": "6-stelliger Code"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verification code"
+            "value": "6-digit code"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de verificación"
+            "value": "Código de 6 dígitos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code de vérification"
+            "value": "Code à 6 chiffres"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codice di verifica"
+            "value": "Codice a 6 cifre"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de verificação"
+            "value": "Código de 6 dígitos"
           }
         }
       }
@@ -59118,43 +59071,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التحقق بخطوتين"
+            "value": "المصادقة الثنائية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwei-Faktor"
+            "value": "Zwei-Faktor-Authentifizierung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Two-Factor"
+            "value": "Two-factor authentication"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doble factor"
+            "value": "Autenticación de dos factores"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double Facteur"
+            "value": "Authentification à deux facteurs"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due fattori"
+            "value": "Autenticazione a due fattori"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dois fatores"
+            "value": "Autenticação de dois fatores"
           }
         }
       }
@@ -60998,7 +60951,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نرسل رابطًا إلى هذا العنوان: افتحه للتفعيل."
+            "value": "نرسل رابطًا إلى هذا العنوان: افتحه للتأكيد."
           }
         },
         "de": {
@@ -61010,78 +60963,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "We send a link to this address: open it to verify."
+            "value": "We send a link to this address: open it to confirm."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviamos un enlace a esta dirección: ábrelo para validar."
+            "value": "Enviamos un enlace a esta dirección: ábrelo para confirmar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nous envoyons un lien à cette adresse : ouvrez-le pour valider."
+            "value": "Nous envoyons un lien à cette adresse : ouvrez-le pour confirmer."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inviamo un link a questo indirizzo: aprilo per convalidare."
+            "value": "Inviamo un link a questo indirizzo: aprilo per confermare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviamos um link para este endereço: abra-o para validar."
-          }
-        }
-      }
-    },
-    "auth.signup.email.hintLabel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لماذا رابط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warum ein Link"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Why a link"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Por qué un enlace"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pourquoi un lien"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Perché un link"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Por que um link"
+            "value": "Enviamos um link para este endereço: abra-o para confirmar."
           }
         }
       }
@@ -61650,6 +61556,147 @@
         }
       }
     },
+    "auth.signup.legal.consent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بالمتابعة، فإنك توافق على %1$@ و%2$@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn du fortfährst, stimmst du den %1$@ und der %2$@ zu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By continuing, you agree to the %1$@ and the %2$@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al continuar, aceptas las %1$@ y la %2$@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En continuant, vous acceptez les %1$@ et la %2$@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuando, accetti le %1$@ e l'%2$@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ao continuar, você aceita os %1$@ e a %2$@."
+          }
+        }
+      }
+    },
+    "auth.signup.legal.terms": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شروط الاستخدام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutzungsbedingungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terms of use"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "condiciones de uso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "conditions d'utilisation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "condizioni d'uso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "termos de uso"
+          }
+        }
+      }
+    },
+    "auth.signup.legal.privacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سياسة الخصوصية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenschutzerklärung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "privacy policy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "política de privacidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "politique de confidentialité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "informativa sulla privacy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "política de privacidade"
+          }
+        }
+      }
+    },
     "auth.signup.password.label": {
       "extractionState": "manual",
       "localizations": {
@@ -61740,53 +61787,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mínimo de 6 caracteres"
-          }
-        }
-      }
-    },
-    "auth.signup.password.why": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لماذا تضع كلمة مرور الآن؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warum jetzt ein Passwort festlegen?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Why set a password now?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Por qué poner una contraseña ahora?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pourquoi mettre un mot de passe maintenant ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Perché impostare una password adesso?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Por que definir uma senha agora?"
           }
         }
       }
@@ -62473,13 +62473,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nombre de usuario"
+            "value": "Usuario"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom d'utilisateur"
+            "value": "Pseudo"
           }
         },
         "it": {
@@ -62491,7 +62491,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome de usuário"
+            "value": "Usuário"
           }
         }
       }
@@ -227605,7 +227605,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Valide ton adresse e-mail"
+            "value": "Confirme ton adresse e-mail"
           }
         },
         "it": {
@@ -234549,31 +234549,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email verified ✓"
+            "value": "Email confirmed ✓"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Correo verificado ✓"
+            "value": "Correo confirmado ✓"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adresse vérifiée ✓"
+            "value": "Adresse confirmée ✓"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email verificata ✓"
+            "value": "Email confermata ✓"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail verificado ✓"
+            "value": "E-mail confirmado ✓"
           }
         }
       }
@@ -234690,31 +234690,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Number verified ✓"
+            "value": "Number confirmed ✓"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Número verificado ✓"
+            "value": "Número confirmado ✓"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Numéro vérifié ✓"
+            "value": "Numéro confirmé ✓"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Numero verificato ✓"
+            "value": "Numero confermato ✓"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Número verificado ✓"
+            "value": "Número confirmado ✓"
           }
         }
       }
@@ -234878,31 +234878,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verify your email address"
+            "value": "Confirm your email address"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Valida tu dirección de correo"
+            "value": "Confirma tu dirección de correo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Validez votre adresse e-mail"
+            "value": "Confirmez votre adresse e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convalida il tuo indirizzo e-mail"
+            "value": "Conferma il tuo indirizzo e-mail"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Valide seu endereço de e-mail"
+            "value": "Confirme seu endereço de e-mail"
           }
         }
       }
@@ -309136,43 +309136,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الحساب محمي بالمصادقة الثنائية: سجّل الدخول بكلمة المرور والرمز."
+            "value": "المصادقة الثنائية: أدخل كلمة المرور والرمز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieses Konto ist durch Zwei-Faktor-Authentifizierung geschützt: Melde dich mit deinem Passwort und deinem Code an."
+            "value": "Zwei-Faktor-Authentifizierung: Gib dein Passwort und deinen Code ein."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This account is protected by two-factor authentication: sign in with your password and your code."
+            "value": "Two-factor authentication: enter your password and your code."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta cuenta está protegida con verificación en dos pasos: inicia sesión con tu contraseña y tu código."
+            "value": "Autenticación de dos factores: introduce tu contraseña y tu código."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce compte est protégé par la double authentification : connectez-vous avec votre mot de passe et votre code."
+            "value": "Authentification à deux facteurs : saisissez votre mot de passe et votre code."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo account è protetto dall'autenticazione a due fattori: accedi con la password e il codice."
+            "value": "Autenticazione a due fattori: inserisci la password e il codice."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conta é protegida pela autenticação em dois fatores: entre com sua senha e seu código."
+            "value": "Autenticação em dois fatores: informe sua senha e seu código."
           }
         }
       }

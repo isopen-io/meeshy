@@ -2,14 +2,14 @@
 <resources>
     <string name="activation_close">Fermer</string>
     <string name="activation_complete">Votre compte est validé. Merci !</string>
-    <string name="activation_email_done">Adresse vérifiée ✓</string>
+    <string name="activation_email_done">Adresse confirmée ✓</string>
     <string name="activation_email_label">Confirmez votre adresse e-mail</string>
     <string name="activation_email_send">Recevoir le code</string>
     <string name="activation_email_sending">Envoi…</string>
     <string name="activation_invite_title">Validez votre compte</string>
     <string name="activation_later">Plus tard</string>
     <string name="activation_phone_add">Ajouter mon numéro</string>
-    <string name="activation_phone_done">Numéro vérifié ✓</string>
+    <string name="activation_phone_done">Numéro confirmé ✓</string>
     <string name="activation_phone_label">Ajoutez un numéro pour sécuriser et récupérer votre compte</string>
     <string name="ageGate_body">Ce compte ne peut pas encore utiliser Meeshy. Tu pourras nous rejoindre à tes 13 ans.</string>
     <string name="arrival_celebration_lead">Nous préparons vos conversations…</string>
@@ -22,9 +22,9 @@
     <string name="auth_forgot_never_had_text">Ce même lien vous permet d\'en créer un.</string>
     <string name="auth_forgot_subtitle">Recevez par e-mail un lien pour choisir un nouveau mot de passe.</string>
     <string name="auth_forgot_title">Mot de passe oublié</string>
-    <string name="auth_login_two_factor_label">Code de vérification double facteur</string>
-    <string name="auth_login_two_factor_placeholder">Code de vérification</string>
-    <string name="auth_login_two_factor_title">Double Facteur</string>
+    <string name="auth_login_two_factor_label">Code à 6 chiffres</string>
+    <string name="auth_login_two_factor_placeholder">Code à 6 chiffres</string>
+    <string name="auth_login_two_factor_title">Authentification à deux facteurs</string>
     <string name="auth_magic_cancel">Annuler</string>
     <string name="auth_magic_countdown_a11y">Le lien expire dans</string>
     <string name="auth_magic_expired">Lien expiré, renvoyez-en un nouveau</string>
@@ -38,7 +38,7 @@
     <string name="email_gate_later">Plus tard</string>
     <string name="email_gate_send">Recevoir le code</string>
     <string name="email_gate_sending">Envoi…</string>
-    <string name="email_gate_title">Validez votre adresse e-mail</string>
+    <string name="email_gate_title">Confirmez votre adresse e-mail</string>
     <string name="email_verification_code_a11y_label">Code de vérification</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Ce code a expiré. Demandez-en un nouveau.</string>
@@ -194,7 +194,7 @@
     <string name="onboarding_email_failed">Le lien n\'a pas pu partir. Réessaie.</string>
     <string name="onboarding_email_resend">Renvoyer le lien</string>
     <string name="onboarding_email_sent">Lien renvoyé — regarde ta boîte de réception</string>
-    <string name="onboarding_email_title">Valide ton adresse e-mail</string>
+    <string name="onboarding_email_title">Confirme ton adresse e-mail</string>
     <string name="onboarding_friends_add">Ajouter</string>
     <string name="onboarding_friends_add_a11y">Ajouter %1$s en ami</string>
     <string name="onboarding_friends_added">Envoyée</string>

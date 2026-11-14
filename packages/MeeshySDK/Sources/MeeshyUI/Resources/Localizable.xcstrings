@@ -7365,26 +7365,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Vollständiger Benutzername"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Full username"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nombre de usuario completo"
+            "state": "translated",
+            "value": "Usuario completo"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Nom d'utilisateur complet"
+            "state": "translated",
+            "value": "Pseudo complet"
           }
         },
         "it": {
@@ -7395,8 +7395,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nome de usuário completo"
+            "state": "translated",
+            "value": "Usuário completo"
           }
         }
       }
@@ -8412,13 +8412,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Introduce tu nombre de usuario y correo completos."
+            "value": "Introduce tu usuario y correo completos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrez votre nom d'utilisateur et votre e-mail complets."
+            "value": "Entrez votre pseudo et votre e-mail complets."
           }
         },
         "it": {
@@ -8430,7 +8430,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Digite seu nome de usuário e e-mail completos."
+            "value": "Digite seu usuário e e-mail completos."
           }
         }
       }

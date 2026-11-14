@@ -49,9 +49,6 @@ struct SignupView: View {
     @FocusState var focusedField: SignupField?
     @State var isShowingLanguageSheet = false
     @State var isShowingCountryPicker = false
-    /// Le champ dont le (i) est DÉPLIÉ — un seul à la fois (#6441).
-    @State var expandedHint: SignupField?
-    @State var isPasswordWhyExpanded = false
     @State var isPasswordRevealed = false
     @State var isShowingTerms = false
     @State var isShowingPrivacy = false
@@ -207,20 +204,14 @@ struct SignupView: View {
 
     // MARK: - Phase 2 — l'adresse
 
-    /// L'AVERTISSEMENT DE VALIDATION, derrière un (i) (#6626). Replié n'est
-    /// pas perdu : le champ le porte en `accessibilityHint`, et le (i) le déplie.
-    private var emailHint: AuthInfoHint {
-        AuthInfoHint(
-            text: String(
-                localized: "auth.signup.email.verificationNotice",
-                defaultValue: "Nous envoyons un lien à cette adresse : ouvrez-le pour valider.",
-                bundle: .main
-            ),
-            buttonLabel: String(
-                localized: "auth.signup.email.hintLabel",
-                defaultValue: "Pourquoi un lien",
-                bundle: .main
-            )
+    /// L'AVERTISSEMENT DE VALIDATION se lit AU REPOS sous le champ (#17671,
+    /// règle 7) : « un lien, pas un mot de passe » est propre à Meeshy, et la
+    /// phrase qui le dit n'a pas à être cherchée derrière un (i).
+    private var emailNote: String {
+        String(
+            localized: "auth.signup.email.verificationNotice",
+            defaultValue: "Nous envoyons un lien à cette adresse : ouvrez-le pour confirmer.",
+            bundle: .main
         )
     }
 
@@ -228,7 +219,7 @@ struct SignupView: View {
         fieldBlock(
             field: .email,
             label: String(localized: "auth.signup.email.label", defaultValue: "Adresse e-mail", bundle: .main),
-            hint: emailHint
+            note: emailNote
         ) {
             // `.emailAddress` fait aussi office d'IDENTIFIANT pour le trousseau.
             TextField(
@@ -377,31 +368,27 @@ struct SignupView: View {
     }
 
     private var legalNotice: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(String(localized: "auth.signup.legal", defaultValue: "En continuant, vous acceptez les conditions d'utilisation et la politique de confidentialité.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundStyle(theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+        Text(legalSentence)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+            .foregroundStyle(theme.textMuted)
+            .tint(MeeshyColors.indigo500)
+            .fixedSize(horizontal: false, vertical: true)
+            .environment(\.openURL, OpenURLAction { url in
+                guard let link = SignupLegalLink(url: url) else { return .systemAction }
+                switch link {
+                case .terms: isShowingTerms = true
+                case .privacy: isShowingPrivacy = true
+                }
+                return .handled
+            })
+    }
 
-            HStack(spacing: MeeshySpacing.lg) {
-                Button {
-                    isShowingTerms = true
-                } label: {
-                    Text(String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.indigo500)
-                        .frame(minHeight: MeeshyControlSize.tapTarget)
-                }
-                Button {
-                    isShowingPrivacy = true
-                } label: {
-                    Text(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.indigo500)
-                        .frame(minHeight: MeeshyControlSize.tapTarget)
-                }
-            }
-        }
+    private var legalSentence: AttributedString {
+        SignupLegalNotice.attributed(
+            format: String(localized: "auth.signup.legal.consent", defaultValue: "En continuant, vous acceptez les %1$@ et la %2$@.", bundle: .main),
+            terms: String(localized: "auth.signup.legal.terms", defaultValue: "conditions d'utilisation", bundle: .main),
+            privacy: String(localized: "auth.signup.legal.privacy", defaultValue: "politique de confidentialité", bundle: .main)
+        )
     }
 
     private var switchToLoginRow: some View {
@@ -491,7 +478,7 @@ struct SignupView: View {
     func fieldBlock<Content: View>(
         field: SignupField,
         label: String,
-        hint: AuthInfoHint? = nil,
+        note: String? = nil,
         labelsContent: Bool = true,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -504,28 +491,21 @@ struct SignupView: View {
                 // Un contenu qui porte plusieurs éléments (le champ de mot de
                 // passe et son œil, #8054) se libelle lui-même.
                 content()
-                    .modifier(FieldBlockAccessibility(label: label, hint: hint?.text ?? "", applies: labelsContent))
-                if let hint {
-                    AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
-                }
+                    .modifier(FieldBlockAccessibility(label: label, hint: note ?? "", applies: labelsContent))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: 48)
             .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
-            if let hint {
-                AuthInfoHintText(hint: hint, isExpanded: expandedHint == field, color: theme.textSecondary)
+            if let note {
+                Text(note)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
             }
         }
-    }
-
-    /// LE DÉTAIL DERRIÈRE UN (i) (#6441) — un seul (i) déplié à la fois.
-    func hintExpansion(for field: SignupField) -> Binding<Bool> {
-        Binding(
-            get: { expandedHint == field },
-            set: { expandedHint = $0 ? field : nil }
-        )
     }
 
     /// Le refus se pose SOUS son champ, en `.footnote`, et VoiceOver le lit

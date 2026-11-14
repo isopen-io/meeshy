@@ -134,7 +134,7 @@ enum EmailProofErrorText {
     /// (#10445) : ce n'est ni un refus ni un « Email vérifié ! ».
     private static func secondFactorRequired(_ bundle: Bundle) -> String {
         String(localized: "emailProof.secondFactorRequired",
-               defaultValue: "Ce compte est protégé par la double authentification : connectez-vous avec votre mot de passe et votre code.", bundle: bundle)
+               defaultValue: "Authentification à deux facteurs : saisissez votre mot de passe et votre code.", bundle: bundle)
     }
 
     private static func tooManyAttempts(_ bundle: Bundle) -> String {
