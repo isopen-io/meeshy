@@ -194,14 +194,14 @@ describe('les gestes', () => {
 
   const settle = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, inerte, puis ne laisse rien', async () => {
+  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, cachée au lecteur d’écran mais jamais inerte (loi 17.11), puis ne laisse rien', async () => {
     const view = mount();
     view.press('[data-call-caption-line="w-1"]');
     expect(view.host.querySelector('[data-call-caption-original]')?.hasAttribute('data-leaving')).toBe(false);
     view.press('[data-call-caption-line="w-1"]');
     const leaving = view.host.querySelector('[data-call-caption-original]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.getAttribute('aria-hidden')).toBe('true');
     await settle(260);
     expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();

@@ -515,6 +515,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
     expect(callChromeStore.getState().stowed).toBe(false);
+    /* P8.14 (#17831) : la couche repart en fondu, montée le temps de son départ, puis se retire. */
+    expect(view.find('[data-call-mode="effects"]')?.hasAttribute('data-leaving')).toBe(true);
+    await afterMotion();
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
@@ -643,14 +646,14 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.done();
     });
 
-    test('à la sortie, le Montage redescend par le bas, reste monté le temps du mouvement sans prendre le doigt, et la pilule revient', async () => {
+    test('à la sortie, le Montage redescend par le bas, reste monté le temps du mouvement, touchable (loi 17.11), et la pilule revient', async () => {
       const view = await enter();
       await finish();
       played.length = 0;
       act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
       const leaving = view.find('[data-call-mode="montage"]');
       expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-      expect(leaving?.hasAttribute('inert')).toBe(true);
+      expect(leaving?.hasAttribute('inert')).toBe(false);
       expect(of('controls').map((entry) => entry.keyframes.map((frame) => frame.transform))).toEqual([['translateY(0)', 'translateY(100%)']]);
       expect(of('preview').map((entry) => entry.keyframes.map((frame) => frame.opacity))).toEqual([[1, 0]]);
       expect(view.find('[data-call-control-pill]')).not.toBeNull();
@@ -690,24 +693,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.done();
     });
 
-    /* La loi 17 excepte Effets, qui emprunte au composer (loi 9) : iOS borne la montée au Montage (`CallModeChromeMotion.risesFromBottom`, #17813). */
-    test('Effets ne monte pas du bas, et ne reste pas monté pour y redescendre : seuls l’en-tête et la pilule partent par leurs bords', async () => {
-      const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
-      view.press('[data-call-more]');
-      await frame();
-      view.press('[data-call-rail="mine"] [data-call-control="effects"]');
-      await settle(() => import('./call-effects-mode'));
-      expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
-      const rises = (entry: Played) => entry.keyframes.some((frame) => frame.transform === 'translateY(100%)');
-      expect(played.filter((entry) => entry.what === 'effects' && rises(entry))).toEqual([]);
-      expect(of('pill').map((entry) => entry.keyframes[1]?.transform)).toEqual(['translateY(100%)']);
-      await finish();
-      played.length = 0;
-      view.press('[data-call-mode-quit]');
-      expect(view.find('[data-call-mode="effects"]')).toBeNull();
-      expect(played.filter((entry) => entry.what === 'effects')).toEqual([]);
-      view.done();
-    });
+    /* Effets ne monte pas du bas : il se fond à l'entrée et à la sortie (P8.14) — `call-effects-layer-fade.test.tsx`. */
   });
 
   /* Les plans de l'écran d'appel, du fond vers le lecteur : la scène, ma
@@ -760,7 +746,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
-    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
     /* Évolue avec #17964 (point 3) : le journal n'a plus de ‹ ; « Journal », en disque blanc au pied, le referme, rend les sous-titres et leur « Journal » reprend le focus. */
     view.press('[data-call-journal-toggle]');
     await frame();
@@ -955,7 +941,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
     expect(panel()?.closest('[data-call-control-pill]')).not.toBeNull();
     view.press('[data-call-more]');
-    expect(panel()?.closest('[data-leaving][inert]')).not.toBeNull();
+    expect(panel()?.closest('[data-leaving]')).not.toBeNull();
     view.press('[data-call-more]');
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
     expect(panel()?.closest('[data-leaving]')).toBeNull();
