@@ -50,7 +50,7 @@ struct GameSettingsScreen: View {
     // MARK: Les célébrations
 
     private var celebrations: some View {
-        GameCard {
+        GameCard(title: GameText.settingsCelebrationsTitle) {
             GameNoteInfo(text: GameText.settingsCelebrationsBody, note: GameText.settingsCelebrationsNote, openNoteID: $openNoteID)
             GameSwitchRow(
                 label: GameText.settingsCelebrationsSwitch, isOn: prefs.prefs.celebrations,

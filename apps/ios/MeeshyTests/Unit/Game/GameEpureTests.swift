@@ -352,7 +352,7 @@ final class GameEpureTests: XCTestCase {
     }
 
     /// Règle 7 : chaque bloc non usuel garde sa phrase d'orientation AU REPOS ; seul le détail secondaire passe derrière
-    /// un (i). La phrase du bloc « Mee et Meo » nomme les deux personnages, le titre de carte n'existe plus.
+    /// un (i). Chaque bloc garde son titre — « Mee et Meo » comme sur le web —, sa phrase nomme ce qui s'affiche.
     func test_settings_everyNonUsualBlock_keepsItsOrientationSentenceVisible_andTheDetailIsBehindAnInfoButton() throws {
         let view = try code("Meeshy/Features/Game/Wave2/GameSettingsViews.swift")
         for sentence in [
@@ -364,7 +364,9 @@ final class GameEpureTests: XCTestCase {
         ] {
             XCTAssertTrue(view.contains(sentence), "« \(sentence) » ne se lit plus au repos ou n'a plus son (i)")
         }
-        XCTAssertFalse(view.contains("settingsCelebrationsTitle"), "un seul nom : l'interrupteur « Signes des aïeux » ; le titre de carte redisait « Mee et Meo »")
+        XCTAssertTrue(view.contains("GameCard(title: GameText.settingsCelebrationsTitle)"), "le bloc des célébrations garde son titre, comme les cinq autres cartes de l'écran")
+        XCTAssertEqual(try Self.catalog()["game2.settings.celebrations.title"]?["fr"], "Mee et Meo", "le titre lu est celui du web")
+        XCTAssertEqual(try Self.catalog()["game2.settings.celebrations.title"]?.count, 7, "le titre est traduit dans les sept langues")
         XCTAssertFalse(view.contains("settingsNotificationsBody"), "la fréquence et la portée sont derrière le (i)")
         XCTAssertTrue(try XCTUnwrap(try Self.catalog()["game2.settings.celebrations.body"]?["fr"]).contains("Mee et Meo"), "le repère propre à Meeshy reste lisible")
     }

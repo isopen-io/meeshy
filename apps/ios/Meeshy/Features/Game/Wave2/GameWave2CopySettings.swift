@@ -6,6 +6,8 @@ import MeeshyUI
 extension GameText {
     static var settingsTitle: String { String(localized: "game2.settings.title", defaultValue: "Réglages du jeu", bundle: .main) }
 
+    static var settingsCelebrationsTitle: String { String(localized: "game2.settings.celebrations.title", defaultValue: "Mee et Meo", bundle: .main) }
+
     static var settingsCelebrationsBody: String { String(localized: "game2.settings.celebrations.body", defaultValue: "Les cartes de Mee et Meo s’affichent sur Progression", bundle: .main) }
 
     static var settingsCelebrationsNote: MeeshyInfoNote {
