@@ -242,7 +242,7 @@
     },
     "me-progression-reglages": {
       "total": 141,
-      "firstScreen": 59
+      "firstScreen": 62
     },
     "me-progression-regles": {
       "total": 387,
@@ -577,6 +577,18 @@
       },
       "motif": "Une phrase dit ce qu'est la joute (groupe de 30, 7 qui montent, 5 qui descendent) ; la légende « étincelles » ne se répète plus sur chaque ligne du classement, seule la valeur reste vue",
       "issue": 18148
+    },
+    "me-progression-reglages": {
+      "de": {
+        "total": 141,
+        "firstScreen": 59
+      },
+      "a": {
+        "total": 141,
+        "firstScreen": 62
+      },
+      "motif": "Le premier écran avait été capturé hors CI à 59 ; la CI en mesure 62 à total inchangé (141), toujours sous les 69 d'avant l'épure du jeu",
+      "issue": 18238
     }
   }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import QuartzCore
 import MeeshySDK
 import MeeshyUI
 
@@ -11,7 +12,7 @@ extension StoryViewerView {
     // fluidité de lecture. Le tick unique par navigation MANUELLE vit au point de geste
     // (touchUp nav dans +Canvas, commit de swipe de groupe ci-dessus).
     func goToNext() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
+        guard transitionLatch.admit(isDismissing: isDismissing, isComposerEngaged: isComposerEngaged) else { return }
         guard let group = currentGroup else { return }
         reportStoryNavigation(StoryNavigationTelemetry.forward(position: storyTelemetryPosition))
 
@@ -36,7 +37,7 @@ extension StoryViewerView {
     }
 
     func goToPrevious() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
+        guard transitionLatch.admit(isDismissing: isDismissing, isComposerEngaged: isComposerEngaged) else { return }
         reportStoryNavigation(StoryNavigationTelemetry.backward(position: storyTelemetryPosition))
 
         if currentStoryIndex > 0 {
@@ -131,6 +132,120 @@ extension StoryViewerView {
 
     func reportStoryNavigation(_ events: [SocialEventV2]) {
         events.forEach { SocialEventsV2Reporter.shared.emit($0) }
+    }
+}
+
+/// **La cadence de navigation** (#18509) : un toucher n'est refusé que pendant
+/// la fermeture ou la composition ; pendant une transition, il la conclut. Deux
+/// changements plus rapprochés que `rafaleInterval` s'échangent franchement,
+/// sans l'animation d'entrée choisie par l'auteur. L'interlude d'identité entre
+/// deux auteurs se présente toujours (décision du porteur, #18516).
+nonisolated enum StoryNavigationCadence {
+    enum Style: Equatable {
+        case authored
+        case franche
+    }
+
+    enum Admission: Equatable {
+        case proceed
+        case concludeThenProceed
+        case refuse
+    }
+
+    static let rafaleInterval: TimeInterval = 0.45
+
+    static func admission(isDismissing: Bool, isComposerEngaged: Bool, transitionInFlight: Bool) -> Admission {
+        guard !isDismissing, !isComposerEngaged else { return .refuse }
+        return transitionInFlight ? .concludeThenProceed : .proceed
+    }
+
+    static func style(sinceLastChange: TimeInterval?) -> Style {
+        guard let interval = sinceLastChange, interval >= 0, interval < rafaleInterval else { return .authored }
+        return .franche
+    }
+}
+
+/// **La transition en vol** : ce qui la termine, pour qu'un toucher puisse la
+/// conclure tout de suite, et l'instant du dernier changement, pour la cadence.
+/// Une référence stable (`@State`) que rien n'observe : `isTransitioning`
+/// change avec elle et réévalue le lecteur.
+@MainActor
+final class StoryTransitionLatch {
+    enum Kind: Equatable {
+        case crossFade
+        case groupCube
+    }
+
+    private(set) var kind: Kind?
+    private var finish: (@MainActor () -> Void)?
+    private var ticket = 0
+    private var lastChangeAt: TimeInterval?
+
+    nonisolated deinit {}
+
+    var isInFlight: Bool { finish != nil }
+
+    /// Seul le cube tient la story qu'on quitte ; le fondu et l'interlude
+    /// laissent jouer celle qui entre (`StoryPlaybackCauses.entering`).
+    var isTurningCube: Bool { kind == .groupCube }
+
+    @discardableResult
+    func begin(_ kind: Kind, finish: @escaping @MainActor () -> Void) -> Int {
+        conclude()
+        ticket &+= 1
+        self.kind = kind
+        self.finish = finish
+        return ticket
+    }
+
+    func complete(_ ticket: Int) {
+        guard ticket == self.ticket else { return }
+        conclude()
+    }
+
+    func conclude() {
+        guard let pending = finish else { return }
+        finish = nil
+        kind = nil
+        pending()
+    }
+
+    func noteChange(at now: TimeInterval) -> StoryNavigationCadence.Style {
+        defer { lastChangeAt = now }
+        return StoryNavigationCadence.style(sinceLastChange: lastChangeAt.map { now - $0 })
+    }
+
+    /// Un toucher reçu pendant une transition la CONCLUT puis passe : aucun
+    /// toucher n'est perdu en rafale.
+    func admit(isDismissing: Bool, isComposerEngaged: Bool) -> Bool {
+        switch StoryNavigationCadence.admission(isDismissing: isDismissing, isComposerEngaged: isComposerEngaged,
+                                                transitionInFlight: isInFlight) {
+        case .refuse: return false
+        case .proceed: return true
+        case .concludeThenProceed:
+            concludeWithoutAnimation()
+            return true
+        }
+    }
+
+    /// Un changement commence : sa cadence est lue sur l'horloge des images, la
+    /// mesure du geste s'ouvre (#18510), et la transition en vol se conclut.
+    func beginChange() -> StoryNavigationCadence.Style {
+        StoryNavigationTrace.shared?.gestureBegan()
+        let style = noteChange(at: CACurrentMediaTime())
+        concludeWithoutAnimation()
+        return style
+    }
+
+    func concludeWithoutAnimation() {
+        guard isInFlight else { return }
+        Self.instantly { conclude() }
+    }
+
+    static func instantly(_ body: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, body)
     }
 }
 

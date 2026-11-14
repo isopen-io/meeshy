@@ -152,6 +152,7 @@ class CallEffectsCompactHeightTest {
     @Test
     @Config(qualifiers = "w568dp-h320dp-land")
     fun `Effets - un dessus plus haut que l'ecran defile, la barre reste entiere`() {
+        var askedApplied = 0
         rule.setContent {
             MeeshyTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -166,14 +167,17 @@ class CallEffectsCompactHeightTest {
                             onBack = {},
                             onSettings = {},
                             onAddLook = {},
-                            onShowApplied = {},
+                            onShowApplied = { askedApplied++ },
                             onChip = {},
                         )
                     }
                 }
             }
         }
-        assertWholeBarAndLongPress()
+        listOf("Back to the call", "Settings", "Add another look").forEach(::assertBarWhole)
+        rule.onNodeWithContentDescription("Add another look").performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertThat(askedApplied).isEqualTo(1)
     }
 
     @Test

@@ -51,7 +51,7 @@ class CallLiveFramePeerReleaseAnnouncementTest {
         val announcer = ui.substringAfter("private fun CallLiveFramePeerReleaseAnnouncer(").substringBefore("\n}\n")
         assertThat(announcer).contains("controller.peerReleases.collect")
         assertThat(announcer).contains("AnnouncementPriority.POLITE")
-        assertThat(announcer).doesNotContain("Text(")
+        assertThat(announcer).doesNotContainMatch("""\bText\(""")
     }
 
     private fun res(): File = File(calls(), "../../../../../res").canonicalFile

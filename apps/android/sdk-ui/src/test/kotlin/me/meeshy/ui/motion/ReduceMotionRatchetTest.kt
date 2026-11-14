@@ -162,8 +162,8 @@ class ReduceMotionRatchetTest {
     }
 
     private companion object {
-        /** 117 dans 64 fichiers sur origin/dev le 2026-11-14 avant #18459 ; 104 dans 57 apres. Abaisser, jamais relever. */
-        const val UNREDUCED_MOTION_CEILING = 104
+        /** 117 dans 64 fichiers sur origin/dev le 2026-11-14 avant #18459 ; 104 dans 57 apres ; 102 apres #18556 (la bulle de la Riviere brule). Abaisser, jamais relever. */
+        const val UNREDUCED_MOTION_CEILING = 102
 
         /** 11 le 2026-11-14 sur 4afe432feb, 9 apres le lot des feuilles, 4 apres #18459. Abaisser, jamais relever. */
         const val SYSTEM_SCALE_CEILING = 4

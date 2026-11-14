@@ -19,6 +19,7 @@ final class RecordingAudioSession: AudioSessionProviding, @unchecked Sendable {
         var options: AVAudioSession.CategoryOptions = []
         var calls: [Call] = []
         var writesOnMainThread = 0
+        var readsOnMainThread = 0
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -26,9 +27,25 @@ final class RecordingAudioSession: AudioSessionProviding, @unchecked Sendable {
     var calls: [Call] { state.withLock { $0.calls } }
     var writesOnMainThread: Int { state.withLock { $0.writesOnMainThread } }
 
-    var category: AVAudioSession.Category { state.withLock { $0.category } }
-    var mode: AVAudioSession.Mode { state.withLock { $0.mode } }
-    var categoryOptions: AVAudioSession.CategoryOptions { state.withLock { $0.options } }
+    var readsOnMainThread: Int { state.withLock { $0.readsOnMainThread } }
+
+    var category: AVAudioSession.Category {
+        noteRead()
+        return state.withLock { $0.category }
+    }
+    var mode: AVAudioSession.Mode {
+        noteRead()
+        return state.withLock { $0.mode }
+    }
+    var categoryOptions: AVAudioSession.CategoryOptions {
+        noteRead()
+        return state.withLock { $0.options }
+    }
+
+    private func noteRead() {
+        guard Thread.isMainThread else { return }
+        state.withLock { $0.readsOnMainThread += 1 }
+    }
 
     func setCategory(
         _ category: AVAudioSession.Category,
@@ -256,6 +273,89 @@ struct MediaSessionCoordinatorSessionQueueTests {
 
         #expect(session.calls == [.setActive(false)])
         #expect(session.writesOnMainThread == 0)
+    }
+}
+
+/// **Un lecteur ne relit jamais la session audio sur son fil** (#18511) :
+/// `-[AVAudioSession categoryOptions]` seul a bloqué le fil principal 0,51 s
+/// au changement de story. La configuration se tient en mémoire, écrite par
+/// les écritures du coordinateur, oubliée aux interruptions et aux appels.
+@MainActor
+struct MediaSessionCoordinatorKnownConfigurationTests {
+
+    private func makeSUT() -> (MediaSessionCoordinator, RecordingAudioSession, NotificationCenter) {
+        let session = RecordingAudioSession()
+        let center = NotificationCenter()
+        return (MediaSessionCoordinator.makeForTesting(session: session, leaseNotificationCenter: center), session, center)
+    }
+
+    @Test func activateContentPlayback_withAKnownConfiguration_readsNothingOnTheCaller() async {
+        let (sut, session, _) = makeSUT()
+        sut.activateContentPlayback(.audible)
+        await sut.sessionSettled()
+
+        sut.activateContentPlayback(.audible)
+        sut.activateContentPlayback(.muted)
+        await sut.sessionSettled()
+
+        #expect(session.readsOnMainThread == 0)
+        #expect(session.calls.count == 2)
+    }
+
+    @Test func activateContentPlayback_onAFreshCoordinator_readsTheSessionOnlyOnItsQueue() async {
+        let (sut, session, _) = makeSUT()
+
+        sut.activateContentPlayback(.audible)
+        sut.activatePlaybackSync(options: [.duckOthers])
+        await sut.sessionSettled()
+
+        #expect(session.readsOnMainThread == 0)
+    }
+
+    @Test func ensureContentPlayback_underAKnownPlaybackSession_dispatchesNothing() async {
+        let (sut, session, _) = makeSUT()
+        sut.activateContentPlayback(.audible)
+        await sut.sessionSettled()
+        let callsBefore = session.calls.count
+
+        sut.ensureContentPlayback(.muted)
+
+        #expect(!sut.hasPendingSessionWork)
+        await sut.sessionSettled()
+        #expect(session.calls.count == callsBefore)
+        #expect(session.readsOnMainThread == 0)
+    }
+
+    @Test func ensureContentPlayback_withAnUnknownSession_readsItOnTheQueue() async {
+        let (sut, session, _) = makeSUT()
+
+        sut.ensureContentPlayback(.audible)
+        await sut.sessionSettled()
+
+        #expect(session.readsOnMainThread == 0)
+        #expect(session.calls.first == .setCategory(.playback, .default, ContentPlaybackSessionLaw.audibleOptions))
+    }
+
+    @Test func aSystemInterruption_forgetsTheKnownConfiguration() async {
+        let (sut, _, center) = makeSUT()
+        sut.activateContentPlayback(.audible)
+        await sut.sessionSettled()
+        #expect(sut.sessionMemo.known != nil)
+
+        center.post(name: AVAudioSession.interruptionNotification, object: nil)
+
+        #expect(sut.sessionMemo.known == nil)
+    }
+
+    @Test func aCallToggle_forgetsTheKnownConfiguration() async {
+        let (sut, _, _) = makeSUT()
+        sut.activateContentPlayback(.audible)
+        await sut.sessionSettled()
+
+        sut.setCallActive(true)
+        sut.setCallActive(false)
+
+        #expect(sut.sessionMemo.known == nil)
     }
 }
 #endif
