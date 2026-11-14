@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { Composer } from './composer';
@@ -51,6 +52,7 @@ describe('Composer — le cadre des emojis rapides', () => {
     act(() => {
       root.render(<Composer onSend={onSend} preferred={['fr']} />);
     });
+    openComposerTools(container);
     return container;
   };
 
@@ -86,11 +88,10 @@ describe('Composer — le cadre des emojis rapides', () => {
     expect(frame.hasAttribute('data-covers-toolbar')).toBe(false);
   });
 
-  test('la barre d’outils garde TOUTE sa largeur, focus ou non : aucune réserve, la caméra tient l’angle droit (#9082)', () => {
+  test('la barre d’outils garde TOUTE sa largeur, focus ou non : aucune réserve (#9082)', () => {
     const el = mount();
     const toolbar = el.querySelector<HTMLElement>('[data-composer-toolbar]')!;
     expect(toolbar.style.paddingInlineEnd).toBe('');
-    expect(toolbar.lastElementChild?.hasAttribute('data-composer-camera')).toBe(true);
   });
 
   test('du texte dans le champ : le cadre cède la place au bouton d’envoi', () => {

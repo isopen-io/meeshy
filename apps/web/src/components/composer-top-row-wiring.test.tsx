@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 
@@ -51,6 +52,7 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     act(() => {
       root.render(<Composer onSend={onSend} preferred={['fr']} />);
     });
+    openComposerTools(container);
     return container;
   };
 
@@ -384,38 +386,12 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(protection.effectFlags).toBeUndefined();
   });
 
-  test('#9082 — le sticker prend la place de la tonalité : plus d’indicateur d’humeur, une porte vers la feuille', () => {
+  test('#9082 — plus d’indicateur d’humeur dans la rangée ; photos, caméra et stickers n’y ont plus de doublon (#18361) : ils sont dans le menu du « + »', () => {
     const el = mount(() => {});
     expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).toBeNull();
-    const sticker = el.querySelector<HTMLButtonElement>('[data-composer-toolbar] button[data-composer-sticker]');
-    expect(sticker?.getAttribute('aria-label')).toBe('Sticker');
-    expect(sticker?.className).toMatch(/min-h-11/);
-    expect(sticker?.className).toMatch(/min-w-11/);
-  });
-
-  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée ; #9123 — elle ouvre le studio, plus l’appareil de l’OS', () => {
-    const el = mount(() => {});
-    const toolbar = el.querySelector('[data-composer-toolbar]')!;
-    const camera = toolbar.querySelector('[data-composer-camera]');
-    expect(camera).not.toBeNull();
-    expect(toolbar.lastElementChild).toBe(camera);
-    expect(camera?.tagName).toBe('BUTTON');
-    expect(camera?.querySelector('input[type="file"]')).toBeNull();
-  });
-
-  test('#9120 — la photothèque (images ET vidéos) se pose juste avant la caméra', () => {
-    const el = mount(() => {});
-    const toolbar = el.querySelector('[data-composer-toolbar]')!;
-    const library = toolbar.querySelector('[data-composer-library]');
-    const camera = toolbar.querySelector('[data-composer-camera]');
-    expect(library).not.toBeNull();
-    expect(library?.nextElementSibling).toBe(camera);
-    const input = library?.querySelector('input[type="file"]');
-    expect(input?.getAttribute('accept')).toBe('image/*,video/*');
-    expect(input?.hasAttribute('capture')).toBe(false);
-    expect(input?.hasAttribute('multiple')).toBe(true);
-    expect(library?.className).toMatch(/min-h-11/);
-    expect(library?.className).toMatch(/min-w-11/);
+    for (const name of ['sticker', 'library', 'camera']) {
+      expect({ name, present: el.querySelector(`[data-composer-toolbar] [data-composer-${name}]`) !== null }).toEqual({ name, present: false });
+    }
   });
 
   test('les cibles éphémère/flou/effets/langue portent le plancher 44 px sur les DEUX dimensions', () => {
@@ -443,10 +419,10 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     const leading = el.querySelector<HTMLElement>('[data-composer-toolbar-leading]')!;
     const pill = el.querySelector<HTMLElement>('[data-composer-language]')!;
     expect(leading.contains(pill)).toBe(false);
-    const order = [...el.querySelectorAll<HTMLElement>('[data-composer-toolbar] :is([data-composer-ephemeral], [data-composer-blur], [data-composer-view-once], [data-composer-effects], [data-composer-sticker], [data-composer-language], [data-composer-library], [data-composer-camera])')].map(
+    const order = [...el.querySelectorAll<HTMLElement>('[data-composer-toolbar] :is([data-composer-ephemeral], [data-composer-blur], [data-composer-view-once], [data-composer-effects], [data-composer-language])')].map(
       (node) => Object.keys(node.dataset).find((key) => key.startsWith('composer')),
     );
-    expect(order).toEqual(['composerEphemeral', 'composerBlur', 'composerViewOnce', 'composerEffects', 'composerSticker', 'composerLanguage', 'composerLibrary', 'composerCamera']);
+    expect(order).toEqual(['composerEphemeral', 'composerBlur', 'composerViewOnce', 'composerEffects', 'composerLanguage']);
   });
 
   test('#9251 — la bande menante DIT qu’elle défile tant qu’un outil reste au-delà de son bord', () => {

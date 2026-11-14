@@ -81,8 +81,20 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(hybrid?.disabled).toBe(false);
     expect(hybrid?.closest('details')).toBeNull();
     expect(hybrid?.textContent).toContain('Passer au mode Hybride');
-    expect(hybrid?.textContent).toContain('Chiffré sur nos serveurs');
+    expect(hybrid?.textContent).toContain('Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.');
+    expect(hybrid?.textContent).not.toContain('seconde couche');
     expect(target('server')).toBeNull();
+  });
+
+  test('le détail d’un mode est derrière un (i), lu même replié ; l’irréversibilité est dite une fois, entière', async () => {
+    await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    const info = document.querySelector<HTMLButtonElement>('[data-conversation-encryption-switch] button[aria-label="Que change ce mode ?"]');
+    const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toContain('une seconde couche permet de vérifier');
+    expect(note?.className).toContain('sr-only');
+    const rule = 'Le chiffrement de bout en bout ne se désactive jamais';
+    expect(document.querySelector('[data-conversation-encryption-switch]')?.textContent?.split(rule).length).toBe(2);
+    expect(document.querySelector('[data-conversation-encryption-switch]')?.textContent).toContain('Vous pourrez toujours ouvrir une autre conversation');
   });
 
   test('le bout en bout se voit, désactivé, et dit pourquoi le navigateur ne l’active pas', async () => {

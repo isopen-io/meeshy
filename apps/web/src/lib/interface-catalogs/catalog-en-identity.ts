@@ -38,7 +38,7 @@ const enIdentity = {
   'conversation.details.role.moderator': 'Moderator',
   'conversation.details.share': 'Share a link',
   'conversation.details.share.busy': 'Creating the link…',
-  'conversation.details.share.copied': 'Link copied — just paste it.',
+  'conversation.details.share.copied': 'Link copied.',
   'conversation.details.share.failed': 'Couldn’t create the link — try again in a moment.',
   'conversation.details.share.unavailable': 'Sharing isn’t available here — copy the link: {url}',
   'thread.header.active_members': 'Most active members',

@@ -769,16 +769,7 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          {...(mayAttachHere('image/*')
-            ? {
-                onOpenStickers: () => {
-                  setPanelOpen(false);
-                  setStickerSheetOpen(true);
-                },
-                onPickLibrary: addFiles,
-                onOpenCamera: () => setCapturing(true),
-              }
-            : {})}
+          toolsOpen={panelOpen}
           languageCode={compose.language}
           onOpenLanguage={() => setLanguageSheetOpen(true)}
           languagePillRef={languagePillRef}
