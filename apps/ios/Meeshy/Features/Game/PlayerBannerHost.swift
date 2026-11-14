@@ -21,7 +21,8 @@ import MeeshyUI
 // avant le jeu) ; l'appareil n'en garde qu'une copie, qui sert hors ligne.
 
 extension Notification.Name {
-    /// Progression vient d'écrire un instantané dans le cache : la bannière le relit, sans réseau.
+    /// Un instantané du jeu vient d'être écrit dans le cache (Progression, ou la revalidation de la bannière) : la
+    /// bannière et l'anneau des actes du menu le relisent, sans réseau.
     static let engagementSnapshotPersisted = Notification.Name("meeshy.engagement.snapshotPersisted")
 }
 
@@ -50,6 +51,8 @@ struct EngagementPlayerBannerSource: PlayerBannerSourcing {
         guard let snapshot = try? await service.fetchProgress() else { return nil }
         let store = await CacheCoordinator.shared.engagementProgress
         await bestEffort("playerBannerHost.store.save", category: .cache) { try await store.save([snapshot], for: key) }
+        // L'anneau des actes du menu (#17768) lit ce même cache sans requête : il apprend ici qu'il a changé.
+        await MainActor.run { NotificationCenter.default.post(name: .engagementSnapshotPersisted, object: nil) }
         return snapshot.game
     }
 }
