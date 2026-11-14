@@ -113,6 +113,91 @@ class KitGlassRatchets(unittest.TestCase):
         self.assertEqual(count("kit-glass-call", self.SRC, other), 4)
 
 
+class MotionRatchets(unittest.TestCase):
+    KIT = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPillMorph.swift"
+    RECIPE = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPillRecipe.swift"
+    ACCESSIBILITY = "packages/MeeshySDK/Sources/MeeshyUI/Theme/Accessibility.swift"
+    TOKENS = "packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift"
+    ROOT = "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootFeedLayer.swift"
+
+    ANIMATIONS = (
+        "a.animation(.spring(response: 0.3, dampingFraction: 0.8), value: x)\n"
+        "b.animation(\n    .easeOut(duration: 0.2),\n    value: y)\n"
+        "c.animation(reduceMotion ? nil : .default, value: z)\n"
+        "d.animation(nil, value: z)\n"
+        "e.animation(.none, value: z)\n"
+        "f.animation(MeeshyMotion.animation(.default, reduce: r), value: z)\n"
+        "g.meeshyAnimation(.default, value: z)\n"
+        "h.animation(isSystemReduce ? nil : .default, value: z)\n"
+        "// i.animation(.default, value: z)\n"
+    )
+
+    def test_raw_animation_counts_calls_without_a_reduction_predicate(self):
+        self.assertEqual(count("motion-raw-animation", self.ANIMATIONS), 2)
+
+    def test_raw_animation_exempts_the_kit_and_the_motion_module(self):
+        for rel in (self.KIT, self.ACCESSIBILITY):
+            self.assertEqual(count("motion-raw-animation", self.ANIMATIONS, rel), 0)
+
+    def test_raw_animation_root_counts_only_root_files(self):
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS), 0)
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS, self.ROOT), 2)
+        root_view = "apps/ios/Meeshy/Features/Main/Views/RootView.swift"
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS, root_view), 2)
+
+    SPRINGS = (
+        "a = .spring(response: 0.3, dampingFraction: 0.8)\n"
+        "b = .spring(duration: 0.3)\n"
+        "c = .spring(bounce: 0.2)\n"
+        "d = .spring(dampingFraction: 0.7)\n"
+        "e = .spring()\n"
+        "f = .interpolatingSpring(stiffness: 1, damping: 1)\n"
+        "g = .spring\n"
+        "h = MeeshyAnimation.springFast\n"
+        "// i = .spring()\n"
+    )
+
+    def test_literal_spring_counts_hand_written_springs(self):
+        self.assertEqual(count("motion-literal-spring", self.SPRINGS), 6)
+
+    def test_literal_spring_exempts_tokens_and_kit_recipes(self):
+        for rel in (self.TOKENS, self.RECIPE):
+            self.assertEqual(count("motion-literal-spring", self.SPRINGS, rel), 0)
+        self.assertEqual(count("motion-literal-spring", self.SPRINGS, self.KIT), 6)
+
+    REDUCED = (
+        "withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring) { a = 1 }\n"
+        "withAnimation(Motion.animation(reduceMotion: reduce)) { a = 1 }\n"
+        "withAnimation(reduceMotion ? nil : .spring) { a = 1 }\n"
+        "withAnimation(reduceMotion ? .none : .spring) { a = 1 }\n"
+        "withAnimation(MeeshyMotion.animation(.spring, reduce: reduceMotion)) { a = 1 }\n"
+        "meeshyWithAnimation(.spring, reduced: .easeOut(duration: 0.15), reduceMotion: reduceMotion) { a = 1 }\n"
+        "withAnimation(.spring) { a = 1 }\n"
+    )
+
+    def test_reduced_raw_with_animation_counts_sites_the_root_would_flatten(self):
+        self.assertEqual(count("motion-reduced-raw-with-animation", self.REDUCED), 2)
+
+    DISCS = (
+        "Circle().fill(.ultraThinMaterial)\n"
+        "Circle()\n    .fill(.regularMaterial)\n"
+        "x.background(.thinMaterial, in: Circle())\n"
+        "x.background(.ultraThinMaterial, in: .circle)\n"
+        "x.background(.ultraThinMaterial).clipShape(Circle())\n"
+        "x.background(.ultraThinMaterial, in: Capsule())\n"
+        "Capsule().fill(.ultraThinMaterial)\n"
+        "// Circle().fill(.ultraThinMaterial)\n"
+    )
+
+    def test_glass_material_disc_counts_hand_made_glass_discs(self):
+        self.assertEqual(count("kit-glass-material-disc", self.DISCS), 5)
+
+    def test_glass_material_disc_exempts_the_kit_and_the_compatibility_layer(self):
+        compat = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveLiquidGlass.swift"
+        for rel in (self.KIT, compat):
+            self.assertEqual(count("kit-glass-material-disc", self.DISCS, rel), 0)
+
+
 class UncheckedSendable(unittest.TestCase):
     BARE = "final class A: @unchecked Sendable {}\n"
 

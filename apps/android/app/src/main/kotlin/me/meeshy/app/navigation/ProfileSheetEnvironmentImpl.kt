@@ -102,20 +102,20 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
     ): ProfileSheetEnvironment {
         val after: (() -> Unit) -> Unit = { navigate -> host.dismissThen(scope, navigate) }
         return ProfileSheetEnvironment(
-            onOpenConversation = { id -> after { navController.navigate(Routes.chat(id)) } },
-            onReport = { id, username -> after { navController.navigate(Routes.reportUser(id, username)) } },
-            onViewPosts = { id -> after { navController.navigate(Routes.userPosts(id)) } },
-            onCall = { request -> request.routePath()?.let { path -> after { navController.navigate(path) } } },
-            onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
-            onViewStory = { id -> after { navController.navigate(Routes.story(id)) } },
+            onOpenConversation = { id -> after { navController.navigateSingleTop(Routes.chat(id)) } },
+            onReport = { id, username -> after { navController.navigateSingleTop(Routes.reportUser(id, username)) } },
+            onViewPosts = { id -> after { navController.navigateSingleTop(Routes.userPosts(id)) } },
+            onCall = { request -> request.routePath()?.let { path -> after { navController.navigateSingleTop(path) } } },
+            onOpenPost = { postId -> after { navController.navigateSingleTop(Routes.postDetail(postId)) } },
+            onViewStory = { id -> after { navController.navigateSingleTop(Routes.story(id)) } },
             liveSigns = ::signsFor,
             postsItems = { userId, isSelf ->
                 rememberProfilePostsItems(
                     userId = userId,
-                    onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
-                    onOpenMyStories = if (isSelf) ({ after { navController.navigate(Routes.MY_STORIES) } }) else null,
+                    onOpenPost = { postId -> after { navController.navigateSingleTop(Routes.postDetail(postId)) } },
+                    onOpenMyStories = if (isSelf) ({ after { navController.navigateSingleTop(Routes.MY_STORIES) } }) else null,
                     onDismissSheet = host::dismiss,
-                    onOpenReels = { reelId, _ -> navController.navigate(Routes.reels(seed = reelId)) },
+                    onOpenReels = { reelId, _ -> navController.navigateSingleTop(Routes.reels(seed = reelId)) },
                     hostScope = scope,
                 )
             },

@@ -145,4 +145,41 @@ final class IncomingCallViewTests: XCTestCase {
             "IncomingCallView must not declare an unused isDark computed property."
         )
     }
+
+    // MARK: - P17.2 / P17.13 — l'appel entrant pose ses puces et ses boutons en verre (#18211)
+
+    private func callViewsSource(_ file: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/\(file)"))
+    }
+
+    func test_activerLeSon_isAGlassChip_notAFlatWhiteCapsule() throws {
+        let preview = try callViewsSource("CallPreviewViews.swift")
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallPreviewSoundButton: View", in: preview))
+        XCTAssertFalse(button.contains("Capsule().fill(Color.white)"), "Plus de capsule blanche pleine (P17.2)")
+        XCTAssertFalse(button.contains(".black"), "Plus d'encre noire : le texte est clair sur le verre")
+        XCTAssertTrue(button.contains(".adaptiveLiquidGlass(in: Capsule()"), "Le verre du kit, iOS 16 à 26 (P17.13)")
+        XCTAssertTrue(button.contains("interactive: true"))
+        XCTAssertTrue(button.contains("minHeight: 50"), "Cible tenue")
+        XCTAssertTrue(button.contains(".accessibilityAddTraits(audible ? .isSelected : [])"))
+    }
+
+    func test_incomingScreen_chipsBarAndSecondaryButtons_useTheSharedLiquidGlassRecipe() throws {
+        let incoming = try callViewsSource("IncomingCallView.swift")
+        let bar = try callViewsSource("IncomingPreAnswerBar.swift")
+        let preview = try callViewsSource("CallPreviewViews.swift")
+        let chip = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var typeChip: some View", in: incoming))
+        XCTAssertTrue(chip.contains(".adaptiveLiquidGlass(in: Capsule())"))
+        XCTAssertTrue(bar.contains(".adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus"))
+        for (name, code) in [("IncomingCallView", incoming), ("IncomingPreAnswerBar", bar)] {
+            XCTAssertFalse(code.contains(".adaptiveGlass(in:"), "\(name) : le matériau nu (sans reflet ni liseré) sous iOS 16 à 25 a quitté l'appel entrant")
+        }
+        let sound = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallPreviewSoundButton: View", in: preview))
+        XCTAssertFalse(sound.contains(".adaptiveGlass(in:"))
+    }
+
+    func test_incomingScreen_refuseAndAnswerStayProminentGlass() throws {
+        let incoming = try callViewsSource("IncomingCallView.swift")
+        XCTAssertTrue(incoming.contains(".adaptiveGlassProminent(in: Circle(), tint: tint)"), "Refuser et Répondre suivent Fin (#17323)")
+    }
 }
+

@@ -1,8 +1,8 @@
-# Rendre un champ nullable déplace le défaut : toute comparaison d'identité qui le lisait devient une comparaison de deux inconnues
+## Rendre un champ nullable déplace le défaut : toute comparaison d'identité qui le lisait devient une comparaison de deux inconnues
 
 *2026-11-14, cycle 156. Trouvé en écrivant le correctif, pas en le relisant.*
 
-## Le geste, et sa trappe
+### Le geste, et sa trappe
 
 `ReactionUpdateEvent.userId` était `String` (requis) alors que le contrat le
 déclare optionnel. Le correctif tient en un caractère :
@@ -27,7 +27,7 @@ Le correctif aurait donc échangé un défaut bruyant (l'événement n'arrivait
 jamais) contre un défaut silencieux (il arrive et se trompe de personne) — pire,
 parce que plus difficile à voir.
 
-## La règle
+### La règle
 
 **Élargir un type ne corrige rien tout seul : il RELOCALISE la question chez
 tous ses lecteurs.** Un champ qui ne pouvait pas être absent portait une garantie
@@ -41,7 +41,7 @@ déréférencement, jamais une égalité entre deux absences.
 > compile encore ? » mais **« qui comparait cette valeur, et que vaut sa
 > comparaison quand les deux côtés sont absents ? »**
 
-## Le remède, et pourquoi c'est un SITE et pas une condition
+### Le remède, et pourquoi c'est un SITE et pas une condition
 
 La réponse n'est pas de corriger les deux `if` sur place — ce serait deux copies
 d'une règle, et la troisième, écrite plus tard, serait fausse. La question a un
@@ -56,7 +56,7 @@ fun ReactionUpdateEvent.isOwnEcho(currentUserId: String?): Boolean =
 nullabilité : elle mérite d'être énoncée une fois, testée une fois, et trouvable
 par son nom.
 
-## Où chercher la même trappe
+### Où chercher la même trappe
 
 Partout où un identifiant nullable rencontre l'identité du lecteur, qui est
 elle-même nullable dès qu'un compte anonyme existe : `participantId`, `userId`,

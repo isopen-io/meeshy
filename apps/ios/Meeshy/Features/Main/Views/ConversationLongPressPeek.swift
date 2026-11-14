@@ -192,8 +192,9 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
 
     private func settle(to target: ConversationPeekDetent) {
         if target != detent { HapticFeedback.light() }
-        let animation: Animation = reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.32, dampingFraction: 0.86)
-        withAnimation(animation) {
+        meeshyWithAnimation(.spring(response: 0.32, dampingFraction: 0.86),
+                            reduced: .easeOut(duration: 0.18),
+                            reduceMotion: reduceMotion) {
             detent = target
             progress = target.progress
         }

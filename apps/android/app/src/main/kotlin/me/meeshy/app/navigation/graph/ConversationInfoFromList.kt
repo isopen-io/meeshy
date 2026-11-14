@@ -1,7 +1,10 @@
 package me.meeshy.app.navigation.graph
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
+import me.meeshy.app.navigation.pushFrom
+import me.meeshy.app.navigation.rememberConversationOpener
 import me.meeshy.app.chat.ConversationInfoPresenter
 import me.meeshy.app.chat.ConversationInfoSeed
 import me.meeshy.app.navigation.Routes
@@ -23,8 +26,10 @@ internal fun ConversationInfoFromList(
     conversation: ApiConversation,
     readerId: String?,
     navController: NavHostController,
+    entry: NavBackStackEntry,
     onDismiss: () -> Unit,
 ) {
+    val openConversation = rememberConversationOpener(navController, entry)
     val palette = conversation.displayPaletteInTheme()
     ConversationInfoPresenter(
         seed = ConversationInfoSeed(
@@ -38,9 +43,7 @@ internal fun ConversationInfoFromList(
             encryptionMode = conversation.encryptionMode,
         ),
         onDismiss = onDismiss,
-        onOpenMessage = { messageId ->
-            navController.navigate(Routes.chat(conversation.id, highlightMessageId = messageId))
-        },
-        onShare = { navController.navigate(Routes.createShareLink(conversation.id)) },
+        onOpenMessage = { messageId -> openConversation(conversation.id, messageId) },
+        onShare = { navController.pushFrom(entry, Routes.createShareLink(conversation.id)) },
     )
 }

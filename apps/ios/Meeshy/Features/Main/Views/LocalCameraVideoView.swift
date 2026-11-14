@@ -7,13 +7,16 @@ struct LocalCameraVideoView: View {
     let track: Any?
     let intendedFront: Bool
     var contentMode: UIView.ContentMode
+    /// U1.11 — ma vignette de groupe garde son rendu de la grille à la une (`CallVideoView.rendererKey`).
+    var rendererKey: String?
     @ObservedObject var liveCamera: CallLiveCamera
 
     init(track: Any?, intendedFront: Bool, contentMode: UIView.ContentMode = .scaleAspectFill,
-         liveCamera: CallLiveCamera = .shared) {
+         rendererKey: String? = nil, liveCamera: CallLiveCamera = .shared) {
         self.track = track
         self.intendedFront = intendedFront
         self.contentMode = contentMode
+        self.rendererKey = rendererKey
         self.liveCamera = liveCamera
     }
 
@@ -25,6 +28,6 @@ struct LocalCameraVideoView: View {
     }
 
     var body: some View {
-        CallVideoView(track: track, mirror: mirror, contentMode: contentMode)
+        CallVideoView(track: track, mirror: mirror, contentMode: contentMode, rendererKey: rendererKey)
     }
 }

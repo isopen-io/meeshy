@@ -12,7 +12,7 @@ extension CallView {
     var isMyImageFullScreen: Bool {
         CallCameraRail.isMyImageFullScreen(
             isGroupStage: isGroupStage,
-            isSelfFeatured: isSelfFeatured,
+            isSelfFeatured: GroupCallSpotlight.featuresLocal(groupStageFocus),
             isLocalPrimary: effectiveSwapStreams
         )
     }

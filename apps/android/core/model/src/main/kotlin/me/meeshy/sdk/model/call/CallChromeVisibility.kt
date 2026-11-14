@@ -5,6 +5,9 @@ enum class CallChromeElement {
 
     /** The « Back to grid · Full screen » capsule of the featured person of a group (U1.10, #8550). */
     FeaturedCapsule,
+
+    /** The « X captures the call's screen » chip (R1): a top banner, it stows with them (law 11, #17963). */
+    CaptureAlert,
 }
 
 /**
@@ -29,6 +32,7 @@ data class CallChromeVisibility(
         -> isRevealed && !isStageFullScreen && !isModeActive
         // Stowed WITH the controls, but the full screen does not stow it: it is the way out of it.
         CallChromeElement.FeaturedCapsule -> isRevealed && !isModeActive
+        CallChromeElement.CaptureAlert -> isVisible(CallChromeElement.ScreenShareBanner)
     }
 
     fun toggled(): CallChromeVisibility = copy(isRevealed = !isRevealed)
