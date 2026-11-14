@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">Salvar a versão editada</string>
     <string name="settings_notif_more_options">Mais</string>
     <string name="privacy_save_media">Salvar em Fotos</string>
+    <string name="sessions_revoke_error">Não foi possível desconectar</string>
+    <string name="sessions_revoke_all_error">Não foi possível desconectar os outros aparelhos.</string>
     <string name="settings_notif_type_contact_activity">Retorno de um contato</string>
     <string name="settings_notif_type_contact_activity_subtitle">Um contato volta ao Meeshy, no máximo a cada 3 horas.</string>
     <string name="settings_packs_orientation">Os Meeshes compram pacotes: fundos de conversa, anéis de avatar, banners.</string>

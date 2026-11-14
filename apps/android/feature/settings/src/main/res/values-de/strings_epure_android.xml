@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">Bearbeitete Version speichern</string>
     <string name="settings_notif_more_options">Mehr</string>
     <string name="privacy_save_media">In Fotos sichern</string>
+    <string name="sessions_revoke_error">Abmeldung fehlgeschlagen</string>
+    <string name="sessions_revoke_all_error">Die anderen Geräte konnten nicht abgemeldet werden.</string>
     <string name="settings_notif_type_contact_activity">Rückkehr eines Kontakts</string>
     <string name="settings_notif_type_contact_activity_subtitle">Ein Kontakt ist wieder auf Meeshy, höchstens alle 3 Stunden.</string>
     <string name="settings_packs_orientation">Mit Meeshes kaufst du Pakete: Konversationshintergründe, Avatar-Ringe, Banner.</string>

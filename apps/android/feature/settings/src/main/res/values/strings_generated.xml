@@ -226,7 +226,6 @@
     <string name="sessions_revoke_confirm_action">Sign out</string>
     <string name="sessions_revoke_confirm_message">%1$s will have to sign in again to access your account.</string>
     <string name="sessions_revoke_confirm_title">Sign out this device?</string>
-    <string name="sessions_revoke_error">Couldn\'t sign out</string>
     <string name="sessions_section_others">Other devices</string>
     <string name="sessions_timezone">Time zone: %1$s</string>
     <string name="sessions_unknown_device">Unknown device</string>

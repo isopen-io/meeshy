@@ -226,7 +226,6 @@
     <string name="sessions_revoke_confirm_action">Abmelden</string>
     <string name="sessions_revoke_confirm_message">%1$s muss sich erneut anmelden, um auf dein Konto zuzugreifen.</string>
     <string name="sessions_revoke_confirm_title">Dieses Gerät abmelden?</string>
-    <string name="sessions_revoke_error">Abmeldung fehlgeschlagen</string>
     <string name="sessions_section_others">Andere Geräte</string>
     <string name="sessions_timezone">Zeitzone: %1$s</string>
     <string name="sessions_unknown_device">Unbekanntes Gerät</string>

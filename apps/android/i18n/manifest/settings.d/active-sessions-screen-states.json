@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sessions_revoke_error",
-          "androidName": "sessions_revoke_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions_unknown_device",
           "androidName": "sessions_unknown_device",
           "status": "adopted"

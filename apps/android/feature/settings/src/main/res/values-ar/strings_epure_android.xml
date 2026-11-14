@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">حفظ النسخة المعدّلة</string>
     <string name="settings_notif_more_options">المزيد</string>
     <string name="privacy_save_media">الحفظ في الصور</string>
+    <string name="sessions_revoke_error">تعذّر تسجيل الخروج</string>
+    <string name="sessions_revoke_all_error">تعذّر تسجيل خروج الأجهزة الأخرى.</string>
     <string name="settings_notif_type_contact_activity">عودة جهة اتصال</string>
     <string name="settings_notif_type_contact_activity_subtitle">يعود أحد جهات الاتصال إلى Meeshy، مرة كل 3 ساعات على الأكثر.</string>
     <string name="settings_packs_orientation">تشتري بالـ Meeshes حزمًا: خلفيات المحادثات وإطارات الصور الرمزية واللافتات.</string>

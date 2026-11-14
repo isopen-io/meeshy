@@ -226,7 +226,6 @@
     <string name="sessions_revoke_confirm_action">تسجيل الخروج</string>
     <string name="sessions_revoke_confirm_message">سيحتاج %1$s إلى تسجيل الدخول مجددًا للوصول إلى حسابك.</string>
     <string name="sessions_revoke_confirm_title">تسجيل خروج هذا الجهاز؟</string>
-    <string name="sessions_revoke_error">تعذّر تسجيل الخروج</string>
     <string name="sessions_section_others">أجهزة أخرى</string>
     <string name="sessions_timezone">المنطقة الزمنية: %1$s</string>
     <string name="sessions_unknown_device">جهاز غير معروف</string>

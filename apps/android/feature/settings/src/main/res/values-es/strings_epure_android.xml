@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">Guardar la versión retocada</string>
     <string name="settings_notif_more_options">Más</string>
     <string name="privacy_save_media">Guardar en Fotos</string>
+    <string name="sessions_revoke_error">No se ha podido cerrar la sesión</string>
+    <string name="sessions_revoke_all_error">No se ha podido cerrar la sesión en los demás dispositivos.</string>
     <string name="settings_notif_type_contact_activity">Regreso de un contacto</string>
     <string name="settings_notif_type_contact_activity_subtitle">Un contacto vuelve a Meeshy, como máximo cada 3 horas.</string>
     <string name="settings_packs_orientation">Los Meeshes compran packs: fondos de conversación, anillos de avatar, banners.</string>

@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">Salva la versione ritoccata</string>
     <string name="settings_notif_more_options">Altro</string>
     <string name="privacy_save_media">Salva in Foto</string>
+    <string name="sessions_revoke_error">Disconnessione non riuscita</string>
+    <string name="sessions_revoke_all_error">Non è stato possibile disconnettere gli altri dispositivi.</string>
     <string name="settings_notif_type_contact_activity">Ritorno di un contatto</string>
     <string name="settings_notif_type_contact_activity_subtitle">Un contatto torna su Meeshy, al massimo ogni 3 ore.</string>
     <string name="settings_packs_orientation">I Meeshes comprano pack: sfondi delle conversazioni, anelli dell\'avatar, banner.</string>

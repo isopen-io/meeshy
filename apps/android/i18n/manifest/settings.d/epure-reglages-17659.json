@@ -297,6 +297,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "sessions_revoke_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sessions_revoke_all_error",
+          "status": "android-only"
+        },
+        {
           "androidName": "settings_notif_type_contact_activity",
           "status": "android-only"
         },

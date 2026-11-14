@@ -73,6 +73,8 @@
     <string name="settings_media_capture_rendered_title">Save the edited version</string>
     <string name="settings_notif_more_options">More</string>
     <string name="privacy_save_media">Save to Photos</string>
+    <string name="sessions_revoke_error">Couldn\'t sign out</string>
+    <string name="sessions_revoke_all_error">The other devices couldn\'t be signed out.</string>
     <string name="settings_notif_type_contact_activity">Contact is back</string>
     <string name="settings_notif_type_contact_activity_subtitle">A contact comes back to Meeshy, at most every 3 hours.</string>
     <string name="settings_packs_orientation">Meeshes buy packs: conversation backgrounds, avatar rings, banners.</string>

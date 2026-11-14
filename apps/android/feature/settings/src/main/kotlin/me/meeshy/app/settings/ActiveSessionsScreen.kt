@@ -324,10 +324,10 @@ private fun ActiveSessionsDialogs(
             dismissButton = { TextButton(onClick = cancel) { Text(stringResource(R.string.sessions_cancel)) } },
         )
     }
-    if (state.failure != null) {
+    state.failure?.let { failure ->
         AlertDialog(
             onDismissRequest = { onEvent(ActiveSessionsUiEvent.DismissFailure) },
-            text = { Text(stringResource(R.string.sessions_revoke_error)) },
+            text = { Text(stringResource(failureMessageRes(failure))) },
             confirmButton = {
                 TextButton(onClick = { onEvent(ActiveSessionsUiEvent.DismissFailure) }) {
                     Text(stringResource(R.string.sessions_error_ok))
@@ -335,6 +335,12 @@ private fun ActiveSessionsDialogs(
             },
         )
     }
+}
+
+/** Un échec de « Déconnecter les autres appareils » dit qu'ils restent connectés : c'est une action de sécurité. */
+internal fun failureMessageRes(failure: ActiveSessionsFailure): Int = when (failure) {
+    ActiveSessionsFailure.REVOKE_ONE -> R.string.sessions_revoke_error
+    ActiveSessionsFailure.REVOKE_OTHERS -> R.string.sessions_revoke_all_error
 }
 
 @Composable

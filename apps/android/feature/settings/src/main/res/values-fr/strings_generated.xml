@@ -226,7 +226,6 @@
     <string name="sessions_revoke_confirm_action">Déconnecter</string>
     <string name="sessions_revoke_confirm_message">%1$s devra se reconnecter pour accéder à votre compte.</string>
     <string name="sessions_revoke_confirm_title">Déconnecter cet appareil ?</string>
-    <string name="sessions_revoke_error">Déconnexion impossible</string>
     <string name="sessions_section_others">Autres appareils</string>
     <string name="sessions_timezone">Fuseau : %1$s</string>
     <string name="sessions_unknown_device">Appareil inconnu</string>
