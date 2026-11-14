@@ -39,6 +39,12 @@ public nonisolated enum MeeshyDragTargetsRule {
         return result
     }
 
+    /// Les cibles offertes : une cible existe si et seulement si l'hôte passe
+    /// son rappel, jamais grisée.
+    public static func offered(duplicate: Bool, remove: Bool) -> Set<MeeshyDragTarget> {
+        Set(MeeshyDragTarget.allCases.filter { $0 == .duplicate ? duplicate : remove })
+    }
+
     /// La cible survolée. Entrée à `captureRadius` ou moins du centre, sortie
     /// au-delà de `releaseRadius` : entre les deux, la cible déjà survolée est
     /// tenue (aucun battement à la frontière). Un point non fini ne survole rien.

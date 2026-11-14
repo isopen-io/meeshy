@@ -18,7 +18,8 @@ import UIKit
 /// - `labels` : les quatre noms accessibles, traduits par l'hôte ;
 /// - `tone` : celui de l'hôte par défaut ; `haptic: .none` laisse l'hôte jouer le sien.
 ///
-/// Les rappels sont relus à chaque ouverture des cibles.
+/// Les rappels sont relus à chaque ouverture des cibles et rendus à leur
+/// fermeture : l'état ne retient rien de l'hôte entre deux glissers.
 public struct MeeshyDragTargets<DuplicateGlyph: View, RemoveGlyph: View>: View {
     @ObservedObject private var state: MeeshyDragTargetsState
     private let topSlot: CGRect?
@@ -65,12 +66,13 @@ public struct MeeshyDragTargets<DuplicateGlyph: View, RemoveGlyph: View>: View {
                 MeeshyDragTargetsLayer(
                     state: state,
                     hovered: state.hovered,
+                    offered: MeeshyDragTargetsRule.offered(duplicate: onDuplicate != nil, remove: onRemove != nil),
                     topSlot: topSlot,
                     bottomSlot: bottomSlot,
                     labels: labels,
                     tone: tone,
-                    duplicateGlyph: onDuplicate == nil ? nil : duplicateGlyph,
-                    removeGlyph: onRemove == nil ? nil : removeGlyph,
+                    duplicateGlyph: duplicateGlyph,
+                    removeGlyph: removeGlyph,
                     reduceMotion: reduce
                 )
                 .transition(Self.transition(reduceMotion: reduce))
@@ -79,7 +81,7 @@ public struct MeeshyDragTargets<DuplicateGlyph: View, RemoveGlyph: View>: View {
         }
         .animation(MeeshyDragTargetsRecipe.presence(appearing: state.isActive), value: state.isActive)
         .allowsHitTesting(false)
-        .onAppear(perform: bindHandlers)
+        .onDisappear { state.release() }
         .adaptiveOnChange(of: state.hovered) { _, target in
             guard let target else { return }
             MeeshyDragTargetsAnnouncement.post(labels.name(of: target, isHot: true))
@@ -138,17 +140,17 @@ enum MeeshyDragTargetsAnnouncement {
 private struct MeeshyDragTargetsLayer<DuplicateGlyph: View, RemoveGlyph: View>: View {
     let state: MeeshyDragTargetsState
     let hovered: MeeshyDragTarget?
+    let offered: Set<MeeshyDragTarget>
     let topSlot: CGRect?
     let bottomSlot: CGRect?
     let labels: MeeshyDragTargetsLabels
     let tone: MeeshyGlassTone?
-    let duplicateGlyph: DuplicateGlyph?
-    let removeGlyph: RemoveGlyph?
+    let duplicateGlyph: DuplicateGlyph
+    let removeGlyph: RemoveGlyph
     let reduceMotion: Bool
 
     var body: some View {
         GeometryReader { proxy in
-            let offered = offeredTargets
             let centers = MeeshyDragTargetsRule.centers(
                 size: proxy.size, safeTop: proxy.safeAreaInsets.top, safeBottom: proxy.safeAreaInsets.bottom,
                 topSlot: topSlot, bottomSlot: bottomSlot, offered: offered
@@ -156,10 +158,10 @@ private struct MeeshyDragTargetsLayer<DuplicateGlyph: View, RemoveGlyph: View>: 
             let origin = proxy.frame(in: .global).origin
             let windowCenters = centers.mapValues { CGPoint(x: $0.x + origin.x, y: $0.y + origin.y) }
             ZStack(alignment: .topLeading) {
-                if let duplicateGlyph, let center = centers[.duplicate] {
+                if let center = centers[.duplicate] {
                     disc(.duplicate, glyph: duplicateGlyph).position(center)
                 }
-                if let removeGlyph, let center = centers[.remove] {
+                if let center = centers[.remove] {
                     disc(.remove, glyph: removeGlyph).position(center)
                 }
             }
@@ -169,13 +171,6 @@ private struct MeeshyDragTargetsLayer<DuplicateGlyph: View, RemoveGlyph: View>: 
             }
         }
         .accessibilityElement(children: .contain)
-    }
-
-    private var offeredTargets: Set<MeeshyDragTarget> {
-        var result = Set<MeeshyDragTarget>()
-        if duplicateGlyph != nil { result.insert(.duplicate) }
-        if removeGlyph != nil { result.insert(.remove) }
-        return result
     }
 
     private func disc<Glyph: View>(_ target: MeeshyDragTarget, glyph: Glyph) -> some View {
@@ -220,7 +215,13 @@ private struct MeeshyDragTargetDisc<Glyph: View>: View {
             .foregroundStyle(recipe.inkColor(isDark: isDark))
             .frame(width: CGFloat(recipe.diameter), height: CGFloat(recipe.diameter))
             .background {
-                Circle().fill(recipe.fillColor(isDark: isDark).opacity(recipe.fillOpacity))
+                Circle()
+                    .fill(recipe.fillColor(isDark: isDark).opacity(recipe.fillOpacity))
+                    .shadow(
+                        color: MeeshyColors.mediaBackdrop.opacity(recipe.shadow?.opacity ?? 0),
+                        radius: CGFloat(recipe.shadow?.radius ?? 0),
+                        y: CGFloat(recipe.shadow?.y ?? 0)
+                    )
             }
             .modifier(MeeshyDragTargetGlass(request: recipe.glass, tone: tone))
             .animation(MeeshyDragTargetsRecipe.heatFade(reduceMotion: reduceMotion), value: isHot)
