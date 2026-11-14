@@ -12,6 +12,13 @@
  * « Réduire les animations », rien de tout cela : la règle générale d'`app.css` rend tout immédiat, et
  * le fantôme n'existe pas.
  */
+/* Le fantôme et son voile ne prennent aucun toucher : le geste qui suit la fermeture atteint l'écran
+   dessous (N4). `inert` le dit au fantôme ; son `::backdrop`, que tous les moteurs ne font pas hériter,
+   le reçoit ici. */
+[data-dialog-ghost]::backdrop {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   dialog[data-sheet-presentation][open],
   dialog[data-confirm-dialog][open] {

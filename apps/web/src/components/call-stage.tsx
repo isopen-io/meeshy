@@ -40,7 +40,7 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
-import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import type { CornerSight } from '@/components/call-duo-corner';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
@@ -107,7 +107,10 @@ const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({
  * se connecter, et la grille n'est que la disposition d'un appel connecté) ;
  * arrivée, elle se dessine dans le même rendu que la scène.
  */
-export const callGridView = preloadedView(() => import('./call-grid').then((module) => module.CallGrid));
+/** L'écran partagé à la une d'un groupe (U2), chargé à part et AVEC la grille : un groupe sans partage ne paie pas son code dans la grille. */
+const groupScreenView = preloadedView(() => import('./call-grid-screen').then((module) => module.GroupSharedScreen));
+
+export const callGridView = preloadedView(() => Promise.all([import('./call-grid'), groupScreenView.load()]).then(([module]) => module.CallGrid));
 const CallGrid = callGridView.View;
 
 export const CALL_GRID_KIT: CallGridKit = {
@@ -122,14 +125,17 @@ export const CALL_GRID_KIT: CallGridKit = {
   useStageFlip,
   Arrives,
   HeldSwap,
+  CameraOff: CameraOffStage,
+  isDrag: isTileDrag,
+  SharedScreen: groupScreenView.View,
 };
 
 /**
  * LA SURFACE QUI ZOOME L'ÉCRAN REÇU EN DUO (P15.11), CHARGÉE À PART : le crochet du zoom et ses lois ne pèsent plus sur
  * `call_overlay`. L'écran la précharge avec l'appel (`PREFETCH`) ; pas encore là, l'écran reçu se montre entier.
  */
-export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.ScreenZoomSurface));
-const ScreenZoomSurface = screenZoomSurfaceView.View;
+export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.DuoSharedScreen));
+const DuoScreenView = screenZoomSurfaceView.View;
 
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
@@ -147,8 +153,9 @@ type StageProps = {
   readonly language: InterfaceLanguage;
   readonly choice: SpotlightChoice;
   readonly onChoose: (choice: SpotlightChoice) => void;
-  readonly immersive: boolean;
-  readonly onToggleImmersive: () => void;
+  /** Le plein écran de la scène (loi 15, #17961) : un duo n'a qu'un niveau, la une d'un groupe en a deux pour un écran partagé. */
+  readonly fullScreen: FullScreenLevel;
+  readonly onFullScreen: (level: FullScreenLevel) => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
   /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
@@ -196,36 +203,20 @@ function PeerMuted() {
 }
 
 
-function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
+const ScreenButton = (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => <CallButton {...props} tone="glass" prominent />;
+
+/**
+ * L'écran reçu en duo (P15) vit avec sa surface de zoom, dans son chunk chargé avec la vignette du coin dès que le duo
+ * sonne (`duoCornerView`) : il est là bien avant qu'un écran ne soit partagé.
+ */
+function DuoScreen({ call, language, fullScreen, onFullScreen }: Pick<StageProps, 'call' | 'language' | 'fullScreen' | 'onFullScreen'>) {
   const sharer = screenSharer(call.members);
-  const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
-  const screen = <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />;
+  const immersive = fullScreen !== 'off';
   return (
-    <div className="absolute inset-0" data-call-shared-screen="">
-      {/* L'écran reçu se zoome (P15.11) : la surface des gestes et son calque GPU ne portent QUE l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais. */}
-      <Suspense fallback={screen}>
-        <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isTileDrag}>
-          {screen}
-        </ScreenZoomSurface>
-      </Suspense>
-      {call.cameraOn && !immersive ? (
-        <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
-          <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
-        </div>
-      ) : null}
-      <div className="absolute bottom-4 right-4 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }} data-call-chrome-fade="">
-        <CallButton
-          label={translate(language, immersive ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
-          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[immersive ? 'cornersIn' : 'cornersOut']} size={20} />}
-          onPress={onToggleImmersive}
-          tone="glass"
-          prominent
-          size={44}
-          data={{ 'data-call-fullscreen': '' }}
-        />
-      </div>
-    </div>
+    <Suspense fallback={null}>
+      <DuoScreenView call={call} sharer={sharer} language={language} immersive={immersive} onToggleImmersive={() => onFullScreen(immersive ? 'off' : 'full')} mirrored={selfPreviewMirrored(call)} corner={screenCorner} Button={ScreenButton} isDrag={isTileDrag} />
+    </Suspense>
   );
 }
 
@@ -301,7 +292,7 @@ function useSelfTilePlace({ call, language, swapped, shown, chromeVisible, topIn
  * L'écran la précharge dès qu'un duo se montre (il sonne avant de se connecter) et avec l'appel (`PREFETCH`) ; elle se
  * rend dans le même rendu une fois là.
  */
-export const duoCornerView = preloadedView(() => import('./call-duo-corner').then((module) => module.DuoCorner));
+export const duoCornerView = preloadedView(() => Promise.all([import('./call-duo-corner'), screenZoomSurfaceView.load()]).then(([module]) => module.DuoCorner));
 const DuoCornerView = duoCornerView.View;
 
 /** La couleur de qui se montre : la mienne sans identifiant est le neutre de l'écran, jamais une couleur inventée. */
@@ -383,7 +374,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
  * qu'il contient : passer de 2 × 3 à 3 × 2 ne le redimensionne pas, aucune boucle. Avant sa première mesure
  * (rendu serveur, scène encore sans taille), la fenêtre.
  */
-function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
+function GroupStage({ call, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const viewport = useCallViewport();
   const [frame, measured] = useElementSize();
@@ -398,8 +389,8 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
           self={{ id: me?.id ?? null, stream: selfCameraStream(call), cameraOn: selfCameraShown(call), mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
           onChoose={onChoose}
-          immersive={immersive}
-          onToggleImmersive={onToggleImmersive}
+          fullScreen={fullScreen}
+          onFullScreen={onFullScreen}
           moderation={moderation}
           language={language}
           chromeVisible={chromeVisible}
@@ -413,9 +404,9 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
-  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} immersive={immersive} onToggleImmersive={onToggleImmersive} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
-  if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
+export function CallStage({ call, layout, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} fullScreen={fullScreen} onFullScreen={onFullScreen} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
+  if (layout === 'screen') return <DuoScreen call={call} language={language} fullScreen={fullScreen} onFullScreen={onFullScreen} />;
   if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;
 }

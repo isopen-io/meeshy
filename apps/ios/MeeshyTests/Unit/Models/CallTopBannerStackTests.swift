@@ -475,3 +475,101 @@ final class CallTopBannerSpanTests: XCTestCase {
         XCTAssertTrue(branch.contains(".callChromeVisibility(chrome.isVisible(.captureAlert))"))
     }
 }
+
+/// P11.1 (#18206) — en groupe, l'en-tête FLOTTE sur la grille : en portrait, la grille part du haut
+/// de la zone sûre et Réduire · Image dans l'image · Conversation et la capsule se posent sur les
+/// vignettes du haut, comme la planche P11. La pilule, elle, reste dans le flux (#17949, A) : la
+/// grille se resserre au-dessus d'elle. Ce qui garde sa réserve sous l'en-tête : la hauteur compacte
+/// (L4, #17885 : la rangée de quatre entre l'en-tête et la pilule), la une (P14, sa capsule et la puce
+/// d'écran se posent au haut de sa vignette) et une pile de bandeaux (L4.11, #17833 : la grille ne
+/// passe jamais sous un bandeau).
+@MainActor
+final class CallGroupHeaderFloatTests: XCTestCase {
+
+    func test_headerFloats_overThePortraitGrid() {
+        XCTAssertTrue(CallTopBannerStack.headerFloatsOverGroupStage(isGrid: true, isCompactHeight: false))
+    }
+
+    func test_headerDoesNotFloat_overACompactHeightRow_L4() {
+        XCTAssertFalse(
+            CallTopBannerStack.headerFloatsOverGroupStage(isGrid: true, isCompactHeight: true),
+            "L4 (#17885) : en hauteur compacte, aucune vignette ne passe sous l'en-tête"
+        )
+    }
+
+    func test_headerDoesNotFloat_overTheFeaturedTile_P14() {
+        XCTAssertFalse(
+            CallTopBannerStack.headerFloatsOverGroupStage(isGrid: false, isCompactHeight: false),
+            "P14 : la capsule de la une se pose au haut de sa vignette, jamais sous celle de l'en-tête"
+        )
+    }
+
+    func test_floatingHeader_startsTheGridAtTheSafeArea() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            59 - 8,
+            "après l'espacement de la scène, la grille part de la zone sûre, 8 pt au-dessus de la rangée d'en-tête (planche P11)"
+        )
+    }
+
+    func test_floatingHeader_onAWindowWithoutSafeArea_neverReservesANegativeBand() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 0, chromeTopInset: 8, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            0
+        )
+    }
+
+    func test_reservedHeader_keepsTheStageUnderTheHeaderRow() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: false, hasBanners: false, isStageFullScreen: false),
+            67 + 52
+        )
+    }
+
+    func test_aBanner_pushesTheGridUnderTheStack_evenWhenTheHeaderFloats() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: true, isStageFullScreen: false),
+            CallTopBannerStack.topInset(chromeTopInset: 67),
+            "L4.11 (#17833) : la pile se pose sous l'en-tête, la grille lui cède sa place"
+        )
+    }
+
+    /// #18227 — une pastille de service (« En attente », « Vidéo réduite ») est un bandeau de la pile :
+    /// l'en-tête ne flotte plus et la grille lui cède sa place.
+    func test_aServicePill_countsAsABanner_theHeaderStopsFloating() {
+        let present = CallTopBannerStack.present(isScreenShareShown: false, isRecordingShown: false, isCaptureAlertShown: false, isLiveFrameShown: false, service: [.hold])
+        XCTAssertFalse(present.isEmpty)
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: !present.isEmpty, isStageFullScreen: false),
+            CallTopBannerStack.topInset(chromeTopInset: 67)
+        )
+    }
+
+    func test_fullScreenStage_startsAtTheSafeArea_floatingOrNot() {
+        for floats in [true, false] {
+            XCTAssertEqual(
+                CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: floats, hasBanners: false, isStageFullScreen: true),
+                59
+            )
+        }
+    }
+
+    func test_groupStage_floatsTheHeaderFromTheGridFocus_andMovesWithIt() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(
+            layout.contains("headerFloats: CallTopBannerStack.headerFloatsOverGroupStage(isGrid: groupStageFocus == .grid, isCompactHeight: isStageCompactHeight)"),
+            "la loi pure décide, depuis ce qui est à la une et la hauteur de la scène"
+        )
+        XCTAssertFalse(layout.contains("Self.chromeTopInset + 52"), "plus de bande réservée en dur au-dessus de la grille")
+        XCTAssertTrue(layout.contains("safeAreaTop: DeviceLayout.safeAreaTop, chromeTopInset: Self.chromeTopInset"))
+        let reserve = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
+        XCTAssertTrue(reserve.contains("CallTopBannerStack.groupStageTopBase("))
+        XCTAssertTrue(reserve.contains("hasBanners: !present.isEmpty"), "les pastilles de service comptent : la présence vient de la pile")
+        XCTAssertTrue(reserve.contains("service: service"))
+        XCTAssertTrue(
+            reserve.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: base)"),
+            "grille ↔ une : la scène glisse sous l'en-tête, jamais d'un coup ; Réduire les animations : un fondu court"
+        )
+    }
+}
