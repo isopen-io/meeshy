@@ -9,6 +9,18 @@ enum class CallTopBanner {
 }
 
 /**
+ * L1.8 (#17965 point 2) — où se pose la pile des bannières : sa largeur visible ([maxWidthDp], `null` = presque toute la
+ * largeur) et si ma vignette descend dessous ([pushesSelfTile]) ou garde son coin à côté.
+ */
+data class CallTopBannerSpan(val maxWidthDp: Float?, val pushesSelfTile: Boolean) {
+    /** La largeur du porteur de la pile : la largeur visible plus la marge que chaque bandeau garde de chaque côté. */
+    val hostMaxWidthDp: Float? get() = maxWidthDp?.let { it + 2 * CallTopBannerStack.HORIZONTAL_MARGIN_DP }
+
+    /** La place que ma vignette descend sous la pile ([stackDp], sa hauteur mesurée) : rien quand elle garde son coin. */
+    fun selfTileClearanceDp(stackDp: Float): Float = if (pushesSelfTile) stackDp else 0f
+}
+
+/**
  * P16.4 à P16.8 — les bandeaux du haut de l'appel (partage d'écran, enregistrement, capture, cadre en direct) forment UNE
  * pile, ancrée SOUS la rangée d'en-tête (Réduire, Image dans l'image, Conversation, capsule), miroir de iOS
  * `CallTopBannerStack`. Règle pure : l'ordre, les dégagements et le mouvement de sortie se prouvent sans écran.
@@ -29,7 +41,29 @@ object CallTopBannerStack {
     /** P16.5 — la hauteur du bandeau de partage : la cible de « Arrêter » tient les 48 dp d'Android. */
     const val BANNER_HEIGHT_DP: Float = 48f
 
+    /** L1.8 (#17965) — en paysage, la pile a la borne de toute pilule sur fenêtre large (#17935). */
+    const val LANDSCAPE_MAX_WIDTH_DP: Float = CallPillWidth.TEXT_DP
+
+    /** L1.8 — sous cette largeur, « Vous partagez votre écran » et « Arrêter » ne tiennent plus côte à côte. */
+    const val LANDSCAPE_MIN_WIDTH_DP: Float = 300f
+
     private const val PRIORITY_STEP = 10
+
+    private val Portrait = CallTopBannerSpan(maxWidthDp = null, pushesSelfTile = true)
+
+    /**
+     * L1.8 (#17965 point 2) — en portrait, la pile tient presque toute la largeur et ma vignette descend dessous (P16.8). En
+     * paysage (la forme de la fenêtre décide, [CallSelfTileLaw.isLandscape]), elle est bornée à 560 et centrée, et se resserre
+     * symétriquement pour longer ma vignette en haut ([selfTileReserveDp], [CallSelfTileLaw.bannerReserveDp]) : ma vignette
+     * garde son coin à côté d'elle. Une fenêtre couchée trop étroite pour qu'elle y tienne ([LANDSCAPE_MIN_WIDTH_DP]) garde la
+     * pile bornée et rend la règle du portrait : ma vignette descend.
+     */
+    fun span(window: CallTileSize, selfTileReserveDp: Float): CallTopBannerSpan {
+        if (!CallSelfTileLaw.isLandscape(window)) return Portrait
+        val beside = minOf(LANDSCAPE_MAX_WIDTH_DP, window.widthDp - 2 * maxOf(HORIZONTAL_MARGIN_DP, selfTileReserveDp))
+        if (beside >= LANDSCAPE_MIN_WIDTH_DP) return CallTopBannerSpan(maxWidthDp = beside, pushesSelfTile = false)
+        return CallTopBannerSpan(minOf(LANDSCAPE_MAX_WIDTH_DP, window.widthDp - 2 * HORIZONTAL_MARGIN_DP), pushesSelfTile = true)
+    }
 
     /** Ordre fixe, quel que soit l'ordre d'arrivée : partage → enregistrement → capture → cadre. Un absent ne laisse pas de trou. */
     fun ordered(present: Set<CallTopBanner>): List<CallTopBanner> = CallTopBanner.entries.filter(present::contains)

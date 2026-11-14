@@ -177,6 +177,8 @@ fun CallScreen(
     val glassTone = callGlassTone(groupShown, state.isPeerScreenSharing, duo, chromeState.layer.activeMode, groupFocus)
     // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
     val bannerHeights = remember { CallTopBannerHeights() }
+    // L1.8 · L2.8 : ma vignette longe la pile des bannières et cède son coin aux rails, en paysage.
+    val selfTileNeighbours = remember { CallSelfTileNeighbours() }
     val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
     val groupGridClearance = rememberGroupGridBannerClearance(
         bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen, reduceMotion,
@@ -191,6 +193,7 @@ fun CallScreen(
             LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallSelfTileNeighbours provides selfTileNeighbours,
             LocalCallGroupGridClearance provides groupGridClearance,
         ) {
         Box(
