@@ -137,7 +137,13 @@ const closingBraceIndex = (source: string, openAt: number): number => {
   return index - 1;
 };
 
-type Declaration = { readonly name: string; readonly bodyStart: number; readonly bodyEnd: number };
+type Declaration = {
+  readonly name: string;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  /** `Outer.Inner` — le nom SIMPLE ne suffit pas à désigner un type imbriqué (voir [qualify]). */
+  readonly qualified: string;
+};
 
 const DECLARATION = /\b(?:struct|class|enum|actor)\s+(\w+)\s*(?:<[^>\n]*>)?\s*(?::[^{\n]*)?\{/g;
 
@@ -151,15 +157,29 @@ const DECLARATION = /\b(?:struct|class|enum|actor)\s+(\w+)\s*(?:<[^>\n]*>)?\s*(?
  */
 const EXTENSION = /\bextension\s+([\w.]+)\s*(?:<[^>\n]*>)?\s*(?::[^{\n]*)?\{/g;
 
+/**
+ * Le nom QUALIFIÉ d'une déclaration, préfixé par le type qui la contient.
+ *
+ * Ce n'est pas du zèle : `MessageSocketEvents+Conversations.swift` déclare DEUX `struct Update`
+ * imbriqués, à quatre-vingt-dix lignes l'un de l'autre, dans deux événements différents. Une
+ * résolution par nom simple rend le DERNIER rencontré — et la garde confronte alors un type à un
+ * contrat qui n'est pas le sien, en nommant des champs qui n'existent nulle part. Mesuré : c'est
+ * exactement ce qu'elle a fait avant cette qualification.
+ */
 const declarations = (source: string): readonly Declaration[] => {
   const found: Declaration[] = [];
   const pattern = new RegExp(DECLARATION.source, 'g');
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(source)) !== null) {
     const bodyStart = pattern.lastIndex;
-    found.push({ name: match[1], bodyStart, bodyEnd: closingBraceIndex(source, bodyStart) });
+    found.push({ name: match[1], bodyStart, bodyEnd: closingBraceIndex(source, bodyStart), qualified: match[1] });
   }
-  return found;
+  return found.map((declaration) => {
+    const enclosing = found
+      .filter((other) => other !== declaration && other.bodyStart < declaration.bodyStart && other.bodyEnd >= declaration.bodyEnd)
+      .sort((a, b) => b.bodyStart - a.bodyStart)[0];
+    return enclosing ? { ...declaration, qualified: `${enclosing.name}.${declaration.name}` } : declaration;
+  });
 };
 
 /** Le corps PROPRE d'un type : le sien, moins celui de ses types imbriqués. */
@@ -266,7 +286,7 @@ export const readSwift = () => {
     }
     for (const declaration of all) {
       const body = ownBody(source, declaration, all);
-      if (/\binit\s*\(\s*from\s+\w*\s*:/.test(body)) customDecoders.add(declaration.name);
+      if (/\binit\s*\(\s*from\s+\w*\s*:/.test(body)) customDecoders.add(declaration.qualified);
       const nestedKeys = all.find(
         (other) =>
           other.name === 'CodingKeys' && other.bodyStart > declaration.bodyStart && other.bodyEnd <= declaration.bodyEnd,
@@ -276,8 +296,8 @@ export const readSwift = () => {
         ...property,
         name: keys.get(property.swiftName) ?? property.swiftName,
       }));
-      if (types.has(declaration.name)) ambiguous.add(declaration.name);
-      types.set(declaration.name, { name: declaration.name, file, properties, customDecoder: false });
+      if (types.has(declaration.qualified)) ambiguous.add(declaration.qualified);
+      types.set(declaration.qualified, { name: declaration.qualified, file, properties, customDecoder: false });
     }
   }
 
@@ -316,11 +336,17 @@ export const readSwift = () => {
     }
   }
 
-  const resolveType = (name: string | undefined): SwiftType | undefined => {
+  /**
+   * `within` est le type depuis lequel le nom est écrit : en Swift, `Update` à l'intérieur de
+   * `UserPreferencesReorderedSocketEvent` désigne SON `Update`, jamais celui du voisin. On tente
+   * donc le nom qualifié d'abord, le nom simple ensuite — et jamais l'inverse.
+   */
+  const resolveType = (name: string | undefined, within?: string): SwiftType | undefined => {
     if (name === undefined) return undefined;
-    const found = types.get(name);
+    const key = within !== undefined && types.has(`${within}.${name}`) ? `${within}.${name}` : name;
+    const found = types.get(key);
     if (!found) return undefined;
-    return { ...found, customDecoder: customDecoders.has(name) };
+    return { ...found, customDecoder: customDecoders.has(key) || customDecoders.has(name) };
   };
 
   return { routes, resolveType, typeCount: types.size, ambiguousTypeNames: [...ambiguous].sort(), eventCount: events.size };

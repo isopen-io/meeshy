@@ -131,6 +131,7 @@ import {
 } from './socket-payload-shape/mirror-contract';
 import {
   KOTLIN_MIRROR,
+  describeNestedFindings,
   describeRequiredFieldFinding,
   describeUnresolvedRoute,
 } from './socket-payload-shape/required-field-report';
@@ -215,6 +216,50 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
     }
 
     const report = [...divergences.values()].sort();
+    expect(report, `\n${report.join('\n')}\n`).toEqual([]);
+  });
+  /**
+   * Le SECOND niveau (#18116) : un champ qui porte un OBJET, et ce que le miroir exige dedans.
+   *
+   * Une seule divergence au moment de l'écriture — `ApiNotification.actor.id`, requis par le miroir
+   * et OPTIONNEL au contrat, parce que `NotificationEventData.actor` redéclarait une jumelle plus
+   * lâche de `NotificationActor` (#18249). Le miroir avait raison ; c'est le contrat qui mentait sur
+   * ce que son propre émetteur produit, et aucune garde de PREMIER niveau ne pouvait le dire.
+   *
+   * Un cran, pas deux : au-delà, il faudrait suivre les types à travers des alias et des unions,
+   * c'est-à-dire réécrire un vérificateur de types. Ce qui n'est pas confronté ne l'est pas en
+   * silence — `nested` vaut `undefined` quand le contrat n'expose pas d'objet, et la garde se tait.
+   */
+  it('tout champ REQUIS dans un objet IMBRIQUÉ existe au contrat, et y est REQUIS', () => {
+    const findings = new Set<string>();
+
+    for (const route of kotlin.routes) {
+      const mirror = kotlin.resolveClass(route.className);
+      const declared = route.event === undefined ? undefined : contract.get(route.event);
+      if (!mirror || !declared || mirror.customSerializer) continue;
+
+      const byName = new Map(declared.map((field) => [field.name, field] as const));
+      for (const field of mirror.fields) {
+        /* `List<T>` se confronte à son ÉLÉMENT, et un `?` ne change pas ce qui est porté. */
+        const carriedName = field.type.replace(/[?\s]/g, '').replace(/^List<(.+)>$/, '$1');
+        const carried = kotlin.resolveClass(carriedName);
+        const counterpart = byName.get(field.name);
+        if (!carried || carried.customSerializer || !counterpart?.nested) continue;
+        for (const message of describeNestedFindings({
+          event: route.event as string,
+          carrierField: field.name,
+          nestedTypeName: carriedName,
+          nestedFile: carried.file,
+          requiredFields: carried.fields.filter(isRequired).map((nestedField) => nestedField.name),
+          declared: new Map(counterpart.nested.map((nestedField) => [nestedField.name, nestedField.optional] as const)),
+          mirror: KOTLIN_MIRROR,
+        })) {
+          findings.add(message);
+        }
+      }
+    }
+
+    const report = [...findings].sort();
     expect(report, `\n${report.join('\n')}\n`).toEqual([]);
   });
 });

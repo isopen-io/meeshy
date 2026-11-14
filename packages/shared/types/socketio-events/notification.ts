@@ -7,6 +7,7 @@
 
 // Prédicat des marquages de notifications en masse
 import type {
+  NotificationActor,
   NotificationContext,
   NotificationDeletedBulkScope,
   NotificationMetadata,
@@ -41,12 +42,17 @@ export interface NotificationEventData {
    *  and non-message notification types. */
   readonly subtitle?: string;
   readonly content: string;
-  readonly actor?: {
-    readonly id?: string;
-    readonly username?: string;
-    readonly displayName?: string;
-    readonly avatar?: string;
-  };
+  /**
+   * L'auteur du geste — le TYPE PARTAGÉ, jamais une redéclaration.
+   *
+   * Ce champ portait une jumelle anonyme dont les quatre clés étaient optionnelles, quand
+   * `NotificationActor` (`types/notification.ts`, le type que l'émetteur manipule de bout en bout :
+   * `createNotification` → `sanitizeNotificationInputs` → `formatNotification`) exige `id` et
+   * `username`. Le contrat déclarait donc plus lâche que son propre producteur — et une garde de
+   * forme ne pouvait pas distinguer un miroir client trop exigeant d'un contrat qui ment sur ce
+   * qu'il émet (#18245).
+   */
+  readonly actor?: NotificationActor;
   /**
    * Déclaré `NotificationContext` — le type RÉEL du producteur — et non plus
    * `Record<string, unknown>` (cycle 105).

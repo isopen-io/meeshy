@@ -80,3 +80,37 @@ export type UnresolvedRoute = {
 
 export const describeUnresolvedRoute = (route: UnresolvedRoute): string =>
   `${relativeToRepo(route.file)} — ${route.reference} ⇒ ${route.reason}`;
+
+/**
+ * Un champ qui porte un OBJET, et ce que le miroir exige DEDANS (#18116).
+ *
+ * Un champ imbriqué tue la trame exactement comme un champ de premier niveau — le décodeur descend,
+ * ne trouve pas la clé, et l'ÉVÉNEMENT ENTIER est perdu. `SocketCommentAddedData.comment` et
+ * `ApiNotification.actor` sont des documents complets derrière une seule clé.
+ */
+export type NestedCarrier = {
+  readonly event: string;
+  /** La clé du FIL qui porte l'objet. */
+  readonly carrierField: string;
+  readonly nestedTypeName: string;
+  readonly nestedFile: string;
+  /** Les clés que le miroir exige DANS l'objet porté. */
+  readonly requiredFields: readonly string[];
+  /** Ce que le contrat déclare dans cet objet — `undefined` ⇒ rien à confronter. */
+  readonly declared: ReadonlyMap<string, boolean> | undefined;
+  readonly mirror: MirrorIdentity;
+};
+
+export const describeNestedFindings = (carrier: NestedCarrier): readonly string[] => {
+  if (!carrier.declared) return [];
+  return carrier.requiredFields
+    .filter((field) => carrier.declared?.get(field) !== false)
+    .map(
+      (field) =>
+        `${carrier.event} — « ${carrier.carrierField}.${field} » est REQUIS par ` +
+        `${carrier.nestedTypeName} (${relativeToRepo(carrier.nestedFile)}, miroir ${carrier.mirror.platform}) ` +
+        `mais ${carrier.declared?.has(field) ? 'OPTIONNEL' : 'ABSENT'} dans l'objet que le contrat ` +
+        `déclare sous « ${carrier.carrierField} » (${EVENT_MAPS_TS}). ` +
+        carrier.mirror.symptom,
+    );
+};
