@@ -1,22 +1,23 @@
 /**
  * **LA PILE DES BANDEAUX DU HAUT** (P16.7, #17746 ; `CallTopBannerStack.ordered` d'iOS) — le partage
- * d'écran, l'enregistrement, la capture et le cadre en direct forment UNE pile sous l'en-tête, dans
- * un ordre fixe quel que soit l'ordre d'arrivée. Une loi pure : l'écran pose, l'indicateur
- * d'enregistrement et ma vignette lisent d'elle la place qu'il leur reste.
+ * d'écran, l'enregistrement, la capture, les pastilles de service (« En attente », « Vidéo réduite »,
+ * #18227, rang d'Android `CallTopBanner.Hold` / `VideoNotice`) et le cadre en direct forment UNE pile
+ * sous l'en-tête, dans un ordre fixe quel que soit l'ordre d'arrivée. Une loi pure : l'écran pose,
+ * l'indicateur d'enregistrement et ma vignette lisent d'elle la place qu'il leur reste.
  */
-export type TopBanner = 'screen-share' | 'recording' | 'capture' | 'live-frame';
+export type TopBanner = 'screen-share' | 'recording' | 'capture' | 'hold' | 'video-notice' | 'live-frame';
 
 export type PresentBanners = Readonly<Partial<Record<TopBanner, boolean>>>;
 
-const ORDER: readonly TopBanner[] = ['screen-share', 'recording', 'capture', 'live-frame'];
+const ORDER: readonly TopBanner[] = ['screen-share', 'recording', 'capture', 'hold', 'video-notice', 'live-frame'];
 
 /** La hauteur que chaque bandeau prend dans la pile, écart compris (px) — le cadre en direct, de hauteur variable, ne réserve rien à ma vignette. */
-export const TOP_BANNER_CLEARANCE: Readonly<Record<TopBanner, number>> = { 'screen-share': 60, recording: 60, capture: 56, 'live-frame': 0 };
+export const TOP_BANNER_CLEARANCE: Readonly<Record<TopBanner, number>> = { 'screen-share': 60, recording: 60, capture: 56, hold: 52, 'video-notice': 52, 'live-frame': 0 };
 
 export const orderedTopBanners = (present: PresentBanners): readonly TopBanner[] => ORDER.filter((banner) => present[banner] === true);
 
-/** Les bandeaux qui couvrent le coin de ma vignette : MON partage (pleine largeur), l'enregistrement (carte, capsule ou avis) et la capture (R1.6, R3.10). Le cadre ne la déplace pas, comme sur iOS (`CallTopBannerStack.selfTileClearance`) et Android (`selfTileClearanceDp`) ; un partage REÇU n'est pas dans la pile (#17730). */
-const SELF_TILE_BANNERS: ReadonlySet<TopBanner> = new Set(['screen-share', 'recording', 'capture']);
+/** Les bandeaux qui couvrent le coin de ma vignette : MON partage (pleine largeur), l'enregistrement (carte, capsule ou avis), la capture (R1.6, R3.10) et les pastilles de service (E3 · E4, #18227 : jamais couverte). Le cadre ne la déplace pas, comme sur iOS (`CallTopBannerStack.selfTileClearance`) et Android (`selfTileClearanceDp`) ; un partage REÇU n'est pas dans la pile (#17730). */
+const SELF_TILE_BANNERS: ReadonlySet<TopBanner> = new Set(['screen-share', 'recording', 'capture', 'hold', 'video-notice']);
 
 /** Ce que ma vignette et ses commandes descendent sous l'en-tête : la carte d'accord y compte sa hauteur MESURÉE (`recordingCard`, 0 sans carte), écart compris. */
 export const selfTileClearance = (present: PresentBanners, recordingCard = 0): number =>
