@@ -93,6 +93,7 @@ const ar = {
   'callControls.liveFrame.answer.declined.anonymous': 'يحتفظ الطرف الآخر بعرضه',
   'callControls.liveFrame.notProposed': 'تم تطبيق الإطار لديك، لكن تعذّر اقتراحه',
   'callControls.liveFrame.surface': 'إطار {frame} حول الفيديوهين',
+  'callControls.mode.closeSettings': 'إغلاق الإعدادات',
   'callControls.mode.frames': 'الإطارات',
   'callControls.layers.title': 'التأثيرات المطبّقة',
   'callControls.layers.undo': 'إلغاء {name}',
