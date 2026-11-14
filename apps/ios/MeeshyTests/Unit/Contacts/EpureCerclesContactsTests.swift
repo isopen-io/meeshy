@@ -629,13 +629,16 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertFalse(source.contains("new_conversation.contacts.empty.subtitle"))
     }
 
-    func test_circlesOffline_readsTheBannerWord_inEveryLanguage() throws {
-        let source = try code("apps/ios/Meeshy/Features/Contacts/CirclesTab.swift")
-        XCTAssertFalse(source.contains("circles.offline.empty"))
-        XCTAssertGreaterThanOrEqual(source.components(separatedBy: "circles.offline.banner").count - 1, 2, "la bannière et l'état vide disent le même mot")
-        let banner = try XCTUnwrap(try app()["circles.offline.banner"])
-        XCTAssertEqual(banner["fr"], "Hors ligne")
-        for language in Self.otherLanguages { XCTAssertFalse(try XCTUnwrap(banner[language]).isEmpty, language) }
+    /// Hors ligne et sans cercle en mémoire, « Hors ligne » seul se lisait comme la présence des personnes : l'état
+    /// vide dit en une ligne que c'est le réseau qui manque et ce qui revient avec lui. La bannière, au-dessus d'une
+    /// liste déjà affichée, garde le mot seul.
+    func test_circlesOfflineEmpty_saysTheNetworkIsMissing_notThatPeopleAreOffline_inEveryLanguage() throws {
+        let title = CirclesTab.offlineEmptyTitle
+        XCTAssertEqual(title, "Hors ligne : tes cercles reviennent avec le réseau")
+        XCTAssertTrue(title.contains("réseau"))
+        XCTAssertLessThanOrEqual(title.count, 60, "une ligne")
+        try assertTranslated(try app(), "circles.offline.empty.title", french: title)
+        XCTAssertEqual(try app()["circles.offline.banner"]?["fr"], "Hors ligne", "la bannière au-dessus de la liste reste le mot seul")
     }
 
     func test_starredEmpty_isOneLine_theGestureBehindAQuestion() throws {

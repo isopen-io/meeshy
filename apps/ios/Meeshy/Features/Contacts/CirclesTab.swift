@@ -6,6 +6,13 @@ import MeeshyUI
 /// mes demandes de montée. Cache d'abord (squelette seulement sur cache vide), états vide / chargement / erreur /
 /// hors ligne dessinés.
 struct CirclesTab: View {
+
+    /// L'onglet des cercles vide et hors ligne : « Hors ligne » seul s'y lisait comme la PRÉSENCE des personnes
+    /// (le même mot nomme l'état d'un contact) ; la ligne dit que c'est le réseau qui manque et ce qui revient
+    /// avec lui (règle 7, revue #18088).
+    static var offlineEmptyTitle: String {
+        String(localized: "circles.offline.empty.title", defaultValue: "Hors ligne : tes cercles reviennent avec le réseau", bundle: .main)
+    }
     @ObservedObject var viewModel: CirclesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
@@ -36,7 +43,7 @@ struct CirclesTab: View {
             } else if viewModel.visibleLinks.isEmpty, viewModel.isOffline {
                 emptyState(
                     icon: "wifi.slash",
-                    title: String(localized: "circles.offline.banner", defaultValue: "Hors ligne", bundle: .main),
+                    title: Self.offlineEmptyTitle,
                     actionTitle: nil,
                     action: {}
                 )

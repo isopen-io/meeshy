@@ -7664,6 +7664,53 @@
         }
       }
     },
+    "circles.offline.empty.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل: تعود دوائرك مع عودة الشبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: Deine Kreise kommen mit dem Netz zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: your circles come back with the network"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión: tus círculos vuelven con la red"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors ligne : tes cercles reviennent avec le réseau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: i tuoi cerchi tornano con la rete"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: seus círculos voltam com a rede"
+          }
+        }
+      }
+    },
     "circles.pending": {
       "extractionState": "manual",
       "localizations": {
