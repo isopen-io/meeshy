@@ -274,7 +274,7 @@ describe('CallService.listHistory', () => {
       expect(callParticipantFindMany).not.toHaveBeenCalled();
     });
 
-    it('scopes the callParticipant participation lookup to the returned call ids, with what tells who ANSWERED (#18242) and nothing else', async () => {
+    it('scopes the callParticipant participation lookup to the returned call ids and the READER\'s own lines (#18453), with what tells who ANSWERED (#18242) and nothing else', async () => {
       const row = makeRow({ id: 'call-1', initiatorId: 'other-user', answeredAt: new Date() });
       const callParticipantFindMany = jest.fn<FindMany>().mockResolvedValue([{ callSessionId: 'call-1' }]);
       const prisma = makePrisma({
@@ -285,8 +285,8 @@ describe('CallService.listHistory', () => {
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(callParticipantFindMany).toHaveBeenCalledWith({
-        where: { callSessionId: { in: ['call-1'] } },
-        select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } },
+        where: { callSessionId: { in: ['call-1'] }, participant: { userId: USER_ID } },
+        select: { callSessionId: true, role: true, answeredAt: true },
       });
     });
   });
@@ -693,6 +693,45 @@ describe('CallService.listHistory', () => {
       const missed: CallSpec = { id: 'call-missed', type: 'direct', status: 'missed', answeredAt: null, lines: [{ userId: OTHER, role: 'initiator' }] };
       const mine: CallSpec = { id: 'call-mine', type: 'group', initiatorId: USER_ID, lines: [{ userId: USER_ID, role: 'initiator' }] };
       expect((await missedTab([bystander, missed, mine])).sort()).toEqual(['call-bystander', 'call-missed']);
+    });
+
+    it('#18453 M17 — la fiche d\'un appel de groupe SUIVI que le lecteur a LANCÉ ne nomme pas Karim, qui a seulement sonné', async () => {
+      const call: CallSpec = {
+        id: 'call-mine-tracked',
+        type: 'group',
+        initiatorId: USER_ID,
+        lines: [{ userId: USER_ID, role: 'initiator', answeredAt: ANSWERED_AFTER_PROMOTION }, { userId: 'user-karim', answeredAt: null }, { userId: 'user-awa', answeredAt: ANSWERED_AFTER_PROMOTION }],
+      };
+      const [item] = await read([call], 'all');
+      expect(item?.direction).toBe('outgoing');
+      expect(item?.participants.map((participant) => participant.userId)).toEqual(['user-awa']);
+    });
+
+    it('#18453 M1 — un DUO SUIVI dont seule la marque de l\'initiateur a tenu : c\'est la LOI (`duo`) qui fait lire « entrant » au destinataire', async () => {
+      const duo: CallSpec = { ...duoWithoutKey, lines: [{ userId: OTHER, role: 'initiator', answeredAt: ANSWERED_AFTER_PROMOTION }, { userId: USER_ID, answeredAt: null }] };
+      expect(await directionOf(duo)).toBe('incoming');
+    });
+
+    it('#18453 — la direction ne charge que la ligne du LECTEUR, et rend la même direction', async () => {
+      const sessions = [callDoc(duoWithoutKey)];
+      const lines = duoWithoutKey.lines.map((line, order) => lineDoc(duoWithoutKey.id, line, order));
+      const documents = findManyIn(lines);
+      const loadedForDirection: MongoDocument[] = [];
+      const findMany = async (args: Parameters<typeof documents.findMany>[0]) => {
+        const rows = await documents.findMany(args);
+        if (args?.select && 'role' in args.select) loadedForDirection.push(...rows);
+        return rows;
+      };
+      const prisma = {
+        callSession: { findMany: findManyIn(sessions).findMany },
+        participant: { findMany: findManyIn([]).findMany },
+        callParticipant: { findMany },
+      } as unknown as PrismaClient;
+
+      const page = await new CallService(prisma).listHistory(USER_ID, { limit: 30, filter: 'all', viewer: null });
+
+      expect(page.items[0]?.direction).toBe('incoming');
+      expect(loadedForDirection).toHaveLength(1);
     });
 
     it('R5 — lire le journal ne journalise rien, même pour un appel suivi sans aucune marque (l\'alerte vit à l\'écriture du résumé)', async () => {

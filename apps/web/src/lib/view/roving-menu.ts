@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
 
+import { prefersReducedMotion } from './reduced-motion';
+import { useBackDismiss } from './use-back-dismiss';
+
 /**
  * LE MENU ANCRÉ, PARTAGÉ — patron ARIA « menu » à ROVING TABINDEX (#5559
  * défaut 4 : le même patron était écrit DEUX FOIS, une fois par
@@ -108,10 +111,31 @@ export type RovingMenuOptions = {
    * inchangé pour les deux appelants historiques.
    */
   readonly initialOpen?: boolean;
+  /**
+   * LE MENU OUVERT EST LA COUCHE DU DESSUS (#18460) — vrai par défaut : le
+   * menu s'inscrit dans la pile de `useBackDismiss` pendant qu'il est ouvert.
+   * Le retour matériel Android et Précédent le ferment seul, sans quitter
+   * l'écran ; Échap ne le ferme que s'il est au sommet, et empêche la demande
+   * de fermeture du `<dialog>` qui le porte. `false` : l'hôte porte déjà sa
+   * propre couche (une seule entrée par ouverture), et Échap reste écouté ici.
+   */
+  readonly layer?: boolean;
+  /**
+   * LA SORTIE EN MOUVEMENT (#18460) — combien de temps le menu reste monté
+   * (`mounted`, `leaving`) après sa fermeture. 0 par défaut (`mounted ===
+   * open`) ; sous « Réduire les animations », le démontage est immédiat.
+   */
+  readonly exitMs?: number;
 };
+
+type Presence = { readonly open: boolean; readonly leaving: boolean };
 
 export type RovingMenu = {
   readonly open: boolean;
+  /** Le menu est dans le DOM : ouvert, ou en train de sortir. */
+  readonly mounted: boolean;
+  /** Le menu est fermé mais joue encore sa sortie : il ne répond plus. */
+  readonly leaving: boolean;
   readonly setOpen: (next: boolean | ((current: boolean) => boolean)) => void;
   /** Ferme le menu et rend le focus au déclencheur — l'issue de `Échap` ET
    *  celle d'un choix effectué (`choose()` côté appelant). */
@@ -154,7 +178,25 @@ export type RovingMenu = {
 
 export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
   const { itemCount, isDisabledAt = () => false, computeInitialIndex, onScroll, onResize, returnFocusTo, anchor } = options;
-  const [open, setOpen] = useState(options.initialOpen ?? false);
+  const layer = options.layer !== false;
+  const exitMs = options.exitMs ?? 0;
+  const [presence, setPresence] = useState<Presence>({ open: options.initialOpen ?? false, leaving: false });
+  const { open, leaving } = presence;
+  const exitRef = useRef(exitMs);
+  exitRef.current = exitMs;
+  /* STABLE, comme le setter d'état qu'il remplace : un hôte peut le capturer. */
+  const setOpen = useRef((next: boolean | ((current: boolean) => boolean)) =>
+    setPresence((current) => {
+      const value = typeof next === 'function' ? next(current.open) : next;
+      if (value === current.open) return current;
+      return { open: value, leaving: !value && exitRef.current > 0 && !prefersReducedMotion() };
+    }),
+  ).current;
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => setPresence((current) => (current.leaving ? { open: current.open, leaving: false } : current)), exitMs);
+    return () => clearTimeout(timer);
+  }, [leaving, exitMs]);
   const [activeIndex, setActiveIndex] = useState(0);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -166,6 +208,8 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
     setOpen(false);
     (returnFocusTo?.() ?? buttonRef.current)?.focus();
   };
+
+  useBackDismiss(closeAndFocusButton, { escape: true, active: layer && open });
 
   /**
    * LES SORTIES SONT POSÉES DANS LE COMMIT QUI INSÈRE LE MENU (#7293) —
@@ -201,12 +245,13 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
       if (event.key !== 'Escape') return;
       closeAndFocusButton();
     };
+    const listensEscape = !layer;
     const onPointerDown = (event: PointerEvent) => {
       if (menuRef.current?.contains(event.target as Node)) return;
       if (buttonRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('keydown', onKeyDown);
+    if (listensEscape) document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
     /**
      * UN DÉFILEMENT QUI N'A PAS BOUGÉ L'ANCRE N'EST PAS UN DÉFILEMENT CONTRE
@@ -293,6 +338,8 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
 
   return {
     open,
+    mounted: open || leaving,
+    leaving,
     setOpen,
     closeAndFocusButton,
     activeIndex,

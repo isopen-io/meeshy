@@ -211,7 +211,7 @@ private struct MeeshyDragTargetDisc<Glyph: View>: View {
         )
         let isDark = colorScheme == .dark
         return glyph
-            .font(.system(size: CGFloat(recipe.glyphSize), weight: .semibold))
+            .font(recipe.glyphFont)
             .foregroundStyle(recipe.inkColor(isDark: isDark))
             .frame(width: CGFloat(recipe.diameter), height: CGFloat(recipe.diameter))
             .background {

@@ -22,6 +22,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
 import me.meeshy.sdk.model.piece.PieceBadge
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshyContentTransform
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.foundation.background
@@ -101,7 +103,7 @@ public fun BubbleFileRow(
                 }
             }
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
-            .animateContentSize(MeeshyMotion.springDefault()),
+            .sizeFollowsContent(LocalReduceMotion.current),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DocumentFileCard(file = file, onColor = onColor, trailing = { FileBadgeView(badge = badge, onColor = onColor) })
@@ -155,11 +157,15 @@ private fun FileBadgeView(badge: PieceBadge, onColor: Color) {
         PieceBadge.Failed -> 4
         else -> 0
     }
+    val reduceMotion = LocalReduceMotion.current
     AnimatedContent(
         targetState = kind,
         transitionSpec = {
-            (fadeIn(tween(150)) + scaleIn(MeeshyMotion.springFast(), initialScale = 0.8f)) togetherWith
-                (fadeOut(tween(150)) + scaleOut(targetScale = 0.8f))
+            meeshyContentTransform(
+                reduceMotion,
+                (fadeIn(tween(BADGE_FADE_MILLIS)) + scaleIn(MeeshyMotion.springFast(), initialScale = BADGE_FROM_SCALE)) togetherWith
+                    (fadeOut(tween(BADGE_FADE_MILLIS)) + scaleOut(targetScale = BADGE_FROM_SCALE)),
+            )
         },
         label = "file-badge",
         modifier = Modifier.clearAndSetSemantics {},
@@ -179,6 +185,13 @@ private fun FileBadgeView(badge: PieceBadge, onColor: Color) {
         }
     }
 }
+
+/** La taille de la rangée suit son contenu sur le ressort par défaut ; immédiate sous « Réduire les animations ». */
+private fun Modifier.sizeFollowsContent(reduceMotion: Boolean): Modifier =
+    if (reduceMotion) this else animateContentSize(MeeshyMotion.springDefault())
+
+private const val BADGE_FADE_MILLIS = 150
+private const val BADGE_FROM_SCALE = 0.8f
 
 @Composable
 private fun BadgeDisc(onColor: Color, content: @Composable () -> Unit) {
@@ -257,7 +270,7 @@ private fun BubbleContactCardRow(file: BubbleFile, onColor: Color, onClick: (() 
                 else base.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) { contentDescription = spoken }
             }
             .padding(MeeshySpacing.sm)
-            .animateContentSize(MeeshyMotion.springDefault()),
+            .sizeFollowsContent(LocalReduceMotion.current),
     ) {
         Row(
             modifier = Modifier.heightIn(min = 44.dp),

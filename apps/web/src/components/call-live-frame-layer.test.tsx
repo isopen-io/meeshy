@@ -295,7 +295,7 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
     view.rerender(status(none, spy()));
     const leaving = view.find('[data-call-live-frame-slot]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.querySelector('[data-call-live-frame-proposal]')).not.toBeNull();
     expect(slots()[1]?.keyframes.map((frame) => frame.transform)).toEqual(['translateY(0)', 'translateY(-100%)']);
     await finish();

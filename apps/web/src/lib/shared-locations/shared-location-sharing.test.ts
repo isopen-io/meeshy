@@ -159,11 +159,47 @@ describe('partager', () => {
     await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
     await world.center.share({ userId: AUTRE, precision: 'exact', durationMinutes: 480 });
     expect(world.starts[1]?.recipients).toEqual([
-      { userId: AMI, precision: 'city' },
+      { userId: AMI, precision: 'city', expiresInSeconds: 3600 },
       { userId: AUTRE, precision: 'exact' },
     ]);
     expect(world.starts[1]?.durationMinutes).toBe(480);
     expect(world.center.entry(AMI)?.until).toBe(T0 + HOUR);
+  });
+
+  test('la passerelle reçoit l’échéance de chacun, qui court même onglet fermé (#18205)', async () => {
+    const world = makeWorld();
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    await world.advance(10 * 60_000);
+    await world.center.share({ userId: AUTRE, precision: 'exact', durationMinutes: 480 });
+    expect(world.starts.at(-1)?.recipients).toEqual([
+      { userId: AMI, precision: 'city', expiresInSeconds: 50 * 60 },
+      { userId: AUTRE, precision: 'exact' },
+    ]);
+  });
+
+  test('une passerelle d’avant #18205 refuse l’échéance : la liste repart sans, et le partage prend', async () => {
+    const world = makeWorld();
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
+    expect(await world.center.share({ userId: AUTRE, precision: 'exact', durationMinutes: 480 })).toBeNull();
+    expect(world.starts.slice(1).map((payload) => payload.recipients)).toEqual([
+      [
+        { userId: AMI, precision: 'city', expiresInSeconds: 3600 },
+        { userId: AUTRE, precision: 'exact' },
+      ],
+      [
+        { userId: AMI, precision: 'city' },
+        { userId: AUTRE, precision: 'exact' },
+      ],
+    ]);
+    expect(world.center.entry(AUTRE)?.precision).toBe('exact');
+  });
+
+  test('sans échéance à envoyer, un refus « invalide » ne se rejoue pas', async () => {
+    const world = makeWorld();
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
+    expect(await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 })).toBe('invalid');
+    expect(world.starts).toHaveLength(1);
   });
 });
 
@@ -250,7 +286,7 @@ describe('révocation (#18166)', () => {
     expect(world.center.entry(AMI)).toBeNull();
     expect(rosterOps.isWithdrawalPending(world.stored(), AMI)).toBe(true);
     await world.advance(SHARED_LOCATION_RETRY_MS);
-    expect(world.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+    expect(world.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city', expiresInSeconds: (HOUR - SHARED_LOCATION_RETRY_MS) / 1000 }]);
     expect(rosterOps.hasPendingWithdrawals(world.stored())).toBe(false);
   });
 
@@ -292,7 +328,7 @@ describe('échéances', () => {
     await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
     await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 480 });
     await world.advance(HOUR + 2_000);
-    expect(world.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+    expect(world.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city', expiresInSeconds: (7 * HOUR - 2_000) / 1000 }]);
     expect(world.center.entry(AMI)).toBeNull();
   });
 

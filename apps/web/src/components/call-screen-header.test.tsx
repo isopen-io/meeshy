@@ -118,14 +118,14 @@ describe('la capsule de l’en-tête (P9.8)', () => {
     ]);
   });
 
-  test('elle repart de même, restée à sa place le temps du mouvement, inerte, puis démontée', async () => {
+  test('elle repart de même, restée à sa place le temps du mouvement, touchable (loi 17.11), puis démontée', async () => {
     const view = await mount(true);
     played.length = 0;
     await view.render(false);
     const leaving = view.capsule();
     expect(leaving).not.toBeNull();
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.getAttribute('aria-hidden')).toBe('true');
     expect(played.filter((entry) => entry.what === 'capsule').map((entry) => entry.keyframes[0])).toEqual([{ opacity: 1, transform: 'scale(1)' }]);
     await act(async () => {

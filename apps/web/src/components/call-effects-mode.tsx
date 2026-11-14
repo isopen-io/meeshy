@@ -12,7 +12,7 @@ import { ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-ba
 import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { useEffectLayers } from '@/lib/calls/use-effect-layers';
-import { useSwapPresence } from '@/lib/calls/use-mode-motion';
+import { loadModeMotion, useModeFade, useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
@@ -22,7 +22,7 @@ import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
-import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useEffectsBarMode } from './call-effects-bar';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, MODE_FIT, RIDER_FIT, SettingsGlass, STACKED, textOf, useEffectsBarMode, useRiderAtBar } from './call-effects-bar';
 import type { LiveFrameHold } from './call-live-frame-hold-option';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
@@ -57,7 +57,7 @@ import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
  * d'appel ; son catalogue se charge avec lui (`loadEffectsModeText`).
  */
 
-export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language)]);
+export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language), loadModeMotion()]);
 
 /**
  * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
@@ -111,6 +111,9 @@ type ModeProps = {
   readonly hold?: LiveFrameHold | undefined;
   /** La puce « Cadres » ouvre le Montage : sans lui, la rangée ne propose que Visage et Couleur. */
   readonly onOpenFrames?: (() => void) | undefined;
+  /** La couche repart (P8.14) : elle se fond, puis appelle `onGone`. */
+  readonly leaving?: boolean;
+  readonly onGone?: () => void;
 };
 
 /** Ce qu'on tire de ma vidéo affichée : une image, ou une piste à filmer. */
@@ -244,7 +247,7 @@ const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
 
 const layerChoice = (id: string): string => (id === 'none' || id === 'natural' ? NO_CHOICE : id);
 
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames, leaving = false, onGone = () => undefined }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const root = useRef<HTMLDivElement>(null);
   const [category, setCategory] = useState<EffectsCategory>(startOn);
@@ -258,10 +261,15 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const row = genreRow(true, onOpenFrames !== undefined);
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
+  useRiderAtBar(rider);
   const style = useRef('none');
   const puces = useSwapPresence<HTMLDivElement>(colorAvailable && showsLooks(bar.mode));
   const looks = useSwapPresence<HTMLDivElement>(colorAvailable && showsCarousel(bar.mode));
   const panel = useSwapPresence<HTMLDivElement>(settings);
+  const leavingAttributes = useModeFade(root, leaving, onGone, () => {
+    bar.reopen();
+    setCategory(startOn);
+  });
   const studio = useCaptureStudio({
     language,
     still: async () => {
@@ -342,14 +350,14 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   };
 
   return (
-    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="effects">
+    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className={`flex w-full flex-col items-center gap-3 ${MODE_FIT}`} data-call-mode="effects" {...leavingAttributes}>
       <div className="pointer-events-none fixed inset-0 z-0 bg-media-backdrop" data-call-mode-preview="effects">
         {preview}
       </div>
       {companions.length === 0 ? null : <CallEffectsCompanions language={language} companions={companions} captions={captions} floor={controls} />}
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
-        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+      <div ref={controls} className={`relative z-10 flex w-full flex-col items-center gap-3 ${MODE_FIT}`}>
+        <div ref={rider} className={`flex w-full flex-col items-center gap-3 ${RIDER_FIT}`} data-call-mode-rider="">
           <CaptureStatus status={studio.status} />
           <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
             {looks.mounted ? (

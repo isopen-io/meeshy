@@ -167,7 +167,7 @@ async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<voi
   ctx.follow(callId);
   const held = state();
   const { peerFrameId } = held;
-  patch({ frameId: id, answer: null, notice: null });
+  patch({ frameId: id, answer: null, notice: null, peerReleased: null });
   if (id === null) {
     if (!liveFrameReleaseReachesPeer(held)) return;
     patch({ sentProposal: null, ...(held.frameId === peerFrameId ? { peerFrameId: null } : {}) });
@@ -184,7 +184,7 @@ async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<voi
 async function answerProposal(ctx: LiveFrameContext, reply: CallLiveFrameReply): Promise<void> {
   const { proposal, callId } = ctx.state();
   if (proposal === null || callId === null) return;
-  ctx.patch(reply === 'accepted' ? { proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId } : { proposal: null });
+  ctx.patch(reply === 'accepted' ? { proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId, peerReleased: null } : { proposal: null, peerReleased: null });
   await sendReply(ctx.deps, callId, proposal.frameId, reply);
 }
 
@@ -194,10 +194,13 @@ function receiveReply(ctx: LiveFrameContext, reply: CallLiveFrameReply, answered
   ctx.patch({ sentProposal: null, answer: { frameId: answered, reply, from: remoteSharedName }, ...(reply === 'accepted' ? { peerFrameId: answered } : {}) });
 }
 
-/** Le cadre que l'autre montre : une proposition, sauf s'il est déjà le mien (acceptée d'office, la réponse est rendue). */
+/**
+ * Le cadre que l'autre montre : une proposition, sauf s'il est déjà le mien (acceptée d'office, la réponse est rendue).
+ * Son retrait fait tomber le cadre que nous partagions, et le lecteur d'écran le dit (#18367).
+ */
 function receivePeerFrame(ctx: LiveFrameContext, callId: string, id: string | null): Promise<void> | null {
   const dropsMine = id === null && liveFramePeerReleaseDropsMine(ctx.state());
-  ctx.patch({ peerFrameId: id, ...(dropsMine ? { frameId: null } : {}) });
+  ctx.patch({ peerFrameId: id, peerReleased: dropsMine ? { from: ctx.state().remoteSharedName } : null, ...(dropsMine ? { frameId: null } : {}) });
   if (id === null) {
     ctx.place(null);
     return null;

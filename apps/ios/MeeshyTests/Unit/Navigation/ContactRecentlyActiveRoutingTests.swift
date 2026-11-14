@@ -11,7 +11,8 @@ import MeeshySDK
 /// `iPadRootView+Navigation`) : même convention que
 /// `NotificationCallRoutingTests`, ce sont des gardes de SOURCE. Elles
 /// reconnaissent la branche « profil » par ce qu'elle FAIT (elle pose
-/// `router.deepLinkProfileUser` depuis l'identifiant de l'expéditeur), jamais
+/// `router.deepLinkProfileUser`, ou la demande à `router.presentProfileSheet`,
+/// depuis l'identifiant de l'expéditeur), jamais
 /// par sa place — et exigent que `.contactRecentlyActive` y soit rangé.
 /// L'acteur qui voyage jusqu'à cette branche est vérifié côté SDK
 /// (`ContactRecentlyActiveNotificationTests`, chemins liste, bannière et push).
@@ -33,7 +34,9 @@ final class ContactRecentlyActiveRoutingTests: XCTestCase {
             guard let colon = segment.range(of: ":\n") else { return nil }
             let label = String(segment[..<colon.lowerBound])
             let body = String(segment[colon.upperBound...])
-            guard body.contains("router.deepLinkProfileUser = ProfileSheetUser("),
+            let opensProfile = body.contains("router.deepLinkProfileUser = ProfileSheetUser(")
+                || body.contains("router.presentProfileSheet(ProfileSheetUser(")
+            guard opensProfile,
                   body.contains("senderId") else { return nil }
             return "." + label
         }

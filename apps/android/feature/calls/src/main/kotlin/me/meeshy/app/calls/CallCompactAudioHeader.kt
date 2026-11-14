@@ -48,6 +48,8 @@ internal fun CallAudioStageSwitch(
     signalingDegraded: Boolean = false,
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
     reduceMotion: Boolean = rememberCallReduceMotion(),
+    /** #18488 : the height of the stage, to tighten the compact avatar on a low window; 0 = unknown, the 56 dp avatar. */
+    stageHeightDp: Float = 0f,
 ) {
     val transitions = remember(reduceMotion) { CallAudioStageTransitions.of(reduceMotion) }
     Box(modifier) {
@@ -78,6 +80,7 @@ internal fun CallAudioStageSwitch(
                 peer = peer,
                 signalingDegraded = signalingDegraded,
                 peerSpeech = peerSpeech,
+                avatarDp = CallAudioStageLayout.compactAvatarDp(stageHeightDp),
                 modifier = Modifier.testTag(CALL_COMPACT_AUDIO_HEADER_TAG),
             )
         }
@@ -96,6 +99,7 @@ internal fun CallCompactAudioHeader(
     modifier: Modifier = Modifier,
     signalingDegraded: Boolean = false,
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
+    avatarDp: Float = CallAudioStageLayout.COMPACT_AVATAR_DP,
 ) {
     Column(
         modifier = modifier.padding(horizontal = MeeshySpacing.lg),
@@ -108,8 +112,9 @@ internal fun CallCompactAudioHeader(
             CallAvatarPair(
                 name = state.peerName,
                 peer = peer,
-                size = CallAudioStageLayout.COMPACT_AVATAR_DP.dp,
+                size = avatarDp.dp,
                 peerSpeech = peerSpeech,
+                badgeMin = if (avatarDp < CallAudioStageLayout.COMPACT_AVATAR_DP) TIGHT_BADGE_MIN else LOCAL_BADGE_MIN,
             )
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
                 Text(
