@@ -1,3 +1,4 @@
+import type { SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
 import type { SharedLocationDurationMinutes, SharedLocationPrecision } from '@meeshy/shared/types/shared-location-constants';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
@@ -43,6 +44,13 @@ import {
  * la personne sort de la liste, son identifiant est gardé (au plus 8 h) et rejoué toutes
  * les 30 s et à chaque socket accrochée ; aucune mise à jour de position ne part tant
  * qu'il attend, le serveur servant peut-être encore la personne retirée.
+ *
+ * PLUSIEURS APPAREILS, UN PARTAGE (#18389) : la passerelle n'en connaît qu'un par compte, et
+ * c'est lui qui fait foi. `sync()` relit ce qu'elle sert (à chaque socket accrochée et à chaque
+ * `location:share-own-changed`) et s'y recale, retraits en attente d'ici gagnants
+ * (`rosterOps.withServed`) : un retrait fait ailleurs s'applique ici, un ajout fait ailleurs
+ * n'est plus effacé par la liste périmée de cet onglet. Un partage démarré ailleurs ne fait
+ * pas suivre la position d'ici : un seul appareil publie.
  */
 
 export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: SharedLocationFix } | { readonly kind: 'denied' } | { readonly kind: 'unavailable' };
@@ -81,6 +89,8 @@ export type SharedLocationSharingCenter = {
   reconcile(): Promise<void>;
   /** Relit la liste gardée : un autre onglet du même compte a pu la changer. */
   refresh(): void;
+  /** Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18389). */
+  sync(): Promise<void>;
   abandon(): void;
 };
 
@@ -127,6 +137,7 @@ export function createSharedLocationSharingCenter({
   schedule,
   owner,
   currentAccount,
+  served = async () => null,
 }: {
   readonly emitter: SharedLocationEmitter;
   readonly fixes: SharedLocationFixSource;
@@ -136,6 +147,8 @@ export function createSharedLocationSharingCenter({
   readonly schedule: (delayMs: number, run: () => void) => () => void;
   readonly owner: string;
   readonly currentAccount: () => string | null;
+  /** Le partage que la passerelle sert au compte ; `null` quand la relecture n'a rien rendu (hors ligne, passerelle d'avant). */
+  readonly served?: () => Promise<SharedLocationOwnSnapshot | null>;
 }): SharedLocationSharingCenter {
   const withdrawalsKey = sharedLocationWithdrawalsKey(storageKey);
   const load = (): SharedLocationRoster => decodeSharedLocationRoster(storage.getItem(storageKey), storage.getItem(withdrawalsKey));
@@ -377,6 +390,21 @@ export function createSharedLocationSharingCenter({
     },
     refresh: () => {
       if (isLive()) reread();
+    },
+    sync: async () => {
+      await locked(async () => {
+        const truth = await served().catch(() => null);
+        if (truth === null || !isLive()) return null;
+        const next = rosterOps.withServed(roster(), truth, now());
+        if (rosterOps.equals(next, roster())) return null;
+        adopt(next);
+        if (!rosterOps.hasRecipients(next)) {
+          lastSent = null;
+          stopFollowing();
+        }
+        scheduleDeadline();
+        return null;
+      });
     },
     abandon: () => {
       abandoned = true;
