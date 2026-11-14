@@ -14,10 +14,12 @@ import {
   type CallHistoryRow
 } from '../callHistory';
 import { resolveGroupCallParticipants } from './callHistoryParticipants';
-import { answeredCallRoster, CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE } from './answeredCallRoster';
+import { answeredCallRoster, CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE, type CallRosterLine } from './answeredCallRoster';
 import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
 
 export type CallHistoryType = 'all' | 'audio' | 'video';
+
+type ReaderCallLine = CallRosterLine & { readonly callSessionId: string; readonly participant: { readonly userId: string | null } | null };
 
 /** Call journal sliding window: 3 months. */
 export const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -254,7 +256,7 @@ export async function listCallHistory(
   const nonOutgoingCalls = page.filter((r) => r.initiatorId !== userId);
   const participatedCallIds = new Set<string>();
   if (nonOutgoingCalls.length > 0) {
-    const lines = await prisma.callParticipant.findMany({
+    const lines: ReadonlyArray<ReaderCallLine> = await prisma.callParticipant.findMany({
       where: { callSessionId: { in: nonOutgoingCalls.map((r) => r.id) } },
       select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } }
     });

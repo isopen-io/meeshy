@@ -51,6 +51,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
 }));
 
 import { CallService } from '../../../services/CallService';
+import { CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE } from '../../../services/calls/answeredCallRoster';
 import { CallStatus } from '@meeshy/shared/prisma/client';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -207,7 +208,8 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
-        callParticipantFindMany: jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1' }]),
+        // #18242 — une ligne DÉCROCHÉE : une ligne de sonnerie seule ne suffit plus.
+        callParticipantFindMany: jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1', role: 'participant', answeredAt: new Date(), participant: { userId: USER_ID } }]),
       });
       const svc = new CallService(prisma);
       const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
@@ -260,7 +262,7 @@ describe('CallService.listHistory', () => {
       expect(callParticipantFindMany).not.toHaveBeenCalled();
     });
 
-    it('scopes the callParticipant participation lookup to the current user and the returned call ids', async () => {
+    it('scopes the callParticipant participation lookup to the returned call ids, with what tells who ANSWERED (#18242) and nothing else', async () => {
       const row = makeRow({ id: 'call-1', initiatorId: 'other-user', answeredAt: new Date() });
       const callParticipantFindMany = jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1' }]);
       const prisma = makePrisma({
@@ -271,8 +273,8 @@ describe('CallService.listHistory', () => {
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(callParticipantFindMany).toHaveBeenCalledWith({
-        where: { callSessionId: { in: ['call-1'] }, participant: { userId: USER_ID } },
-        select: { callSessionId: true },
+        where: { callSessionId: { in: ['call-1'] } },
+        select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } },
       });
     });
   });
@@ -440,9 +442,15 @@ describe('CallService.listHistory', () => {
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
       const { where } = callSessionFindMany.mock.calls.at(-1)[0];
+      // #18242 — avant le suivi par ligne, la règle d'avant ; après, seule une
+      // ligne DÉCROCHÉE du lecteur l'exclut (une ligne de sonnerie ne compte plus).
       expect(where.OR).toContainEqual({
-        answeredAt: { not: null },
+        answeredAt: { lt: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE },
         participants: { none: { participant: { userId: USER_ID } } },
+      });
+      expect(where.OR).toContainEqual({
+        answeredAt: { gte: CALL_PARTICIPANT_ANSWERS_TRACKED_SINCE },
+        participants: { none: { participant: { userId: USER_ID }, answeredAt: { not: null } } },
       });
     });
 

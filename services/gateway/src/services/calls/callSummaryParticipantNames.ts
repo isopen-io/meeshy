@@ -30,6 +30,9 @@ import { logger } from '../../utils/logger';
 
 type Served = { readonly metadata?: unknown; readonly conversationId?: unknown };
 
+/** Toute ligne servie est un objet ; on n'en lit que ces deux clés (une contrainte `Served` serait un type FAIBLE, refusé aux lignes typées `Record`). */
+const servedOf = (row: object): Served => row as Served;
+
 /** Ce qu'il faut d'un membre de conversation pour le NOMMER — rien d'autre (ni coordonnée, ni présence). */
 export type NamedMember = {
   readonly displayName: string;
@@ -65,8 +68,12 @@ export const conversationMemberName = (row: NamedMember): string => {
     ?? (row.user === null ? DELETED_ACCOUNT_DISPLAY_NAME : accountDisplayName(row.user));
 };
 
-const conversationOf = (row: Served, fallback: string | undefined): string | undefined =>
-  (typeof row.conversationId === 'string' ? nonBlank(row.conversationId) : undefined) ?? fallback;
+const conversationOf = (row: object, fallback: string | undefined): string | undefined => {
+  const { conversationId } = servedOf(row);
+  return (typeof conversationId === 'string' ? nonBlank(conversationId) : undefined) ?? fallback;
+};
+
+const storedIdsOf = (row: object): ReadonlyArray<string> => storedCallSummaryParticipantIds(servedOf(row).metadata);
 
 
 const servedMetadata = (metadata: unknown, conversationId: string, names: NameByMember): unknown => {
@@ -99,16 +106,16 @@ const loadNames = async (
   }, new Map());
 };
 
-export async function withCallSummaryParticipantNames<T extends Served>(
+export async function withCallSummaryParticipantNames<T extends object>(
   prisma: Pick<PrismaClient, 'participant'>,
   rows: ReadonlyArray<T>,
   options: { readonly conversationId?: string } = {}
 ): Promise<T[]> {
-  const summaries = rows.filter((row) => storedCallSummaryParticipantIds(row.metadata).length > 0);
+  const summaries = rows.filter((row) => storedIdsOf(row).length > 0);
   if (summaries.length === 0) return [...rows];
 
   const conversationIds = [...new Set(summaries.flatMap((row) => conversationOf(row, options.conversationId) ?? []))];
-  const userIds = [...new Set(summaries.flatMap((row) => storedCallSummaryParticipantIds(row.metadata)))];
+  const userIds = [...new Set(summaries.flatMap(storedIdsOf))];
 
   const names = await (conversationIds.length === 0
     ? Promise.resolve<NameByMember | null>(null)
@@ -120,11 +127,12 @@ export async function withCallSummaryParticipantNames<T extends Served>(
       }));
 
   return rows.map((row) => {
-    if (storedCallSummaryParticipantIds(row.metadata).length === 0) return row;
+    if (storedIdsOf(row).length === 0) return row;
     const conversationId = conversationOf(row, options.conversationId);
+    const stored = servedOf(row).metadata;
     const metadata = names === null || conversationId === undefined
-      ? withoutCallSummaryParticipants(row.metadata)
-      : servedMetadata(row.metadata, conversationId, names);
+      ? withoutCallSummaryParticipants(stored)
+      : servedMetadata(stored, conversationId, names);
     return { ...row, metadata };
   });
 }
@@ -133,7 +141,7 @@ export async function withCallSummaryParticipantNames<T extends Served>(
  * La même lecture, rendue par `id` pour un hôte qui garde ses lignes (la
  * liste des conversations) : seuls les résumés d'appel nommés y figurent.
  */
-export async function callSummariesWithParticipantNames<T extends Served & { readonly id: string }>(
+export async function callSummariesWithParticipantNames<T extends { readonly id: string }>(
   prisma: Pick<PrismaClient, 'participant'>,
   rows: ReadonlyArray<T>
 ): Promise<ReadonlyMap<string, T>> {
