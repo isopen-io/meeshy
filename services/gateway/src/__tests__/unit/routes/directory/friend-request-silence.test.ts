@@ -123,6 +123,8 @@ describe('#13933 — accepter relève au niveau visé, et seulement s’il tient
     ['ACQUAINTANCE', null, 'ACQUAINTANCE'],
     ['FRIEND', lien('ACQUAINTANCE', 'ACQUAINTANCE'), 'FRIEND'],
     [undefined, lien('ACQUAINTANCE', 'ACQUAINTANCE'), 'FRIEND'],
+    [undefined, undefined, 'FRIEND'],
+    ['FRIEND', undefined, 'FRIEND'],
   ])('une demande %s relève les DEUX accords à %s', async (targetLevel, row, attendu) => {
     const { status, store } = await agir(AUTRE, 'accept', {
       demandes: [demande(FR, 'pending', MOI, AUTRE, targetLevel ? { targetLevel } : {})], liens: row ? [row] : [],
