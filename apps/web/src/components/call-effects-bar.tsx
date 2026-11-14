@@ -4,6 +4,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
 import { listLayers, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
 import { afterAddingLook, afterBack, afterChoice, afterEscape, afterGenre, afterRemoval, afterSettings, afterShowingApplied, pressed as pressedGenre, showsLooks, type EffectsBarMode } from '@/lib/calls/call-effects-bar-rule';
+import { onRowWheel, ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, type VideoEffects } from '@/lib/calls/video-effects';
 import { translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
@@ -12,6 +13,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CallModeBar, GLASS_WIDTH, ModeOption } from './call-mode-carousel';
+import { IosSwitch } from './ios-switch';
 
 /**
  * **LA BARRE D'EFFETS, UNE POUR LES DEUX MODES** (#17903, décision porteur du 2026-11-13 sur #16979 ; P8, C1) —
@@ -102,19 +104,26 @@ export type CategoryEntry = { readonly id: string; readonly label: string; reado
 
 type CategoriesProps = { readonly entries: readonly CategoryEntry[]; readonly pressed: EffectGenre | null; readonly onPick: (id: string) => void; readonly label: string };
 
-/** Les puces qui trient les looks (Visage · Couleur · Cadres) : la rangée du haut de la barre, que Réglages ouvert fait partir. */
+/**
+ * Les puces qui trient les looks (Visage · Couleur · Cadres) : la rangée du haut de la barre, que Réglages ouvert fait
+ * partir. Elle défile à l'horizontale quand le texte grossit ou que la langue s'allonge, effacée en fondu à ses deux
+ * bords (P8.5, #17409 : `ROW_EDGE_FADE`, la recette unique) ; les marges automatiques de la grappe la centrent quand
+ * elle tient, sans jamais couper son début.
+ */
 function EffectsCategories({ entries, pressed, onPick, label }: CategoriesProps) {
   return (
     <>
-      <div role="group" aria-label={label} className="flex items-center justify-center text-on-media [text-shadow:0_1px_2px_var(--color-scrim)]" data-call-effects-categories="">
-        {entries.map((entry, index) => (
-          <span key={entry.id} className="flex items-center">
-            {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
-            <button type="button" aria-pressed={pressed === entry.genre} onClick={() => onPick(entry.id)} className={`${TEXT_TAB} ${pressed === entry.genre ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry.id}>
-              {entry.label}
-            </button>
-          </span>
-        ))}
+      <div role="group" aria-label={label} onWheel={onRowWheel} className="flex w-full items-center overflow-x-auto overscroll-x-none px-2 text-on-media [scrollbar-width:none] [text-shadow:0_1px_2px_var(--color-scrim)] [&::-webkit-scrollbar]:hidden" style={ROW_EDGE_FADE} data-call-effects-categories="">
+        <div className="mx-auto flex shrink-0 items-center">
+          {entries.map((entry, index) => (
+            <span key={entry.id} className="flex shrink-0 items-center">
+              {index === 0 ? null : <span aria-hidden className="px-0.5 opacity-60">·</span>}
+              <button type="button" aria-pressed={pressed === entry.genre} onClick={() => onPick(entry.id)} className={`${TEXT_TAB} whitespace-nowrap ${pressed === entry.genre ? 'text-on-media' : 'text-on-media-3'}`} data-call-effects-category={entry.id}>
+                {entry.label}
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
       <span aria-hidden className="h-px w-full" style={{ background: 'var(--color-media-hairline)' }} />
     </>
@@ -208,10 +217,12 @@ type AddProps = {
   readonly full: boolean;
   readonly onAdd: () => void;
   readonly onList: () => void;
+  /** Le nom de l'action « Effets appliqués » offerte au lecteur d'écran quand il y a des couches ; rien sinon. */
+  readonly appliedLabel: string | null;
 };
 
-/** (+) : une tape pose un genre de plus ; l'appui long, le menu contextuel ou Maj + Entrée ouvrent la liste des effets appliqués. */
-function AddLookButton({ label, hint, full, onAdd, onList }: AddProps) {
+/** (+) : une tape pose un genre de plus ; l'appui long, le menu contextuel ou Maj + Entrée ouvrent la liste des effets appliqués — et, pour le lecteur d'écran tactile qui n'a pas d'appui long, une commande nommée « Effets appliqués » (C1.13, l'action d'accessibilité de (+) sur iOS), hors de l'ordre de tabulation. */
+function AddLookButton({ label, hint, full, onAdd, onList, appliedLabel: applied }: AddProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fired = useRef(false);
   const clear = (): void => {
@@ -241,29 +252,36 @@ function AddLookButton({ label, hint, full, onAdd, onList }: AddProps) {
     onList();
   };
   return (
-    <ModeOption
-      label={label}
-      hint={hint}
-      glyph={plus}
-      dimmed={full}
-      onPress={press}
-      data={{ 'data-call-effects-add-look': '' }}
-      extra={{
-        'aria-keyshortcuts': 'Shift+Enter',
-        'aria-disabled': full ? true : undefined,
-        onPointerDown: start,
-        onPointerUp: clear,
-        onPointerCancel: clear,
-        onPointerLeave: clear,
-        onKeyDown,
-        onContextMenu: (event) => {
-          event.preventDefault();
-          clear();
-          fired.current = false;
-          onList();
-        },
-      }}
-    />
+    <>
+      <ModeOption
+        label={label}
+        hint={hint}
+        glyph={plus}
+        dimmed={full}
+        onPress={press}
+        data={{ 'data-call-effects-add-look': '' }}
+        extra={{
+          'aria-keyshortcuts': 'Shift+Enter',
+          'aria-disabled': full ? true : undefined,
+          onPointerDown: start,
+          onPointerUp: clear,
+          onPointerCancel: clear,
+          onPointerLeave: clear,
+          onKeyDown,
+          onContextMenu: (event) => {
+            event.preventDefault();
+            clear();
+            fired.current = false;
+            onList();
+          },
+        }}
+      />
+      {applied === null ? null : (
+        <button type="button" tabIndex={-1} aria-label={applied} onClick={onList} className="sr-only" data-call-effects-applied-action="">
+          {applied}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -328,7 +346,7 @@ export function EffectsBar({ language, mode, categories, settings, add, stack, f
         }
         quit={{ label: mode === 'settings' ? text.closeSettings : t('callStudio.mode.backEffects'), glyph: chevron, onPress: onBack, data: { 'data-call-mode-quit': '' } }}
         center={settings === null ? null : <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={mode === 'settings'} onPress={settings.onToggle} data={{ 'data-call-effects-settings-toggle': '' }} />}
-        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={() => (hasLayers ? list.onOpen() : undefined)} />}
+        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={() => (hasLayers ? list.onOpen() : undefined)} appliedLabel={hasLayers ? text.title : null} />}
       />
     </div>
   );
@@ -408,9 +426,7 @@ export function EffectsSettings({ language, effects, colorAvailable, blurAvailab
       {blurAvailable ? (
         <button type="button" role="switch" aria-checked={effects.blur} onClick={() => apply({ blur: !effects.blur })} className="flex min-h-11 w-full items-center justify-between gap-3 text-mini font-semibold text-on-media" data-call-effects-blur="">
           <span>{translate(language, 'call.effects.blur')}</span>
-          <span aria-hidden className="relative h-6 w-10 shrink-0 rounded-full transition-colors motion-reduce:transition-none" style={{ background: effects.blur ? 'var(--ios-success)' : 'var(--color-media-hairline)' }}>
-            <span className={`absolute top-0.5 size-5 rounded-full bg-on-media transition-transform motion-reduce:transition-none ${effects.blur ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
-          </span>
+          <IosSwitch checked={effects.blur} tint="var(--ios-success)" />
         </button>
       ) : null}
     </>
@@ -420,7 +436,7 @@ export function EffectsSettings({ language, effects, colorAvailable, blurAvailab
 /** Le verre de Réglages, tel que les deux modes le posent au-dessus de leur barre ; `first` y pose ce que le mode y range en tête (« Chaque visage » au Montage). */
 export function SettingsGlass({ presence, open, language, effects, colorAvailable, blurAvailable, apply, first = null }: SettingsProps & { readonly presence: { readonly ref: RefObject<HTMLDivElement | null> }; readonly open: boolean; readonly first?: ReactNode }) {
   return (
-    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.settings')} className={`${PANEL} gap-1 px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
+    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.panel')} className={`${PANEL} gap-1 px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
       {first}
       <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
     </div>

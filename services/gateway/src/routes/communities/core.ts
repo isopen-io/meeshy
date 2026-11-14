@@ -20,6 +20,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
@@ -367,6 +368,10 @@ export async function registerCoreRoutes(
       }
 
       const userId = authContext.userId;
+
+      if (validatedData.avatar !== undefined && !(await identityImageIsCallers(fastify.prisma, { userId, reference: validatedData.avatar }))) {
+        return sendBadRequest(reply, 'Invalid community', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
 
       // Generer l'identifier
       const identifier = generateIdentifier(validatedData.name, validatedData.identifier);

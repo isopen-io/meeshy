@@ -41,7 +41,6 @@ const pt = {
   'callControls.incoming.silent': '{name} não verá nem ouvirá você',
   'callControls.incoming.noVideo': 'Sem vídeo',
   'callControls.incoming.answer': 'Atender',
-  'callControls.incoming.me': 'eu',
   'callControls.error.invite': 'Não foi possível convidar {name}',
   'callControls.error.mute': 'Não foi possível silenciar {name}',
   'callControls.error.remove': 'Não foi possível remover {name}',

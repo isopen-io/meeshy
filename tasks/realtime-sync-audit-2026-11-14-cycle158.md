@@ -3,9 +3,15 @@
 *2026-11-14. Branche `claude/exciting-planck-yajbnj`, partie de `dev` à
 `aaa84631` (la tête juste après la fusion du cycle 157).*
 
-**Livré** : la fusion de #18160 (cycles 156 + 157) dans `dev`, puis #18240 (le
-message de la garde) et #18121 (son extension au miroir Swift).
-**Mesuré et inventorié, non corrigé** : #18120, qui demande du Swift compilé.
+**Livré, fusionné dans `dev`** : #18160 (les cycles 156 + 157, qui attendaient),
+#18240 (le message de la garde), #18121 (son extension au miroir Swift), #18249
+(un contrat qui mentait sur son propre émetteur), #18116 (les objets imbriqués),
+#18123 (les cinq idiomes de routage Android), #18269 (le miroir Swift dans les
+deux sens), #18159 (sept pièges armés retirés) et #18252 + #18340 (quatre des
+six rouges Android de `dev`).
+**Mesuré et inventorié, non corrigé** : #18120 (demande du Swift compilé) et les
+deux derniers rouges de `dev`, qui demandent une décision de copie de l'épure
+#18099 — #18340 les documente.
 
 ---
 
@@ -32,12 +38,14 @@ sans conflit dit que les TEXTES ne se contredisent pas ; l'absence de
 recouvrement dit que les SUJETS ne se touchent pas. Les deux ensemble valent
 mieux que l'un des deux.
 
-La compilation JVM nue a demandé de reconstruire le harnais du cycle 157 (resté
-hors dépôt) : un projet Gradle `kotlin("jvm")` qui pointe ses `srcDirs` sur
-`core/model`, applique `gradle/call-frames-catalogue.gradle.kts` et résout depuis
-`repo1.maven.org` — `repo.maven.apache.org` a rendu **429** trois fois, et
-`-Pkotlin.daemon.jvmargs=-Xmx6g` (propriété **Gradle**, pas système) évite l'ICE
-sur les 2 179 sources de test.
+Pour cette compilation, j'ai reconstruit à la main un harnais Gradle
+`kotlin("jvm")` — **et c'était une erreur : il existe**
+(`./apps/android/meeshy.sh jvm-check`, voir plus bas « Ce que ce cycle a appris
+sur son propre outillage »). Deux choses apprises en chemin restent vraies quel
+que soit le harnais : `repo.maven.apache.org` rend **429** sous ce proxy là où
+`repo1.maven.org` répond, et `kotlin.daemon.jvmargs` se passe en propriété
+**Gradle** (`-P`), pas système (`-D`), faute de quoi le compilateur tombe sur un
+ICE qui ressemble à un manque de mémoire.
 
 ---
 
@@ -193,6 +201,200 @@ imbriqué vidé (Swift, les trois `comment.author`).
 
 ---
 
+## Lot F — #18123 : les CINQ idiomes de routage, et la famille `call:*` enfin confrontée
+
+La garde Kotlin n'en lisait que trois, et le trou avait une FORME plutôt qu'une
+taille : toute la famille `call:*` sociale route par un **parseur écrit à la
+main**, sans aucune classe `@Serializable` à confronter, et les quatre
+`viewing:*` par un `decode<T>` **réifié** derrière `socketManager.on(…)`.
+
+> La QUESTION ne change pas d'un idiome à l'autre — « le miroir exige-t-il une
+> clé que le contrat ne garantit pas ? » — **seule la PREUVE change.** Un parseur
+> manuel dit son exigence par `o.str("x") ?: return@decode null` : sans la clé, il
+> rend `null`, la route écarte la trame, et rien ne rougit. Même panne que
+> `MissingFieldException`, autre mécanisme, même silence.
+
+Et le rapport le DIT, au lieu de recopier le symptôme de kotlinx : un lecteur qui
+chercherait un `MissingFieldException` dans un fichier qui n'en produit aucun
+conclurait que la garde se trompe. Le `MirrorIdentity` du cycle (lot B) a servi
+une troisième fois sans une ligne de duplication.
+
+**Couverture : 110 → 125 des 176 événements.** Zéro divergence sur les seize
+événements neufs : les douze parseurs d'appel et les quatre `viewing:*` sont
+conformes — et le dire est un résultat, pas un vide.
+
+### Deux pièges, mesurés plutôt que prévenus
+
+- **Un index global des corps de fonction par NOM rendait le dernier homonyme.**
+  `recordingStarted`, `recordingStopped` et `previewSignal` existent ailleurs dans
+  le dépôt : trois routes revenaient « sans aucune exigence », donc silencieusement
+  non gardées, et la garde restait verte. Le corps se cherche désormais dans le
+  fichier qui DÉCLARE l'objet nommé par la route. **C'est la faute des deux
+  `struct Update` Swift, dans l'autre langage, à une heure d'intervalle.**
+- **`previewSignal` ne lit aucune clé : il DÉLÈGUE** à `CallSignalMapper`. Il est
+  ÉNUMÉRÉ comme non confronté et exclu du compte de couverture — *un zéro qu'on
+  ne distingue pas d'une absence est le mode de panne silencieux d'une garde qui
+  déduit sa table.*
+
+Vu rougir : une clé requise injectée dans
+`CallSocialEventParser.mutedByModerator` (le rapport nomme le fichier du PARSEUR
+et son vrai symptôme) et dans `ViewingChange` (les trois `viewing:*` d'un coup).
+
+---
+
+## Lot G — #18269 : le miroir Swift gardé dans les DEUX sens
+
+La quatrième case d'un tableau à deux entrées. Kotlin avait ses deux gardes
+(#18070 et #18158) ; Swift n'en avait qu'une (#18121).
+
+|  | le miroir **EXIGE** trop | le miroir **DÉCLARE** trop |
+|---|---|---|
+| Kotlin | #18070 | #18158 |
+| Swift | #18121 | **ce lot** |
+
+**Mesure sur 101 types de FIL : UN seul champ** déclaré et absent du contrat —
+`FriendRequestRejectedEvent.senderId`, délibéré et documenté sur place (*« il ne
+sert qu'à router l'émission côté gateway : déclaré optionnel par tolérance,
+jamais lu »*), et son consommateur ne lit que `rejecterId`.
+
+Le miroir Swift est donc **propre dans les deux sens aujourd'hui**. L'enjeu
+n'était pas une moisson : c'est que la prochaine dérive rougisse chez celui qui
+l'écrit, comme elle le fait côté Kotlin depuis le cycle 157.
+
+Deux frontières, chacune mesurée plutôt que posée par prudence : le **FICHIER**
+décide (hors de `Sockets/`, un type a un producteur REST), et les types à
+`init(from:)` **manuel** sont écartés — les compter rendait 18 constats dont
+**17** de cette forme, et un outil qui crie à tort finit désarmé.
+
+---
+
+## Ce que ce cycle a appris sur son propre outillage
+
+J'ai reconstruit à la main un harnais Gradle « Kotlin pur » pour compiler
+`:core:model` sans AGP. **Il existait**, committé et documenté :
+`./apps/android/meeshy.sh jvm-check` — et il fait davantage (`:core:crypto`,
+`:core:e2ee`, exclusion des fichiers liés à Android). Vérifié depuis :
+`BUILD SUCCESSFUL in 3m 45s` sur l'arbre de ce cycle.
+
+Le `CLAUDE.md` RACINE ne le mentionne pas ; celui d'`apps/android` le porte en
+tête de son bandeau. Et le journal du cycle précédent citait
+`gradle -p scripts/jvm-check` — un chemin RELATIF à un répertoire qu'il ne
+nommait pas, que j'ai lu comme « un brouillon disparu avec sa session ».
+
+Leçon : `tasks/lessons/2026-11-14-le-claude-md-du-repertoire-dit-l-outil-que-la-racine-ignore.md`.
+
+---
+
+## Lot H — #18159 : sept pièges armés retirés, et deux témoins qui attestaient une forme inexistante
+
+Sept champs déclarés par un miroir Kotlin et portés par **aucun** événement du
+contrat. Ils valaient toujours `null` ou `0` ; le jour où une branche s'y
+adosse, elle ne s'exécute jamais, et rien ne rougit — c'est mot pour mot
+l'histoire de #18124.
+
+Retirés : `ConversationDeletedSocketEvent.deletedAt`,
+`ConversationClosedSocketEvent.reason`, `SocketPostDeletedData.deletedAt`,
+`SocketStoryViewedData.viewedAt`, `UnreadUpdateEvent.totalUnread`,
+`ReactionUpdateEvent.count`, `FriendRequestRejectedEvent.senderId`. Leurs
+entrées **sortent** de l'inventaire de la garde — c'est son second sens qui
+l'exige.
+
+### Ce que le compilateur a trouvé et que le balayage ne pouvait pas voir
+
+Un `grep` sur « qui LIT ce champ ? » rend zéro. `./apps/android/meeshy.sh
+jvm-check` a rendu **trois sites** de plus, tous dans des TÉMOINS — et deux
+d'entre eux attestaient une forme que **personne n'émet** :
+
+| témoin | ce qu'il affirmait | ce que la passerelle sert |
+|---|---|---|
+| `une fermeture porte sa raison quand la passerelle la sert` | un `reason` sur `conversation:closed` | `{ conversationId, closedBy, closedAt }` — `announceConversationClosed.ts` |
+| `SocketPayloadWireContractTest` | un `count` sur `reaction:added` | `{ …, aggregation, timestamp }` — `ReactionService.createUpdateEvent` |
+
+Le second est le plus parlant : c'est le fichier dont le doc-comment EXIGE une
+charge « copiée clé par clé de l'émetteur », et dont le lot du cycle 157 disait
+qu'il tenait « la moitié que les témoins Android ne tenaient pas ».
+
+> **Un témoin de contrat de fil qui INVENTE sa charge atteste une forme que
+> personne ne sert.** La règle était écrite en tête du fichier ; la charge, dix
+> lignes plus bas, ne la suivait pas. Une charge de témoin se copie depuis
+> l'émetteur, elle ne se compose pas de mémoire.
+
+Les deux sont réécrits sur ce que le fil porte vraiment, et gardent ce qui
+comptait : la tolérance aux clés en trop.
+
+### Ce qui reste de #18159
+
+`MessageDeletedEvent.deletedAt` est **lu** (`MessageRealtimeApplier`, avec
+`?: now`), donc le retirer demande de toucher `sdk-core`, qu'aucun outil local
+ne compile — et la branche défendable est l'autre : une suppression a une heure
+SERVEUR, que le contrat ne sert à personne (iOS et le web ont le même trou).
+C'est un lot d'émetteur + contrat + trois miroirs, pas un retrait.
+
+---
+
+## Lot I — vérifier la CI APRÈS chaque fusion, et ce que ça a rendu
+
+Ce cycle a fusionné cinq PR dans `dev`. Après chacune, le run `android.yml`
+correspondant a été ouvert et lu — c'est ce qui a rendu la moitié du travail
+ci-dessus, et aucune de ces causes n'aurait pu être vue autrement :
+`android.yml` ne tourne **ni sur PR ni en `workflow_dispatch`** sous
+`CI_DEV_SEUL` (#18048), donc un lot Android n'est prouvable qu'une fois FUSIONNÉ.
+
+| rouge | cause | état |
+|---|---|---|
+| `:feature:chat:compileDebugKotlin` | `stringResource` dans la lambda NON-inline de `joinToString` | **corrigé, vert en CI** |
+| cliquet de verbosité | « %lld en ligne » compté comme explication parce que sa clé contenait le nom de son ÉCRAN | **corrigé, vert en CI** |
+| `KitGlassRatchetTest` | 65 appels de verre dessiné pour un plafond de 64 | **corrigé, vert en CI** |
+| `:app:compileDebugUnitTestKotlin` | lambda finale liée au paramètre `info` ajouté APRÈS `onTap` | **corrigé**, fusionné |
+| `EpureComposantsPartagesStringsTest` | un texte retiré côté Android survit dans la SOURCE iOS | ouvert — #18340 |
+| `StickerSheetPagesRobolectricTest` | l'épure a raccourci Android seul, le témoin garde la parité iOS | ouvert — #18340 |
+
+> **Une lambda finale se lie au DERNIER paramètre.** Ajouter un paramètre après
+> un `(() -> Unit)?` déplace donc silencieusement tous les appels à lambda
+> finale. Ici le compilateur l'a attrapé parce que les types diffèrent ; si le
+> paramètre ajouté avait été une lambda lui aussi, **rien n'aurait rougi** et
+> l'action du toast serait devenue sa note.
+
+Les deux derniers ne sont **pas** corrigés, et la raison est une frontière, pas
+une difficulté : ils demandent de choisir une copie produit — dans sept langues
+pour le premier — qui appartient à l'épure. Aligner le témoin sur le texte livré
+serait pire que de le laisser rouge : il garde explicitement la parité iOS, et
+le faire taire supprimerait le seul signal de la divergence.
+
+---
+
+## Lot J — la question que les trois gardes de NOMS ne posent pas (#18342)
+
+Les gardes de noms vérifient qu'aucun client n'écoute **hors** contrat.
+Personne ne vérifie l'inverse : qu'un événement du contrat ait au moins un
+lecteur. En confrontant les 176 événements aux routes des trois clients (126
+Android après #18123, 160 Swift, 129 noms cités côté web), **six** n'ont aucun
+lecteur — et **trois d'entre eux sont ÉMIS** :
+
+| événement | émis ? | déclaré par un client ? |
+|---|---|---|
+| `location:blood-proximity` | oui — deux `emit` par alerte | non |
+| `link:message:new` | oui | non |
+| `agent:admin-event` | oui | non |
+| `call:transcription-result`, `call:translation-enabled`, `call:translation-requested` | non | non |
+
+Et la mesure contredit une affirmation du dépôt : `services/gateway/CLAUDE.md`
+écrit que l'enveloppe de `link:message:new` a « son unique auditeur (le web) ».
+Le web ne cite ni ce nom, ni sa constante, ni rien d'approchant.
+
+> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation**, au même titre
+> qu'un tri (cycle 86 bis), un compte (cycle 93) ou une contrainte de schéma
+> (cycle 94). Celui-ci a survécu à la disparition de ce qu'il décrit — et tout
+> le raisonnement du cycle 114 sur ce qu'une émission d'enveloppe « livre »
+> s'appuie dessus.
+
+Rien n'est retiré : trois de ces noms sont probablement des features à venir, et
+`location:blood-proximity` sert une directive récente dont le client n'est
+peut-être pas écrit. Chacun demande un verdict, pas un retrait automatique —
+c'est #18342.
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
@@ -215,5 +417,8 @@ rougira le jour où on l'en sortira** — et il attend une session avec Xcode.
 | #18249 | le contrat de `notification:new` redéclarait une jumelle plus lâche | **fermée** par ce lot |
 | #18116 | les champs imbriqués, les deux miroirs | **fermée** par ce lot (UN cran ; au-delà il faudrait suivre alias et unions) |
 | #18120 | la portée COMMUNAUTÉ n'atteint jamais iOS | ouverte — inventoriée par la garde, demande Xcode |
-| #18123 | les deux idiomes de routage Kotlin non vus (66 événements) | ouverte |
-| #18159, #18124, #18115 | les pièges armés du cycle 157 | ouvertes |
+| #18123 | les deux idiomes de routage Kotlin non vus | **fermée** par ce lot (110 → 125 des 176) |
+| #18269 | le miroir Swift gardé dans un seul sens | **fermée** par ce lot |
+| #18252 | les deux rouges Android de `dev` | **fermée** par ce lot |
+| #18159 | les neuf pièges armés | **sept retirés** ; reste `MessageDeletedEvent.deletedAt`, qui demande un lot d'émetteur |
+| #18124, #18115 | les pièges armés du cycle 157 | ouvertes |

@@ -9,8 +9,13 @@ import type { SelfTileCorner, TileFootprint, TileSize } from './call-self-tile';
  * 1. SOUS ma vignette en coin haut, AU-DESSUS d'elle en coin bas, tant que la
  *    bande qui reste en vaut la peine ({@link RAIL_MIN_BAND}) — le rail y
  *    reste centré et, s'il est plus long qu'elle, y défile au doigt ;
- * 2. sinon (paysage, écran court) À CÔTÉ d'elle, vers l'intérieur, sur toute la
- *    hauteur mais au-dessus de la pilule, qui ne tient plus entre deux rails.
+ * 2. sinon (écran debout trop court) À CÔTÉ d'elle, vers l'intérieur, sur toute
+ *    la hauteur mais au-dessus de la pilule, qui ne tient plus entre deux rails.
+ *
+ * **En paysage, le rail reste à son bord** (L2.8, décision porteur du 2026-11-13,
+ * #17965 point 1) : c'est ma vignette du duo qui lui cède le coin
+ * (`selfTileRailShift`, `call-self-tile.ts`), et l'écran le dit dans l'empreinte
+ * qu'il remet (`yields`), ouverte comme pendant la sortie des rails.
  *
  * Les mesures sont celles de la zone des rails (`call-rails.tsx`) : 3,5 rem
  * sous la zone sûre ({@link RAILS_TOP}), 6,5 rem au-dessus d'elle pour la
@@ -68,7 +73,7 @@ type ClearanceInput = {
 
 export function railsClearance({ tile, viewport, inset = 0, rtl, lengths }: ClearanceInput): RailsClearance {
   const none: RailsClearance = { leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE };
-  if (tile === null) return none;
+  if (tile === null || tile.yields === true) return none;
   const side = sideOf(tile.corner, rtl);
   return { ...none, [side]: clearanceFor(tile, viewport, inset, lengths[side]) };
 }

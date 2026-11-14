@@ -4,6 +4,7 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 const ar = {
   'callStudio.effects.color': 'اللون',
   'callStudio.effects.settings': 'الإعدادات',
+  'callStudio.effects.panel': 'إعدادات صورتي',
   'callStudio.face.none': 'بدون',
   'callStudio.face.smoothing': 'تنعيم البشرة',
   'callStudio.face.toad': 'ضفدع',

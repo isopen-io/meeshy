@@ -4306,6 +4306,7 @@
 		ED28F72C45AC0477E865366C /* VoiceSetupDestinationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E11086F8422F66EC5C698A1 /* VoiceSetupDestinationTests.swift */; };
 		ED30ACA9BB0FD316BB3AB93D /* ConversationView+StoryCovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EE3ACA6210DAE37FD30A25 /* ConversationView+StoryCovers.swift */; };
 		ED3C94DF7C650EBCD611DC6A /* LinkSignInConfirmationPreviewLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4CAE67F65C975362B7CFBE /* LinkSignInConfirmationPreviewLaunch.swift */; };
+		ED3DA26D05F63FF58759CEAF /* RootMenuLadderFollowGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CB5AEF7025117060B6BA2 /* RootMenuLadderFollowGuardTests.swift */; };
 		ED685509204F2BB3B66F98EA /* ListeningBroadcaster+Live.swift in Sources */ = {isa = PBXBuildFile; fileRef = B83C142723584C416DB986FB /* ListeningBroadcaster+Live.swift */; };
 		ED7E409E4610A2B278841F2B /* ComposerSceneObjectFamiliesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D4D0FB115E14CEE0428E4F /* ComposerSceneObjectFamiliesTests.swift */; };
 		ED80339D42E41820498BC494 /* ShareLinkArrivalsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5027970EA2CB026250A3FEA /* ShareLinkArrivalsListView.swift */; };
@@ -5372,6 +5373,7 @@
 		2362B04A9F32D673D1D15679 /* NSETrustedOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSETrustedOrigin.swift; sourceTree = "<group>"; };
 		2363C7DFDC933C371C43E5A7 /* FocalRichBlockEquatableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalRichBlockEquatableTests.swift; sourceTree = "<group>"; };
 		236500E5B411F7A5E463B928 /* ConversationThreadDecryptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationThreadDecryptionTests.swift; sourceTree = "<group>"; };
+		236CB5AEF7025117060B6BA2 /* RootMenuLadderFollowGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootMenuLadderFollowGuardTests.swift; sourceTree = "<group>"; };
 		2379098A20D54F068E3CB935 /* ShareSenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSenderTests.swift; sourceTree = "<group>"; };
 		237DA7B6650923AC78B59A10 /* SignupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupView.swift; sourceTree = "<group>"; };
 		23A4F485349BC68115985CE5 /* ComposerInlineEdit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerInlineEdit.swift; sourceTree = "<group>"; };
@@ -9891,6 +9893,7 @@
 				F34DB7AA14731DE689819A7E /* RestingMotionTests.swift */,
 				1A91DA7A65204BD34E7F746F /* RootComposerHandoffTests.swift */,
 				DE6348003B79B74EFA434BC3 /* RootMenuLadderEntryTests.swift */,
+				236CB5AEF7025117060B6BA2 /* RootMenuLadderFollowGuardTests.swift */,
 				E21947B5B7F1E6FA3D89EA6D /* RootMenuLadderGlowGuardTests.swift */,
 				56B5FCD2F0C1CE0B520B676A /* RootRerenderSourceGuardTests.swift */,
 				C5156B704EE2649C4DA14C54 /* RootScopeOwnershipGuardTests.swift */,
@@ -15516,7 +15519,6 @@
 				};
 			};
 			buildConfigurationList = 147F4A57130170E66816D782 /* Build configuration list for PBXProject "Meeshy" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -15538,17 +15540,18 @@
 				F7615CB1707FC23CDBA090B5 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				9999AD8C50CACBF85DF613CF /* Meeshy */,
-				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
-				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
-				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
-				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
-				0D382A685B3389715FC2687F /* MeeshyTests */,
-				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
 				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
+				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
+				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
+				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
+				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
+				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				0D382A685B3389715FC2687F /* MeeshyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -19880,6 +19883,7 @@
 				79B8C93D46830D5A694BE64D /* RootAuthObservationGuardTests.swift in Sources */,
 				57F5540AE46D71412A6CD0F8 /* RootComposerHandoffTests.swift in Sources */,
 				994EC33FCDE22DDE91F22CF5 /* RootMenuLadderEntryTests.swift in Sources */,
+				ED3DA26D05F63FF58759CEAF /* RootMenuLadderFollowGuardTests.swift in Sources */,
 				EE81D846F41D0F151DF4E40A /* RootMenuLadderGlowGuardTests.swift in Sources */,
 				18694090E35ACAA3547067C9 /* RootPresentationRulesTests.swift in Sources */,
 				2519F5603D1EA0D0411AF169 /* RootRerenderSourceGuardTests.swift in Sources */,

@@ -58,6 +58,9 @@ function makePrisma(options: { readonly participantFails?: boolean } = {}) {
       findUnique: jest.fn<any>().mockResolvedValue(account),
       update: jest.fn<any>().mockResolvedValue(account),
     },
+    messageAttachment: {
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }),
+    },
     participant: {
       updateMany: options.participantFails
         ? jest.fn<any>().mockRejectedValue(new Error('mongo down'))

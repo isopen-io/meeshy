@@ -13,6 +13,7 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
  * sur fond noir, à SA couleur (celle de ses sous-titres), l'icône caméra à côté
  * du texte, et l'anneau + le halo de cette couleur à la parole seulement, rien
  * au repos : un seul calque d'ombres (`call-motion.css`), dont seule l'OPACITÉ change.
+ * La parole se lit au niveau audio reçu, comme au duo audio (`PeerSpeechRing`, #17637).
  *
  * L'image cède la place à l'avatar (et revient) en fondu : la scène noire monte
  * par-dessus l'image, qui ne part qu'une fois couverte ; revenue, l'image se monte
@@ -46,27 +47,42 @@ type CameraOffStageProps = {
   readonly presenceKey: string | undefined;
   /** La couleur de la personne : son disque, son anneau, son halo. */
   readonly color: string;
-  readonly speaking: boolean;
-  readonly label: string;
+  /**
+   * Le flux dont le NIVEAU AUDIO dit la parole (G4.2, P9.6, #17637 : la loi à hystérésis du duo audio, jamais les
+   * sous-titres) — `null` : personne à mesurer (mon image en grand, la vignette du coin). Il ne se mesure que tant que la
+   * scène noire se montre.
+   */
+  readonly speech: MediaStream | null;
+  /** La phrase sous l'avatar — `null` : la vignette du coin, qui n'a que l'avatar (loi 17.12). */
+  readonly label: string | null;
+  /** Le diamètre de l'avatar : 96 sur la scène, la moitié de la vignette dans le coin. */
+  readonly size?: number;
 };
 
-export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, color, speaking, label }: CameraOffStageProps) {
+/**
+ * La scène noire de la caméra coupée, sur la scène du duo ET dans la vignette du coin quand elle montre l'autre (loi
+ * 17.12) : l'image et l'avatar passent l'un à l'autre en fondu, jamais d'un coup.
+ */
+export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, color, speech, label, size = 96 }: CameraOffStageProps) {
   const ms = cameraOffFadeMs(prefersReducedMotion());
   const [settledOn, settle] = useState(videoOn);
   const veil = useRef<HTMLDivElement>(null);
   useOpacityFade(veil, !videoOn, ms, () => settle(videoOn));
+  const veilHidden = videoOn && settledOn;
   return (
     <>
       {videoOn || settledOn ? <div className="absolute inset-0 overflow-hidden">{video}</div> : null}
-      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-media-backdrop ${videoOn && settledOn ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
+      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-media-backdrop ${veilHidden ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
         <div className="flex flex-col items-center gap-3">
-          <Portrait name={name} avatar={avatar} size={96} pulse={false} presenceKey={presenceKey} tint={color}>
-            <SpeechRing color={color} speaking={speaking} />
+          <Portrait name={name} avatar={avatar} size={size} pulse={false} presenceKey={presenceKey} tint={color}>
+            <PeerSpeechRing color={color} stream={veilHidden ? null : speech} />
           </Portrait>
-          <span className="flex items-center gap-2 text-body text-on-media-3">
-            <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={16} />
-            {label}
-          </span>
+          {label === null ? null : (
+            <span className="flex items-center gap-2 text-body text-on-media-3">
+              <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={16} />
+              {label}
+            </span>
+          )}
         </div>
       </div>
     </>
