@@ -2,8 +2,8 @@
   "families": {
     "android:app": {
       "labels": 319,
-      "words": 970,
-      "long": 6,
+      "words": 948,
+      "long": 2,
       "explanations": 26
     },
     "android:feature/auth": {
@@ -15,62 +15,62 @@
     "android:feature/calls": {
       "labels": 519,
       "words": 1801,
-      "long": 15,
-      "explanations": 91
+      "long": 12,
+      "explanations": 90
     },
     "android:feature/chat": {
-      "labels": 1136,
-      "words": 4434,
-      "long": 60,
-      "explanations": 114
+      "labels": 1065,
+      "words": 4114,
+      "long": 51,
+      "explanations": 103
     },
     "android:feature/community": {
       "labels": 118,
       "words": 313,
       "long": 2,
-      "explanations": 32
+      "explanations": 26
     },
     "android:feature/contacts": {
-      "labels": 160,
-      "words": 775,
-      "long": 11,
-      "explanations": 14
-    },
-    "android:feature/conversations": {
-      "labels": 652,
-      "words": 1999,
-      "long": 11,
-      "explanations": 163
-    },
-    "android:feature/feed": {
-      "labels": 341,
-      "words": 1063,
-      "long": 5,
-      "explanations": 30
-    },
-    "android:feature/game": {
-      "labels": 1269,
-      "words": 8279,
-      "long": 119,
-      "explanations": 116
-    },
-    "android:feature/notifications": {
-      "labels": 65,
-      "words": 164,
-      "long": 0,
+      "labels": 144,
+      "words": 709,
+      "long": 10,
       "explanations": 9
     },
+    "android:feature/conversations": {
+      "labels": 569,
+      "words": 1703,
+      "long": 8,
+      "explanations": 131
+    },
+    "android:feature/feed": {
+      "labels": 335,
+      "words": 959,
+      "long": 2,
+      "explanations": 28
+    },
+    "android:feature/game": {
+      "labels": 1265,
+      "words": 8194,
+      "long": 118,
+      "explanations": 115
+    },
+    "android:feature/notifications": {
+      "labels": 62,
+      "words": 152,
+      "long": 0,
+      "explanations": 7
+    },
     "android:feature/profile": {
-      "labels": 188,
-      "words": 509,
+      "labels": 173,
+      "words": 470,
       "long": 1,
-      "explanations": 18
+      "explanations": 17
     },
     "android:feature/reels": {
-      "labels": 55,
-      "words": 126,
+      "labels": 47,
+      "words": 98,
       "long": 0,
-      "explanations": 5
+      "explanations": 2
     },
     "android:feature/settings": {
       "labels": 648,
@@ -79,10 +79,10 @@
       "explanations": 59
     },
     "android:feature/stories": {
-      "labels": 818,
-      "words": 2755,
-      "long": 17,
-      "explanations": 48
+      "labels": 810,
+      "words": 2660,
+      "long": 15,
+      "explanations": 40
     },
     "android:sdk-core": {
       "labels": 4,
@@ -92,9 +92,9 @@
     },
     "android:sdk-ui": {
       "labels": 937,
-      "words": 3384,
-      "long": 32,
-      "explanations": 73
+      "words": 3310,
+      "long": 24,
+      "explanations": 71
     },
     "ios:Meeshy/(phrases)": {
       "labels": 407,
