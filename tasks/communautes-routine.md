@@ -384,3 +384,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `CommunityDecodingTest` (+4 : servi, `null`/absent, zéro/négatif, résultat de recherche).
 - Gates locaux : `xcstrings_to_android.py --check` vert, tests des scripts i18n 218/218. `meeshy.sh jvm-check` ne tourne plus en conteneur : `libsignal-client` vient de `build-artifacts.signal.org`, refusé (403) par le proxy — la preuve est `android.yml` sur la PR.
 - Prochain lot recommandé : #18061 (Android, la notification « ajouté à la communauté » ouvre la communauté), puis #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 41 (15:38 UTC)
+
+- Run consacré à mener #18479 (#18026) à la fusion : PR de la routine ouverte, dernière poussée à 14:06, donc inactive.
+- CI de la tête `5039d5f4e` : tout vert sauf `Android (assemble + unit tests)`, rouge sur les 7 mêmes tests de `:feature:calls` que `dev` (#18490, ouverte), que la PR ne touche pas. `assembleDebug` vert ; `:core:model`, `:core:network` et `:feature:community` (dont `CommunityDecodingTest`) passés avant l'arrêt de Gradle sur `:feature:calls`.
+- `origin/dev` intégré sans conflit ; `xcstrings_to_android.py --check` vert sur la fusion.
+- Prochain lot recommandé : inchangé (#18061, puis #18439, puis le reste de #16857).
