@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.ui.appearance.LocalPackShopOpener
 import me.meeshy.ui.appearance.PackShopOpener
+import me.meeshy.ui.component.focal.LocalCallJournal
 import me.meeshy.ui.settings.LocalSettingsInviteOpener
 import me.meeshy.ui.settings.SettingsInviteOpener
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,6 +35,7 @@ import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ProvideConversationMoods
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.settings.LocationSharingSettingsSheet
 
 /**
@@ -73,7 +75,9 @@ internal fun NavGraphBuilder.chatDestination(
                     val settingsInviteOpener = remember(navController) {
                         SettingsInviteOpener { invite -> navController.navigate(Routes.settingsFocus(invite)) }
                     }
+                    val callJournal = rememberCallJournalSlot(conversationId)
                     CompositionLocalProvider(
+                        LocalCallJournal provides callJournal,
                         LocalPackShopOpener provides packShopOpener,
                         LocalSettingsInviteOpener provides settingsInviteOpener,
                     ) {
@@ -107,6 +111,7 @@ internal fun NavGraphBuilder.chatDestination(
                         locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
                         onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                         onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
+                        onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
                     )
                     }
                 }

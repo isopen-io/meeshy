@@ -144,18 +144,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "settings.cache.purge.unattributed.description",
-          "androidName": "purge_unattributed_description",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "settings.cache.purge.unattributed.label",
-          "androidName": "purge_unattributed_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "settings.cache.purge.unattributed.title",
           "androidName": "purge_unattributed_title",
           "status": "adopted"
@@ -164,18 +152,6 @@
           "catalog": "app",
           "iosKey": "settings.data.storage.cache.description",
           "androidName": "data_storage_cache_description",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.data.storage.cache.subtitle",
-          "androidName": "data_storage_cache_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.data.storage.cache.title",
-          "androidName": "data_storage_cache_title",
           "status": "adopted"
         },
         {

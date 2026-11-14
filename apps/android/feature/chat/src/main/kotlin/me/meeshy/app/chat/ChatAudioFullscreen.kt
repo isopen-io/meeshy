@@ -7,7 +7,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +29,7 @@ import me.meeshy.ui.component.bubble.BubbleContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import me.meeshy.ui.component.viewer.ViewerDialog
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 
 /**
@@ -196,7 +196,7 @@ internal fun ChatAudioFullscreen(
             onOpenLanguages = { source -> languagesOf = source.carrierId },
         )
     }
-    Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
         Box(Modifier.fillMaxSize()) {
             AudioFullscreenScreen(
                 sources = sources,

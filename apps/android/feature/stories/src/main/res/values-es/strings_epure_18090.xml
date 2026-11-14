@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_queue_empty_title">Ninguna publicación en curso o fallida</string>
+    <string name="stories_comments_empty_title">Sin comentarios</string>
+    <string name="stories_viewers_empty_title">Sin vistas</string>
+    <string name="story_sentinel_body">Actualiza la aplicación para verla.</string>
+</resources>

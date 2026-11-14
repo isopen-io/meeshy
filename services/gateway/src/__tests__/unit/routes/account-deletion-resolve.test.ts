@@ -76,7 +76,10 @@ function buildApp(etat: EtatDemande | null) {
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userRelation: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     pairInteractionDay: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
-    relationFeatureSetting: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    relationFeatureSetting: {
+      deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })),
+      updateMany: jest.fn(async (a: unknown) => { ecritures.push({ partages: a }); return { count: 0 }; }),
+    },
     friendRequest: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     conversationShareLink: {
       findMany: jest.fn(async (_a: unknown) => [] as Array<{ id: string }>),
@@ -183,6 +186,24 @@ describe('POST … /resolve — les effets', () => {
 
     const reactivation = ecritures.find((e) => 'user' in e) as { user: { data: Record<string, unknown> } } | undefined;
     expect(reactivation?.user.data).toMatchObject({ isActive: true, deletedAt: null });
+
+    await app.close();
+  });
+
+  it('ÉTEINT les partages du rituel AVANT de rendre le compte : une purge en panne ne les rallume pas au retour (#14924)', async () => {
+    const { prisma, ecritures } = buildApp({ status: 'GRACE_PERIOD_EXPIRED', tokenExpiresAt: dans(3600_000) });
+    const app = await monter(prisma);
+
+    await app.inject({ method: 'POST', url: `${PREFIXE}/resolve`, payload: { token: JETON, action: 'cancel' } });
+
+    const partages = ecritures.findIndex((e) => 'partages' in e);
+    const retour = ecritures.findIndex((e) => 'user' in e);
+    expect(partages).toBeGreaterThanOrEqual(0);
+    expect(partages).toBeLessThan(retour);
+    expect((ecritures[partages] as { partages: unknown }).partages).toEqual({
+      where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }] },
+      data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false },
+    });
 
     await app.close();
   });

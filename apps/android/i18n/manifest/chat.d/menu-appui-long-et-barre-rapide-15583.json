@@ -4,12 +4,6 @@
     ":feature:chat": {
       "resDir": "feature/chat/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "action.more",
-          "androidName": "action_more",
-          "status": "adopted"
-        }
       ]
     }
   }

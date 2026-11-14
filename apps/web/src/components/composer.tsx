@@ -1025,11 +1025,11 @@ export const Composer = memo(function Composer({
                 onClick={sendDraft}
                 className={`grid size-11 place-items-center rounded-chip${slotSettled.current ? ' composer-slot-in' : ''}`}
                 style={{
-                  background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))',
+                  background: 'var(--send-accent-fill)',
                 }}
                 aria-label={translate(uiLanguage, 'composer.send')}
               >
-                <Glyph name="arrowUp" size={20} className="text-white" />
+                <Glyph name="arrowUp" size={20} className="text-ios-on-brand" />
               </button>
             ) : (
               <QuickEmojiFrame onSend={send} animateIn={slotSettled.current} />

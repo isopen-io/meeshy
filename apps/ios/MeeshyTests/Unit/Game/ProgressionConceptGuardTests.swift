@@ -133,7 +133,11 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_everyConcept_hasItsNameItsWhyItsHowAndItsTwoTips_inTheSevenLanguages() throws {
         let table = try catalog()
         for concept in concepts {
-            for field in ["name", "why", "how", "tip.1", "tip.2"] {
+            let sheet = ProgressionConcept(rawValue: concept)
+            let fields = ["name", "why", "tip.1"]
+                + (sheet.flatMap { ConceptText.how($0) } == nil ? [] : ["how"])
+                + (sheet.flatMap { ConceptText.tip2($0) } == nil ? [] : ["tip.2"])
+            for field in fields {
                 let key = "game.concept.\(concept).\(field)"
                 let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
                 for locale in locales {
@@ -278,7 +282,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             $0.hasPrefix("game.state.") || $0.hasPrefix("game.spend.missing.") || $0.hasPrefix("game.fact.missing_for.")
                 || $0.hasPrefix("game.concept.chip.to_") || $0 == "game.detail.badge.missing" || $0 == "game.detail.levelstep.progress"
         }
-        XCTAssertGreaterThanOrEqual(watched.filter { $0.hasPrefix("game.state.") }.count, 35, "les phrases d'état ont quitté le catalogue")
+        XCTAssertGreaterThanOrEqual(watched.filter { $0.hasPrefix("game.state.") }.count, 34, "les phrases d'état ont quitté le catalogue")
         let pattern = try NSRegularExpression(pattern: "%(?:\\d+\\$)?@")
         func holes(_ text: String) -> [String] {
             pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range, in: text).map { String(text[$0]) } }
@@ -302,7 +306,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             let entry = try XCTUnwrap(table["game.rules.concept.\(key).body"], "\(key) : le carnet ne l'explique pas")
             for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "game.rules.concept.\(key).body : pas de \(locale)") }
         }
-        for key in glossaryExtras.map({ "game.rules.concept.\($0).name" }) + ["game.rules.section_concepts", "game.rules.concepts_intro"] {
+        for key in glossaryExtras.map({ "game.rules.concept.\($0).name" }) + ["game.rules.section_concepts"] {
             let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
             for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
         }
@@ -372,7 +376,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             }
         }
         XCTAssertEqual(table["game.concept.points.why"]?["fr"], "Tes étincelles forment ta lumière ; son éclat, c’est ton niveau.")
-        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("Il se lit sur ta lumière"))
+        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("il se lit sur ta lumière"))
         XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau baisse d’autant"))
         for key in ["game.rules.2.body", "game.rules.4.body", "game.concept.level.what", "game.concept.points.why",
                     "game.guide.moment.first_mint.means", "game.mint.chip.level_a11y",
@@ -386,7 +390,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_theTailwind_saysSevenLevelsBelowTheLevelRecord_inEveryLanguage() throws {
         let table = try catalog(prefix: "game.")
         XCTAssertEqual(table["game.rules.concept.tailwind.body"]?["fr"],
-                       "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.")
+                       "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.")
         let fiche = try XCTUnwrap(table["game.detail.fact.tailwind"]?["fr"])
         XCTAssertEqual(fiche, "+25\u{00A0}% sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.")
         XCTAssertLessThanOrEqual(fiche.count, 110, "la fiche tient en 110 caractères")
@@ -420,7 +424,8 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "%lld frappées depuis toujours")
         XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ta plus haute lumière : le plus haut niveau que tu as atteint.")
         XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "Ce sont toutes les Meeshes que tu as frappées depuis toujours.")
-        XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés"))
+        XCTAssertTrue((table["game2.prestige.confirm.keeps"]?["fr"] ?? "").contains("tes étincelles reçues depuis toujours, ta plus haute lumière"),
+                      "l'offre de Renaissance dit, au repos, ce qui reste : les records s'y nomment")
         XCTAssertTrue((table["game2.prestige.confirm.access"]?["fr"] ?? "").hasSuffix("car elles lisent ta plus haute lumière."))
         for key in ["game.sparks.record.line", "game.sparks.cumul.record", "game.sparks.levelRecord.line", "game.concept.fact.minted",
                     "progression.meesh.minted.one", "progression.meesh.minted.many", "game2.prestige.confirm.access"] {
@@ -448,7 +453,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
     func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
         let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
+        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.howNote(concept)", "ConceptText.use(concept)", "ConceptText.useNote(concept)",
                       "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
         }

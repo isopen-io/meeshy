@@ -1,11 +1,15 @@
 package me.meeshy.app.auth
 
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -163,5 +167,16 @@ class SignupScreenPhasesTest {
 
         assertThat(closed).isTrue()
         assertThat(rig.handoffs.signupEmail.take()).isEqualTo("ada@meeshy.me")
+    }
+
+    @Test
+    fun `the card carries no second title and says what no password means, at rest`() {
+        show(rig())
+        typePhone("0612345678")
+        typeEmail("ada@meeshy.me")
+
+        compose.onAllNodesWithText("Your account").assertCountEquals(0)
+        compose.onAllNodesWithText("Why set a password now?").assertCountEquals(0)
+        compose.onNodeWithText("Without a password, you sign in with a link sent by email.").performScrollTo().assertIsDisplayed()
     }
 }

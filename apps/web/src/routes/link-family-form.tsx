@@ -1,6 +1,7 @@
 import type { HTMLAttributes } from 'react';
 
 import { SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { BRAND_BUTTON_STYLE, LinksGlyph } from '@/routes/links-parts';
 
 /**
@@ -25,6 +26,7 @@ export function Field({
   dir,
   maxLength,
   required = false,
+  note,
 }: {
   readonly id: string;
   readonly label: string;
@@ -38,14 +40,21 @@ export function Field({
   readonly dir?: 'ltr';
   readonly maxLength?: number;
   readonly required?: boolean;
+  /** Ce que le libellé ne dit pas, derrière un (i) à côté de lui. */
+  readonly note?: InfoHint;
 }) {
+  const info = useInfoHint();
   const invalid = error !== undefined && error !== null;
-  const described = [help === undefined ? null : `${id}-help`, invalid ? `${id}-error` : null].filter((part): part is string => part !== null).join(' ');
+  const described = [help === undefined ? null : `${id}-help`, note === undefined ? null : info.id, invalid ? `${id}-error` : null].filter((part): part is string => part !== null).join(' ');
   return (
     <div data-field={id} className="grid gap-0.5 px-3.5 py-2 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
-      <label htmlFor={id} className="text-chip font-medium" style={{ color: invalid ? 'var(--color-error)' : SECTION_INK_2 }}>
-        {label}
-      </label>
+      <div className="flex items-center gap-1">
+        <label htmlFor={id} className="text-chip font-medium" style={{ color: invalid ? 'var(--color-error)' : SECTION_INK_2 }}>
+          {label}
+        </label>
+        {note === undefined ? null : <InfoHintButton hint={note} state={info} />}
+      </div>
+      {note === undefined ? null : <InfoHintText hint={note} state={info} />}
       <input
         id={id}
         type={type}

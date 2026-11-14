@@ -6,6 +6,7 @@ import java.util.Locale
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.call.CallHeaderNames
 import me.meeshy.sdk.model.call.frames.CallFrameCallContext
 import org.junit.Test
 
@@ -52,5 +53,18 @@ class CallFrameTextsResolverTest {
         val resolver = CallFrameTextsResolver({ reads++; null }, { day }, { Locale.FRANCE })
         resolver.texts(CallFrameCallContext(null, knownGroupTitle = null, isGroupCall = false))
         assertThat(reads).isEqualTo(0)
+    }
+
+    @Test
+    fun `la capsule lit le nom donne en duo et le nom du groupe en groupe, dans le cache`() = runTest {
+        val direct = ApiConversation(
+            id = "c1", type = "direct", title = "Awa Diallo",
+            userPreferences = listOf(ApiConversationPreferences(customName = "Maman")),
+        )
+        assertThat(resolver(direct).headerNames("c1", null).givenName).isEqualTo("Maman")
+        val group = ApiConversation(id = "g1", type = "group", title = "Équipe")
+        assertThat(resolver(group).headerNames("g1", "Maillage").groupName).isEqualTo("Équipe")
+        assertThat(resolver(null).headerNames("g1", "Maillage").groupName).isEqualTo("Maillage")
+        assertThat(resolver(null).headerNames(null, null)).isEqualTo(CallHeaderNames(null, null))
     }
 }

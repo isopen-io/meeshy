@@ -32,12 +32,6 @@ export type SpotlightView = {
   readonly automatic: boolean;
 };
 
-export const chooseMember = (userId: string): SpotlightChoice => ({ kind: 'member', userId });
-
-export const chooseSelf = (): SpotlightChoice => ({ kind: 'self' });
-
-export const chooseGrid = (dismissedSharer: string | null): SpotlightChoice => ({ kind: 'grid', dismissedSharer });
-
 type SpotlightInput = {
   readonly members: readonly CallMember[];
   readonly choice: SpotlightChoice;
@@ -68,12 +62,9 @@ export function resolveSpotlight(input: SpotlightInput): SpotlightView | null {
   return sharer === null ? null : featuring(sharer, input, true);
 }
 
-/** Le zoom d'un écran partagé à la une (#9098, `GroupCallSpotlight.clampedZoom`) : de 1 à 4, autour du centre. */
-export const SCREEN_MAX_ZOOM = 4;
-
-const clampZoom = (zoom: number): number => Math.min(Math.max(zoom, 1), SCREEN_MAX_ZOOM);
-
-export const screenZoomAfterPinch = (zoom: number, ratio: number): number => clampZoom(zoom * ratio);
-
-/** Un cran de Ctrl + molette (ou du pincement d'un pavé tactile) : vers le haut grandit. */
-export const screenZoomAfterWheel = (zoom: number, deltaY: number): number => clampZoom(zoom * Math.exp(-deltaY / 300));
+/**
+ * « Grille » ne vaut que pour le partage qu'il a congédié (`GroupCallSpotlight.choice(afterSharerChangedFrom:)`
+ * d'iOS) : dès que le partageur change — il s'arrête, un autre partage, ou le même qui repart —, le choix
+ * tombe et la règle reprend la main. Un membre épinglé ou ma tuile restent.
+ */
+export const choiceAfterSharerChange = (choice: SpotlightChoice, from: string | null, to: string | null): SpotlightChoice => (from !== to && choice?.kind === 'grid' ? null : choice);

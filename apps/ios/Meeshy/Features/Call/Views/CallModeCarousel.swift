@@ -1,23 +1,17 @@
 import SwiftUI
+import UIKit
 import CoreGraphics
 import MeeshyUI
 import MeeshySDK
 
 enum CallModeCopy {
-    static var quit: String {
-        String(localized: "call.mode.quit", defaultValue: "Quitter", bundle: .main)
-    }
-
-    static var quitEffectsHint: String {
-        String(localized: "call.mode.quit.effects.hint", defaultValue: "Rend votre image telle qu'elle était et revient à l'appel", bundle: .main)
-    }
-
-    static var quitMontageHint: String {
-        String(localized: "call.mode.quit.montage.hint", defaultValue: "Revient à l'appel", bundle: .main)
-    }
-
     static var carouselHint: String {
-        String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour choisir", bundle: .main)
+        String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour parcourir, touchez deux fois pour appliquer", bundle: .main)
+    }
+
+    static func carouselPosition(_ ordinal: CallModeCarouselOrdinal) -> String {
+        String(format: String(localized: "call.mode.carousel.position", defaultValue: "%1$lld sur %2$lld", bundle: .main),
+               ordinal.rank, ordinal.count)
     }
 
     static var effectsTitle: String {
@@ -54,12 +48,36 @@ enum CallModeCopy {
         String(localized: "call.mode.montage.title", defaultValue: "Montage de l'appel", bundle: .main)
     }
 
-    static var validate: String {
-        String(localized: "call.mode.effects.validate", defaultValue: "Valider", bundle: .main)
+    static var backToCall: String {
+        String(localized: "call.mode.effects.back", defaultValue: "Retour à l'appel", bundle: .main)
     }
 
-    static var validateHint: String {
-        String(localized: "call.mode.effects.validate.hint", defaultValue: "Garde cet effet et revient à l'appel", bundle: .main)
+    static var backToCallHint: String {
+        String(localized: "call.mode.effects.back.hint", defaultValue: "Garde votre look et revient à l'appel", bundle: .main)
+    }
+
+    static var addLook: String {
+        String(localized: "call.mode.effects.addLook", defaultValue: "Ajouter un autre look", bundle: .main)
+    }
+
+    static var addLookHint: String {
+        String(localized: "call.mode.effects.addLook.hint", defaultValue: "Passe aux looks d'un autre genre, à cumuler avec le vôtre", bundle: .main)
+    }
+
+    static var addLookFull: String {
+        String(localized: "call.mode.effects.addLook.full", defaultValue: "Trois effets au plus", bundle: .main)
+    }
+
+    static var addLookFullHint: String {
+        String(localized: "call.mode.effects.addLook.full.hint", defaultValue: "Annulez un effet pour en ajouter un autre ; appui long pour les voir", bundle: .main)
+    }
+
+    static var framesChip: String {
+        String(localized: "call.mode.effects.category.frame", defaultValue: "Cadres", bundle: .main)
+    }
+
+    static var montageSettingsHint: String {
+        String(localized: "call.mode.montage.settings.hint", defaultValue: "Affiche « Chaque visage » à la place des cadres", bundle: .main)
     }
 
     static var settings: String {
@@ -77,12 +95,28 @@ enum CallModeCopy {
         }
     }
 
+    /// #16979 — le mot d'un genre dans LA rangée de la famille : celui d'Effets, « Cadres » au Montage.
+    static func genreName(_ genre: CallEffectKind) -> String {
+        if let category = CallEffectsCategory(kind: genre) { return categoryName(category) }
+        return genre == .frame ? framesChip : CallEffectsCopy.layerKindName(genre)
+    }
+
     static func title(_ mode: CallScreenMode) -> String {
         switch mode {
         case .effects: return effectsTitle
         case .montage: return montageTitle
         }
     }
+}
+
+/// #18192 — les déclinaisons d'un élément, que la voix parcourt sans les appliquer : la liste
+/// (l'élément nu, puis ses déclinaisons), celle qui est posée, leur nom et les deux actions.
+struct CallModeCarouselVariants<Item> {
+    let of: (Item) -> [Item]
+    let current: (Item) -> Item
+    let name: (Item) -> String
+    let next: String
+    let previous: String
 }
 
 struct CallModeCarousel<Item: Hashable, Cell: View>: View {
@@ -96,16 +130,21 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     var hint: String?
     var onCapturePhoto: (() -> Void)?
     var onStartRecording: (() -> Void)?
+    var onConfirm: (() -> Void)?
+    var variants: CallModeCarouselVariants<Item>?
     @ViewBuilder let cell: (Item, Bool) -> Cell
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// #8736 — l'élément au centre, qui suit le doigt ; `selection` n'est
     /// posée qu'au repos.
     @State private var centred: Item? = nil
+    /// #18192 — la position que VoiceOver parcourt, distincte de `selection` (l'effet appliqué).
+    @State private var browse = CallModeCarouselBrowse<Item>()
+    @AccessibilityFocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Text(name(centred ?? selection))
+            Text(browse.isBrowsing ? announcedName : name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
@@ -128,7 +167,7 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue(isRecording ? CallModeCopy.recording : name(selection))
+        .accessibilityValue(isRecording ? CallModeCopy.recording : spokenValue)
         .accessibilityHint(CallModeCopy.carouselHint)
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -137,11 +176,43 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
             @unknown default: return
             }
         }
+        .accessibilityAction { activate() }
+        .accessibilityActions { variantActions }
+        .accessibilityFocused($isFocused)
+        .adaptiveOnChange(of: isFocused) { _, focused in
+            guard !focused else { return }
+            browse.leave()
+        }
+        .adaptiveOnChange(of: selection) { _, _ in
+            browse.leave()
+        }
         .modifier(CallModeShotActions(
             isEnabled: !isRecording,
             onCapturePhoto: onCapturePhoto,
             onStartRecording: onStartRecording
         ))
+    }
+
+    private var position: Item {
+        browse.position(applied: selection)
+    }
+
+    private var announcedName: String {
+        guard let variant = browse.variant, let variants else { return name(position) }
+        return variants.name(variant)
+    }
+
+    private var spokenValue: String {
+        guard let ordinal = CallModeCarouselRule.ordinal(of: position, in: items) else { return announcedName }
+        return "\(announcedName), \(CallModeCopy.carouselPosition(ordinal))"
+    }
+
+    @ViewBuilder
+    private var variantActions: some View {
+        if let variants, variants.of(position).count > 1 {
+            Button(variants.next) { stepVariant(1, in: variants) }
+            Button(variants.previous) { stepVariant(-1, in: variants) }
+        }
     }
 
     @ViewBuilder
@@ -170,11 +241,31 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         }
     }
 
+    /// #18192 — un balayage VoiceOver PARCOURT : la voix annonce le look, rien n'est appliqué.
     private func step(_ offset: Int) {
-        let next = CallModeCarouselRule.stepping(selection, in: items, by: offset)
-        guard next != selection else { return }
-        selection = next
+        guard browse.step(by: offset, in: items, applied: selection) else { return }
         HapticFeedback.light()
+    }
+
+    private func stepVariant(_ offset: Int, in variants: CallModeCarouselVariants<Item>) {
+        guard browse.stepVariant(by: offset, applied: selection, variants: variants.of, current: variants.current) else { return }
+        HapticFeedback.light()
+        UIAccessibility.post(notification: .announcement, argument: spokenValue)
+    }
+
+    /// #18192 — le double-tap de VoiceOver applique ce qui est annoncé ; sur l'effet déjà posé, il
+    /// ne réapplique rien et rend le menu de base.
+    private func activate() {
+        let current: (Item) -> Item = variants?.current ?? { $0 }
+        let activation = browse.activation(applied: selection, current: current)
+        browse.leave()
+        switch activation {
+        case .apply(let item):
+            selection = item
+            HapticFeedback.light()
+        case .confirm:
+            onConfirm?()
+        }
     }
 }
 
@@ -521,54 +612,6 @@ struct CallModeThumbnail: View {
         .clipShape(Self.shape)
         .overlay(Self.shape.stroke(isSelected ? Color.white : Color.white.opacity(MeeshyOpacity.medium), lineWidth: isSelected ? 3 : 1))
         .accessibilityHidden(true)
-    }
-}
-
-struct CallModeOption: Identifiable {
-    let id: String
-    let symbol: String
-    let label: String
-    let caption: String
-    var hint: String? = nil
-    var isOn: Bool? = nil
-    var isEnabled = true
-    let action: () -> Void
-}
-
-struct CallModeActionBar: View {
-    let exitHint: String
-    let onExit: () -> Void
-    let options: [CallModeOption]
-
-    private static let sideDiameter: CGFloat = 44
-
-    var body: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            CallPillButton(
-                symbol: "xmark",
-                kind: .normal,
-                label: CallModeCopy.quit,
-                caption: CallModeCopy.quit,
-                hint: exitHint,
-                diameter: Self.sideDiameter,
-                action: onExit
-            )
-            Spacer(minLength: 0)
-            ForEach(options) { option in
-                CallPillButton(
-                    symbol: option.symbol,
-                    kind: option.isOn == true ? .active : .normal,
-                    label: option.label,
-                    caption: option.caption,
-                    hint: option.hint,
-                    toggleState: option.isOn,
-                    diameter: Self.sideDiameter,
-                    action: option.action
-                )
-                .disabled(!option.isEnabled)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }
 

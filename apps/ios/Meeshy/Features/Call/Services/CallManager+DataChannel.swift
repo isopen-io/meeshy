@@ -21,15 +21,14 @@ extension CallManager {
                 self.handleRemoteBye(callId: callId, rawReason: reason)
             case .transcriptEntry(let entry):
                 // Journal de transcription en P2P direct : même garde d'appel
-                // que le sink socket `callTranslatedSegmentReceived` — une
-                // entrée d'un appel déjà terminé/remplacé est ignorée, et la
-                // réception est liée au panneau (caché ⇒ désabonné, comme le
-                // chemin socket). Révisions partielles et final d'un même
+                // que le sink du relais (`CallSignalingRouter`) — une entrée d'un
+                // appel déjà terminé/remplacé est ignorée. Le journal garde tout
+                // l'appel, sous-titres allumés ou non (#17342) : aucune garde ne
+                // dépend du panneau. Révisions partielles et final d'un même
                 // énoncé partagent leur `wireId` : chaque correction remplace
                 // la précédente en place, puis la traduction relayée par le
                 // gateway fusionne dans CallTranscriptionService.
                 guard self.currentCallId == entry.callId else { return }
-                guard self.transcriptionService.isShowingOverlay else { return }
                 let segment = CallTranscriptionSegmentFactory.makeTranscriptionSegment(from: entry)
                 self.transcriptionService.receivePeerEntry(segment)
             case .ignored:

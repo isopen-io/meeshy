@@ -3,14 +3,10 @@
     <string name="call_control_more_caption">More</string>
     <string name="call_control_expanded">Expanded</string>
     <string name="call_control_collapsed">Collapsed</string>
-    <string name="call_control_mute_label">Mute microphone</string>
-    <string name="call_control_unmute_label">Unmute microphone</string>
-    <string name="call_control_mute_caption">Mic</string>
     <string name="call_control_output_hint">Chooses where the call audio plays</string>
     <string name="call_control_end_caption">Hang up</string>
     <string name="call_control_video_paused">Video paused (weak connection)</string>
     <string name="call_control_video_paused_caption">Paused</string>
     <string name="call_control_video_paused_hint">Tap to turn the camera off. Video resumes automatically if the connection improves.</string>
-    <string name="call_control_video_caption">Video</string>
     <string name="call_panel_close">Close</string>
 </resources>

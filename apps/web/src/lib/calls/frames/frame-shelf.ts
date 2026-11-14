@@ -8,7 +8,7 @@ import type { FrameStudio } from './frame-studio';
  * cadre qu'un pair a choisi, ou mémorisé dans une ambiance retirée, se peint.
  *
  * `null` = étagère INCONNUE (ancien serveur, invité, panne) : rien ne se cache.
- * Un décorateur pur sur l'atelier, sans rien en importer : le chunk
+ * Un décorateur pur sur l'atelier, sans rien en importer (les lois de portée, c'est l'atelier qui les prête) : le chunk
  * `call_frame_studio` ne grossit pas, et tout ce que l'atelier porte (peinture,
  * libellés d'usage, polices) passe intact.
  *
@@ -19,13 +19,14 @@ import type { FrameStudio } from './frame-studio';
 export function shelvedStudio(studio: FrameStudio, shelf: readonly string[] | null): FrameStudio {
   if (shelf === null) return studio;
   const installed = new Set<string>(shelf);
-  return {
+  const shelved: Omit<FrameStudio, 'hidesBeyondSpotlight' | 'scopeShowing'> = {
     ...studio,
-    moods: (people) => studio.moods(people).filter((mood) => installed.has(mood)),
-    framesOf: (people, mood) => (installed.has(mood) ? studio.framesOf(people, mood) : []),
+    moods: (people, scope) => studio.moods(people, scope).filter((mood) => installed.has(mood)),
+    framesOf: (people, mood, scope) => (installed.has(mood) ? studio.framesOf(people, mood, scope) : []),
     reconcile: (id, people) => {
       const reconciled = studio.reconcile(id, people);
       return reconciled !== null && installed.has(reconciled.mood) ? reconciled : null;
     },
   };
+  return { ...shelved, ...studio.scopeLaws(shelved) };
 }

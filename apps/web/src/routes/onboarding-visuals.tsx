@@ -28,13 +28,22 @@ import { initialsOf } from '@/lib/view/conversation';
  * un drapeau inventé : une langue sans drapeau n'en affiche aucun. */
 export const flagOf = (code: string): string => SUPPORTED_LANGUAGES.find((language) => language.code === code)?.flag ?? '';
 
-export function PointsPill({ points, bump, label }: { readonly points: number; readonly bump: boolean; readonly label: string }) {
+export function PointsPill({
+  points,
+  bump,
+  label,
+  showsCount = true,
+}: {
+  readonly points: number;
+  readonly bump: boolean;
+  readonly label: string;
+  /** Faux quand la carte porte sa jauge : elle dit déjà ce que le compteur mesure (épure #17584, règle 2). */
+  readonly showsCount?: boolean;
+}) {
   return (
-    <span data-onb-pill className={bump ? 'onb-pill onb-pill-bump' : 'onb-pill'} aria-label={label} role="img">
+    <span data-onb-pill data-onb-points={points} className={bump ? 'onb-pill onb-pill-bump' : 'onb-pill'} aria-label={label} role="img">
       <GlyphSvg glyph={PROGRESSION_GLYPHS.star} size={16} />
-      <span aria-hidden="true">
-        {points}
-      </span>
+      {showsCount ? <span aria-hidden="true">{points}</span> : null}
     </span>
   );
 }

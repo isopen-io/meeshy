@@ -61,6 +61,37 @@ final class CallChromeInteractionTests: XCTestCase {
         XCTAssertEqual(GroupStageTapRule.outcome(isChromeVisible: true), .spotlight)
     }
 
+    // MARK: - G1.11 · G2.8 — le rangement est un mouvement, pas un fondu sur place
+
+    func test_stow_leavesByItsEdge_onlyWhenHiddenAndMotionIsAllowed() {
+        XCTAssertTrue(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: false))
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: true, reduceMotion: false))
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: true), "Réduire les animations : un fondu, rien ne se déplace")
+    }
+
+    func test_stow_animation_reducedMotionIsAShortFade() {
+        XCTAssertEqual(CallChromeStow.animation(reduceMotion: false), .easeInOut(duration: CallChromeVisibility.fadeDuration))
+        XCTAssertEqual(CallChromeStow.animation(reduceMotion: true), .easeInOut(duration: CallChromeStow.reducedFadeDuration))
+        XCTAssertLessThan(CallChromeStow.reducedFadeDuration, CallChromeVisibility.fadeDuration)
+    }
+
+    /// La sortie est MESURÉE : l'élément part de toute sa hauteur plus sa marge au bord, si bien
+    /// qu'une pilule dépliée (rangées, journal) quitte l'écran aussi entièrement que la pilule nue.
+    func test_stow_headerLeavesUpwards_byItsMeasuredHeightAndTopMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .top, extent: 44, margin: 59), -103)
+    }
+
+    func test_stow_pillLeavesDownwards_byItsMeasuredHeightAndBottomMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 68, margin: 46), 114)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 440, margin: 46), 486, "Le journal ouvert sort lui aussi tout entier")
+    }
+
+    func test_stow_unmeasuredExtent_stillLeavesPastTheMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 0, margin: 46), 46)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: -5, margin: 46), 46)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: .nan, margin: 46), 46)
+    }
+
     // MARK: - Enfoncement
 
     func test_pressFeedback_pressIn_hasNoAnimationDelay() {

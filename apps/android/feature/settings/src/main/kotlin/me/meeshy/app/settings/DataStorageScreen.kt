@@ -18,6 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,8 +95,18 @@ fun DataStorageScreen(
 @Composable
 private fun MediaCacheCard(totalBytes: Long?) {
     val tint = MeeshyPalette.Indigo500
+    var openNote by rememberOpenNote()
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), MeeshyIcons.Storage, tint)
+        MeeshyInfoNoted(
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.data_storage_cache_question),
+                text = stringResource(R.string.data_storage_cache_description),
+            ),
+            openNoteId = openNote,
+            onOpenNoteIdChange = { openNote = it },
+        ) {
+            SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), MeeshyIcons.Storage, tint)
+        }
         SettingsCard(tint = tint) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg),
@@ -101,19 +114,13 @@ private fun MediaCacheCard(totalBytes: Long?) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                     Icon(MeeshyIcons.Storage, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.data_storage_cache_title),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MeeshyTheme.tokens.textPrimary,
-                        )
-                        Text(
-                            text = stringResource(R.string.data_storage_cache_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.data_storage_cache_size),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (totalBytes == null) {
                         MeeshySkeletonBox(modifier = Modifier.size(width = 56.dp, height = 18.dp))
                     } else {
@@ -125,11 +132,6 @@ private fun MediaCacheCard(totalBytes: Long?) {
                         )
                     }
                 }
-                Text(
-                    text = stringResource(R.string.data_storage_cache_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
             }
         }
     }

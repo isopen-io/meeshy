@@ -25,6 +25,11 @@ jest.mock('../../../services/achievements/CerclesAchievements', () => ({
   CerclesAchievements: jest.fn().mockImplementation(() => ({ recordEvent: jest.fn<any>().mockResolvedValue(undefined) })),
 }));
 
+const scheduleCommunityAddedAnnouncement = jest.fn<any>();
+jest.mock('../../../services/notifications/community-added', () => ({
+  scheduleCommunityAddedAnnouncement: (...args: unknown[]) => scheduleCommunityAddedAnnouncement(...args),
+}));
+
 import { registerMembershipRoutes } from '../../../routes/communities/membership';
 import { registerMemberRoutes } from '../../../routes/communities/members';
 
@@ -182,6 +187,34 @@ describe('POST /communities/:id/members — la route jumelle de l’administrate
     const { app, writes } = await build(ADMIN);
     expect((await add(app, target)).statusCode).toBe(404);
     expect(writes).toHaveLength(0);
+    await app.close();
+  });
+});
+
+describe("la personne ajoutée l'apprend (#18052)", () => {
+  const announced = () => scheduleCommunityAddedAnnouncement.mock.calls.map((call) => call[1]);
+
+  it.each([
+    ['invitée', invite],
+    ['ajoutée par un administrateur', add],
+  ])('une personne %s est prévenue, au nom de qui l’a fait entrer', async (_label, door) => {
+    scheduleCommunityAddedAnnouncement.mockClear();
+    const { app } = await build(ADMIN);
+    expect((await door(app, NEWCOMER)).statusCode).toBe(200);
+    expect(announced()).toEqual([{ communityId: COMMUNITY, actorId: ADMIN, recipientIds: [NEWCOMER] }]);
+    await app.close();
+  });
+
+  it.each([
+    ['un compte désactivé', invite, DEACTIVATED_USER],
+    ['un blocage', invite, BLOCKS_ADMIN],
+    ['un membre déjà actif (409)', invite, MEMBER],
+    ['un membre déjà actif ré-ajouté', add, MEMBER],
+  ])('rien ne part pour %s', async (_label, door, target) => {
+    scheduleCommunityAddedAnnouncement.mockClear();
+    const { app } = await build(ADMIN);
+    await door(app, target);
+    expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
     await app.close();
   });
 });

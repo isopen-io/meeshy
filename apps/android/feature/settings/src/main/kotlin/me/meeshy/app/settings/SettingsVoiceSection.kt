@@ -23,6 +23,7 @@ internal fun SettingsVoiceSection(rows: List<SettingsHubRow>, onOpenVoiceProfile
                     stringResource(R.string.settings_voice_create),
                     MeeshyPalette.Success,
                     onOpenVoiceProfile,
+                    subtitle = stringResource(R.string.settings_voice_orientation),
                 )
                 else -> Unit
             }

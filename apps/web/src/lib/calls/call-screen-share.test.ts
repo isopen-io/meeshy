@@ -50,8 +50,8 @@ describe('la disposition quand un pair partage', () => {
 });
 
 describe('ce que voit celui qui partage', () => {
-  test('une pastille « Vous partagez votre écran »', () => {
-    expect(statusPills({ micMuted: false, screenSharing: true, members: {}, quality: null, isGroup: false })).toEqual(['screen-sharing']);
+  test('« Vous partagez votre écran » n’est plus une pastille : c’est un bandeau sous l’en-tête (P16.4)', () => {
+    expect(statusPills({ micMuted: false, screenSharing: true, members: {}, quality: null, isGroup: false })).toEqual([]);
   });
 });
 

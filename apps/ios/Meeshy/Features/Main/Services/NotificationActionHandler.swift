@@ -63,6 +63,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let conversationLocks: any ConversationLockProbing
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
+    private let stopBring: @MainActor (String) async -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -187,8 +188,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         },
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
-        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live
+        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
+        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) }
     ) {
+        self.stopBring = stopBring
         self.repliesAwaitingRegime = repliesAwaitingRegime
         self.awaitingReplyRules = awaitingReplyRules
         self.destinationGuard = destinationGuard
@@ -247,11 +250,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
-            // #6999 — OUVRIR, c'est CONSOMMER. Le tap ne marquait rien lu : la
-            // ligne restait non lue dans la cloche et le compteur ne bougeait
-            // pas, pour une notification que l'utilisateur venait d'ouvrir.
-            // La navigation d'ABORD : la consommation attend le `markAsRead`
-            // REST, et le tap ne faisait rien tant qu'il n'était pas revenu.
+            // #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST.
             openNotification(userInfo)
             await consumeTapped(payload)
 
@@ -294,6 +293,9 @@ final class NotificationActionHandler: NotificationActionHandling {
             handleDetailAction(actionIdentifier, userInfo: userInfo)
             await consumeTapped(payload)
 
+        case MeeshyNotificationAction.stopBring.rawValue:
+            await handleStopBring(userInfo)
+
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
             // actual decline via CallKit; APNs declineCall is just
@@ -304,6 +306,12 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             await consumeTapped(payload)
         }
+    }
+
+    /// #17442 — « Arrêter » sur la bannière d'un Bring : le Bring s'éteint partout, l'app ne s'ouvre pas.
+    private func handleStopBring(_ userInfo: [AnyHashable: Any]) async {
+        guard let bringId = userInfo["bringId"] as? String, !bringId.isEmpty else { return }
+        await stopBring(bringId)
     }
 
     // MARK: - Conversation verrouillée par PIN (#12655)

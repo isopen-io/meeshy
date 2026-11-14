@@ -63,8 +63,12 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
         XCTAssertTrue(hero.contains(".contentShape("),
                       "The banner's hit area must be bounded to its own frame.")
 
-        XCTAssertTrue(source.contains("headerBar\n                    .zIndex(1)"),
-                      "The header bar must sit above the content that follows it, so no overflow can cover its buttons.")
+        // #17907 — Fermer et Réglages flottent en surimpression du défilement, comme sur la fiche profil :
+        // aucun débordement du contenu ne peut les recouvrir.
+        XCTAssertTrue(source.contains(".overlay(alignment: .topLeading) { closeButton }"),
+                      "Close must float above the scrolling content, so no overflow can cover it.")
+        XCTAssertTrue(source.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
+                      "Settings must float above the scrolling content, so no overflow can cover it.")
     }
 
     func test_callParticipantVisualAvatar_migratesToCachedAvatarImage() throws {
@@ -78,8 +82,9 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
                       "avatarView must use CachedAvatarImage — a 44-56pt call circle has no room for the retry icon+label.")
         XCTAssertTrue(avatar.contains("name: callManager.remoteUsername"),
                       "CachedAvatarImage needs a name for its initials fallback.")
-        XCTAssertTrue(avatar.contains("accentColor: MeeshyColors.brandPrimaryHex"),
-                      "CachedAvatarImage must reuse the documented brand hex constant (never a raw literal).")
+        XCTAssertTrue(avatar.contains("accentColor: ringsInPeerColor ? peerColorHex : MeeshyColors.brandPrimaryHex"),
+                      "CachedAvatarImage must reuse the documented brand hex constant for the banner and the shared peer color for the bubble (P18.4) — never a raw literal.")
+        XCTAssertFalse(avatar.contains("accentColor: \"#"), "never a raw hex literal")
         XCTAssertFalse(avatar.contains("CachedAsyncImage("),
                         "avatarView must no longer construct a bare CachedAsyncImage for the remote avatar.")
     }
@@ -98,7 +103,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
 
     func test_callSelfView_suspendedTile_showsTheLocalUserPhoto() throws {
         let source = try appSource("Meeshy/Features/Call/Views/CallView+SelfView.swift")
-        let tile = try block(from: "private var videoSuspendedTileBody: some View {", upTo: "VStack(spacing: MeeshySpacing.xsPlus)", in: source)
+        let tile = try block(from: "struct CallVideoSuspendedTileBody: View {", upTo: "VStack(spacing: MeeshySpacing.xsPlus)", in: source)
         XCTAssertTrue(tile.contains("CachedAvatarImage("))
         XCTAssertTrue(tile.contains("localUser?.avatar"), "La vignette « vidéo en pause » montre la photo de l'utilisateur local.")
         XCTAssertFalse(tile.contains("Text(initial)"))

@@ -11,7 +11,7 @@ import { AFFILIATE_TINT } from '@/routes/link-families-parts';
 import { Field, FormError, SubmitButton } from '@/routes/link-family-form';
 import { LinksGlyph, LinksHeader, LinksOfflineNotice } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
-import { FormSection, RuleToggle } from '@/routes/share-link-form';
+import { FormIntro, FormSection, RuleToggle } from '@/routes/share-link-form';
 
 /**
  * **NOUVEAU LIEN DE PARRAINAGE** (#6409) — miroir `AffiliateCreateView.swift` :
@@ -60,7 +60,8 @@ export default function AffiliateLinkNewScreen() {
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
         <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
           {online ? null : <LinksOfflineNotice language={language} />}
-          <FormSection id="affiliate-section-identity" title={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
+          <FormIntro text={translateLinkFamilies(language, 'linkFamilies.affiliate.create.intro')} />
+          <FormSection id="affiliate-section-identity" title={null} subtitle={null} icon={null}>
             <Field
               id="affiliate-name"
               required
@@ -72,7 +73,7 @@ export default function AffiliateLinkNewScreen() {
               onChange={(value) => edit('name', value)}
             />
           </FormSection>
-          <FormSection id="affiliate-section-limit" title={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit')} subtitle={null} icon={<LinksGlyph name="gauge" size={12} />}>
+          <FormSection id="affiliate-section-limit" title={null} subtitle={null} icon={null}>
             <RuleToggle
               id="affiliate-limit"
               label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit')}

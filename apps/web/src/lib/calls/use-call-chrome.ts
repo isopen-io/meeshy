@@ -3,8 +3,9 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { chromeAfter, type ChromeCue, type ChromeVisibility } from './call-controls';
 
 /**
- * **CE QUI RANGE LES COMMANDES D'UNE VIDÉO** (#8391, #8550, #8988) — le
- * branchement DOM de `chromeAfter`, sur une scène vidéo seulement :
+ * **CE QUI RANGE LES COMMANDES D'UNE SCÈNE** (#8391, #8550, #8988, #17945) — le
+ * branchement DOM de `chromeAfter`, sur la scène d'un appel établi
+ * (`tapStowsChrome` : une vidéo, le fond d'un duo audio ou d'un groupe sans caméra) :
  *
  * - TOUCHER la scène (n'importe où hors d'un bouton, d'un champ ou du cadre
  *   des commandes) range TOUTES les commandes — en-tête, pilule et son
@@ -45,7 +46,7 @@ const INTERACTIVE = [
 /**
  * Décidé à la DESCENTE du toucher (phase de capture), avant que la cible
  * n'agisse : sous Preact, un bouton qui change d'état (« Couper le micro » →
- * « Activer le micro ») remplace son glyphe pendant son propre gestionnaire,
+ * « Réactiver le micro ») remplace son glyphe pendant son propre gestionnaire,
  * et à la remontée la cible, détachée, n'a plus de bouton parmi ses ancêtres.
  *
  * Un toucher qui rate de peu (le titre d'une feuille, l'espace entre deux
@@ -61,7 +62,8 @@ export const tapTogglesChrome = (event: Event): boolean => {
 };
 
 type ChromeInput = {
-  readonly videoScene: boolean;
+  /** La scène range ses commandes au toucher (`tapStowsChrome`), et aucun mode n'a pris l'écran. */
+  readonly scene: boolean;
   readonly root: RefObject<HTMLElement | null>;
   /** Vrai pour un clic qui n'est pas un toucher — celui qui suit un glissé (#9096, `use-call-swipe-down.ts`). */
   readonly swallowTap?: () => boolean;
@@ -70,8 +72,10 @@ type ChromeInput = {
 export type CallChrome = {
   readonly visibility: ChromeVisibility;
   /**
-   * Range ou rend les commandes comme le ferait un toucher de la scène
-   * (#9183) — pour un appelant qui n'en a pas émis un : une tuile de groupe
+   * REND les commandes (#9183, G1.9) — pour un appelant qui n'a pas émis de
+   * toucher de la scène. Rendre, jamais basculer : le focus qu'un doigt donne à
+   * un bouton (Chromium) les a souvent déjà rendues avant le clic, et un
+   * second basculement les rangerait aussitôt. Une tuile de groupe
    * est un `<button>`, donc `tapTogglesChrome` lui laisse toujours son
    * toucher (loi `INTERACTIVE`). Chrome masqué, une tuile appelle `reveal()`
    * au lieu de se mettre à la une ; chrome visible, elle se met à la une
@@ -81,13 +85,13 @@ export type CallChrome = {
 };
 
 /**
- * Ce que montrent les commandes : `shown` hors d'une scène vidéo, sinon
+ * Ce que montrent les commandes : `shown` hors d'une scène qui range, sinon
  * l'état de `chromeAfter` — que l'écran projette en opacité et en visibilité.
  */
-export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): CallChrome {
+export function useCallChrome({ scene, root, swallowTap }: ChromeInput): CallChrome {
   const [visibility, setVisibility] = useState<ChromeVisibility>('shown');
-  const scene = useRef(videoScene);
-  scene.current = videoScene;
+  const stage = useRef(scene);
+  stage.current = scene;
   const swallow = useRef(swallowTap);
   swallow.current = swallowTap;
   const cue = (next: ChromeCue) => setVisibility((current) => chromeAfter(current, next));
@@ -99,7 +103,7 @@ export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): Ca
     const key = () => cue('key');
     const tap = (event: Event) => {
       if (swallow.current?.() === true) return;
-      if (scene.current && tapTogglesChrome(event)) cue('tap');
+      if (stage.current && tapTogglesChrome(event)) cue('tap');
     };
     page.addEventListener('keydown', key);
     element.addEventListener('focusin', key);
@@ -112,8 +116,8 @@ export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): Ca
   }, [root]);
 
   useEffect(() => {
-    if (!videoScene) setVisibility('shown');
-  }, [videoScene]);
+    if (!scene) setVisibility('shown');
+  }, [scene]);
 
-  return { visibility: videoScene ? visibility : 'shown', reveal: () => cue('tap') };
+  return { visibility: scene ? visibility : 'shown', reveal: () => setVisibility('shown') };
 }

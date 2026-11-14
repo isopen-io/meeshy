@@ -60,7 +60,7 @@ struct EmailCodeEntry: View {
                     .font(.title3)
                     .foregroundStyle(MeeshyColors.success)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                    Text(String(localized: "emailVerification.provenElsewhere.title", defaultValue: "Adresse confirmée ✓"))
+                    Text(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "emailVerification.provenElsewhere.body", defaultValue: "Saisissez le code reçu pour vous connecter sur ce téléphone."))
@@ -122,7 +122,7 @@ struct EmailCodeEntry: View {
         // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
         // champ — inintelligible. On pose un label + un indice explicites.
         .accessibilityLabel(String(localized: "emailVerification.code.a11yLabel", defaultValue: "Code de vérification"))
-        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par email"))
+        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par e-mail"))
     }
 
     // MARK: - Error View

@@ -499,13 +499,14 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     func sampleAudioLevels() async {
         guard let host, isGroupCallActive else { return }
         let primary = primaryUserId
-        let primaryLevel = await host.primaryAudioLevel()
+        let primaryLevels = await host.primaryAudioLevels()
         let current = links
         var levels: [String: Double] = [:]
         for (userId, link) in current {
             if let level = await link.audioLevel() { levels[userId] = level }
         }
-        if let primary, let primaryLevel { levels[primary] = primaryLevel }
+        if let primary, let primaryLevel = primaryLevels?.primary { levels[primary] = primaryLevel }
+        if let localLevel = primaryLevels?.local, !host.isLocalMicMuted { levels[host.groupLocalUserId] = localLevel }
         detector = detector.recording(levels, at: now())
         let speakers = detector.speakers
         if speakers != speakingUserIds { speakingUserIds = speakers }

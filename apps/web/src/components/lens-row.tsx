@@ -42,6 +42,7 @@ import { currentInterfaceLanguage, interfaceLanguageOf } from '@/lib/interface-l
 import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@/lib/view/conversation';
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
+import { useListeningBand } from '@/lib/now-playing/listening-band';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
 import { navigate, useIsCurrentPath } from '@/lib/router';
 import { Link, href } from '@/routes/route-table';
@@ -211,6 +212,9 @@ export type LensRowProps = {
 };
 
 /** Le rôle de plateforme que la passerelle a servi, lu sans s'abonner : `null` tant qu'il ne l'a pas été. */
+/** Le compte du pair, clé de l'écoute servie (`now-playing:changed.userId`), comme l'en-tête du fil. */
+const listeningKeyOf = (peer: ReturnType<typeof peerOf>): string | undefined => peer?.userId ?? peer?.user?.id ?? undefined;
+
 const servedPlatformRole = (): string | null => appQueryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null;
 
 type RowPointerHandler = (event: ReactPointerEvent<HTMLLIElement>) => void;
@@ -427,6 +431,9 @@ function LensRowImpl({
   /* LA PRÉSENCE VIVANTE DU PAIR (#10571) : la rangée mémoïsée se repeint seule
      quand SA pastille change — un `user:status`, ou un seuil 1/3/5 franchi. */
   const peerPresence = usePresence(group ? undefined : peerOf(conversation, viewerId), now === undefined ? undefined : { now });
+  /* CE QU'ÉCOUTE LE PAIR, au détail que son cercle ouvre (#16733) — iso
+     `ConversationRowAvatar` : le bandeau de l'en-tête, sur la rangée. */
+  const peerListening = useListeningBand(group ? undefined : listeningKeyOf(peerOf(conversation, viewerId)), labelLanguage);
   const peerSignals = group
     ? {}
     : {
@@ -440,6 +447,7 @@ function LensRowImpl({
         ...(peerMood === undefined
           ? {}
           : { mood: peerMood, moodStill: true, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }),
+        ...(peerListening === undefined ? {} : { listening: peerListening }),
       };
   /* … ET ELLE SE TOUCHE, sur l'avatar qui porte déjà le profil du pair : la
      cible est le frère de ce lien-là (`Avatar.moodAuthorId`). */
@@ -663,6 +671,14 @@ function LensRowImpl({
             >
               {title}
             </span>
+            {/* L'ÉCOUTE DU PAIR SE DIT DANS LA LIGNE (#16733) — le bandeau de
+                l'avatar est décoratif ; c'est ce lien, arrêt de tabulation de
+                la rangée, qui la porte au lecteur d'écran. */}
+            {peerListening === undefined ? null : (
+              <span data-listening-spoken="" className="sr-only">
+                {peerListening.spoken}
+              </span>
+            )}
             {/*
               L'ÉPINGLE SE VOIT SUR LA RANGÉE, toujours — pas seulement dans le
               supplément magnifié. iOS n'a pas besoin de ce glyphe : il range

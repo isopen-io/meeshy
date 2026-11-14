@@ -10,7 +10,7 @@ import { RELATION_LINKS_QUERY_KEY, type RelationLink } from '@/lib/api/relations
 import type { WatchRealtime } from '@/lib/api/watch-realtime';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
-import type { TalkieCaptureFactory } from '@/lib/talkie/talkie-sender';
+import type { TalkieCaptureFactory, TalkieVoiceCopy } from '@/lib/talkie/talkie-sender';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -111,7 +111,11 @@ function harness(ack: unknown) {
     },
   };
   const watch: WatchRealtime = (watcher) => watcher(socket);
-  const capture: TalkieCaptureFactory = async () => ({ stop: async () => undefined });
+  const capture: TalkieCaptureFactory = async ({ onFrame }) => {
+    onFrame(new Uint8Array([0xff, 0xf1, 7]), 21);
+    return { stop: async () => undefined };
+  };
+  const copies: TalkieVoiceCopy[] = [];
   const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
   transport.request = (async () => ({ ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] })) as HttpTransport['request'];
   const notices: string[] = [];
@@ -128,9 +132,13 @@ function harness(ack: unknown) {
       watch={watch}
       capture={capture}
       supported={async () => true}
+      copier={async (copy) => {
+        copies.push(copy);
+        return true;
+      }}
     />
   );
-  return { row, emitted, notices, tones };
+  return { row, emitted, notices, tones, copies };
 }
 
 const settle = async () => {
@@ -143,6 +151,15 @@ const press = async (node: HTMLElement) => {
   const button = node.querySelector<HTMLButtonElement>('[data-talkie-send]');
   await act(async () => {
     button?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  });
+  await settle();
+  await settle();
+};
+
+const release = async (node: HTMLElement) => {
+  const button = node.querySelector<HTMLButtonElement>('[data-talkie-send]');
+  await act(async () => {
+    button?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
   });
   await settle();
   await settle();
@@ -178,12 +195,17 @@ describe('ProfileTalkieRow', () => {
     expect(notices).toEqual([]);
   });
 
-  test('un blocage se dit comme un repli : une INFORMATION neutre, jamais une erreur', async () => {
+  test('un blocage se dit comme un repli : la voix s’enregistre, part en message vocal, et l’issue est une INFORMATION', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
-    const { row, notices, tones } = harness({ success: false, error: 'x', code: 'TALKIE_BLOCKED' });
+    const { row, notices, tones, copies } = harness({ success: false, error: 'x', code: 'TALKIE_BLOCKED' });
     const node = await mount(row);
     await settle();
     await press(node);
+    expect(node.textContent).toContain('Le talkie ne passe pas : votre voix part en message vocal');
+    expect(notices).toEqual([]);
+    await release(node);
+    expect(copies).toHaveLength(1);
+    expect(copies[0]?.toUserId).toBe(PROCHE);
     expect(notices).toEqual(['L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.']);
     expect(tones).toEqual([false]);
     expect(node.querySelector('[data-talkie-send]')).not.toBeNull();

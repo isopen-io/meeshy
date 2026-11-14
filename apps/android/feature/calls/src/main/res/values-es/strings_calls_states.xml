@@ -4,7 +4,6 @@
     <string name="call_outgoing_waiting">Esperando al contacto…</string>
     <string name="call_outgoing_waiting_hint">El contacto aún no ha respondido.</string>
     <string name="call_connecting_label">Conectando…</string>
-    <string name="call_unknown_peer">Desconocido</string>
     <string name="call_type_audio">Llamada de audio</string>
     <string name="call_type_video">Videollamada</string>
     <string name="call_incoming_audio">Llamada entrante</string>

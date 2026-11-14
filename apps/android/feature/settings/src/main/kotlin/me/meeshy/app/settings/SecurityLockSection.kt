@@ -86,6 +86,7 @@ internal fun SecurityLockSectionContent(
                 color = tint,
             )
         }
+        SettingsOrientation(stringResource(R.string.security_lock_orientation))
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.lg),
             modifier = Modifier.fillMaxWidth(),

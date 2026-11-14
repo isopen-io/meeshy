@@ -4,11 +4,7 @@
     ":feature:stories": {
       "resDir": "feature/stories/src/main/res",
       "entries": [
-        {
-          "catalog": "ui",
-          "iosKey": "story.repost.reprojected",
-          "status": "adopted"
-        }
+        { "androidName": "story_repost_reprojected", "status": "android-only" }
       ]
     }
   }

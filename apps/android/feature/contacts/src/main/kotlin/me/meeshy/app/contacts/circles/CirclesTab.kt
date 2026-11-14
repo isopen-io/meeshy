@@ -70,12 +70,7 @@ fun CirclesTab(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             state.showsSkeleton -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            state.isEmptyState -> FullState(
-                title = stringResource(R.string.circles_empty_title),
-                subtitle = stringResource(R.string.circles_empty_subtitle),
-                action = stringResource(R.string.circles_empty_action),
-                onAction = onFindContacts,
-            )
+            state.isEmptyState -> CirclesEmptyState(onFindContacts = onFindContacts)
             state.visibleLinks.isEmpty() && state.hasError -> FullState(
                 title = stringResource(R.string.circles_error_load),
                 subtitle = null,
@@ -124,6 +119,8 @@ private fun CirclesList(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         item(key = "banner") { Banner(state = state, onRetry = { viewModel.load(forceNetwork = true) }) }
+        item(key = "intro") { CirclesIntro() }
+        item(key = "shared-locations") { SharedLocationsMapSection() }
         if (state.incomingRaises.isNotEmpty() || state.outgoingRaises.isNotEmpty()) {
             item(key = "requests-header") {
                 Text(
@@ -178,6 +175,31 @@ private fun CirclesList(
             }
         }
     }
+}
+
+/** La phrase d'orientation du bloc, lisible au repos : ce que sont les cercles (règle 7, #18083). */
+@Composable
+internal fun CirclesIntro(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.circles_intro),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * Aucun lien encore : ce que règle un cercle ET comment on y entre, visibles au repos (règle 7 — les cercles
+ * sont propres à Meeshy, rien d'autre ne le dit à qui arrive ici pour la première fois, #18083).
+ */
+@Composable
+internal fun CirclesEmptyState(onFindContacts: () -> Unit) {
+    FullState(
+        title = stringResource(R.string.circles_intro),
+        subtitle = stringResource(R.string.circles_empty_subtitle),
+        action = stringResource(R.string.circles_empty_action),
+        onAction = onFindContacts,
+    )
 }
 
 /** Le cache reste affiché ; l'état se dit discrètement au-dessus. */

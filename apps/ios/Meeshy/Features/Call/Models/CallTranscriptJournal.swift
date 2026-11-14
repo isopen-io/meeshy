@@ -1,12 +1,13 @@
 import CoreGraphics
 import Foundation
 
+/// Le journal d'un appel : TOUTES les phrases, rangées à leur heure de capture,
+/// sans rien qui fasse tomber les plus anciennes (#17342).
 enum CallTranscriptJournal {
-    static let ceiling = 10_000
-
     static func inserting(_ segment: CallTranscriptionSegment, into sorted: [CallTranscriptionSegment]) -> [CallTranscriptionSegment] {
-        let index = insertionIndex(for: segment.capturedAt, in: sorted)
-        return Array(sorted[..<index]) + [segment] + Array(sorted[index...])
+        var journal = sorted
+        journal.insert(segment, at: insertionIndex(for: segment.capturedAt, in: sorted))
+        return journal
     }
 
     static func insertionIndex(for date: Date, in sorted: [CallTranscriptionSegment]) -> Int {
@@ -22,9 +23,16 @@ enum CallTranscriptJournal {
         }
         return low
     }
+}
 
-    static func bounded(_ sorted: [CallTranscriptionSegment]) -> [CallTranscriptionSegment] {
-        sorted.count > ceiling ? Array(sorted.suffix(ceiling)) : sorted
+/// L'heure d'une phrase DANS l'appel (mm:ss depuis son début, h:mm:ss au-delà) :
+/// la même pour la ligne du journal vivant, la ligne de capture et le journal
+/// d'après l'appel. Sans début d'appel connu, aucune heure plutôt qu'une heure
+/// murale qui ne dirait pas la même chose.
+enum CallJournalClock {
+    static func label(at date: Date, since start: Date?, locale: Locale = .current) -> String? {
+        guard let start else { return nil }
+        return CallManager.formatDuration(max(0, date.timeIntervalSince(start)), locale: locale)
     }
 }
 

@@ -33,6 +33,7 @@ const itStickerPacks = {
   'stickerPacks.submit.instant': 'Instant',
   'stickerPacks.submit.removeItem': 'Rimuovi questo sticker',
   'stickerPacks.submit.zoneHint': 'Disegna sull’immagine la zona in cui verrà scritto il testo. L’anteprima mostra il testo più lungo consentito.',
+  'stickerPacks.submit.zoneHint.question': 'Come posizionare il testo?',
   'stickerPacks.submit.zoneDefault': 'Testo predefinito',
   'stickerPacks.submit.zoneLength': 'Lunghezza massima',
   'stickerPacks.submit.send': 'Invia in revisione',

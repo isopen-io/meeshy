@@ -107,14 +107,23 @@ class CallLiveJournalTest {
     }
 
     @Test
-    fun `the journal keeps the most recent lines once past its ceiling`() {
-        val journal = (1..CallLiveJournal.CEILING + 3).fold(CallLiveJournal()) { acc, i ->
+    fun `the journal keeps the whole call, no sentence falls past ten thousand lines (#17342)`() {
+        val tenThousand = 10_000
+        val journal = (1..tenThousand + 3).fold(CallLiveJournal()) { acc, i ->
             acc.receive(seg(wireId = "w$i", text = "t$i", isFinal = true, at = i.toLong()))
         }
 
-        assertThat(journal.segments).hasSize(CallLiveJournal.CEILING)
-        assertThat(journal.segments.first().text).isEqualTo("t4")
-        assertThat(journal.tail(2).map { it.text }).containsExactly("t${CallLiveJournal.CEILING + 2}", "t${CallLiveJournal.CEILING + 3}").inOrder()
+        assertThat(journal.segments).hasSize(tenThousand + 3)
+        assertThat(journal.segments.first().text).isEqualTo("t1")
+        assertThat(journal.tail(2).map { it.text }).containsExactly("t${tenThousand + 2}", "t${tenThousand + 3}").inOrder()
+    }
+
+    @Test
+    fun `a sentence that arrives late is still ranged at its capture clock, the oldest are never pushed out`() {
+        val journal = (1..5).fold(CallLiveJournal()) { acc, i -> acc.receive(seg(wireId = "w$i", text = "t$i", isFinal = true, at = i * 10L)) }
+            .receive(seg(wireId = "late", text = "late", isFinal = true, at = 25))
+
+        assertThat(journal.segments.map { it.text }).containsExactly("t1", "t2", "late", "t3", "t4", "t5").inOrder()
     }
 
     @Test

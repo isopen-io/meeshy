@@ -32,7 +32,7 @@ const ar = {
   'onboarding.email.failed': 'لم يُرسَل الرابط. حاول مجددًا.',
 
   'onboarding.age.title': 'تاريخ ميلادك',
-  'onboarding.age.body': 'لنقترح عليك المساحات المناسبة. يمكنك التخطي.',
+  'onboarding.age.body': 'لنقترح عليك المساحات المناسبة.',
   'onboarding.age.skip': 'تخطٍّ',
   'onboarding.age.check': 'تحقّق من تاريخ ميلادك.',
   'onboarding.age.failed': 'لم يُحفظ تاريخك. حاول مجددًا.',
@@ -68,7 +68,7 @@ const ar = {
   'onboarding.story.verify': 'لنشر قصتك، أكّد عنوان بريدك الإلكتروني أولًا.',
 
   'onboarding.friends.title': 'اعثر على جماعتك',
-  'onboarding.friends.body': 'أضف 3 أشخاص يشبهونك. حين يقبلون، يربح كلٌّ منكما على الأقل\u00A0\u2066+{points}\u2069.',
+  'onboarding.friends.body': 'أضف 3 أشخاص يشبهونك.',
   'onboarding.friends.add': 'إضافة',
   'onboarding.friends.addNamed': 'إضافة {name}',
   'onboarding.friends.added': 'أُرسل',
@@ -92,7 +92,7 @@ const ar = {
   'onboarding.recap.streak.other': 'أيام اللهب: \u2066{days}\u2069',
   'onboarding.recap.badges': 'الأوسمة: {count}',
   'onboarding.recap.friends': 'طلبات في الطريق: {count}',
-  'onboarding.recap.tomorrow': 'غدًا، يمكن أن يشتعل لهبك منذ {next} أيام.',
+  'onboarding.recap.tomorrow': 'غدًا، يشتعل لهبك منذ {next} أيام.',
   'onboarding.recap.explore': 'تابع الاستكشاف',
   'onboarding.recap.game': 'اكتشف اللعبة مع مي وميو',
   'onboarding.recap.done': 'يكفي لهذا اليوم',

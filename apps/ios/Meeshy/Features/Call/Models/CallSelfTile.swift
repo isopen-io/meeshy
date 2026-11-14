@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     case x1 = 1
@@ -27,6 +28,25 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         CGSize(width: width, height: width * Self.aspectRatio)
     }
 
+    /// L1.5 — dans une fenêtre plus large que haute, ma vignette se couche : 130 × 96 au palier
+    /// standard. La loi lit la forme de la fenêtre, jamais le device (iPad, fenêtres redimensionnées).
+    static let landscapeWidthFactor: CGFloat = 1.3
+    static let landscapeAspectRatio: CGFloat = 96.0 / 130.0
+
+    static func isLandscape(_ window: CGSize) -> Bool {
+        window.width > window.height
+    }
+
+    func width(isLandscape: Bool) -> CGFloat {
+        isLandscape ? width * Self.landscapeWidthFactor : width
+    }
+
+    func size(isLandscape: Bool) -> CGSize {
+        isLandscape
+            ? CGSize(width: width(isLandscape: true), height: width(isLandscape: true) * Self.landscapeAspectRatio)
+            : size
+    }
+
     var larger: CallSelfTileScale {
         Self(rawValue: rawValue + 1) ?? self
     }
@@ -45,16 +65,37 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         return current
     }
 
-    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale) -> CGSize {
-        guard magnification.isFinite, magnification > 0 else { return current.size }
-        let width = min(max(current.width * magnification, CallSelfTileScale.x1.width), CallSelfTileScale.x3.width)
-        return CGSize(width: width, height: width * aspectRatio)
+    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale, isLandscape: Bool = false) -> CGSize {
+        guard magnification.isFinite, magnification > 0 else { return current.size(isLandscape: isLandscape) }
+        let width = min(
+            max(current.width(isLandscape: isLandscape) * magnification, CallSelfTileScale.x1.width(isLandscape: isLandscape)),
+            CallSelfTileScale.x3.width(isLandscape: isLandscape)
+        )
+        return CGSize(width: width, height: width * (isLandscape ? landscapeAspectRatio : aspectRatio))
     }
 
     /// #16663 — un toucher range le chrome : ma vignette passe à sa petite
     /// taille ; le chrome revenu, elle reprend celle que j'avais choisie.
     static func resting(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CallSelfTileScale {
         isChromeVisible ? chosen : .x1
+    }
+
+    /// G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la
+    /// vignette est mise à l'échelle de sa petite taille, jamais relayoutée.
+    static func restingFactor(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CGFloat {
+        resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
+    }
+
+    /// Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins, badge) : divisé par
+    /// le facteur d'échelle, il est dessiné à sa taille de petite vignette (lois 4, 11).
+    static func counterScaled(_ length: CGFloat, by factor: CGFloat) -> CGFloat {
+        factor.isFinite && factor > 0 ? length / factor : length
+    }
+
+    /// L'ancre du rangement : le coin de l'écran le plus proche du centre de la vignette, qui garde
+    /// ainsi sa marge pendant la réduction.
+    static func anchor(of center: CGPoint, in container: CGSize) -> UnitPoint {
+        UnitPoint(x: center.x < container.width / 2 ? 0 : 1, y: center.y < container.height / 2 ? 0 : 1)
     }
 
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {
@@ -103,3 +144,59 @@ nonisolated enum CallSelfTileStroke {
         return key
     }
 }
+
+/// #17982 — la plaque de ma vignette de duo : le composant de plaque du groupe (`CallTileNameplate`),
+/// au pied de la vignette. Elle nomme la personne montrée, comme le liseré (loi 4) : « Vous », ou
+/// l'autre après une permutation. Sa largeur suit la vignette VISIBLE (rangée, loi 11) et laisse le
+/// liseré et le badge micro coupé du correspondant à découvert.
+nonisolated enum CallSelfTilePlate {
+    static let sideInset: CGFloat = 6
+    static let badgeReserve: CGFloat = 28
+
+    static func title(showsLocal: Bool, you: String, peer: String) -> String {
+        showsLocal ? you : peer
+    }
+
+    static func maxWidth(tileWidth: CGFloat, stowFactor: CGFloat, reservesBadge: Bool) -> CGFloat {
+        let factor = stowFactor.isFinite && stowFactor > 0 ? stowFactor : 1
+        let inset = reservesBadge ? badgeReserve : sideInset
+        return max(0, tileWidth * factor - 2 * inset)
+    }
+
+    static func accessibilityValue(name: String, size: String) -> String {
+        [name, size].joined(separator: ", ")
+    }
+}
+
+/// Loi 17.10 — ma vignette se déplace, change de palier et se permute par un ressort ; Réduire les
+/// animations le remplace par le fondu court du chrome, jamais par une bascule sèche.
+enum CallSelfTileMotion {
+    static func spring(response: Double, dampingFraction: Double, reduceMotion: Bool) -> Animation {
+        reduceMotion
+            ? .easeInOut(duration: CallChromeStow.reducedFadeDuration)
+            : .spring(response: response, dampingFraction: dampingFraction)
+    }
+}
+
+/// §7.2 — les quatre coins où ma vignette s'aimante. Son centre se pose à la distance de chaque bord
+/// (zone sûre, en-tête et pile au-dessus, pilule au-dessous, rail quand elle lui cède le coin).
+nonisolated enum CallSelfTileCorner: CaseIterable, Sendable {
+    case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    var isTop: Bool { self == .topLeading || self == .topTrailing }
+
+    var isLeading: Bool { self == .topLeading || self == .bottomLeading }
+
+    func center(of size: CGSize, in container: CGSize, insets: EdgeInsets) -> CGPoint {
+        CGPoint(
+            x: isLeading ? insets.leading + size.width / 2 : container.width - insets.trailing - size.width / 2,
+            y: isTop ? insets.top + size.height / 2 : container.height - insets.bottom - size.height / 2
+        )
+    }
+
+    /// Le coin le plus proche d'un point : celui où la vignette lâchée s'aimante.
+    static func nearest(to point: CGPoint, center: (CallSelfTileCorner) -> CGPoint) -> CallSelfTileCorner {
+        allCases.min { hypot(point.x - center($0).x, point.y - center($0).y) < hypot(point.x - center($1).x, point.y - center($1).y) } ?? .topTrailing
+    }
+}
+

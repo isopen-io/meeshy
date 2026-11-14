@@ -145,7 +145,7 @@ struct PostSceneMosaic: View {
             FeedCaptionOverlay(
                 caption: SceneCaption.resolve(sceneIndex: tuile.sceneIndex,
                                               in: document, post: post,
-                                              carrierFallback: false),
+                                              carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)),
                 words: MosaicLayout.captionWordLimit(mode: mode,
                                                      visualCount: document.scenes.count,
                                                      tileWidth: tuile.width))
@@ -559,7 +559,11 @@ struct PostSceneMosaic: View {
                 .allowsHitTesting(false)
                 .accessibilityLabel(Text(String(
                     localized: "feed.scene.sound.muted",
-                    defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                    defaultValue: "Son coupé",
+                    bundle: .main)))
+                .accessibilityHint(Text(String(
+                    localized: "feed.scene.sound.muted.hint",
+                    defaultValue: "Ouvrir en plein écran pour l'entendre",
                     bundle: .main)))
         }
     }

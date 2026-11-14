@@ -42,6 +42,8 @@ internal class ChatNavigationActions(
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */
     val onOpenConversation: (conversationId: String) -> Unit = {},
+    /** Ouvre la Progression (« Voir le jeu » dans la carte de la Flamme, #17770). */
+    val onOpenProgression: () -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
     /** [ChatViewModel.mayInviteFriends]: whether the info sheet offers « Inviter mes amis ». */

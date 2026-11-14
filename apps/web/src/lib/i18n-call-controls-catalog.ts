@@ -67,6 +67,17 @@ export function loadCallControlsCatalog(language: InterfaceLanguage): Promise<Ca
   return request;
 }
 
+/**
+ * LECTURE EN MODE SUSPENSE — jette la promesse en cours si le catalogue n'est pas encore là ; la limite
+ * Suspense la plus proche la rattrape (comme `suspendForInterfaceCatalog`). Pour le journal d'après
+ * l'appel, rendu dans le fil ou dans la fiche d'un appel, hors de l'écran d'appel qui charge ce catalogue
+ * avec lui (#17878).
+ */
+export function suspendForCallControlsCatalog(language: InterfaceLanguage): void {
+  if (loaded.has(language)) return;
+  throw loadCallControlsCatalog(language);
+}
+
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 export function translateCallControls<K extends CallControlsCatalogKey>(

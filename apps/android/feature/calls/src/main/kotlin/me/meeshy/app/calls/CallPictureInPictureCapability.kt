@@ -6,16 +6,12 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.components.SingletonComponent
-import dagger.multibindings.IntoMap
 import dagger.multibindings.IntoSet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
 import me.meeshy.sdk.model.call.CallState
-import me.meeshy.ui.icons.MeeshyIcons
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -134,23 +130,18 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     }
 }
 
-@Singleton
-class CallPictureInPictureActionHandler @Inject constructor(
-    private val pip: CallPictureInPictureCoordinator,
-) : CallActionHandler {
-    override fun present(state: CallUiState): CallActionPresentation? =
-        if (pip.offersAction(state)) CallActionPresentation(MeeshyIcons.PictureInPicture, R.string.call_control_pip) else null
-
-    override fun perform() {
-        pip.requestEnter()
-    }
-}
-
 @HiltViewModel
 class CallPictureInPictureViewModel @Inject constructor(
     private val pip: CallPictureInPictureCoordinator,
 ) : ViewModel() {
     val inPip: StateFlow<Boolean> = pip.inPip
+
+    /** #17329 — le bouton d'Image dans l'image de l'en-tête : offert pour cet instantané de l'appel. */
+    fun offers(state: CallUiState): Boolean = pip.offersAction(state)
+
+    fun enter() {
+        pip.requestEnter()
+    }
 
     fun callScreenShown(shown: Boolean) = pip.setCallScreenShown(shown)
 
@@ -163,9 +154,4 @@ interface CallPictureInPictureCapabilityModule {
     @Binds
     @IntoSet
     fun bindFeatureController(impl: CallPictureInPictureCoordinator): CallFeatureController
-
-    @Binds
-    @IntoMap
-    @CallActionKey(CallAction.PictureInPicture)
-    fun bindActionHandler(impl: CallPictureInPictureActionHandler): CallActionHandler
 }

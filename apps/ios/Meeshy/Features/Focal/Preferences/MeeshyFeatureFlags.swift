@@ -105,4 +105,11 @@ nonisolated enum MeeshyFeatureFlags {
         default: return defaults.bool(forKey: personSettingsUserDefaultsKey)
         }
     }
+
+    // MARK: - `bring_alarm` (essai AlarmKit, #17442)
+
+    /// L'alarme système d'un Bring (AlarmKit, iOS 26+) : ouverte en Debug, fermée en Release, forçable par
+    /// l'environnement (`MEESHY_FLAG_BRING_ALARM` = `1` / `0`) puis par le groupe d'apps — que la NSE lit aussi.
+    /// La loi vit dans `BringAlarmPlan`, compilé dans l'app et dans l'extension.
+    static var isBringAlarmEnabled: Bool { BringAlarmPlan.isEnabled }
 }

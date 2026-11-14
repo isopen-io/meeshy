@@ -63,7 +63,6 @@ struct EmailVerificationView: View {
                 _ = await cancellableSleep(for: Self.successPause)
                 dismiss()
             }
-            .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -96,7 +95,7 @@ struct EmailVerificationView: View {
     // MARK: - Title
 
     private var titleSection: some View {
-        Text(String(localized: "emailVerification.title", defaultValue: "Vérifiez votre email"))
+        Text(String(localized: "emailVerification.title", defaultValue: "Confirmez votre adresse e-mail"))
             .font(.system(.title, design: .rounded).weight(.bold))
             .foregroundStyle(theme.textPrimary)
             .accessibilityAddTraits(.isHeader)
@@ -123,10 +122,6 @@ struct EmailVerificationView: View {
 
     private var resendSection: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas reçu le code ?"))
-                .font(.footnote)
-                .foregroundStyle(theme.textSecondary)
-
             Button {
                 Task { await viewModel.resendCode() }
             } label: {
@@ -181,7 +176,7 @@ struct EmailVerificationView: View {
                         .foregroundStyle(MeeshyColors.success)
                         .adaptiveSymbolBounce(value: viewModel.verificationSuccess)
 
-                    Text(String(localized: "emailVerification.success", defaultValue: "Email vérifié !"))
+                    Text(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓"))
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                 }

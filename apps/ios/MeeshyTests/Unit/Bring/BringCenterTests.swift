@@ -15,27 +15,31 @@ final class BringCenterTests: XCTestCase {
         let clock: Clock
         let rings: PassthroughSubject<BringRing, Never>
         let stops: PassthroughSubject<BringStopped, Never>
+        let alarm: MockBringAlarmScheduler
     }
 
     final class Clock: @unchecked Sendable {
         var now = Date(timeIntervalSince1970: 1_800_000_000)
     }
 
-    private func makeRig(people: [CirclePerson] = []) -> Rig {
+    private func makeRig(people: [CirclePerson] = [], appIsActive: Bool = true, alarmsOn: Bool = false) -> Rig {
         let service = MockBringService()
         let ringer = FakeBringRinger()
         let clock = Clock()
         let rings = PassthroughSubject<BringRing, Never>()
         let stops = PassthroughSubject<BringStopped, Never>()
+        let alarm = MockBringAlarmScheduler()
         let sut = BringCenter(
             service: service,
             people: FakeCirclePeople(people),
             ringer: ringer,
             ringEvents: rings.eraseToAnyPublisher(),
             stoppedEvents: stops.eraseToAnyPublisher(),
+            alarms: alarmsOn ? BringAlarmCoordinator(scheduler: alarm, enabled: true) : .inert,
+            isAppActive: { appIsActive },
             now: { clock.now }
         )
-        return Rig(sut: sut, service: service, ringer: ringer, clock: clock, rings: rings, stops: stops)
+        return Rig(sut: sut, service: service, ringer: ringer, clock: clock, rings: rings, stops: stops, alarm: alarm)
     }
 
     private func ring(_ id: String = "b1", from: String = "alice", in seconds: TimeInterval = 120, clock: Clock) -> BringRing {
@@ -176,5 +180,56 @@ final class BringCenterTests: XCTestCase {
         XCTAssertTrue(BringCenter.handlesPush(["type": "bring_stopped"]))
         XCTAssertFalse(BringCenter.handlesPush(["type": "new_message"]))
         XCTAssertFalse(BringCenter.handlesPush([:]))
+    }
+
+    // MARK: - L'alarme système (#17442)
+
+    func test_inTheBackground_aRing_postsTheSystemAlarm() async {
+        let rig = makeRig(appIsActive: false, alarmsOn: true)
+
+        rig.sut.receive(ring(clock: rig.clock), name: "Alice")
+        await settle()
+
+        let scheduled = await rig.alarm.scheduled
+        XCTAssertEqual(scheduled.map(\.bringId), ["b1"])
+        XCTAssertTrue(scheduled.first?.title.contains("Alice") ?? false)
+    }
+
+    func test_inTheForeground_theAppRingsItself_andRemovesAnAlarmTheExtensionPosted() async {
+        let rig = makeRig(appIsActive: true, alarmsOn: true)
+
+        rig.sut.receive(ring(clock: rig.clock), name: "Alice")
+        await settle()
+
+        let scheduled = await rig.alarm.scheduled
+        let cancelled = await rig.alarm.cancelled
+        let asked = await rig.alarm.authorizationRequests
+        XCTAssertTrue(scheduled.isEmpty)
+        XCTAssertEqual(cancelled, ["b1"])
+        XCTAssertEqual(asked, 0)
+        XCTAssertTrue(rig.ringer.isRinging)
+    }
+
+    func test_stoppingTheBring_cancelsItsAlarm_andStopsItOnTheServer() async {
+        let rig = makeRig(appIsActive: false, alarmsOn: true)
+        rig.sut.receive(ring(clock: rig.clock), name: "Alice")
+
+        rig.sut.stop(bringId: "b1")
+        await settle()
+
+        let cancelled = await rig.alarm.cancelled
+        XCTAssertTrue(cancelled.contains("b1"))
+        XCTAssertNil(rig.sut.incoming)
+        XCTAssertEqual(rig.service.stopped, ["b1"])
+    }
+
+    func test_aStoppedPush_cancelsAnAlarmEvenWithoutAScreen() async {
+        let rig = makeRig(appIsActive: false, alarmsOn: true)
+
+        rig.sut.didStop("b9")
+        await settle()
+
+        let cancelled = await rig.alarm.cancelled
+        XCTAssertEqual(cancelled, ["b9"])
     }
 }

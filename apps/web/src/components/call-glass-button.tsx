@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { callButtonGlassTreatment, type CallButtonTone } from '@/lib/calls/call-button-glass';
+import { useGlassToneRef } from '@/lib/calls/use-pill-motion';
 
 export type { CallButtonTone };
 
@@ -51,6 +52,7 @@ const TONE_STYLE: Readonly<Record<Exclude<CallButtonTone, 'glass'>, { readonly b
 
 export function CallButton({ label, glyph, onPress, tone = 'disc', prominent = false, pressed, expanded, controls, popup = false, disabled = false, caption, size = 48, data = {} }: CallButtonProps) {
   const treatment = callButtonGlassTreatment(tone);
+  const glassRef = useGlassToneRef(treatment.blursBackdrop && prominent);
   const surface = treatment.blursBackdrop ? (prominent ? 'glass-call-prominent ' : 'glass-call ') : treatment.surface === 'drawn-disc' ? 'glass-call-disc ' : '';
   const round = `${surface}grid shrink-0 place-items-center rounded-full`;
   const roundStyle = tone === 'glass' ? { width: size, height: size } : { width: size, height: size, ...TONE_STYLE[tone] };
@@ -65,14 +67,14 @@ export function CallButton({ label, glyph, onPress, tone = 'disc', prominent = f
   if (caption === undefined)
     return (
       <div className="flex flex-col items-center gap-1">
-        <button type="button" {...aria} title={label} onClick={onPress} disabled={disabled} {...data} className={`${round} ${press}`} style={roundStyle}>
+        <button ref={glassRef} type="button" {...aria} title={label} onClick={onPress} disabled={disabled} {...data} className={`${round} ${press}`} style={roundStyle}>
           {glyph}
         </button>
       </div>
     );
   return (
     <button type="button" {...aria} onClick={onPress} disabled={disabled} {...data} className={`flex shrink-0 flex-col items-center gap-1 rounded-2xl ${press}`}>
-      <span className={round} style={roundStyle}>
+      <span ref={glassRef} className={round} style={roundStyle}>
         {glyph}
       </span>
       <span aria-hidden className="max-w-[4.5rem] truncate text-mini text-on-media">

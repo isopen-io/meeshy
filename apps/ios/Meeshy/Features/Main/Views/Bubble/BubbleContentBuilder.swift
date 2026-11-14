@@ -129,23 +129,7 @@ extension BubbleContent {
             ?? message.cachedTimeString
             ?? MessageRecord.computeTimeString(for: message.createdAt)
 
-        // --- Call notice (rich call-summary system message) ---
-        // When a system message carries structured call metadata, resolve the
-        // per-viewer direction now (outgoing iff the current user initiated) so
-        // the leaf view stays primitive. Absent metadata (legacy summaries) →
-        // nil, and the `.system` path falls back to the plain centered notice.
-        if message.messageSource == .system, let summary = message.callSummary {
-            self.callNotice = CallNotice(
-                summary: summary,
-                isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
-                fallbackText: message.content,
-                timeString: resolvedTimeString,
-                timestamp: message.createdAt,
-                recording: CallRecording.from(message.attachments)
-            )
-        } else {
-            self.callNotice = nil
-        }
+        self.callNotice = Self.resolveCallNotice(message: message, currentUserId: currentUserId, timeString: resolvedTimeString)
 
         // --- Avis d'arrivée ---
         // Une arrivée n'est PAS une prise de parole : sans branche dédiée elle
@@ -607,5 +591,22 @@ extension BubbleContent {
             return .notEmojiOnly
         }
         return EmojiDetector.analyze(message.content)
+    }
+
+    /// Call notice (rich call-summary system message). When a system message carries structured call
+    /// metadata, resolve the per-viewer direction now (outgoing iff the current user initiated) so the leaf
+    /// view stays primitive. Absent metadata (legacy summaries) → nil, and the `.system` path falls back to
+    /// the plain centered notice.
+    static func resolveCallNotice(message: MeeshyMessage, currentUserId: String, timeString: String) -> CallNotice? {
+        guard message.messageSource == .system, let summary = message.callSummary else { return nil }
+        return CallNotice(
+            summary: summary,
+            isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
+            viewerId: currentUserId,
+            fallbackText: message.content,
+            timeString: timeString,
+            timestamp: message.createdAt,
+            recording: CallRecording.from(message.attachments)
+        )
     }
 }

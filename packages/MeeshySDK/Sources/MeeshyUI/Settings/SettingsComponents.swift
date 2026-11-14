@@ -155,6 +155,11 @@ public struct SettingsRow<Trailing: View>: View {
     private let color: String
     private let info: SettingsInfo?
     private let onInfo: ((SettingsInfo) -> Void)?
+    /// L'épure (#17584) : la note dépliée SOUS la rangée, derrière un (i) dont le
+    /// nom accessible est la question. `openNoteID` tient la note ouverte de
+    /// l'écran (une seule à la fois).
+    private let note: MeeshyInfoNote?
+    private let openNoteID: Binding<String?>?
     private let trailing: Trailing
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -166,6 +171,8 @@ public struct SettingsRow<Trailing: View>: View {
         color: String,
         info: SettingsInfo? = nil,
         onInfo: ((SettingsInfo) -> Void)? = nil,
+        note: MeeshyInfoNote? = nil,
+        openNoteID: Binding<String?>? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.icon = icon
@@ -174,6 +181,8 @@ public struct SettingsRow<Trailing: View>: View {
         self.color = color
         self.info = info
         self.onInfo = onInfo
+        self.note = note
+        self.openNoteID = openNoteID
         self.trailing = trailing()
     }
 
@@ -190,12 +199,28 @@ public struct SettingsRow<Trailing: View>: View {
                     if let info, let onInfo {
                         SettingsInfoButton(info: info, color: color, action: onInfo)
                     }
+                    if let note, let openNoteID {
+                        MeeshyInfoNoteButton(
+                            note: note,
+                            isExpanded: openNoteID.wrappedValue == note.id,
+                            tint: Color(hex: color).opacity(MeeshyOpacity.intense)
+                        ) {
+                            openNoteID.wrappedValue = MeeshyInfoNote.toggled(open: openNoteID.wrappedValue, tapped: note.id)
+                        }
+                    }
                 }
                 if let subtitle {
                     Text(subtitle)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                         .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note, let openNoteID, openNoteID.wrappedValue == note.id {
+                    Text(verbatim: note.text)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                        .foregroundStyle(theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
                 }
             }
 

@@ -6,7 +6,16 @@ import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.VideoFilterPreset
+import me.meeshy.sdk.model.call.CallFaceEffect
+import me.meeshy.sdk.model.call.activeFaceEffect
+import me.meeshy.sdk.model.call.activePreset
 import me.meeshy.sdk.model.call.applyingPreset
+import me.meeshy.sdk.model.call.effects.CallEffectKind
+import me.meeshy.sdk.model.call.effects.CallEffectLayer
+import me.meeshy.sdk.model.call.effects.CallEffectLayers
+import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsStackRule
+import me.meeshy.sdk.model.call.selectingFaceEffect
 import org.junit.Test
 
 class CallEffectsCapabilityTest {
@@ -63,6 +72,43 @@ class CallEffectsCapabilityTest {
         controller.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), info)
         assertThat(controller.config.value).isEqualTo(VideoFilterConfig.DEFAULT)
         assertThat(sink.applied.last()).isEqualTo(VideoFilterConfig.DEFAULT)
+    }
+
+    @Test
+    fun `the stack of three layers belongs to one call too, its end empties it and forgets the requested row (#16979)`() {
+        val controller = CallVideoEffectsController(RecordingSink())
+        controller.setLayers(CallEffectLayers.of(listOf(CallEffectLayer(CallEffectKind.Frame, "frame-1"))))
+        controller.requestEffectsCategory(CallEffectsCategory.Color)
+
+        controller.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), info)
+
+        assertThat(controller.layers.value.isEmpty).isTrue()
+        assertThat(controller.takeRequestedCategory()).isNull()
+    }
+
+    @Test
+    fun `the row the Montage asks for is read once, by the mode that opens`() {
+        val controller = CallVideoEffectsController(RecordingSink())
+        controller.requestEffectsCategory(CallEffectsCategory.Color)
+
+        assertThat(controller.takeRequestedCategory()).isEqualTo(CallEffectsCategory.Color)
+        assertThat(controller.takeRequestedCategory()).isNull()
+    }
+
+    @Test
+    fun `undoing a layer takes its setting off the sent image and the layer off the stack, the others stay (#16979)`() {
+        val sink = RecordingSink()
+        val controller = CallVideoEffectsController(sink)
+        val config = VideoFilterConfig().applyingPreset(VideoFilterPreset.Golden).selectingFaceEffect(CallFaceEffect.Toad)
+        controller.apply(config)
+        controller.setLayers(CallEffectsStackRule.layers(CallEffectLayers.EMPTY, frame = "frame-1", config = config))
+
+        controller.removeLayer(CallEffectKind.Color)
+
+        assertThat(controller.config.value.activePreset).isNull()
+        assertThat(controller.config.value.activeFaceEffect).isEqualTo(CallFaceEffect.Toad)
+        assertThat(sink.applied.last().activePreset).isNull()
+        assertThat(controller.layers.value.bottomToTop.map { it.kind }).containsExactly(CallEffectKind.Frame, CallEffectKind.Face).inOrder()
     }
 
     @Test

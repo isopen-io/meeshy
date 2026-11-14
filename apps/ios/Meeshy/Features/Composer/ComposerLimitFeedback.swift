@@ -59,16 +59,21 @@ enum ComposerLimitFeedback {
 /// compteur ni plafond n'est affiché au repos ; atteindre la borne la dit, et
 /// la redire pendant la même frappe serait une vibration par caractère.
 nonisolated enum ComposerLimitNotice {
-    static let quietInterval: TimeInterval = 2
+    static let quietInterval: TimeInterval = Double(MeeshyStatusCapsuleTiming.silenceMilliseconds) / 1000
 
     struct Spoken: Equatable, Sendable {
         let limit: StoryComposerLimit
         let at: Date
     }
 
+    /// La loi du silence est celle du kit (K14, `MeeshyStatusCapsuleTiming`) :
+    /// une borne redite dans les 2 s se tait. L'`id` du kit est le nom de la borne.
     static func speaks(_ limit: StoryComposerLimit, at now: Date, last: Spoken?) -> Bool {
-        guard let last, last.limit == limit else { return true }
-        return now.timeIntervalSince(last.at) >= quietInterval
+        MeeshyStatusCapsuleTiming.speaks(
+            id: limit.rawValue,
+            at: now,
+            last: last.map { MeeshyStatusCapsuleTiming.Spoken(id: $0.limit.rawValue, at: $0.at) }
+        )
     }
 }
 

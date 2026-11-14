@@ -22,6 +22,8 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public var color: String = "4ECDC4"
     public var theme: ConversationContext.ConversationTheme = .general
     public var language: ConversationContext.ConversationLanguage = .french
+    /// « N en ligne » (#18014) — agrégat anonyme servi par le détail ; `nil` quand il n'est pas servi.
+    public var onlineMemberCount: Int?
 
     public init(id: String = UUID().uuidString, identifier: String, name: String,
                 description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
@@ -30,12 +32,14 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
                 memberCount: Int = 0, conversationCount: Int = 0,
                 emoji: String = "", color: String = "4ECDC4",
                 theme: ConversationContext.ConversationTheme = .general,
-                language: ConversationContext.ConversationLanguage = .french) {
+                language: ConversationContext.ConversationLanguage = .french,
+                onlineMemberCount: Int? = nil) {
         self.id = id; self.identifier = identifier; self.name = name
         self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.isPrivate = isPrivate; self.isActive = isActive; self.deletedAt = deletedAt
         self.createdBy = createdBy; self.createdAt = createdAt; self.updatedAt = updatedAt
         self.memberCount = memberCount; self.conversationCount = conversationCount
         self.emoji = emoji; self.color = color; self.theme = theme; self.language = language
+        self.onlineMemberCount = onlineMemberCount
     }
 }

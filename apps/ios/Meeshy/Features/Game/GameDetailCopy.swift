@@ -272,7 +272,7 @@ enum GameBadgeGuideText {
 
     static var rulesIntro: String {
         String(localized: "game.rules.badges.intro",
-               defaultValue: "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangées en cinq familles.",
+               defaultValue: "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée…",
                bundle: .main)
     }
 
@@ -288,17 +288,11 @@ enum GameBadgeGuideText {
 
     static var rulesImprint: String {
         String(localized: "game.rules.badges.imprint",
-               defaultValue: "Frapper une Meesh n’éteint plus aucune médaille. Une médaille éteinte auparavant reste une empreinte qui dit ce qu’il manque pour la rallumer.",
+               defaultValue: "Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.",
                bundle: .main)
     }
 
     static var rulesFamilies: String {
         String(localized: "game.rules.badges.families", defaultValue: "Les vingt médailles, par famille", bundle: .main)
-    }
-
-    static var rulesSheet: String {
-        String(localized: "game.rules.badges.sheet",
-               defaultValue: "Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.",
-               bundle: .main)
     }
 }

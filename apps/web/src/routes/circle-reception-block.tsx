@@ -23,7 +23,8 @@ import {
  * personne est donc une COUPURE.
  *
  * - « Bloquer ses Bring » dès Ami ; « Couper son talkie » dès Proche (sa voix
- *   arrive alors en message vocal).
+ *   arrive alors en message vocal) ; « Couper ses invitations ensemble » dès
+ *   Proche (#17023 : elle ne peut plus m'inviter à regarder ou écouter ensemble).
  * - « Ce que j'écoute » dès Proche (#16831) : un ACCORD, refusé par défaut —
  *   coché, ce que j'écoute sur mon iPhone part vers cette personne (iso
  *   `CirclePersonSwitch`, iOS). Même interrupteur : coché = le champ est vrai.
@@ -35,9 +36,17 @@ import {
 
 type BlockSpec = {
   readonly minLevel: RelationLevel;
-  readonly label: 'circles.settings.blockBring' | 'circles.settings.blockTalkie' | 'circles.settings.listening';
-  readonly detail: 'circles.settings.blockBring.detail' | 'circles.settings.blockTalkie.detail' | 'circles.settings.shareListening.detail';
-  readonly failed: 'circles.settings.blockBring.failed' | 'circles.settings.blockTalkie.failed' | 'circles.settings.shareListening.failed';
+  readonly label: 'circles.settings.blockBring' | 'circles.settings.blockTalkie' | 'circles.settings.blockTogether' | 'circles.settings.listening';
+  readonly detail:
+    | 'circles.settings.blockBring.detail'
+    | 'circles.settings.blockTalkie.detail'
+    | 'circles.settings.blockTogether.detail'
+    | 'circles.settings.shareListening.detail';
+  readonly failed:
+    | 'circles.settings.blockBring.failed'
+    | 'circles.settings.blockTalkie.failed'
+    | 'circles.settings.blockTogether.failed'
+    | 'circles.settings.shareListening.failed';
   /** Ce qui se relit après le réglage : un blocage croisé change ma disponibilité de Bring. */
   readonly refresh: (userId: string) => readonly unknown[] | null;
 };
@@ -55,6 +64,13 @@ const SPECS: Readonly<Record<ReceptionBlock, BlockSpec>> = {
     label: 'circles.settings.blockTalkie',
     detail: 'circles.settings.blockTalkie.detail',
     failed: 'circles.settings.blockTalkie.failed',
+    refresh: () => null,
+  },
+  togetherBlocked: {
+    minLevel: 'CLOSE',
+    label: 'circles.settings.blockTogether',
+    detail: 'circles.settings.blockTogether.detail',
+    failed: 'circles.settings.blockTogether.failed',
     refresh: () => null,
   },
   listeningCategoryShared: {
@@ -75,6 +91,7 @@ export const receptionBlocksFor = (level: RelationLevel): readonly ReceptionBloc
 const withBlock = (settings: ReceptionSettings | undefined, block: ReceptionBlock, value: boolean): ReceptionSettings => ({
   bringBlocked: settings?.bringBlocked ?? false,
   talkieBlocked: settings?.talkieBlocked ?? false,
+  togetherBlocked: settings?.togetherBlocked ?? false,
   listeningCategoryShared: settings?.listeningCategoryShared ?? false,
   [block]: value,
 });

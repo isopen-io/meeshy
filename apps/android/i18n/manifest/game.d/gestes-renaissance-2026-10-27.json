@@ -36,11 +36,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.prestige.confirm.access",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.prestige.confirm.consent",
           "status": "adopted"
         }

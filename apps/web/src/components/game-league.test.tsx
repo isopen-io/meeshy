@@ -126,8 +126,8 @@ describe('les trois autres accès', () => {
     expect(html).toContain('s’ouvre au niveau 10');
     expect(html).toContain('Au plus haut 7');
     expect(html).toContain('Requis 10');
-    expect(html).toContain('Il manque 3 niveaux');
-    expect(html).toContain('Tu es au niveau 7');
+    expect(html).not.toContain('Il manque');
+    expect(html).not.toContain('Tu es au niveau');
   });
 
   test('fermée aux mineurs : la ligue entre amis, elle, reste ouverte', () => {
@@ -190,7 +190,7 @@ describe('le consentement et le pseudonyme (nom choisi ouvert)', () => {
     type(host, '#game-league-pseudonym', '!!');
     await submit(host);
     expect(calls).toBe(0);
-    expect(host.textContent).toContain('n’est pas valable');
+    expect(host.textContent).toContain('Nom non valable');
   });
 
   test('le refus de la passerelle s’affiche sous le champ', async () => {

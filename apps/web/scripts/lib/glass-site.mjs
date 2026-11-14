@@ -24,6 +24,13 @@
 
 export const GLASS_SITE = 'src/styles/glass.css';
 
+/**
+ * LE VERRE DU KIT (K01, #17400) est la SECONDE moitié du site : la matière des
+ * composants de `components/kit/`, chargée avec eux (`import` du composant) et
+ * non avec la feuille de première peinture, que `budgets.json` plafonne.
+ */
+export const GLASS_KIT_SITE = 'src/styles/glass-kit.css';
+
 const KINDS = ['blur', 'translucent-tone', 'glass-override'];
 
 export const GLASS_INVENTORY = {
@@ -134,7 +141,7 @@ const measure = (text) => {
 
 export function glassViolations(sources, inventory = GLASS_INVENTORY) {
   return sources
-    .filter((source) => source.path !== GLASS_SITE)
+    .filter((source) => source.path !== GLASS_SITE && source.path !== GLASS_KIT_SITE)
     .flatMap((source) => {
       const found = measure(source.text);
       const allowances = inventory[source.path] ?? {};

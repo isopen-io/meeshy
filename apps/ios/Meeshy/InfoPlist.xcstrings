@@ -69,8 +69,7 @@
             "state" : "new",
             "value" : "Meeshy"
           }
-        }
-      ,
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
@@ -88,12 +87,59 @@
             "state" : "translated",
             "value" : "Meeshy"
           }
-        }
-      ,
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy"
+          }
+        }
+      }
+    },
+    "NSAlarmKitUsageDescription" : {
+      "comment" : "AlarmKit: the alarm that rings when a Bring arrives",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يقرع Meeshy منبّهًا على آيفون عندما يرسل لك صديق «Bring»، أي حالة طارئة قصوى، حتى في الوضع الصامت."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lässt auf deinem iPhone einen Wecker klingeln, wenn dir ein Freund einen Bring sendet, einen extremen Notfall, auch im Lautlos-Modus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy rings an alarm on your iPhone when a friend sends you a Bring, an extreme emergency, even in silent mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy hace sonar una alarma en tu iPhone cuando un amigo te envía un Bring, una urgencia extrema, incluso en modo silencio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy fait sonner une alarme sur ton iPhone quand un ami t’envoie un Bring, une urgence extrême, même en mode silencieux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy fa suonare una sveglia sul tuo iPhone quando un amico ti invia un Bring, un’emergenza estrema, anche in modalità silenziosa."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy faz tocar um alarme no seu iPhone quando um amigo envia um Bring, uma emergência extrema, mesmo no modo silencioso."
           }
         }
       }

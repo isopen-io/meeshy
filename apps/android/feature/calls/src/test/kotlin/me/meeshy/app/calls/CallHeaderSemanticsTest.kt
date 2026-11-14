@@ -41,9 +41,9 @@ class CallHeaderSemanticsTest {
     }
 
     @Test
-    fun `le libelle de la puce compose la duree et le micro coupe du pair`() {
+    fun `le libelle de la capsule video compose le nom la duree et le micro coupe du pair`() {
         rule.setContent { MeeshyTheme { CallHeaderBar(connected(peerMuted = true), conversationId = "c1", showsMinimize = true, onMinimize = {}) } }
-        rule.onNodeWithContentDescription("Call duration, Contact muted").assertExists()
+        rule.onNodeWithContentDescription("Alice, Call duration, Contact muted").assertExists()
     }
 
     @Test

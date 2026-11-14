@@ -31,4 +31,16 @@ class CallGroupStageSizingTest {
         assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.Captions, CallAction.Journal).inOrder()
         assertThat(CallGroupStageSizing.rows(emptyList(), isCompactHeight = true)).isEmpty()
     }
+
+    @Test
+    fun `the rows keep their 340 dp ceiling while the grid keeps its 140 dp floor (P12_7)`() {
+        assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 900f, reservedDp = 240f)).isEqualTo(340f)
+        assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 600f, reservedDp = 240f)).isEqualTo(600f - 240f - 140f)
+    }
+
+    @Test
+    fun `the rows yield to the grid down to one line, never to nothing`() {
+        assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 300f, reservedDp = 240f)).isEqualTo(96f)
+        assertThat(CallGroupStageSizing.rowsCeilingDp(stageHeightDp = 0f, reservedDp = 240f)).isEqualTo(96f)
+    }
 }

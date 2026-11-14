@@ -95,6 +95,112 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertNil(CallModeCarouselRule.nearestIndex(offset: 0, itemWidth: 0, spacing: 0, count: 3))
     }
 
+    // MARK: - Parcourir à la voix (#18192)
+
+    private let looks = ["a", "b", "c", "d"]
+
+    func test_browse_atRest_announcesTheAppliedEffect_andActivationOnlyConfirms() {
+        let browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.isBrowsing)
+        XCTAssertEqual(browse.position(applied: "b"), "b")
+        XCTAssertEqual(browse.activation(applied: "b"), .confirm, "Rien de parcouru : l'activation ne réapplique rien, elle rend le menu de base")
+    }
+
+    func test_browse_adjusting_movesTheAnnouncedPosition_withoutApplyingAnything() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.step(by: 1, in: looks, applied: "a"))
+        XCTAssertTrue(browse.step(by: 1, in: looks, applied: "a"))
+        XCTAssertTrue(browse.isBrowsing)
+        XCTAssertEqual(browse.position(applied: "a"), "c", "Chaque balayage avance d'un look depuis la position PARCOURUE")
+        XCTAssertEqual(browse.activation(applied: "a"), .apply("c"), "Seule l'activation applique, et elle applique ce qui est annoncé")
+    }
+
+    func test_browse_atTheEdge_doesNotMove() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.step(by: -1, in: looks, applied: "a"))
+        XCTAssertFalse(browse.step(by: 1, in: looks, applied: "d"))
+        XCTAssertEqual(browse.position(applied: "d"), "d")
+    }
+
+    func test_browse_backOnTheAppliedLook_activationOnlyConfirms() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 1, in: looks, applied: "b")
+        browse.step(by: -1, in: looks, applied: "b")
+        XCTAssertEqual(browse.position(applied: "b"), "b")
+        XCTAssertEqual(browse.activation(applied: "b"), .confirm)
+    }
+
+    func test_browse_leaving_forgetsThePosition() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 2, in: looks, applied: "a")
+        browse.leave()
+        XCTAssertFalse(browse.isBrowsing, "Quitter l'élément, ou un effet appliqué ailleurs, rend l'annonce à l'effet appliqué")
+        XCTAssertEqual(browse.position(applied: "a"), "a")
+    }
+
+    func test_ordinal_isOneBased_andNilOutsideTheList() {
+        XCTAssertEqual(CallModeCarouselRule.ordinal(of: "c", in: looks), CallModeCarouselOrdinal(rank: 3, count: 4))
+        XCTAssertEqual(CallModeCarouselRule.ordinal(of: "a", in: looks), CallModeCarouselOrdinal(rank: 1, count: 4))
+        XCTAssertNil(CallModeCarouselRule.ordinal(of: "z", in: looks))
+    }
+
+    // MARK: - Les déclinaisons se parcourent aussi (#18192)
+
+    private func declinations(_ item: String) -> [String] {
+        item == "b" ? ["b", "b.1", "b.2"] : []
+    }
+
+    private func posedB1(_ item: String) -> String {
+        item == "b" ? "b.1" : item
+    }
+
+    func test_browse_variant_startsFromThePosedDeclination_andIsNotApplied() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.stepVariant(by: 1, applied: "b", variants: declinations, current: posedB1))
+        XCTAssertEqual(browse.variant, "b.2", "La déclinaison suivante part de celle qui est posée")
+        XCTAssertTrue(browse.isBrowsing)
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .apply("b.2"))
+    }
+
+    func test_browse_variant_backToThePlainFrame_appliesIt_whenADeclinationIsPosed() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.stepVariant(by: -1, applied: "b", variants: declinations, current: posedB1))
+        XCTAssertEqual(browse.variant, "b")
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .apply("b"), "Le cadre nu n'est pas la déclinaison posée : il s'applique")
+    }
+
+    func test_browse_variant_onThePosedDeclination_onlyConfirms() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.stepVariant(by: 1, applied: "b", variants: declinations, current: posedB1)
+        browse.stepVariant(by: -1, applied: "b", variants: declinations, current: posedB1)
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .confirm)
+    }
+
+    func test_browse_variant_followsTheBrowsedFrame_notTheAppliedOne() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 1, in: looks, applied: "a")
+        XCTAssertTrue(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertEqual(browse.variant, "b.1", "Les déclinaisons sont celles du cadre annoncé")
+        XCTAssertTrue(browse.stepVariant(by: 5, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertEqual(browse.variant, "b.2", "Sans boucler : la dernière déclinaison arrête le pas")
+        XCTAssertFalse(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+    }
+
+    func test_browse_variant_withoutDeclinations_doesNotMove() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertNil(browse.variant)
+        XCTAssertFalse(browse.isBrowsing)
+    }
+
+    func test_browse_movingToAnotherFrame_forgetsTheVariant() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.stepVariant(by: 1, applied: "b", variants: declinations, current: { $0 })
+        browse.step(by: 1, in: looks, applied: "b")
+        XCTAssertNil(browse.variant)
+        XCTAssertEqual(browse.activation(applied: "b"), .apply("c"))
+    }
+
     func test_motion_swipe_choosesOnlyWhereItRests() {
         var motion = CallModeCarouselMotion<String>()
         motion.moved(to: "b", infersInteraction: true)
@@ -192,16 +298,30 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertEqual(cool.activeFaceEffect, .toad)
     }
 
-    func test_exiting_validated_keepsWhatWasChosen() {
-        let original = VideoFilterConfig()
-        let chosen = original.selectingFaceEffect(.angel)
-        XCTAssertEqual(CallEffectsModeRule.exiting(validated: true, current: chosen, original: original), chosen)
+    /// P8b · loi 14 — « (+) Ajouter un autre look » : la règle généralisée à la pile de trois couches
+    /// se lit dans `CallEffectLayersTests` ; ici, ce que le cumul garde.
+    func test_addingALook_keepsTheLookAlreadyChosen() {
+        let toad = VideoFilterConfig().selectingFaceEffect(.toad)
+        let cumulated = CallEffectsModeRule.applying(color: .golden, to: toad)
+        XCTAssertEqual(cumulated.activeFaceEffect, .toad)
+        XCTAssertEqual(cumulated.activePreset, .golden)
     }
 
-    func test_exiting_quit_restoresTheImageAsItWas() {
-        let original = VideoFilterConfig().applyingPreset(.vivid)
-        let tried = original.selectingFaceEffect(.demon)
-        XCTAssertEqual(CallEffectsModeRule.exiting(validated: false, current: tried, original: original), original)
+    /// P8b.6 — le panneau de Réglages monte depuis la barre en ≈ 200 ms et y redescend ;
+    /// « Réduire les animations » garde un fondu court, sans montée, et ne supprime
+    /// jamais le mouvement d'un coup.
+    func test_settingsPanel_risesFromTheBar_andOnlyFadesUnderReduceMotion() {
+        XCTAssertGreaterThan(CallEffectsSettingsMotion.panelRise(reduceMotion: false), 0)
+        XCTAssertEqual(CallEffectsSettingsMotion.panelRise(reduceMotion: true), 0)
+    }
+
+    /// P8b.6 — la bande et le panneau se croisent en ≈ 200 ms ; « Réduire les
+    /// animations » garde un fondu court, elle ne supprime jamais le mouvement d'un coup.
+    func test_settingsMotion_isAShortCrossfade_neverInstant() {
+        XCTAssertEqual(CallEffectsSettingsMotion.duration(reduceMotion: false), 0.2)
+        XCTAssertGreaterThan(CallEffectsSettingsMotion.duration(reduceMotion: true), 0)
+        XCTAssertLessThan(CallEffectsSettingsMotion.duration(reduceMotion: true),
+                          CallEffectsSettingsMotion.duration(reduceMotion: false))
     }
 
     // MARK: - Les gestes sur le style choisi (#8625)
@@ -302,7 +422,7 @@ final class CallModeRulesTests: XCTestCase {
     /// que l'appel établi offre Effets ; un repli audio le referme.
     func test_preConnect_openModeSurvivesTheConnectionOnlyIfEffectsStayOffered() {
         let open = CallScreenLayer.idle.entering(.effects)
-        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: true))), open)
-        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: false))), .idle)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: true))), open)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: false))), .idle)
     }
 }

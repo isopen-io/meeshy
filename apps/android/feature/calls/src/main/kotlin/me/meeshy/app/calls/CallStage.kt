@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -35,8 +36,11 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
+import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.webrtc.EglBase
@@ -71,6 +75,8 @@ internal fun CallDuoVideoStage(
     layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
     onSwap: () -> Unit = {},
+    /** Ma vignette touchée, contrôles rangés : ils reviennent d'abord (G1.9). */
+    onRevive: () -> Unit = {},
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
@@ -78,6 +84,7 @@ internal fun CallDuoVideoStage(
     framed: Boolean = false,
     selfUserId: String = "",
     peerUserId: String = "",
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -87,6 +94,9 @@ internal fun CallDuoVideoStage(
         } else {
             val featuresLocal = layout.isMyImageFullScreen
             val fit = ScreenShareCapturePolicy.remoteFits(state.isPeerScreenSharing, rememberCallVideoFit())
+            // P15.11 : l'écran reçu tient la une (la permutation est refusée), il se pince jusqu'à 4×.
+            val receivingScreen = state.isPeerScreenSharing && !featuresLocal && !framed
+            val screenZoom = rememberCallReceivedScreenZoom(receivingScreen, callKey)
             if (!framed) {
                 if (featuresLocal && localTrack != null) {
                     VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.mirrorsLocalPreview, fit = fit)
@@ -100,8 +110,9 @@ internal fun CallDuoVideoStage(
                         eglContext = eglContext,
                         peerName = state.peerName,
                         avatarUrl = peerAvatarUrl,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().clipToBounds().callReceivedScreenZoomLayer(screenZoom, receivingScreen),
                         fit = fit,
+                        peerSpeech = peerSpeech,
                     )
                 }
             }
@@ -110,10 +121,11 @@ internal fun CallDuoVideoStage(
             // Ma propre image en plein écran se pince (zoom de la caméra envoyée) ; zoomée, un double toucher
             // revient à 1×.
             val pinchZoom = if (featuresLocal) selfCamera?.zoom else null
-            if (onSceneTap != null || pinchZoom != null) {
-                Box(
+            if (onSceneTap != null || pinchZoom != null || receivingScreen) {
+                val sceneGestures = if (receivingScreen) {
+                    Modifier.callReceivedScreenZoomGestures(screenZoom, reduceMotion, onSceneTap)
+                } else {
                     Modifier
-                        .fillMaxSize()
                         .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom).callCameraZoomAdjustable(pinchZoom) else it }
                         .pointerInput(onSceneTap, pinchZoom) {
                             detectTapGestures(
@@ -122,8 +134,9 @@ internal fun CallDuoVideoStage(
                                 },
                                 onTap = { onSceneTap?.invoke() },
                             )
-                        },
-                )
+                        }
+                }
+                Box(Modifier.fillMaxSize().then(sceneGestures))
             }
             if (pinchZoom != null) {
                 CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))
@@ -154,17 +167,20 @@ internal fun CallDuoVideoStage(
                     paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
                     onSwap = onSwap,
+                    onReveal = onRevive,
                     controlsVisible = controlsVisible,
                     rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
-                    modifier = Modifier.fillMaxSize(),
-                    overlay = {
-                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
+                    // #17982 : la plaque dit qui la vignette montre ; permutée, le micro coupé de l'autre y précède son nom,
+                    // comme sur une tuile de groupe (P11.6).
+                    plate = CallSelfTileLaw.plate(showsPeer = featuresLocal, peerName = state.peerName),
+                    plateLeading = {
                         if (state.isPeerMuted && featuresLocal) {
-                            CallPeerMutedBadge(
-                                compact = true,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs),
-                            )
+                            Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(CALL_TILE_PLATE_ICON))
                         }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    overlay = { _ ->
+                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                     },
                 ) {
                     when {
@@ -182,6 +198,7 @@ internal fun CallDuoVideoStage(
                             modifier = Modifier.fillMaxSize(),
                             compact = true,
                             overlay = true,
+                            peerSpeech = peerSpeech,
                         )
                         localTrack != null -> VideoRenderer(
                             track = localTrack,

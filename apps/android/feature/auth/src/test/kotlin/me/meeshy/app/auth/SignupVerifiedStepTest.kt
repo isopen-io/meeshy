@@ -59,7 +59,7 @@ class SignupVerifiedStepTest {
 
         compose.onNodeWithTag(SIGNUP_VERIFIED_SEAL_TAG).assertIsDisplayed()
         compose.onNodeWithText("Account verified!", substring = true, ignoreCase = true).assertExists()
-        compose.onNodeWithText("people read you in your language", substring = true, ignoreCase = true).assertExists()
+        compose.onNodeWithText("read you in their language", substring = true, ignoreCase = true).assertExists()
     }
 
     @Test

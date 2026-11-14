@@ -10,11 +10,12 @@ const pt = {
   'licences.source.title': 'Código-fonte',
   'licences.source.body': 'O código-fonte desta versão, scripts de compilação incluídos, está disponível gratuitamente.',
   'licences.source.commit': 'Revisão {commit}',
-  'licences.source.open': 'Abrir o código-fonte',
+  'licences.source.open': 'Abrir',
   'licences.agpl.title': 'Texto da licença AGPL-3.0',
   'licences.libsignal.title': 'Avisos da libsignal',
   'licences.libsignal.body': 'A libsignal e as bibliotecas que ela inclui, com o texto de suas licenças.',
-  'licences.libsignal.open': 'Ver os avisos publicados pelo Signal',
+  'licences.libsignal.question': 'O que este aviso cobre?',
+  'licences.libsignal.open': 'Abrir',
   'licences.legal_review': 'Estas informações estão em revisão jurídica.',
 } as const satisfies LicencesCatalog;
 

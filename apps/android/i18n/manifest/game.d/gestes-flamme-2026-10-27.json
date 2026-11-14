@@ -21,11 +21,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.flame_panel.freeze_full",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.flame_panel.freeze_buy",
           "status": "adopted"
         },
@@ -47,11 +42,6 @@
         {
           "catalog": "app",
           "iosKey": "game.flame_panel.relight_closed",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.flame_panel.offline",
           "status": "adopted"
         },
         {

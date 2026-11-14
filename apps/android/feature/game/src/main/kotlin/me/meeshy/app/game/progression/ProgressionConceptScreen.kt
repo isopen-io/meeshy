@@ -126,21 +126,21 @@ fun ProgressionConceptScreen(
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
             }
-            FicheSection(stringResource(R.string.game_fiche_what)) {
-                Sentence(stringResource(ConceptCopy.what(concept)))
-                Sentence(stringResource(ConceptCopy.why(concept)), strong = true)
-                Sentence(stringResource(ConceptCopy.how(concept)))
-            }
+            ConceptWhatSection(
+                title = stringResource(R.string.game_fiche_what),
+                what = stringResource(ConceptCopy.what(concept)),
+                useQuestion = stringResource(R.string.game_concept_use_question),
+                use = stringResource(ConceptCopy.use(concept)),
+            )
             // « Où j'en suis » ne redit rien : la section disparaît quand elle n'a rien à ajouter (iOS #11180).
             if (fiche != null && fiche.hasWhere) {
                 FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
-            FicheSection(stringResource(R.string.game_fiche_earn)) {
-                Sentence(stringResource(ConceptCopy.tip1(concept)))
-                Sentence(stringResource(ConceptCopy.tip2(concept)))
-            }
-            FicheSection(stringResource(R.string.game_fiche_use)) {
-                Sentence(stringResource(ConceptCopy.use(concept)))
+            val tips = ConceptCopy.tips(concept)
+            if (tips.isNotEmpty()) {
+                FicheSection(stringResource(R.string.game_fiche_earn)) {
+                    tips.forEach { Sentence(stringResource(it)) }
+                }
             }
             val game = snapshot.game
             // La frappe monte en tête avec l'Héritage : « À toi de jouer » ne la redit pas.
@@ -241,11 +241,10 @@ private fun FicheSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Sentence(text: String, strong: Boolean = false) {
+private fun Sentence(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
-        fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Normal,
         color = MeeshyTheme.tokens.textPrimary,
     )
 }

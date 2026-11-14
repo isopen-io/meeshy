@@ -12,7 +12,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
 import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
-import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, type RuleKey } from '@/routes/share-link-form';
+import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, ruleLabelId, type RuleKey } from '@/routes/share-link-form';
 
 /**
  * **L'ÉDITION D'UN LIEN D'INVITATION** (#7797) — la colonne de droite de la
@@ -53,9 +53,24 @@ const TEXT_INPUT_STYLE = {
   outlineColor: BRAND,
 } as const;
 
+/** Le nom d'un champ et, à côté, QUI le voit — lisible au repos, et relié au champ par `noteId` (règle 7, #17641). */
+function FieldHeading({ htmlFor, label, noteId, note }: { readonly htmlFor: string; readonly label: string; readonly noteId: string; readonly note: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2">
+      <label htmlFor={htmlFor} className="text-caption font-bold" style={{ color: INK_2 }}>
+        {label}
+      </label>
+      <span id={noteId} className="text-caption" style={{ color: INK_2 }}>
+        {note}
+      </span>
+    </div>
+  );
+}
+
 function NumberRow({
   id,
   label,
+  scopeId,
   value,
   invalid,
   errorText,
@@ -63,6 +78,8 @@ function NumberRow({
 }: {
   readonly id: string;
   readonly label: string;
+  /** « Maximum » se lit DEUX fois dans « Limiter » : le nom lu porte d'abord la rangée qu'il borne (`RuleToggle` de cet id). */
+  readonly scopeId: string;
   readonly value: number;
   readonly invalid: boolean;
   readonly errorText: string;
@@ -71,7 +88,7 @@ function NumberRow({
   return (
     <div className="grid">
       <label htmlFor={id} className="flex items-center gap-3 px-3.5 py-1.5 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
-        <span className="min-w-0 flex-1 text-body" style={{ color: INK }}>
+        <span id={`${id}-label`} className="min-w-0 flex-1 text-body" style={{ color: INK }}>
           {label}
         </span>
         <input
@@ -82,6 +99,7 @@ function NumberRow({
           max={MAX_USES_CEILING}
           step={1}
           value={Number.isFinite(value) ? String(value) : ''}
+          aria-labelledby={`${ruleLabelId(scopeId)} ${id}-label`}
           aria-invalid={invalid}
           {...(invalid ? { 'aria-describedby': `${id}-error` } : {})}
           onInput={(event) => onChange(event.currentTarget.valueAsNumber)}
@@ -168,6 +186,8 @@ export type EditLinkFormProps = {
   readonly onSave: (patch: ShareLinkPatch) => Promise<ShareLinkUpdateOutcome>;
   readonly onToggleActive: () => void;
   readonly onDelete: () => void;
+  /** Posé dans une fiche qui porte déjà le titre : le formulaire ne le redit pas. */
+  readonly bare?: boolean;
 };
 
 /**
@@ -176,7 +196,7 @@ export type EditLinkFormProps = {
  * ce que le lien était avant le geste : le cache est revenu en arrière
  * (`performUpdateShareLink`), le brouillon aussi.
  */
-export function EditLinkForm({ language, link, policy, now, onSave, onToggleActive, onDelete }: EditLinkFormProps) {
+export function EditLinkForm({ language, link, policy, now, onSave, onToggleActive, onDelete, bare = false }: EditLinkFormProps) {
   const [draft, setDraft] = useState<ShareLinkEditDraft>(() => editDraftOf(link, policy));
   const [invalid, setInvalid] = useState<EditDraftField | null>(null);
   const [saving, setSaving] = useState(false);
@@ -204,10 +224,18 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
   const numberError = translateInvite(language, 'linkDetail.edit.number.invalid', { max: format.format(MAX_USES_CEILING) });
 
   return (
-    <section id="link-edit" aria-labelledby="link-edit-title" data-share-link-edit className="grid scroll-mt-4 gap-4 rounded-sheet p-4 md:p-6" style={SECTION_CARD_STYLE}>
-      <h2 id="link-edit-title" className="text-thread font-extrabold" style={{ color: INK }}>
-        {translateInvite(language, 'linkDetail.edit.title')}
-      </h2>
+    <section
+      id="link-edit"
+      {...(bare ? { 'aria-label': translateInvite(language, 'linkDetail.edit.title') } : { 'aria-labelledby': 'link-edit-title' })}
+      data-share-link-edit
+      className={`grid scroll-mt-4 gap-4 p-4 md:p-6 ${bare ? '' : 'rounded-sheet'}`}
+      style={bare ? undefined : SECTION_CARD_STYLE}
+    >
+      {bare ? null : (
+        <h2 id="link-edit-title" className="text-thread font-extrabold" style={{ color: INK }}>
+          {translateInvite(language, 'linkDetail.edit.title')}
+        </h2>
+      )}
       <form
         noValidate
         data-link-edit-form
@@ -218,37 +246,39 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
         }}
       >
         <div className="grid gap-3">
-          <label htmlFor="link-edit-name" className="grid gap-1.5 text-caption font-bold" style={{ color: INK_2 }}>
-            {translateInvite(language, 'linkDetail.edit.name')}
+          <div className="grid gap-1.5">
+            <FieldHeading htmlFor="link-edit-name" label={translateInvite(language, 'linkDetail.edit.name')} noteId="link-edit-name-note" note={translateInvite(language, 'linkDetail.edit.name.note')} />
             <input
               id="link-edit-name"
               dir="auto"
               value={draft.name}
               maxLength={100}
               autoComplete="off"
+              aria-describedby="link-edit-name-note"
               placeholder={translateInvite(language, 'linkDetail.edit.name.placeholder')}
               onInput={(event) => edit({ name: event.currentTarget.value })}
               className={TEXT_INPUT}
               style={TEXT_INPUT_STYLE}
             />
-          </label>
-          <label htmlFor="link-edit-message" className="grid gap-1.5 text-caption font-bold" style={{ color: INK_2 }}>
-            {translateInvite(language, 'linkDetail.edit.message')}
+          </div>
+          <div className="grid gap-1.5">
+            <FieldHeading htmlFor="link-edit-message" label={translateInvite(language, 'linkDetail.edit.message')} noteId="link-edit-message-note" note={translateInvite(language, 'linkDetail.edit.message.note')} />
             <textarea
               id="link-edit-message"
               dir="auto"
               value={draft.description}
               rows={3}
               maxLength={500}
+              aria-describedby="link-edit-message-note"
               placeholder={translateInvite(language, 'linkDetail.edit.message.placeholder')}
               onInput={(event) => edit({ description: event.currentTarget.value })}
               className={`${TEXT_INPUT} py-3 leading-relaxed`}
               style={{ ...TEXT_INPUT_STYLE, resize: 'vertical' }}
             />
-          </label>
+          </div>
         </div>
 
-        <FormSection id="link-edit-limits" title={translateInvite(language, 'linkDetail.edit.limits')} subtitle={null} icon={<LinksGlyph name="hourglass" size={13} />}>
+        <FormSection id="link-edit-limits" title={translateInvite(language, 'linkDetail.edit.limits')} subtitle={translateLinkFamilies(language, 'links.create.section.limits.subtitle')} icon={<LinksGlyph name="hourglass" size={13} />}>
           <label htmlFor="link-edit-expiration" className="flex items-center gap-3 px-3.5 py-1.5 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
             <RowIcon tint="var(--color-warning)">
               <LinksGlyph name="hourglass" size={15} />
@@ -282,7 +312,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             label={translateInvite(language, 'linkDetail.edit.maxUses')}
             caption={
               draft.limitUses && Number.isFinite(draft.maxUses)
-                ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: format.format(draft.maxUses) })
+                ? translateLinkFamilies(language, 'links.create.limit.max', { count: format.format(draft.maxUses) })
                 : translate(language, 'links.unlimited')
             }
             icon={<Glyph name="users" size={15} />}
@@ -295,6 +325,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             <NumberRow
               id="link-edit-max-uses"
               label={translateInvite(language, 'linkDetail.edit.maxUses.count')}
+              scopeId="limitUses"
               value={draft.maxUses}
               invalid={invalid === 'maxUses'}
               errorText={numberError}
@@ -319,6 +350,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             <NumberRow
               id="link-edit-max-concurrent"
               label={translateInvite(language, 'linkDetail.edit.maxConcurrent.count')}
+              scopeId="limitConcurrent"
               value={draft.maxConcurrent}
               invalid={invalid === 'maxConcurrent'}
               errorText={numberError}
@@ -331,7 +363,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-entry"
           title={translateInvite(language, 'linkDetail.edit.entry')}
-          subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
+          subtitle={null}
           icon={<LinksGlyph name="userCheck" size={13} />}
           rules={ACCESS_RULES}
           draft={draft}
@@ -396,6 +428,9 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
         >
           {translateInvite(language, 'linkDetail.edit.delete')}
         </button>
+        <p data-share-link-actions-note className="col-span-2 text-caption" style={{ color: INK_2 }}>
+          {translateInvite(language, 'linkDetail.edit.actions.note')}
+        </p>
       </div>
     </section>
   );

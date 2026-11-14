@@ -155,10 +155,16 @@ nonisolated enum ComposerFlashIntensity {
     static let defaultLevel: Double = 1
     static let storageKey = "composer.camera.flashIntensity"
 
-    /// Le curseur ne s'allonge que flash actif : sans lumière, il n'y a pas
-    /// d'intensité à régler.
-    static func showsSlider(flash: AVCaptureDevice.FlashMode) -> Bool {
-        flash != .off
+    /// Le curseur ne s'allonge que flash actif ET caméra avant (#17463) :
+    /// c'est l'écran qui éclaire, et lui seul se dose.
+    static func showsSlider(flash: AVCaptureDevice.FlashMode, position: AVCaptureDevice.Position) -> Bool {
+        flash != .off && position == .front
+    }
+
+    /// Le bord gauche du curseur pour qu'il se centre SOUS le bouton flash (#17463).
+    static func sliderLeading(flashMidX: CGFloat, sliderWidth: CGFloat) -> CGFloat {
+        guard flashMidX.isFinite else { return 0 }
+        return max(0, flashMidX - sliderWidth / 2)
     }
 
     static func clamped(_ level: Double) -> Double {

@@ -5,7 +5,6 @@
     <!-- Navigation tabs -->
 
     <!-- Login screen -->
-    <string name="login_welcome_back">Bon retour</string>
 
     <!-- Chat screen -->
     <string name="chat_no_messages">Aucun message pour l\'instant</string>
@@ -22,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">Fait sonner votre téléphone quand un proche déclenche un Bring, même en silencieux</string>
+    <string name="bring_channel_description">Sonne quand un proche déclenche un Bring, même en silencieux</string>
     <string name="call_channel_description">Appels vocaux et vidéo entrants</string>
     <string name="a11y_floating_menu">Menu de navigation</string>
 

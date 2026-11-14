@@ -45,6 +45,20 @@ final class CaptionsModeTests: XCTestCase {
     func test_init_transcribing_showOriginalTextTrue_returnsOriginal() {
         XCTAssertEqual(CaptionsMode(isShowingCaptions: true, showOriginalText: true), .original)
     }
+
+    // MARK: - Ce que le bouton montre et dit
+
+    func test_symbol_eachStateHasItsOwnGlyph() {
+        XCTAssertEqual(CaptionsMode.off.symbol, "captions.bubble")
+        XCTAssertEqual(CaptionsMode.translated.symbol, "captions.bubble.fill")
+        XCTAssertEqual(CaptionsMode.original.symbol, "character.bubble.fill")
+    }
+
+    func test_stateLabel_eachStateIsSpokenDistinctly() {
+        let spoken = [CaptionsMode.off, .translated, .original].map { $0.stateLabel }
+        XCTAssertEqual(Set(spoken).count, 3)
+        XCTAssertFalse(spoken.contains(""))
+    }
 }
 
 // MARK: - TranscriptionCapturePolicy
@@ -129,5 +143,83 @@ final class TranscriptionCapturePolicyTests: XCTestCase {
             TranscriptionCapturePolicy.action(localPanelOpen: false, peerCaptionsActive: false, isCapturing: true),
             .stop
         )
+    }
+}
+
+/// #17678 (loi 7) — la bande des sous-titres et le journal lisent les mêmes phrases,
+/// chacun avec SON réglage Traduit · Original et SES phrases dépliées au toucher.
+@MainActor
+final class CallCaptionsSurfaceTests: XCTestCase {
+
+    private func segment() -> Meeshy.CallTranscriptionSegment {
+        Meeshy.CallTranscriptionSegment(
+            id: UUID(), text: "Hello", speakerId: "peer", startTime: 0, endTime: 1, isFinal: true,
+            confidence: 1, language: "en", translatedText: "Bonjour", translatedLanguage: "fr",
+            capturedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
+
+    private func line(
+        _ segment: Meeshy.CallTranscriptionSegment,
+        on surface: CallCaptionsSurface,
+        journalOriginal: Bool = false,
+        reveals: CallCaptionsReveals = CallCaptionsReveals()
+    ) -> CallCaptionLine {
+        CallCaptionLine.make(
+            segment: segment, isLocal: false, speakerName: "Peer",
+            prefersOriginal: surface.prefersOriginal(bandOriginal: false, journalOriginal: journalOriginal),
+            isRevealed: reveals.isRevealed(segment.id, on: surface),
+            readerPrism: ["fr"]
+        )
+    }
+
+    // MARK: - La bascule du journal ne touche pas la bande
+
+    func test_surface_bandFollowsTheCaptionsButtonOnly() {
+        XCTAssertFalse(CallCaptionsSurface.band.prefersOriginal(bandOriginal: false, journalOriginal: true))
+        XCTAssertTrue(CallCaptionsSurface.band.prefersOriginal(bandOriginal: true, journalOriginal: false))
+    }
+
+    func test_surface_journalFollowsItsOwnToggleOnly() {
+        XCTAssertTrue(CallCaptionsSurface.journal.prefersOriginal(bandOriginal: false, journalOriginal: true))
+        XCTAssertFalse(CallCaptionsSurface.journal.prefersOriginal(bandOriginal: true, journalOriginal: false))
+    }
+
+    func test_originalChosenInTheJournal_keepsTheBandInTheReadersLanguage() {
+        let spoken = segment()
+        XCTAssertEqual(line(spoken, on: .journal, journalOriginal: true).text, "Hello")
+        XCTAssertEqual(line(spoken, on: .band, journalOriginal: true).text, "Bonjour")
+    }
+
+    // MARK: - Toucher une phrase la déplie sous elle seule, dans la surface touchée
+
+    func test_aPhraseTouchedInTheBand_unfoldsItsOriginalInTheBandOnly() {
+        let spoken = segment()
+        let reveals = CallCaptionsReveals().toggling(spoken.id, on: .band)
+        XCTAssertEqual(line(spoken, on: .band, reveals: reveals).originalBelow, "Hello")
+        XCTAssertNil(line(spoken, on: .journal, reveals: reveals).originalBelow)
+        XCTAssertEqual(line(spoken, on: .journal, reveals: reveals).text, "Bonjour")
+    }
+
+    func test_aPhraseTouchedInTheJournal_leavesTheBandFolded() {
+        let spoken = segment()
+        let reveals = CallCaptionsReveals().toggling(spoken.id, on: .journal)
+        XCTAssertEqual(line(spoken, on: .journal, reveals: reveals).originalBelow, "Hello")
+        XCTAssertNil(line(spoken, on: .band, reveals: reveals).originalBelow)
+    }
+
+    func test_touchingAgain_foldsThePhraseBack_withoutTouchingTheOtherSurface() {
+        let id = UUID()
+        let reveals = CallCaptionsReveals()
+            .toggling(id, on: .band)
+            .toggling(id, on: .journal)
+            .toggling(id, on: .band)
+        XCTAssertFalse(reveals.isRevealed(id, on: .band))
+        XCTAssertTrue(reveals.isRevealed(id, on: .journal))
+    }
+
+    func test_touchingOnePhrase_unfoldsItAlone() {
+        let reveals = CallCaptionsReveals().toggling(UUID(), on: .band)
+        XCTAssertFalse(reveals.isRevealed(UUID(), on: .band))
     }
 }

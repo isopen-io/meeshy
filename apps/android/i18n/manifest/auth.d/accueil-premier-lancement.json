@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "welcome.tagline",
-          "androidName": "welcome_tagline",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "welcome.createAccount",
           "androidName": "welcome_createAccount",
           "status": "adopted"

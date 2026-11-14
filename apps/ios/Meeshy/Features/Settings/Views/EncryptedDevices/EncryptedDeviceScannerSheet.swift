@@ -18,7 +18,7 @@ struct EncryptedDeviceScannerSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: MeeshySpacing.lg) {
-                Text(String(localized: "e2ee.devices.scanner.instruction", defaultValue: "Visez le code affiché par votre autre appareil, dans « Mes appareils chiffrés » › « Montrer mon code ».", bundle: .main))
+                Text(String(localized: "e2ee.devices.scanner.instruction", defaultValue: "Visez le code montré par votre autre appareil.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -111,7 +111,7 @@ struct EncryptedDeviceScannerSheet: View {
             ProgressView()
         default:
             cameraUnavailable(
-                text: String(localized: "e2ee.devices.scanner.noCamera", defaultValue: "Cet appareil n’a pas de caméra. Lisez plutôt le code de cet appareil depuis l’autre.", bundle: .main),
+                text: String(localized: "e2ee.devices.scanner.noCamera", defaultValue: "Pas de caméra : lisez le code de cet appareil depuis l’autre.", bundle: .main),
                 showsSettings: false
             )
         }

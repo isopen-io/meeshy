@@ -42,3 +42,44 @@ describe('flipKeyframes — l’inverse du déplacement, joué vers zéro', () =
     for (const key of keys) expect(FLIP_PROPERTIES).toContain(key);
   });
 });
+
+describe('flipKeyframes — un changement de TAILLE se joue lui aussi en transform (ma vignette qui se couche)', () => {
+  const from = { x: 262, y: 128, width: 112, height: 160 };
+  const to = { x: 698, y: 60, width: 130, height: 96 };
+
+  test('depuis le coin haut-gauche, la boîte repart de sa taille d’avant : translation puis échelle', () => {
+    const frames = flipKeyframes({ first: from, last: to, reducedMotion: false, origin: { x: 0, y: 0 } });
+    expect(frames).toEqual([{ transform: `translate(${262 - 698}px, ${128 - 60}px) scale(${112 / 130}, ${160 / 96})` }, { transform: 'none' }]);
+  });
+
+  test('depuis le coin haut-droit, le bord droit reste en place : la translation compense l’échelle', () => {
+    const [start] = flipKeyframes({ first: from, last: to, reducedMotion: false, origin: { x: 1, y: 0 } }) ?? [];
+    const sx = 112 / 130;
+    expect(start).toEqual({ transform: `translate(${262 - 698 - 130 * (1 - sx)}px, ${128 - 60}px) scale(${sx}, ${160 / 96})` });
+  });
+
+  test('sans origine déclarée, la taille ne se joue pas (les autres appelants ne changent pas)', () => {
+    expect(flipKeyframes({ first: from, last: { ...to, x: 262, y: 128 }, reducedMotion: false })).toBeNull();
+  });
+
+  test('une taille identique ne joue que le déplacement', () => {
+    const frames = flipKeyframes({ first: { x: 0, y: 0, width: 100, height: 50 }, last: { x: 0, y: 40, width: 100, height: 50 }, reducedMotion: false, origin: { x: 0, y: 0 } });
+    expect(frames).toEqual([{ transform: 'translate(0px, -40px)' }, { transform: 'none' }]);
+  });
+
+  test('une boîte que sa propre échelle réduit (ma vignette rangée, `scale` à 0,5) : la translation, qui joue SOUS cette échelle, se divise par elle et le bord repart d’où il était', () => {
+    const [start] = flipKeyframes({ first: from, last: to, reducedMotion: false, origin: { x: 1, y: 0 }, carried: { x: 0.5, y: 0.5 } }) ?? [];
+    const sx = 112 / 130;
+    expect(start).toEqual({ transform: `translate(${(262 - 698 - 130 * (1 - sx)) / 0.5}px, ${(128 - 60) / 0.5}px) scale(${sx}, ${160 / 96})` });
+  });
+
+  test('un simple déplacement sous une échelle portée se divise lui aussi ; une échelle nulle ou absente ne divise rien', () => {
+    expect(flipKeyframes({ first: { x: 0, y: 0 }, last: { x: 0, y: 40 }, reducedMotion: false, carried: { x: 0.8, y: 0.8 } })?.[0]).toEqual({ transform: 'translate(0px, -50px)' });
+    expect(flipKeyframes({ first: { x: 0, y: 0 }, last: { x: 0, y: 40 }, reducedMotion: false, carried: { x: 0, y: 0 } })?.[0]).toEqual({ transform: 'translate(0px, -40px)' });
+  });
+
+  test('réduire les animations : la taille change, un fondu court remplace le mouvement (opacité seule)', () => {
+    expect(flipKeyframes({ first: from, last: to, reducedMotion: true, origin: { x: 0, y: 0 } })).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+  });
+});
+

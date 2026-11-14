@@ -1,7 +1,10 @@
 package me.meeshy.app.chat
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.runtime.CompositionLocalProvider
 import com.google.common.truth.Truth.assertThat
@@ -71,5 +74,49 @@ class ChatHeaderBandTest {
             }
         }
         compose.onNodeWithContentDescription("120 sparks earned in this conversation").assertExists()
+    }
+
+    private fun cardShown(): Boolean =
+        compose.onAllNodesWithTag("chat.header.flame.card", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    @Test
+    fun `touching the unfolded pill opens the same card as the folded flame (#17987)`() {
+        var hidden = 0
+        var openedLegend = 0
+        compose.setContent {
+            MeeshyTheme {
+                ChatHeaderEngagementPill(
+                    snapshot = ConversationEngagementSnapshot("c1", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-13"),
+                    onOpenProgression = { openedLegend += 1 },
+                    onHideFlame = { hidden += 1 },
+                )
+            }
+        }
+        assertThat(cardShown()).isFalse()
+        compose.onNodeWithTag("chat.header.engagement").performClick()
+        compose.waitForIdle()
+        assertThat(cardShown()).isTrue()
+        assertThat(openedLegend).isEqualTo(0)
+        compose.onNodeWithText("Hide the flame").performClick()
+        compose.waitForIdle()
+        assertThat(hidden).isEqualTo(1)
+        assertThat(cardShown()).isFalse()
+    }
+
+    @Test
+    fun `touching the total alone leads to My Legend, without a card (#17987)`() {
+        var openedLegend = 0
+        compose.setContent {
+            MeeshyTheme {
+                ChatHeaderEngagementPill(
+                    snapshot = ConversationEngagementSnapshot("c1", totalPoints = 120, day = "2026-11-13"),
+                    onOpenProgression = { openedLegend += 1 },
+                )
+            }
+        }
+        compose.onNodeWithTag("chat.header.engagement").performClick()
+        compose.waitForIdle()
+        assertThat(openedLegend).isEqualTo(1)
+        assertThat(cardShown()).isFalse()
     }
 }

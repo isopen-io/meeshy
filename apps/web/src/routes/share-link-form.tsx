@@ -47,12 +47,13 @@ export type RuleKey = Extract<
 >;
 type RuleTextKey = Extract<LinkFamiliesCatalogKey, `links.create.access.${string}` | `links.create.permission.${string}`>;
 type RuleGlyph = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'links'; readonly name: LinksGlyphName };
-type RuleSpec = { readonly key: RuleKey; readonly label: RuleTextKey; readonly caption: RuleTextKey; readonly glyph: RuleGlyph; readonly tint: string };
+/** `caption` : la phrase d'EFFET d'une rangée dont le nom ne dit pas tout, visible sous lui (règle 7) ; `null` pour l'usuel (pseudo, e-mail). */
+type RuleSpec = { readonly key: RuleKey; readonly label: RuleTextKey; readonly caption: RuleTextKey | null; readonly glyph: RuleGlyph; readonly tint: string };
 
 export const ACCESS_RULES: readonly RuleSpec[] = [
   { key: 'requireAccount', label: 'links.create.access.account', caption: 'links.create.access.account.caption', glyph: { set: 'links', name: 'userCheck' }, tint: SHARE_TINT },
-  { key: 'requireNickname', label: 'links.create.access.nickname', caption: 'links.create.access.nickname.caption', glyph: { set: 'socle', name: 'user' }, tint: 'var(--ios-indigo-600)' },
-  { key: 'requireEmail', label: 'links.create.access.email', caption: 'links.create.access.email.caption', glyph: { set: 'links', name: 'envelopeSimple' }, tint: 'var(--color-warning)' },
+  { key: 'requireNickname', label: 'links.create.access.nickname', caption: null, glyph: { set: 'socle', name: 'user' }, tint: 'var(--ios-indigo-600)' },
+  { key: 'requireEmail', label: 'links.create.access.email', caption: null, glyph: { set: 'links', name: 'envelopeSimple' }, tint: 'var(--color-warning)' },
   { key: 'requireBirthday', label: 'links.create.access.birthday', caption: 'links.create.access.birthday.caption', glyph: { set: 'links', name: 'calendarBlank' }, tint: 'var(--color-warning)' },
 ];
 
@@ -77,6 +78,20 @@ function RuleIcon({ glyph }: { readonly glyph: RuleGlyph }) {
   return glyph.set === 'socle' ? <Glyph name={glyph.name} size={15} /> : <LinksGlyph name={glyph.name} size={15} />;
 }
 
+/** La phrase d'orientation qui ouvre un formulaire de lien : ce que fait le lien qu'on crée (règle 7, #17641). */
+export function FormIntro({ text }: { readonly text: string }) {
+  return (
+    <p data-links-intro className="ps-1 text-caption" style={{ color: INK_2 }}>
+      {text}
+    </p>
+  );
+}
+
+/**
+ * Une section de formulaire. Sans `title`, la section est une carte sans titre : ses rangées se
+ * nomment seules (épure, règle 2 — un titre qui répète sa rangée est retiré). `subtitle` dit, au
+ * repos, ce que le titre ne dit pas (à QUI s'appliquent les bascules, ce que bornent les limites).
+ */
 export function FormSection({
   id,
   title,
@@ -85,24 +100,26 @@ export function FormSection({
   children,
 }: {
   readonly id: string;
-  readonly title: string;
+  readonly title: string | null;
   readonly subtitle: string | null;
   readonly icon: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-2">
-      <div className="grid gap-0.5 ps-1">
-        <h2 id={id} className={`flex items-center gap-1.5 text-check font-bold uppercase tracking-wide ${SECTION_BRAND_INK}`}>
-          <span aria-hidden="true">{icon}</span>
-          {title}
-        </h2>
-        {subtitle === null ? null : (
-          <p className="text-caption" style={{ color: INK_2 }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
+    <section {...(title === null ? {} : { 'aria-labelledby': id })} className="grid gap-2">
+      {title === null ? null : (
+        <div className="grid gap-0.5 ps-1">
+          <h2 id={id} className={`flex items-center gap-1.5 text-check font-bold uppercase tracking-wide ${SECTION_BRAND_INK}`}>
+            <span aria-hidden="true">{icon}</span>
+            {title}
+          </h2>
+          {subtitle === null ? null : (
+            <p data-form-section-subtitle className="text-caption" style={{ color: INK_2 }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      )}
       <div className={`grid overflow-hidden rounded-card ${ROW_DIVIDER}`} style={SECTION_CARD_STYLE}>
         {children}
       </div>
@@ -110,6 +127,8 @@ export function FormSection({
   );
 }
 
+/** L'identifiant du NOM d'une bascule — un champ qui la précise s'en sert pour se nommer par elle. */
+export const ruleLabelId = (id: string): string => `link-rule-${id}-label`;
 
 export function RuleToggle({
   id,
@@ -123,7 +142,8 @@ export function RuleToggle({
 }: {
   readonly id: string;
   readonly label: string;
-  readonly caption: string;
+  /** Sous le nom : l'EFFET de la bascule (« Les invités voient les messages précédents ») ou sa valeur du moment (« Illimité », « 5 max »). */
+  readonly caption?: string | null;
   readonly icon: ReactNode;
   readonly tint: string;
   readonly checked: boolean;
@@ -132,22 +152,24 @@ export function RuleToggle({
 }) {
   const captionId = `link-rule-${id}-caption`;
   return (
-    <div data-link-rule-row={id} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 60, opacity: disabled ? 0.45 : 1 }}>
+    <div data-link-rule-row={id} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: caption ? 60 : 52, opacity: disabled ? 0.45 : 1 }}>
       <RowIcon tint={tint}>{icon}</RowIcon>
       <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-body font-medium" style={{ color: INK }}>
+        <span id={ruleLabelId(id)} className="text-body font-medium" style={{ color: INK }}>
           {label}
         </span>
-        <span id={captionId} className="text-caption" style={{ color: INK_2 }}>
-          {caption}
-        </span>
+        {caption ? (
+          <span id={captionId} className="text-caption" style={{ color: INK_2 }}>
+            {caption}
+          </span>
+        ) : null}
       </span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        aria-describedby={captionId}
+        {...(caption ? { 'aria-describedby': captionId } : {})}
         data-link-rule={id}
         disabled={disabled}
         onClick={() => onToggle(!checked)}
@@ -174,7 +196,7 @@ export function RulesSection({
   readonly language: InterfaceLanguage;
   readonly id: string;
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle: string | null;
   readonly icon: ReactNode;
   readonly rules: readonly RuleSpec[];
   /** Les huit bascules seulement : la création (`ShareLinkDraft`) et l'édition
@@ -191,7 +213,7 @@ export function RulesSection({
             key={rule.key}
             id={rule.key}
             label={translateLinkFamilies(language, rule.label)}
-            caption={translateLinkFamilies(language, rule.caption)}
+            caption={rule.caption === null ? null : translateLinkFamilies(language, rule.caption)}
             icon={<RuleIcon glyph={rule.glyph} />}
             tint={rule.tint}
             checked={draft[rule.key] && !overridden}
@@ -252,6 +274,7 @@ export function ConversationChoice({
       type="button"
       aria-haspopup="dialog"
       aria-invalid={invalid}
+      {...(conversation === null ? { 'aria-label': translateLinkFamilies(language, 'links.create.picker.title') } : {})}
       data-link-conversation={conversation?.id ?? ''}
       onClick={onOpen}
       className="flex w-full min-w-0 items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2 focus-visible:-outline-offset-2"
@@ -344,7 +367,7 @@ export function LimitsFields({
 }) {
   const count = new Intl.NumberFormat(language).format(draft.maxUses);
   const caption = draft.limitUses
-    ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: Number.isFinite(draft.maxUses) ? count : '—' })
+    ? translateLinkFamilies(language, 'links.create.limit.max', { count: Number.isFinite(draft.maxUses) ? count : '—' })
     : translate(language, 'links.unlimited');
   return (
     <>

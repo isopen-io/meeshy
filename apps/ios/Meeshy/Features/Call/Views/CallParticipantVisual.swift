@@ -26,26 +26,44 @@ struct CallParticipantVisual: View {
     // reconstructs this struct; a defaulted @ObservedObject would tear down
     // and rebuild its objectWillChange subscription on every such tick.
     @ObservedObject var callManager: CallManager
+    /// P18.4 — la bulle d'appel réduit porte le liseré et l'avatar à la couleur de
+    /// l'autre ; la bannière garde son visuel (trait blanc sur la vidéo, indigo de marque).
+    let ringsInPeerColor: Bool
     @State private var remoteProfile: MeeshyUser?
 
     /// Initialiseur circulaire — les deux sites d'appel préexistants (avatar
     /// de la pilule, palier cercle de la bulle) continuent de passer un seul
     /// `diameter:`.
-    init(diameter: CGFloat, callManager: CallManager) {
+    init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager) {
         self.width = diameter
         self.height = diameter
         self.cornerRadius = diameter / 2
+        self.ringsInPeerColor = ringsInPeerColor
         self.callManager = callManager
     }
 
     /// Initialiseur rectangle — paliers small/medium/large de `CallBubbleView`,
     /// où largeur et hauteur divergent et le rayon de coin ne dérive plus
     /// d'un diamètre unique.
-    init(width: CGFloat, height: CGFloat, cornerRadius: CGFloat, callManager: CallManager) {
+    init(width: CGFloat, height: CGFloat, cornerRadius: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager) {
         self.width = width
         self.height = height
         self.cornerRadius = cornerRadius
+        self.ringsInPeerColor = ringsInPeerColor
         self.callManager = callManager
+    }
+
+    /// La couleur de la personne : la fonction partagée de ses sous-titres et de sa vignette.
+    private var peerColorHex: String {
+        CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId)
+    }
+
+    private var ring: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(
+                ringsInPeerColor ? CallSelfTileStroke.color(forKey: callManager.remoteUserId) : Color.white.opacity(MeeshyOpacity.medium),
+                lineWidth: ringsInPeerColor ? CallSelfTileStroke.lineWidth : 1
+            )
     }
 
     var body: some View {
@@ -54,10 +72,7 @@ struct CallParticipantVisual: View {
                 CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
                     .frame(width: width, height: height)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1)
-                    )
+                    .overlay(ring)
                     .accessibilityHidden(true)
             } else {
                 avatarView
@@ -86,10 +101,11 @@ struct CallParticipantVisual: View {
                 thumbHash: remoteProfile?.avatarThumbHash,
                 name: callManager.remoteUsername ?? "?",
                 size: min(width, height),
-                accentColor: MeeshyColors.brandPrimaryHex
+                accentColor: ringsInPeerColor ? peerColorHex : MeeshyColors.brandPrimaryHex
             )
         }
         .frame(width: width, height: height)
+        .overlay { if ringsInPeerColor { ring } }
         .accessibilityHidden(true)
     }
 

@@ -80,7 +80,7 @@
           "catalog": "app",
           "iosKey": "call.control.capture.hint",
           "androidName": "call_control_capture_hint",
-          "status": "adopted"
+          "status": "candidate"
         },
         {
           "catalog": "app",

@@ -3,6 +3,7 @@ import { engagementAxisLabel, engagementAxisWhatCounts } from '@meeshy/shared/ut
 import { BADGE_MATERIALS } from '@meeshy/shared/utils/game/badge-tiers';
 import { badgeGuide, badgeGuidesByFamily } from '@meeshy/shared/utils/game/badge-guide';
 
+import { GameFold } from '@/components/game-fold';
 import { GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameMedal } from '@/components/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -20,14 +21,12 @@ import { familyName, formatCount, gameText, materialName } from '@/lib/view/game
  * Une page qui explique, sans geste : aucun dessin n'est lu (les médailles sont
  * décoratives, le nom et la phrase les disent).
  */
-export function RulesBadges() {
+export function RulesBadges({ open, onToggle }: { readonly open: boolean; readonly onToggle: () => void }) {
   const language = currentInterfaceLanguage();
   const families = badgeGuidesByFamily(ENGAGEMENT_AXES.map((axisKey) => badgeGuide({ axisKey, count: 0 })));
   return (
-    <section id={BADGES_SECTION_ID} aria-labelledby={`${BADGES_SECTION_ID}-titre`} className="flex scroll-mt-4 flex-col gap-3">
-      <h2 id={`${BADGES_SECTION_ID}-titre`} className="text-title font-bold" style={{ color: GAME_INK }}>
-        {gameText('game.rules.badges.title')}
-      </h2>
+    <section id={BADGES_SECTION_ID} aria-labelledby={`${BADGES_SECTION_ID}-titre`} className="scroll-mt-4 rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
+      <GameFold id="medailles" level={2} headingId={`${BADGES_SECTION_ID}-titre`} open={open} onToggle={onToggle} title={gameText('game.rules.badges.title')}>
       <p className="text-body" style={{ color: GAME_INK }}>
         {gameText('game.rules.badges.intro')}
       </p>
@@ -89,6 +88,7 @@ export function RulesBadges() {
       <p className="text-body" style={{ color: GAME_INK_2 }}>
         {gameText('game.rules.badges.sheet')}
       </p>
+      </GameFold>
     </section>
   );
 }

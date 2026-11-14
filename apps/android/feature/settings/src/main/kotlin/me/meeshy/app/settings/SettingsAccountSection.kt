@@ -26,7 +26,7 @@ internal fun SettingsAccountSection(
                 SettingsHubRowId.PRIVACY ->
                     SettingsChevronRow(MeeshyIcons.LockFilled, stringResource(R.string.settings_privacy_title), MeeshyPalette.Indigo500, onOpenPrivacy)
                 SettingsHubRowId.SECURITY ->
-                    SettingsChevronRow(MeeshyIcons.ShieldFilled, stringResource(R.string.settings_security), MeeshyPalette.Info, onOpenSecurity)
+                    SettingsChevronRow(MeeshyIcons.ShieldFilled, stringResource(R.string.settings_security), MeeshyPalette.Info, onOpenSecurity, subtitle = stringResource(R.string.settings_security_orientation))
                 SettingsHubRowId.BLOCKED_USERS ->
                     SettingsChevronRow(MeeshyIcons.Block, stringResource(R.string.settings_blocked_users), MeeshyPalette.Error, onOpenBlockedUsers)
                 SettingsHubRowId.DELETE_ACCOUNT -> SettingsChevronRow(

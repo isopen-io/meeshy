@@ -17,10 +17,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "security_sessions_manage",
-          "status": "android-only"
-        },
-        {
           "androidName": "security_title",
           "status": "android-only"
         }

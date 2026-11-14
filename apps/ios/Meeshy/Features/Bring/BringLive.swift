@@ -52,7 +52,8 @@ extension BringCenter {
     static let shared = BringCenter(
         service: BringService.shared,
         people: CirclePeopleDirectory.shared,
-        ringer: BringTone()
+        ringer: BringTone(),
+        alarms: .system
     )
 }
 

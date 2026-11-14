@@ -15,24 +15,34 @@ import org.junit.Test
 class EmptyStateVisualTest {
 
     @Test
-    fun `error arm becomes a retryable error card with the translated subtitle, never the raw server message`() {
+    fun `error arm becomes a retryable one-line card, never the raw server message`() {
         val visual = EmptyStateVisual.of(ConversationListContent.Error("Unable to resolve host gate.meeshy.me"))
 
         assertThat(visual).isEqualTo(
             EmptyStateVisual(
                 glyph = EmptyStateGlyph.Error,
-                title = EmptyStateCopy.ErrorTitle,
-                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ErrorSubtitle),
+                title = EmptyStateCopy.ErrorMessage,
                 cta = EmptyStateCopy.Retry,
             ),
         )
     }
 
     @Test
-    fun `a blank error message gets the same translated subtitle`() {
+    fun `a blank error message gets the same one translated line`() {
         val visual = EmptyStateVisual.of(ConversationListContent.Error("   "))
 
-        assertThat(visual?.subtitle).isEqualTo(EmptyStateSubtitle.Resource(EmptyStateCopy.ErrorSubtitle))
+        assertThat(visual?.title).isEqualTo(EmptyStateCopy.ErrorMessage)
+    }
+
+    @Test
+    fun `no empty state carries a second line, one line plus an action when there is one`() {
+        val states = listOf(
+            ConversationListContent.Error("x"), ConversationListContent.FilteredEmpty,
+            ConversationListContent.ColdEmpty, ConversationListContent.SearchNoResults,
+        ).map { EmptyStateVisual.of(it) }
+
+        assertThat(EmptyStateVisual::class.java.declaredFields.map { it.name }).doesNotContain("subtitle")
+        assertThat(states.map { it?.cta }).containsExactly(EmptyStateCopy.Retry, null, EmptyStateCopy.NewConversation, null).inOrder()
     }
 
     @Test
@@ -43,7 +53,6 @@ class EmptyStateVisualTest {
             EmptyStateVisual(
                 glyph = EmptyStateGlyph.NoResults,
                 title = EmptyStateCopy.FilteredTitle,
-                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.FilteredSubtitle),
                 cta = null,
             ),
         )
@@ -57,7 +66,6 @@ class EmptyStateVisualTest {
             EmptyStateVisual(
                 glyph = EmptyStateGlyph.NoConversations,
                 title = EmptyStateCopy.ColdTitle,
-                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ColdSubtitle),
                 cta = EmptyStateCopy.NewConversation,
             ),
         )
@@ -71,7 +79,6 @@ class EmptyStateVisualTest {
             EmptyStateVisual(
                 glyph = EmptyStateGlyph.SearchNoResults,
                 title = EmptyStateCopy.SearchNoResultsTitle,
-                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.SearchNoResultsSubtitle),
                 cta = null,
                 compact = true,
             ),

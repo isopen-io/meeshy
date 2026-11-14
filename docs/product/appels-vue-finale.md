@@ -14,19 +14,21 @@
    - **Les boutons sont en Liquid Glass quand la version d'iOS le permet, en verre dessiné sinon** (directive porteur du 2026-11-09, #17323). Elle supplante « un bouton inactif n'a pas de fond » et « jamais de verre posé sur du verre » ; les captures montrent désormais le disque de verre de chaque bouton.
    - Le Liquid Glass l'emporte : sur iOS 26 et plus, chaque bouton est un verre interactif, avec l'effet au toucher des boutons de l'en-tête de conversation (`ConversationHeaderGlassGlyph`), et les verres voisins se composent dans un même conteneur.
    - Sur iOS 16 à 25, le bouton est le verre dessiné de `adaptiveLiquidGlass`. Android transpose par `MeeshyGlassSurface`.
+   - **Sur fenêtre large, toute pilule a UNE borne : 560 px, centrée sous la scène, en duo comme en groupe** (décision porteur du 2026-11-13, #17935 ; W1, W2). Elle vaut pour la pilule agrandie qui porte les sous-titres, le journal ou les deux rangées du groupe, comme pour la bande du paysage (L3). En paysage, la pile des bannières du haut (« Vous partagez votre écran · Arrêter », puce de capture, enregistrement) a la même borne, centrée, et ma vignette garde son coin à côté d'elle (décision porteur du 2026-11-13, #17965 ; L6).
    - **La capsule de droite de l'en-tête** (décision porteur du 2026-11-09, #17341) : en vidéo, elle porte le nom que j'ai donné à la personne (sinon son nom d'affichage) et la durée, « Awa · 04:12 » ; l'indicateur réseau n'y apparaît que si la connexion se dégrade. En audio, le nom et la durée sont déjà au centre sous l'avatar : la capsule n'existe que pour l'indicateur réseau, et seulement s'il se dégrade. En groupe, elle porte le nom du groupe, le nombre et la durée.
 2. **(…) fait sortir les actions, et les range.**
-   - En duo, deux rails verticaux sortent vers les bords. **Gauche = mon image** : Caméra, Retourner, Effets, Écran ; caméra éteinte, seulement Caméra et Écran, car un contrôle sans effet n'est pas posé (porteur, 2026-11-10). **Droite = l'appel** : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture.
-   - **La liste « l'appel » ne porte que ce qui n'a pas déjà sa place ailleurs** (décisions porteur du 2026-11-09, #17329 : « il faut garder » ce que le code porte en plus, « ajouter ce qui n'existe pas encore ailleurs », et la planche s'enrichit « sans doublon de ce qu'elle rend déjà autrement », #17332). La conversation s'ouvre par l'en-tête (#8436) et l'image dans l'image y a son bouton : l'en-tête porte, de gauche à droite, Réduire · Image dans l'image (si l'appel y est éligible, ou pour en sortir) · Conversation (si elle est connue). Rien ne disparaît : Messages et Image dans l'image passent à l'en-tête, Journal, Réagir et Capture entrent dans la liste.
-   - En groupe, les mêmes dix actions montent dans la pilule, qui s'agrandit en deux rangées légendées (mon image, puis l'appel).
+   - En duo, deux rails verticaux sortent vers les bords. **Gauche = mon image** : Caméra, Retourner, Effets, Écran ; caméra éteinte, seulement Caméra et Écran, car un contrôle sans effet n'est pas posé (porteur, 2026-11-10). **Droite = l'appel** : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture. **Capture seulement avec une image** : en appel audio, le rail « L'appel » n'a que cinq boutons, sans Capture (décision porteur du 2026-11-13, #17944 ; P10). Dans une conversation chiffrée de bout en bout, Enregistrer est absent, et l'interface le dit (loi 14).
+   - **La liste « l'appel » ne porte que ce qui n'a pas déjà sa place ailleurs** (décisions porteur du 2026-11-09, #17329 : « il faut garder » ce que le code porte en plus, « ajouter ce qui n'existe pas encore ailleurs », et la planche s'enrichit « sans doublon de ce qu'elle rend déjà autrement », #17332). La conversation s'ouvre par l'en-tête (#8436) et l'image dans l'image y a son bouton : l'en-tête porte, de gauche à droite, Réduire · Image dans l'image (si l'appel y est éligible, ou pour en sortir) · Conversation (si elle est connue). En audio, Image dans l'image n'est posé que si la plateforme y est éligible : iOS ne l'est pas en audio pur (décision porteur du 2026-11-13, #17964 ; P9, P9b, P10). Rien ne disparaît : Messages et Image dans l'image passent à l'en-tête, Journal, Réagir et Capture entrent dans la liste.
+   - En groupe, les mêmes actions montent dans la pilule, qui s'agrandit en deux rangées légendées (mon image, puis l'appel).
+   - **En groupe, la grille se resserre au-dessus de la pilule agrandie**, comme au-dessus des sous-titres (P13) ; au repos, les plaques du bas restent visibles au-dessus de la pilule (décision porteur du 2026-11-13, #17949 ; P11, P12).
    - **Les deux dispositions se tiennent selon le nombre de participants** (directive porteur du 2026-11-09, #17327) : à plusieurs, aucun rail ne se pose par-dessus la grille, pour ne masquer aucune vignette.
    - L'ordre et le vocabulaire sont les mêmes sur les trois plateformes.
 3. **Le verre est adaptatif.** Sur un contenu clair (un écran partagé), il s'assombrit pour garder le contraste, en-tête et pilule compris.
 4. **Chaque personne a UNE couleur, partout dans l'appel et après** (#16612, #16614, précisée par le porteur le 2026-11-07, #16662).
    - La graine est `authorAccentColor(userId, name)` (`@meeshy/shared`). Ses miroirs sont `DynamicColorGenerator.colorForName(userId)` sur iOS et `CallSpeakerColor` sur Android. L'identifiant prime sur le nom, et il n'y a jamais de seconde palette.
    - Cette couleur teinte :
-     - le liseré de la vignette, **la mienne comprise** ;
-     - l'anneau de qui parle ;
+     - le liseré de la vignette, **la mienne comprise**. Après permutation des images en duo (#16973), le liseré de la petite vignette suit la personne qu'elle montre (décision porteur du 2026-11-13, #17964, comme iOS et Android) ;
+     - l'anneau de qui parle, avec son halo : il n'apparaît QU'À LA PAROLE, et rien ne l'annonce au repos (pas d'anneau permanent). Il en va de même quand sa caméra est coupée et que son avatar prend la place de l'image (G4, P9 ; famille 2, 2026-11-11). En audio, c'est l'anneau et le halo qui disent la parole : sous le nom, il y a la durée (loi 1), jamais « En train de parler » (décision porteur du 2026-11-13, #17964 ; P9, P9b, P10) ;
      - **le pseudo, toujours** ;
      - **la phrase, SEULEMENT quand elle sert une traduction**.
    - Une phrase originale reste à l'encre du thème (blanc sur le verre d'appel, noir ou blanc dans le fil selon le thème) :
@@ -43,59 +45,129 @@
    - Ma phrase n'est jamais traduite pour moi.
    - La ligne servie descend le **Prisme** du lecteur (`resolvePrismTranslation` / `served`), jamais `translations[0]`.
    - **Les sous-titres vivent DANS la pilule**, au-dessus de sa rangée de base, dans le même verre, en duo comme en groupe (décision porteur du 2026-11-09, #17343). Ouvrir les actions (…) les range ; refermer les actions les rend.
+   - **UNE seule grammaire de bande, en duo comme en groupe** (décision porteur du 2026-11-13, #17933 ; P3, P13, W1, W2) : les phrases à même le verre, DEUX phrases, un filet qui les sépare de la rangée, et « Journal » en bouton au pied de la bande. Les deux phrases sont les deux plus récentes, la phrase en cours comprise (iOS `suffix(2)` ; décision porteur du 2026-11-13, #17964 ; P3, P4). Il n'y a plus de carte sombre intérieure en groupe, ni de « Journal » en simple texte.
+   - **La bande et le journal rangent les phrases dans le MÊME ordre : par début de phrase** (l'heure dans l'appel où la phrase a commencé), la plus ancienne en haut, la plus récente en bas, contre la rangée. Une traduction ou une version finale qui arrive plus tard met la ligne à jour sur place, sans la déplacer : en P3 et P4, la phrase d'Awa reste au-dessus de ma réponse même si sa traduction arrive après (compte rendu famille 1, #17329).
 6. **Toucher une phrase montre son original dessous** ; la retoucher le replie. « Journal » ouvre tout l'appel, DANS la pilule, à la place des sous-titres (#17343).
+   - **« Journal » referme le journal** (décision porteur du 2026-11-13, #17964 ; P6, P9b) : tant que le journal est ouvert dans la pilule, le bouton « Journal » y reste visible, au pied, à la place où il l'a ouvert, en disque blanc plein à icône et texte sombres (loi 1), comme pour la colonne du grand écran (#17932). Le retoucher referme le journal et rend ce qu'il remplaçait : les sous-titres s'ils étaient allumés, sinon la pilule de base. Ouvrir (…) le range toujours. Sur les trois plateformes.
+   - **En appel audio, le journal ouvert RÉDUIT l'avatar** (décision porteur du 2026-11-11, #17529 ; P9b). L'avatar passe de 120 pt à ~56 pt et monte en un en-tête compact, sous l'en-tête de l'appel : l'avatar à gauche, et à côté, sur la même rangée, le nom puis la durée (iOS `CallCompactAudioHeader`). Le journal prend la place libérée ; la personne ne disparaît jamais derrière lui, et son anneau de parole suit l'avatar à sa nouvelle taille.
+     - Seul le journal ouvert DANS la pilule réduit l'avatar : les sous-titres le laissent à 120 pt, et l'avatar reprend sa taille dès que le journal n'est plus dans la pilule (journal fermé, (…) ouvert par-dessus, ou en-tête, pilule et journal rangés par un toucher sur le fond, loi 11, #17945).
+     - La transition est un morphisme : l'avatar glisse et se réduit vers l'en-tête compact pendant que le nom et la durée le rejoignent en fondu (≈ 200 ms, transformation et opacité seulement), puis le chemin inverse au retour. Réduire les animations ⇒ un fondu seul, sans déplacement ni changement d'échelle.
 7. **Le journal est FIDÈLE, pendant et après l'appel.**
    - C'est le MÊME journal avant et après la fin de l'appel : mêmes phrases, même ordre, mêmes couleurs, même descente du Prisme.
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
-   - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place pendant qu'il est ouvert (porteur, 2026-11-10). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
+   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction, et la bascule y inverse les deux lignes (#17862, ci-dessous).
+   - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343), et « Journal » en disque blanc le referme (loi 6, #17964). Ma vignette garde sa place, en haut à droite, pendant qu'il est ouvert (porteur, 2026-11-10 ; P6). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
+   - **La colonne du journal sur grand écran (W1)** :
+     - Colonne ouverte, le bouton « Journal », au pied de la bande comme dans le rail, est ACTIF : un disque blanc plein à icône et texte sombres (loi 1). Le retoucher referme la colonne. La colonne ne porte aucun ✕ : sa tête n'a que « Journal » et la bascule Traduit · Original, comme `CallJournalPanel` sur iOS (décision porteur du 2026-11-13, #17932).
+     - Elle entre par le bord de FIN de la fenêtre (le bord gauche en droite à gauche) et y repart à la fermeture ; la scène glisse vers son nouveau centre pendant ce temps (décision porteur du 2026-11-13, #17931). C'est l'exception de la loi 17 pour la colonne : elle ne naît pas de la barre du bas.
+     - Un mode (Effets, Montage) la range avec l'en-tête ; elle revient à la sortie du mode (décision porteur du 2026-11-13, #17934 ; loi 14).
    - Rien n'est tronqué, et une ligne dont la traduction arrive après la fin de la phrase est mise à jour sur place, pas dupliquée. Les règles de fusion sont web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android `CallLiveJournal.merged`.
-   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique. Une bascule Traduit / Original s'applique à tout l'appel.
+   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique.
+   - **Après l'appel, la bascule INVERSE les deux lignes, sur tout l'appel** (décision porteur du 2026-11-13, #17862). C'est la même bascule Traduit · Original que celle du journal vivant (P6).
+     - Par défaut, la traduction servie par le Prisme est la ligne principale, et « Original · … » est dessous (#17340).
+     - « Voir l'original », au pied du journal, fait de l'original la ligne principale de chaque phrase traduite. La traduction passe dessous, étiquetée « Traduit · … ».
+     - Le libellé devient alors « Voir la traduction », qui rend l'état par défaut.
+     - Rien ne disparaît. Une phrase sans traduction (la mienne, ou une phrase déjà dans la langue du lecteur) reste seule dans les deux états.
+     - La bascule n'est offerte que si une phrase au moins est traduite.
+     - En tête, l'original reste à l'encre du thème et la traduction à la couleur de son auteur (loi 4). La ligne dessous garde la même place, le même retrait et l'encre secondaire, qu'elle dise « Original · » ou « Traduit · ».
+     - Le passage d'un état à l'autre se fait en fondu ; avec Réduire les animations, il n'y a aucun déplacement.
+     - Exemple : Awa a dit « Nos vemos mañana », traduit « On se voit demain ». Par défaut, le journal montre « On se voit demain » et, dessous, « Original · Nos vemos mañana ». Après « Voir l'original », il montre « Nos vemos mañana » et, dessous, « Traduit · On se voit demain ».
    - Pendant l'appel :
      - le défilement est libre ;
      - « Revenir au direct » apparaît dès qu'on a remonté ;
      - le journal survit à l'appel réduit, aux sous-titres coupés et à une reconnexion.
 8. **Micro coupé = ma parole n'est plus transcrite** (#8475).
-9. **Effets = des looks : filtres, cadres, effets de visage, de paysage et de voix.** La directive porteur du 2026-11-10 (#17409) rend les effets de voix, que #8050 avait retirés le 2026-09-27 ; elle est postérieure et la supplante.
-   - **Effets emprunte au composer** (directive porteur du 2026-11-10, #17406) : les filtres, les cadres et les effets sont des LOOKS, choisis en surimpression sur mon image, dans la bande du composer (`ComposerLookStrip`), et les puces qui les trient (`ComposerLookFilterChips` : Tout · Filtres · Cadres · Visage · Paysage · Voix…) apparaissent dans la barre du bas (P8). Elles défilent à l'horizontale sans coupure brute : la rangée s'efface toujours en fondu à gauche comme à droite (#17409). L'appel ne recrée ni la bande, ni les puces, ni le catalogue.
-10. **L'écran partagé de quelqu'un d'autre passe à la une tout seul.** La caméra de celui qui partage passe en médaillon, au liseré de sa couleur.
+9. **Effets = des looks sur mon image, triés par UNE rangée de genres : Visage · Couleur · Cadres** (livrée par #16979 sur les trois plateformes, gardée par le porteur le 2026-11-13, #17962 ; P8, C1).
+   - Cette rangée supplante, dans la barre de l'appel, les puces du composer (`ComposerLookFilterChips` : Tout · Filtres · Cadres · Visage · Paysage · Voix…) qu'y posait la directive du 2026-11-10 (#17406). Elle est la même en Effets et en Montage : Visage et Couleur s'ouvrent dans Effets, Cadres dans Montage, et toucher un genre de l'autre mode y passe. Un genre n'y figure que si l'appel offre le mode qui le montre.
+   - Le genre affiché est pressé, en blanc plein ; les autres sont pâles, séparés par « · ». En grand texte, la rangée défile sans coupure brute et s'efface en fondu à ses deux bords (#17409).
+   - Les looks se choisissent en surimpression sur mon image : la case choisie au centre, à pleine taille, les voisines plus petites. **Un seul nom est écrit, sous la case choisie** ; les voisines n'en portent pas, et le lecteur d'écran lit le nom de chacune (décision porteur du 2026-11-14, P8.6 ; P8, C1). Le carrousel des cadres suit la même règle. L'appel ne recrée ni la bande, ni le catalogue.
+   - Toucher un genre ouvre sa bande au-dessus de la barre. Un look touché, la bande se referme et la barre revient à son menu de base (loi 14, règle C1).
+10. **L'écran partagé de quelqu'un d'autre passe à la une tout seul, même si j'ai mis quelqu'un à la une à la main** (décision porteur du 2026-11-14, #18180 ; loi 15). La caméra de celui qui partage passe en médaillon, au liseré de sa couleur.
 
-11. **Un toucher n'importe où sur l'image range tout, un autre toucher rend tout** (#16663).
-    - Le premier toucher cache l'en-tête, la pilule, les rails et les bandeaux, et ma vignette passe à sa petite taille.
+11. **Un toucher sur la scène range tout, un autre toucher rend tout** (#16663 ; étendue à l'audio puis au groupe sans caméra par les décisions porteur du 2026-11-13, #17945).
+    - La scène, c'est l'image en vidéo et le fond derrière l'avatar en audio. En duo audio, le premier toucher range l'en-tête, la pilule et le journal, et l'avatar grandit à 120 pt (loi 6) ; un nouveau toucher les rend.
+    - **En groupe sans aucune caméra allumée**, un toucher sur le fond range aussi l'en-tête, la pilule et le journal, et un autre les rend : même règle qu'en duo audio (extension tranchée le 2026-11-13, #17945).
+    - Le premier toucher cache l'en-tête, la pilule, les rails et les bannières, et ma vignette passe à sa petite taille.
+    - **« Les bannières » sont celles du haut** : « Vous partagez votre écran · Arrêter », la puce de capture (loi 13), la capsule d'enregistrement et les avis. Le bandeau des autres (les vignettes, loi 15) n'est pas une bannière : il reste au premier toucher (décision porteur du 2026-11-13, #17961).
     - Le second toucher fait revenir les contrôles partout, et ma vignette reprend la taille que j'avais choisie.
     - Il n'y a pas de minuterie. Un bouton touché pendant le fondu répond quand même.
-    - Les sous-titres et une carte d'accord (enregistrement, cadre) ne se cachent jamais : quand la pilule se range, les sous-titres restent dans un verre sans sa rangée de base (G1).
+    - Les sous-titres et une carte d'accord (enregistrement, cadre) ne se cachent jamais : quand la pilule se range, les sous-titres restent dans un verre sans sa rangée de base (G1). Il en va de même en mode Effets ou Montage : les sous-titres restent dans ce verre sans rangée, posé au-dessus des looks (P8), du panneau de réglages (P8b) ou du carrousel des cadres (C1). En mode, ce verre n'a pas de bouton « Journal » : son pied garde « EN → FR · toucher = original » (décision porteur du 2026-11-13, #17946).
+    - **Un SEUL verre se resserre** (famille 2, 2026-11-11) : au premier toucher, le verre qui portait les sous-titres au-dessus de la rangée perd sa rangée par morphisme (loi 17) et reste le même verre ; il n'y a jamais de second verre posé pour les sous-titres rangés, sur aucune plateforme. En-tête, rails et pilule sortent vers leurs bords, et reviennent par le chemin inverse.
+    - **Le cycle G1 → G2 rend l'état d'avant** : si (…) était ouvert, il revient ouvert ; les sous-titres que (…) rangeait restent rangés ; ce qui était fermé reste fermé.
+    - **Un journal ouvert dans la pilule se range avec elle** au premier toucher et revient avec elle au second. Sur grand écran, la colonne du journal (W1) reste : elle ne masque rien (décision porteur).
+    - Contrôles cachés, toucher ma vignette rend d'abord les contrôles, comme toucher l'image.
+    - **Contrôles cachés, toucher « Journal »** dans le verre des sous-titres rend les contrôles ET ouvre le journal dans la pilule (décision porteur du 2026-11-13, #17964 ; G1), comme iOS.
 12. **Lancer un partage d'écran RÉDUIT l'appel** (#16664).
     - Je quitte Meeshy pour montrer autre chose, et l'appel me suit en capsule : icône d'écran, nom · durée, « Arrêter ».
     - Toucher la capsule rouvre l'appel ; le bandeau « Vous partagez votre écran · Arrêter » y reste sous l'en-tête.
     - Mon partage ne passe jamais à la une chez moi.
 13. **Une capture ou un enregistrement d'écran se voit et se garde** (#16665).
-    - Une puce rouge « X capture l'écran de l'appel » apparaît chez tous, en audio comme en vidéo.
-    - Une ligne datée entre dans le journal et reste dans celui d'après l'appel.
-    - L'enregistrement demande l'accord de tous, sur une carte qui ne se cache jamais, et le journal note son début et sa fin.
+    - Une puce « X capture l'écran de l'appel » apparaît chez les autres, en audio comme en vidéo (décision porteur du 2026-11-13, #17963 ; R1) :
+      - elle est en verre teinté rouge, celui du kit et du bandeau de partage ;
+      - elle dure 5 s (`CALL_SCREENSHOT_ALERT_TTL_MS`, kit partagé) et se range au premier toucher avec les bannières (loi 11) ;
+      - celui qui capture ne voit pas sa propre puce : sa capture entre au journal.
+    - Une ligne datée entre dans la bande des sous-titres et dans le journal, et reste dans celui d'après l'appel (R1).
+    - L'enregistrement demande l'accord de tous, sur une carte qui ne se cache jamais, et le journal note son début et sa fin. Ce que le code porte en plus est gardé (#17963) ; R2 dessine le paragraphe, R2 et R3 écrivent les deux autres, qui ne coexistent pas avec l'état qu'elles montrent :
+      - la carte d'accord porte un paragraphe qui l'explique : « Tout le monde doit accepter. L'enregistrement s'arrête si quelqu'un rejoint. » ;
+      - chez qui demande, la capsule dit « En attente de l'accord de tous… » avec « Annuler », qui retire la demande ; c'est la même capsule qui dit ensuite « Enregistrement en cours » et « Arrêter » ;
+      - à l'arrêt, une pastille d'avis le dit (« Enregistrement refusé », « Quelqu'un a rejoint l'appel : enregistrement arrêté », « L'enregistrement a été ajouté à la conversation »…), avec ✕, et se retire seule après 4 s.
+    - Dans une conversation chiffrée de bout en bout, il n'y a pas d'enregistrement (loi 14).
     - **Contrat (#16665), rétrocompatible.** `call:screen-capture-detected` porte un `kind` optionnel, `recording` (enregistrement d'écran, `isCapturing` vrai puis faux) ou `screenshot` (capture ponctuelle, `isCapturing` vrai seul). Un `kind` absent se lit `recording`, ce qu'envoient les clients d'avant. La passerelle relaie `kind` dans `call:screen-capture-alert`. Elle persiste chaque DÉBUT (`isCapturing` vrai) dans `CallCaptureEvent` (`callSessionId`, `participantId`, `userId?`, `kind`, `offsetMs`, `createdAt`), au plus une ligne par participant, par sorte et par fenêtre de 5 s. L'enregistrement CONSENTI de l'appel (`call:recording-started` / `call:recording-stopped`, aucun fil client nouveau) s'y écrit aussi, par la passerelle là où elle diffuse ces deux événements : `kind` vaut `call-recording-started` (au nom de l'enregistreur) ou `call-recording-stopped` (seulement s'il avait commencé ; `participantId` et `userId` nuls quand personne ne l'a demandé : fin d'appel, délai, arrivée). `GET /calls/:callId/transcript` ajoute `captures: [{ id, participantId, userId, displayName, kind, offsetMs, at }]` à côté de `segments` (les trois champs d'auteur peuvent être nuls pour un arrêt d'enregistrement ; une sorte inconnue s'ignore). Les clients insèrent ces lignes à leur heure, dans le journal vivant comme dans celui d'après l'appel : « Awa a capturé l'écran » ou « Awa enregistre l'écran », « L'enregistrement de l'appel a commencé » ou « L'enregistrement de l'appel s'est arrêté », en encre secondaire, sans couleur d'auteur sur la phrase (le pseudo garde la sienne).
 14. **Options en surimpression.**
     - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, par morphisme : la même barre s'allonge et grandit pour la contenir, avec ‹ Retour et Fermer, puis reprend sa forme (loi 17). C'est la même barre agrandie qui porte les sous-titres et le journal.
-    - « Participants » s'ouvre en feuille ; « Journal » s'ouvre dans la pilule (loi 7).
-    - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
-    - Montage garde Quitter · Réglages · Valider tant que le porteur ne l'a pas aligné ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
+    - **Retour, Fermer et (…) pendant une option** (famille 2, 2026-11-11 ; G3) : « ‹ Retour » rend le MENU, les actions de (…) ouvertes et leurs rails revenus ; « Fermer » rend la pilule de base, tout rangé ; (…) touché pendant l'option la referme comme Fermer. Le glyphe de Retour est le chevron ‹, celui de P8 et P8b, jamais le chevron vers le bas de Réduire.
+    - **Enregistrer** : le titre « Enregistrer l'appel » au centre, la phrase « Tout le monde doit accepter », puis deux puces larges et ÉGALES, Audio et Vidéo, dans le verre de l'appel. Toucher l'une lance aussitôt la demande d'accord (R2) et referme l'option : il n'y a ni bouton de lancement, ni choix à confirmer, ni puce mise en avant.
+    - **Dans une conversation chiffrée de bout en bout, Enregistrer est ABSENT, et l'interface le dit** (directive porteur du 2026-10-03, #9224 ; #12963) : l'enregistrement partirait en clair au serveur, qui ne voit jamais le clair d'une conversation chiffrée. Le bouton n'est posé ni dans le rail « L'appel » ni dans la rangée du groupe, et une phrase dit pourquoi (Android : « L'enregistrement n'est pas disponible dans une conversation chiffrée de bout en bout »). Aucun enregistrement ne démarre et rien n'est téléversé ; le refus fail-closed de la passerelle et du web est l'objet de #12963 (ouverte). Aucune vue n'est redessinée : P2, P10 et P12 montrent une conversation sans chiffrement de bout en bout.
+    - « Ajouter » (la liste « l'appel », loi 2) ouvre la feuille des personnes ; « Journal » s'ouvre dans la pilule (loi 7).
+    - **Règle C1 : effets, looks et filtres, cadres, visage et couleur sont UNE famille d'outils, avec une seule barre et une seule navigation, en Effets comme en Montage** (décisions porteur du 2026-11-13 et du 2026-11-14, #16979, #17962 ; P8, P8b, C1). Elle s'énonce ici une fois pour toute la famille, et aucun mode n'y fait exception. Elle supplante la barre Quitter · Cadre · Valider du Montage.
+      - **La barre est partout `‹ · Réglages · (+)`**, sous la rangée de genres « Visage · Couleur · Cadres » (loi 9). C'est le **menu de base** de la famille : aucune bande n'y est ouverte au-dessus. Effets et Montage sont deux modes plein écran qui parlent la langue du composer (directive porteur du 2026-11-10, #17409). Réglages porte un engrenage et sa légende « Réglages », pour ne pas se confondre avec le glyphe d'Effets. Il ouvre P8b, où il passe en disque blanc.
+      - Toucher un genre ouvre sa bande au-dessus de la barre : les looks pour Visage et Couleur (P8), le carrousel des cadres et ses ambiances pour Cadres (C1). Le choix se fait dans les looks et les cadres du composer (loi 9). « Aucun » rend mon image d'origine.
+      - **La validation est automatique** : il n'y a de « Valider » nulle part. Choisir un effet l'applique aussitôt, et en retirer un le retire aussitôt.
+      - **Après la sélection d'une feature, la barre REVIENT à son menu de base.** Une feature, c'est un look, un filtre, un cadre ou une déformation du visage. La bande qu'elle avait ouverte se referme par le chemin inverse (loi 17), et l'effet reste appliqué sur l'image. **En Montage aussi, le carrousel se referme après un cadre touché** (décision porteur du 2026-11-14, qui remplace « en Montage, le carrousel est le menu de base et reste après un cadre » de #17962). Exemple : en Montage, je touche le cadre « Doré ». Il s'applique aussitôt et la barre revient à `‹ · Réglages · (+)`.
+      - **Seule exception : un réglage continu** (Luminosité, Flou du fond, le panneau P8b) n'est pas un choix. Son panneau reste ouvert pendant qu'on règle (décision porteur du 2026-11-13, #17947). Retoucher « Réglages » le referme. ‹ le referme aussi et ramène la barre de base, et un second ‹ quitte le mode (décision porteur du 2026-11-14, #17947).
+      - Depuis le menu de base, ‹ revient à l'appel en gardant les effets appliqués.
+      - **Au plus trois couches d'effet s'empilent** (un cadre, un filtre, une déformation…). (+) en ajoute une par-dessus les autres. Avec trois couches, (+) n'en ajoute pas de quatrième : il le dit à son étiquette d'accessibilité et garde son appui long.
+      - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, et les autres gardent leur ordre. La liste se referme alors et la barre revient à son menu de base, comme après tout choix. Annuler un cadre gardé pour les deux le relâche, donc chez les deux (loi 16, #18183). Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
+      - La pile est une loi PURE, la même sur les trois plateformes (ajouter, retirer, plafond de trois, ordre) : TS, Swift et Kotlin en sont des miroirs.
+    - **P8b, l'arrivée des réglages** (famille 2, 2026-11-11). Le panneau Luminosité · Flou du fond est un VERRE SÉPARÉ, posé au-dessus de la barre, à la place de la bande ouverte. La barre perd sa rangée de genres (loi 9) et se resserre par morphisme sur `‹ · Réglages · (+)`. Ce qui était ouvert part en fondu pendant que le panneau monte depuis la barre, en fondu lui aussi, en ≈ 200 ms (transformation et opacité). « Réduire les animations » ne garde que le fondu. À la fermeture du panneau, la rangée de genres revient par le chemin inverse et la barre retrouve son menu de base (règle C1). Les sous-titres restent au-dessus de tout, dans un verre sans rangée ni « Journal » (loi 11, #17946), et le bandeau des autres reste comme en P8.
+    - **Réglages, en Montage, ouvre le panneau de P8b avec « Chaque visage » dedans** (un portrait carré de chaque participant, enregistré dans Photos), à la place du carrousel (#17962, iOS ; gardé, loi 18). Le web, qui pose aujourd'hui « Chaque visage » au-dessus des ambiances, s'aligne.
+    - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344). Sur grand écran, la colonne du journal (W1) se range avec lui et revient à la sortie du mode : la scène est entière pour juger l'effet (décision porteur du 2026-11-13, #17934).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
+    - **Un partage d'écran qui commence prend la une, même après un choix manuel** (décision porteur du 2026-11-14, #18180 ; loi 10). Exemple : appel à quatre, j'ai mis Lina à la une en touchant sa vignette, puis Karim commence à partager son écran. L'écran de Karim prend la une et Lina retourne au bandeau. Le passage se fait en mouvement (loi 17), en fondu avec Réduire les animations, et le lecteur d'écran annonce le partage.
     - La vignette à la une n'a pas de badge : une capsule en haut à droite offre « Revenir à la grille » et « Plein écran ».
-    - Le bandeau des autres est en bas en portrait, en colonne en paysage.
-    - Pincer zoome sur un écran partagé jusqu'à 4×, deux tapes reviennent à 1×.
+    - **Toucher la vignette à la une range les contrôles**, comme toucher l'image (loi 11) ; un autre toucher les rend. On revient à la grille par la capsule « Revenir à la grille » (décision porteur du 2026-11-13, #17948 ; P14, U1).
+    - Le bandeau des autres est en bas en portrait, en colonne en paysage. **En paysage (U3), comme iOS** (décision porteur du 2026-11-13, #17961) : l'en-tête et la capsule restent, la pilule flotte sur la vignette à la une (comme L4), et la colonne porte des vignettes de 84 × 112 qui défilent et s'effacent en fondu à leurs bords.
+    - **Un écran partagé à la une a DEUX niveaux de plein écran** (décision porteur du 2026-11-13, #17961, verbatim : « On doit voir le plein écran avec les participants (écran caméra visible) et possibilité de mettre le full plein écran où on ne voit que le partage d'écran. ») :
+      - **le plein écran** (U2) montre l'écran partagé ET les caméras des participants, en colonne en paysage, en bandeau en portrait ; l'en-tête, la pilule et les bannières se rangent. La caméra de qui partage y est, à son liseré ; elle attend la seconde piste vidéo (#8404) ;
+      - **le plein écran total** (U2b) ne montre que le partage d'écran, aucune caméra.
+    - **La capsule en plein écran** garde « Revenir à la grille » à côté de « Quitter le plein écran », au glyphe « rentrer » (#17961, comme le code). « Quitter » redescend d'un niveau : du plein écran total au plein écran, du plein écran à la une ; « Revenir à la grille » sort de tout.
+    - **On passe au plein écran total par un SECOND appui sur « Plein écran »** (décision porteur du 2026-11-14, #17961). Le bouton garde sa place dans la capsule et monte d'un niveau à chaque appui : à la une, puis plein écran (U2), puis plein écran total (U2b). En U2, la capsule porte donc « Revenir à la grille · Plein écran total · Quitter le plein écran » ; en U2b, « Revenir à la grille · Quitter le plein écran total ». Le passage est un mouvement (loi 17) : la colonne ou le bandeau des caméras sort par son bord et l'écran s'élargit, puis le chemin inverse ; Réduire les animations ⇒ fondu seul.
+    - **Une caméra à la une n'a qu'UN niveau de plein écran** (décision porteur du 2026-11-14, #17961) : son plein écran garde les autres en bandeau. Le niveau total est réservé à un écran partagé.
+    - **En plein écran, un toucher sur l'écran range puis rend la capsule et la puce « Écran de X · 2× »** (#17961, iOS), aux deux niveaux. Les caméras du plein écran restent.
+    - Pincer zoome jusqu'à 4× sur ce qui est à la une : un écran partagé comme une caméra, **la mienne comprise** (décision porteur du 2026-11-14, #18181 ; U1). **Zoomé, l'image se déplace au doigt, bornée à son cadre** ; deux tapes reviennent à 1× et recentrent (#17961 ; web #17747, iOS et Android #17753), sur les trois plateformes.
 16. **Cadres en direct, en duo vidéo.**
-    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
-    - Le proposeur apprend la réponse en une capsule.
+    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »). Sa barre est celle d'Effets, `‹ · Réglages · (+)`, sans « Valider », et suit la règle C1 (loi 14, #16979). Le cadre touché s'applique chez moi, le carrousel se referme et la barre revient à son menu de base. L'option « Cadre » garde le cadre pour les deux et le PROPOSE à l'autre (« Non merci » · « Appliquer »).
+    - **Relâcher « Cadre » retire le cadre partagé chez les deux** (décision porteur du 2026-11-14, #18183). Exemple : j'ai gardé un cadre, et Awa l'a accepté. Je relâche « Cadre » : le cadre tombe chez moi ET chez Awa. Annuler ce cadre dans la liste de l'appui long sur (+) le relâche de même (loi 14).
+    - Le proposeur apprend la réponse en une capsule (« Awa a appliqué votre cadre », « Awa garde son affichage »), qui se retire seule après 4 s (C3).
     - Le cadre tombe si l'appel passe à trois.
+    - **Ce que le code porte en plus est gardé** (décision porteur du 2026-11-13, #17962) :
+      - deux tapes sur le carrousel prennent une photo de l'appel, un appui long le filme (C1). Le carrousel, lui, se referme après un cadre touché (règle C1, loi 14, 2026-11-14) : ce que #17962 gardait ici est remplacé ;
+      - si la proposition ne part pas, un avis le dit : « Le cadre est appliqué chez vous, mais n'a pas pu être proposé » (C1) ;
+      - quand l'appareil se protège (chaleur, économie d'énergie), le cadre se met en pause et une capsule, au même endroit que la réponse, le dit : « Cadre en pause : l'appareil se protège » ; un cadre animé reste masqué sous « Réduire les animations », et une capsule le dit aussi (C3). Ces états ne se dessinent pas dans C1–C3, qui montrent le cas nominal : ils y sont écrits.
 17. **Rien n'apparaît ni ne disparaît d'un coup** (directive porteur du 2026-11-10, #17406).
     - Un élément arrive depuis l'endroit d'où il vient, et repart vers lui.
     - Les rails latéraux entrent par le bord de l'écran et sortent par lui, vers l'extérieur.
     - Ce qui s'ouvre depuis la barre du bas (options, sous-titres, journal, rangées d'actions en groupe) s'ouvre par morphisme : la barre s'allonge et grandit, puis reprend sa forme.
+    - La colonne du journal sur grand écran (W1) vient, elle, du bord de fin de la fenêtre et y repart, la scène glissant vers son nouveau centre (#17931, loi 7).
     - Une rangée qui défile (puces, bandeau de vignettes) n'est jamais coupée net : elle s'efface en fondu à ses deux bords (#17409).
-    - Tout ce qui se pose par-dessus l'image suit la même logique. Seule exception : Effets, qui emprunte au composer (loi 9).
+    - Tout ce qui se pose par-dessus l'image suit la même logique. Deux exceptions : Effets, qui emprunte au composer (loi 9), et la colonne du journal sur grand écran, qui vient du bord de fin de la fenêtre (loi 7, #17931).
+    - Dans la famille d'outils (Effets, Montage), une bande ouverte par un genre (looks, carrousel des cadres) monte depuis la barre et y redescend après le choix, quand la barre revient à son menu de base (règle C1, loi 14). Les réglages (P8b) arrivent aussi depuis la barre : ce qui était ouvert part en fondu, le panneau de verre monte depuis la barre en fondu (≈ 200 ms) et la barre se resserre par morphisme. Le panneau reste ouvert pendant le réglage. Retoucher « Réglages » ou ‹ le referme, et la rangée de genres revient par le chemin inverse (loi 14, #17947).
     - Le mouvement ne perd aucune image, reste interruptible (loi 11) et « Réduire les animations » le remplace par un fondu court.
 18. **Simplicité : la vue affiche ce qu'elle dessine, rien en plus** (directive porteur du 2026-11-10, #17406).
     - Aucun extra : ni libellé, ni badge, ni bouton, ni panneau d'appoint que la vue ne montre pas.
+    - **Ne pas régresser : ce que le code porte en plus de la planche est GARDÉ, et la planche le dessine (ou l'écrit sous la vue), sauf décision contraire du porteur** (directive porteur du 2026-11-14). Un écart où le code fait plus que la vue ne se corrige pas en retirant du code : on dessine ce qu'il porte. Seule une décision du porteur retire une fonction, comme le carrousel qui ne reste plus ouvert après un cadre (loi 14).
+    - **Les extras du code que le porteur garde sont dessinés** (#18226, #18227 ; E1 à E5) : le zoom de ma caméra et son indicateur (E1), le badge du micro coupé de l'autre et le bouton de zoom de ma vignette (E2), la pastille « En attente » (E3), la pastille « Vidéo réduite » (E4) et la rangée « Force du lissage » des réglages (E5). Aucune ne se retire sans décision du porteur. **« En attente » et « Vidéo réduite » existent sur les TROIS plateformes** (décision porteur du 2026-11-14, #18227) : Android les portait seul, iOS et le web s'alignent sur lui, mêmes déclencheurs, en verre partagé, dans la pile des bannières du haut.
     - Rien de ce qui existe ne se recrée : un lot réutilise ou étend le composant, la loi et le texte déjà là.
     - Le verre est partout l'atome adaptatif (`adaptiveLiquidGlass` sur iOS, `MeeshyGlassSurface` sur Android, la surface de verre partagée sur le web).
 
@@ -117,15 +189,19 @@
 |---|---|---|---|
 | ![G1](appels-vue-finale/vues/G1.png) | ![G2](appels-vue-finale/vues/G2.png) | ![G3](appels-vue-finale/vues/G3.png) | ![G4](appels-vue-finale/vues/G4.png) |
 
+**Règle C1, pour toute la famille d'outils** (Effets en P8 et P8b, Montage en C1 ; loi 14, #16979, #17962, décisions du 2026-11-14). La barre est partout `‹ · Réglages · (+)`, sous la rangée de genres « Visage · Couleur · Cadres » (loi 9). C'est le menu de base. Un genre touché ouvre sa bande, et ce qui est touché s'applique aussitôt, sans « Valider ». Après la sélection d'une feature (look, filtre, cadre, déformation), la bande se referme et la barre revient à son menu de base, en Montage comme en Effets. Seul le panneau continu de P8b reste ouvert pendant qu'on règle (#17947) : ‹ le referme, et un second ‹ quitte le mode. (+) empile jusqu'à trois couches, et son appui long liste les effets appliqués pour en retirer un. P8 et C1 montrent la bande ouverte, au moment du choix, avec un seul nom, sous la case au centre (P8.6).
+
 | P8b · Effets : réglages |
 |---|
 | ![P8b](appels-vue-finale/vues/P8b.png) |
 
 ### À la une
 
-| U1 · Une personne à la une | U2 · Écran à la une, plein écran | U3 · À la une, paysage |
-|---|---|---|
-| ![U1](appels-vue-finale/vues/U1.png) | ![U2](appels-vue-finale/vues/U2.png) | ![U3](appels-vue-finale/vues/U3.png) |
+Un écran partagé à la une a deux niveaux de plein écran (loi 15, #17961) : U2, le plein écran, garde les caméras des participants ; U2b, le plein écran total, ne montre que le partage. On passe au plein écran total par un second appui sur Plein écran : le bouton monte d'un niveau à chaque appui. « Quitter » (glyphe « rentrer ») redescend d'un niveau, et « Revenir à la grille » sort de tout. Une caméra à la une n'a qu'un niveau de plein écran (#17961, 2026-11-14). Un partage d'écran qui commence prend la une, même après un choix manuel (#18180). Pincer zoome sur ce qui est à la une, ma propre caméra comprise (#18181). En paysage, U3 garde l'en-tête et la capsule, la pilule flotte sur la vignette à la une, et la colonne porte des vignettes de 84 × 112.
+
+| U1 · Une personne à la une | U2 · Écran à la une, plein écran | U2b · Plein écran total | U3 · À la une, paysage |
+|---|---|---|---|
+| ![U1](appels-vue-finale/vues/U1.png) | ![U2](appels-vue-finale/vues/U2.png) | ![U2b](appels-vue-finale/vues/U2b.png) | ![U3](appels-vue-finale/vues/U3.png) |
 
 ### Je partage mon écran
 
@@ -135,11 +211,17 @@
 
 ### Cadres en direct
 
+C1 suit la règle C1 (loi 14) : la rangée « Visage · Couleur · Cadres », « Cadres » pressé, puis `‹ · Réglages · (+)`. Elle montre le carrousel ouvert AVANT le choix, l'état le plus lisible : les ambiances, le carrousel avec un seul nom, sous la case au centre, et l'option « Cadre » pas encore pressée. Le cadre touché s'applique aussitôt, le carrousel se referme et la barre revient à son menu de base ; C3 montre le cadre appliqué. Presser « Cadre » garde le cadre pour les deux et le propose (C2). Le relâcher le retire chez les deux (#18183). Réglages ouvre P8b avec « Chaque visage » (loi 14). Les sous-titres allumés restent au-dessus, dans un verre sans « Journal » (#17946). Un appui long sur (+) liste les effets appliqués, trois au plus, pour en retirer un (loi 14, #16979).
+
+Ce que le code porte en plus est gardé, et écrit sous chaque vue de la planche quand il n'y est pas dessiné (lois 16 et 18, #17962) : deux tapes sur le carrousel prennent une photo, un appui long filme ; l'avis « Le cadre est appliqué chez vous, mais n'a pas pu être proposé » ; la capsule de réponse qui se retire seule après 4 s ; la capsule « Cadre en pause : l'appareil se protège ».
+
 | C1 · Choisir un cadre | C2 · La proposition chez l'autre | C3 · Cadre appliqué |
 |---|---|---|
 | ![C1](appels-vue-finale/vues/C1.png) | ![C2](appels-vue-finale/vues/C2.png) | ![C3](appels-vue-finale/vues/C3.png) |
 
 ### Capture et enregistrement
+
+R1 à R3 sont sur un vrai duo, « Awa · 12:40 » (#17963). R1 : la puce en verre teinté rouge, 5 s, rangée au premier toucher, absente chez qui capture (loi 13). R2 : la carte d'accord et son paragraphe ; ma vignette descend sous la carte et n'est jamais couverte (R2.11, 2026-11-14, comme le code). R3 : la capsule d'enregistrement ; chez qui demande, la même capsule disait avant « En attente de l'accord de tous… · Annuler », et à l'arrêt une pastille d'avis se retire seule après 4 s (loi 13). Dans une conversation chiffrée de bout en bout, Enregistrer est absent, et l'interface le dit (loi 14).
 
 | R1 · Quelqu'un capture l'écran | R2 · Demande d'enregistrement | R3 · Enregistrement en cours |
 |---|---|---|
@@ -147,15 +229,15 @@
 
 ### Duo audio
 
-En audio, la personne est au centre et son anneau prend sa couleur quand elle parle. « Caméra » (rail gauche) bascule l'appel en vidéo.
+En audio, la personne est au centre, la durée sous son nom ; son anneau prend sa couleur, avec son halo, quand elle parle, et aucun texte ne dit « En train de parler » ; au repos, aucun anneau (loi 4, #17964). L'en-tête ne pose Image dans l'image que si la plateforme y est éligible (iOS : pas en audio pur). Journal ouvert, « Journal » reste au pied de la pilule en disque blanc et le referme (loi 6). « Caméra » (rail gauche) bascule l'appel en vidéo. Quand le journal s'ouvre dans la pilule, l'avatar se réduit en un en-tête compact, nom et durée à côté (loi 6, P9b). Un toucher sur le fond range l'en-tête, la pilule et le journal, et l'avatar grandit à 120 pt ; un nouveau toucher les rend (loi 11, #17945). Il en va de même en groupe quand aucune caméra n'est allumée. Le rail « L'appel » n'a que cinq boutons : Capture n'est posé qu'avec une image (loi 2, #17944).
 
-| P9 · Audio, repos | P10 · Audio, actions et sous-titres |
-|---|---|
-| ![P9](appels-vue-finale/vues/P9.png) | ![P10](appels-vue-finale/vues/P10.png) |
+| P9 · Audio, repos | P9b · Audio, journal ouvert | P10 · Audio, actions |
+|---|---|---|
+| ![P9](appels-vue-finale/vues/P9.png) | ![P9b](appels-vue-finale/vues/P9b.png) | ![P10](appels-vue-finale/vues/P10.png) |
 
 ### Groupe
 
-La grille prend l'écran. Chaque vignette porte le liseré de sa couleur, la mienne comprise, et qui parle s'illumine de sa couleur. Toucher une vignette la met à la une ; la retoucher rend la grille.
+La grille prend l'écran au-dessus de la pilule, et se resserre au-dessus d'elle quand elle s'agrandit, pour les actions comme pour les sous-titres ; au repos, les plaques du bas restent visibles (loi 2, #17949). Chaque vignette porte le liseré de sa couleur, la mienne comprise, et qui parle s'illumine de sa couleur. Toucher une vignette la met à la une ; toucher la vignette à la une range les contrôles (loi 11), et la capsule « Revenir à la grille » rend la grille (loi 15, #17948). La bande des sous-titres a la grammaire du duo : à même le verre, deux phrases, un filet, « Journal » en bouton (loi 5, #17933).
 
 | P11 · Repos | P12 · (…) touché | P13 · Sous-titres dans le cadre | P14 · À la une |
 |---|---|---|---|
@@ -169,7 +251,7 @@ La grille prend l'écran. Chaque vignette porte le liseré de sa couleur, la mie
 
 ### Paysage
 
-Les rails restent sur les bords, centrés verticalement. La pilule et la bande de sous-titres se centrent en bas, la bande limitée à 560 px. Ma vignette se range en haut à droite.
+Les rails restent sur les bords, chacun centré verticalement sur sa hauteur libre, sous l'en-tête ; leurs boutons gardent 44 pt. En groupe, la rangée de quatre ne se pose qu'en hauteur compacte, entre l'en-tête et la pilule (L4, #17885). La pilule et la bande de sous-titres se centrent en bas, la bande limitée à 560 px. Ma vignette se range en haut à droite. (…) ouvert, le rail « L'appel » reste au bord et ma vignette lui cède le coin : elle se décale vers l'intérieur, contre lui, et revient à son coin quand les rails se rangent (L2, #17965). La pile des bannières est bornée à 560 et centrée, ma vignette gardant son coin à côté (L6, #17965).
 
 | L1 · Duo, repos | L2 · Duo, actions |
 |---|---|
@@ -179,11 +261,25 @@ Les rails restent sur les bords, centrés verticalement. La pilule et la bande d
 |---|---|
 | ![L3](appels-vue-finale/vues/L3.png) | ![L4](appels-vue-finale/vues/L4.png) |
 
-| L5 · Écran reçu |
-|---|
-| ![L5](appels-vue-finale/vues/L5.png) |
+| L5 · Écran reçu | L6 · Duo, je partage |
+|---|---|
+| ![L5](appels-vue-finale/vues/L5.png) | ![L6](appels-vue-finale/vues/L6.png) |
+
+### Ce que le code porte en plus
+
+Loi 18 : ce que le code porte en plus de la vue est gardé, et la planche le dessine (directive porteur du 2026-11-14). E1 et E2 montrent le zoom de ma caméra et le micro coupé de l'autre (iOS ; le badge est aussi sur le web, #8787) ; E3 et E4 montrent « En attente » et « Vidéo réduite », sur les trois plateformes (#18227) ; E5 montre la rangée « Force du lissage » du panneau de réglages (iOS, #9289).
+
+| E1 · Mon image en plein écran : le zoom | E2 · Le micro de l'autre est coupé | E3 · En attente |
+|---|---|---|
+| ![E1](appels-vue-finale/vues/E1.png) | ![E2](appels-vue-finale/vues/E2.png) | ![E3](appels-vue-finale/vues/E3.png) |
+
+| E4 · Vidéo réduite | E5 · Effets : réglages avec Lissage |
+|---|---|
+| ![E4](appels-vue-finale/vues/E4.png) | ![E5](appels-vue-finale/vues/E5.png) |
 
 ### Après l'appel : le journal fidèle
+
+Les captures A1 et A2 montrent l'état par défaut : la traduction en tête, « Original · … » dessous, et « Voir l'original » au pied. Toucher « Voir l'original » inverse les deux lignes de tout l'appel. L'original passe en tête, la traduction dessous (« Traduit · … »), et le pied dit « Voir la traduction » (loi 7, #17862).
 
 | A1 · Bulle d'appel, fil clair | A2 · Bulle d'appel, fil sombre |
 |---|---|
@@ -193,6 +289,9 @@ Les rails restent sur les bords, centrés verticalement. La pilule et la bande d
 
 Sur un écran large, la scène reste centrée et le journal se pose en colonne de verre à droite, au lieu de recouvrir l'image.
 
+- **W1** : colonne ouverte, « Journal » (pied de la bande et rail) est un disque blanc plein ; le retoucher referme la colonne, qui ne porte aucun ✕ (#17932). La colonne entre par le bord de fin et y repart, la scène glissant vers son nouveau centre (#17931) ; en mode Effets ou Montage, elle se range avec l'en-tête (#17934). Loi 7.
+- **W2** : la bande des sous-titres est celle du duo, à même le verre, deux phrases, « Journal » en bouton (#17933) ; la pilule est bornée à 560 px, comme en duo (#17935). Lois 1 et 5.
+
 | W1 · Duo, journal en colonne |
 |---|
 | ![W1](appels-vue-finale/vues/W1.png) |
@@ -201,26 +300,75 @@ Sur un écran large, la scène reste centrée et le journal se pose en colonne d
 |---|
 | ![W2](appels-vue-finale/vues/W2.png) |
 
-## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev`)
+## Où en est chaque plateforme (audit final, `origin/dev` à `8a9072691e`, 2026-11-14)
 
-Ce tableau est un compte rendu daté. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
+Chaque cellule : conformes / total des clauses jugées, puis écarts, absents, à rejouer et sans objet, puis les issues ouvertes principales. Relevé avant les PR #17942 à #18197 (R3.5 et une partie de W1/W2, de C1 et du carrousel VoiceOver iOS sont livrés depuis). Décisions ouvertes : #17730, #17731, #16974, #17810, #17883.
+
+| Famille (vues) | Web | iOS | Android natif |
+|---|---|---|---|
+| Duo vidéo, portrait (P1–P8) | 59/65 (6 écarts) ; ouvert : #17843, #17928, #17982, #18221, #18224 | 63/65 (2 écarts) ; ouvert : #17982, #18208 | 60/65 (5 écarts) ; ouvert : #17819, #17843, #17982, #18213 |
+| Gestes et options (G1–G4, P8b) | 35/39 (4 écarts) ; ouvert : #17982, #18221, #18226 | 37/39 (2 écarts) ; ouvert : #17558, #17982, #18226 | 37/39 (2 écarts) ; ouvert : #17982, #18217, #18226 |
+| À la une (U1–U3) | 27/34 (7 écarts) ; ouvert : #17961 | 25/34 (7 écarts, 2 à rejouer) ; ouvert : #17961 | 27/34 (7 écarts) ; ouvert : #17961, #18213 |
+| Je partage mon écran (S1–S2) | 14/17 (3 écarts) ; ouvert : #17982, #18223 | 12/17 (2 écarts, 3 à rejouer) ; ouvert : #17982, #18210 | 14/17 (3 écarts) ; ouvert : #17982, #18218 |
+| Cadres en direct (C1–C3) | 31/34 (3 écarts) ; ouvert : #18183, #18221, #18222 | 33/34 (1 écart) ; ouvert : #18183 | 32/34 (2 écarts) ; ouvert : #18183, #18213 |
+| Capture et enregistrement (R1–R3) | 28/36 (4 écarts, 3 à rejouer, 1 sans objet) ; ouvert : #17963 | 31/36 (5 écarts) ; ouvert : #17963 | 29/36 (5 écarts, 2 à rejouer) ; ouvert : #17963 |
+| Duo audio (P9, P9b, P10) | 41/44 (3 écarts) ; ouvert : #17928, #17982 | 42/44 (2 écarts) ; ouvert : #17964, #18206 | 43/44 (1 écart) ; ouvert : #17964 |
+| Groupe (P11–P14) | 36/39 (3 écarts) ; ouvert : #17928, #17963 | 34/39 (3 écarts, 2 à rejouer) ; ouvert : #17964, #18206 | 33/39 (3 écarts, 3 à rejouer) ; ouvert : #17964, #18220 |
+| Partage d'écran, appel entrant, appel réduit (P15–P18) | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18223, #18224 | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18211, #18212 | 38/47 (7 écarts, 2 absents) ; ouvert : #17982, #18218, #18219 |
+| Paysage (L1–L5) | 52/58 (5 écarts, 1 absent) ; ouvert : #17963, #17982 | 50/58 (5 écarts, 1 absent, 2 à rejouer) ; ouvert : #17982 | 51/58 (5 écarts, 1 absent, 1 à rejouer) ; ouvert : #17982 |
+| Après l'appel : le journal fidèle (A1–A2) | 23/25 (2 écarts) ; ouvert : #17868, #18225 | 21/25 (4 écarts) ; ouvert : #18209 | 21/25 (4 écarts) ; ouvert : #17868, #18216 |
+| Grand écran (web) (W1–W2) | 35/36 (1 écart) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 |
+| Lois sans vue (lois 17–18) | 9/18 (9 écarts) ; ouvert : #17961, #17982, #18223, #18224, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17961, #17982, #18206, #18207, #18208, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17819, #17843, #18213, #18214, #18215, #18226 |
+
+Livré depuis le relevé (fusionné dans dev) : #18189 (iOS C1), #18194 (Android C1) et #18234 (web C1) : la barre ‹ · Réglages · (+) revient au menu de base après chaque choix d'effet ; #18197 : sous VoiceOver iOS, balayer parcourt le carrousel d'effets sans appliquer, le double-tap applique ; #18235 : sur Android, rails, bandeau, colonne et rangées s'effacent en fondu à leurs deux bords ; #18236 : la planche dessine ce que le code porte en plus (E1–E5 : zoom, micro de l'autre, En attente, Vidéo réduite, Lissage) ; #17970, #17980, #18001 et #17999 : en audio et en groupe sans caméra, un toucher sur le fond range l'appel (Android, iOS, web).
+
+## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev` ; complété le 2026-11-11, le 2026-11-13 et le 2026-11-14)
+
+Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glass et rails, #17340 à #17343, mode Effets) ont été relevées le 2026-11-11 par `gh api` sur ses issues et ses PR, `dev` à `fe780f4b1a` et verrouillé ; `dev` déverrouillé, elles sont remises à jour le même jour : toutes ces PR sont fusionnées. Les lignes de la famille 2 (G1–G4, P8b) sont relevées le 2026-11-11 par `gh api`, `dev` à `e85d0efca6`. La preuve iOS et Android complète se fait sur `dev` après fusion (CI de poussée de `ios.yml`, `sdk-tests.yml` et `android.yml`). Les lignes touchées par l'audit final et ses décisions (#17944 à #17949) sont relevées le 2026-11-13 par `gh api`, `dev` à `8a9072691e`, puis remises à jour le même jour, avec les décisions #17961 à #17965, `dev` à `8d0f8d02ba` (après la fusion de #17970). Les lignes des décisions du 2026-11-14 (règle C1, #18180, #18181, #18183, #17961, #17947) sont relevées le 2026-11-14 sur leurs issues et sur l'audit final, `dev` à `0d3a7b086b`. Les autres lignes restent celles du 2026-11-08. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
 
 | Loi / vue | Web | iOS | Android natif |
 |---|---|---|---|
-| Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) reste à porter, #16972 ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
-| Relevé du 2026-11-09 (#17311) : boutons en Liquid Glass (loi 1) et rails en duo (loi 2) | à vérifier | boutons en disques dessinés, #17323 ; le duo range ses actions en rangées comme le groupe, #17327 | même écart qu'iOS, #17323 et #17327 |
+| Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) est livré par #17735 (fusionnée), #16972 restant ouverte ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
+| Boutons en Liquid Glass (loi 1, #17323) et rails en duo (loi 2, #17327) | fusionné : verre par bouton #17419 (#17418), rails #17445 (#17429), libellés #17470 (#17462) ; rendu à rejouer, #17423 et #17455 | fusionné : Liquid Glass #17403, rails #17431, libellés #17428 (#17417) ; rendu à rejouer, #17422, #17438, #17439 | fusionné : verre #17420, rails #17446, libellés #17472 (#17461) ; rendu à rejouer, #17421 et #17450 |
+| Capsule de l'en-tête : nom donné · durée, réseau seulement dégradé (loi 1, #17341) | fusionné, #17504 (#17499 fermée) | fusionné, #17493 (#17491 fermée) | fusionné, #17501 (#17498 fermée) |
+| Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, #17494 (#17492) ; avatar réduit à 56 pt en audio journal ouvert, `CallCompactAudioHeader` (#17529) | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
+| Le journal garde tout l'appel, sous-titres allumés ou non (loi 7, #17342) | gardé avant la décision (constat de #17342) ; heure dans l'appel et ordre, fusionné, #17519 (#17517) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516), le témoin qui jetait ces phrases y est retourné |
+| Original au toucher pendant l'appel, bascule Traduit · Original sur tout le journal (lois 6, 7, #17340) | original seulement sous la phrase touchée, fusionné, #17519 (#17517) ; bascule dans la tête du journal (#16942) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516) |
+| Après l'appel, « Voir l'original » inverse les deux lignes, « Traduit · … » dessous (loi 7, A1/A2, #17862) | fait, #17910 (#17897) : `transcriptReading` (loi pure), `UnfoldedOriginal` généralisée, fondu d'opacité seule | fusionné, #17904 (#17895 fermée) | fusionné, #17905 (#17896 fermée) |
+| Mode Effets : sous-titres gardés au-dessus des looks, Réglages à l'engrenage légendé (lois 9, 11, 14 ; P8) | fusionné, #17525 (#17524) ; engrenage : ligne P8b | P8 conforme à l'audit du 2026-11-11 (10/10, glyphe d'Effets alors dessiné sur Réglages) ; bande et puces du composer à faire, #17554 (ouverte) ; engrenage : ligne P8b | fusionné, #17512 (#17511, sous-titres gardés) ; engrenage : ligne P8b |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
 | Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
-| Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) ; bascule Traduit / Original dans l'en-tête (#16942) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
+| Journal pendant l'appel coloré (lois 4, 7) : **la couleur seulement** ; sa place, ce qu'il garde et l'original sont aux lignes #17342, #17343 et #17340 | couleur livrée, nom et phrase (#16634) | couleur livrée (`CallCaptionRow`) | couleur livrée (`CallCaptionRow`) |
 | Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) ; avatars de l'historique encore teintés par le nom, #16954 |
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
-| Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) ; la colonne du journal ne s'efface pas encore au toucher | livré (#16663) | livré (#16663) |
-| Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) ; vignette vidéo flottante de P18, #16953 |
-| Capture visible chez tous et gardée au journal (loi 13) | livré (#16709) : capsule R1, ligne datée au journal vivant, au bandeau et au journal d'après l'appel ; en disposition audio la capsule reste dans la rangée d'alertes | livré (#16709) : capsule R1 en audio comme en vidéo, ligne au journal vivant et d'après l'appel | en partie (#16709) : sorte de capture sur le fil et lignes au journal d'après l'appel ; capsule R1 en direct et détection locale, #16981 |
-| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; disposition de la barre C1, #16979 ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
-| Journal en colonne sur grand écran (W1, W2) | livré dans le code (#16942) ; marges latérales de W2 plus étroites que la référence | sans objet (iPad : à trancher) | sans objet (tablette : #15640) |
-| Vidéo entrante avec aperçu et « Sans vidéo » (P17) | livré dans le code (#16944) ; ordre de l'en-tête, #16978 | livré dans le code (#16945, ouverte jusqu'à la CI et la capture au simulateur) ; style de « Activer le son » à trancher (#8627) | « Sans vidéo » livré dans le code (#16952) ; barre micro et caméra et aperçu de ma caméra, #16949 |
-| Médaillon de la caméra de qui partage (P15, L5) | à vérifier | à vérifier | reporté, demande une seconde piste vidéo, #8404 |
+| Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) ; la colonne du journal reste au toucher, comme la loi 11 le veut désormais (W1, décision porteur) | livré (#16663) | livré (#16663) |
+| G1, G2 : un seul verre de sous-titres se resserre, le chrome sort vers ses bords et revient par le chemin inverse, ma vignette rend d'abord les contrôles (loi 11 ; famille 2, relevé du 2026-11-11) | fusionné, #17544 (#17536 fermée), avec la pilule qui se déforme à l'ouverture d'une option ; le témoin du second verre a évolué | fusionné, #17534 (#17532 fermée) | fusionné, #17543 (#17537 fermée), en groupe dès qu'une caméra est allumée ; le témoin du second verre a évolué |
+| G1 → G2 rend l'état d'avant ((…) ouvert reste ouvert, sous-titres rangés restent rangés) et le journal se range avec la pilule (loi 11) | écrit par la planche le 2026-11-11 ; non relevé séparément | non relevé séparément | non relevé séparément |
+| G3 : option Enregistrer dans la pilule, « Enregistrer l'appel » au centre, phrase d'accord, puces égales Audio · Vidéo qui lancent la demande, Retour ‹ et Fermer dans le verre de l'appel (loi 14) | fusionné, #17569 (#17568 fermée), « Ajouter » en feuille compris | fusionné, #17539 (#17538 fermée) ; Retour rend le menu, Fermer la pilule de base (`CallView+Panels.swift`) | fusionné, #17561 (#17560 fermée) |
+| G4 : caméra de l'autre coupée en duo, avatar à sa couleur, anneau et halo seulement à la parole, image ↔ avatar en fondu (lois 4, 17) | fusionné, #17570 (#17567 fermée) | fusionné, #17540 (#17535 fermée) | fusionné, #17562 (#17559 fermée) |
+| « Caméra » offerte en appel audio, qui passe l'appel en vidéo (loi 2, P10) | déjà offerte | déjà offerte | fusionné, #17533 (#17468 fermée) ; le témoin « an audio call offers no camera toggle » a évolué |
+| P8b : panneau Luminosité · Flou du fond en verre séparé au-dessus de la barre ‹ · Réglages · (+) qui se resserre, engrenage légendé (lois 14, 17) | fusionné, #17589 (#17580 fermée) | fusionné, #17553 (#17552 fermée) | fusionné, #17565 (#17564 fermée) |
+| Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) ; capsule au nom donné, sans repli en bulle pendant le partage, #17756 (fermée) | livré (#16664) ; contraction vers la capsule, verre rouge, « Arrêter » atteignable, #17763 (fermée) | livré (#16664) ; vignette vidéo flottante de P18, #16953 |
+| Capture visible chez tous et gardée au journal (loi 13) | livré (#16709) : capsule R1, ligne datée au journal vivant, au bandeau et au journal d'après l'appel ; en disposition audio la capsule reste dans la rangée d'alertes | livré (#16709) : capsule R1 en audio comme en vidéo, ligne au journal vivant et d'après l'appel | livré (#16709, puis #16981 et #17795 fermées) : capsule R1 en direct, détection locale, carte et capsule d'enregistrement dans la pile des bandeaux ; à vérifier sur capture |
+| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; barre C1 `‹ · Réglages · (+)`, pile de trois couches et appui long sur (+), tranchés le 2026-11-13 (#16979), livrés sur les trois plateformes (#17912, #17913, #17914) ; pas de suspension au mouvement ni à la chauffe | livré ; barre `‹ · Réglages · (+)` et pile de trois couches, #17912 (#16979 fermée) ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; barre `‹ · Réglages · (+)` et pile de trois couches, #17913 (#16979 fermée) ; à vérifier sur capture |
+| Journal en colonne sur grand écran (W1, W2) | livré dans le code (#16942) ; la colonne entre et repart par le bord de fin, #17922 (#17931 fermée) ; « Journal » actif en disque blanc qui referme la colonne, sans ✕, #17950 (#17932 fermée) ; bande de groupe du duo et borne de 560 px, #17950 (#17933, #17935 fermées) ; marges latérales de W2 plus étroites que la référence ; plaque de ma vignette « Vous » (P11.6, L4.4) ; grille à quatre : rangée de quatre seulement si la fenêtre est en paysage ET de hauteur < 500, sinon 2 × 2 comme W2 (loi tenue sur les trois plateformes, #17885, #17893, #17894 et le lot iOS de la même famille) | colonne sans objet : sur iPad, décision porteur (#17883) ; bande de groupe du duo et borne de 560 pt, #17943 (#17933, #17935 fermées) | colonne sans objet : sur tablette, décision porteur (#17883) ; bande de groupe du duo et borne de 560 dp, #17942 (#17933, #17935 fermées) |
+| Vidéo entrante avec aperçu et « Sans vidéo » (P17) | livré dans le code (#16944) ; ordre de l'en-tête livré (#16978 fermée) ; micro, caméra et aperçu, #16949 (fermée) | livré dans le code (#16945 fermée) ; « Activer le son » est une puce de verre, comme la planche (#8627 fermée) | « Sans vidéo » livré dans le code (#16952) ; barre micro et caméra et aperçu de ma caméra livrés (#16949 fermée) |
+| Médaillon de la caméra de qui partage (P15, L5 ; et parmi les caméras du plein écran U2, #17961) | non livré : demande une seconde piste vidéo, #8404 (ouverte) ; place de ma vignette, #17730 | non livré : #8404 ; place de ma vignette, #17730 | non livré, reporté : #8404 |
+| À la une et plein écran de groupe (loi 15, U1–U3) | fusionné (#17709 fermée) ; zoom par le calque GPU du duo et déplacement, #17754 (ouverte) | fusionné (#17708 fermée) ; zoom sous VoiceOver et panoramique, #17736, déplacement de l'écran zoomé, #17753 (ouvertes) | fusionné (#17728 fermée) ; déplacement de l'écran zoomé, #17753 (ouverte) |
+| Audio : rail « L'appel » à cinq boutons, sans Capture (loi 2, P10, #17944) | déjà tenu (`call-controls.ts`, `videoScene`) ; #17944 fermée, le code était déjà conforme | déjà tenu (`CallControlsLayout`, `showsVideo`) ; #17944 fermée | déjà tenu (`CallActionSet`, `showsVideo`) ; #17944 fermée |
+| Duo audio : un toucher sur le fond range en-tête, pilule et journal, l'avatar grandit à 120 pt (loi 11, #17945) | en cours (`use-call-chrome.ts`) | en cours, #17980 (ouverte) : loi pure `CallChromeVisibility.isTapStage` | fusionné, #17970 : `isTapStage`, `CallAudioSceneTapTarget` |
+| Groupe sans aucune caméra : un toucher sur le fond range aussi en-tête, pilule et journal (loi 11, #17945 étendue) | à faire | à faire : #17980 garde « groupe sans caméra → faux » dans les vecteurs de `isTapStage` | à faire : #17970 garde « groupe sans caméra → faux » |
+| En mode Effets ou Montage, le verre des sous-titres n'a pas de « Journal » (loi 11, P8, P8b, C1, #17946) | en cours | déjà tenu (`CallView+Mode.swift`, `opensJournal: false`) ; témoin, #17980 (ouverte) | fusionné, #17970 : `CallModeCaptions`, Montage compris |
+| Le panneau Luminosité · Flou du fond reste ouvert pendant le réglage, se referme par « Réglages » ou ‹ ; ‹ ramène la barre de base, un second ‹ quitte le mode (loi 14, P8b, #17947, précisée le 2026-11-14) | en cours | fusionné, #17980 : ‹ referme le panneau et rend le menu de base (`CallEffectsBarRule.afterBack`) | tenu, témoin #17970 ; ‹ y quitte le mode d'un coup : à aligner sur la précision du 2026-11-14 |
+| Groupe : toucher la vignette à la une range les contrôles, la capsule rend la grille (loi 15, P14, #17948) | en cours | déjà tenu (`GroupCallStageView`, `onStageTap`) ; témoin, #17980 (ouverte) | tenu, témoin #17970 (`CallGroupFeaturedTile`) |
+| Groupe : la grille se resserre au-dessus de la pilule agrandie, plaques du bas visibles au repos (loi 2, P11, P12, #17949) | en cours | déjà tenu dans la mise en page ; témoin, #17980 (ouverte) ; capture au simulateur à faire | tenu, témoin #17970 |
+| À la une (#17961) : deux niveaux de plein écran, plein écran avec les caméras des participants (U2) et plein écran total (U2b) ; capsule « Revenir à la grille » + « Quitter » au glyphe « rentrer », un toucher range et rend capsule et puce ; déplacement borné de l'écran zoomé ; U3 en paysage comme iOS (loi 15) | à faire ; déplacement borné déjà là (#17747) ; U3 à aligner sur iOS | à faire : les deux niveaux ; capsule, toucher et U3 déjà tenus (`GroupCallStageView`) ; déplacement, #17753 | à faire : les deux niveaux, U3 ; déplacement, #17753 |
+| Montage et cadres (#17962) : rangée « Visage · Couleur · Cadres », Réglages ouvre P8b avec « Chaque visage », extras gardés (lois 9, 14, 16 ; P8, C1–C3) | à faire : « Chaque visage » passe d'au-dessus des ambiances au panneau de Réglages | à faire : relevé de conformité (rangée et « Chaque visage » déjà dans `CallEffectsBar` et `CallModeControls`) | à faire |
+| Règle C1 pour toute la famille d'outils (2026-11-14, #16979, #17962) : après un look, un filtre, un cadre ou une déformation choisis, la bande se referme et la barre revient à `‹ · Réglages · (+)`, en Montage comme en Effets ; un seul nom sous la case choisie (P8.6) ; relâcher « Cadre » le retire chez les deux (#18183) (lois 9, 14, 16 ; P8, C1) | à faire ; un seul nom déjà tenu (`call-mode-carousel.tsx`) ; le cadre reste chez l'autre après un relâchement (#18183) | à faire : le carrousel du Montage reste ouvert après un cadre (#17912, à aligner) ; un seul nom, mais au-dessus de la piste (`CallModeCarousel`) : à passer sous la case ; relâchement, #18183 | à faire ; un seul nom déjà tenu, sous la piste (`CallModeCarousel.kt`) ; relâchement, #18183 |
+| À la une (2026-11-14) : un partage qui commence prend la une même après un choix manuel (#18180) ; zoom de ma propre vignette à la une (#18181) ; second appui sur Plein écran pour le plein écran total, une caméra à la une n'a qu'un niveau (#17961) (loi 15 ; U1, U2, U2b) | à faire : la vignette choisie à la main reste à la une (#18180) ; mon zoom déjà permis | à faire : idem (#18180) ; mon zoom déjà permis | à faire : idem (#18180) ; mon zoom à ouvrir (#18181) |
+| Capture et enregistrement (#17963) : puce en verre teinté rouge, 5 s, rangée au premier toucher, absente chez qui capture ; R1–R3 en duo ; extras gardés (loi 13) | à faire | à faire : la puce dure aujourd'hui 4 s (`CallCaptureAlertCapsule.transientSeconds`) | à faire |
+| Duo (#17964) : durée sous le nom en audio, Image dans l'image seulement si éligible, deux phrases, « Journal » en disque blanc qui referme le journal dans la pilule, « Journal » contrôles rangés, liseré permuté (lois 4–7, 11 ; P3, P4, P6, P9, P9b, P10, G1) | à faire | à faire : « Journal » en disque blanc ; le reste est la référence | à faire |
+| Paysage (#17965) : ma vignette cède le coin au rail, pile des bannières bornée à 560 et centrée (lois 1, 11 ; L2, L6) | à faire : ma vignette cède le coin (#17438) | à faire | à faire |
 
 ## Pour les agents qui travaillent l'interface d'appel
 

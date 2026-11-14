@@ -32,7 +32,7 @@ const pt = {
   'onboarding.email.failed': 'O link não foi enviado. Tenta de novo.',
 
   'onboarding.age.title': 'A tua data de nascimento',
-  'onboarding.age.body': 'Para te propor os espaços certos. Podes saltar.',
+  'onboarding.age.body': 'Para te propor os espaços certos.',
   'onboarding.age.skip': 'Saltar',
   'onboarding.age.check': 'Verifica a tua data de nascimento.',
   'onboarding.age.failed': 'A tua data não foi guardada. Tenta de novo.',
@@ -68,7 +68,7 @@ const pt = {
   'onboarding.story.verify': 'Para publicar a tua story, confirma primeiro o teu e-mail.',
 
   'onboarding.friends.title': 'Encontra a tua malta',
-  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo. Quando aceitarem, ganham pelo menos\u00A0+{points} os dois.',
+  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo.',
   'onboarding.friends.add': 'Adicionar',
   'onboarding.friends.addNamed': 'Adicionar {name}',
   'onboarding.friends.added': 'Enviado',
@@ -92,7 +92,7 @@ const pt = {
   'onboarding.recap.streak.other': 'Chama: {days} dias',
   'onboarding.recap.badges': 'Medalhas: {count}',
   'onboarding.recap.friends': 'Pedidos a caminho: {count}',
-  'onboarding.recap.tomorrow': 'Amanhã, a Chama pode arder há {next} dias.',
+  'onboarding.recap.tomorrow': 'Amanhã, sua Chama vai arder há {next} dias.',
   'onboarding.recap.explore': 'Continuar a explorar',
   'onboarding.recap.game': 'Descobrir o jogo com Mee e Meo',
   'onboarding.recap.done': 'Chega por hoje',

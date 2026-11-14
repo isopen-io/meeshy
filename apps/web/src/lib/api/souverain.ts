@@ -51,6 +51,14 @@ export function estClefSouveraine(key: readonly unknown[]): boolean {
 }
 
 /**
+ * Le premier segment d'une clé que le LECTEUR ordinaire ne garde qu'en mémoire
+ * (#16984) : les positions que ses liens lui partagent n'ont rien à survivre, sur
+ * le disque, à la session, au partage ni à un blocage. Ce n'est pas une lecture
+ * d'administration ; la ranger sous le préfixe souverain en masquait l'intention.
+ */
+export const HORS_DISQUE_PREFIXE = 'hors-disque' as const;
+
+/**
  * **TOUTE DONNÉE D'ADMINISTRATION RESTE EN MÉMOIRE** (#8876) — `true` pour toute
  * clé dont le premier segment est `'admin'` ou le préfixe souverain, SAUF
  * exactement `['admin', 'permissions']`.
@@ -71,7 +79,7 @@ export function estClefSouveraine(key: readonly unknown[]): boolean {
  * gardent EN PLUS le préfixe souverain et `gcTime: 0`.
  */
 export function estClefNonPersistable(key: readonly unknown[]): boolean {
-  if (estClefSouveraine(key)) return true;
+  if (estClefSouveraine(key) || key[0] === HORS_DISQUE_PREFIXE) return true;
   if (key[0] !== 'admin') return false;
   return !(key.length === 2 && key[1] === 'permissions');
 }

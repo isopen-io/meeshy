@@ -14,11 +14,12 @@ const fr = {
   'licences.source.title': 'Code source',
   'licences.source.body': 'Le code source correspondant à cette version, scripts de construction compris, est disponible gratuitement.',
   'licences.source.commit': 'Révision {commit}',
-  'licences.source.open': 'Ouvrir le code source',
+  'licences.source.open': 'Ouvrir',
   'licences.agpl.title': 'Texte de la licence AGPL-3.0',
   'licences.libsignal.title': 'Avis de libsignal',
   'licences.libsignal.body': 'libsignal et les bibliothèques qu’il intègre, avec le texte de leurs licences.',
-  'licences.libsignal.open': 'Voir les avis publiés par Signal',
+  'licences.libsignal.question': 'Que couvre cet avis ?',
+  'licences.libsignal.open': 'Ouvrir',
   'licences.legal_review': 'Ces informations sont en cours de validation juridique.',
 } as const;
 

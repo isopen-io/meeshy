@@ -167,14 +167,26 @@ nonisolated struct ComposerCloseQuestion: Equatable, Sendable {
 
 /// La feuille ancrée, montée comme un NŒUD (#8387) : son contenu sort du type
 /// de la pile.
+///
+/// **Montée là où elle se voit** (#17432) : sous un viseur vivant, la feuille se pose PAR-DESSUS
+/// lui (au-dessus de l'enveloppe de la capture), sinon dans la pile. Une seule des deux places
+/// la peint, jamais les deux.
 struct ComposerHostAnchoredSheetLayer: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
+    var aboveViewfinder = false
+
+    /// Le viseur se montre (armé, sans avoir cédé la scène) : la feuille se pose sur lui.
+    private var ridesViewfinder: Bool {
+        ComposerCaptureSurfaceRule.showsViewfinder(stage: host.sceneCapture.stage, yieldsToScene: host.viewfinderYieldsToScene)
+    }
 
     var body: some View {
-        host.anchoredSheetLayer
-            .frame(maxWidth: ComposerSceneArrangementRelay(host: host).sheetWidth)
-            .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.32, dampingFraction: 0.88),
-                       value: host.anchoredPortal)
+        if ridesViewfinder == aboveViewfinder {
+            host.anchoredSheetLayer
+                .frame(maxWidth: ComposerSceneArrangementRelay(host: host).sheetWidth)
+                .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.32, dampingFraction: 0.88),
+                           value: host.anchoredPortal)
+        }
     }
 }

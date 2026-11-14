@@ -4,9 +4,9 @@
  * catalogue la RÉPAND. La rangée des réglages de la coque Android (#7307).
  */
 const enDevicePush = {
-  'settings.notif.device.blocked': 'Notifications are blocked on this device',
+  'settings.notif.device.blocked': 'Blocked on this device',
   'settings.notif.device.open_settings': 'Open settings',
-  'settings.notif.device.prompt': 'Turn on notifications on this device',
+  'settings.notif.device.prompt': 'Off on this device',
   'settings.notif.device.enable': 'Turn on',
 };
 

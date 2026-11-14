@@ -362,3 +362,12 @@ describe('ROUTES — les quatre adresses de partage de la passerelle (#7319)', (
     }
   });
 });
+
+describe('ROUTES — les positions partagées (#16984)', () => {
+  test('sharedLocations s’apparie à /positions et à rien d’autre, en import() paresseux', () => {
+    const compiled = compile(ROUTES.sharedLocations.pattern);
+    expect(match(compiled, '/positions')).toEqual({});
+    expect(match(compiled, '/positions/x')).toBe(null);
+    expect(typeof ROUTES.sharedLocations.screen).toBe('function');
+  });
+});

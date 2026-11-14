@@ -54,12 +54,20 @@ afterEach(() => {
   else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
 });
 
-type ProbeProps = { readonly flipKey: string | null; readonly y?: number; readonly fadeFrom?: number; readonly held?: boolean };
+type ProbeProps = { readonly flipKey: string | null; readonly y?: number; readonly fadeFrom?: number; readonly held?: boolean; readonly ownScale?: string; readonly width?: number; readonly reducedDuration?: number };
 
-function Probe({ flipKey, y = 0, fadeFrom, held }: ProbeProps) {
+function Probe({ flipKey, y = 0, fadeFrom, held, ownScale, width, reducedDuration }: ProbeProps) {
   const ref = useRef<HTMLDivElement>(null);
-  useFlip(ref, { key: flipKey, duration: 250, easing: 'ease-out', ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(held === undefined ? {} : { held }) });
-  return <div ref={ref} data-probe="" data-y={y} />;
+  useFlip(ref, {
+    key: flipKey,
+    duration: 250,
+    easing: 'ease-out',
+    ...(fadeFrom === undefined ? {} : { fadeFrom }),
+    ...(held === undefined ? {} : { held }),
+    ...(width === undefined ? {} : { origin: { x: 0, y: 0 } }),
+    ...(reducedDuration === undefined ? {} : { reducedDuration }),
+  });
+  return <div ref={ref} data-probe="" data-y={y} data-width={width} style={ownScale === undefined ? undefined : { scale: ownScale }} />;
 }
 
 function stub(): void {
@@ -80,7 +88,8 @@ function stub(): void {
     writable: true,
     value(this: HTMLElement) {
       const top = Number(this.getAttribute('data-y') ?? 0) - scroll;
-      return { left: 10, top, right: 10, bottom: top, width: 0, height: 0, x: 10, y: top, toJSON: () => ({}) };
+      const width = Number(this.getAttribute('data-width') ?? 0);
+      return { left: 10, top, right: 10 + width, bottom: top + width, width, height: width, x: 10, y: top, toJSON: () => ({}) };
     },
   });
 }
@@ -155,5 +164,28 @@ describe('useFlip', () => {
     await render({ flipKey: 'a', fadeFrom: 0.4 });
     await render({ flipKey: 'b', fadeFrom: 0.4 });
     expect(played[0]?.frames).toEqual([{ opacity: 0.4 }, { opacity: 1 }]);
+  });
+
+  test('l’élément porte sa propre échelle (`scale`, ma vignette rangée) : la translation jouée sous elle s’y divise, il repart bien d’où on le voyait', async () => {
+    stub();
+    await render({ flipKey: 'a', y: 100, ownScale: '0.5' });
+    await render({ flipKey: 'b', y: 220, ownScale: '0.5' });
+    expect(played[0]?.frames).toEqual([{ transform: 'translate(0px, -240px)' }, { transform: 'none' }]);
+  });
+
+  test('réduire les animations : le fondu qui remplace le changement de taille dure le temps court déclaré, pas celui du mouvement', async () => {
+    stub();
+    const savedMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+    try {
+      await render({ flipKey: 'a', width: 100, reducedDuration: 120 });
+      await render({ flipKey: 'b', width: 60, reducedDuration: 120 });
+    } finally {
+      if (savedMedia === undefined) Reflect.deleteProperty(window, 'matchMedia');
+      else Object.defineProperty(window, 'matchMedia', savedMedia);
+    }
+    expect(played).toHaveLength(1);
+    expect(played[0]?.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(played[0]?.options).toEqual({ duration: 120, easing: 'ease-out' });
   });
 });

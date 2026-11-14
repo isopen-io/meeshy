@@ -1,7 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from 'react';
 
 import type { CallCaption } from '@/lib/calls/call-captions';
-import { companionCapacity, companionCorner, companionLayout, companionRestingLeft, companionTileSize, otherCorner, speakingPeers, type CompanionCorner, type CompanionTile } from '@/lib/calls/call-effects-companions';
+import { speakingPeers } from '@/lib/calls/call-speaking';
+import { companionCapacity, companionCorner, companionLayout, companionRestingLeft, companionTileSize, otherCorner, type CompanionCorner, type CompanionTile } from '@/lib/calls/call-effects-companions';
 import { translateCallStudio } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 

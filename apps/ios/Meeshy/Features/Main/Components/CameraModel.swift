@@ -73,6 +73,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'entrée audio est ajoutée paresseusement (mode Vidéo), pas au montage
     /// de la session — cf. `enableAudioCaptureIfNeeded()`.
     private var hasAudioInput = false
+    /// La raison de la dernière interruption de la session, `nil` hors interruption (#17433).
+    var interruptionReason: Int?
     private var didAnnounceMicrophoneRefusal = false
 
     /// Les sorties se branchent sur la file de la session (`sessionQueue`) ;
@@ -90,6 +92,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// Le sélecteur « Ambiance » du bouton Camera Control, relié au look (OPUS-9).
+    nonisolated let ambianceLink = CameraAmbianceLink()
     /// L'horizon de l'objectif en service, posé sur la photo au déclenchement.
     let horizon = ComposerCaptureHorizon()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
@@ -333,6 +337,28 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
+    /// **Un autre client audio a pris le micro** (#17433) : la session entière s'est
+    /// interrompue, l'objectif avec. Le micro sort, la vidéo repart ; il reviendra à la
+    /// prochaine vidéo par `enableAudioCaptureIfNeeded`.
+    func dropMicrophoneAndResume() {
+        Logger.media.notice("composer capture: microphone taken by another client, video resumes without it")
+        hasAudioInput = false
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            Self.removeAudioInputs(from: self.session)
+        }
+        sessionQueue.resumeIfWanted(session)
+    }
+
+    /// Toute entrée audio sort, qu'elle ait été publiée au fil principal ou non.
+    nonisolated private static func removeAudioInputs(from session: AVCaptureSession) {
+        let audio = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.filter { $0.device.hasMediaType(.audio) }
+        guard !audio.isEmpty else { return }
+        session.beginConfiguration()
+        audio.forEach(session.removeInput)
+        session.commitConfiguration()
+    }
+
     private func disarmMicrophoneForPhoto() {
         guard hasAudioInput else { return }
         hasAudioInput = false
@@ -500,6 +526,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         zoomScale = installe.zoomScale
         zoomFactor = 1
         watchSubjectArea(of: installe.device)
+        watchSystemPressure(of: installe.device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -554,7 +581,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// photo, et les curseurs du bouton Camera Control (OPUS-9).
     nonisolated private func adoptLens(_ device: AVCaptureDevice) {
         CameraPhotoTuning.adopt(for: device, on: photoOutput)
-        CameraSystemControlsHost.install(in: session, for: device) { [weak self] facteur in
+        CameraSystemControlsHost.install(in: session, for: device, ambiance: ambianceLink) { [weak self] facteur in
             guard let self else { return }
             self.zoomFactor = self.zoomScale.displayed(facteur)
         }
@@ -635,6 +662,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// L'objectif en place, tel que la file l'a installé.
     private(set) var activeVideoDevice: AVCaptureDevice?
+    /// Le guet de la pression du système sur cet objectif — `CameraModel+SystemPressure`.
+    var pressureObservation: NSKeyValueObservation?
 
     /// **Le cadrage de l'objectif actif** — publié pour le badge du
     /// viseur en facteur AFFICHÉ, remis à ×1 à chaque changement d'objectif.
@@ -645,6 +674,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     func stop() {
         cancelOpening()
+        // Une photo en vol ne survit pas au viseur : sans ceci, `isTakingPhoto` restait vrai et
+        // le déclencheur du viseur suivant refusait en silence (#17433).
+        isTakingPhoto = false
+        interruptionReason = nil
         #if DEBUG
         fixture?.stop()
         #endif

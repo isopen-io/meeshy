@@ -7,6 +7,10 @@
         {
           "androidName": "chat_menu_e2ee_signals_notice",
           "status": "android-only"
+        },
+        {
+          "androidName": "chat_menu_e2ee_signals_notice_alone",
+          "status": "android-only"
         }
       ]
     }

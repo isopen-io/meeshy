@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.call
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.ln
+import kotlin.math.max
 import kotlin.math.min
 
 /** Un palier de la vignette locale : 72, 100 ou 150 dp de large (miroir de iOS `CallSelfTileScale`). */
@@ -14,6 +15,17 @@ enum class CallSelfTileScale(val widthDp: Float) {
 
     val heightDp: Float get() = widthDp * ASPECT_RATIO
 
+    /** L1.5 — la largeur du palier dans une fenêtre couchée (130 dp au palier standard). */
+    fun widthDp(isLandscape: Boolean): Float = if (isLandscape) widthDp * LANDSCAPE_WIDTH_FACTOR else widthDp
+
+    /** L1.5 — dans une fenêtre plus large que haute, ma vignette se couche : 130 × 96 au palier standard. */
+    fun size(isLandscape: Boolean): CallTileSize =
+        if (isLandscape) {
+            CallTileSize(widthDp(isLandscape = true), widthDp(isLandscape = true) * LANDSCAPE_ASPECT_RATIO)
+        } else {
+            CallTileSize(widthDp, heightDp)
+        }
+
     val larger: CallSelfTileScale get() = entries.getOrElse(ordinal + 1) { this }
 
     val smaller: CallSelfTileScale get() = entries.getOrElse(ordinal - 1) { this }
@@ -21,6 +33,8 @@ enum class CallSelfTileScale(val widthDp: Float) {
     companion object {
         val Standard: CallSelfTileScale = X2
         const val ASPECT_RATIO: Float = 1.4f
+        const val LANDSCAPE_WIDTH_FACTOR: Float = 1.3f
+        const val LANDSCAPE_ASPECT_RATIO: Float = 96f / 130f
         const val STEP_UP_THRESHOLD: Float = 1.12f
         const val STEP_DOWN_THRESHOLD: Float = 0.89f
 
@@ -52,9 +66,29 @@ data class CallSafeInsets(
     val bottomDp: Float = 0f,
     val startDp: Float = 0f,
     val endDp: Float = 0f,
+    /** P16.8 — la place que prend, sous l'en-tête, le bandeau « Vous partagez » : ma vignette se range dessous. */
+    val bannerDp: Float = 0f,
+    /**
+     * L2.8 (#17965 point 1) — la place que les rails du (…) prennent sur chaque bord, en paysage : ma vignette leur cède
+     * son coin, vers l'intérieur, sans changer de taille ([CallSelfTileLaw.railYieldDp]).
+     */
+    val railDp: Float = 0f,
 )
 
 enum class CallSelfTileCorner { TopStart, TopEnd, BottomStart, BottomEnd }
+
+/**
+ * #17982 (P1.4, P11.6) — la plaque de ma vignette de duo : « Vous » tant qu'elle me montre, le nom de l'autre une fois
+ * les vidéos permutées (la plaque dit qui la vignette MONTRE, comme son liseré, loi 4), « Participant » sans nom connu.
+ * La même plaque que la grille de groupe, sur la même clé de catalogue.
+ */
+sealed interface CallSelfTilePlate {
+    data object You : CallSelfTilePlate
+
+    data class Named(val name: String) : CallSelfTilePlate
+
+    data object Unknown : CallSelfTilePlate
+}
 
 /**
  * La loi de la vignette locale : sa taille (palier + pincement en cours, bornée à la zone sûre),
@@ -66,12 +100,44 @@ object CallSelfTileLaw {
     const val TOP_CLEARANCE_DP: Float = 60f
     const val BOTTOM_CLEARANCE_DP: Float = 130f
 
+    /** L1.8 · L2.8 — l'écart qui sépare ma vignette d'un voisin qu'elle longe : le rail du (…), la pile des bannières. */
+    const val NEIGHBOUR_GAP_DP: Float = 8f
+
+    /** L2.8 — de combien ma vignette quitte son coin pour un rail : le rail, sa marge au bord et l'écart, moins sa propre marge. */
+    const val RAIL_YIELD_DP: Float =
+        CallRailsLayout.EDGE_INSET_DP + CallRailsLayout.RAIL_WIDTH_DP + NEIGHBOUR_GAP_DP - MARGIN_DP
+
+    /** La forme de la fenêtre décide, jamais l'appareil : plus large que haute = paysage (tablettes, fenêtres libres). */
+    fun isLandscape(window: CallTileSize): Boolean = window.widthDp > window.heightDp
+
     /** La taille suivie des doigts pendant le pincement, entre le plus petit et le plus grand palier. */
-    fun liveSize(pinch: Float, from: CallSelfTileScale): CallTileSize {
-        if (!pinch.isFinite() || pinch <= 0f) return CallTileSize(from.widthDp, from.heightDp)
-        val width = (from.widthDp * pinch).coerceIn(CallSelfTileScale.X1.widthDp, CallSelfTileScale.X3.widthDp)
-        return CallTileSize(width, width * CallSelfTileScale.ASPECT_RATIO)
+    fun liveSize(pinch: Float, from: CallSelfTileScale, isLandscape: Boolean = false): CallTileSize {
+        if (!pinch.isFinite() || pinch <= 0f) return from.size(isLandscape)
+        val width = (from.widthDp(isLandscape) * pinch)
+            .coerceIn(CallSelfTileScale.X1.widthDp(isLandscape), CallSelfTileScale.X3.widthDp(isLandscape))
+        val ratio = if (isLandscape) CallSelfTileScale.LANDSCAPE_ASPECT_RATIO else CallSelfTileScale.ASPECT_RATIO
+        return CallTileSize(width, width * ratio)
     }
+
+    /**
+     * L1.5 — le point de départ d'une rotation : la taille d'avant, en rapport de la nouvelle (x = largeur, y = hauteur).
+     * Mise à l'échelle depuis ce rapport vers 1, la vignette se couche ou se relève sans saut.
+     */
+    fun rotationStart(previous: CallTileSize, target: CallTileSize): CallTilePoint =
+        if (target.widthDp <= 0f || target.heightDp <= 0f) {
+            CallTilePoint(1f, 1f)
+        } else {
+            CallTilePoint(previous.widthDp / target.widthDp, previous.heightDp / target.heightDp)
+        }
+
+    /** L1.5 — l'échelle d'un axe pendant la rotation : de [start] vers 1 à mesure que [fraction] va de 0 à 1. */
+    fun rotationScale(start: Float, fraction: Float): Float = start + (1f - start) * fraction
+
+    /** L1.5 — la taille que la vignette MONTRE à [fraction] d'une rotation : c'est d'elle que repart la rotation suivante. */
+    fun shownDuringRotation(layout: CallTileSize, start: CallTilePoint, fraction: Float): CallTileSize = CallTileSize(
+        layout.widthDp * rotationScale(start.xDp, fraction),
+        layout.heightDp * rotationScale(start.yDp, fraction),
+    )
 
     /** Réduit [size] (jamais ne l'agrandit) pour tenir dans [available], à rapport constant. */
     fun fitted(size: CallTileSize, available: CallTileSize): CallTileSize {
@@ -84,13 +150,34 @@ object CallSelfTileLaw {
     fun resting(chosen: CallSelfTileScale, controlsVisible: Boolean): CallSelfTileScale =
         if (controlsVisible) chosen else CallSelfTileScale.X1
 
+    /**
+     * G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la vignette est mise à
+     * l'échelle de sa petite taille, jamais relayoutée.
+     */
+    fun restingFactor(chosen: CallSelfTileScale, controlsVisible: Boolean): Float =
+        resting(chosen, controlsVisible).widthDp / chosen.widthDp
+
+    /**
+     * Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur d'échelle, il est
+     * dessiné à sa taille de petite vignette (lois 4 et 11).
+     */
+    fun counterScaled(length: Float, by: Float): Float = if (by.isFinite() && by > 0f) length / by else length
+
+    /** L'ancre du rangement : le coin de la vignette tourné vers son coin d'écran, qui garde ainsi sa marge. */
+    fun anchor(corner: CallSelfTileCorner): CallTilePoint = when (corner) {
+        CallSelfTileCorner.TopStart -> CallTilePoint(0f, 0f)
+        CallSelfTileCorner.TopEnd -> CallTilePoint(1f, 0f)
+        CallSelfTileCorner.BottomStart -> CallTilePoint(0f, 1f)
+        CallSelfTileCorner.BottomEnd -> CallTilePoint(1f, 1f)
+    }
+
     /** La taille affichée : le palier, suivi du pincement, borné à la zone sûre de l'écran. */
     fun tileSize(container: CallTileSize, insets: CallSafeInsets, scale: CallSelfTileScale, pinch: Float): CallTileSize {
         val available = CallTileSize(
             widthDp = container.widthDp - insets.startDp - insets.endDp - 2 * MARGIN_DP,
-            heightDp = container.heightDp - insets.topDp - insets.bottomDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
+            heightDp = container.heightDp - insets.topDp - insets.bottomDp - insets.bannerDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
         )
-        return fitted(liveSize(pinch, scale), available)
+        return fitted(liveSize(pinch, scale, isLandscape(container)), available)
     }
 
     /** Le centre de repos de la vignette dans [corner], marges de zone sûre et dégagements du chrome compris. */
@@ -102,9 +189,9 @@ object CallSelfTileLaw {
     ): CallTilePoint {
         val halfW = size.widthDp / 2
         val halfH = size.heightDp / 2
-        val startX = insets.startDp + MARGIN_DP + halfW
-        val endX = container.widthDp - insets.endDp - MARGIN_DP - halfW
-        val topY = insets.topDp + TOP_CLEARANCE_DP + halfH
+        val startX = insets.startDp + insets.railDp + MARGIN_DP + halfW
+        val endX = container.widthDp - insets.endDp - insets.railDp - MARGIN_DP - halfW
+        val topY = insets.topDp + insets.bannerDp + TOP_CLEARANCE_DP + halfH
         val bottomY = container.heightDp - insets.bottomDp - BOTTOM_CLEARANCE_DP - halfH
         return when (corner) {
             CallSelfTileCorner.TopStart -> CallTilePoint(startX, topY)
@@ -127,4 +214,44 @@ object CallSelfTileLaw {
 
     /** Le coin de repos initial : en haut à la fin, comme sur iOS. */
     val InitialCorner: CallSelfTileCorner = CallSelfTileCorner.TopEnd
+
+    /** #17982 — la plaque de la vignette : « Vous », sauf permutée ([showsPeer]) où elle nomme l'autre. */
+    fun plate(showsPeer: Boolean, peerName: String): CallSelfTilePlate = when {
+        !showsPeer -> CallSelfTilePlate.You
+        peerName.isBlank() -> CallSelfTilePlate.Unknown
+        else -> CallSelfTilePlate.Named(peerName.trim())
+    }
+
+    /**
+     * #17982 (G1.2) — la largeur que la plaque ne dépasse pas : la vignette MONTRÉE (rangée ou non, [stowFactor] étant la
+     * cible du rangement, pas sa valeur animée : une seule mise en page par mouvement), moins [insetDp] de chaque côté
+     * pour laisser le liseré libre.
+     */
+    fun plateMaxWidthDp(tileWidthDp: Float, stowFactor: Float, insetDp: Float): Float =
+        max(0f, tileWidthDp * stowFactor - 2 * insetDp)
+
+    /** L2.8 (#17965 point 1) — en paysage, les rails du (…) dehors, ma vignette s'écarte de son bord ; sinon elle reste à son coin. */
+    fun railYieldDp(isLandscape: Boolean, railsShown: Boolean): Float = if (isLandscape && railsShown) RAIL_YIELD_DP else 0f
+
+    /**
+     * L2.8 — le glissement vers la place cédée, lu au dessin : l'écart (coordonnées « début → fin ») entre la place où l'œil
+     * voit la vignette ([shownDp], la place cédée qui s'anime) et sa place mise en page ([targetDp]). Un coin de fin s'écarte
+     * vers le début, un coin de début vers la fin.
+     */
+    fun railGlideDp(corner: CallSelfTileCorner, shownDp: Float, targetDp: Float): Float =
+        if (corner.isEnd) targetDp - shownDp else shownDp - targetDp
+
+    /**
+     * L1.8 (#17965 point 2) — la place que ma vignette tient depuis le bord de la fenêtre quand elle est en haut, écart
+     * compris : la pile des bannières, centrée, la longe sans la toucher. La plus grande des deux zones sûres latérales,
+     * pour que le centrage de la pile tienne même quand la découpe n'est que d'un côté. En bas, elle ne gêne pas la pile.
+     */
+    fun bannerReserveDp(corner: CallSelfTileCorner, insets: CallSafeInsets, widthDp: Float): Float =
+        if (corner.isTop) max(insets.startDp, insets.endDp) + insets.railDp + MARGIN_DP + widthDp + NEIGHBOUR_GAP_DP else 0f
+
+    private val CallSelfTileCorner.isEnd: Boolean
+        get() = this == CallSelfTileCorner.TopEnd || this == CallSelfTileCorner.BottomEnd
+
+    private val CallSelfTileCorner.isTop: Boolean
+        get() = this == CallSelfTileCorner.TopStart || this == CallSelfTileCorner.TopEnd
 }

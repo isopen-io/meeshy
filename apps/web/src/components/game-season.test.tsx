@@ -61,7 +61,7 @@ describe('une saison en cours', () => {
 
   test('ce qu’il manque pour l’étape suivante, et comment on gagne des étoiles', () => {
     expect(text(html)).toContain('pas jusqu’à la halte suivante');
-    expect(text(html)).toContain('4 pas mènent à la halte suivante');
+    expect(text(html)).toContain('4 pas par halte');
   });
 
   test('quarante étapes, chacune lisible : réclamée, à réclamer, à venir', () => {
@@ -85,7 +85,7 @@ describe('une saison en cours', () => {
   });
 
   test('le Sceau est cosmétique et le dit', () => {
-    expect(text(html)).toContain('purement décoratif');
+    expect(text(html)).toContain('Sans effet sur le jeu');
   });
 });
 
@@ -143,7 +143,7 @@ describe('le Sceau', () => {
     const page = text(host.innerHTML);
     expect(page).toContain('Tu as 3 Meeshes');
     expect(page).toContain('Il faut 10 Meeshes');
-    expect(page).toContain('Il manque 7 Meeshes');
+    expect(page).not.toContain('Il manque');
   });
 
   test('avant l’achat : les Meeshes en poche et le prix — jamais ce qui restera (#9705, #11178)', () => {

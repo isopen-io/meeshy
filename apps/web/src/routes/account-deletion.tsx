@@ -26,7 +26,7 @@ import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { DeletionGuidePage } from './account-deletion-guide';
-import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY, type ActionTone } from './link-page-parts';
+import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_LINE, type ActionTone } from './link-page-parts';
 import { PasswordInput } from '@/components/password-input';
 
 /**
@@ -151,8 +151,8 @@ function DeletionLinkPage({ link, online, language, deps }: PageProps & { readon
       body={
         <>
           <LinkText>{translate(language, copy.body)}</LinkText>
-          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
-          {failure === null ? null : <LinkAlert>{translate(language, REACH_FAILURE_BODY[failure])}</LinkAlert>}
+          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
+          {failure === null ? null : <LinkAlert>{translate(language, REACH_FAILURE_LINE[failure])}</LinkAlert>}
         </>
       }
     >
@@ -204,8 +204,8 @@ const REQUEST_FAILURE_COPY = {
   'wrong-password': 'accountDeletion.request.wrongPassword',
   'already-pending': 'accountDeletion.request.alreadyPending',
   'no-email': 'accountDeletion.request.noEmail',
-  'signed-out': 'linkPage.signedOut.body',
-  ...REACH_FAILURE_BODY,
+  'signed-out': 'linkPage.signedOut.title',
+  ...REACH_FAILURE_LINE,
 } as const satisfies Readonly<Record<DeletionRequestFailure, InterfaceCatalogKey>>;
 
 type RequestState =
@@ -302,7 +302,7 @@ function DeletionRequestPage({ online, language, deps }: PageProps) {
           className={FIELD_CLASS}
           style={FIELD_STYLE}
         />
-        {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
+        {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
         {failure === null ? null : <LinkAlert>{translate(language, REQUEST_FAILURE_COPY[failure])}</LinkAlert>}
         <ActionButton type="submit" tone="danger" disabled={!ready}>
           {translate(language, sending ? 'accountDeletion.working' : 'accountDeletion.request.action')}

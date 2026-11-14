@@ -1,11 +1,17 @@
 import AVFoundation
 import UIKit
+import os
 import MeeshySDK
 import MeeshyUI
 
 /// La prise photo du viseur : le déclencheur, sa disponibilité et les délégués d'AVFoundation.
 extension CameraModel {
 
+    /// **L'obturateur part sur la file de la session** (#17433). Lire les connexions et les
+    /// réglages de la sortie depuis le fil principal l'attachait à la file : une
+    /// reconfiguration en cours (bascule, micro qui entre) le figeait le temps de la valider.
+    /// Seul l'angle de l'horizon se lit ici ; la garde est REPOSÉE sur la file, devant l'appel,
+    /// car l'état a pu changer entre le toucher et son passage.
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
         #if DEBUG
         if let fixture {
@@ -15,49 +21,72 @@ extension CameraModel {
             return
         }
         #endif
-        // Même exception ObjC que l'enregistrement sans connexion active, donc
-        // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
-        let connection = photoOutput.connection(with: .video)
-        guard !isSwitchingCamera, CameraRecordingReadiness.mayCapturePhoto(
-            sessionIsRunning: session.isRunning,
-            hasVideoConnection: connection != nil,
-            connectionIsActive: connection?.isActive ?? false,
-            connectionIsEnabled: connection?.isEnabled ?? false
-        ) else { return }
-        let settings = CameraPhotoTuning.settings(
-            flash: flash, supportedFlashModes: photoOutput.supportedFlashModes,
-            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions),
-            formatMaxPhotoDimensions: photoOutput.sourceMaxPhotoDimensions)
-        horizon.level(connection)
+        guard !isSwitchingCamera, !isTakingPhoto else { return }
         isTakingPhoto = true
-        photoOutput.capturePhoto(with: settings, delegate: self)
+        let angle = horizon.captureAngle
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            let sortie = self.photoOutput
+            // Même exception ObjC que l'enregistrement sans connexion active, donc
+            // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
+            let connection = sortie.connection(with: .video)
+            guard CameraRecordingReadiness.mayCapturePhoto(
+                sessionIsRunning: self.session.isRunning,
+                hasVideoConnection: connection != nil,
+                connectionIsActive: connection?.isActive ?? false,
+                connectionIsEnabled: connection?.isEnabled ?? false
+            ), let connection else {
+                Task { @MainActor in self.photoWasRefused() }
+                return
+            }
+            let settings = CameraPhotoTuning.settings(
+                flash: flash, supportedFlashModes: sortie.supportedFlashModes,
+                outputMaxPhotoDimensions: CameraPhotoDimensions(sortie.maxPhotoDimensions),
+                formatMaxPhotoDimensions: sortie.sourceMaxPhotoDimensions)
+            ComposerCaptureHorizon.apply(angle, to: connection)
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
     }
 
-    /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
-    /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
-    /// PREND dans le même mouvement attende qu'elle le puisse. Jamais
-    /// pendant une bascule : l'entrée en place va être retirée.
-    var isCaptureReady: Bool {
+    /// **Ce que la session peut faire maintenant**, lu sur ses faits réels (#17433).
+    var captureAvailability: CameraCaptureAvailability {
         #if DEBUG
-        if fixture != nil { return !isSwitchingCamera }
+        if fixture != nil { return isSwitchingCamera ? .switching : .ready }
         #endif
         let connection = photoOutput.connection(with: .video)
-        return !isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto(
-            sessionIsRunning: session.isRunning,
-            hasVideoConnection: connection != nil,
-            connectionIsActive: connection?.isActive ?? false,
-            connectionIsEnabled: connection?.isEnabled ?? false)
+        return CameraCaptureAvailability.resolve(CameraCaptureAvailability.Facts(
+            wantsToRun: sessionQueue.wantsToRun,
+            isRunning: session.isRunning,
+            isInterrupted: session.isInterrupted,
+            interruptionReason: interruptionReason,
+            isSwitching: isSwitchingCamera,
+            hasPhotoConnection: connection != nil,
+            photoConnectionIsActive: connection?.isActive ?? false,
+            photoConnectionIsEnabled: connection?.isEnabled ?? false))
     }
 
-    /// Attend que la session soit prête, au plus `timeout`. `false` ⇒ elle ne
-    /// l'a pas été (permission refusée, simulateur sans caméra, tâche annulée).
+    /// **La session peut-elle rendre une image ?** Pour qu'un geste qui OUVRE la caméra et
+    /// PREND dans le même mouvement attende qu'elle le puisse. Jamais pendant une bascule.
+    var isCaptureReady: Bool { captureAvailability == .ready }
+
+    /// Attend que la session soit prête. `timeout` borne l'attente d'une session déjà en
+    /// régime ; une session qui démarre, bascule ou se remet d'une interruption réparable a
+    /// le budget de `CameraCaptureWait` (#17433). `false` ⇒ elle ne l'a pas été (viseur
+    /// fermé, permission refusée, simulateur sans caméra, tâche annulée).
     func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
-        let limite = Date().addingTimeInterval(timeout)
-        while !isCaptureReady {
-            guard !Task.isCancelled, Date() < limite else { return false }
-            guard await cancellableSleep(for: .milliseconds(50)) else { return false }
+        let debut = Date()
+        while true {
+            let etat = captureAvailability
+            let ecoule = Date().timeIntervalSince(debut)
+            switch CameraCaptureWait.decide(etat, elapsed: ecoule, settledBudget: timeout) {
+            case .shoot: return !Task.isCancelled
+            case .giveUp:
+                Logger.media.error("capture not ready after \(Int(ecoule * 1000), privacy: .public) ms: \(String(describing: etat), privacy: .public)")
+                return false
+            case .wait:
+                guard !Task.isCancelled, await cancellableSleep(for: .milliseconds(50)) else { return false }
+            }
         }
-        return !Task.isCancelled
     }
 }
 
@@ -77,8 +106,17 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         shutterClock.start()
     }
 
-    /// AVFoundation n'a rendu aucune image : le déclencheur se libère, et le dit.
+    /// La file a trouvé la session hors d'état d'écrire : le déclencheur se libère, et le dit.
+    func photoWasRefused() {
+        guard isTakingPhoto else { return }
+        isTakingPhoto = false
+        ComposerCaptureReadiness.announceNotReady()
+    }
+
+    /// AVFoundation n'a rendu aucune image : le déclencheur se libère, et le dit. Une prise
+    /// dont le viseur s'est fermé entre-temps (`stop()`) ne dit plus rien.
     func photoWasLost() {
+        guard isTakingPhoto else { return }
         isTakingPhoto = false
         CameraTakeNotice.announceLostPhoto()
     }
@@ -89,28 +127,29 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         lastShutterDelay = shutterClock.report()
     }
 
+    /// Le traitement (décodage, redressement, amélioration) part sur sa propre file (#17433) :
+    /// fait dans le délégué, il retenait la file d'AVFoundation, et la prise suivante avec.
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let original = photo.fileDataRepresentation() else {
             Task { @MainActor in self.photoWasLost() }
             return
         }
+        CameraModel.photoProcessing.async { [self] in self.deliverProcessed(original) }
+    }
+
+    nonisolated private func deliverProcessed(_ original: Data) {
         let processed = photoProcessor.process(encoded: original, settings: .capture)
         let data = processed?.data ?? original
         guard let image = processed.map({ UIImage(cgImage: $0.image) }) ?? UIImage(data: original) else {
             Task { @MainActor in self.photoWasLost() }
             return
         }
-        // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
-        // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
-        // `saveImageFile` hands Photos the bytes untouched.
-        // `PhotoLibraryManager` is deliberately non-@MainActor so its
-        // `performChanges` block runs on Photos' own queue without the
-        // executor-isolation SIGTRAP an inline save would hit.
-        // L'original ne rejoint Photos que si le réglage le demande,
-        // quelle que soit la zone de la prise : la prise reste dans la
-        // session de toute façon.
+        // Les octets traités partent TELS QUELS (HEIC/JPEG, EXIF gardé) : `saveImageFile` les
+        // remet à Photos intacts. L'original ne rejoint Photos que si le réglage le demande.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
         Task { @MainActor in
+            // Un viseur fermé pendant le traitement (`stop()`) ne reçoit plus rien.
+            guard self.isTakingPhoto else { return }
             self.isTakingPhoto = false
             self.capturedPhoto = image
             // Les octets TRAITÉS, publiés à côté de l'image : ils portent
@@ -122,4 +161,7 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             self.capturedPhotoId = UUID().uuidString
         }
     }
+
+    /// La file du traitement des photos : une prise à la fois, hors de la file d'AVFoundation.
+    nonisolated static let photoProcessing = DispatchQueue(label: "me.meeshy.camera.photo-processing", qos: .userInitiated)
 }

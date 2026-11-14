@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,6 +85,7 @@ fun EncryptedDevicesScreen(
             contentPadding = PaddingValues(start = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
+            item(key = "orientation") { SettingsOrientation(stringResource(R.string.encrypted_devices_orientation)) }
             item(key = "notice") { NotYetEncryptedNotice() }
             when (val content = state.content()) {
                 EncryptedDevicesContent.Loading -> item(key = "loading") { LoadingRow() }
@@ -114,12 +119,22 @@ private fun NotYetEncryptedNotice() {
             Icon(MeeshyIcons.Shield, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column {
-                Text(
-                    text = stringResource(R.string.encrypted_devices_notice_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.semantics { heading() },
-                )
+                var openNote by rememberOpenNote()
+                MeeshyInfoNoted(
+                    note = MeeshyInfoNote(
+                        question = stringResource(R.string.encrypted_devices_notice_code_question),
+                        text = stringResource(R.string.encrypted_devices_notice_code_note),
+                    ),
+                    openNoteId = openNote,
+                    onOpenNoteIdChange = { openNote = it },
+                ) {
+                    Text(
+                        text = stringResource(R.string.encrypted_devices_notice_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
                 Text(
                     text = stringResource(R.string.encrypted_devices_notice_body),
                     style = MaterialTheme.typography.bodySmall,
@@ -190,14 +205,10 @@ private fun EmptyState() {
     ) {
         Icon(MeeshyIcons.Devices, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(36.dp))
         Text(
-            text = stringResource(R.string.encrypted_devices_empty_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = MeeshyTheme.tokens.textPrimary,
-        )
-        Text(
-            text = stringResource(R.string.encrypted_devices_empty_body),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textMuted,
+            text = stringResource(R.string.encrypted_devices_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -207,7 +218,8 @@ private fun EncryptedDeviceRow(device: OwnEncryptedDevice, isRetiring: Boolean, 
     val title = deviceTitle(device)
     val platform = stringResource(platformName(device.platform))
     val locale = LocalConfiguration.current.locales[0]
-    val dates = stringResource(R.string.encrypted_devices_enrolled, deviceDate(device.enrolledAt, locale))
+    val enrolled = stringResource(R.string.encrypted_devices_enrolled, deviceDate(device.enrolledAt, locale))
+    val lastSeen = stringResource(R.string.encrypted_devices_last_seen, deviceDate(device.lastSeenAt, locale))
     MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(MeeshySpacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -228,7 +240,8 @@ private fun EncryptedDeviceRow(device: OwnEncryptedDevice, isRetiring: Boolean, 
             Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Text(text = title, style = MaterialTheme.typography.titleSmall, color = MeeshyTheme.tokens.textPrimary, maxLines = 1)
                 Text(text = platform, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
-                Text(text = dates, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+                Text(text = enrolled, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+                Text(text = lastSeen, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
                 if (device.isCurrent) {
                     Text(
                         text = stringResource(R.string.encrypted_devices_current),

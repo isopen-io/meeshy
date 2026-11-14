@@ -147,6 +147,13 @@ protocol GroupCallSignalingProviding: AnyObject {
     func emitCallSignal(callId: String, type: String, payload: [String: Any])
 }
 
+/// Les niveaux audio (0…1) d'un même relevé : celui du pair principal, et le mien.
+/// Un niveau absent (aucune mesure) laisse le maintien de `ActiveSpeakerDetector` s'écouler.
+struct GroupCallAudioLevels: Equatable, Sendable {
+    let primary: Double?
+    let local: Double?
+}
+
 /// L'appel que `CallManager` tient : le coordinateur y lit l'appel courant,
 /// le pair principal et l'état des médias locaux.
 @MainActor
@@ -168,7 +175,9 @@ protocol GroupCallHostProviding: AnyObject {
     var isLocalMicMuted: Bool { get }
     var isLocalVideoEnabled: Bool { get }
     var primaryRemoteVideoTrack: Any? { get }
-    func primaryAudioLevel() async -> Double?
+    /// UN relevé de statistiques de la liaison principale : le niveau que le pair
+    /// principal envoie et le mien (P11.5) — jamais deux `getStats` par échantillon.
+    func primaryAudioLevels() async -> GroupCallAudioLevels?
     /// #9085 — le principal a quitté un groupe qui continue : sa liaison n'est
     /// plus reprise, et l'appel reste établi par le maillage.
     func groupPrimaryDidVacate()

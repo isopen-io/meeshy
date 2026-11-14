@@ -164,7 +164,7 @@ internal fun MintGestures(
                 tint = MeeshyPalette.Warning,
                 ink = MeeshyPalette.Indigo950,
             )
-            if (!gestures.online) GameNote(stringResource(R.string.game_mint_offline))
+            if (!gestures.online) GameNote(stringResource(R.string.game2_offline_action))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.CenterVertically) {
             Icon(MeeshyIcons.Sparkles, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(MEE_SIZE))
@@ -231,7 +231,7 @@ private fun mintFailureText(gestures: GameGesturesUiState, game: GameBlock): Str
 @Composable
 internal fun mintFailureText(gestures: GameGesturesUiState, debt: Long): String? {
     val failure = gestures.failures[GameGesture.Mint] ?: return null
-    if (failure.offline) return stringResource(R.string.game_mint_offline)
+    if (failure.offline) return stringResource(R.string.game2_offline_action)
     return when (MintFailureKind.of(failure.code)) {
         MintFailureKind.Debt -> debtText(debt)
         MintFailureKind.ReserveClosed, MintFailureKind.PriceChanged -> gestureMessage(failure)

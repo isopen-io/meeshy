@@ -38,12 +38,14 @@ internal fun SettingsChevronRow(
     value: String? = null,
     heavyHaptic: Boolean = false,
     chevronTint: Color = MeeshyTheme.tokens.textMuted,
+    subtitle: String? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     SettingsRow(
         icon = icon,
         title = title,
         color = color,
+        subtitle = subtitle,
         value = value,
         modifier = Modifier.clickable(role = Role.Button) {
             if (heavyHaptic) haptics.heavy() else haptics.light()
@@ -100,10 +102,12 @@ internal fun SettingsGroup(
     title: String,
     icon: ImageVector,
     tint: Color,
+    orientation: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SettingsSectionHeader(title = title, icon = icon, color = tint)
+        orientation?.let { SettingsOrientation(it) }
         SettingsCard(tint = tint, content = content)
     }
 }

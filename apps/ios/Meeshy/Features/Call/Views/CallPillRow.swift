@@ -9,20 +9,29 @@ struct CallPanelHeader: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            headerButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
+            CallPanelHeaderButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-            headerButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
+            CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)
         .padding(.top, MeeshySpacing.xxs)
     }
+}
 
-    private func headerButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+/// Un bouton de 44 pt de l'en-tête d'un panneau de la pilule (Retour, Fermer) : le
+/// verre de l'atome, la cible tactile pleine. Le journal y trouve aussi son Fermer.
+struct CallPanelHeaderButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.footnote.weight(.bold))
@@ -70,6 +79,8 @@ struct CallPillRow<Content: View>: View {
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
+            // P12.8 — une rangée qui défile s'efface en fondu à ses deux bords.
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
         }
         .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)

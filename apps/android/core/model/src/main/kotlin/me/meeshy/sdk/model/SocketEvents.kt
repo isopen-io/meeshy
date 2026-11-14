@@ -67,14 +67,32 @@ data class TypingEvent(
 data class ReactionUpdateEvent(
     val messageId: String,
     val conversationId: String,
-    val userId: String,
+    /**
+     * Le `User.id` de l'acteur. **Optionnel au contrat** (`types/reaction.ts`), et c'est délibéré :
+     * la passerelle le pose toujours, mais une charge PERSISTÉE puis rejouée hors ligne peut dater
+     * d'avant son ajout.
+     *
+     * **Piège ARMÉ, pas panne mesurée** (#18070) : aucun émetteur ne l'omet aujourd'hui — les trois
+     * sites passent une chaîne — donc rien ne tombe. Exigé ici, il FERAIT lever
+     * `MissingFieldException` sur ce rejeu, avalée par `SocketInboundRoute.guarded`, et la réaction
+     * n'arriverait jamais sans que rien ne rougisse. On ne laisse pas un piège armé au motif que
+     * personne n'a marché dessus.
+     */
+    val userId: String? = null,
     val emoji: String,
-    val count: Int = 0,
     /** Le `Participant.id` de l'acteur (clé d'auteur d'un tiers) ; absent d'une vieille passerelle. */
     val participantId: String? = null,
     /** L'agrégat servi APRÈS l'action : borne autoritaire du nombre de lignes d'un emoji. */
     val aggregation: ReactionEventAggregation? = null,
 )
+
+/**
+ * « Cet écho est-il le mien ? » — site UNIQUE de la question, parce qu'elle a un piège : [userId] est
+ * désormais nullable, et `null == null` rendrait VRAI pour un lecteur anonyme (dont l'identité est nulle
+ * elle aussi) face à la réaction d'un tiers. Un acteur INCONNU n'est jamais moi.
+ */
+fun ReactionUpdateEvent.isOwnEcho(currentUserId: String?): Boolean =
+    userId != null && userId == currentUserId
 
 @Serializable
 data class ReactionEventAggregation(
@@ -87,7 +105,6 @@ data class ReactionEventAggregation(
 data class UnreadUpdateEvent(
     val conversationId: String,
     val unreadCount: Int,
-    val totalUnread: Int = 0,
     /** Le pont ✦ à trois états : absent = non calculé (on garde), `null` = effacer, objet = remplacer. */
     val bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
 )
@@ -110,14 +127,61 @@ data class UserStatusEvent(
     val lastActiveAt: String? = null,
 )
 
+/**
+ * Une traduction de texte servie par `message:translation`.
+ *
+ * Fidèle à `packages/shared/types/socketio-events/translation.ts` (`TranslationData`), dont
+ * `buildTranslationEvent.ts` est l'unique producteur. Seules les clés que les consommateurs
+ * utilisent sont déclarées — `ignoreUnknownKeys = true` tolère les autres (`id`, `cacheKey`,
+ * `cached`, `confidenceScore`, `createdAt`), et les déclarer n'ajouterait que de la dérive à tenir.
+ *
+ * La lecture est INDULGENTE (chaînes vides par défaut) pour la raison de [TranscriptionReadyEvent] :
+ * une trame malformée doit être écartée par la fusion no-op, jamais lever au décodage et emporter
+ * l'événement entier.
+ */
+@Serializable
+data class TranslationEntry(
+    val targetLanguage: String = "",
+    val translatedContent: String = "",
+    val sourceLanguage: String? = null,
+    val translationModel: String? = null,
+)
+
+/**
+ * `message:translation` — le rattrapage du Prisme Linguistique : le pipeline traduit APRÈS la création
+ * (`message:new` porte `translations` VIDE), donc un message reçu reste dans la langue de l'expéditeur
+ * jusqu'à cet événement.
+ *
+ * **La charge IMBRIQUE ses traductions et ne porte PAS de `conversationId`** — le contrat
+ * (`TranslationEvent`, `translation.ts`) et son émetteur unique (`buildTranslationEvent.ts`) sont
+ * formels, et le web le documente à l'identique (`realtime-apply.ts`, `applyMessageTranslation` :
+ * on retrouve le fil en balayant le cache, jamais par un champ de la charge).
+ *
+ * Ce miroir déclarait une forme PLATE — `conversationId`, `targetLanguage`, `translatedContent` à la
+ * racine, tous requis — que la passerelle n'a jamais émise : chaque trame levait
+ * `MissingFieldException`, avalée par `SocketInboundRoute.guarded`. Aucune traduction temps réel
+ * n'atteignait Android, et le Prisme devenait fonction d'un rechargement REST (#18069).
+ */
 @Serializable
 data class TranslationEvent(
     val messageId: String,
-    val conversationId: String,
-    val targetLanguage: String,
-    val translatedContent: String,
-    val translationModel: String? = null,
-)
+    val translations: List<TranslationEntry> = emptyList(),
+) {
+    /** Les traductions à FUSIONNER : sans langue ni texte, il n'y a rien à écrire dans la bulle. */
+    val usable: List<TranslationEntry>
+        get() = translations.filter { it.targetLanguage.isNotBlank() && it.translatedContent.isNotBlank() }
+
+    /**
+     * Les langues dont la passerelle a RÉPONDU, texte vide compris.
+     *
+     * Distinct de [usable], et la distinction n'est pas cosmétique : ce qui efface un état
+     * « traduction en cours » est l'ARRIVÉE d'une réponse, pas sa qualité. Confondre les deux
+     * laisserait l'attente allumée POUR TOUJOURS sur une trame à texte vide — l'écran promet une
+     * traduction que plus aucun événement ne viendra solder.
+     */
+    val answeredLanguages: List<String>
+        get() = translations.map { it.targetLanguage }.filter { it.isNotBlank() }.distinct()
+}
 
 /**
  * A ready voice-note transcript — the payload of `audio:transcription-ready`.
@@ -195,7 +259,18 @@ data class TranslatedAudioPayload(
 data class AttachmentUpdatedEvent(
     val messageId: String,
     val conversationId: String,
-    val attachmentId: String,
+    /**
+     * **Posé CONDITIONNELLEMENT par l'émetteur** (`emitAttachmentUpdated.ts`), donc optionnel au
+     * contrat : un enrichissement qui porte sur le message entier n'en nomme aucune pièce. Exigé
+     * ici, le décodage de ces trames-là échouait pour de bon (#18070).
+     *
+     * **Sans effet OBSERVABLE pour autant, et il faut le dire** : le flux que ce miroir alimente
+     * (`MessageSocketManager.attachmentUpdated`) n'a aucun collecteur — le miroir VIVANT de
+     * `message:attachment-updated` est `MessageAttachmentUpdatedEvent`, qui portait déjà la clé en
+     * optionnel. Ce correctif retire donc du bruit de journal, pas une panne. La jumelle morte est
+     * suivie par #18115.
+     */
+    val attachmentId: String? = null,
     val status: String? = null,
     val url: String? = null,
     val thumbnailUrl: String? = null,
@@ -422,7 +497,6 @@ data class PresenceSnapshotEvent(
 @Serializable
 data class ConversationDeletedSocketEvent(
     val conversationId: String,
-    val deletedAt: String? = null,
 )
 
 /**
@@ -456,7 +530,6 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
-    val reason: String? = null,
 )
 
 /**
@@ -559,6 +632,15 @@ data class SocketPostRepostedData(
 data class SocketPostLikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -566,13 +648,21 @@ data class SocketPostLikedData(
 data class SocketPostUnlikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
 @Serializable
 data class SocketPostDeletedData(
     val postId: String,
-    val deletedAt: String? = null,
 )
 
 /**
@@ -614,6 +704,15 @@ data class SocketCommentLikedData(
     val postId: String,
     val commentId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -673,7 +772,6 @@ data class SocketStoryUpdatedData(
 data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
-    val viewedAt: String? = null,
     /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
     val viewCount: Int? = null,
 )

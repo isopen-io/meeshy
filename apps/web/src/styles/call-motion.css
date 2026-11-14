@@ -1,0 +1,401 @@
+/* LE TEXTE DE LA PILULE ARRIVE D'OÙ IL VIENT (#17343, #17406) — les sous-titres
+   qui entrent dans le verre de la pilule, le journal qui s'ouvre à leur place, les
+   sous-titres qui restent quand la pilule se range : ils MONTENT depuis la rangée
+   de base, jamais d'un coup. Seules la transformation et l'opacité bougent, la
+   règle de « Réduire les animations » (`app.css`, règle 32) les ramène à un
+   instant, et un toucher pendant le mouvement répond (rien n'est bloqué).
+   CE QUI PARAÎT DANS L'EN-TÊTE ARRIVE DE MÊME (#17329, `CallView+Header` d'iOS) :
+   le bouton Image dans l'image quand l'appel y devient éligible, la capsule quand
+   l'appel s'établit, les barres quand le réseau se dégrade. Une seule règle, une
+   seule image clé, chargées avec l'écran d'appel (`call-screen.tsx`) : la première
+   peinture ne les paie pas. L'arrivée ne se prolonge pas (`backwards`) : une
+   transformation tenue ferait de la capsule le bloc conteneur de son détail
+   `fixed`, qui s'y écraserait. La CAPSULE, elle, entre et sort par une mise à
+   l'échelle ancrée à son bord de fin (P9.8, #17509) : jouée par le moteur
+   (`HeldSwap`, Web Animations), seul à pouvoir en faire un fondu court
+   sous « Réduire les animations » que la règle générale ne coupe pas ; la
+   feuille n'y met que l'ancre. */
+[data-call-pill-text],
+[data-call-pip],
+[data-call-deck-content='rows'],
+[data-call-signal] {
+  animation: call-pill-text-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+@keyframes call-pill-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+[data-call-capsule] {
+  min-width: 0;
+  transform-origin: 100% 50%;
+}
+
+[data-call-capsule]:dir(rtl) {
+  transform-origin: 0% 50%;
+}
+
+[data-call-capsule][data-leaving] {
+  pointer-events: none;
+}
+
+/* ET IL REPART COMME IL EST VENU (#17406) — le texte qui quitte la pilule reste à
+   sa place le temps de ce fondu (`PILL_TEXT_EXIT`, `call-pill-text-exit.ts`), redescend
+   vers la rangée de base et ne prend plus le doigt : un bouton touché pendant la
+   sortie répond. Sous « Réduire les animations », la règle générale ramène ce fondu à
+   un instant : les sous-titres, eux, y partent en fondu court joué par le moteur
+   (`CAPTIONS_EXIT`, `useRailFade`, #17700). */
+[data-call-pill-text][data-leaving] {
+  animation: call-pill-text-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+/* La pilule ne se resserre pas sous les sous-titres qui repartent : ils gardent la
+   largeur du verre qui porte du texte (`PILL_TEXT_WIDTH_CLASS`, moins son liseré
+   intérieur), et elle ne reprend sa forme qu'une fois qu'ils sont partis. */
+[data-call-pill-text="captions"][data-leaving] {
+  width: min(calc(100vw - 2.25rem), calc(560px - 0.75rem));
+}
+
+@keyframes call-pill-text-out {
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+/* LA FEUILLE MONTE DU BAS ET Y REDESCEND (G3.5, #17406) — le voile en fondu, la
+   feuille par sa seule transformation ; elle repart pendant `data-leaving` sans
+   prendre le doigt. */
+[data-call-sheet-panel] {
+  animation: call-sheet-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+[data-call-sheet-scrim] {
+  animation: call-sheet-fade-in 240ms ease-out backwards;
+}
+
+[data-call-sheet][data-leaving] {
+  pointer-events: none;
+}
+
+[data-call-sheet][data-leaving] [data-call-sheet-panel] {
+  animation: call-sheet-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+[data-call-sheet][data-leaving] [data-call-sheet-scrim] {
+  animation: call-sheet-fade-out 180ms ease-in both;
+}
+
+@keyframes call-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes call-sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes call-sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes call-sheet-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes call-sheet-in {
+    from {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  @keyframes call-sheet-out {
+    to {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  @keyframes call-pill-text-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes call-pill-text-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+
+/* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8,
+   #17536 ; `CallChromeStow` d'iOS) — l'en-tête par le haut, la pilule par le bas, les
+   bandeaux en fondu ; rien n'est coupé net. Seules la transformation (`translate`, qui
+   se mesure sur la hauteur de l'élément lui-même) et l'opacité bougent. La visibilité
+   suit le mouvement : un bouton encore visible répond (#8735), et le mouvement est
+   interruptible. Sous « Réduire les animations », aucun déplacement : le fondu court
+   est joué par `useStowFade` (Web Animations, que la règle générale n'éteint pas).
+   `data-call-stowed` est la même règle, posée par un élément qui vit hors de l'écran
+   d'appel (l'indicateur d'enregistrement). */
+[data-call-stow],
+[data-call-pill-rest] {
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s;
+}
+
+[data-call-chrome='hidden'] [data-call-stow],
+[data-call-stow][data-call-stowed] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s linear 0.3s;
+}
+
+[data-call-chrome='hidden'] [data-call-stow='top'],
+[data-call-stow='top'][data-call-stowed] {
+  translate: 0 calc(-100% - env(safe-area-inset-top) - var(--stow-clearance, 0px) - 1rem);
+}
+
+[data-call-chrome='hidden'] [data-call-stow='bottom'],
+[data-call-stow='bottom'][data-call-stowed] {
+  translate: 0 calc(100% + env(safe-area-inset-bottom) + 1.5rem);
+}
+
+/* UN SEUL VERRE (G1.3) — rangée, la pilule qui porte des sous-titres reste : son verre
+   (`data-call-pill-skin`, seul mis à l'échelle depuis son bord du bas) se resserre
+   autour d'eux, qui descendent d'autant qu'il perd, pendant que sa rangée de base, ses
+   rangées et son séparateur repartent vers le bas en s'effaçant. `--stow-scale` et
+   `--stow-shift` sont mesurés par `use-pill-motion.ts`. Le cadre de la pilule, vide
+   au-dessus du verre resserré, ne prend plus le doigt : seuls les sous-titres le prennent. */
+[data-call-pill-skin] {
+  transform-origin: 50% 100%;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+[data-call-pill-text='captions'] {
+  transition: translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+[data-call-pill-text='captions'] > hr {
+  transition: opacity 0.3s ease;
+}
+
+[data-call-pill-stowed] {
+  pointer-events: none;
+}
+
+[data-call-pill-stowed] [data-call-captions-panel] {
+  pointer-events: auto;
+}
+
+[data-call-pill-stowed] [data-call-pill-skin] {
+  transform: scaleY(var(--stow-scale, 1));
+}
+
+[data-call-pill-stowed] [data-call-pill-text='captions'] {
+  translate: 0 var(--stow-shift, 0px);
+}
+
+[data-call-pill-stowed] [data-call-pill-text='captions'] > hr {
+  opacity: 0;
+}
+
+[data-call-pill-stowed] [data-call-pill-rest] {
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 var(--stow-shift, 0px);
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s linear 0.3s;
+}
+
+/* LE BANDEAU DES AUTRES QUI REPART (U2.10) — plein écran, il quitte la mise en page à l'instant : la une
+   grandit sans l'attendre (`useStageFlip`), et lui glisse vers son bord, là où il était, par `HeldSwap`
+   (transformation et opacité seules ; marqué `data-leaving`, ni focus ni clic). La rangée du bas retient
+   ses 4 de liseré (`px-3` moins `-mx-2`), la colonne ses 12 de bord et ses 8 de débord (`-my-2`). */
+[data-call-strip][data-leaving] {
+  position: absolute;
+  margin: 0;
+}
+
+[data-call-strip-edge='bottom'][data-leaving] {
+  inset-inline: 0.25rem;
+  bottom: 0;
+}
+
+[data-call-strip-edge='trailing'][data-leaving] {
+  inset-block: -0.5rem;
+  inset-inline-end: 0.75rem;
+}
+
+/* Ma vignette se range par une échelle ancrée à son coin (G1.11, `selfTileRestingFactor`) :
+   la transformation seule, jamais sa largeur ni sa hauteur. */
+[data-call-corner-frame] {
+  transition: scale 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-chrome='hidden'] [data-call-stow],
+  [data-call-stow][data-call-stowed],
+  [data-call-pill-stowed] [data-call-pill-rest] {
+    translate: none;
+  }
+}
+
+/* L'ANNEAU ET LE HALO DE LA CAMÉRA COUPÉE (G4.2, #17567) — un seul calque d'ombres, à la
+   couleur de la personne que la scène noire remet (`--call-tint`, `speakerColor`) ; il ne
+   paraît qu'à la parole, par son opacité seule (`useOpacityFade`). */
+[data-call-camera-off-speech] {
+  box-shadow: 0 0 0 3px var(--call-tint), 0 0 24px 6px color-mix(in srgb, var(--call-tint) 50%, transparent);
+}
+
+/* La vignette d'un groupe (P11.5, P14.4) : le MÊME calque, resserré — un liseré renforcé et un halo qui
+   reste sous les 8 de l'espace entre deux vignettes (6 de portée, l'air que garde le bandeau). */
+[data-call-camera-off-speech][data-call-speech-shape='tile'] {
+  box-shadow: 0 0 0 2px var(--call-tint), 0 0 4px 2px color-mix(in srgb, var(--call-tint) 50%, transparent);
+}
+
+/* HAUTEUR COMPACTE (P12.7, `CallGroupStageSizing` d'iOS) — un iPhone en paysage, une fenêtre basse : les rangées
+   légendées que le `(…)` déplie dans la pilule d'un groupe ne recouvrent plus la grille. Elles se replient en UNE
+   ligne sans légendes (chaque rangée garde son nom pour le lecteur d'écran), qui défile à l'horizontale et
+   s'efface en fondu à ses deux bords, sur le liseré de 8 qu'elle garde. */
+[data-call-deck][data-call-compact] [data-call-actions='rows'] {
+  flex-direction: row;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+  padding-inline: 8px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent);
+}
+[data-call-deck][data-call-compact] [data-call-actions='rows']::-webkit-scrollbar {
+  display: none;
+}
+[data-call-deck][data-call-compact] [data-call-row] {
+  flex: none;
+}
+[data-call-deck][data-call-compact] [data-call-row-title] {
+  display: none;
+}
+[data-call-deck][data-call-compact] [data-call-row-scroll] {
+  overflow: visible;
+}
+
+/* L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT (S1.7, S2.1, #17774) — l'un se contracte vers
+   l'autre et s'en redéploie par une échelle et un fondu courts, jouée par le moteur
+   (`playViewSwap`, Web Animations, que la règle générale de « Réduire les animations » n'éteint
+   pas) ; la feuille n'y met que l'ancre : l'écran se déploie depuis le haut, là où la capsule se
+   tient, la capsule depuis son centre. Qui repart ne prend plus le doigt. */
+[data-call-screen] {
+  transform-origin: 50% 0;
+}
+
+[data-call-pill-bar] {
+  transform-origin: 50% 0;
+}
+
+[data-call-screen][data-leaving],
+[data-call-pill-bar][data-leaving] {
+  pointer-events: none;
+}
+
+/* LA PILE DES BANDEAUX SE REFERME SANS ATTENDRE (S2.6, #17774) — le bandeau de partage et la capsule de
+   capture (R1.6) qui repartent quittent la mise en page à l'instant et glissent vers le haut (`HeldSwap`),
+   si bien que les bandeaux qui les suivaient remontent aussitôt, en translation (`useBannersClose`), au
+   lieu de sauter quand ils se démontent. Le haut (`top`) de chacun est épinglé à sa place d'avant par
+   le moteur ; 0 tient pour le premier. La case du cadre en direct (la carte de proposition, la capsule
+   de réponse) en fait autant (C2.7, C3.6). */
+[data-call-banner-stack] > [data-call-capture-slot][data-leaving],
+[data-call-banner-stack] > [data-call-live-frame-slot][data-leaving],
+[data-call-banner-stack] > [data-call-screen-share-banner][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}
+
+/* LE MONTAGE MONTE DU BAS ET Y REDESCEND (C1.12, #17813) — sa barre et son carrousel arrivent par le bord du bas
+   et repartent par lui (`useModeRise`, Web Animations : fondu court sous « Réduire les animations »). Qui repart
+   quitte la mise en page à l'instant, posé au bas du plan des commandes (`pb-6`), pour que la pilule qui revient
+   reprenne sa place sans attendre ; il ne prend plus le doigt. */
+[data-call-mode][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1.5rem;
+  pointer-events: none;
+}
+
+/* L'EN-TÊTE ET LA PILULE QUE LE MODE RELÈVE PARTENT PAR LEUR BORD (C1.12) — l'en-tête par le haut, la pilule par le
+   bas (`HeldSwap`), à leur place d'avant et sans repousser le reste ; la pilule qui revient, ou le mode qui repart,
+   ne se bousculent pas dans le plan des commandes. */
+[data-call-header-slot][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}
+
+[data-call-controls][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1.5rem;
+}
+
+/* LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — le temps du
+   passage, le moteur de mouvement (`pill-motion-engine.ts`, `playGlassTone`) tient le verre à sa
+   densité régulière et pose un VOILE (`::before`) : un calque de la couleur du verre dont l'OPACITÉ
+   seule monte ou redescend (le compositeur la porte, aucun fond n'est recalculé à chaque image), en
+   Web Animations — la règle générale de « Réduire les animations » coupe les transitions, pas elles.
+   Le liseré et le reflet du haut quittent le verre pour un calque posé AU-DESSUS du voile (`::after`) :
+   sinon le voile les éteindrait à moitié, et la fin du fondu les rallumerait d'un coup.
+   Au repos aucun calque n'existe : le ton est celui des classes de `glass.css`, dont ces calques
+   reprennent le liseré et le reflet (`--glass-call-rim`, `--glass-call-sheen`). Régulière + voile à la
+   mesure de `glassVeil` = exactement la densité proéminente : la fin du fondu ne saute pas. Chargé
+   avec l'écran d'appel, comme tout ce qui porte ce verre : la première peinture ne le paie pas. */
+.glass-call[data-glass-fading],
+.glass-call-prominent[data-glass-fading] {
+  border-color: transparent;
+  box-shadow: var(--glass-call-drop);
+}
+
+.glass-call[data-glass-fading]::before,
+.glass-call-prominent[data-glass-fading]::before,
+.glass-call[data-glass-fading]::after,
+.glass-call-prominent[data-glass-fading]::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.glass-call[data-glass-fading]::before,
+.glass-call-prominent[data-glass-fading]::before {
+  background-color: var(--ios-indigo-950);
+  opacity: 0;
+}
+
+.glass-call[data-glass-fading]::after,
+.glass-call-prominent[data-glass-fading]::after {
+  border: var(--glass-call-rim);
+  box-shadow: var(--glass-call-sheen);
+}

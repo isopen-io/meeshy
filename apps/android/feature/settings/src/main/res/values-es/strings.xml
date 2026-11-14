@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_section_chats">Chats</string>
-    <string name="settings_section_privacy">Privacidad y seguridad</string>
     <string name="settings_display_language">Idioma de visualización</string>
-    <string name="settings_language_system">Idioma del sistema</string>
     <string name="settings_regional_language_search">Buscar idioma</string>
     <string name="settings_regional_language_empty">Ningún idioma coincide con tu búsqueda</string>
-    <string name="settings_notification_vibration">Vibración</string>
     <string name="settings_notif_show_preview">Vista previa de mensajes</string>
     <string name="settings_notif_badge_enabled">Insignia del icono de la app</string>
     <string name="settings_dnd_start">Desde</string>
@@ -31,19 +27,9 @@
     <string name="settings_notif_type_friend_content">Actividad de amigos</string>
     <string name="settings_notif_type_group_invite">Invitaciones de grupo</string>
     <string name="settings_notif_type_system">Alertas del sistema</string>
-    <string name="settings_two_factor">Autenticación de dos factores</string>
-    <string name="settings_account_contact">Correo y teléfono</string>
-    <string name="settings_clear_media_cache">Borrar caché multimedia</string>
-    <string name="settings_storage_used">Almacenamiento usado</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Activada</string>
-    <string name="twofactor_enable_button">Configurar la autenticación de dos factores</string>
     <string name="twofactor_regenerate_button">Regenerar códigos de respaldo</string>
-    <string name="twofactor_setup_title">Escanea el código QR</string>
-    <string name="twofactor_setup_instructions">Escanea este código QR con tu aplicación de autenticación, o introduce el código manualmente.</string>
-    <string name="twofactor_setup_secret_label">Código de entrada manual</string>
-    <string name="twofactor_backup_codes_warning">Guarda estos códigos en un lugar seguro. Cada código solo se puede usar una vez.</string>
-    <string name="twofactor_backup_codes_done">He guardado mis códigos</string>
     <string name="twofactor_regenerate_title">Regenerar códigos de respaldo</string>
     <string name="twofactor_regenerate_confirm">Regenerar</string>
     <string name="twofactor_error_status">No se pudo cargar el estado del 2FA</string>
@@ -57,16 +43,11 @@
     <string name="change_password_error_weak">La nueva contraseña es demasiado débil. Elige una más larga y menos predecible.</string>
     <string name="change_password_error_rejected">Contraseña rechazada. Compruébala e inténtalo de nuevo.</string>
     <!-- Cambio de email / teléfono (§K) -->
-    <string name="account_contact_title">Correo y teléfono</string>
-    <string name="account_contact_email_resend">Reenviar correo</string>
     <string name="account_contact_email_resend_cooldown">Reenviar (%1$ds)</string>
-    <string name="account_contact_error_email_change">No se pudo enviar el correo de verificación. Verifique la dirección e inténtelo de nuevo.</string>
-    <string name="account_contact_error_email_resend">No se pudo reenviar el correo de verificación.</string>
     <string name="account_contact_phone_new_label">Nuevo teléfono</string>
     <string name="account_contact_phone_send_code">Enviar código</string>
     <string name="account_contact_error_phone_change">No se pudo enviar el código de verificación. Verifique el número e inténtelo de nuevo.</string>
     <!-- Privacidad y visibilidad (§L) -->
-    <string name="settings_privacy">Privacidad y visibilidad</string>
     <string name="privacy_title">Privacidad y visibilidad</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">Esta acción es irreversible</string>
@@ -80,28 +61,16 @@
     <string name="delete_account_email_body">Revisa tu bandeja de entrada para confirmar la eliminación de tu cuenta.</string>
 
     <!-- Exportación de datos (RGPD) -->
-    <string name="data_export_info_body">Conforme al RGPD, puedes exportar todos tus datos personales.</string>
     <string name="data_export_format_json">JSON</string>
     <string name="data_export_format_csv">CSV</string>
     <string name="data_export_content_profile">Perfil (siempre incluido)</string>
     <string name="data_export_ready_title">Exportación lista</string>
 
     <!-- Media cache management -->
-    <string name="media_cache_info_title">Medios en caché</string>
-    <string name="media_cache_info_body">La caché acelera la carga de los medios y ahorra datos. Vaciarla es seguro: los archivos se vuelven a descargar cuando se necesitan.</string>
-    <string name="media_cache_total_label">Caché total usada</string>
-    <string name="media_cache_category_thumbnails">Miniaturas</string>
-    <string name="media_cache_clear_all">Vaciar caché</string>
-    <string name="media_cache_confirm_title">Vaciar caché</string>
-    <string name="media_cache_confirm_message">Esto eliminará todos los medios almacenados localmente. Se volverán a descargar si es necesario.</string>
-    <string name="media_cache_error_scan">No se pudo leer el tamaño de la caché. Desliza para actualizar.</string>
-    <string name="media_cache_error_clear">No se pudo vaciar la caché. Inténtalo de nuevo.</string>
 
     <!-- Diagnósticos de fallos -->
     <string name="settings_diagnostics">Diagnósticos</string>
     <string name="crash_reports_title">Diagnósticos</string>
-    <string name="crash_reports_info_body">Si la aplicación se cierra inesperadamente, se guarda aquí un informe para que puedas compartirlo con soporte. Nada sale de tu dispositivo hasta que lo compartas.</string>
-    <string name="crash_reports_empty">No hay informes de fallos: la aplicación funciona sin problemas.</string>
     <string name="crash_reports_clear_all">Borrar informes</string>
     <string name="crash_reports_confirm_title">Borrar informes</string>
     <string name="crash_reports_confirm_message">Esto elimina permanentemente todos los informes de fallos guardados en este dispositivo.</string>
@@ -110,13 +79,10 @@
     <string name="crash_kind_anr">ANR</string>
     <string name="about_version_label">Versión %1$s</string>
     <string name="about_info_application_id">ID de aplicación</string>
-    <string name="settings_help_support">Ayuda y soporte</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>
     <string name="support_title">Ayuda y soporte</string>
-    <string name="support_link_email">Correo de soporte</string>
 
     <!-- Active sessions -->
-    <string name="sessions_revoke_others">Cerrar sesión en los demás dispositivos</string>
 </resources>

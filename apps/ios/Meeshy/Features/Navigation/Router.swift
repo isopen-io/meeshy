@@ -166,7 +166,7 @@ extension Route {
         case .userStats:
             return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
         case .progression:
-            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .progressionSection(let section):
             // Le titre de la PAGE, pas celui du hub : c'est lui que la barre
             // de navigation d'iPad affiche et que VoiceOver annonce à
@@ -186,11 +186,11 @@ extension Route {
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
         case .progressionDashboard:
-            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
-            return String(localized: "route.title.affiliate", defaultValue: "Affiliation", bundle: .main)
+            return String(localized: "route.title.affiliate", defaultValue: "Parrainage", bundle: .main)
         case .trackingLinks:
             return String(localized: "route.title.tracking_links", defaultValue: "Liens de suivi", bundle: .main)
         case .shareLinks:

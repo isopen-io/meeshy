@@ -290,15 +290,7 @@ struct ComposerCaptureChrome: View {
                 }
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
-            if session.isRenderingLook {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .controlSize(.large)
-                    .padding(MeeshySpacing.lg)
-                    .adaptiveLiquidGlass(in: Circle())
-                    .accessibilityLabel(ComposerCaptureCopy.rendering)
-            }
+            if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
@@ -377,6 +369,17 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// Le rendu du look est en cours : la prise attend, et le dit.
+    private var renderingSpinner: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .controlSize(.large)
+            .padding(MeeshySpacing.lg)
+            .adaptiveLiquidGlass(in: Circle())
+            .accessibilityLabel(ComposerCaptureCopy.rendering)
+    }
+
     /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
     /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
     private var showsTopRow: Bool {
@@ -402,6 +405,7 @@ struct ComposerCaptureChrome: View {
             holding: session.barCapture.holding,
             flashIntensity: session.barCapture.flashIntensity,
             onFlashIntensity: { session.setFlashIntensity($0) },
+            cameraPosition: session.barCapture.cameraPosition,
             flipping: session.barCapture.flipping,
             editing: session.phase.isEditing,
             rendering: session.isRenderingLook || session.takeSaveState == .saving,

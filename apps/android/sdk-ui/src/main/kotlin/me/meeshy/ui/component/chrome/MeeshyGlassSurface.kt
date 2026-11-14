@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toIntSize
 import me.meeshy.sdk.model.chrome.GlassRendering
 import me.meeshy.sdk.model.chrome.resolveGlassRendering
+import me.meeshy.ui.component.kit.LocalMeeshyGlassNested
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -39,6 +41,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * degradee 1 dp, ombre noire 20 % (rayon 10, y 5) et, des l'API 31, flou du fond enregistre par
  * [MeeshyBackground]. Avant l'API 31, ou en transparence reduite, surface opaque teintee.
  * Pendant iOS : `glassCard` / `adaptiveLiquidGlass`.
+ *
+ * Elle se sait hôte d'un verre : une surface du kit posée dedans ne porte pas de seconde matière (`LocalMeeshyGlassNested`).
  *
  * @param tint teinte optionnelle (accent de conversation, passe en parametre par l'appelant).
  * @param liquid ajoute le reflet et le liseré clair de la recette liquid glass.
@@ -112,6 +116,7 @@ fun MeeshyGlassSurface(
                 if (liquid) MeeshyGradients.liquidGlassRim(dark, tint != null) else MeeshyGradients.glassBorder(dark),
                 shape,
             ),
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(LocalMeeshyGlassNested provides true) { content() }
+    }
 }

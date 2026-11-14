@@ -287,13 +287,13 @@ public struct MeeshyForgotPasswordView: View {
                     .padding(.horizontal, MeeshySpacing.xxl)
                 }
 
-                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Pour vérifier votre identité, entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
+                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Entrez votre pseudo et votre e-mail complets.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, MeeshySpacing.xxl)
 
-                AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Nom d'utilisateur complet", bundle: .module), icon: "person.fill", text: $fullUsername, textContentType: .username)
+                AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Pseudo complet", bundle: .module), icon: "person.fill", text: $fullUsername, textContentType: .username)
                     .padding(.horizontal, MeeshySpacing.xxl)
 
                 AuthTextField(title: String(localized: "auth.forgotPassword.fullEmail", defaultValue: "E-mail complet", bundle: .module), icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress, textContentType: .emailAddress)

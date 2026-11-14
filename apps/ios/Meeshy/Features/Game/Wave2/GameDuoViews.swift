@@ -29,7 +29,7 @@ struct GameDuoCard: View {
     @ViewBuilder
     private var content: some View {
         if !duo.unlocked {
-            GameNote(text: GameText.duoLocked(level: GameCopy.formatCount(GameDuo.minLevel), current: GameCopy.formatCount(levelRecord)))
+            GameNote(text: GameText.duoLocked(level: GameCopy.formatCount(GameDuo.minLevel)))
             GameFactChipRow(
                 concept: .league,
                 items: GameSpendRows.requirement(GameSpend.requirement(current: levelRecord, required: GameDuo.minLevel), record: true),
@@ -127,9 +127,7 @@ struct GameDuoCard: View {
     private var idle: some View {
         GameNote(text: idleSentence)
         if duo.status == .none {
-            if model.friends.isEmpty {
-                GameNote(text: GameText.duoNoFriends)
-            } else {
+            if !model.friends.isEmpty {
                 VStack(spacing: MeeshySpacing.sm) {
                     ForEach(Array(model.friends.prefix(Self.friendLimit)), id: \.id) { friend in
                         GameActionButton(

@@ -166,9 +166,7 @@ private fun PackFacts(pack: ShopPack, contents: ShopPackContents?) {
     }
     val ready = contents as? ShopPackContents.Ready
     val weight = when {
-        ready?.embedded == true && (ready.bytes ?: 0L) > 0L ->
-            stringResource(R.string.pack_shop_detail_embedded_size, Formatter.formatShortFileSize(context, ready.bytes ?: 0L))
-        ready?.embedded == true -> stringResource(R.string.pack_shop_detail_embedded)
+        ready?.embedded == true && (ready.bytes ?: 0L) == 0L -> null
         (ready?.bytes ?: 0L) > 0L -> Formatter.formatShortFileSize(context, ready?.bytes ?: 0L)
         else -> null
     }

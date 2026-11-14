@@ -13,6 +13,13 @@ const esEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'Esta publicación hizo brotar {count} chispa para ti',
   'engagement.post.points.other': 'Esta publicación hizo brotar {count} chispas para ti',
+  'engagement.card.streak.one': 'día seguido aquí',
+  'engagement.card.streak.other': 'días seguidos aquí',
+  'engagement.card.today': 'Hoy',
+  'engagement.card.total': 'Aquí desde el principio',
+  'engagement.card.open': 'Ver el juego',
+  'engagement.card.hide': 'Ocultar la llama',
+  'engagement.card.title': 'En esta conversación',
 } as const;
 
 export default esEngagement;

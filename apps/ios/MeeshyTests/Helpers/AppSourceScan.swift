@@ -149,7 +149,7 @@ enum AppSourceScan {
 
     static func isIconOnlyAndMute(_ site: ButtonSite) -> Bool {
         guard site.label.contains("Image(systemName") else { return false }
-        if site.label.contains("Text(") || site.label.contains("Label(") { return false }
+        if site.label.contains("Text(") || site.label.contains("Label(") || site.label.contains("title:") { return false }
         if site.chain.contains("accessibilityHidden(true)") { return false }
         return !site.label.contains("accessibilityLabel") && !site.chain.contains("accessibilityLabel")
     }

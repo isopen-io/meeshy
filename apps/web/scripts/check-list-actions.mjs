@@ -931,10 +931,10 @@ await enTetePage.waitForSelector('ul li button', { timeout: 3000 }).catch(() => 
 const resultats = await enTetePage.locator('ul li button').count();
 check(resultats >= 1, `deux caractères rendent au moins un contact cliquable (obtenu : ${resultats})`);
 
-/** 4) « Progression » ⇒ sa route répond aussi. */
+/** 4) « Ma Légende » (ex « Progression », #17769) ⇒ sa route répond aussi. */
 await enTetePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
-await enTetePage.click('header a[aria-label^="Progression"]');
+await enTetePage.click('header a[aria-label^="Ma Légende"]');
 await enTetePage.waitForTimeout(400);
 const apresProgression = await enTetePage.evaluate(() => window.location.pathname);
 check(

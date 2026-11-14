@@ -116,10 +116,18 @@ fun SecurityScreen(
                 SecurityEmailSection(contact, contactViewModel)
                 SecurityPhoneSection(contact, contactViewModel)
                 SecurityLockSection()
-                SecuritySectionCard(MeeshyIcons.Shield, stringResource(R.string.security_section_encrypted_devices)) {
+                SecuritySectionCard(
+                    MeeshyIcons.Shield,
+                    stringResource(R.string.security_section_encrypted_devices),
+                    orientation = stringResource(R.string.security_e2ee_orientation),
+                ) {
                     SecurityLinkRow(MeeshyIcons.Shield, stringResource(R.string.encrypted_devices_title), onOpenEncryptedDevices)
                 }
-                SecuritySectionCard(Icons.Filled.Devices, stringResource(R.string.security_section_sessions)) {
+                SecuritySectionCard(
+                    Icons.Filled.Devices,
+                    stringResource(R.string.security_section_sessions),
+                    orientation = stringResource(R.string.security_sessions_orientation),
+                ) {
                     SecurityLinkRow(Icons.Filled.Devices, stringResource(R.string.security_sessions_manage), onOpenSessions)
                 }
                 Spacer(Modifier.height(MeeshySpacing.xl))

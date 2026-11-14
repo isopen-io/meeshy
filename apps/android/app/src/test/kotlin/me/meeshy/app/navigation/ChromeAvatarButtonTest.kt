@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.ServedProfileDecorItem
+import me.meeshy.sdk.model.game.GameActsRing
 import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
@@ -76,5 +77,31 @@ class ChromeAvatarButtonTest {
         assertThat(chromeAvatarDecorRing(user)).isEqualTo(ring)
         assertThat(chromeAvatarDecorRing(user.copy(profileDecor = null))).isNull()
         assertThat(chromeAvatarDecorRing(null)).isNull()
+    }
+
+    @Test
+    fun `TalkBack lit les notifications puis les actes du jour, menu ferme`() {
+        assertThat(chromeMenuA11yValue(notifications = "3 notifications en attente", acts = "Actes du jour : 2 sur 3", menuExpanded = false))
+            .isEqualTo("3 notifications en attente, Actes du jour : 2 sur 3")
+        assertThat(chromeMenuA11yValue(notifications = null, acts = "Actes du jour : 2 sur 3", menuExpanded = false))
+            .isEqualTo("Actes du jour : 2 sur 3")
+    }
+
+    @Test
+    fun `menu ouvert, les actes se taisent et les notifications restent`() {
+        assertThat(chromeMenuA11yValue(notifications = "3 notifications en attente", acts = "Actes du jour : 2 sur 3", menuExpanded = true))
+            .isEqualTo("3 notifications en attente")
+        assertThat(chromeMenuA11yValue(notifications = null, acts = "Actes du jour : 2 sur 3", menuExpanded = true)).isNull()
+        assertThat(chromeMenuA11yValue(notifications = null, acts = null, menuExpanded = false)).isNull()
+    }
+
+    @Test
+    fun `chaque acte se dessine en arc depuis le haut, dans le sens des aiguilles`() {
+        val arcs = chromeActsRingArcs(GameActsRing(done = 1, total = 3))
+        assertThat(arcs).hasSize(3)
+        assertThat(arcs.map { it.isDone }).containsExactly(true, false, false).inOrder()
+        assertThat(arcs[0].startAngle).isWithin(1e-3f).of(-90f + 360f * 7f / 300f)
+        assertThat(arcs[0].sweepAngle).isWithin(1e-3f).of(120f - 360f * 14f / 300f)
+        assertThat(arcs[1].startAngle).isWithin(1e-3f).of(30f + 360f * 7f / 300f)
     }
 }

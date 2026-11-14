@@ -14,7 +14,7 @@ import { useUrlSharing } from '@/lib/links/use-url-sharing';
 import { useOnline } from '@/lib/net/online';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
-import { COMMUNITY_TINT, CopyRowAction, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, SEPARATOR } from '@/routes/link-families-parts';
+import { COMMUNITY_TINT, CopyRowAction, FamilyDisc, FamilyEmpty, FamilyRow, FamilySkeleton, FamilyStats, SEPARATOR } from '@/routes/link-families-parts';
 import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice } from '@/routes/links-parts';
 
 /**
@@ -36,7 +36,7 @@ export const visibilityLabel = (language: InterfaceLanguage, link: CommunityLink
   translateLinkFamilies(language, link.isPrivate ? 'linkFamilies.community.private' : 'linkFamilies.community.public');
 
 export function CommunityLinkRow({ language, link, copied, onCopy }: { readonly language: InterfaceLanguage; readonly link: CommunityLink; readonly copied: boolean; readonly onCopy: () => void }) {
-  const facts = [...(link.memberCount === null ? [] : [membersLabel(language, link.memberCount)]), roleLabel(language, link), visibilityLabel(language, link)];
+  const facts = [...(link.memberCount === null ? [] : [membersLabel(language, link.memberCount)]), roleLabel(language, link)];
   const label = new Intl.ListFormat(language, { type: 'unit', style: 'short' }).format([link.name, ...facts]);
   return (
     <FamilyRow
@@ -109,22 +109,14 @@ export default function CommunityLinksScreen() {
               language={language}
               tint={COMMUNITY_TINT}
               items={[
-                {
-                  stat: 'communities',
-                  glyph: <LinksGlyph name="usersThree" size={18} />,
-                  value: summary.communities,
-                  label: translateLinkFamilies(language, 'linkFamilies.community.stats.communities'),
-                },
                 { stat: 'public', glyph: <LinksGlyph name="globe" size={18} />, value: summary.publicCommunities, label: translateLinkFamilies(language, 'linkFamilies.community.stats.public') },
                 { stat: 'members', glyph: <LinksGlyph name="userCheck" size={18} />, value: summary.members, label: translateLinkFamilies(language, 'linkFamilies.community.stats.members') },
               ]}
             />
           )}
-          <FamilySection id="community-links-title" title={translateLinkFamilies(language, 'linkFamilies.community.section')}>
-            <ul data-community-links className="grid gap-2">
-              {body}
-            </ul>
-          </FamilySection>
+          <ul data-community-links aria-label={translateLinkFamilies(language, 'links.hub.community.title')} className="grid gap-2">
+            {body}
+          </ul>
         </div>
       </div>
       <LinksAnnouncement text={sharing.announcer.text} />

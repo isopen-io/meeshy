@@ -141,10 +141,10 @@ function MessageEditComposer({
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => onSubmit(text)}
               className="grid size-11 place-items-center rounded-chip"
-              style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))' }}
+              style={{ background: 'var(--send-accent-fill)' }}
               aria-label={translateMessagePieces(language, 'message.edit.submit')}
             >
-              <Glyph name="check" size={20} className="text-white" />
+              <Glyph name="check" size={20} className="text-ios-on-brand" />
             </button>
           ) : null}
         </div>

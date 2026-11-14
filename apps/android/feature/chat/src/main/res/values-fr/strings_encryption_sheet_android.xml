@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_direct_only_here">Sur ce téléphone, le chiffrement de bout en bout n’existe que pour les conversations à deux : un groupe ne peut pas encore être chiffré de bout en bout d’ici.</string>
     <string name="encryption_irreversible_refused">Le chiffrement de bout en bout ne se désactive pas. Pour échanger sans lui, créez une nouvelle conversation.</string>
     <string name="encryption_action_failed">Le changement n’a pas pu être fait. Réessayez.</string>
     <string name="encryption_offline">Vous êtes hors connexion : reconnectez-vous pour lire ou modifier le chiffrement.</string>

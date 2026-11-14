@@ -19,8 +19,8 @@ import { useOnline } from '@/lib/net/online';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
-import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowAction, SEPARATOR } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
+import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowMore, SEPARATOR } from '@/routes/link-families-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinkCreated, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
 
 /**
  * **SES LIENS DE PARRAINAGE** (#6409) — miroir `AffiliateView.swift` : en-tête
@@ -65,10 +65,11 @@ export function AffiliateTokenRow({
           used: format.format(token.currentUses),
           max: format.format(token.maxUses),
         });
+  const created = linkCreatedLabel(language, token.createdAt);
   const label = new Intl.ListFormat(language, {
     type: 'unit',
     style: 'short',
-  }).format([token.name, statusLabel(language, token.isActive), signups, ...(uses === null ? [] : [uses])]);
+  }).format([token.name, statusLabel(language, token.isActive), uses ?? signups, created]);
   return (
     <FamilyRow
       rowId={token.id}
@@ -84,26 +85,28 @@ export function AffiliateTokenRow({
               {SEPARATOR}
             </>
           )}
-          <span data-affiliate-signups className="whitespace-nowrap font-medium" style={{ color: 'var(--color-ios-ink)' }}>
-            {signups}
-          </span>
-          {uses === null ? null : (
-            <>
-              {SEPARATOR}
-              <span className="whitespace-nowrap">{uses}</span>
-            </>
+          {uses === null ? (
+            <span data-affiliate-signups className="whitespace-nowrap font-medium" style={{ color: 'var(--color-ios-ink)' }}>
+              {signups}
+            </span>
+          ) : (
+            <span data-affiliate-uses className="whitespace-nowrap font-medium" style={{ color: 'var(--color-ios-ink)' }}>
+              {uses}
+            </span>
           )}
+          <LinkCreated language={language} createdAt={token.createdAt} />
         </>
       }
       actions={
         <span className="flex shrink-0 items-center">
           <CopyRowAction language={language} label={translateLinkFamilies(language, 'linkFamilies.affiliate.copy')} tint={AFFILIATE_TINT} copied={copied} onCopy={onCopy} />
-          <RowAction name="share" label={translateLinkFamilies(language, 'linkFamilies.affiliate.share')} tint={AFFILIATE_TINT} onClick={onShare}>
-            <LinksGlyph name="export" size={18} />
-          </RowAction>
-          <RowAction name="delete" label={translateLinkFamilies(language, 'linkFamilies.affiliate.delete')} tint="var(--color-error)" onClick={onDelete}>
-            <LinksGlyph name="trash" size={18} />
-          </RowAction>
+          <RowMore
+            label={translateLinkFamilies(language, 'linkFamilies.more')}
+            items={[
+              { name: 'share', label: translateLinkFamilies(language, 'linkFamilies.affiliate.share'), glyph: <LinksGlyph name="export" size={18} />, tint: AFFILIATE_TINT, onSelect: onShare },
+              { name: 'delete', label: translateLinkFamilies(language, 'linkFamilies.affiliate.delete'), glyph: <LinksGlyph name="trash" size={18} />, tint: 'var(--color-error)', onSelect: onDelete },
+            ]}
+          />
         </span>
       }
     />
@@ -303,11 +306,9 @@ export default function AffiliateLinksScreen() {
               ]}
             />
           )}
-          <FamilySection id="affiliate-links-title" title={translate(language, 'root.menu.links')}>
-            <ul data-affiliate-links className="grid gap-2">
-              {body}
-            </ul>
-          </FamilySection>
+          <ul data-affiliate-links aria-label={translate(language, 'root.menu.links')} className="grid gap-2">
+            {body}
+          </ul>
           {served === null ? null : (
             <FamilySection id="affiliate-referrals-title" title={translateLinkFamilies(language, 'linkFamilies.affiliate.section.referrals')}>
               <ReferralList language={language} referrals={served.referrals} />

@@ -1,9 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
-
-import { callActions } from '@/lib/calls/call-actions';
-import { callsAvailable } from '@/lib/calls/calls-availability';
-import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
-import { translate } from '@/lib/i18n-catalog';
+import type { CallNoticeTarget } from '@/lib/calls/call-notice';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { SystemRow } from '@/lib/view/message-badges';
 import { systemRowLabel, systemRowText } from '@/lib/view/message-badges';
@@ -12,10 +7,11 @@ import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { withoutTrailingInvite } from '@/lib/view/arrival-greeting';
 
 import { ArrivalGreetingInvite, useArrivalGreeting } from './arrival-greeting-invite';
-import { Attachments } from './attachment-blocks';
-import { Glyph, GlyphSvg } from './glyph';
+import { CallNotice } from './call-notice-card';
+import { GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
+import { SystemNoticeTime } from './system-notice-time';
 
 /**
  * LA RANGÉE SYSTÈME — un message qui n'est PAS une prise de parole (#5936).
@@ -32,14 +28,7 @@ import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
  * conteneur porte `aria-label` (D-32 §11, « une rangée se lit d'un seul
  * libellé »), ses enfants sont `aria-hidden`.
  */
-export function SystemNotice({
-  row,
-  timeString,
-  surface,
-  callTarget = null,
-  languages = [],
-  language = currentInterfaceLanguage(),
-}: {
+type SystemNoticeProps = {
   readonly row: SystemRow;
   readonly timeString: string;
   readonly surface: 'row' | 'bubble';
@@ -48,40 +37,22 @@ export function SystemNotice({
   readonly languages?: readonly string[];
   /** La langue d'INTERFACE de la rangée — celle du document par défaut. */
   readonly language?: InterfaceLanguage;
-}) {
+};
+
+/** Un appel est une CARTE (#17878, A1.2) ; tout autre message système, une rangée ou une capsule. */
+export function SystemNotice(props: SystemNoticeProps) {
+  const { row, timeString, callTarget = null, languages = [], language = currentInterfaceLanguage() } = props;
+  if (row.kind === 'call') return <CallNotice row={row} timeString={timeString} callTarget={callTarget} languages={languages} language={language} />;
+  return <PlainSystemNotice {...props} />;
+}
+
+function PlainSystemNotice({ row, timeString, surface, language = currentInterfaceLanguage() }: SystemNoticeProps) {
   const label = systemRowLabel(row, language);
   /* « DIS-LUI SALUT » (#16338) — sous la phrase, comme « Rappeler » : un bouton nommé, jamais caché sous `aria-hidden`. */
   const greeting = useArrivalGreeting(row);
-  const action =
-    row.kind === 'call' && callTarget !== null && callsAvailable() ? (
-      <CallNoticeAction target={callTarget} languages={languages} />
-    ) : greeting !== null ? (
-      <ArrivalGreetingInvite greeting={greeting} language={language} />
-    ) : null;
+  const action = greeting !== null ? <ArrivalGreetingInvite greeting={greeting} language={language} /> : null;
   const content = <SystemNoticeContent row={row} language={language} invitesApart={greeting !== null} />;
-  /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
-     à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour
-     AA ailleurs dans le fil (`.focal-meta`, `EditedMark`), JAMAIS
-     `--color-meta` (0,50, le littéral que la régression F-083 avait laissé) :
-     mesuré 2,44:1 (heure, clair) / 3,98:1 (texte) — sous AA dans les QUATRE
-     runs, l'heure à un fantôme quasi invisible. `--color-ios-ink-2` seul
-     n'est appliqué QU'UNE fois ici (pas de second `× 0.7` sur l'heure comme
-     avant : une opacité composée deux fois assombrissait l'heure PLUS que le
-     texte qu'elle précède). */
-  /* L'HEURE PRÉCÈDE TOUJOURS LE TEXTE, sur les DEUX peaux
-     (`BubbleSystemNoticeView.swift:107-113`/`BubbleJoinNoticeView.swift`,
-     `FocalSystemNoticeRow.swift`) : « un message système est un JALON du
-     fil, pas une parole » — même sous la capsule des Bulles, iOS grave
-     l'heure AU-DESSUS d'elle, jamais dedans. */
-  const time = (
-    <time
-      className="text-[9.5px] font-semibold"
-      style={{ color: 'var(--color-ios-ink-2)', opacity: META_TEXT_OPACITY }}
-      aria-hidden
-    >
-      {timeString}
-    </time>
-  );
+  const time = <SystemNoticeTime timeString={timeString} />;
 
   if (surface === 'row') {
     return (
@@ -125,18 +96,6 @@ function SystemNoticeContent({
   /** L'invite « dis-leur salut » est un bouton à part : la phrase ne la répète pas (#16338). */
   readonly invitesApart?: boolean;
 }) {
-  if (row.kind === 'call') {
-    return (
-      <>
-        {row.callType === 'video' ? (
-          <GlyphSvg glyph={THREAD_STATES_GLYPHS.videoCamera} size={13} />
-        ) : (
-          <Glyph name="phone" size={13} />
-        )}
-        <span>{row.text}</span>
-      </>
-    );
-  }
   if (row.kind === 'join') {
     return (
       <>
@@ -190,67 +149,4 @@ function SystemNoticeContent({
     );
   }
   return <span>{systemRowText(row, language)}</span>;
-}
-
-/**
- * RAPPELER / REJOINDRE (`BubbleCallNoticeView.swift`) — iOS le pose au DOUBLE
- * tap de la carte pour qu'un doigt qui défile ne sonne chez personne ; au web,
- * un bouton NOMMÉ sous la capsule porte le même geste sans rien de caché.
- */
-const CallTranscriptPanel = lazy(() => import('./call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
-
-function CallNoticeAction({ target, languages }: { readonly target: CallNoticeTarget; readonly languages: readonly string[] }) {
-  const language = currentInterfaceLanguage();
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const transcriptId = target.callId === null ? undefined : `call-transcript-${target.callId}`;
-  const onClick = () => {
-    const request = { conversationId: target.conversationId, media: target.media, ...callIdentityOf(target.conversationId) };
-    if (target.live) callActions.join({ ...request, callId: target.callId });
-    else callActions.start(request);
-  };
-  return (
-    <>
-      <span className="flex flex-wrap items-center justify-center gap-1">
-        <button
-          type="button"
-          data-call-notice-action={target.live ? 'join' : 'call-back'}
-          onClick={onClick}
-          className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold"
-          style={{ color: 'var(--accent)' }}
-        >
-          {translate(language, target.live ? 'call.bubble.join' : 'call.bubble.callBack')}
-        </button>
-        {target.transcript ? (
-          <button
-            type="button"
-            data-call-transcript-toggle=""
-            aria-expanded={transcriptOpen}
-            aria-controls={transcriptOpen ? transcriptId : undefined}
-            onClick={() => setTranscriptOpen((open) => !open)}
-            className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold"
-            style={{ color: 'var(--accent)' }}
-          >
-            {translate(language, transcriptOpen ? 'callTranscript.hide' : 'callTranscript.show')}
-          </button>
-        ) : null}
-      </span>
-      {target.recording !== null ? (
-        <div data-call-recording={target.recording.attachment.id} className="flex w-full max-w-[320px] justify-center">
-          <Attachments
-            attachments={[target.recording.attachment]}
-            languages={languages}
-            fallbackLanguage={target.recording.language}
-            mediaFrame="box"
-          />
-        </div>
-      ) : null}
-      {transcriptOpen && target.callId !== null ? (
-        <div id={transcriptId} className="flex w-full justify-center">
-          <Suspense fallback={null}>
-            <CallTranscriptPanel callId={target.callId} language={language} />
-          </Suspense>
-        </div>
-      ) : null}
-    </>
-  );
 }

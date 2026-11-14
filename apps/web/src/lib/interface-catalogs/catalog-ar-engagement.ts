@@ -13,6 +13,13 @@ const arEngagement = {
   'engagement.pill.join': '{streak}، {points}',
   'engagement.post.points.one': 'أطلق هذا المنشور {count} شرارة لك',
   'engagement.post.points.other': 'أطلق هذا المنشور {count} شرارات لك',
+  'engagement.card.streak.one': 'يوم متتالٍ هنا',
+  'engagement.card.streak.other': 'أيام متتالية هنا',
+  'engagement.card.today': 'اليوم',
+  'engagement.card.total': 'هنا منذ البداية',
+  'engagement.card.open': 'افتح اللعبة',
+  'engagement.card.hide': 'إخفاء اللهب',
+  'engagement.card.title': 'في هذه المحادثة',
 } as const;
 
 export default arEngagement;

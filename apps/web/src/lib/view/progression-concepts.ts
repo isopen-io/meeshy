@@ -217,16 +217,17 @@ function level(view: EngagementWithGame): Body {
 
 /**
  * LES ÉTINCELLES (#11178) : TA LUMIÈRE, ce que tu possèdes — jamais le cycle, jamais le total à vie, jamais le prix
- * d'une Meesh (il est à l'Héritage, où la fiche mène). En petit : l'Ombre d'abord, qui ferme la frappe, sinon le
+ * d'une Meesh (il est à l'Héritage, où la fiche mène). Le nombre seul : l'intitulé de la carte dit déjà « Étincelles »,
+ * et le mot répété était celui que l'écran ne pouvait plus porter sous son plafond d'épure (#17769). En petit : l'Ombre d'abord, qui ferme la frappe, sinon le
  * « depuis toujours ».
  */
 function points(view: EngagementWithGame): Body {
   const game = view.game;
-  if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value), valueId: 'sparks_pocket' };
+  if (game === undefined) return { ...EMPTY, value: formatCount(view.level.value), valueId: 'sparks_pocket' };
   const sparks = sparksReading(game.level);
   const cumul = sparksCumulLine(sparks);
   return {
-    value: pointsLabel(sparks.pocket),
+    value: formatCount(sparks.pocket),
     valueId: 'sparks_pocket',
     line:
       sparks.debt > 0
@@ -526,7 +527,7 @@ const counted = (concept: Counted, done: number, total: number): Body => {
   return {
     value: fraction(done, total),
     valueId: `${concept}_earned`,
-    line: chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, total - done)) }), ref, `${concept}_left`),
+    line: null,
     gauge: ratio(done, total),
     primary: ref,
     facts: [fact(`${concept}_earned`, gameText('game.fact.earned'), fraction(done, total), ref)],
@@ -569,7 +570,7 @@ function atlas(view: EngagementWithGame): Body {
   return {
     value: stamps,
     valueId: 'atlas_stamps',
-    line: chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, served.total - served.stamped)) }), about('atlas_stamps'), 'atlas_left'),
+    line: null,
     gauge: ratio(served.stamped, served.total),
     primary: about('atlas_stamps'),
     facts: [

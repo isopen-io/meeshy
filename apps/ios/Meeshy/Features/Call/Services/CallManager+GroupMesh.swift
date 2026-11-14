@@ -48,8 +48,8 @@ extension CallManager: GroupCallHostProviding {
     var isLocalVideoEnabled: Bool { isVideoEnabled }
     var primaryRemoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
 
-    func primaryAudioLevel() async -> Double? {
-        await webRTCService.getStats()?.inboundAudioLevel
+    func primaryAudioLevels() async -> GroupCallAudioLevels? {
+        await webRTCService.getStats().map { GroupCallAudioLevels(primary: $0.inboundAudioLevel, local: $0.outboundAudioLevel) }
     }
 
     // MARK: - Ce que CallManager cède au maillage

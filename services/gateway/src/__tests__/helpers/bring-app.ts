@@ -89,8 +89,12 @@ export async function buildBringApp(
   const prisma = {
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
-      findMany: jest.fn(async (args: { where: { id: { in: string[] } } }) =>
-        args.where.id.in.map((id) => users.get(id)).filter((u) => u !== undefined)),
+      // Honore `blockedUserIds: { has }` (qui m'a bloqué ?) : sans lui, tous les candidats se lisaient bloqués.
+      findMany: jest.fn(async (args: { where: { id: { in: string[] }; blockedUserIds?: { has: string } } }) =>
+        args.where.id.in
+          .map((id) => users.get(id))
+          .filter((u) => u !== undefined)
+          .filter((u) => args.where.blockedUserIds === undefined || ((u.blockedUserIds as string[]) ?? []).includes(args.where.blockedUserIds.has))),
       findFirst: jest.fn(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
         args.where.OR.map((branch) => users.get(branch.id)).find((u, i) =>
           u !== undefined && ((u.blockedUserIds as string[]) ?? []).includes(args.where.OR[i].blockedUserIds.has),
@@ -119,6 +123,13 @@ export async function buildBringApp(
         const next = { ...(reglages.get(key) ?? args.create), ...(reglages.has(key) ? args.update : {}) };
         reglages.set(key, next);
         return next;
+      }),
+      // Honore l'égalité de colonne et un `OR` de telles égalités, les seules formes que la passerelle écrit ici.
+      findMany: jest.fn(async (args: { where: Record<string, unknown> & { OR?: ReadonlyArray<Record<string, unknown>> } }) => {
+        const { OR, ...egalites } = args.where;
+        const egal = (row: Record<string, unknown>, conditions: Record<string, unknown>) =>
+          Object.entries(conditions).every(([colonne, valeur]) => row[colonne] === valeur);
+        return [...reglages.values()].filter((row) => egal(row, egalites) && (OR === undefined || OR.some((branche) => egal(row, branche))));
       }),
       updateMany: jest.fn(async (args: { where: { ownerId: string; otherId: string }; data: Record<string, unknown> }) => {
         const key = cleDe(args.where.ownerId, args.where.otherId);

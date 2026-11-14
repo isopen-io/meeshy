@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { GameLeagueBlock, GameVisibility } from '@meeshy/shared/types/game';
 import { PHOTO_INVITATIONS, type PhotoInvitations } from '@meeshy/shared/types/game-photo-settings';
 import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
@@ -7,6 +9,8 @@ import type { GameDevicePrefs } from '@/lib/game/preferences';
 import { gameText } from '@/lib/view/game-copy';
 
 import { atmosphereName } from './game-atmosphere-choice';
+import { gameHint } from './game-hint';
+import { InfoHintButton, InfoHintText, InfoNoted, useInfoHint, type InfoHint } from './info-hint';
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
@@ -65,7 +69,29 @@ export type GameSettingsProps = {
   readonly onHidden: (on: boolean) => void;
   readonly onVisibility: (patch: Partial<GameVisibility>) => void;
   readonly onLeaveLeague: () => void;
+  /** Le (i) de chaque titre de bloc (#17587, épure #17584) — absent : le titre seul. */
+  readonly notes?: Partial<Record<GameSettingsBlock, InfoHint>> | undefined;
 };
+
+export type GameSettingsBlock = 'celebrations' | 'hidden' | 'atmosphere' | 'invitations' | 'notifications' | 'visibility' | 'league';
+
+function BlockTitle({ block, note, children }: { readonly block: GameSettingsBlock; readonly note: InfoHint | undefined; readonly children: ReactNode }) {
+  return (
+    <InfoNoted note={note}>
+      <h2 id={`game-settings-${block}-title`} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {children}
+      </h2>
+    </InfoNoted>
+  );
+}
+
+const defaultNotes = (hidden: boolean): Readonly<Partial<Record<GameSettingsBlock, InfoHint>>> => ({
+  hidden: gameHint('game.settings.hidden.note_q', 'game.settings.hidden.note', hidden ? gameText('game.settings.hidden.reopen_note') : undefined),
+  atmosphere: gameHint('game.settings.atmosphere.note_q', 'game.settings.atmosphere.note'),
+  invitations: gameHint('game.settings.invitations.note_q', 'game.settings.invitations.note'),
+  notifications: gameHint('game.settings.notifications.note_q', 'game.settings.notifications.body'),
+  visibility: gameHint('game.settings.visibility.note_q', 'game.settings.visibility.note'),
+});
 
 const FIELDS = ['rank', 'treasury', 'showcase', 'atlas'] as const;
 
@@ -76,22 +102,29 @@ const DEFAULT_LEVEL: Readonly<Record<(typeof FIELDS)[number], GameVisibility['sh
   atlas: ATLAS_DEFAULT_VISIBILITY,
 };
 
-function SwitchRow({ marker, label, checked, disabled, onChange }: { readonly marker: string; readonly label: string; readonly checked: boolean; readonly disabled?: boolean; readonly onChange: (on: boolean) => void }) {
+function SwitchRow({ marker, label, checked, disabled, note, onChange }: { readonly marker: string; readonly label: string; readonly checked: boolean; readonly disabled?: boolean; readonly note?: InfoHint | undefined; readonly onChange: (on: boolean) => void }) {
+  const state = useInfoHint();
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-chip px-1 has-[:disabled]:opacity-60" style={{ minHeight: 44 }}>
-      <span className="min-w-0 break-words text-body font-semibold" style={{ color: GAME_INK }}>
-        {label}
-      </span>
-      <input
-        type="checkbox"
-        role="switch"
-        {...{ [marker]: '' }}
-        checked={checked}
-        disabled={disabled === true}
-        onChange={(event) => onChange(event.currentTarget.checked)}
-        className="size-6 shrink-0 accent-[var(--color-ios-brand)]"
-      />
-    </label>
+    <>
+      <div className="flex items-center gap-1">
+        <label className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-chip px-1 has-[:disabled]:opacity-60" style={{ minHeight: 44 }}>
+          <span className="min-w-0 break-words text-body font-semibold" style={{ color: GAME_INK }}>
+            {label}
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            {...{ [marker]: '' }}
+            checked={checked}
+            disabled={disabled === true}
+            onChange={(event) => onChange(event.currentTarget.checked)}
+            className="size-6 shrink-0 accent-[var(--color-ios-brand)]"
+          />
+        </label>
+        {note === undefined ? null : <InfoHintButton hint={note} state={state} />}
+      </div>
+      {note === undefined ? null : <InfoHintText hint={note} state={state} />}
+    </>
   );
 }
 
@@ -102,13 +135,16 @@ function GamePhotoSwitch({ online, game, photo, onChange }: { readonly online: b
       <SwitchRow
         marker="data-game-setting-photo"
         label={gameText('game.settings.notifications.photo_switch')}
+        note={gameHint('game.settings.notifications.photo_note_q', 'game.settings.notifications.photo_body')}
         checked={!cutByGame && (photo ?? true)}
         disabled={!online || photo === undefined || cutByGame}
         onChange={onChange}
       />
-      <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText(cutByGame ? 'game.settings.notifications.photo_cut' : 'game.settings.notifications.photo_body')}
-      </p>
+      {cutByGame ? (
+        <p className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.settings.notifications.photo_cut')}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -116,12 +152,13 @@ function GamePhotoSwitch({ online, game, photo, onChange }: { readonly online: b
 export function GameSettings(props: GameSettingsProps) {
   const { prefs, visibility, league, online, savingVisibility, leavingLeague, errors } = props;
   const inLeague = league?.access === 'open';
+  const notes = { ...defaultNotes(prefs.hidden), ...props.notes };
   return (
     <>
       <GameCard id="game-settings-celebrations" labelledBy="game-settings-celebrations-title">
-        <h2 id="game-settings-celebrations-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <BlockTitle block="celebrations" note={notes.celebrations}>
           {gameText('game.settings.celebrations.title')}
-        </h2>
+        </BlockTitle>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.celebrations.body')}
         </p>
@@ -129,18 +166,13 @@ export function GameSettings(props: GameSettingsProps) {
       </GameCard>
 
       <GameCard id="game-settings-hidden" labelledBy="game-settings-hidden-title">
-        <h2 id="game-settings-hidden-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.settings.hidden.title')}
-        </h2>
+        <BlockTitle block="hidden" note={notes.hidden}>
+          {gameText('game.settings.hidden.section')}
+        </BlockTitle>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.hidden.body')}
         </p>
-        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.switch')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
-        {prefs.hidden ? (
-          <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.settings.hidden.reopen_note')}
-          </p>
-        ) : null}
+        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.row')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
         {online ? null : (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.offline.action')}
@@ -150,9 +182,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.atmosphere === undefined ? null : (
         <GameCard id="game-settings-atmosphere" labelledBy="game-settings-atmosphere-title">
-          <h2 id="game-settings-atmosphere-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="atmosphere" note={notes.atmosphere}>
             {gameText('game.settings.atmosphere.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.atmosphere.body')}
           </p>
@@ -178,9 +210,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.invitations === undefined ? null : (
         <GameCard id="game-settings-invitations" labelledBy="game-settings-invitations-title">
-          <h2 id="game-settings-invitations-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="invitations" note={notes.invitations}>
             {gameText('game.settings.invitations.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.invitations.body')}
           </p>
@@ -212,12 +244,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.onGameNotifications === undefined ? null : (
         <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
-          <h2 id="game-settings-notifications-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="notifications" note={notes.notifications}>
             {gameText('game.settings.notifications.title')}
-          </h2>
-          <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.settings.notifications.body')}
-          </p>
+          </BlockTitle>
           <SwitchRow
             marker="data-game-setting-notifications"
             label={gameText('game.settings.notifications.switch')}
@@ -238,9 +267,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {visibility === undefined ? null : (
         <GameCard id="game-settings-visibility" labelledBy="game-settings-visibility-title">
-          <h2 id="game-settings-visibility-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="visibility" note={notes.visibility}>
             {gameText('game.settings.visibility.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.visibility.body')}
           </p>
@@ -264,9 +293,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {league === undefined ? null : (
         <GameCard id="game-settings-league" labelledBy="game-settings-league-title">
-          <h2 id="game-settings-league-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="league" note={notes.league}>
             {gameText('game.settings.league.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {inLeague
               ? league.pseudonym === null

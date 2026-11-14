@@ -21,7 +21,6 @@ import {
   LinksHeader,
   LinksLoadError,
   LinksOfflineNotice,
-  SECTION_TITLE_CLASS,
   SHARE_LINK_ROW_HEIGHT,
   ShareLinkRow,
   ShareLinksEmpty,
@@ -108,14 +107,9 @@ export default function ShareLinksScreen() {
         <div className="mx-auto grid max-w-xl gap-5 pb-24 pt-2">
           {online ? null : <LinksOfflineNotice language={language} />}
           {summary === null ? null : <ShareLinksStats language={language} summary={summary} />}
-          <section aria-labelledby="share-links-title" className="grid gap-2">
-            <h2 id="share-links-title" className={SECTION_TITLE_CLASS} style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(language, 'root.menu.links')}
-            </h2>
-            <ul data-share-links className="grid gap-2">
-              {body}
-            </ul>
-          </section>
+          <ul data-share-links aria-label={translate(language, 'root.menu.links')} className="grid gap-2">
+            {body}
+          </ul>
         </div>
       </div>
       <LinksAnnouncement text={sharing.announcer.text} />

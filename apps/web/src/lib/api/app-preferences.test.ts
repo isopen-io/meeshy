@@ -55,6 +55,7 @@ const expected: AppPreferences = {
   pushEnabled: false,
   soundEnabled: true,
   contactActivityEnabled: false,
+  bringEnabled: true,
   gameEnabled: false,
   gamePhotoEnabled: false,
   showOnlineStatus: false,
@@ -297,5 +298,40 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls).toHaveLength(0);
     expect(written.ok && written.data.soundEnabled).toBe(false);
     expect(read.ok && read.data.soundEnabled).toBe(false);
+  });
+});
+
+/**
+ * « RECEVOIR DES BRING » (#16588) — l'interrupteur GLOBAL de la réception du
+ * Bring (`notification.bringEnabled`, lu par `BringService.recipientPreferences`).
+ * Défaut serveur : activé. Un serveur qui ne le sert pas veut dire « reçu ».
+ */
+describe('« Recevoir des Bring » — le port le lit, le rend et l’écrit (#16588)', () => {
+  test('servi coupé, il est rendu coupé', () => {
+    expect(decodeAppPreferences(wire({ notification: { bringEnabled: false } }))?.bringEnabled).toBe(false);
+  });
+
+  test('absent (serveur plus ancien), il vaut « reçu »', () => {
+    expect(decodeAppPreferences(wire())?.bringEnabled).toBe(true);
+  });
+
+  test('de mauvais type, la lecture est illisible plutôt que devinée', () => {
+    expect(decodeAppPreferences(wire({ notification: { bringEnabled: 'non' } }))).toBeNull();
+  });
+
+  test('la réponse d’une écriture le rend s’il est servi, ne l’invente pas sinon', () => {
+    const base = { pushEnabled: true, soundEnabled: true, contactActivityEnabled: true };
+    expect(decodeServedPreferences({ notification: { ...base, bringEnabled: false } })).toEqual({ ...base, bringEnabled: false });
+    expect(decodeServedPreferences({ notification: base })).toEqual(base);
+  });
+
+  test('il part sous `notification`, là où la passerelle le lit', () => {
+    expect(preferencesPatchBody({ bringEnabled: false })).toEqual({ notification: { bringEnabled: false } });
+  });
+
+  test('la lecture le demande avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('notification.bringEnabled');
   });
 });

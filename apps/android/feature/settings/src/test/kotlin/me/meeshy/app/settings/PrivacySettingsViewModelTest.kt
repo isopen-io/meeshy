@@ -305,9 +305,9 @@ class PrivacySettingsViewModelTest {
         advanceUntilIdle()
         assertThat(vm.state.value.presentedInfo).isNull()
 
-        vm.showInfo(PrivacyInfoTopic.READ_RECEIPTS)
+        vm.showInfo(PrivacyInfoTopic.ONLINE_STATUS)
         advanceUntilIdle()
-        assertThat(vm.state.value.presentedInfo).isEqualTo(PrivacyInfoTopic.READ_RECEIPTS)
+        assertThat(vm.state.value.presentedInfo).isEqualTo(PrivacyInfoTopic.ONLINE_STATUS)
 
         vm.dismissInfo()
         advanceUntilIdle()

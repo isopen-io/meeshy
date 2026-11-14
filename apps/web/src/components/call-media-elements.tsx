@@ -11,7 +11,7 @@ import { callOutputStore } from '@/lib/calls/call-output';
  * qu'un appel réduit continue de s'entendre.
  */
 
-function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null, held?: MutableRefObject<T | null>) {
+export function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null, held?: MutableRefObject<T | null>) {
   const own = useRef<T | null>(null);
   const ref = held ?? own;
   useEffect(() => {

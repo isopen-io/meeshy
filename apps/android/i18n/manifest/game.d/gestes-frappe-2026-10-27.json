@@ -36,11 +36,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.mint.offline",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.mint.minted_line",
           "status": "adopted"
         },

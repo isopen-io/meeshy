@@ -2,8 +2,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import type { CacheStore } from '../CacheStore';
 import { blockedIdsAroundViewer } from '../ContactDirectoryService';
-import { loadFeedCircles } from './feedFriends';
-import { getReadableCommunityIds } from './communityVisibility';
+import { loadFeedCircles, loadFeedFriendIds } from './feedFriends';
+import { loadFeedDirectContactIds } from './feedContacts';
+import { getCommunityCoMemberIds, getReadableCommunityIds } from './communityVisibility';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 
 /**
@@ -57,4 +58,19 @@ export async function buildFeedVisibilityFilter(
     getReadableCommunityIds(prisma, viewerId),
   ]);
   return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds, circles, readableCommunityIds);
+}
+
+/**
+ * L'audience COMPLÈTE d'un lecteur, composée depuis ses seules lectures :
+ * amis ∪ contacts DM, co-membres, puis `buildFeedVisibilityFilter` (blocage,
+ * cercles, communautés lisibles). Pour les listes qui n'ont pas déjà ces
+ * ensembles en main — recherche globale, favoris (#17182).
+ */
+export async function viewerPostAudience(prisma: PrismaClient, viewerId: string, cache?: CacheStore) {
+  const [friendIds, directContactIds, communityCoMemberIds] = await Promise.all([
+    loadFeedFriendIds({ prisma, cache, userId: viewerId }),
+    loadFeedDirectContactIds({ prisma, cache, userId: viewerId }),
+    getCommunityCoMemberIds(prisma, viewerId, cache),
+  ]);
+  return buildFeedVisibilityFilter(prisma, viewerId, [...new Set([...friendIds, ...directContactIds])], communityCoMemberIds, cache);
 }

@@ -65,6 +65,12 @@ export const togetherUserKey = (userId: string): string => indexKey('user', user
  */
 export const togetherConversationKey = (conversationId: string): string => indexKey('conversation', conversationId);
 
+/**
+ * Le compteur des invitations d'un hôte vers UN invité (#17023) : orienté, et même discrétion —
+ * son nom ne dit ni qui invite ni qui est invité.
+ */
+export const togetherInviteBudgetKey = (hostId: string, guestId: string): string => indexKey('invites', `${hostId}>${guestId}`);
+
 /** Les index où une séance est inscrite : ses deux comptes et sa conversation. */
 const indexKeysOf = (session: TogetherSession): readonly string[] => [
   togetherUserKey(session.hostId),

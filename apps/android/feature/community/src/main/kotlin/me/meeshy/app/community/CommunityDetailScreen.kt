@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.Community
 import me.meeshy.sdk.model.CommunityAccess
+import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityDetailAction
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
@@ -97,7 +98,7 @@ fun CommunityDetailScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                CommunityDetailEffect.Left, CommunityDetailEffect.NotFound -> navigation.onBack()
+                CommunityDetailEffect.Left -> navigation.onBack()
                 CommunityDetailEffect.Joined -> haptics.success()
                 CommunityDetailEffect.ActionFailed -> {
                     haptics.error()
@@ -121,13 +122,9 @@ fun CommunityDetailScreen(
                 onLeave = { confirmLeave = true },
                 onAddChannel = { showAddChannel = true },
             )
-            state.showError -> MeeshyEmptyState(
-                icon = MeeshyIcons.WarningFilled,
-                title = stringResource(R.string.community_common_error),
-                subtitle = stringResource(R.string.community_settings_error_default),
-                actionLabel = stringResource(R.string.community_common_retry),
-                onAction = viewModel::retry,
-            )
+            state.showError -> state.failure?.let { failure ->
+                LoadFailureState(failure = failure, onRetry = viewModel::retry, onBack = navigation.onBack)
+            }
             else -> DetailSkeleton()
         }
         if (community == null) {
@@ -199,7 +196,7 @@ private fun LoadedDetail(
                 MeeshyEmptyState(
                     icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),
-                    subtitle = stringResource(R.string.community_detail_posts_empty_subtitle),
+                    subtitle = "",
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                 )
             }
@@ -454,7 +451,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.channelsSection(
             MeeshyEmptyState(
                 icon = MeeshyIcons.Chat,
                 title = stringResource(R.string.community_detail_channels_empty_title),
-                subtitle = stringResource(R.string.community_detail_channels_empty_subtitle),
+                subtitle = "",
                 actionLabel = if (canAdd) stringResource(R.string.community_detail_channels_empty_action) else null,
                 onAction = if (canAdd) onAddChannel else null,
                 modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -506,4 +503,21 @@ private fun DetailSkeleton() {
             MeeshySkeletonBox(Modifier.fillMaxWidth().height(64.dp), RoundedCornerShape(12.dp))
         }
     }
+}
+
+/** La cause dite, jamais le message du serveur ; « Réessayer » là où réessayer peut aboutir, sinon le retour (iOS `CommunityLoadFailure`). */
+@Composable
+private fun LoadFailureState(failure: CommunityLoadFailure, onRetry: () -> Unit, onBack: () -> Unit) {
+    val (icon, title, body) = when (failure) {
+        CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_load_refused_title, R.string.community_load_refused_body)
+        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, null)
+        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, null)
+    }
+    MeeshyEmptyState(
+        icon = icon,
+        title = stringResource(title),
+        subtitle = body?.let { stringResource(it) }.orEmpty(),
+        actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_load_refused_back),
+        onAction = if (failure.offersRetry) onRetry else onBack,
+    )
 }

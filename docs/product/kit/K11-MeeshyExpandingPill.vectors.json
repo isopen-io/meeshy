@@ -1,0 +1,478 @@
+{
+  "kit": "K11",
+  "recipe": {
+    "topInset": 10,
+    "sideInset": 12,
+    "sectionGap": 12,
+    "bottomInsetBeforeRow": 4,
+    "bottomInsetWithoutRow": 10,
+    "headerButton": 40,
+    "headerButtonGap": 6,
+    "confirmationInset": 16,
+    "confirmationGap": 12,
+    "choiceGap": 8,
+    "choiceHeight": 44,
+    "choiceRadius": 22,
+    "choiceInset": 16,
+    "hostShare": 0.62,
+    "bodyFloor": 160,
+    "edgeFade": 8,
+    "enterScale": 0.94,
+    "webSlide": 8,
+    "fadeMs": 250,
+    "reducedFadeMs": 200,
+    "neutralFillOpacity": 0.12,
+    "neutralPressedFillOpacity": 0.22,
+    "destructivePressedFillOpacity": 0.78,
+    "tapTarget": {
+      "ios": 44,
+      "android": 48,
+      "web": 44
+    }
+  },
+  "presence": [
+    {
+      "host": "shown",
+      "option": null,
+      "presence": "shown"
+    },
+    {
+      "host": "withoutRow",
+      "option": null,
+      "presence": "withoutRow"
+    },
+    {
+      "host": "shown",
+      "option": {
+        "keepsRow": true
+      },
+      "presence": "shown"
+    },
+    {
+      "host": "shown",
+      "option": {
+        "keepsRow": false
+      },
+      "presence": "withoutRow"
+    },
+    {
+      "host": "stowed",
+      "option": {
+        "keepsRow": false
+      },
+      "presence": "stowed"
+    },
+    {
+      "host": "stowed",
+      "option": {
+        "keepsRow": true
+      },
+      "presence": "stowed"
+    },
+    {
+      "host": "stowed",
+      "option": null,
+      "presence": "stowed"
+    }
+  ],
+  "isOpen": [
+    {
+      "option": null,
+      "bodyIsEmpty": false,
+      "open": false
+    },
+    {
+      "option": {
+        "showsHeader": true
+      },
+      "bodyIsEmpty": false,
+      "open": true
+    },
+    {
+      "option": {
+        "showsHeader": true
+      },
+      "bodyIsEmpty": true,
+      "open": true
+    },
+    {
+      "option": {
+        "showsHeader": false
+      },
+      "bodyIsEmpty": false,
+      "open": true
+    },
+    {
+      "option": {
+        "showsHeader": false
+      },
+      "bodyIsEmpty": true,
+      "open": false
+    }
+  ],
+  "escape": [
+    {
+      "isOpen": false,
+      "hasEscape": true,
+      "hasBack": true,
+      "hasClose": true,
+      "target": "none"
+    },
+    {
+      "isOpen": true,
+      "hasEscape": true,
+      "hasBack": true,
+      "hasClose": true,
+      "target": "escape"
+    },
+    {
+      "isOpen": true,
+      "hasEscape": false,
+      "hasBack": true,
+      "hasClose": true,
+      "target": "back"
+    },
+    {
+      "isOpen": true,
+      "hasEscape": false,
+      "hasBack": false,
+      "hasClose": true,
+      "target": "close"
+    },
+    {
+      "isOpen": true,
+      "hasEscape": false,
+      "hasBack": false,
+      "hasClose": false,
+      "target": "none"
+    }
+  ],
+  "header": [
+    {
+      "view": "R7",
+      "hasBack": true,
+      "hasClose": true,
+      "hasTrailing": false,
+      "back": true,
+      "close": true,
+      "reservesStart": false,
+      "reservesEnd": false
+    },
+    {
+      "view": "O9",
+      "hasBack": true,
+      "hasClose": false,
+      "hasTrailing": true,
+      "back": true,
+      "close": false,
+      "reservesStart": false,
+      "reservesEnd": false
+    },
+    {
+      "view": "retour seul",
+      "hasBack": true,
+      "hasClose": false,
+      "hasTrailing": false,
+      "back": true,
+      "close": false,
+      "reservesStart": false,
+      "reservesEnd": true
+    },
+    {
+      "view": "journal",
+      "hasBack": false,
+      "hasClose": true,
+      "hasTrailing": true,
+      "back": false,
+      "close": true,
+      "reservesStart": true,
+      "reservesEnd": false
+    },
+    {
+      "view": "titre seul",
+      "hasBack": false,
+      "hasClose": false,
+      "hasTrailing": false,
+      "back": false,
+      "close": false,
+      "reservesStart": true,
+      "reservesEnd": true
+    }
+  ],
+  "headerInset": [
+    {
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "inset": 46
+    },
+    {
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "inset": 78
+    },
+    {
+      "start": 40,
+      "end": 132,
+      "gap": 6,
+      "inset": 138
+    },
+    {
+      "start": 0,
+      "end": 0,
+      "gap": 6,
+      "inset": 6
+    }
+  ],
+  "headerTitle": [
+    {
+      "view": "R7, le titre tient au centre",
+      "width": 342,
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "natural": 100,
+      "center": 171,
+      "titleWidth": 250
+    },
+    {
+      "view": "O9 grande police, le compteur large : le titre glisse vers le debut et garde toute la place libre",
+      "width": 342,
+      "start": 40,
+      "end": 140,
+      "gap": 6,
+      "natural": 160,
+      "center": 121,
+      "titleWidth": 150
+    },
+    {
+      "view": "O9, titre trop long pour le centre mais pas pour la place libre : il glisse juste assez",
+      "width": 342,
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "natural": 200,
+      "center": 164,
+      "titleWidth": 200
+    },
+    {
+      "view": "O9, le titre tient a marge egale : il reste centre",
+      "width": 342,
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "natural": 160,
+      "center": 171,
+      "titleWidth": 186
+    },
+    {
+      "view": "aucune place",
+      "width": 0,
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "natural": 100,
+      "center": 0,
+      "titleWidth": 0
+    }
+  ],
+  "insets": [
+    {
+      "showsHeader": true,
+      "keepsRow": true,
+      "top": 10,
+      "leading": 12,
+      "bottom": 4,
+      "trailing": 12
+    },
+    {
+      "showsHeader": true,
+      "keepsRow": false,
+      "top": 10,
+      "leading": 12,
+      "bottom": 10,
+      "trailing": 12
+    },
+    {
+      "showsHeader": false,
+      "keepsRow": true,
+      "top": 10,
+      "leading": 12,
+      "bottom": 4,
+      "trailing": 12
+    },
+    {
+      "showsHeader": false,
+      "keepsRow": false,
+      "top": 16,
+      "leading": 16,
+      "bottom": 16,
+      "trailing": 16
+    }
+  ],
+  "ceiling": [
+    {
+      "hostHeight": 800,
+      "showsHeader": true,
+      "keepsRow": true,
+      "override": null,
+      "ceiling": 366
+    },
+    {
+      "hostHeight": 800,
+      "showsHeader": true,
+      "keepsRow": false,
+      "override": null,
+      "ceiling": 424
+    },
+    {
+      "hostHeight": 800,
+      "showsHeader": false,
+      "keepsRow": true,
+      "override": null,
+      "ceiling": 418
+    },
+    {
+      "hostHeight": 800,
+      "showsHeader": false,
+      "keepsRow": false,
+      "override": null,
+      "ceiling": 464
+    },
+    {
+      "hostHeight": 390,
+      "showsHeader": true,
+      "keepsRow": true,
+      "override": null,
+      "ceiling": 160
+    },
+    {
+      "hostHeight": 0,
+      "showsHeader": true,
+      "keepsRow": true,
+      "override": null,
+      "ceiling": 160
+    },
+    {
+      "hostHeight": 800,
+      "showsHeader": true,
+      "keepsRow": true,
+      "override": 300,
+      "ceiling": 300
+    },
+    {
+      "hostHeight": 800,
+      "showsHeader": true,
+      "keepsRow": true,
+      "override": -5,
+      "ceiling": 0
+    }
+  ],
+  "scrolls": [
+    {
+      "contentHeight": 100,
+      "ceiling": 366,
+      "scrolls": false
+    },
+    {
+      "contentHeight": 366,
+      "ceiling": 366,
+      "scrolls": false
+    },
+    {
+      "contentHeight": 366.4,
+      "ceiling": 366,
+      "scrolls": false
+    },
+    {
+      "contentHeight": 367,
+      "ceiling": 366,
+      "scrolls": true
+    },
+    {
+      "contentHeight": 900,
+      "ceiling": 160,
+      "scrolls": true
+    }
+  ],
+  "stacks": [
+    {
+      "widths": [
+        120,
+        150
+      ],
+      "available": 342,
+      "gap": 8,
+      "stacks": false
+    },
+    {
+      "widths": [
+        167,
+        167
+      ],
+      "available": 342,
+      "gap": 8,
+      "stacks": false
+    },
+    {
+      "widths": [
+        200,
+        150
+      ],
+      "available": 342,
+      "gap": 8,
+      "stacks": true
+    },
+    {
+      "widths": [
+        150
+      ],
+      "available": 342,
+      "gap": 8,
+      "stacks": false
+    },
+    {
+      "widths": [],
+      "available": 342,
+      "gap": 8,
+      "stacks": false
+    }
+  ],
+  "order": [
+    {
+      "roles": [
+        "neutral",
+        "destructive"
+      ],
+      "ordered": [
+        "neutral",
+        "destructive"
+      ]
+    },
+    {
+      "roles": [
+        "destructive",
+        "neutral"
+      ],
+      "ordered": [
+        "neutral",
+        "destructive"
+      ]
+    },
+    {
+      "roles": [
+        "neutral",
+        "neutral"
+      ],
+      "ordered": [
+        "neutral",
+        "neutral"
+      ]
+    }
+  ],
+  "contrast": {
+    "destructiveInkMin": 4.5,
+    "secondaryTextMin": 4.5
+  }
+}

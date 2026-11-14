@@ -87,12 +87,23 @@ nonisolated enum ComposerLiveLookRule {
     /// photo (`ComposerPhotoLookRule.colorSpace(declared:)`) : une caméra qui
     /// sert du sRGB et une qui sert du P3 donnent, à l'aperçu, à la vidéo et à
     /// la photo, la même teinte.
-    static func graded(_ image: CIImage, filter: VideoFilterPreset, declared: CGColorSpace? = nil) -> CIImage {
+    ///
+    /// Le réglage (OPUS-2) dose l'ambiance puis pose le pavé chaleur × contraste,
+    /// qui peint aussi sans ambiance.
+    static func graded(_ image: CIImage, filter: VideoFilterPreset, tuning: ComposerLookTuning = .neutral,
+                       declared: CGColorSpace? = nil) -> CIImage {
         let posee = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
                                                             y: -image.extent.minY))
-        guard ComposerPhotoLookRule.grades(filter) else { return posee }
+        let teinte = ComposerPhotoLookRule.grades(filter) && tuning.intensity > 0
+        guard teinte || tuning.adjusts else { return posee }
         let espace = ComposerPhotoLookRule.colorSpace(declared: declared ?? image.colorSpace)
-        return VideoFilterColorimetry.graded(posee, config: filter.config, colorSpace: espace)
+        let dosee = teinte
+            ? ComposerLookTuningGrade.blended(original: posee,
+                                              graded: VideoFilterColorimetry.graded(posee, config: filter.config,
+                                                                                    colorSpace: espace),
+                                              intensity: tuning.intensity)
+            : posee
+        return ComposerLookTuningGrade.adjusted(dosee, tuning: tuning)
     }
 
     /// **Un cadre se montre ENTIER** : la photo et la vidéo le rendent à la

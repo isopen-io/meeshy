@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">Profil bearbeiten</string>
     <string name="a11y_floating_feed_hint">Öffnet den Aktivitäts-Feed</string>
+    <string name="a11y_floating_menu_acts">Akte des Tages: %1$d von %2$d</string>
     <string name="a11y_floating_menu_hint">Öffnet das Navigationsmenü</string>
     <string name="a11y_floating_menu_notifications_value">%1$d ausstehende Benachrichtigungen</string>
     <string name="a11y_menu_item_hint">Diesen Bereich öffnen</string>
@@ -49,7 +50,7 @@
     <string name="connection_syncing">Synchronisierung</string>
     <string name="conversations_logout">Abmelden</string>
     <string name="conversations_retry">Erneut versuchen</string>
-    <string name="feed_empty">Noch keine Beiträge</string>
+    <string name="feed_empty">Noch keine Beiträge deiner Kontakte</string>
     <string name="feed_like">Gefällt mir</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Anmelden</string>
@@ -58,6 +59,7 @@
     <string name="menu_communities">Communitys</string>
     <string name="menu_contacts">Kontakte</string>
     <string name="menu_discover">Entdecken</string>
+    <string name="menu_game">Meine Legende</string>
     <string name="menu_my_links">Meine Links</string>
     <string name="menu_notifications">Mitteilungen</string>
     <string name="menu_settings">Einstellungen</string>
@@ -66,7 +68,6 @@
     <string name="notifications_title">Mitteilungen</string>
     <string name="profile_back">Zurück</string>
     <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Abbrechen</string>
     <string name="profile_display_name_label">Anzeigename</string>
     <string name="profile_edit">Bearbeiten</string>
     <string name="profile_edit_title">Profil bearbeiten</string>
@@ -77,7 +78,7 @@
     <string name="push_action_comment_hint">Kommentieren…</string>
     <string name="root_pending_changes">Ausstehende Änderungen</string>
     <string name="root_sync_on_reconnect">Synchronisierung, sobald wieder online</string>
-    <string name="route_title_affiliate">Partnerprogramm</string>
+    <string name="route_title_affiliate">Empfehlung</string>
     <string name="route_title_bookmarks">Lesezeichen</string>
     <string name="route_title_communities">Communities</string>
     <string name="route_title_community">Community</string>
@@ -96,7 +97,7 @@
     <string name="route_title_notifications">Mitteilungen</string>
     <string name="route_title_post">Beitrag</string>
     <string name="route_title_profile">Profil</string>
-    <string name="route_title_progression">Fortschritt</string>
+    <string name="route_title_progression">Meine Legende</string>
     <string name="route_title_settings">Einstellungen</string>
     <string name="route_title_share_links">Freigabelinks</string>
     <string name="route_title_starred">Markierte Nachrichten</string>

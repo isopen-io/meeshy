@@ -102,12 +102,6 @@ internal fun EmailVerificationSheet(
             onVerify = { viewModel.onEvent(EmailVerificationEvent.Verify) },
             modifier = Modifier.padding(top = MeeshySpacing.md),
         )
-        Text(
-            text = stringResource(R.string.email_verification_no_code),
-            style = MaterialTheme.typography.bodySmall,
-            color = tokens.textMuted,
-            modifier = Modifier.padding(top = MeeshySpacing.md),
-        )
         ResendButton(
             isResending = state.isResending,
             confirmed = state.resendConfirmed,

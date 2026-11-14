@@ -27,6 +27,7 @@ import {
   SHARED_LOCATION_DURATIONS_MINUTES,
   SHARED_LOCATION_PRECISIONS,
   SHARED_LOCATION_RECIPIENTS_MAX,
+  type SharedLocationCircle,
   type SharedLocationErrorCode,
   type SharedLocationPrecision,
 } from './shared-location-constants.js';
@@ -69,9 +70,13 @@ export type SharedLocationStopAck =
   | { readonly success: false; readonly error: string; readonly code: SharedLocationErrorCode };
 
 /**
- * Ce qu'UN destinataire reçoit : la position à SA précision et le rayon de son flou.
- * Ni la position exacte d'un flou, ni la précision réelle de l'appareil, ni les autres
- * destinataires ne voyagent à côté.
+ * Ce qu'UN destinataire reçoit : la position à SA précision, le rayon de son flou et
+ * le cercle d'où vient l'émetteur POUR LUI. Ni la position exacte d'un flou, ni la
+ * précision réelle de l'appareil, ni les autres destinataires ne voyagent à côté.
+ *
+ * `circle` est ADDITIF (#17966) : le serveur le pose toujours, et il est redit quand
+ * le cercle change, même à précision égale. Un client le lit comme optionnel (un
+ * serveur antérieur ne le servait pas) et dessine alors un marqueur neutre.
  */
 export type SharedLocationChangedEventData = {
   readonly userId: string;
@@ -79,6 +84,7 @@ export type SharedLocationChangedEventData = {
   readonly longitude: number;
   readonly precision: SharedLocationPrecision;
   readonly radiusMeters: number;
+  readonly circle?: SharedLocationCircle;
   readonly updatedAt: string;
   readonly expiresAt: string;
 };

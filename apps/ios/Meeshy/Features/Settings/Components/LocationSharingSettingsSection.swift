@@ -150,7 +150,7 @@ struct LocationSharingSettingsSection: View {
 
             Text(String(
                 localized: "location.precision.footnote",
-                defaultValue: "Aux niveaux Quartier et Ville, seule la zone est transmise — pas l'adresse exacte.",
+                defaultValue: "Quartier et Ville : seule la zone est transmise, pas l'adresse exacte.",
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.smallSize))

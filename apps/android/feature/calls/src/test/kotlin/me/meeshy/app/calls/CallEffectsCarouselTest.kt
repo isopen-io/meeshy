@@ -13,7 +13,9 @@ import androidx.compose.runtime.setValue
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.VideoFilterConfig
+import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -36,6 +38,12 @@ class CallEffectsCarouselTest {
 
     private fun action(title: String, label: String): () -> Boolean =
         carousel(title).fetchSemanticsNode().config[SemanticsActions.CustomActions].first { it.label == label }.action
+
+    /** TalkBack : un pas parcourt, l'activer (double toucher) choisit l'élément parcouru (#18185). */
+    private fun stepAndActivate(title: String, label: String) {
+        rule.runOnIdle { action(title, label)() }
+        rule.runOnIdle { carousel(title).fetchSemanticsNode().config[SemanticsActions.OnClick].action!!() }
+    }
 
     @Test
     fun `l'effet centre se photographie et se filme depuis le carrousel, TalkBack trouve les deux prises`() {
@@ -73,7 +81,7 @@ class CallEffectsCarouselTest {
 
         val seen = mutableListOf(mode.face)
         repeat(CallFaceEffect.entries.size) {
-            rule.runOnIdle { action("Face", "Next effect")() }
+            stepAndActivate("Face", "Next effect")
             rule.runOnIdle { seen += mode.face }
         }
 
@@ -115,5 +123,48 @@ class CallEffectsCarouselTest {
 
         assertThat(actions("Collage preview")).isEmpty()
         rule.onNodeWithText("Double tap: photo · Long press: video", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `la couleur propose les huit ambiances d'iOS, Naturel en tete, et TalkBack les parcourt toutes`() {
+        var mode by mutableStateOf(opening().showing(CallEffectsCategory.Color))
+        rule.setContent {
+            MeeshyTheme {
+                EffectsCarousel(mode = mode, reduceMotion = true, shots = null, hint = null, onChange = { mode = it })
+            }
+        }
+
+        val seen = mutableListOf(mode.color)
+        repeat(CallEffectsModeRule.colors.size) {
+            stepAndActivate("Colour", "Next effect")
+            rule.runOnIdle { seen += mode.color }
+        }
+
+        assertThat(seen.distinct()).containsExactlyElementsIn(CallEffectsModeRule.colors).inOrder()
+        assertThat(seen.distinct().map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
+    }
+
+    @Test
+    fun `un pas du lecteur d'ecran parcourt sans appliquer, l'activer applique et rend le menu de base (#18185)`() {
+        var mode by mutableStateOf(opening())
+        rule.setContent {
+            MeeshyTheme {
+                EffectsCarousel(mode = mode, reduceMotion = true, shots = null, hint = null, onChange = { mode = it })
+            }
+        }
+
+        rule.runOnIdle { action("Face", "Next effect")() }
+        rule.runOnIdle {
+            assertThat(mode.face).isEqualTo(CallFaceEffect.None)
+            assertThat(mode.bar).isEqualTo(CallEffectsBarMode.Looks)
+        }
+        carousel("Face").assert(SemanticsMatcher("announces the browsed look then its rank") { it.config.getOrNull(SemanticsProperties.StateDescription)?.matches(Regex("Skin smoothing, \\d+ of \\d+")) == true })
+
+        rule.runOnIdle { carousel("Face").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!() }
+        rule.runOnIdle {
+            assertThat(mode.face).isEqualTo(CallFaceEffect.Smoothing)
+            assertThat(mode.bar).isEqualTo(CallEffectsBarMode.Base)
+        }
     }
 }

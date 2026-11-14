@@ -89,16 +89,30 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         }
     }
 
+    /// Cache thread-safe pour les formateurs par fuseau horaire afin d'éviter
+    /// les allocations répétées d'objets `DateFormatter`.
+    private static let formatterCache = Locked(uncheckedState: [String: DateFormatter]())
+
     /// Formate une date en `YYYY-MM-DD` (calendrier grégorien, POSIX) — le format attendu par le
     /// gateway pour `VoiceConsentRequest.birthDate`. Le jour se lit dans le fuseau du SÉLECTEUR :
     /// lu en UTC, un minuit choisi à l'est de Greenwich partait la veille (#17309).
     static func formatBirthDate(_ date: Date, calendar: Calendar = .current) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        let tzIdentifier = calendar.timeZone.identifier
+        return formatterCache.mutateUnchecked { cache in
+            let formatter: DateFormatter
+            if let cached = cache[tzIdentifier] {
+                formatter = cached
+            } else {
+                let created = DateFormatter()
+                created.calendar = Calendar(identifier: .gregorian)
+                created.locale = Locale(identifier: "en_US_POSIX")
+                created.timeZone = calendar.timeZone
+                created.dateFormat = "yyyy-MM-dd"
+                cache[tzIdentifier] = created
+                formatter = created
+            }
+            return formatter.string(from: date)
+        }
     }
 
     func uploadSamples(_ audioDataList: [Data]) async {

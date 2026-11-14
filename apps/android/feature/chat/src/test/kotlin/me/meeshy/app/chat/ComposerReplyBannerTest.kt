@@ -27,6 +27,14 @@ class ComposerReplyBannerTest {
     )
 
     @Test
+    fun `a quoted notice previews its text in the reader language, not its french fallback`() {
+        val banner = ComposerReplyBanner.of(bubble(text = "Appel manqué").copy(isSystem = true, quotedNoticeText = "Missed call"))
+
+        assertThat(banner.preview).isEqualTo("Missed call")
+        assertThat(banner.kind).isEqualTo(ReplyBannerKind.Text)
+    }
+
+    @Test
     fun `a quoted text names its author and carries the text`() {
         val banner = ComposerReplyBanner.of(bubble(text = "On se voit demain ?"))
 

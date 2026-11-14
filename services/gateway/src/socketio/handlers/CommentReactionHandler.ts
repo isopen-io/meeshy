@@ -39,6 +39,13 @@ const COMMENT_REACTION_RATE_LIMIT = {
   keyPrefix: 'socket:comment:reaction',
 } as const;
 
+/** Resynchroniser un commentaire est une lecture : elle ne consomme pas le seau des réactions (#18100). */
+const COMMENT_SYNC_RATE_LIMIT = {
+  maxRequests: 600,
+  windowMs: 60_000,
+  keyPrefix: 'socket:comment:sync',
+} as const;
+
 const reactionRateLimiter = new SocketRateLimiter();
 
 export interface CommentReactionHandlerDependencies {
@@ -372,7 +379,7 @@ export class CommentReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
-      const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_SYNC_RATE_LIMIT);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;

@@ -59,6 +59,7 @@ describe('l écran Licences', () => {
     const host = await mount(<SettingsLicencesScreen language="fr" commit={null} engine={libsignalEngineAt('0.105.4')} />);
     expect(host.querySelector('[data-licences-statement]')?.textContent).toContain('AGPL-3.0 uniquement');
     const text = host.querySelector('[data-licences-agpl] pre')?.textContent ?? '';
+    expect((host.textContent ?? '').toLocaleLowerCase('fr').split('texte de la licence agpl-3.0').length - 1).toBe(1);
     expect(text.startsWith('                    GNU AFFERO GENERAL PUBLIC LICENSE')).toBe(true);
     expect(text).toContain('13. Remote Network Interaction');
     expect(host.querySelector('[data-licences-libsignal]')?.getAttribute('href')).toBe('https://github.com/signalapp/libsignal/tree/v0.105.4/acknowledgments');

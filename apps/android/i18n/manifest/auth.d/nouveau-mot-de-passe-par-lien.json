@@ -90,20 +90,8 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "auth.forgotPassword.error.codeRequired",
-          "androidName": "newpw_err_code_required",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "auth.forgotPassword.error.codeInvalid",
           "androidName": "newpw_err_code_invalid",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "auth.forgotPassword.error.weak",
-          "androidName": "newpw_err_weak",
           "status": "adopted"
         },
         {

@@ -87,14 +87,12 @@ struct CallBubbleView: View {
                 hangupButton.offset(y: sideButtonOffset)
             }
 
-            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+            shareStopSlot(size: size)
+
+            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)
                 .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                .overlay(alignment: .topTrailing) {
-                    TransientCallSignalGlyph(strength: signalStrength)
-                        .padding(MeeshySpacing.xsPlus)
-                        .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
-                        .offset(x: 16, y: -16)
-                }
+                .overlay(alignment: .topTrailing) { signalBadge }
+                .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
                 .overlay(alignment: .top) {
                     tierControlBar
                         .opacity(controlOpacity)
@@ -108,7 +106,7 @@ struct CallBubbleView: View {
             GeometryReader { proxy in
                 Color.clear.preference(
                     key: CallReturnPointFrameKey.self,
-                    value: proxy.frame(in: .global).insetBy(dx: -touchReach, dy: -touchReach)
+                    value: proxy.frame(in: .global).insetBy(dx: -(touchReach + shareStopReachX), dy: -touchReach)
                 )
             }
         }
@@ -149,23 +147,95 @@ struct CallBubbleView: View {
             closeMenu()
         }
         .accessibilityAdjustableAction { direction in
-            let newRawValue: Int
-            switch direction {
-            case .increment: newRawValue = callManager.bubbleSizeTier.rawValue + 1
-            case .decrement: newRawValue = callManager.bubbleSizeTier.rawValue - 1
-            @unknown default: return
-            }
-            guard let newTier = CallBubbleSizeTier(rawValue: newRawValue) else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
-                callManager.bubbleSizeTier = newTier
-            }
-            HapticFeedback.light()
+            adjustTier(direction)
         }
     }
 
+    private func adjustTier(_ direction: AccessibilityAdjustmentDirection) {
+        let newRawValue: Int
+        switch direction {
+        case .increment: newRawValue = callManager.bubbleSizeTier.rawValue + 1
+        case .decrement: newRawValue = callManager.bubbleSizeTier.rawValue - 1
+        @unknown default: return
+        }
+        guard let newTier = CallBubbleSizeTier(rawValue: newRawValue) else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
+            callManager.bubbleSizeTier = newTier
+        }
+        HapticFeedback.light()
+    }
+
+    private var signalBadge: some View {
+        TransientCallSignalGlyph(strength: signalStrength)
+            .padding(MeeshySpacing.xsPlus)
+            .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
+            .offset(x: 16, y: -16)
+    }
+
+    /// P18.5 — l'étiquette de verre « nom · durée » : en bas à gauche du cadre aux paliers
+    /// rectangle (resserrée à sa largeur), sous le cercle au palier cercle (trop petit pour la
+    /// porter), où elle s'efface quand le mini-menu y pose Raccrocher. Elle passe d'une place
+    /// à l'autre en mouvement et ne prend aucun toucher.
+    private func nameplate(frameWidth: CGFloat) -> some View {
+        CallReducedCaption(callManager: callManager, style: .glass)
+            .minimumScaleFactor(0.75)
+            .fixedSize(horizontal: isCircleRegion, vertical: true)
+            .frame(width: isCircleRegion ? nil : max(frameWidth - 2 * MeeshySpacing.sm, 0), alignment: .leading)
+            .padding(.bottom, isCircleRegion ? 0 : MeeshySpacing.sm)
+            .offset(y: isCircleRegion ? nameplateBelowOffset : 0)
+            .opacity(isCircleRegion && isMenuRevealed ? 0 : 1)
+            .animation(reduceMotion ? Animation.easeInOut(duration: 0.15) : Animation.spring(response: 0.3, dampingFraction: 0.85), value: isCircleRegion)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private let nameplateBelowOffset: CGFloat = 32
+
     private var touchReach: CGFloat {
-        guard isCircleRegion && isMenuRevealed else { return 16 }
+        guard isCircleRegion && isMenuRevealed else { return max(16, shareStopReach) }
         return menuButtonGap + menuButtonDiameter + MeeshySpacing.sm
+    }
+
+    // MARK: - « Arrêter » au-dessus d'un plein écran (#17763)
+
+    private let shareStopHeight: CGFloat = 44
+
+    /// Le cadre touchable de la fenêtre passe-plat s'étend jusqu'à la capsule.
+    private var shareStopReach: CGFloat {
+        guard CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) else { return 0 }
+        return menuButtonGap + shareStopHeight + MeeshySpacing.sm
+    }
+
+    /// La capsule déborde la bulle du côté de l'écran : le cadre touchable s'y étend aussi.
+    private var shareStopReachX: CGFloat {
+        shareStopReach > 0 ? 100 : 0
+    }
+
+    @ViewBuilder
+    private func shareStopSlot(size: CGSize) -> some View {
+        Group {
+            if CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) {
+                shareStopCapsule
+                    .frame(width: size.width, alignment: callManager.bubbleEdge == .trailing ? .trailing : .leading)
+                    .offset(y: size.height / 2 + menuButtonGap + shareStopHeight / 2)
+                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
+    }
+
+    private var shareStopCapsule: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .accessibilityHidden(true)
+            CallShareStopButton { callManager.screenShare.stopSharing() }
+        }
+        .padding(.leading, MeeshySpacing.sm)
+        .meeshyGlass(in: Capsule(), tint: MeeshyColors.error)
+        .fixedSize()
+        .environment(\.colorScheme, .dark)
     }
 
     private var tierControlBar: some View {

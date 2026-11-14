@@ -21,7 +21,7 @@ data class CallTranscriptRefresh(val state: CallTranscriptState, val cache: Call
  * Cache first, then the server (#13677) — the Android form of iOS `CallTranscriptLoader`, which serves the encrypted
  * local copy and falls back to the replay. Here the copy is drawn at once and the replay always revalidates it:
  *
- *  - a served transcript replaces the copy; an empty one, a refusal (403) or an unknown call (404) removes it — the
+ *  - a served transcript replaces the copy (unless the reading stopped before the end: shown, copy kept); an empty one, a refusal (403) or an unknown call (404) removes it — the
  *    server is the truth of who may read it, and a copy never outlives that right;
  *  - a transient failure (offline, server error) keeps the copy and keeps showing it; with no copy, the retry shows;
  *  - a conversation sealed end to end has no server transcript: nothing is shown and no copy is kept.
@@ -37,7 +37,7 @@ object CallTranscriptRevalidation {
             if (lines.isEmpty()) {
                 CallTranscriptRefresh(CallTranscriptState.Absent, CallTranscriptCacheAction.Drop)
             } else {
-                CallTranscriptRefresh(CallTranscriptState.Ready(lines), CallTranscriptCacheAction.Store(remote.page))
+                CallTranscriptRefresh(CallTranscriptState.Ready(lines), storing(remote.page))
             }
         }
         is CallTranscriptRemote.Failed -> when (val state = CallTranscriptState.forFailure(remote.httpStatus)) {
@@ -45,6 +45,10 @@ object CallTranscriptRevalidation {
             else -> CallTranscriptRefresh(cached as? CallTranscriptState.Ready ?: state, CallTranscriptCacheAction.Keep)
         }
     }
+
+    /** A call the reading could not finish (`hasMore` still announced) is shown, never stored as if it were whole. */
+    private fun storing(page: CallTranscriptPage): CallTranscriptCacheAction =
+        if (page.hasMore) CallTranscriptCacheAction.Keep else CallTranscriptCacheAction.Store(page)
 
     val sealedEndToEnd: CallTranscriptRefresh =
         CallTranscriptRefresh(CallTranscriptState.Absent, CallTranscriptCacheAction.Drop)

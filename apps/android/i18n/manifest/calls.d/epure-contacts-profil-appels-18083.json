@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_journal_search_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_transcript_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_transcript_note_question",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

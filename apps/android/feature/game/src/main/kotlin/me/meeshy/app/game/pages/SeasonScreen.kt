@@ -85,7 +85,7 @@ private fun SeasonContent(game: GameBlock, gestures: GameGesturesUiState, viewMo
             SeasonSealCard(season, game.treasury.held, gestures, onBuy = viewModel::buySeal)
         }
         upcoming != null -> SeasonUpcoming(upcoming)
-        else -> GameCard(title = stringResource(R.string.game2_season_title)) { GameNote(stringResource(R.string.game2_season_none)) }
+        else -> GameCard { GameNote(stringResource(R.string.game2_season_none)) }
     }
 }
 
@@ -103,7 +103,7 @@ private fun starsText(count: Int): String {
 
 @Composable
 private fun SeasonUpcoming(upcoming: GameUpcomingSeasonBlock) {
-    GameCard(title = stringResource(R.string.game2_season_title), tint = MeeshyPalette.Indigo500) {
+    GameCard(tint = MeeshyPalette.Indigo500) {
         Text(
             stringResource(R.string.game2_season_upcoming, count(upcoming.number), dayLabel(upcoming.startDay, currentLocale())),
             style = MaterialTheme.typography.bodyLarge,
@@ -113,7 +113,7 @@ private fun SeasonUpcoming(upcoming: GameUpcomingSeasonBlock) {
         themeLine(upcoming.themeKey)?.let {
             Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MeeshyPalette.Indigo500)
         }
-        GameNote(stringResource(R.string.game2_season_how, count(GameSeason.STARS_PER_STEP)))
+        GameNote(stringResource(R.string.game2_season_how))
     }
 }
 
@@ -139,7 +139,7 @@ private fun SeasonHeader(season: GameSeasonBlock) {
         } else {
             GameNote(stringResource(R.string.game2_season_to_next, starsText(season.starsToNext)))
         }
-        GameNote(stringResource(R.string.game2_season_how, count(GameSeason.STARS_PER_STEP)))
+        GameNote(stringResource(R.string.game2_season_how))
     }
 }
 

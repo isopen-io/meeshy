@@ -40,7 +40,7 @@ const fr = {
   'onboarding.email.failed': 'Le lien n’est pas parti. Réessaie.',
 
   'onboarding.age.title': 'Ta date de naissance',
-  'onboarding.age.body': 'Pour te proposer les bons espaces. Tu peux passer.',
+  'onboarding.age.body': 'Pour te proposer les bons espaces.',
   'onboarding.age.skip': 'Passer',
   'onboarding.age.check': 'Vérifie ta date de naissance.',
   'onboarding.age.failed': 'Ta date n’a pas été enregistrée. Réessaie.',
@@ -76,7 +76,7 @@ const fr = {
   'onboarding.story.verify': 'Pour publier ta story, confirme d’abord ton adresse e-mail.',
 
   'onboarding.friends.title': 'Trouve ta bande',
-  'onboarding.friends.body': 'Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez au moins\u00A0+{points} tous les deux.',
+  'onboarding.friends.body': 'Ajoute 3 personnes qui te ressemblent.',
   'onboarding.friends.add': 'Ajouter',
   'onboarding.friends.addNamed': 'Ajouter {name}',
   'onboarding.friends.added': 'Envoyée',
@@ -100,7 +100,7 @@ const fr = {
   'onboarding.recap.streak.other': 'Flamme : {days} jours',
   'onboarding.recap.badges': 'Médailles : {count}',
   'onboarding.recap.friends': 'Demandes en route : {count}',
-  'onboarding.recap.tomorrow': 'Demain, ta Flamme peut brûler depuis {next} jours.',
+  'onboarding.recap.tomorrow': 'Demain, ta Flamme brûlera depuis {next} jours.',
   'onboarding.recap.explore': 'Continuer à explorer',
   'onboarding.recap.game': 'Découvrir le jeu avec Mee et Meo',
   'onboarding.recap.done': 'C’est bon pour aujourd’hui',

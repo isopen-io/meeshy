@@ -1,7 +1,9 @@
 package me.meeshy.app.onboarding
 
 import android.content.Context
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -48,8 +50,9 @@ class OnboardingProfileStepCardTest {
         show(profileState())
 
         compose.onNodeWithText(context.getString(R.string.onboarding_profile_title)).assertExists()
-        compose.onNodeWithText(context.getString(R.string.onboarding_profile_benefit_visibility)).assertExists()
-        compose.onNodeWithText(context.getString(R.string.onboarding_profile_benefit_contacts)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.onboarding_profile_body)).assertExists()
+        compose.onAllNodesWithText("More visibility").assertCountEquals(0)
+        compose.onAllNodesWithText("More contacts").assertCountEquals(0)
         compose.onNodeWithText("@ada").assertExists()
     }
 

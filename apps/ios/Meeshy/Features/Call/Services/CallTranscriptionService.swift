@@ -48,22 +48,20 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private enum Constants {
-        static let persistedSegmentCeiling = CallTranscriptJournal.ceiling
-    }
-
     @Published private(set) var segments: [CallTranscriptionSegment] = []
     @Published private(set) var isTranscribing = false
     @Published private(set) var permission: TranscriptionPermission = .notDetermined
     @Published private(set) var lastError: TranscriptionError?
 
-    /// PERF-005: while the live-captions panel is hidden, non-final results
-    /// are skipped (no per-frame UI churn); finals are always processed and
-    /// emitted regardless, since they also feed the other participant's view.
+    /// Le panneau de sous-titres de l'utilisateur LOCAL est ouvert. Il commande
+    /// ce que l'utilisateur LIT et ce qu'il ANNONCE écouter, jamais ce que le
+    /// journal garde : toute phrase reçue ou dite pendant l'appel y entre,
+    /// panneau fermé comme ouvert (#17342) ; la porte de confidentialité
+    /// (#13720) reste du côté de la CAPTURE.
     @Published var isShowingOverlay: Bool = false
 
-    /// #8579 — l'historique COMPLET de l'appel, sans troncature (plafond
-    /// mémoire `CallTranscriptJournal.ceiling`), trié par heure de capture.
+    /// #8579 — l'historique COMPLET de l'appel, sans troncature ni plafond
+    /// (#17342), trié par heure de capture.
     var displayedSegments: [CallTranscriptionSegment] {
         segments
     }
@@ -82,6 +80,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// au fil de l'eau) partagent ce wireId pour que le pair les remplace en
     /// place — le final le clôt (et libère l'id pour l'énoncé suivant).
     private var currentUtteranceWireId: String?
+    /// L'heure de la PREMIÈRE révision de l'énoncé en cours : sa place au journal,
+    /// la même que celle que lui donne le pair (qui garde la plus ancienne date
+    /// de ses révisions) — « début d'énoncé », jamais l'heure de sa dernière
+    /// révision.
+    private var currentUtteranceStartedAt: Date?
     /// Nom d'affichage local embarqué dans les entrées P2P du data channel
     /// (pas de serveur pour l'estampiller sur ce chemin) — fourni par
     /// `CallManager.toggleTranscription` au démarrage.
@@ -93,10 +96,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// par `wireId`.
     var sendPeerEntry: ((DataChannelTranscriptEntry) -> Void)?
     private var allSegments: [CallTranscriptionSegment] = []
-    /// Full-call accumulator for local persistence at call end — append-only,
-    /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
-    /// the live UI and must stay cheap to re-render), bounded only by
-    /// `Constants.persistedSegmentCeiling`.
+    /// Full-call accumulator for local persistence at call end — rangé à l'heure
+    /// de DÉBUT de chaque phrase (A1.6, jamais à sa finalisation), and never
+    /// truncated: the transcript kept after the call holds every sentence (#17342).
     private var persistedSegments: [CallTranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
@@ -308,12 +310,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         request = nil
         recognizer = nil
         currentUtteranceWireId = nil
+        currentUtteranceStartedAt = nil
 
-        // Le JOURNAL est volontairement CONSERVÉ : fermer le panneau en cours
-        // d'appel désabonne émission (moteur arrêté ici) et réception (gardes
-        // isShowingOverlay côté CallManager), mais rouvrir le panneau doit
-        // réafficher tout ce qui a été transcrit — la purge n'a qu'un seul
-        // site, `resetForCallEnd` (fin d'appel définitive, après persistance).
+        // Le JOURNAL est volontairement CONSERVÉ : arrêter la capture en cours
+        // d'appel n'arrête ni la réception (le journal garde tout l'appel,
+        // #17342) ni ce qu'il a déjà — rouvrir le panneau réaffiche tout ce qui
+        // a été dit ; la purge n'a qu'un seul site, `resetForCallEnd` (fin
+        // d'appel définitive, après persistance).
         isTranscribing = false
         lastError = nil
         callId = nil
@@ -709,7 +712,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// it directly, matching the stale-callback-after-teardown guard test.
     /// `capturedAt` is caller-supplied (arrival time), never re-stamped here
     /// — see `handleRecognizerCallback`'s comment on why application time is
-    /// the wrong clock for this value.
+    /// the wrong clock for this value. Only the FIRST revision of an utterance
+    /// dates it: the later revisions and the final keep that start
+    /// (`currentUtteranceStartedAt`).
     ///
     /// `callId` is the call that OWNED the recognition task at the moment it
     /// was started (captured in `startRecognitionTask`), not the currently
@@ -733,7 +738,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // panneau local est fermé (TranscriptionCapturePolicy) — les gâter
         // sur `isShowingOverlay` privait ce pair du flux vivant et ne lui
         // laissait que les finals, l'énoncé apparaissant d'un bloc.
-        // Seul l'APPEND au journal local reste lié au panneau.
+        // L'APPEND au journal local n'est lié à rien d'autre que la capture
+        // elle-même : le journal garde tout l'appel (#17342).
 
         // Le wireId (clé de journal inter-transports) est minté au PREMIER
         // résultat de l'énoncé et partagé par toutes ses révisions
@@ -742,15 +748,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // fusionner la traduction serveur, sans jamais dupliquer de ligne.
         let wireId = currentUtteranceWireId ?? UUID().uuidString.lowercased()
         currentUtteranceWireId = wireId
+        let utteranceStart = currentUtteranceStartedAt ?? capturedAt
+        currentUtteranceStartedAt = utteranceStart
         let segment = CallTranscriptionSegment(
             id: UUID(), wireId: wireId, text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
             isFinal: isFinal, confidence: confidence, language: language,
-            capturedAt: capturedAt
+            capturedAt: utteranceStart
         )
-        if isFinal || isShowingOverlay {
-            appendSegment(segment)
-        }
+        appendSegment(segment)
 
         guard isFinal else {
             // Révision partielle : P2P uniquement (data channel) — jamais le
@@ -758,14 +764,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             // pipeline de traduction ne consomme que les finals.
             emitPartialEntry(
                 wireId: wireId, text: text, speakerId: speakerId,
-                confidence: confidence, language: language, capturedAt: capturedAt
+                confidence: confidence, language: language, capturedAt: utteranceStart
             )
             return
         }
         currentUtteranceWireId = nil
+        currentUtteranceStartedAt = nil
         emitFinalSegment(
             wireId: wireId, text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
-            confidence: confidence, language: language, capturedAt: capturedAt
+            confidence: confidence, language: language, capturedAt: utteranceStart
         )
         rotateRecognitionRequest(language: language)
     }
@@ -868,31 +875,23 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         allSegments = CallTranscriptJournal.inserting(merged, into: others)
         segments = allSegments
         guard merged.isFinal else { return }
-        if let persistedIndex = persistedSegments.firstIndex(where: { $0.wireId == wireId }) {
-            persistedSegments[persistedIndex] = merged
-        } else {
-            // L'énoncé est entré dans le journal comme révision partielle
-            // (jamais persistée) et vient d'être finalisé par fusion — c'est
-            // ICI qu'il gagne sa place dans l'accumulateur de persistance.
-            persistedSegments.append(merged)
-            if persistedSegments.count > Constants.persistedSegmentCeiling {
-                persistedSegments = Array(persistedSegments.suffix(Constants.persistedSegmentCeiling))
-            }
-        }
+        // L'énoncé est entré dans le journal comme révision partielle (jamais
+        // persistée) puis finalisé par fusion : c'est ICI qu'il gagne sa place,
+        // à l'heure où il a COMMENCÉ ; une ligne déjà persistée est reprise à
+        // la même règle, sa fusion ayant pu avancer son début.
+        let remaining = persistedSegments.filter { $0.wireId != wireId }
+        persistedSegments = CallTranscriptJournal.inserting(merged, into: remaining)
     }
 
     // MARK: - Private — Result Handling
 
     private func appendSegment(_ segment: CallTranscriptionSegment) {
         let others = allSegments.filter { !($0.speakerId == segment.speakerId && !$0.isFinal) }
-        allSegments = CallTranscriptJournal.bounded(CallTranscriptJournal.inserting(segment, into: others))
+        allSegments = CallTranscriptJournal.inserting(segment, into: others)
         segments = allSegments
 
         if segment.isFinal {
-            persistedSegments.append(segment)
-            if persistedSegments.count > Constants.persistedSegmentCeiling {
-                persistedSegments = Array(persistedSegments.suffix(Constants.persistedSegmentCeiling))
-            }
+            persistedSegments = CallTranscriptJournal.inserting(segment, into: persistedSegments)
         }
     }
 

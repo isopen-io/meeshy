@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { allFiles } from './lib/files.mjs';
-import { GLASS_INVENTORY, GLASS_SITE, glassViolations, type GlassSource } from './lib/glass-site.mjs';
+import { GLASS_INVENTORY, GLASS_KIT_SITE, GLASS_SITE, glassViolations, type GlassSource } from './lib/glass-site.mjs';
 
 /**
  * #6124 — LE VERRE A UN SITE, ET UN OUTIL LE DIT.
@@ -106,6 +106,14 @@ describe('le dépôt — tout le verre de web-v2 passe par son site (#6124)', ()
   test('le site existe et déclare la matière', () => {
     const site = sources.find((s) => s.path === GLASS_SITE);
     expect(site?.text ?? '').toContain('backdrop-filter');
+  });
+
+  test('le verre du kit est la seconde moitié du site, chargé avec ses composants', () => {
+    const kit = sources.find((s) => s.path === GLASS_KIT_SITE);
+    expect(kit?.text ?? '').toContain('backdrop-filter');
+    expect(glassViolations([source(GLASS_KIT_SITE, kit?.text ?? '')])).toEqual([]);
+    const loader = sources.find((s) => s.path === 'src/components/kit/meeshy-glass-tone.tsx');
+    expect(loader?.text ?? '').toContain("@/styles/glass-kit.css");
   });
 
   test('aucune surface ne réécrit le verre hors du site ni de l’inventaire nommé', () => {

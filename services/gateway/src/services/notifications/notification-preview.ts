@@ -9,7 +9,7 @@
 import type { MessageLiveness } from '../messages/message-liveness';
 import type { MessageProtectionRow } from '../messages/push-envelope-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
-import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
+import { isAfterReadEphemeral, inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -58,6 +58,21 @@ export type MessageBannerSource = MessagePrismSource & {
    */
   readonly ephemeralDuration: number | null;
   readonly effectFlags: number | null;
+  /**
+   * #18030 — l'échéance telle que la BASE la porte À CET INSTANT, et non telle
+   * que l'appelant la croyait à l'envoi.
+   *
+   * Elle sort d'ici pour la même raison que l'horloge ci-dessus : la colonne
+   * entrait DÉJÀ dans la requête (`MESSAGE_LIVENESS_SELECT`, cycle 127) et n'en
+   * ressortait pas — seul le VERDICT de vivacité en sortait. Zéro requête de
+   * plus.
+   *
+   * `null` dit DEUX choses que seul `liveness` sépare : « le message n'a pas
+   * d'échéance » et « je n'ai pas pu lire ». C'est pourquoi l'arbitrage est
+   * chez `servedMessageDeadline`, qui ne RETIRE jamais — un `null` ne peut que
+   * laisser gagner la valeur d'en face.
+   */
+  readonly expiresAt: Date | null;
   readonly liveness: MessageLiveness;
   /**
    * #17195 — ce que la BASE dit de la protection du message, pour le SECOND
@@ -113,6 +128,9 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   messageType: null,
   ephemeralDuration: null,
   effectFlags: null,
+  // #18030 — une panne de lecture ne prononce ni « pas d'échéance » ni une
+  // échéance : elle laisse gagner celle de l'appelant.
+  expiresAt: null,
   // Fail-CLOSED : une relecture en échec ne prononce pas « ordinaire ».
   protection: null,
   liveness: 'unknown',
@@ -562,4 +580,60 @@ export function mediaSummaryString(lang: string, mediaType?: 'image' | 'video' |
       : mediaType === 'audio' ? 'attachment.audio'
         : null;
   return key ? notificationString(lang, key) : '';
+}
+
+/**
+ * L'échéance qu'une bannière SERT, entre ce que la base dit et ce que
+ * l'appelant croyait savoir (#18030).
+ *
+ * ─── L'ARITHMÉTIQUE N'EST PAS À NOUS ────────────────────────────────────────
+ *
+ * « la plus proche des échéances connues, rien si aucune » a DÉJÀ son site
+ * unique — `inheritedEphemeralExpiresAt` (`@meeshy/shared`), que cinq sites du
+ * gateway consomment. Ce helper-ci ne porte donc que la QUESTION (laquelle de
+ * deux observations d'une même colonne fait foi) et son repli en `undefined`,
+ * que `createNotification` attend. La première rédaction de ce lot en recopiait
+ * le corps — un sixième exemplaire, dans le commit même dont le doc-comment
+ * voisin dit que deux exemplaires d'une règle est la configuration qui a
+ * produit les cycles 121 à 128.
+ *
+ * ─── POURQUOI UN ARBITRAGE, ET PAS « LA BASE GAGNE » ────────────────────────
+ *
+ * Côté BASE : trois écrivains RAPPROCHENT l'échéance après l'insertion —
+ * `ephemeralCountdown` (décompte démarré à la réception),
+ * `consumeAfterReadMessages` (« RAPPROCHER seulement », son propre commentaire)
+ * et `captureNoticeRetention` (rétention raccourcie d'un message capturé). La
+ * copie que l'appelant porte depuis l'envoi est alors périmée dans le seul sens
+ * qui compte : plus TARDIVE que la réalité, donc une ligne `Notification` — qui
+ * porte le corps servi et l'enveloppe — survivrait au message qu'elle annonce.
+ *
+ * Côté APPELANT, il y a exactement DEUX cas, et aucun des deux n'est « la base
+ * n'a pas encore écrit » :
+ *
+ *   1. **la relecture a ÉCHOUÉ** (`UNKNOWN_BANNER_SOURCE`) — une panne de
+ *      lecture n'autorise ni à prolonger une échéance ni à en retirer une ;
+ *   2. **la colonne a été EFFACÉE sur place** par
+ *      `purgeViewOnceContent.reevaluateLegacyViewOnceBurn`, qui pose
+ *      `expiresAt: null` parce que l'échéance a DÉMÉNAGÉ vers `viewOnceBurnAt`.
+ *      Garder la valeur de l'appelant y est un CHOIX — la bannière s'efface à
+ *      l'ancienne échéance au lieu de suivre le déménagement — et c'est le
+ *      choix conservateur : `null` ne retire rien, et la vivacité de la vue
+ *      unique est gardée ailleurs (`messageLivenessOf`, `viewOnceBurnedAt`).
+ *
+ * **Ce que ce doc-comment NE dit PAS, parce que c'est faux :** « l'appelant
+ * tient une échéance que la base n'a pas encore écrite, cas nominal d'un
+ * éphémère dont le décompte démarre à la réception ». C'était la première
+ * justification écrite de ce lot, et elle est impossible — `ephemeralSendFields`
+ * écrit `expiresAt` À L'INSERTION sur TOUTES ses branches éphémères (le plafond
+ * de rétention à défaut d'une destruction calculée), et `claimed` n'est jamais
+ * calculé : c'est toujours une copie de la colonne. Le lot a failli remplacer
+ * une affirmation non instruite par une autre, dans le commit qui condamne
+ * l'exemption non instruite. **Un raisonnement est une affirmation, au même
+ * titre qu'un compte ou un tri — y compris celui qui justifie un correctif.**
+ */
+export function servedMessageDeadline(
+  live: Date | null | undefined,
+  claimed: Date | null | undefined
+): Date | undefined {
+  return inheritedEphemeralExpiresAt([live, claimed]) ?? undefined;
 }

@@ -35,6 +35,12 @@ public object CallModeCarouselRule {
         return items[(index + by).coerceIn(0, items.lastIndex)]
     }
 
+    /** Le rang (de 1) d'un élément et le nombre d'éléments, que la voix annonce (« 3 sur 12 ») ; rien hors de la liste. */
+    public fun <T> ordinal(item: T, items: List<T>): CallModeCarouselOrdinal? {
+        val index = items.indexOf(item)
+        return if (index < 0) null else CallModeCarouselOrdinal(rank = index + 1, count = items.size)
+    }
+
     /** Le CHOIX (l'effet envoyé à l'autre) ne part qu'au repos. */
     public fun commits(isInteracting: Boolean): Boolean = !isInteracting
 
@@ -49,6 +55,18 @@ public object CallModeCarouselRule {
         val step = itemWidth + spacing
         if (count <= 0 || step <= 0f || !offset.isFinite()) return null
         return (offset / step).roundToInt().coerceIn(0, count - 1)
+    }
+}
+
+/**
+ * #17814 · C1.12 — la barre et le carrousel du Montage montent depuis le bas et y redescendent (transformation et
+ * opacité), sur une couche qui fond. Effets garde le seul fondu de sa couche : la loi 17 l'excepte (« Effets emprunte
+ * au composer », loi 9). « Réduire les animations » ne laisse que le fondu court. Miroir de iOS `CallModeChromeMotion`.
+ */
+public object CallModeChromeMotion {
+    public fun risesFromBottom(mode: CallScreenMode, reduceMotion: Boolean): Boolean = when (mode) {
+        CallScreenMode.Montage -> !reduceMotion
+        CallScreenMode.Effects -> false
     }
 }
 

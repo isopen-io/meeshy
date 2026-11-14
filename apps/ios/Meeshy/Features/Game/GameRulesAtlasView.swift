@@ -57,10 +57,12 @@ struct GameRulesAtlasView: View {
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                Text(GameAtlasCopy.line(family))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let line = GameAtlasCopy.line(family) {
+                    Text(line)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

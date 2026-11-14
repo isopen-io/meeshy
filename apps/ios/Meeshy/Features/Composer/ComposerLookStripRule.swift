@@ -171,13 +171,18 @@ nonisolated enum ComposerLookStripRule {
         return [.frame(.none)] + uniques.map { ComposerLookStripItem.frame($0) }
     }()
 
-    /// **Filtre, effet et cadre se COMBINENT** : choisir l'un garde les autres.
+    /// **Filtre, effet et cadre se COMBINENT** : choisir l'un garde les autres. Une
+    /// AUTRE ambiance repart pleine ; le pavé chaleur × contraste reste.
     static func look(of item: ComposerLookStripItem, combinedWith current: ComposerPhotoLook) -> ComposerPhotoLook {
         switch item {
         case .untouched: return ComposerPhotoLook()
-        case .filter(let preset): return ComposerPhotoLook(filter: preset, frame: current.frame, effect: current.effect)
-        case .effect(let effet): return ComposerPhotoLook(filter: current.filter, frame: current.frame, effect: effet)
-        case .frame(let cadre): return ComposerPhotoLook(filter: current.filter, frame: cadre, effect: current.effect)
+        case .filter(let preset):
+            return ComposerPhotoLook(filter: preset, frame: current.frame, effect: current.effect,
+                                     tuning: preset == current.filter ? current.tuning : current.tuning.with(intensity: 1))
+        case .effect(let effet):
+            return ComposerPhotoLook(filter: current.filter, frame: current.frame, effect: effet, tuning: current.tuning)
+        case .frame(let cadre):
+            return ComposerPhotoLook(filter: current.filter, frame: cadre, effect: current.effect, tuning: current.tuning)
         }
     }
 

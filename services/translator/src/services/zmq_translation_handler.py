@@ -39,7 +39,7 @@ except ImportError:
     pass
 
 # Import de la configuration des limites
-from config.message_limits import can_translate_message
+from config.message_limits import MessageLimits, can_translate_message
 from services.task_privacy import shown, text_may_be_logged, under_declared_regime
 
 # Import des constantes de disponibilité des pipelines
@@ -333,9 +333,11 @@ class TranslationHandler:
             # Vérifier la longueur du message pour la traduction
             message_text = request_data.get('text', '')
             if not can_translate_message(message_text):
-                logger.warning(f"⚠️ [TRANSLATOR] Message too long to be translated: {len(message_text)} caractères (max: {MessageLimits.MAX_TRANSLATION_LENGTH})")
-                # Ne pas traiter ce message, retourner un résultat vide ou le texte original
-                # On pourrait aussi envoyer une notification à la gateway ici si nécessaire
+                logger.warning(
+                    f"⚠️ [TRANSLATOR] Message too long to be translated: "
+                    f"messageId={request_data.get('messageId')}, length={len(message_text)} "
+                    f"(max: {MessageLimits.MAX_TRANSLATION_LENGTH})"
+                )
                 no_translation_message = {
                     'type': 'translation_skipped',
                     'messageId': request_data.get('messageId'),
@@ -344,11 +346,14 @@ class TranslationHandler:
                     'max_length': MessageLimits.MAX_TRANSLATION_LENGTH,
                     'conversationId': request_data.get('conversationId', 'unknown')
                 }
+                skipped_task_id = request_data.get('taskId')
+                if skipped_task_id:
+                    no_translation_message['taskId'] = skipped_task_id
                 if self.pub_socket:
                     await self.pub_socket.send(json.dumps(no_translation_message).encode('utf-8'))
-                    logger.info(f"[TRANSLATOR] translation message ignored for message {request_data.get('messageId')}")
+                    logger.info(f"[TRANSLATOR] translation skipped for message {request_data.get('messageId')}")
                 return
-            
+
             # Dédupliquer les re-pushes gateway du même taskId pendant que
             # la tâche initiale tourne encore (cf. _inflight_tasks).
             incoming_task_id = request_data.get('taskId')

@@ -164,7 +164,7 @@ describe('la première page : un nom en petit, une valeur en grand, une seule li
 
   test('la carte des Étincelles : ta lumière en grand, « depuis toujours » en petit, jamais le prix d’une Meesh', () => {
     const card = hub(porteur()).querySelector('[data-concept-card="points"]');
-    expect(plain(card?.querySelector('[data-concept-value]')?.textContent)).toBe('108 233 étincelles');
+    expect(plain(card?.querySelector('[data-concept-value]')?.textContent)).toBe('108 233');
     expect(plain(card?.querySelector('[data-concept-line]')?.textContent)).toBe('377 752 reçues depuis toujours');
     expect(occurrences(card as Element, '10 423')).toBe(0);
   });

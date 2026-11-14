@@ -8,7 +8,7 @@
  * Effets est GLISSÉ en continu (le rendu Preact du fil principal que le
  * traitement ne doit plus payer) :
  *
- *  1. un effet de couleur ET de visage (« Chaud » + « Éruption ») ;
+ *  1. un effet de couleur ET de visage (« Doré » + « Éruption ») ;
  *  2. le flou d'arrière-plan par segmentation (la caméra simulée n'offre pas
  *     `backgroundBlur`) — et il FLOUTE : la netteté de l'image envoyée chute ;
  *  3. le zoom numérique (#8441) : l'image ENVOYÉE est recadrée.
@@ -264,12 +264,15 @@ try {
   await page.click('[data-call-control="effects"]');
   check(await appears(page, '[data-call-mode="effects"]'), 'le mode Effets s’ouvre');
   await page.click('[data-call-effects-category="color"]');
-  await page.click('[data-carousel-item="warm"]');
+  await page.click('[data-carousel-item="golden"]');
   await page.click('[data-call-effects-category="face"]');
   await page.click('[data-carousel-item="volcano"]');
-  await measure(page, 'effet (Chaud + Éruption)');
+  /* Un choix rend le menu de base (#18186) : la mesure fait glisser le carrousel, rouvert par sa puce. */
+  await page.click('[data-call-effects-category="face"]');
+  await measure(page, 'effet (Doré + Éruption)');
 
-  await page.click('[data-carousel-item="none"]');
+  /* « Aucun » est au bout de la piste, que la mesure vient de faire glisser : activé comme au lecteur d'écran, sans défilement qui le dispute au centrage. */
+  await page.$eval('[data-carousel-item="none"]', (button) => button.click());
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
   await until(page, () => (document.querySelector('[data-call-mode-preview] video')?.videoWidth ?? 0) > 0);
@@ -306,15 +309,16 @@ try {
     await elapse(page, 3000);
     await capture(page, 'perf-flou');
     console.log(`  netteté avec le masque : ${((await sharpness(page)) ?? 0).toFixed(2)} (sans flou : ${(sharp ?? 0).toFixed(2)})`);
+    await page.click('[data-call-effects-category="face"]');
     await measure(page, 'flou d’arrière-plan (segmentation)');
     await page.click('[data-call-effects-settings-toggle]');
     await page.click('[data-call-effects-blur]');
     await page.click('[data-call-effects-settings-toggle]');
   }
 
-  await page.click('[data-call-effects-validate]');
+  await page.click('[data-call-mode-quit]');
   await until(page, () => document.querySelector('[data-call-mode]') === null);
-  const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
+  const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
   const zoomOffered = (await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local';
   check(zoomOffered, 'le cran du zoom numérique est offert sur une caméra sans zoom (#8441)');
   if (zoomOffered) {

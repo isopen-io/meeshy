@@ -83,10 +83,13 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         var isLocalVideoEnabled = false
         var primaryRemoteVideoTrack: Any?
         var primaryAudioLevelResult: Double?
+        var localAudioLevelResult: Double?
         private(set) var vacateCallCount = 0
         private(set) var titles: [String] = []
 
-        func primaryAudioLevel() async -> Double? { primaryAudioLevelResult }
+        func primaryAudioLevels() async -> GroupCallAudioLevels? {
+            GroupCallAudioLevels(primary: primaryAudioLevelResult, local: localAudioLevelResult)
+        }
         func groupPrimaryDidVacate() { vacateCallCount += 1 }
         func groupCallTitleDidChange(_ title: String) { titles.append(title) }
         private(set) var groupVideoCeilings: [CallVideoBudget?] = []
@@ -423,6 +426,28 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         await sut.sampleAudioLevels()
 
         XCTAssertEqual(sut.speakingUserIds, ["b", "c"])
+    }
+
+    /// P11.5 — je suis nommé parmi ceux qui parlent quand MA voix passe le seuil :
+    /// ma tuile s'illumine comme celle des autres, d'un seul relevé de statistiques.
+    func test_sampleAudioLevels_namesMeWhenMyOwnVoiceIsLoud() async {
+        let (sut, host, _, _, _) = makeSUT()
+        host.primaryAudioLevelResult = 0.0
+        host.localAudioLevelResult = 0.3
+
+        await sut.sampleAudioLevels()
+
+        XCTAssertEqual(sut.speakingUserIds, ["me"])
+    }
+
+    func test_sampleAudioLevels_neverNamesMeWhileMyMicIsMuted() async {
+        let (sut, host, _, _, _) = makeSUT()
+        host.isLocalMicMuted = true
+        host.localAudioLevelResult = 0.3
+
+        await sut.sampleAudioLevels()
+
+        XCTAssertTrue(sut.speakingUserIds.isEmpty)
     }
 
     // MARK: - Noms de ceux qu'on rejoint

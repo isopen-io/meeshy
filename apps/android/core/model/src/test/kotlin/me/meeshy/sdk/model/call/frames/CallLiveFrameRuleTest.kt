@@ -31,6 +31,14 @@ class CallLiveFrameRuleTest {
     }
 
     @Test
+    fun `la proposition d'un cadre ne se montre qu'en duo video, ni en groupe ni en audio (#17820 C2_10)`() {
+        assertThat(CallLiveFrameRule.mayShowProposal(participants = 2, showsVideo = true, isGroupStage = false)).isTrue()
+        assertThat(CallLiveFrameRule.mayShowProposal(participants = 2, showsVideo = false, isGroupStage = false)).isFalse()
+        assertThat(CallLiveFrameRule.mayShowProposal(participants = 2, showsVideo = true, isGroupStage = true)).isFalse()
+        assertThat(CallLiveFrameRule.mayShowProposal(participants = 3, showsVideo = true, isGroupStage = false)).isFalse()
+    }
+
+    @Test
     fun `le cadre affiche est un cadre en direct du catalogue, en duo`() {
         val id = CallLiveFrameRule.frames().first().id
         assertThat(CallLiveFrameRule.displayed(id, participants = 2)?.id).isEqualTo(id)

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -7,6 +9,7 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import type { CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
+import { CallButton } from './call-glass-button';
 import { CallJournalPanel } from './call-journal-panel';
 
 /**
@@ -45,7 +48,11 @@ describe('CallJournalPanel', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[] } = {}) => {
+  let mounts = 0;
+
+  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[]; readonly startedAt?: number | null; readonly callId?: string } = {}) => {
+    mounts += 1;
+    const callId = options.callId ?? `call-journal-${mounts}`;
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -54,7 +61,9 @@ describe('CallJournalPanel', () => {
       act(() =>
         root.render(
           <CallJournalPanel
+          Button={CallButton}
             id="call-journal-panel"
+            callId={callId}
             closeGlyph={null}
             language="fr"
             onClose={() => void events.push('close')}
@@ -62,6 +71,7 @@ describe('CallJournalPanel', () => {
             captions={next}
             notes={options.notes ?? []}
             colorOf={(who) => (who.speakerName === '' ? '#fff' : '#f0a')}
+            startedAt={options.startedAt === undefined ? -64_000 : options.startedAt}
             listening={options.listening ?? true}
             onListen={() => void events.push('listen')}
           />,
@@ -99,15 +109,78 @@ describe('CallJournalPanel', () => {
     expect(first?.textContent).toContain('Nadia');
     expect(first?.querySelector('time')?.getAttribute('dateTime')).toBe(new Date(1_000).toISOString());
     expect(first?.querySelector('[data-call-journal-text]')?.textContent).toBe('Ligne 0');
-    expect(first?.querySelector('[data-call-journal-original]')?.textContent).toBe('Original · Line 0');
+    expect(first?.querySelector('[data-call-journal-original]')).toBeNull();
     expect(entries.at(-1)?.querySelector('[data-call-journal-text]')?.textContent).toBe('Ligne 299');
     view.done();
   });
 
-  test('ma parole se lit telle que dite, sans original redoublé ; chaque ligne ne se peint que là où je regarde', () => {
+  test('#17517 — l’heure dans l’appel est À DROITE de la ligne méta, le pseudo et l’étiquette de langue à gauche ; plus d’heure murale', () => {
+    const view = mount([caption({ at: 1_000 })]);
+    const entry = view.find('[data-call-journal-entry]') as HTMLElement;
+    const who = entry.querySelector('[data-call-journal-who]') as HTMLElement;
+    const clock = entry.querySelector('time') as HTMLElement;
+    expect(who.textContent).toContain('Nadia');
+    expect(who.textContent).toContain('EN → FR');
+    expect(who.contains(clock)).toBe(false);
+    expect(clock.textContent).toBe('01:05');
+    expect(who.nextElementSibling).toBe(clock);
+    expect(entry.textContent).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+    view.done();
+  });
+
+  test('#17517 — sans début d’appel connu, aucune heure', () => {
+    const view = mount([caption()], { startedAt: null, notes: [{ id: 'n1', kind: 'screenshot', userId: 'u', name: 'Karim', at: 1_500 }] });
+    expect(view.all('time')).toHaveLength(0);
+    view.done();
+  });
+
+  test('#17340 — l’original ne se déplie que sous la phrase TOUCHÉE, et se replie au second toucher', () => {
+    const view = mount([caption({ id: 'a' }), caption({ id: 'b', original: 'See you', translated: 'À plus', at: 2_000 })]);
+    expect(view.all('[data-call-journal-original]')).toHaveLength(0);
+    const taps = view.all('[data-call-journal-entry] button') as HTMLButtonElement[];
+    expect(taps.map((tap) => tap.getAttribute('aria-expanded'))).toEqual(['false', 'false']);
+    act(() => taps[1]?.click());
+    const open = view.all('[data-call-journal-original]');
+    expect(open).toHaveLength(1);
+    expect(open[0]?.textContent).toBe('Original · See you');
+    expect(view.all('[data-call-journal-entry]')[1]?.contains(open[0] ?? null)).toBe(true);
+    expect((view.all('[data-call-journal-entry] button')[1] as HTMLElement).getAttribute('aria-expanded')).toBe('true');
+    act(() => taps[1]?.click());
+    expect((view.all('[data-call-journal-entry] button')[1] as HTMLElement).getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  test('#17406 — l’original du journal DESCEND de sa phrase et y REMONTE en fondu, comme dans la bande : même repère, même feuille', () => {
+    const view = mount([caption({ id: 'a' })]);
+    act(() => (view.find('[data-call-journal-line]') as HTMLElement).click());
+    const open = view.find('[data-call-journal-original]') as HTMLElement;
+    expect(open.hasAttribute('data-call-unfolded-original')).toBe(true);
+    act(() => (view.find('[data-call-journal-line]') as HTMLElement).click());
+    const leaving = view.find('[data-call-journal-original]') as HTMLElement;
+    expect(leaving.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving.getAttribute('aria-hidden')).toBe('true');
+    view.done();
+
+    const css = readFileSync(new URL('../styles/call-unfolded-original.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\[data-call-unfolded-original\]\s*\{\s*animation:\s*call-unfold-in\s/);
+    expect(css).toMatch(/\[data-call-unfolded-original\]\[data-leaving\]\s*\{\s*animation:\s*call-unfold-out\s/);
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*)\}\s*$/.exec(css)?.[1] ?? '';
+    expect(reduced).toMatch(/@keyframes call-unfold-in\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}/);
+    expect(reduced).not.toContain('transform');
+    expect(readFileSync(new URL('./call-unfolded-original.tsx', import.meta.url), 'utf8')).toContain("import '@/styles/call-unfolded-original.css';");
+  });
+
+  test('#17340 — une phrase sans traduction (la mienne comprise) n’a rien à déplier : pas de bouton', () => {
+    const view = mount([caption({ id: 'raw', original: 'Same', translated: null, pair: null })]);
+    expect(view.all('[data-call-journal-entry] button')).toHaveLength(0);
+    view.done();
+  });
+
+  test('ma parole se lit telle que dite, signée « Moi » comme dans la bande (planche P6), sans original redoublé ; chaque ligne ne se peint que là où je regarde', () => {
     const view = mount([caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
     const entry = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
-    expect(entry.textContent).toContain('Vous');
+    expect(entry.querySelector('strong')?.textContent).toBe('Moi');
+    expect(entry.textContent).not.toContain('Vous');
     expect(entry.querySelector('[data-call-journal-original]')).toBeNull();
     expect(entry.style.contentVisibility).toBe('auto');
     view.done();
@@ -115,6 +188,7 @@ describe('CallJournalPanel', () => {
 
   test('le nom porte la couleur de son auteur ; seule la phrase TRADUITE la prend, l’original et ma parole restent à l’encre de l’appel', () => {
     const view = mount([caption({ id: 'peer' }), caption({ id: 'raw', original: 'Same', translated: null, pair: null }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
+    act(() => (view.find('[data-call-journal-line]') as HTMLElement).click());
     const [peer, raw] = view.all('[data-call-journal-entry="peer"]') as HTMLElement[];
     const mine = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
     expect((peer?.querySelector('strong') as HTMLElement).style.color).toBe('#f0a');
@@ -142,9 +216,41 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('loi 7 — rien de traduit, pas de bascule : il n’y a qu’une version à lire', () => {
+  test('L3.9 — fermer le journal puis le rouvrir rend la phrase dépliée telle qu’on l’a laissée ; un autre appel repart de rien', () => {
+    const first = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    act(() => (first.find('[data-call-journal-line="a"]') as HTMLButtonElement).click());
+    expect(first.find('[data-call-journal-original]')).not.toBeNull();
+    first.done();
+    const back = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    expect(back.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(back.find('[data-call-journal-original]')?.textContent).toBe('Original · Hello everyone');
+    back.done();
+    const other = mount([caption({ id: 'a' })], { callId: 'call-journal-next' });
+    expect(other.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('false');
+    other.done();
+  });
+
+  test('L3.9 — vue « Original » : une phrase qui a une traduction reste touchable, la toucher montre sa traduction (EN → FR) à sa place, un second toucher rend l’original', () => {
+    const view = mount([caption({ id: 'a' }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null, at: 3_000 })]);
+    act(() => (view.all('[data-call-journal-view] button')[1] as HTMLButtonElement).click());
+    const line = () => view.find('[data-call-journal-line="a"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('false');
+    expect(line()?.hasAttribute('aria-expanded')).toBe(false);
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.getAttribute('aria-pressed')).toBe('true');
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Bonjour à tous');
+    expect(line()?.textContent).toContain('EN → FR');
+    expect(view.find('[data-call-journal-original]')).toBeNull();
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    expect(view.find('[data-call-journal-line="me"]')).toBeNull();
+    view.done();
+  });
+
+  test('loi 7 — la bascule Traduit · Original est toujours à droite de la tête, même quand rien n’est traduit (W1.9)', () => {
     const view = mount([caption({ id: 'raw', original: 'Same', translated: null, pair: null })]);
-    expect(view.find('[data-call-journal-view]')).toBeNull();
+    expect(view.find('[data-call-journal-view]')).not.toBeNull();
     view.done();
   });
 
@@ -193,8 +299,13 @@ describe('CallJournalPanel', () => {
     const view = mount([caption({ id: 'a', at: 1_000 }), caption({ id: 'b', at: 2_000 })], { notes });
     const order = view.all('[data-call-journal] > li').map((entry) => entry.getAttribute('data-call-journal-note') ?? entry.getAttribute('data-call-journal-entry'));
     expect(order).toEqual(['peer', 'screenshot', 'peer', 'call-recording-started']);
+    const tie = mount([caption({ id: 'a', at: 1_000 })], { notes: [{ id: 'n0', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 1_000 }] });
+    expect(tie.all('[data-call-journal] > li').map((entry) => entry.getAttribute('data-call-journal-note') ?? entry.getAttribute('data-call-journal-entry'))).toEqual(['peer', 'screenshot']);
+    tie.done();
     const capture = view.find('[data-call-journal-note="screenshot"]') as HTMLElement;
     expect(capture.querySelector('time')?.getAttribute('dateTime')).toBe(new Date(1_500).toISOString());
+    expect(capture.querySelector('time')?.textContent).toBe('01:05');
+    expect(capture.querySelector('[data-call-journal-note-text]')?.nextElementSibling).toBe(capture.querySelector('time'));
     const sentence = capture.querySelector('[data-call-journal-note-text]') as HTMLElement;
     expect(sentence.textContent).toBe('Karim a capturé l’écran');
     expect(sentence.style.color).toBe('var(--color-on-media-3)');

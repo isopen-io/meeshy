@@ -78,6 +78,18 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// Plafond du sommeil avant de retirer une notification d'éphémère :
     /// sept jours, au-delà de toute durée d'éphémère.
     static let expirySleepCapNanoseconds: UInt64 = 7 * 24 * 3_600 * 1_000_000_000
+    static let expirySleepCapDuration: Duration = .seconds(7 * 24 * 3_600)
+
+    /// Le sommeil, sous forme de `Duration`, jusqu'à l'échéance. L'échéance vient de la
+    /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit
+    /// jamais faire piéger la conversion — elle est plafonnée.
+    static func expirySleepDuration(deadline: Date, now: Date) -> Duration {
+        let delay = deadline.timeIntervalSince(now)
+        guard delay.isFinite else { return expirySleepCapDuration }
+        guard delay > 0 else { return .zero }
+        let cap = Double(expirySleepCapNanoseconds) / 1_000_000_000
+        return .seconds(min(delay, cap))
+    }
 
     /// Le sommeil, en nanosecondes, jusqu'à l'échéance. L'échéance vient de la
     /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit

@@ -8,7 +8,7 @@ const itAccounts = {
   'accounts.row.current': 'Account attuale',
   'accounts.row.signed_in': 'Connesso',
   'accounts.row.forget': 'Rimuovi {name} da questo dispositivo',
-  'accounts.add': 'Aggiungi un account',
+  'accounts.add': 'Aggiungi',
   'accounts.keep_signed_in': 'Resta connesso su questo dispositivo',
   'settings.switch_account.title': 'Cambia account',
   'login.server_origin': 'Connesso a: {origin}',

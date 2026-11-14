@@ -66,11 +66,12 @@ class CallRailsGuardTest {
     }
 
     @Test
-    fun `un rail qui defile s'efface en fondu a ses deux bords`() {
+    fun `un rail s'efface en fondu a ses deux bords, qu'il defile ou non (#18213)`() {
         val rails = code("CallActionRails.kt")
 
-        assertThat(rails).contains("canScrollBackward")
-        assertThat(rails).contains("canScrollForward")
+        assertThat(rails).contains(".callScrollEdgeFade(horizontal = false)")
+        assertThat(rails).doesNotContain("canScrollBackward")
+        assertThat(rails).doesNotContain("canScrollForward")
         assertThat(rails).contains("BlendMode.DstIn")
     }
 
@@ -92,5 +93,65 @@ class CallRailsGuardTest {
             assertThat(source).doesNotContain("CallSelfEffectsRow")
             assertThat(source).doesNotContain("CallCameraRailRowSlot")
         }
+    }
+
+    @Test
+    fun `le rangement tient dans un seul verre, sans second verre de sous-titres (G1_3)`() {
+        val block = code("CallControlsBlock.kt")
+        assertThat(block).doesNotContain("stowedCaptions")
+        assertThat(block).contains("staysWhenChromeStowed")
+        assertThat(code("CallConnectedLayout.kt")).doesNotContain("hasOwnGlass = true")
+        assertThat(code("CallControlsPill.kt")).contains("pillText.hasBaseRow")
+    }
+
+    @Test
+    fun `le rangement passe par la transformation et l'opacite, jamais par un relayout (G1_11, G2_8)`() {
+        val fade = code("CallConnectedLayout.kt")
+        assertThat(fade).contains("CallChromeStow.travel(")
+        assertThat(fade).contains("graphicsLayer {")
+        assertThat(fade).doesNotContain(".alpha(alpha)")
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("CallSelfTileLaw.restingFactor(")
+        assertThat(tile).doesNotContain("CallSelfTileLaw.resting(")
+        assertThat(code("CallScreen.kt")).contains("stowsToward = CallVerticalEdge.Top")
+    }
+
+    @Test
+    fun `ma vignette se couche par une transformation lue au dessin, et une rotation reprise repart de la taille montree (L1_5)`() {
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("CallSelfTileLaw.rotationScale(")
+        assertThat(tile).contains("CallSelfTileLaw.shownDuringRotation(")
+    }
+
+    @Test
+    fun `un bouton de rail touche pendant la sortie rend d'abord les contrôles (G2_7)`() {
+        assertThat(code("CallActionRails.kt")).contains("callReviveOnTouch(")
+        assertThat(code("CallConnectedLayout.kt")).contains("onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) }")
+    }
+
+    @Test
+    fun `l'en-tete et la pilule rangés quittent l'écran, barre système comprise (G1_11, G2_8)`() {
+        val fade = code("CallConnectedLayout.kt")
+        assertThat(fade).contains("WindowInsets.systemBars")
+        assertThat(fade).contains("bars.getTop(density)")
+        assertThat(fade).contains("bars.getBottom(density)")
+    }
+
+    @Test
+    fun `la plaque de ma vignette rangée, micro coupé de l'autre compris, garde sa taille de petite vignette (G1_11, #17982)`() {
+        val stage = code("CallStage.kt")
+        assertThat(stage).doesNotContain("TransformOrigin(0f, 1f)")
+        assertThat(Regex("""CallPeerMutedBadge\(""").findAll(stage).count()).isEqualTo(1)
+        assertThat(stage).doesNotContain("callKeepsSmallTileSize(")
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("callKeepsSmallTileSize(stowFactor, TransformOrigin(0.5f, 1f))")
+        assertThat(tile).contains("CallSelfTileLaw.anchor(corner).transformOrigin(rtl)")
+    }
+
+    @Test
+    fun `le filet sous les sous-titres part en fondu avec eux ou avec la rangée de base, jamais d'un coup (G1_3)`() {
+        val pill = code("CallControlsPill.kt")
+        assertThat(pill).doesNotContain("rowText")
+        assertThat(pill).contains("visible = pillText == CallPillText.Captions")
     }
 }

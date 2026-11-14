@@ -339,6 +339,26 @@ class GroupCallMeshTest {
     }
 
     @Test
+    fun `my own level names me among those who speak, my tile included (P11_5)`() = runTest(UnconfinedTestDispatcher()) {
+        val h = callerTrio()
+        h.localLevel = 0.2
+        advanceTimeBy(401)
+        assertThat(h.mesh.ui.value.speakingUserIds).containsExactly("m")
+        h.mesh.teardown()
+    }
+
+    @Test
+    fun `a muted microphone never names me, and drops me at once`() = runTest(UnconfinedTestDispatcher()) {
+        val h = callerTrio()
+        h.localLevel = 0.2
+        advanceTimeBy(401)
+        h.micMuted = true
+        advanceTimeBy(400)
+        assertThat(h.mesh.ui.value.speakingUserIds).isEmpty()
+        h.mesh.teardown()
+    }
+
+    @Test
     fun `a duo never samples anybody`() = runTest(UnconfinedTestDispatcher()) {
         val h = Harness(clock = { testScheduler.currentTime }, samplingMillis = 400)
         h.bind(this, isOutgoing = true)

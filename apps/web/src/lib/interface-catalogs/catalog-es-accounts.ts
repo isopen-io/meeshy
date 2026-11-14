@@ -8,7 +8,7 @@ const esAccounts = {
   'accounts.row.current': 'Cuenta actual',
   'accounts.row.signed_in': 'Sesión iniciada',
   'accounts.row.forget': 'Quitar {name} de este dispositivo',
-  'accounts.add': 'Añadir una cuenta',
+  'accounts.add': 'Añadir',
   'accounts.keep_signed_in': 'Mantener la sesión en este dispositivo',
   'settings.switch_account.title': 'Cambiar de cuenta',
   'login.server_origin': 'Conectado a: {origin}',

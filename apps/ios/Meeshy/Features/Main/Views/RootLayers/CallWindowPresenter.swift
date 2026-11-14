@@ -168,11 +168,10 @@ final class CallOverlayWindowHost: CallWindowHosting {
         overlay.accessibilityViewIsModal = true
         window = overlay
 
-        let animated = !UIAccessibility.isReduceMotionEnabled
-        overlay.alpha = animated ? 0 : 1
+        let fade = CallShareCapsuleMotion.windowFade(reduceMotion: UIAccessibility.isReduceMotionEnabled, appearing: true)
+        overlay.alpha = 0
         overlay.makeKeyAndVisible()
-        guard animated else { return true }
-        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) { overlay.alpha = 1 }
+        UIView.animate(withDuration: fade, delay: 0, options: [.curveEaseOut]) { overlay.alpha = 1 }
         return true
     }
 
@@ -198,8 +197,8 @@ final class CallOverlayWindowHost: CallWindowHosting {
             guard self?.window == nil else { return }
             restoreKey?.makeKey()
         }
-        guard !UIAccessibility.isReduceMotionEnabled else { return finish() }
-        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn]) {
+        let fade = CallShareCapsuleMotion.windowFade(reduceMotion: UIAccessibility.isReduceMotionEnabled, appearing: false)
+        UIView.animate(withDuration: fade, delay: 0, options: [.curveEaseIn]) {
             overlay.alpha = 0
         } completion: { _ in finish() }
     }
@@ -237,6 +236,20 @@ enum CallReturnPoint {
         case .pip: return isMainScreenCovered
         case .fullScreen: return false
         }
+    }
+
+    /// #17763, P18.10 — pendant MON partage, l'appel réduit est la capsule qui
+    /// porte « Arrêter » : ni le glissé ni VoiceOver ne la replient en bulle
+    /// (même voie que le web, #17760). Hors partage, rien ne change (#17731).
+    static func mayCollapseToBubble(isSharing: Bool) -> Bool {
+        !isSharing
+    }
+
+    /// #17763 — la bulle ne se montre plus pendant mon partage que si un plein
+    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. Le
+    /// mini-menu rapide, qui porte déjà ses propres actions, la remplace.
+    static func showsShareStop(isSharing: Bool, isMenuRevealed: Bool) -> Bool {
+        isSharing && !isMenuRevealed
     }
 
     /// Une présentation modale de la racine recouvre la pastille ; une alerte

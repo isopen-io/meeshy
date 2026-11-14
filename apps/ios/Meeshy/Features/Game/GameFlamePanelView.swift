@@ -22,6 +22,7 @@ struct GameFlamePanelView: View {
     let errors: GameErrors
     let onBuyFreeze: () -> Void
     let onRelight: () -> Void
+    @State private var openNoteID: String?
 
     private var flame: GameBlock.Flame { game.flame }
     private var held: Int { game.treasury.held }
@@ -35,13 +36,30 @@ struct GameFlamePanelView: View {
         GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: missing), identifier: identifier)
     }
 
-    var body: some View {
-        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
-            GameNote(text: String(
+    /// La valeur est au repos, nommée par ce qu'elle augmente (« +10 % d'étincelles »), la règle qui la produit derrière un (i) : « Que rapporte ma Flamme ? ».
+    private var bonusNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game.flame_panel.bonus.question", defaultValue: "Que rapporte ma Flamme ?", bundle: .main),
+            text: String(
                 localized: "game.flame_panel.bonus",
                 defaultValue: "Chaque jour de Flamme nourrit tes rêves : +\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % d’étincelles par acte, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
                 bundle: .main
-            ))
+            )
+        )
+    }
+
+    var body: some View {
+        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
+            MeeshyInfoNoted(note: bonusNote, openNoteID: $openNoteID, tint: ThemeManager.shared.textMuted) {
+                Text(String(
+                    localized: "game.flame_panel.bonus_chip",
+                    defaultValue: "+\(GameCopy.formatCount(min(100, max(0, flame.bonusPercent)))) % d’étincelles",
+                    bundle: .main
+                ))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(ThemeManager.shared.textPrimary)
+                .accessibilityIdentifier("game.flame.bonus")
+            }
             Text(String(
                 localized: "game.flame_panel.freezes",
                 defaultValue: "Veilleuses : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",
@@ -67,7 +85,7 @@ struct GameFlamePanelView: View {
         if flame.freezes >= flame.maxFreezes {
             GameNote(text: String(
                 localized: "game.flame_panel.freeze_full",
-                defaultValue: "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.",
+                defaultValue: "Tes Veilleuses sont au complet.",
                 bundle: .main
             ))
         } else {
@@ -105,7 +123,7 @@ struct GameFlamePanelView: View {
         } else if isOut && cannotPayRelight {
             GameNote(text: String(
                 localized: "game.flame_panel.relight_missing_window",
-                defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
+                defaultValue: "Rallumage possible dans les 48 h qui suivent l’extinction.",
                 bundle: .main
             ))
             spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })

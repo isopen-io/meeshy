@@ -22,7 +22,12 @@ import me.meeshy.ui.theme.MeeshyPalette
 internal fun TranscriptionSection(viewModel: TranscriptionSettingsViewModel = hiltViewModel()) {
     val autoTranscribe by viewModel.autoTranscribeIncoming.collectAsStateWithLifecycle()
     val tint = MeeshyPalette.Indigo300
-    SettingsGroup(stringResource(R.string.settings_section_transcription), MeeshyIcons.Quote, tint) {
+    SettingsGroup(
+        stringResource(R.string.settings_section_transcription),
+        MeeshyIcons.Quote,
+        tint,
+        orientation = stringResource(R.string.settings_transcription_orientation),
+    ) {
         NotificationToggleRow(
             label = stringResource(R.string.settings_transcription_auto),
             checked = autoTranscribe,

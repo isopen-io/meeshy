@@ -6,7 +6,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import java.time.LocalDate
@@ -74,5 +78,61 @@ class HeaderFlameReplayTest {
         compose.mainClock.advanceTimeBy(3_000)
         assertThat(shows("9")).isTrue()
         assertThat(shows("4")).isFalse()
+    }
+
+    private fun cardShown(): Boolean =
+        compose.onAllNodesWithTag("chat.header.flame.card", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    @Test
+    fun `touching the flame opens its card instead of hiding it, and the card hides it (#17770)`() {
+        var dismissed = 0
+        var openedGame = 0
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                HeaderFlameDecoration(
+                    snapshot = ConversationEngagementSnapshot("c1", 340, 40, 12, today),
+                    sent = MutableSharedFlow(),
+                    headerExpanded = false,
+                    dismissed = false,
+                    onDismiss = { dismissed += 1 },
+                    onOpenProgression = { openedGame += 1 },
+                ) { Box(Modifier.size(36.dp)) }
+            }
+        }
+        assertThat(cardShown()).isFalse()
+
+        compose.onNodeWithTag("chat.header.flame").performClick()
+        compose.waitForIdle()
+        assertThat(cardShown()).isTrue()
+        assertThat(dismissed).isEqualTo(0)
+        assertThat(shows("+40")).isTrue()
+        assertThat(shows("340")).isTrue()
+
+        compose.onNodeWithText("Hide the flame").performClick()
+        compose.waitForIdle()
+        assertThat(dismissed).isEqualTo(1)
+        assertThat(openedGame).isEqualTo(0)
+    }
+
+    @Test
+    fun `the card leads to the game (#17770)`() {
+        var openedGame = 0
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                HeaderFlameDecoration(
+                    snapshot = ConversationEngagementSnapshot("c1", 340, 40, 12, today),
+                    sent = MutableSharedFlow(),
+                    headerExpanded = false,
+                    dismissed = false,
+                    onDismiss = {},
+                    onOpenProgression = { openedGame += 1 },
+                ) { Box(Modifier.size(36.dp)) }
+            }
+        }
+        compose.onNodeWithTag("chat.header.flame").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Open the game").performClick()
+        compose.waitForIdle()
+        assertThat(openedGame).isEqualTo(1)
     }
 }

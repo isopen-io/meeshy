@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { pushTapTarget } from '@/lib/notifications/target';
+import { pushTapTarget, type NotificationTargetInput } from '@/lib/notifications/target';
+
+// @ts-expect-error — module .mjs sans déclaration de types ; le témoin rejoue LA
+// table du gate de parité, jamais une copie de ses attentes.
+import { ADRESSES } from '../../../scripts/check-push-target-parity.mjs';
 
 import { shellPushUrl } from './shell-push-runtime';
 
@@ -40,5 +44,34 @@ describe('le tap d’une notification de publication, dans la coque', () => {
     expect(shellPushUrl({ route: 'story', params: { post: postId } })).toBe(`/story/${postId}`);
     expect(shellPushUrl({ route: 'mood', params: { post: postId } })).toBe(`/mood/${postId}`);
     expect(shellPushUrl({ route: 'thread', params: { conversation: postId } })).toBe(`/c/${postId}`);
+  });
+});
+
+/**
+ * **LA COQUE EST LE TROISIÈME SITE, ET RIEN NE LE COMPARAIT AUX DEUX AUTRES.**
+ *
+ * `scripts/check-push-target-parity.mjs` tient la loi « une destination, une
+ * adresse » sur DEUX sites : le résolveur (`target.ts`) et son jumeau classique
+ * (`public/sw-push.js`), dont il REJOUE la table `ADRESSES`. `shellPushUrl` est
+ * un TROISIÈME mappage route → adresse, écrit à la main pour la coque Capacitor
+ * — et aucun gate ne l'interrogeait.
+ *
+ * Ce que `tsc` attrape : un membre de l'union SANS `case` (TS2366). Ce qu'il
+ * n'attrape PAS : un `case` qui rend la MAUVAISE adresse — `href('communityMembers', …)`
+ * au lieu de `href('community', …)` compile, et mène le doigt ailleurs. C'est
+ * exactement le défaut de `firebase-messaging-sw.js` que le doc-comment du gate
+ * raconte : la prose portait la bonne règle, le code servait trois routes sur
+ * trois qui n'existaient pas.
+ *
+ * Le témoin ne réécrit donc AUCUNE attente : il rejoue LA table du gate, celle
+ * que le worker doit déjà servir, à travers la coque. Une famille de destination
+ * ajoutée au critère de fin interroge les trois sites d'un coup.
+ */
+describe('la coque sert les mêmes adresses que le worker', () => {
+  const adresses = ADRESSES as ReadonlyArray<readonly [NotificationTargetInput, string]>;
+
+  test('chaque famille du critère de fin mène, dans la coque, où le worker la mène', () => {
+    const servies = adresses.map(([charge]) => shellPushUrl(pushTapTarget(charge)));
+    expect(servies).toEqual(adresses.map(([, attendue]) => attendue));
   });
 });

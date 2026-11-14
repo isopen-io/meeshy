@@ -40,6 +40,5 @@ data class FriendRequestCancelledEvent(
 @Serializable
 data class FriendRequestRejectedEvent(
     val friendRequestId: String? = null,
-    val senderId: String? = null,
     val rejecterId: String,
 )

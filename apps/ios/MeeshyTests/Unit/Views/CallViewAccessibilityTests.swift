@@ -262,16 +262,20 @@ final class CallViewAccessibilityTests: XCTestCase {
         // conveys the state), and the icon+text row must read as one
         // VoiceOver stop, not two disjoint announcements.
         let source = try callViewSource()
-        guard let range = source.range(of: "private var remoteCameraOffPlaceholder: some View {") else {
+        // G4.2 : le placeholder est devenu `CallRemoteCameraOffPlaceholder` (anneau et
+        // halo de parole) ; `remoteCameraOffPlaceholder` ne fait plus que le monter
+        // avec le visage `avatarFace(size: 96, …)`.
+        guard let mount = source.range(of: "private var remoteCameraOffPlaceholder: some View {"),
+              let range = source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"),
+              let end = source.range(of: "private nonisolated struct CallGroupStageHeightKey", range: range.lowerBound ..< source.endIndex) else {
             XCTFail("CallView must define remoteCameraOffPlaceholder")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("avatarCircle(size: 96)"),
+            String(source[mount.lowerBound ..< range.lowerBound]).contains("avatarFace(size: 96"),
             "remoteCameraOffPlaceholder must show the peer's avatar in place of a frozen last frame."
         )
+        let body = String(source[range.lowerBound ..< end.lowerBound])
         XCTAssertTrue(
             body.contains(".accessibilityHidden(true)"),
             "The decorative avatar in remoteCameraOffPlaceholder must be hidden from VoiceOver — " +
@@ -402,7 +406,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     func test_effectsMode_beforeAndAfterTheConnection_offersTheBackgroundBlur() throws {
         let source = try callViewSource()
         guard let start = source.range(of: "private func modeControls(_ mode: CallScreenMode) -> some View {"),
-              let end = source.range(of: "case .montage:", range: start.upperBound ..< source.endIndex) else {
+              let end = source.range(of: "} montage: {", range: start.upperBound ..< source.endIndex) else {
             XCTFail("CallView must route the effects mode through modeControls")
             return
         }
@@ -411,8 +415,8 @@ final class CallViewAccessibilityTests: XCTestCase {
         XCTAssertFalse(effects.contains("if showsConnectedLayout"), "Les commandes d'effets ne dépendent pas de l'appel établi")
 
         let controls = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
-        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(!config.backgroundBlurEnabled)"), "Le flou du fond se règle dans le mode Effets")
-        XCTAssertTrue(controls.contains("caption: CallEffectsCopy.blur"))
+        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(blurs)"), "Le flou du fond se règle dans le mode Effets")
+        XCTAssertTrue(controls.contains("Text(CallEffectsCopy.blur)"), "Une ligne titrée « Flou du fond »")
     }
 
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
@@ -528,7 +532,7 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: isActive, tint: .white)") else {
             XCTFail("Minimize chevron's 40pt glass circle must exist")
             return
         }
@@ -639,22 +643,6 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    func test_compactAudioCallHeader_durationCapsule_hasLabelledAccessibilityValue() throws {
-        let source = try callViewSource()
-        let vicinity = try audioDurationCapsuleVicinity(source, layout: "var compactAudioCallHeader: some View {")
-        XCTAssertTrue(
-            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
-            "compactAudioCallHeader's duration Text must carry the same explicit " +
-            "call.duration.a11y.label — this caption-mode header has no status-pill row, so the " +
-            "labelled value is the only place the timer gains meaning for VoiceOver."
-        )
-        XCTAssertTrue(
-            vicinity.contains("accessibilityValue(callManager.spokenDuration)"),
-            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue, " +
-            "in its spoken form (247i)."
-        )
-    }
-
     /// Doctrine 206i/210i/211i: the capsule now collapses to `.ignore` (not
     /// `.combine`) — combining previously let the signal glyph's own label
     /// leak through and announce a naked "0:34" with no context when the
@@ -664,7 +652,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// call-duration-only element causes no information loss.
     func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
         let source = try callViewSource()
-        for marker in ["var audioCallLayout: some View {", "var compactAudioCallHeader: some View {"] {
+        for marker in ["var audioCallLayout: some View {"] {
             let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
             XCTAssertTrue(
                 vicinity.contains(".accessibilityElement(children: .ignore)"),
@@ -698,20 +686,23 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + the header's
     /// duration chip, #8394) — these tests scope their search to the chip, inside
     /// `durationChip`, or they'd silently inspect the unrelated audio-layout mount instead.
-    private func videoDurationBadgeVicinity(_ source: String, window: Int = 2200) -> String {
-        guard let layoutRange = source.range(of: "var durationChip: some View {") else {
+    private func videoDurationBadgeVicinity(_ source: String) -> String {
+        guard source.contains("var durationChip: some View {") else {
             XCTFail("CallView must define durationChip")
             return ""
         }
-        guard let badgeRange = source.range(
-            of: "TransientCallSignalGlyph(strength: signalStrength)",
-            range: layoutRange.upperBound..<source.endIndex
-        ) else {
+        guard let chipRange = source.range(of: "struct CallHeaderCapsuleChip: View {") else {
+            XCTFail("The duration badge must be drawn by CallHeaderCapsuleChip")
+            return ""
+        }
+        let chip = source[chipRange.lowerBound...]
+        let end = chip.range(of: "\n}\n")?.upperBound ?? chip.endIndex
+        let body = String(chip[..<end])
+        guard body.contains("TransientCallSignalGlyph(strength: signalStrength)") else {
             XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
             return ""
         }
-        let end = source.index(badgeRange.lowerBound, offsetBy: window, limitedBy: source.endIndex) ?? source.endIndex
-        return String(source[badgeRange.lowerBound ..< end])
+        return body
     }
 
     func test_videoDurationBadge_isExplicitOpaqueAccessibilityElement() throws {

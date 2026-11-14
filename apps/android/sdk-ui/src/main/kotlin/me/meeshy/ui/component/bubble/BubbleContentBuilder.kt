@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.JoinNoticePresentation
 import me.meeshy.sdk.model.MessageSenderIdentity
 import me.meeshy.sdk.model.ReactionSummaryReconstruction
 import me.meeshy.sdk.model.sourceKind
+import me.meeshy.sdk.model.QuotedNoticeText
 import me.meeshy.sdk.model.SystemNoticeText
 import java.time.ZoneId
 import java.util.Locale
@@ -105,7 +106,11 @@ public object BubbleContentBuilder {
         val reactions = ReactionSummaryReconstruction
             .reconstruct(message.reactionSummary, ownReactions)
             .map { ReactionEntry(emoji = it.emoji, count = it.count, includesMe = it.includesMe) }
-        val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
+        val noticeLanguage = readerLanguage ?: preferences.systemLanguage ?: preferences.deviceLocale
+            ?: Locale.getDefault().language
+        val quoted = BubbleQuotedReplyBuilder.build(
+            message.replyTo, preferences, mediaBaseUrl, viewerId = currentUserId, noticeLanguage = noticeLanguage,
+        )
         val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
         // and a deleted tombstone carries no metadata (mirrors the pinnedAtIso /
@@ -143,8 +148,7 @@ public object BubbleContentBuilder {
         } else {
             SystemNoticeText.of(
                 message = message,
-                language = readerLanguage ?: preferences.systemLanguage ?: preferences.deviceLocale
-                    ?: Locale.getDefault().language,
+                language = noticeLanguage,
                 timeZoneId = readerTimeZoneId ?: ZoneId.systemDefault().id,
             )
         }
@@ -283,6 +287,11 @@ public object BubbleContentBuilder {
             protection = BubbleKindBuilder.protection(message),
             isViewOnceSealed = viewOnceSealed,
             callSummary = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted },
+            quotedNoticeText = if (message.isSystemMessage && !isDeleted) {
+                QuotedNoticeText.of(message.metadata, currentUserId, noticeLanguage)
+            } else {
+                null
+            },
             callIsOutgoing = message.callSummary?.isOutgoing(currentUserId.orEmpty()) == true,
         )
     }

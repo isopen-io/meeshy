@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -110,16 +111,19 @@ internal fun OnboardingAgeCard(state: OnboardingUiState, actions: OnboardingCard
 private fun BirthDateField(state: OnboardingUiState, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val label = stringResource(R.string.onboarding_age_picker)
+    val gesture = stringResource(R.string.onboarding_age_picker_hint)
     val shown = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).format(state.ageBirthDate)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SectionLabel(label)
         Row(
             modifier = Modifier
                 .testTag("onboarding.age.picker")
                 .fillMaxWidth()
                 .heightIn(min = 54.dp)
                 .clickableField { open = true }
-                .semantics(mergeDescendants = true) { contentDescription = "$label, $shown" }
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "$label, $shown"
+                    stateDescription = gesture
+                }
                 .padding(horizontal = MeeshySpacing.lg),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -130,11 +134,6 @@ private fun BirthDateField(state: OnboardingUiState, onPick: (LocalDate) -> Unit
                 style = meeshyText(MeeshyFontSize.headline, FontWeight.SemiBold, rounded = true),
             )
         }
-        Text(
-            text = stringResource(R.string.onboarding_age_picker_hint),
-            color = MeeshyTheme.tokens.textMuted,
-            style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium),
-        )
     }
     if (open) {
         val pickerState = rememberDatePickerState(
@@ -178,7 +177,7 @@ internal fun OnboardingFriendsCard(state: OnboardingUiState, actions: Onboarding
 
     OnboardingCardLayout(
         title = friendsTitle(phase),
-        message = friendsMessage(phase, reward),
+        message = friendsMessage(phase),
         primary = when {
             offering -> OnboardingAction(
                 title = stringResource(R.string.onboarding_contacts_offer_find),
@@ -222,13 +221,6 @@ internal fun OnboardingFriendsCard(state: OnboardingUiState, actions: Onboarding
                     )
                 }
             }
-            if (hasRequests) {
-                Text(
-                    text = stringResource(R.string.onboarding_friends_pending, reward),
-                    color = MeeshyTheme.tokens.textSecondary,
-                    style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium),
-                )
-            }
         }
     }
 }
@@ -242,11 +234,11 @@ private fun friendsTitle(phase: OnboardingContactsPhase): String = when {
 }
 
 @Composable
-private fun friendsMessage(phase: OnboardingContactsPhase, reward: Int): String = when {
+private fun friendsMessage(phase: OnboardingContactsPhase): String = when {
     phase == OnboardingContactsPhase.Offer -> stringResource(R.string.onboarding_contacts_offer_body)
     phase is OnboardingContactsPhase.Found && phase.friends.isEmpty() -> stringResource(R.string.onboarding_contacts_none_body)
     phase is OnboardingContactsPhase.Found -> stringResource(R.string.onboarding_contacts_found_body)
-    else -> stringResource(R.string.onboarding_friends_body, reward)
+    else -> stringResource(R.string.onboarding_friends_body)
 }
 
 @Composable

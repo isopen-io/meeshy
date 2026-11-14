@@ -8,7 +8,7 @@ const frAccounts = {
   'accounts.row.current': 'Compte actuel',
   'accounts.row.signed_in': 'Connecté',
   'accounts.row.forget': 'Retirer {name} de cet appareil',
-  'accounts.add': 'Ajouter un compte',
+  'accounts.add': 'Ajouter',
   'accounts.keep_signed_in': 'Rester connecté sur cet appareil',
   'settings.switch_account.title': 'Changer de compte',
   'login.server_origin': 'Connecté à : {origin}',

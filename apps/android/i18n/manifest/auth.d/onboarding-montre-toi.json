@@ -13,14 +13,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "onboarding_profile_benefit_visibility",
-          "status": "android-only"
-        },
-        {
-          "androidName": "onboarding_profile_benefit_contacts",
-          "status": "android-only"
-        },
-        {
           "androidName": "onboarding_profile_banner_add",
           "status": "android-only"
         },

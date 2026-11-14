@@ -56,21 +56,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.photo.camera.denied",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.photo.camera.unsupported",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.photo.camera.unavailable",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.mint.tchak",
           "status": "adopted"
         },

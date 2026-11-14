@@ -207,14 +207,6 @@ private fun ChooseIdentityBody(
             color = MeeshyTheme.tokens.textPrimary,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = state.conversationTitle?.takeIf { it.isNotBlank() }?.let {
-                stringResource(R.string.share_link_choose_subtitle, it)
-            } ?: stringResource(R.string.share_link_choose_subtitle_generic),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-        )
         MeeshyPrimaryButton(
             text = stringResource(R.string.share_link_continue_with_account),
             onClick = onContinueWithAccount,

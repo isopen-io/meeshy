@@ -96,9 +96,25 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     // MARK: - Le curseur d'intensité du flash
 
     func test_curseur_nApparaitQueFlashActif() {
-        XCTAssertFalse(ComposerFlashIntensity.showsSlider(flash: .off))
-        XCTAssertTrue(ComposerFlashIntensity.showsSlider(flash: .on))
-        XCTAssertTrue(ComposerFlashIntensity.showsSlider(flash: .auto))
+        XCTAssertFalse(ComposerFlashIntensity.showsSlider(flash: .off, position: .front))
+        XCTAssertTrue(ComposerFlashIntensity.showsSlider(flash: .on, position: .front))
+        XCTAssertTrue(ComposerFlashIntensity.showsSlider(flash: .auto, position: .front))
+    }
+
+    /// **La jauge n'existe que pour la caméra AVANT** (porteur 2026-11-11, #17463) :
+    /// c'est l'écran qui éclaire, et lui seul se dose.
+    func test_curseur_nApparaitQuePourLaCameraAvant() {
+        XCTAssertFalse(ComposerFlashIntensity.showsSlider(flash: .on, position: .back))
+        XCTAssertFalse(ComposerFlashIntensity.showsSlider(flash: .auto, position: .back))
+        XCTAssertFalse(ComposerFlashIntensity.showsSlider(flash: .on, position: .unspecified))
+    }
+
+    /// **La jauge se pose SOUS le bouton flash, pas au centre de la barre** (#17463).
+    func test_curseur_seCentreSousLeBoutonFlash() {
+        XCTAssertEqual(ComposerFlashIntensity.sliderLeading(flashMidX: 120, sliderWidth: 44), 98, accuracy: 0.001)
+        XCTAssertEqual(ComposerFlashIntensity.sliderLeading(flashMidX: 10, sliderWidth: 44), 0, accuracy: 0.001,
+                       "jamais hors de la barre")
+        XCTAssertEqual(ComposerFlashIntensity.sliderLeading(flashMidX: .nan, sliderWidth: 44), 0, accuracy: 0.001)
     }
 
     /// La piste est VERTICALE (#9566) : en haut le plein, en bas le plancher.
@@ -212,7 +228,7 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
 
     func test_laBarreMontreLeCadenasLeZoomEtLeCurseur() throws {
         let barre = try source("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
-        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider"))
+        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider(flash: flashMode, position: cameraPosition)"))
         XCTAssertTrue(barre.contains("accessibilityAdjustableAction"), "le curseur est ajustable à la voix")
         // #9351 — le cadenas, le zoom et la phrase sont passés au bas de la capture.
         let bas = try source("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
@@ -470,7 +486,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     }
 
     func test_lesDeuxMontages_profitentDesGestesSansLesRecabler() throws {
-        for montage in ["Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift",
+        for montage in ["Meeshy/Features/Composer/ComposerSceneViewfinderMount.swift",
                         "Meeshy/Features/Composer/ComposerViewfinder.swift"] {
             let code = try source(montage)
             XCTAssertTrue(code.contains("ComposerCaptureMount("), "\(montage) monte le montage partagé")

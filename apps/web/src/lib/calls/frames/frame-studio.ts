@@ -3,7 +3,7 @@ import { describeFrameUsage, type FrameUsageLabel, type FrameUseContext } from '
 import type { Size } from '../call-montage-shapes';
 import { captureFrames } from './frame-catalogue';
 import { chromeReserveOnScreen, type FrameChrome } from './frame-chrome-reserve';
-import { CALL_FRAME_USES, CAPTURE_FRAME_USES, frameUsageOf, framesFor, moodsFor, offeredFor, reconcileFrame } from './frame-filter';
+import { baseIdOf, CALL_FRAME_USES, CAPTURE_FRAME_USES, declinationById, declinationsOf, frameUsageOf, offeredFor, reconcileFrame, scopeLawsOf, spotlightFrames, spotlightMoods, type FrameScope, type PeopleSource, type ScopeLaws } from './frame-filter';
 import { loadFrameFonts } from './frame-fonts';
 import { paintFrame, type FrameFace } from './frame-paint';
 import type { Surface2D } from './frame-paint-kit';
@@ -73,13 +73,23 @@ export type FrameTier = 'thumb' | 'preview' | 'still';
 
 export type FrameStudio = {
   readonly frames: readonly CaptureFrame[];
-  /** Les ambiances qui ont au moins un cadre pour `people` personnes, dans l'ordre canonique. */
-  readonly moods: (people: number) => readonly FrameMood[];
-  readonly framesOf: (people: number, mood: FrameMood) => readonly CaptureFrame[];
+  /** Les ambiances qui ont au moins un cadre pour `people` personnes : l'ordre canonique, ou — `spotlight` — les sept ouvertes d'office (#12692). */
+  readonly moods: (people: number, scope?: FrameScope) => readonly FrameMood[];
+  readonly framesOf: (people: number, mood: FrameMood, scope?: FrameScope) => readonly CaptureFrame[];
   /** Le cadre `id` servi à `people` personnes, ou la variante de son motif, ou un cadre de son ambiance ; `null` sinon. */
   readonly reconcile: (id: string, people: number) => CaptureFrame | null;
-  /** Résout sur le catalogue CONNU, jamais filtré : un identifiant reçu se peint même s'il ne se propose pas ici. */
+  /** Résout sur le catalogue CONNU, jamais filtré : un identifiant reçu se peint même s'il ne se propose pas ici — et une déclinaison (`ambiance.motif.tranche.style`, #12685) aussi. */
   readonly find: (id: string) => CaptureFrame | null;
+  /** Ces deux lois, posées sur ce qu'une autre source propose (l'atelier étagé) : le chunk du mode n'importe pas le filtre. */
+  readonly scopeLaws: (source: PeopleSource) => ScopeLaws;
+  /** L'identifiant du cadre de base d'un identifiant, décliné (`ambiance.motif.tranche.style`) ou non ; un classique tel quel. */
+  readonly baseId: (id: string) => string;
+  /** « Plus d'ambiances » révélerait-il quelque chose pour `people` personnes ? Sinon, pas de puce (#12692). */
+  readonly hidesBeyondSpotlight: (people: number) => boolean;
+  /** La portée qu'on montre : celle demandée, sauf si le cadre choisi n'y figure pas — alors tout le catalogue. */
+  readonly scopeShowing: (frameId: string | null, people: number, requested: FrameScope) => FrameScope;
+  /** Les déclinaisons d'un cadre de base : lui-même d'abord, puis chacune de ses `styles` (#12685). */
+  readonly declinations: (frame: CaptureFrame) => readonly CaptureFrame[];
   /** Où ce cadre sert (#10146) : la clé du libellé « Utilisable : … » que sa vignette affiche. */
   readonly usageLabel: (frame: CaptureFrame) => FrameUsageLabel;
   /** Ce cadre se sert-il en appel vidéo ? Seul un cadre du direct se resserre entre les contrôles de l'appel (#10481, comme iOS). */
@@ -121,12 +131,15 @@ export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
   const ready = loadFrameFonts(frames, fonts).then(forget);
   const byId = new Map(frames.map((frame) => [frame.id, frame]));
   const offered = offeredFor(frames, options.uses ?? CAPTURE_FRAME_USES);
-  return {
+  const core: Omit<FrameStudio, 'hidesBeyondSpotlight' | 'scopeShowing'> = {
+    scopeLaws: scopeLawsOf,
+    baseId: baseIdOf,
     frames,
-    moods: (people) => moodsFor(offered, people),
-    framesOf: (people, mood) => framesFor(offered, people, mood),
+    moods: (people, scope = 'all') => spotlightMoods(offered, people, scope),
+    framesOf: (people, mood, scope = 'all') => spotlightFrames(offered, people, mood, scope),
     reconcile: (id, people) => reconcileFrame(offered, id, people),
-    find: (id) => byId.get(id) ?? null,
+    find: (id) => byId.get(id) ?? declinationById(byId.get(baseIdOf(id)), id) ?? null,
+    declinations: declinationsOf,
     usageLabel: (frame) => describeFrameUsage(frameUsageOf(frame)),
     servesCall: (frame) => offeredFor([frame], CALL_FRAME_USES).length > 0,
     faces: frameFaces,
@@ -138,4 +151,5 @@ export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
     },
     ready,
   };
+  return { ...core, ...scopeLawsOf(core) };
 }

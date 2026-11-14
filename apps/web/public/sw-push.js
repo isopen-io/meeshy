@@ -66,6 +66,7 @@ const PUSH_ROUTE_PATTERNS = {
   post: '/post/$post',
   discover: '/discover',
   userProfile: '/u/$username',
+  community: '/communities/$community',
   progression: '/me/progression',
   progressionLigue: '/me/progression/ligue',
   progressionSaison: '/me/progression/saison',
@@ -138,6 +139,7 @@ const TAP_FIELDS = [
   'postType',
   'contentType',
   'friendRequestId',
+  'communityId',
   'senderUsername',
   'route',
 ];
@@ -331,6 +333,10 @@ function resolvePushTarget(data) {
 
   const conversationId = texte(data.conversationId);
   if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId }, search: {} };
+
+  /* #18052 — « Ajouté à la communauté Y » ouvre la communauté. */
+  const communityId = texte(data.communityId);
+  if (communityId !== '') return { route: 'community', params: { community: communityId }, search: {} };
 
   const type = texte(data.type);
   if (texte(data.friendRequestId) !== '' || REQUEST_TYPES.indexOf(type) >= 0) return demandes();

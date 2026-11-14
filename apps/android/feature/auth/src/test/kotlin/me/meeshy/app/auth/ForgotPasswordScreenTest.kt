@@ -56,9 +56,9 @@ class ForgotPasswordScreenTest {
 
         compose.onNode(hasSetTextAction()).performTextInput("ada@example.com")
         compose.onNodeWithText("Get the link").performClick()
-        compose.waitUntil { compose.onAllNodesWithText("Email sent").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil { compose.onAllNodesWithText("Link sent").fetchSemanticsNodes().isNotEmpty() }
 
-        compose.onNodeWithText("Open the link sent to ada@example.com").assertIsDisplayed()
+        compose.onNodeWithText("ada@example.com", substring = false, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Nothing yet? Also check your spam or junk folder.").assertIsDisplayed()
         compose.onNodeWithText("Back to login").assertIsDisplayed()
     }

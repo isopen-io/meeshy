@@ -20,5 +20,5 @@ beforeAll(async () => {
 
 test('la fiche « /links/share/$link », qui monte l’édition, charge le catalogue avec son chunk', async () => {
   await ROUTES.shareLink.screen();
-  expect(translateLinkFamilies('fr', 'links.create.section.access.subtitle').length).toBeGreaterThan(0);
+  expect(translateLinkFamilies('fr', 'links.create.section.access')).toBe('Demander aux invités');
 });

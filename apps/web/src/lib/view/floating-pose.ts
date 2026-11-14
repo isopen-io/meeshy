@@ -145,6 +145,46 @@ export function ladderPitch({ count, room }: { readonly count: number; readonly 
   return Math.min(LADDER_PITCH, Math.max(LADDER_RUNG + LADDER_MIN_GAP, tient));
 }
 
+/**
+ * **L'ÉCHELLE QUI NE TIENT PLUS SUR UNE COLONNE** (#17769) — « Ma Légende » en
+ * tête porte l'échelle d'un administrateur à huit barreaux, et à 320 × 568 une
+ * colonne au pas le plus serré en demande 434 pour 408 de place. Rogner la
+ * cible sous 46 ou l'air sous quatre aurait volé un doigt ; l'échelle se replie
+ * plutôt sur une seconde colonne, vers l'INTÉRIEUR de l'écran (`inward` : -1
+ * quand le disque est à droite, 1 à gauche), à un pas d'iOS de la première.
+ *
+ * Les colonnes s'équilibrent (quatre et quatre plutôt que sept et un) et se
+ * lisent l'une après l'autre : l'ordre du clavier et du lecteur d'écran reste
+ * celui de `MENU_LADDER`. Une échelle qui tient garde sa colonne unique et son
+ * pas — rien ne bouge sous le doigt de qui n'en a pas besoin.
+ */
+export type LadderRungPlace = { readonly dx: number; readonly dy: number };
+
+export function ladderRungPlaces({
+  count,
+  room,
+  expandsDown,
+  inward,
+}: {
+  readonly count: number;
+  readonly room: number | null;
+  readonly expandsDown: boolean;
+  readonly inward: -1 | 1;
+}): readonly LadderRungPlace[] {
+  const rowsThatFit =
+    room === null ? count : Math.max(1, Math.floor((room - FIRST_RUNG - LADDER_RUNG / 2) / (LADDER_RUNG + LADDER_MIN_GAP)) + 1);
+  const columns = Math.max(1, Math.ceil(count / rowsThatFit));
+  const perColumn = Math.ceil(count / columns);
+  const pitch = ladderPitch({ count: perColumn, room });
+  return Array.from({ length: count }, (_, index) => {
+    const column = Math.floor(index / perColumn);
+    return {
+      dx: column === 0 ? 0 : inward * column * LADDER_PITCH,
+      dy: ladderRungOffset(index % perColumn, expandsDown, pitch),
+    };
+  });
+}
+
 
 /**
  * **CE QUE LE BOUTON PEUT ATTEINDRE** — les trois couloirs, lus depuis le CSS

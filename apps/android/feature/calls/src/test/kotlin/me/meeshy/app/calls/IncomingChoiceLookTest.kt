@@ -10,7 +10,7 @@ class IncomingChoiceLookTest {
 
     @Test
     fun `Sans video est un combine blanc sur un verre neutre, legende blanche`() {
-        val look = IncomingChoiceLooks.of(IncomingCallAction.AnswerWithoutVideo, isVideoCall = true)
+        val look = IncomingChoiceLooks.of(IncomingCallAction.AnswerWithoutVideo, acceptsVideo = true)
 
         assertThat(look.icon).isEqualTo(MeeshyIcons.Call)
         assertThat(look.glyph).isEqualTo(CallPalette.Ink)
@@ -20,7 +20,7 @@ class IncomingChoiceLookTest {
 
     @Test
     fun `Refuser garde son disque rouge et son combine raccroche`() {
-        val look = IncomingChoiceLooks.of(IncomingCallAction.Decline, isVideoCall = true)
+        val look = IncomingChoiceLooks.of(IncomingCallAction.Decline, acceptsVideo = true)
 
         assertThat(look.icon).isEqualTo(MeeshyIcons.CallEnd)
         assertThat(look.fill).isEqualTo(CallPalette.Decline)
@@ -29,8 +29,8 @@ class IncomingChoiceLookTest {
 
     @Test
     fun `Repondre montre la camera sur un appel video et le combine sur un appel audio`() {
-        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, isVideoCall = true).icon).isEqualTo(MeeshyIcons.Video)
-        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, isVideoCall = false).icon).isEqualTo(MeeshyIcons.Call)
-        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, isVideoCall = true).fill).isEqualTo(CallPalette.Accept)
+        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, acceptsVideo = true).icon).isEqualTo(MeeshyIcons.Video)
+        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, acceptsVideo = false).icon).isEqualTo(MeeshyIcons.Call)
+        assertThat(IncomingChoiceLooks.of(IncomingCallAction.Accept, acceptsVideo = true).fill).isEqualTo(CallPalette.Accept)
     }
 }

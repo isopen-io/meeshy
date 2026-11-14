@@ -71,7 +71,7 @@ class SessionClosedNoticeSheetTest {
         SessionRevocationReason.entries.forEach { reason ->
             val copy = SessionClosedNoticeCopy.of(reason)
             locales.forEach { tag ->
-                listOf(copy.title, copy.message).forEach { id ->
+                listOfNotNull(copy.title, copy.message).forEach { id ->
                     val text = stringIn(tag, id)
                     assertThat(text).isNotEmpty()
                     assertThat(text).doesNotContainMatch("%(\\d+\\$)?[sdf]|\\{|\\}")
@@ -90,10 +90,33 @@ class SessionClosedNoticeSheetTest {
     }
 
     @Test
-    fun `sessions expiree n'offre pas de contact`() {
+    fun `sessions expiree n'offre pas de contact et son titre suffit, sans message`() {
         show(SessionRevocationReason.SESSION_EXPIRED)
         compose.onNodeWithTag(SESSION_CLOSED_CONTACT_TAG).assertDoesNotExist()
-        compose.onNodeWithTag(SESSION_CLOSED_MESSAGE_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(SESSION_CLOSED_MESSAGE_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(SESSION_CLOSED_TITLE_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(SESSION_CLOSED_CONTINUE_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun `seule l'expiration se passe de message, les autres motifs en gardent un`() {
+        val silent = SessionRevocationReason.entries.filter { SessionClosedNoticeCopy.of(it).message == null }.toSet()
+        assertThat(silent).containsExactly(SessionRevocationReason.SESSION_EXPIRED)
+    }
+
+    @Test
+    fun `l'avis de l'equipe tient en un titre et une raison, le contact reste atteignable`() {
+        show(SessionRevocationReason.ADMIN_REVOKE)
+        compose.onNodeWithTag(SESSION_CLOSED_TITLE_TAG).assertTextEquals("Session closed by the Meeshy team")
+        compose.onNodeWithTag(SESSION_CLOSED_MESSAGE_TAG).assertTextEquals("To protect your account.")
+        compose.onNodeWithTag(SESSION_CLOSED_CONTACT_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun `fermee depuis un autre appareil garde sa consigne de securite`() {
+        show(SessionRevocationReason.USER_REVOKE)
+        compose.onNodeWithTag(SESSION_CLOSED_MESSAGE_TAG)
+            .assertTextEquals("Closed from another of your devices. Not you? Change your password.")
     }
 
     @Test

@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallCaption } from './call-captions';
 import { DEFAULT_SELF_TILE, selfTileSize } from './call-self-tile';
-import { companionCapacity, companionCorner, companionLayout, companionRestingLeft, companionTileSize, COMPANION_TILE, LOCAL_COMPANION_ID, otherCorner, speakingPeers, type CompanionTile } from './call-effects-companions';
+import { speakingPeers } from './call-speaking';
+import { companionCapacity, companionCorner, companionLayout, companionRestingLeft, companionTileSize, COMPANION_TILE, LOCAL_COMPANION_ID, otherCorner, type CompanionTile } from './call-effects-companions';
 
 /**
  * #8737 — EN MODE EFFETS, LES AUTRES RESTENT À L'ÉCRAN. Miroir de

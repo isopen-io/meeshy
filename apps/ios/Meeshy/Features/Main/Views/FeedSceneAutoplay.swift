@@ -195,7 +195,11 @@ struct PostSceneCard: View {
                     .allowsHitTesting(false)
                     .accessibilityLabel(Text(String(
                         localized: "feed.scene.sound.muted",
-                        defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                        defaultValue: "Son coupé",
+                        bundle: .main)))
+                    .accessibilityHint(Text(String(
+                        localized: "feed.scene.sound.muted.hint",
+                        defaultValue: "Ouvrir en plein écran pour l'entendre",
                         bundle: .main)))
             }
         }

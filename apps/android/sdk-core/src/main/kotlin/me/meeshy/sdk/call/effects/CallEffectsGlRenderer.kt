@@ -309,18 +309,14 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
     /**
      * The look's strip, uploaded; `null` while it is still baking. The bake (15 625 grades) runs off the
      * capture thread, once per look and per call: the frames meanwhile go out without the look, never late.
+     * Each look asked also bakes the moods the carousel shows beside it ([CallColorLook.bakeOrder]), so that the
+     * next pick finds its cube ready; the moods out of sight are never baked ahead. The GPU holds ONE strip
+     * texture whatever the look; the baked strips (62.5 KB each) live as long as this renderer, freed with it.
      */
     private fun lutReady(preset: VideoFilterPreset): VideoFilterPreset? {
         if (lutPreset == preset && lutTexture != 0) return preset
-        val strip = strips[preset]
-        if (strip == null) {
-            if (baking.add(preset)) {
-                Thread({
-                    CallColorLook.recipe(preset)?.let { strips[preset] = ByteBuffer.wrap(CallColorLook.lutStrip(it)) }
-                }, "MeeshyCallLook").start()
-            }
-            return null
-        }
+        bakeAhead(preset)
+        val strip = strips[preset] ?: return null
         if (lutTexture == 0) lutTexture = GlUtil.generateTexture(GLES20.GL_TEXTURE_2D)
         val (w, h) = CallColorLook.stripSize()
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lutTexture)
@@ -329,6 +325,17 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
         lutPreset = preset
         return preset
+    }
+
+    /** Bakes, off the capture thread, the cubes of [preset] and of its visible neighbours not yet baked or baking. */
+    private fun bakeAhead(preset: VideoFilterPreset) {
+        val toBake = CallColorLook.bakeOrder(preset).filter { baking.add(it) }
+        if (toBake.isEmpty()) return
+        Thread({
+            toBake.forEach { next ->
+                CallColorLook.recipe(next)?.let { strips[next] = ByteBuffer.wrap(CallColorLook.lutStrip(it)) }
+            }
+        }, "MeeshyCallLook").start()
     }
 
     private companion object {

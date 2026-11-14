@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">تعديل الملف الشخصي</string>
     <string name="a11y_floating_feed_hint">يفتح تدفق الأخبار</string>
+    <string name="a11y_floating_menu_acts">فصول اليوم: %1$d من %2$d</string>
     <string name="a11y_floating_menu_hint">يفتح قائمة التنقّل</string>
     <string name="a11y_floating_menu_notifications_value">%1$d إشعارات معلّقة</string>
     <string name="a11y_menu_item_hint">فتح هذا القسم</string>
@@ -49,7 +50,7 @@
     <string name="connection_syncing">المزامنة</string>
     <string name="conversations_logout">تسجيل الخروج</string>
     <string name="conversations_retry">إعادة المحاولة</string>
-    <string name="feed_empty">لا توجد منشورات</string>
+    <string name="feed_empty">لا توجد منشورات من جهات اتصالك</string>
     <string name="feed_like">إعجاب</string>
     <string name="feed_title">التدفق</string>
     <string name="login_button">تسجيل الدخول</string>
@@ -58,6 +59,7 @@
     <string name="menu_communities">المجتمعات</string>
     <string name="menu_contacts">جهات الاتصال</string>
     <string name="menu_discover">اكتشاف</string>
+    <string name="menu_game">أسطورتي</string>
     <string name="menu_my_links">روابطي</string>
     <string name="menu_notifications">الإشعارات</string>
     <string name="menu_settings">الإعدادات</string>
@@ -66,7 +68,6 @@
     <string name="notifications_title">الإشعارات</string>
     <string name="profile_back">رجوع</string>
     <string name="profile_bio_label">نبذة</string>
-    <string name="profile_cancel">إلغاء</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_edit_title">تعديل الملف الشخصي</string>
@@ -96,7 +97,7 @@
     <string name="route_title_notifications">الإشعارات</string>
     <string name="route_title_post">منشور</string>
     <string name="route_title_profile">الملف الشخصي</string>
-    <string name="route_title_progression">التقدّم</string>
+    <string name="route_title_progression">أسطورتي</string>
     <string name="route_title_settings">الإعدادات</string>
     <string name="route_title_share_links">روابط المشاركة</string>
     <string name="route_title_starred">الرسائل المفضّلة</string>

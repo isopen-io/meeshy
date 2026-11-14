@@ -14,6 +14,7 @@ struct VoiceProfileWizardView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = VoiceProfileWizardViewModel()
+    @State private var openNoteID: String?
 
     var body: some View {
         ZStack {
@@ -131,7 +132,7 @@ struct VoiceProfileWizardView: View {
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
 
-                Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
+                Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(theme.textSecondary)
@@ -265,15 +266,11 @@ struct VoiceProfileWizardView: View {
             VStack(spacing: MeeshySpacing.xl) {
                 Spacer().frame(height: 16)
 
-                Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
-
-                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(theme.textSecondary)
-                    .padding(.horizontal, MeeshySpacing.xxl)
+                MeeshyInfoNoted(note: VoiceProfileWizardWording.recordingNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                    Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
+                }
 
                 VoiceRecordingView(
                     accentColor: accentColor,
@@ -322,7 +319,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.horizontal, 60)
             }
 
-            Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Votre profil vocal est en cours de création. Cela peut prendre quelques instants.", bundle: .main))
+            Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Création de votre profil vocal…", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(theme.textMuted)
@@ -360,7 +357,7 @@ struct VoiceProfileWizardView: View {
                     if let quality = profile.quality {
                         profileInfoRow(label: String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main), value: "\(Int(quality * 100))%")
                     }
-                    profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.rawValue.capitalized)
+                    profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.displayLabel)
                 }
                 .padding(MeeshySpacing.lg)
                 .background(
@@ -369,12 +366,6 @@ struct VoiceProfileWizardView: View {
                 )
                 .padding(.horizontal, MeeshySpacing.xl)
             }
-
-            Text(String(localized: "voice.profile.wizard.success.message", defaultValue: "Vos messages audio traduits utiliseront désormais votre voix clonée.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(theme.textSecondary)
-                .padding(.horizontal, MeeshySpacing.xxxl)
 
             Button {
                 HapticFeedback.success()
@@ -407,5 +398,16 @@ struct VoiceProfileWizardView: View {
                 .foregroundStyle(theme.textPrimary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Les phrases de l'étape d'enregistrement. La consigne de lecture est portée par la carte du kit
+/// (« Lisez ce texte à voix haute ») ; le conseil de ton passe derrière un (i) (#18088).
+enum VoiceProfileWizardWording {
+    static var recordingNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "voice.profile.wizard.recording.question", defaultValue: "Comment dois-je parler ?", bundle: .main),
+            text: String(localized: "voice.profile.wizard.recording.description", defaultValue: "Parlez naturellement, sans forcer le ton.", bundle: .main)
+        )
     }
 }

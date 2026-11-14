@@ -42,12 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.notif.more_options",
-          "androidName": "settings_notif_more_options",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.storage",
           "androidName": "settings_storage",
           "status": "adopted"

@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { CallControlAck } from '@meeshy/shared/types/call-controls';
 import { registerCallPreviewEvents, type PreviewCall } from '../call-preview-events';
+import { SOCKET_RATE_LIMITS, type RateLimitConfig } from '../../utils/socket-rate-limiter';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const SDP = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n';
@@ -147,5 +148,25 @@ describe('call:preview-signal — le lien d’aperçu, qui ne décroche rien (#8
     const h = harness({ userId: 'alice' });
     const bad = { callId: CALL, signal: { type: 'offer', from: 'alice', to: 'bob', sdp: 'nope' } };
     expect(await h.signal(bad)).toEqual({ success: false, code: 'VALIDATION_ERROR' });
+  });
+});
+
+describe('call:preview-signal — un budget à lui, jamais celui de l’appel réel (#17952)', () => {
+  it('l’aperçu est jugé contre son propre budget, distinct de celui de call:signal', async () => {
+    const judged: RateLimitConfig[] = [];
+    let preview: ((raw: unknown, ack?: (r: CallControlAck) => void) => Promise<void>) | undefined;
+    registerCallPreviewEvents(
+      {
+        io: { to: () => ({ emit: () => true }) } as never,
+        rateLimiter: { checkLimit: async (_id: string, config: RateLimitConfig) => (judged.push(config), true) },
+        loadCall: async () => ringing(),
+        isMember: async () => true,
+      },
+      { id: 'sock-1', on: (event: string, handler: typeof preview) => { if (event === CLIENT_EVENTS.CALL_PREVIEW_SIGNAL) preview = handler; } } as never,
+      () => 'alice'
+    );
+    await preview?.(offer('alice', 'bob'), () => undefined);
+    expect(judged).toHaveLength(1);
+    expect(judged[0].keyPrefix).not.toBe(SOCKET_RATE_LIMITS.CALL_SIGNAL.keyPrefix);
   });
 });

@@ -94,7 +94,8 @@ public struct BlankCanvasPasteStarter: View {
                 // conversation, pour la même raison.
                 Task { onItems(await resolver.items(from: providers)) }
             }
-            .labelStyle(.titleAndIcon)
+            // Aucun `.labelStyle` ici : le plus proche du bouton gagnerait sur
+            // celui de l'hôte, et le compositeur n'en montre que le glyphe (#17434).
             .buttonBorderShape(.capsule)
             .frame(minHeight: 44)
         }

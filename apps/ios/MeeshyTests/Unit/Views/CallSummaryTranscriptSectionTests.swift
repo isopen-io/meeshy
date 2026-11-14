@@ -49,4 +49,12 @@ final class CallSummaryTranscriptSectionTests: XCTestCase {
             "The disclaimer string key must exist and be shown alongside the Transcript section."
         )
     }
+
+    /// A1.6 — un replay lu jusqu'au bout se range au cache ; un replay que la borne de pages a coupé
+    /// s'affiche sans s'y ranger, sinon le cache-first ne relirait jamais la suite.
+    func test_replayCache_keepsACompleteRead_andSkipsAReadCutByThePageCeiling() {
+        XCTAssertTrue(CallTranscriptLoader.cachesReplay(hasMore: false))
+        XCTAssertTrue(CallTranscriptLoader.cachesReplay(hasMore: nil), "une passerelle antérieure rend tout d'une page")
+        XCTAssertFalse(CallTranscriptLoader.cachesReplay(hasMore: true))
+    }
 }

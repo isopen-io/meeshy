@@ -852,9 +852,9 @@ const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('
 
 /* Les trois arrêts réels de la chaîne, dans l'ordre du DOM de
    `list-header.tsx` : « Créer un lien de partage », « Nouvelle
-   conversation », « Progression ». Chacun doit éviter le grand rail hors
+   conversation », « Ma Légende » (ex « Progression », #17769). Chacun doit éviter le grand rail hors
    champ ET toute tuile de story — jamais seulement le dernier arrêt. */
-const CHAINE = ['Créer un lien de partage', 'Nouvelle conversation', 'Progression'];
+const CHAINE = ['Créer un lien de partage', 'Nouvelle conversation', 'Ma Légende'];
 for (const [index, attendu] of CHAINE.entries()) {
   await kbdPage.keyboard.press('Tab');
   const apres = await kbdPage.evaluate(() => ({

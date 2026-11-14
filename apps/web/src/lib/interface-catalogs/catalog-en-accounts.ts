@@ -8,7 +8,7 @@ const enAccounts = {
   'accounts.row.current': 'Current account',
   'accounts.row.signed_in': 'Signed in',
   'accounts.row.forget': 'Remove {name} from this device',
-  'accounts.add': 'Add an account',
+  'accounts.add': 'Add',
   'accounts.keep_signed_in': 'Stay signed in on this device',
   'settings.switch_account.title': 'Switch account',
   'login.server_origin': 'Connected to: {origin}',

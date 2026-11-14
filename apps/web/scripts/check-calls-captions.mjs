@@ -28,7 +28,8 @@
  *     le canal de données `transcription` (`transcript-entry`) ;
  *  4. « Journal » (#8579), dans la rangée « L'appel » (44 × 44), ouvre À LA
  *     PLACE des rangées tout ce qui a été dit, dans l'ordre : la phrase
- *     servie et son original dessous ; le bandeau se retire le temps de le
+ *     servie, son original SEULEMENT sous la phrase touchée (#17340) et l'heure
+ *     dans l'appel à droite de sa ligne (#17517) ; le bandeau se retire le temps de le
  *     lire. Le journal SURVIT aux sous-titres coupés et à l'appel réduit ;
  *  5. au raccroché, `bye` part sur le canal et `call:analytics` dit
  *     `transcriptionUsed: true` ;
@@ -144,6 +145,11 @@ const tapSize = async (locator) => {
   return { ok: box !== null && box.width >= TAP_FLOOR && box.height >= TAP_FLOOR, size: box && [Math.round(box.width), Math.round(box.height)] };
 };
 
+/** La bascule « Voir l'original » refond ses lignes (`useTranscriptSwapFade`) : la capture attend que ce fondu soit FINI, jamais un délai. */
+const swapSettled = (page) => page.waitForFunction(() => [...document.querySelectorAll('[data-call-transcript-swap]')].every((line) => line.getAnimations().every((animation) => animation.playState !== 'running')), undefined, { timeout: 3000 }).then(() => true, () => false);
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 /**
  * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie.
  * En vidéo, aucune attente n'efface les commandes (#8988) : seul un toucher
@@ -153,7 +159,19 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
+};
+
+/**
+ * (…) RANGE les sous-titres, les refermer les rend (#17343) : pour les LIRE, on
+ * referme les actions. Un témoin qui les cherche menu ouvert ne mesurerait rien.
+ */
+const closeActions = async (page) => {
+  const more = page.locator('[data-call-more]');
+  if ((await more.getAttribute('aria-expanded')) === 'true') await more.click();
+  await appears(page, '[data-call-controls]');
+  await page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle', undefined, { timeout: 3000 }).catch(() => undefined);
 };
 
 const startConnectedCall = async (page) => {
@@ -189,7 +207,7 @@ try {
     [320, 568, false],
   ]) {
     const label = `${width}×${height}${withSpeech ? '' : ' sans reconnaissance vocale'}`;
-    const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+    const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR', colorScheme: process.env.CAPTURE_SCHEME === 'dark' ? 'dark' : 'light', permissions: ['camera', 'microphone'] });
     await context.addInitScript(ARM_PEER_AND_SPEECH, withSpeech);
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
@@ -221,20 +239,25 @@ try {
       await peer(page, 'speak', { id: 'n-1', text: PEER_SAID, translatedText: PEER_TRANSLATED });
       await openActions(page);
       await cc.click();
-      check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un toucher ouvre les sous-titres TRADUITS`);
+      check((await page.$('[data-call-captions-panel]')) === null, `${label} : (…) ouvert, les sous-titres sont rangés`);
+      await closeActions(page);
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel="translated"]'), `${label} : un toucher ouvre les sous-titres TRADUITS, DANS la pilule`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_TRANSLATED))), `${label} : la parole du pair s'affiche TRADUITE (${JSON.stringify(await lineTexts(page))})`);
       check((await page.$('[data-call-caption-lines][aria-live="polite"]')) !== null, `${label} : les sous-titres sont une région aria-live POLIE`);
       check((await page.$eval('[data-call-caption="peer"] [dir="auto"]', (el) => el.getAttribute('dir')).catch(() => null)) === 'auto', `${label} : le texte d'une ligne porte dir="auto" (RTL)`);
       await capture(page, `traduits-${width}x${height}`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await appears(page, '[data-call-captions-panel="original"]'), `${label} : un second toucher passe en langue d'ORIGINE`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_SAID))), `${label} : le mode original rend ce qui a été dit (${JSON.stringify(await lineTexts(page))})`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : un troisième toucher les masque`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un quatrième les rouvre, traduits`);
       const actives = (await peerTranscripts(page, 'call:transcription-active')).filter((payload) => payload?.callId === callId).map((payload) => payload.active);
       check(JSON.stringify(actives) === JSON.stringify([true, false, true]), `${label} : call:transcription-active part à chaque bascule on/off (${JSON.stringify(actives)})`);
@@ -268,31 +291,86 @@ try {
         return appears(page, '[data-call-journal-panel]');
       };
       await openActions(page);
-      const journalButton = page.locator('[data-call-row="call"] [data-call-control="journal"]');
+      const journalButton = page.locator('[data-call-rail="call"] [data-call-control="journal"]');
       const journalSize = await tapSize(journalButton);
-      check(journalSize.ok, `${label} : « Journal » est dans la rangée « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
-      const callRow = await page.$$eval('[data-call-row="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : '')));
-      check(callRow.indexOf('journal') === callRow.indexOf('captions') + 1 && callRow.includes('captions'), `${label} : « Journal » suit les sous-titres (${callRow.join(' · ')})`);
+      check(journalSize.ok, `${label} : « Journal » est dans le rail « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
+      const callRow = await page.$$eval('[data-call-rail="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : button.hasAttribute('data-call-record') ? 'record' : '')));
+      check(JSON.stringify(callRow.filter((key) => key !== 'pip').slice(0, 5)) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « Journal » suit « Ajouter » dans « L'appel » (${callRow.join(' · ')})`);
       await journalButton.click();
       check(await appears(page, '[data-call-journal-panel]'), `${label} : « Journal » ouvre le journal`);
-      check((await page.$('[data-call-row]')) === null, `${label} : le journal REMPLACE les rangées`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-row], [data-call-rail]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le journal REMPLACE les rails`);
       check((await page.$('[data-call-captions-panel]')) === null, `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(await journalEntries())})`);
-      const peerLine = await page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
-        text: entry.querySelector('[data-call-journal-text]')?.textContent ?? '',
-        original: entry.querySelector('[data-call-journal-original]')?.textContent ?? '',
-      }));
-      check(peerLine.text === PEER_TRANSLATED && peerLine.original === `Original · ${PEER_SAID}`, `${label} : la phrase servie, et son original dessous (${JSON.stringify(peerLine)})`);
+      const peerOf = () =>
+        page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
+          text: entry.querySelector('[data-call-journal-text]')?.textContent ?? '',
+          original: entry.querySelector('[data-call-journal-original]')?.textContent ?? '',
+          clock: entry.querySelector('time')?.textContent ?? '',
+          clockAfterWho: entry.querySelector('[data-call-journal-who]')?.nextElementSibling === entry.querySelector('time'),
+        }));
+      const folded = await peerOf();
+      check(folded.text === PEER_TRANSLATED && folded.original === '', `${label} : la phrase servie seule, l'original replié (${JSON.stringify(folded)})`);
+      check(/^\d+:\d{2}$/.test(folded.clock) && folded.clockAfterWho, `${label} : l'heure dans l'appel, à droite de la ligne méta (${JSON.stringify(folded)})`);
+      await page.click('[data-call-journal-entry="peer"] [data-call-journal-line]');
+      await page.waitForSelector('[data-call-journal-original]', { timeout: 3000 });
+      const peerLine = await peerOf();
+      check(peerLine.original === `Original · ${PEER_SAID}`, `${label} : toucher la phrase déplie son original dessous (${JSON.stringify(peerLine)})`);
+      const unfoldIn = await page.$eval('[data-call-journal-original]', (element) => getComputedStyle(element).animationName);
+      check(unfoldIn === 'call-unfold-in', `${label} : l'original du journal DESCEND de sa phrase, il n'apparaît pas d'un coup (${unfoldIn})`);
       check((await page.$eval('[data-call-journal]', (list) => getComputedStyle(list).overflowY)) === 'auto', `${label} : le journal défile librement`);
       await capture(page, `journal-${width}x${height}`);
+      await page.click('[data-call-journal-entry="peer"] [data-call-journal-line]');
+      const unfoldOut = await page.$eval('[data-call-journal-original]', (element) => getComputedStyle(element).animationName).catch(() => 'parti sans fondu');
+      check(unfoldOut === 'call-unfold-out', `${label} : le second toucher le fait REMONTER en fondu (${unfoldOut})`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-journal-original]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : replié, l'original ne laisse rien`);
       await page.click('[data-panel-back]');
-      check(await appears(page, '[data-call-row="call"]'), `${label} : ‹ revient aux rangées`);
+      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ revient aux rails`);
       check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
+
+      // ---- 4 bis. le journal DANS la pilule, depuis le pied des sous-titres (#17343, #17346)
+      await closeActions(page);
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel] [data-call-captions-journal]'), `${label} : les sous-titres sont dans la pilule, avec « Journal » à leur pied`);
+      const footJournal = await tapSize(page.locator('[data-call-captions-journal]'));
+      check(footJournal.ok, `${label} : « Journal » du pied fait au moins ${TAP_FLOOR} (${JSON.stringify(footJournal.size)})`);
+      await page.click('[data-call-captions-journal]');
+      check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre tout l'appel DANS la pilule`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : à la place des sous-titres (ils repartent en fondu, #17700)`);
+      check(await page.$eval('[data-call-control-pill] [data-call-more]', (more) => more.getBoundingClientRect().bottom > (document.querySelector('[data-call-journal]')?.getBoundingClientRect().bottom ?? 0)), `${label} : au-dessus de la rangée de base, qui reste là`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : (…) range le journal`);
+      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : les rails sortent`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : refermer les actions rend le journal`);
+      await page.click('[data-panel-close]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : ✕ rend les sous-titres`);
+
+      // ---- 4 ter. sous « Réduire les animations », (…) ne les coupe pas net (#17700) :
+      // la règle générale de la feuille éteint leur fondu CSS, le moteur le rejoue court.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.click('[data-call-control-pill] [data-call-more]');
+      const reducedOut = await page
+        .waitForFunction(
+          () => {
+            const leaving = document.querySelector('[data-call-pill-text^="captions"][data-leaving]');
+            const fade = leaving?.getAnimations().find((animation) => !('animationName' in animation));
+            const frames = fade?.effect?.getKeyframes() ?? [];
+            return fade === undefined ? null : { duration: fade.effect?.getTiming().duration, opacity: frames.map((frame) => Number(frame.opacity)), moves: frames.some((frame) => frame.transform !== undefined) };
+          },
+          undefined,
+          { timeout: 2000 },
+        )
+        .then((handle) => handle.jsonValue(), () => null);
+      check(reducedOut !== null && reducedOut.opacity.join() === '1,0' && !reducedOut.moves && Number(reducedOut.duration) > 0 && Number(reducedOut.duration) <= 200, `${label} : sous « Réduire les animations », (…) range les sous-titres en fondu COURT, opacité seule (${JSON.stringify(reducedOut)})`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : puis ils ne laissent rien`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : refermer les actions les rend`);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
 
       await openActions(page);
       await cc.click();
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : les sous-titres coupés`);
       check(await openJournal(), `${label} : le journal s'ouvre, sous-titres coupés`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, sous-titres coupés (${JSON.stringify(await journalEntries())})`);
@@ -300,7 +378,7 @@ try {
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : Échap ferme le journal`);
       check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);
 
-      await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+      await page.click('[data-call-screen] button[aria-label="Réduire"]');
       check(await appears(page, '[data-call-pill-bar]'), `${label} : l'appel se réduit`);
       await page.click('[data-call-pill-bar] button >> nth=0');
       check(await appears(page, '[data-call-screen="connected"]'), `${label} : l'appel revient`);
@@ -340,7 +418,9 @@ try {
       const open = page.locator(BUBBLE_TOGGLE);
       await open.scrollIntoViewIfNeeded();
       const openSize = await tapSize(open);
-      check(openSize.ok, `${label} : « Transcription » fait au moins ${TAP_FLOOR} (${JSON.stringify(openSize.size)})`);
+      check(openSize.ok, `${label} : « Afficher la transcription » fait au moins ${TAP_FLOOR} (${JSON.stringify(openSize.size)})`);
+      check((await open.textContent()) === 'Afficher la transcription', `${label} : la bascule replié dit « Afficher la transcription » (${JSON.stringify(await open.textContent())})`);
+      check((await page.$('[data-message="st-call"] [data-call-card] [data-call-transcript-toggle]')) !== null, `${label} : la bascule vit DANS la carte de l'appel`);
       check((await open.getAttribute('aria-expanded')) === 'false', `${label} : repliée par défaut`);
       await open.click();
       check(await appears(page, '[data-call-transcript="lines"]'), `${label} : la transcription gravée se déplie`);
@@ -355,10 +435,26 @@ try {
           ]),
         `${label} : le pair traduit par le Prisme, le lecteur tel quel, l'original quand rien ne sert (${JSON.stringify(transcript)})`,
       );
+      const unfolded = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(unfolded.length === 1 && unfolded[0] === 'Original · Hi, can you hear me?', `${label} : sous la phrase traduite, « Original · … » (${JSON.stringify(unfolded)})`);
       await capture(page, `transcription-${width}x${height}`);
+      const foot = await page.$('[data-call-transcript-original]');
+      check((await foot.getAttribute('aria-pressed')) === 'false' && (await foot.textContent()) === 'Voir l’original', `${label} : le pied dit « Voir l'original », non pressé`);
       await page.click('[data-call-transcript-original]');
       const originals = await page.$$eval('[data-call-transcript-line] [dir="auto"]', (lines) => lines.map((line) => line.textContent ?? ''));
-      check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » rend ce qui a été dit (${JSON.stringify(originals[0])})`);
+      check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » met ce qui a été dit EN TÊTE (${JSON.stringify(originals[0])})`);
+      const inverted = await page.$$eval('[data-call-transcript-line] [data-call-transcript-translated-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(inverted.length === 1 && inverted[0] === 'Traduit · Salut, tu m’entends ?', `${label} : et INVERSE les deux lignes, « Traduit · … » dessous, rien ne disparaît (${JSON.stringify(inverted)})`);
+      check((await page.$('[data-call-transcript-line] [data-call-transcript-original-line]')) === null, `${label} : « Original · … » a cédé la place à « Traduit · … »`);
+      check((await foot.getAttribute('aria-pressed')) === 'true' && (await foot.textContent()) === 'Voir la traduction', `${label} : le pied dit « Voir la traduction », pressé`);
+      check(await swapSettled(page), `${label} : le fondu de la bascule se termine avant la capture`);
+      await capture(page, `transcription-inversee-${width}x${height}`);
+      await page.click('[data-call-transcript-original]');
+      const restored = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(restored.length === 1 && restored[0] === 'Original · Hi, can you hear me?', `${label} : « Voir la traduction » rend l'état par défaut (${JSON.stringify(restored)})`);
+      await open.click();
+      check(await vanishes(page, '[data-call-journal-fold]'), `${label} : replier le journal le retire, après son fondu`);
+      check((await open.getAttribute('aria-expanded')) === 'false', `${label} : le bouton dit qu'il est replié`);
 
       // ------------------------------------------------ 6 bis. la transcription dans la fiche d'un appel fini (#8579)
       await page.goto(`${BASE}/call/call-kwame-video`, { waitUntil: 'load' });

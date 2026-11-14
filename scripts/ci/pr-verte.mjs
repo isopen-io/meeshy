@@ -9,8 +9,11 @@
 //
 // La règle, une fois :
 //   - chaque check du SHA de tête est TERMINÉ, conclu `SUCCESS`, `SKIPPED` ou `NEUTRAL` ;
-//   - « Verdict CI » (l'agrégateur de `ci.yml`, `needs-verdict.mjs`) est PRÉSENT et vert —
-//     un rollup sans lui n'a pas encore jugé la PR ;
+//   - « Verdict CI » (l'agrégateur de `ci.yml`, `needs-verdict.mjs`) est PRÉSENT et a
+//     CONCLU `SUCCESS` — un rollup sans lui n'a pas encore jugé la PR, et un verdict
+//     `SKIPPED` ou `NEUTRAL` dit « je n'ai pas jugé », ce qui n'est pas un feu vert
+//     (#18045 : sous `PR_CI_GEL`, dix-sept jobs sautés et un verdict qui n'exécutait
+//     aucune étape rendaient « vert — 18 checks ») ;
 //   - une annulation n'est JAMAIS verte (`CANCELLED`, `TIMED_OUT`, `STALE`… sont rouges) ;
 //   - un check relancé est jugé sur sa DERNIÈRE exécution (même workflow, même nom).
 //
@@ -60,7 +63,15 @@ export const juge = (rollup) => {
   if (rouges.length > 0) return { etat: 'rouge', code: 1, detail: rouges.sort() };
   const enCours = checks.filter((c) => !c.fini).map((c) => c.nom);
   if (enCours.length > 0) return { etat: 'en cours', code: 3, detail: enCours.sort() };
-  if (!checks.some((c) => c.nom === VERDICT)) return { etat: 'en cours', code: 3, detail: [`« ${VERDICT} » absent du SHA de tête`] };
+  // #18045 — l'agrégateur doit être là ET avoir CONCLU. `SKIPPED` / `NEUTRAL`
+  // disent « je n'ai pas jugé », ce qui est l'inverse d'un feu vert : elles
+  // sont vertes pour un job ORDINAIRE (sauté par zone touchée = rien à faire
+  // sur ce diff) et muettes pour celui dont le travail EST de conclure.
+  const verdict = checks.find((c) => c.nom === VERDICT);
+  if (verdict === undefined) return { etat: 'en cours', code: 3, detail: [`« ${VERDICT} » absent du SHA de tête`] };
+  if (verdict.conclusion !== 'SUCCESS') {
+    return { etat: 'en cours', code: 3, detail: [`« ${VERDICT} » n'a pas conclu (${verdict.conclusion || 'sans conclusion'})`] };
+  }
   return { etat: 'vert', code: 0, detail: [`${checks.length} checks`] };
 };
 
@@ -121,7 +132,35 @@ const autoTest = () => {
   const statutCombine = { state: 'failure', statuses: [{ context: 'ext', state: 'failure', created_at: '2026-10-24T10:00:00Z' }] };
   assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: statutCombine })).etat, 'rouge');
   assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: { state: 'pending', statuses: [] } })).etat, 'vert');
-  console.log('pr-verte --self-test : 25 cas tenus');
+
+  // #18045 — L'AGRÉGATEUR DOIT AVOIR CONCLU, pas seulement être présent.
+  //
+  // `SKIPPED` et `NEUTRAL` veulent dire « ce job n'a pas jugé » — l'inverse
+  // exact d'un feu vert. L'outil les acceptait parce qu'elles sont dans
+  // `VERTS`, ce qui est juste pour un job ORDINAIRE (sauté par zone touchée =
+  // rien à faire sur ce diff) et faux pour l'agrégateur, dont le travail EST de
+  // conclure.
+  //
+  // Mesuré avant ce lot, sur la charge RÉELLE d'une PR sous `PR_CI_GEL` :
+  // dix-sept jobs `skipped` et un `Verdict CI` `success` qui n'avait exécuté
+  // AUCUNE étape (ses trois étapes portaient le gel, son `if: always()` de job
+  // le faisait conclure par absence d'échec) ⇒ `vert — 18 checks`, EXIT=0.
+  // Tous les fusionneurs du dépôt (#12559) auraient fusionné sans qu'un job
+  // tourne.
+  //
+  // Le gel n'est que le RÉVÉLATEUR : toute autre façon de ne pas exécuter le
+  // verdict rouvrait la même porte. D'où une garde sur la CONCLUSION, et non
+  // sur la cause du jour.
+  assert.equal(juge([run(VERDICT, 'SKIPPED'), run('a', 'SKIPPED')]).etat, 'en cours');
+  assert.equal(juge([run(VERDICT, 'NEUTRAL'), run('a', 'SKIPPED')]).etat, 'en cours');
+  assert.deepEqual(juge([run(VERDICT, 'SKIPPED')]).detail, [`« ${VERDICT} » n'a pas conclu (SKIPPED)`]);
+  assert.equal(jugeRest(charge([rest(VERDICT, 'skipped'), rest('a', 'skipped')])).etat, 'en cours');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'neutral'), rest('a', 'skipped')])).etat, 'en cours');
+  // Non-régression : un verdict qui a VRAIMENT conclu reste vert, et un verdict
+  // rouge reste rouge — la garde ne déplace que les deux conclusions muettes.
+  assert.equal(juge([run(VERDICT, 'SUCCESS'), run('a', 'SKIPPED')]).etat, 'vert');
+  assert.equal(juge([run(VERDICT, 'FAILURE'), run('a', 'SKIPPED')]).etat, 'rouge');
+  console.log('pr-verte --self-test : 32 cas tenus');
 };
 
 const lit = (numero) => {

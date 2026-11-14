@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">How do I use it?</string>
+    <string name="game2_showcase_empty">No trophy yet: cups, Rebirth and Flame trophies are kept here.</string>
+    <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date.</string>
+    <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
+    <string name="game2_atlas_privacy">Private by default: the game keeps the language and the date, never the other person or the conversation.</string>
+    <string name="game2_league_pseudonym_invalid">Not valid.</string>
+    <string name="game_rules_2_body">Your level is read from your light: a million sparks make level 100.</string>
+    <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
+    <string name="game2_prestige_meo">Your level restarts at 1 and your sparks at 0; your rank, glory and Meeshes stay. Your ancestors offer you a numbered trophy and %1$s glory.</string>
+    <string name="game2_season_seal_body">Purely decorative: a collectible every %1$s stops.</string>
+    <string name="game2_settings_friends_league_body">Accepted friends and you see each other in the weekly ranking.</string>
+    <string name="game_rules_section_rules">Rules</string>
+    <string name="game_rules_section_concepts">Concepts</string>
+    <string name="game_rules_4_body">Your level drops by as much; your rank and medals don’t drop.</string>
+    <string name="game_rules_5_body">Mints, new levels and great deeds grow your glory, which gives your rank.</string>
+    <string name="game_rules_6_body">Keeping Meeshes grows your legacy; spending them watches over the Flame.</string>
+    <string name="game_rules_7_body">A dream each night, an Offering, a Flame that grows as you come back.</string>
+    <string name="game_detail_coin_what">The Meesh is your light bound into a numbered coin.</string>
+    <string name="game_detail_fact_mint_next">One in a hundred is gold, one in a thousand prism.</string>
+    <string name="game_notebook_empty">Each sign from your ancestors can become a photo here.</string>
+    <string name="game_error_league_pseudonym_invalid">Not valid.</string>
+    <string name="game2_league_pseudonym_hint_change">3 to 20 characters (letters, digits, . - _). Not your name or your username.</string>
+    <string name="game_concept_level_what">Your level is the number at the centre of your ring: it is read from your light.</string>
+    <string name="game_concept_flame_use">A Vigil guards it for one day away.</string>
+    <string name="game_concept_missions_use">Open an act to see where you stand. You can change one a day with a Meesh.</string>
+    <string name="game2_prestige_confirm_access">Your joust and your alliance stay open.</string>
+    <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random and changes with every journey.</string>
+    <string name="game2_league_snapshot">Ranking set every day at 4 a.m.: nobody sees who is playing right now. Only your row is live.</string>
+    <string name="game2_season_how">Acts and alliances carry you a few strides. The whole journey is free.</string>
+    <string name="game2_settings_celebrations_switch">Ancestors’ signs</string>
+    <string name="game_guide_step_welcome_what">The game in seven cards</string>
+    <string name="game_guide_more">What does this moment mean?</string>
+    <string name="game_progression_empty">Your first medal lights up with your very first move.</string>
+    <string name="game_photo_camera_denied">The camera is denied: allow it in settings.</string>
+    <string name="game_photo_camera_unsupported">This device does not allow the camera here.</string>
+    <string name="game_photo_camera_unavailable">The camera is not available.</string>
+    <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it, then you can mint.</string>
+    <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
+    <string name="game2_settings_hidden_body">The game disappears from this device and closes to others.</string>
+    <string name="game2_settings_hidden_question">What does hiding close?</string>
+    <string name="game2_settings_hidden_effects">Hides the game on this device, closes your trophies, rank, Legacy and Atlas to others, takes you out of the public joust. Sparks and trophies are kept.</string>
+    <string name="game2_settings_visibility_question">Who sees when I play?</string>
+    <string name="game2_settings_visibility_presence">Outside accepted friends, nobody sees whether you are online or when you play.</string>
+    <string name="game2_settings_friends_league_question">What does “Opt me out” remove?</string>
+    <string name="game2_settings_friends_league_effects">The switch removes you from their ranking and them from yours: both directions.</string>
+    <string name="reveal_badge_axis_subtitle">One more tier on this axis.</string>
+    <string name="game_rules_1_body">Writing, talking, posting, reacting, inviting: every real exchange counts.</string>
+    <string name="game_rules_1_question">What makes more sparks fly?</string>
+    <string name="game_rules_1_more">A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move.</string>
+    <string name="game_rules_3_body" formatted="false">A Meesh is minted by hand: it binds part of your light.</string>
+    <string name="game_rules_3_question">How much light does a mint take?</string>
+    <string name="game_rules_3_more" formatted="false">That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.</string>
+    <string name="game2_league_consent_how_question">How am I placed?</string>
+    <string name="game_concept_league_use">Look at your place and your zone: the top 7 climb, the bottom 5 go back down.</string>
+    <string name="game2_season_none">No journey under way.</string>
+    <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts.</string>
+    <string name="reveal_streak_subtitle">%1$d days in a row.</string>
+    <string name="game_progression_offline_empty">Offline — no progress in memory.</string>
+    <string name="progression_elans_empty">Post a story, a post or start a conversation: every family you keep going at once multiplies your sparks.</string>
+    <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles. It also carries your journey a few strides further.</string>
+    <string name="game2_guide_moment_league_relegated_means">The bottom 5 go back down; the sparks start again from zero, nothing else goes down.</string>
+    <string name="game_concept_points_what">Every real exchange makes sparks fly: together, they form your light.</string>
+    <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move.</string>
+    <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100; it is optional.</string>
+    <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero; the rest is kept. At most five rebirths lead to the Sixth Age.</string>
+    <string name="game_rules_8_body">At each evolution, a sign from your ancestors becomes a photo with Mee and Meo, kept in your Chronicle.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sparks while your level is 7 or more below your highest light.</string>
+    <string name="game_rules_badges_ribbon_question">What do the ribbon and the enamel mean?</string>
+</resources>

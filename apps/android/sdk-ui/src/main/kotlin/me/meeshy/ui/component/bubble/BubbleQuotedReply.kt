@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.QuotedNoticeText
 import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -40,6 +41,8 @@ internal object BubbleQuotedReplyBuilder {
         reply: ApiMessageReplyPreview?,
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
+        viewerId: String? = null,
+        noticeLanguage: String? = null,
     ): BubbleQuotedReply? {
         if (reply == null) return null
         val senderName = listOf(reply.senderDisplayName, reply.sender?.displayName, reply.sender?.username)
@@ -48,6 +51,16 @@ internal object BubbleQuotedReplyBuilder {
             return BubbleQuotedReply(
                 text = null,
                 isDeleted = true,
+                mediaKind = ReplyMediaKind.None,
+                thumbnailUrl = null,
+                senderName = senderName,
+            )
+        }
+        // #17441 — un avis cité se dit dans la langue du lecteur, de son point de vue ; illisible ⇒ son `content`.
+        QuotedNoticeText.of(reply.notice, viewerId, noticeLanguage)?.let { text ->
+            return BubbleQuotedReply(
+                text = text,
+                isDeleted = false,
                 mediaKind = ReplyMediaKind.None,
                 thumbnailUrl = null,
                 senderName = senderName,

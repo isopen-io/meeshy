@@ -361,6 +361,8 @@ public struct NotificationPayload {
     public let notificationId: String?
     public let type: String?
     public let conversationId: String?
+    /// #18052 — la communauté où le destinataire vient d'être ajouté (`''` vaut absence sur le fil).
+    public let communityId: String?
     public let messageId: String?
     public let senderId: String?
     public let senderUsername: String?
@@ -397,6 +399,8 @@ public struct NotificationPayload {
         self.notificationId = rawNotificationId.isEmpty ? nil : rawNotificationId
         self.type = userInfo["type"] as? String
         self.conversationId = userInfo["conversationId"] as? String
+        let rawCommunityId = userInfo["communityId"] as? String ?? ""
+        self.communityId = rawCommunityId.isEmpty ? nil : rawCommunityId
         self.messageId = userInfo["messageId"] as? String
         self.senderId = userInfo["senderId"] as? String
         self.senderUsername = userInfo["senderUsername"] as? String

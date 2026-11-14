@@ -17,21 +17,22 @@ import { callLayout, type CallLayout } from './call-view';
  *   la caméra (#9094, `.cameraPicker` d'iOS), Effets (caméra allumée, hors
  *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
  *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
- * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
- *   (appel connecté et identifié), Capturer (une vidéo connectée — #8552),
- *   Ajouter des personnes (#8433) et Réagir (#8439), en duo comme en groupe
- *   dès qu'un appel identifié est rejoint, puis l'image dans l'image là où une
- *   vidéo peut flotter — à la dernière place, comme iOS (#9095). La conversation de l'appel n'est
- *   PAS une action : un seul chemin y mène, « Conversation » dans l'en-tête
- *   (#8436).
+ * - **l'appel** — ce qui concerne tout le monde, dans l'ordre de la planche
+ *   (#17327) : Sous-titres, Enregistrer (appel connecté et identifié), Ajouter
+ *   des personnes (#8433), Journal (#8579), Réagir (#8439) et Capturer (une
+ *   vidéo connectée — #8552). Ni la conversation de l'appel ni l'image dans
+ *   l'image ne sont des actions de la liste : elles vivent dans l'en-tête
+ *   (#8436, #17329).
  *
- * En duo comme en groupe, la pilule GRANDIT vers le haut et monte chaque
- * famille en une RANGÉE légendée qui défile à l'horizontale (#8550).
+ * Où elles se rangent dépend du nombre de participants
+ * (`call-controls-disposition.ts`, #17327) : à deux, un rail par famille sur
+ * les bords ; à plusieurs, une RANGÉE légendée par famille dans la pilule, qui
+ * grandit vers le haut (#8550).
  */
 
 export type MineAction = 'camera' | 'flip' | 'camera-picker' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'journal' | 'record' | 'capture' | 'invite' | 'react' | 'pip';
+export type CallAction = 'captions' | 'journal' | 'record' | 'capture' | 'invite' | 'react';
 
 /** Ce que propose l'appareil pour changer de caméra (#9094). */
 export type CameraSwitch = 'flip' | 'picker' | 'none';
@@ -45,8 +46,6 @@ type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'scree
   readonly canEffect: boolean;
   /** Retourner (avant/arrière), choisir parmi des webcams, ou rien. */
   readonly cameraSwitch: CameraSwitch;
-  /** Une vidéo peut flotter dans l'image dans l'image (`shouldOfferPip`). */
-  readonly canPip: boolean;
   /** La scène montre au moins une image (`isVideoScene`). */
   readonly videoScene: boolean;
 };
@@ -64,11 +63,12 @@ export function callControlSet(context: ControlsContext): CallControlSet {
     ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
   ];
   const call: readonly CallAction[] = [
-    ...(inCall ? (['captions', 'journal'] as const) : []),
+    ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
+    ...(context.callId !== null && inCall ? (['invite'] as const) : []),
+    ...(inCall ? (['journal'] as const) : []),
+    ...(context.callId !== null && inCall ? (['react'] as const) : []),
     ...(context.videoScene && context.phase.kind === 'connected' ? (['capture'] as const) : []),
-    ...(context.callId !== null && inCall ? (['invite', 'react'] as const) : []),
-    ...(context.canPip ? (['pip'] as const) : []),
   ];
   return { mine, call };
 }
@@ -97,17 +97,26 @@ export function cameraSwitchOf(devices: readonly CameraDevice[]): CameraSwitch {
   return cameras.some(rearFacing) ? 'flip' : 'picker';
 }
 
-/**
- * La scène est-elle VIDÉO ? Seule une scène vidéo range ses commandes : en
- * audio, il n'y a rien à dégager.
- */
-export function isVideoScene(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup' | 'phase'>): boolean {
+type SceneCall = Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup' | 'phase'>;
+
+/** La scène est-elle VIDÉO ? Une image à capturer (« Capture »), et une scène qui range ses commandes au toucher. */
+export function isVideoScene(call: SceneCall): boolean {
   if (!joined(call.phase.kind)) return false;
   const layout: CallLayout = callLayout(call);
   if (layout === 'video-duo' || layout === 'screen') return true;
   if (layout !== 'grid') return false;
   return call.cameraOn || Object.values(call.members).some((member) => member.cameraOn || member.screenSharing);
 }
+
+/**
+ * Un toucher sur la SCÈNE range-t-il les commandes (loi 11, #16663) ? Dès que l'appel est établi :
+ * l'image d'une vidéo, le fond derrière l'avatar d'un duo audio (#17945) et le fond d'une grille de
+ * groupe sans caméra (extension porteur du 2026-11-13, #17945) — une vignette, bouton, garde son
+ * toucher. Pendant la sonnerie et à la fin, rien ne se range. Mêmes vecteurs que
+ * `CallChromeVisibility.mayToggleByTap` (iOS) et `CallChromeController` (Android) : vidéo oui · duo
+ * audio établi oui · duo audio pas encore établi non · groupe avec caméra oui · groupe sans caméra oui.
+ */
+export const tapStowsChrome = (call: Pick<ActiveCall, 'phase'>): boolean => joined(call.phase.kind);
 
 /**
  * Ce que montrent les commandes d'une vidéo (#8550, #8988) : `shown`, ou

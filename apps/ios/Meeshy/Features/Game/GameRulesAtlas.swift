@@ -199,7 +199,7 @@ enum GameAtlasCopy {
         }
     }
 
-    static func line(_ family: GameRulesAtlas.Family) -> String {
+    static func line(_ family: GameRulesAtlas.Family) -> String? {
         switch family {
         case .tiers:
             String(localized: "game.atlas.tiers.line", defaultValue: "Vingt états, de l’Étincelle à la Singularité : ton anneau change à chacun.", bundle: .main)
@@ -214,7 +214,7 @@ enum GameAtlasCopy {
         case .leagues:
             String(localized: "game.atlas.leagues.line", defaultValue: "Chaque semaine, tu entres dans ta joute : les sept premiers gravissent le cercle suivant.", bundle: .main)
         case .medals:
-            String(localized: "game.atlas.medals.line", defaultValue: "Sept matières, du cuivre au prisme : plus tu répètes un geste, plus la médaille brille.", bundle: .main)
+            nil
         case .trophies:
             String(localized: "game.atlas.trophies.line", defaultValue: "Un trophée se reçoit à un moment précis, et il ne s’éteint jamais.", bundle: .main)
         case .rarities:
@@ -261,10 +261,9 @@ enum GameAtlasCopy {
         }
     }
 
-    /// La règle des niveaux sous la grille des paliers (#9688) : jusqu'où chaque rang ouvre les niveaux, le Prestige
-    /// facultatif au niveau 100, et la Gloire du premier passage. Les nombres et les rangs viennent de la loi.
+    /// La règle des niveaux sous la grille des paliers (#9688) : jusqu'où chaque rang ouvre les niveaux, et la Gloire du premier passage. Les nombres et les rangs viennent de la loi.
     static var levelRules: [String] {
-        GameRulesAtlas.levelCapBands.compactMap(levelCapLine) + [prestigeLine, firstPassGloryLine]
+        GameRulesAtlas.levelCapBands.compactMap(levelCapLine) + [firstPassGloryLine]
     }
 
     private static func levelCapLine(_ band: GameRulesAtlas.LevelCapBand) -> String? {
@@ -285,11 +284,6 @@ enum GameAtlasCopy {
         let from = GameCopy.rankName(first)
         let to = GameCopy.rankName(last)
         return String(localized: "game.atlas.tiers.cap.ranks", defaultValue: "Jusqu’au niveau \(level) aux rangs \(from) et \(to).", bundle: .main)
-    }
-
-    private static var prestigeLine: String {
-        let level = GameCopy.formatCount(GameLevels.prestigeLevel)
-        return String(localized: "game.atlas.tiers.prestige", defaultValue: "La renaissance s’offre au niveau \(level) : elle est facultative, ta lumière peut aussi grandir encore.", bundle: .main)
     }
 
     private static var firstPassGloryLine: String {

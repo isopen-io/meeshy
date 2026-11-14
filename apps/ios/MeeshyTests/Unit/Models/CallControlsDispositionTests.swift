@@ -17,8 +17,7 @@ final class CallControlsDispositionTests: XCTestCase {
             isVideoEnabled: isVideoEnabled,
             hasSelectableCameras: false,
             isConnected: true,
-            mayRecord: true,
-            canPictureInPicture: false
+            mayRecord: true
         ))
     }
 
@@ -64,9 +63,15 @@ final class CallControlsDispositionTests: XCTestCase {
         XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.record)).isEmpty)
     }
 
-    /// Ajouter et Journal s'ouvrent en feuille : les rails restent.
+    /// Le journal s'ouvre DANS la pilule (#17343) : les rails lui cèdent la place, et
+    /// reviennent quand (…) le range.
+    func test_rails_theJournalDrawnInThePill_hidesTheRails_andTheStowedJournalBringsThemBack() {
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.journal)).isEmpty)
+        XCTAssertEqual(CallControlsDisposition.rails.railRows(actions(), layer: .menuOverJournal).count, 2)
+    }
+
+    /// Ajouter s'ouvre en feuille : les rails restent.
     func test_rails_aSheetPanel_keepsTheRails() {
-        XCTAssertEqual(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.journal)).count, 2)
         XCTAssertEqual(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.people)).count, 2)
     }
 
@@ -99,7 +104,7 @@ final class CallControlsDispositionTests: XCTestCase {
     }
 
     func test_rows_neverDrawsARailOverTheGrid() {
-        for layer in [CallScreenLayer.idle, .menu, .panel(.journal), .panel(.react), .mode(.montage)] {
+        for layer in [CallScreenLayer.idle, .menu, .menuOverJournal, .panel(.journal), .panel(.react), .mode(.montage)] {
             XCTAssertTrue(CallControlsDisposition.rows.railRows(actions(), layer: layer).isEmpty, "\(layer)")
         }
     }
@@ -118,6 +123,8 @@ final class CallControlsDispositionTests: XCTestCase {
 
     /// Enregistrer / Réagir : la pilule grandit pour contenir l'option, en duo comme en groupe.
     func test_unfoldsPill_anOptionDrawnInThePill_growsItInBothDispositions() {
+        XCTAssertTrue(CallControlsDisposition.rails.unfoldsPill(for: .panel(.journal)))
+        XCTAssertTrue(CallControlsDisposition.rows.unfoldsPill(for: .panel(.journal)))
         XCTAssertTrue(CallControlsDisposition.rails.unfoldsPill(for: .panel(.react)))
         XCTAssertTrue(CallControlsDisposition.rows.unfoldsPill(for: .panel(.record)))
     }
@@ -190,5 +197,17 @@ final class CallControlsDispositionTests: XCTestCase {
         let leading = Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 21)
         let trailing = Layout.slideOffset(side: .trailing, isRightToLeft: false, safeHorizontal: 21)
         XCTAssertEqual(abs(leading), abs(trailing))
+    }
+
+    // MARK: - #17532 — le rangement fait sortir le rail par son bord (G1.11 · G2.8)
+
+    func test_stow_aStowedRailLeavesByItsEdge_withMotionAllowed() {
+        XCTAssertTrue(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: false))
+        XCTAssertNotEqual(Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 0), 0)
+    }
+
+    func test_stow_aRevealedRailStaysInPlace_andReducedMotionOnlyFades() {
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: true, reduceMotion: false))
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: true))
     }
 }

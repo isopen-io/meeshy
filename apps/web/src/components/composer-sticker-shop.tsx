@@ -109,6 +109,7 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
   },
   title: (pack) => stickerPackText(pack, language).name,
   description: (pack) => stickerPackText(pack, language).description,
+  rowMeta: (pack) => [translateStickerPacks(language, 'stickerPacks.count', { count: String(countOf(pack)) })],
   meta: (pack) => [
     translateStickerPacks(language, 'stickerPacks.by', { author: pack.author }),
     translateStickerPacks(language, 'stickerPacks.count', { count: String(countOf(pack)) }),

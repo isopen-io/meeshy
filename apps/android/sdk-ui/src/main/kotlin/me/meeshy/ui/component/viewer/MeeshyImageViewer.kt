@@ -30,7 +30,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import coil.request.CachePolicy
@@ -86,7 +85,7 @@ public fun MeeshyImageViewer(
     secure: Boolean = false,
 ) {
     if (imageUrls.isEmpty()) return
-    Dialog(
+    ViewerDialog(
         onDismissRequest = onDismiss,
         properties = viewerDialogProperties(secure),
     ) {

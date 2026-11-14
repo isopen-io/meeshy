@@ -622,9 +622,8 @@ struct FeedView: View {
                     // Empty state when no posts and no error
                     if viewModel.hasLoaded && viewModel.posts.isEmpty && !viewModel.isLoading && viewModel.error == nil {
                         AdaptiveContentUnavailableView(
-                            String(localized: "feed.empty.title", defaultValue: "Aucune publication"),
-                            systemImage: "text.bubble",
-                            description: Text(String(localized: "feed.empty.subtitle", defaultValue: "Les publications de vos contacts apparaîtront ici"))
+                            String(localized: "feed.empty.title", defaultValue: "Aucune publication de vos contacts"),
+                            systemImage: "text.bubble"
                         )
                     }
 

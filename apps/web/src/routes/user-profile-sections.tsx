@@ -98,9 +98,6 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
             <p className="text-body font-semibold" style={{ color: INK }}>
               {translate(language, 'userProfile.signin.title')}
             </p>
-            <p className="text-caption" style={{ color: INK_2 }}>
-              {translate(language, 'userProfile.signin.body')}
-            </p>
             <button
               type="button"
               data-profile-signin-cta

@@ -75,6 +75,7 @@ struct ProgressionFrontList: View {
             if game != nil {
                 ProgressionConceptRow(
                     title: String(localized: "game.door.notebook", defaultValue: "La Chronique", bundle: .main),
+                    subtitle: String(localized: "game.door.notebook.line", defaultValue: "Tes photos avec Mee et Meo", bundle: .main),
                     symbol: "book.closed", identifier: "game.door.notebook", action: onOpenNotebook
                 )
                 ProgressionConceptRow(

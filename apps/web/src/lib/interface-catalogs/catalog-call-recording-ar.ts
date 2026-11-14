@@ -2,11 +2,11 @@ import type { CallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 
 const ar = {
   'callRecording.stop': 'إيقاف التسجيل',
+  'callRecording.stopShort': 'إيقاف',
   'callRecording.active': 'التسجيل جارٍ',
   'callRecording.waiting': 'بانتظار موافقة الجميع…',
   'callRecording.ask': '{name} يريد تسجيل المكالمة',
   'callRecording.askVideo': '{name} يريد تسجيل المكالمة بالفيديو',
-  'callRecording.askDetail': 'لا يبدأ التسجيل إلا إذا وافق الجميع، ثم يُضاف إلى المحادثة.',
   'callRecording.accept': 'قبول',
   'callRecording.refuse': 'رفض',
   'callRecording.cancel': 'إلغاء',

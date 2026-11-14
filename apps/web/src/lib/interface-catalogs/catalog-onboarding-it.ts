@@ -32,7 +32,7 @@ const it = {
   'onboarding.email.failed': 'Il link non è partito. Riprova.',
 
   'onboarding.age.title': 'La tua data di nascita',
-  'onboarding.age.body': 'Per proporti gli spazi giusti. Puoi saltare.',
+  'onboarding.age.body': 'Per proporti gli spazi giusti.',
   'onboarding.age.skip': 'Salta',
   'onboarding.age.check': 'Controlla la tua data di nascita.',
   'onboarding.age.failed': 'La tua data non è stata salvata. Riprova.',
@@ -68,7 +68,7 @@ const it = {
   'onboarding.story.verify': 'Per pubblicare la tua story, conferma prima il tuo indirizzo e-mail.',
 
   'onboarding.friends.title': 'Trova la tua gente',
-  'onboarding.friends.body': 'Aggiungi 3 persone simili a te. Quando accettano, guadagnate almeno\u00A0+{points} entrambi.',
+  'onboarding.friends.body': 'Aggiungi 3 persone simili a te.',
   'onboarding.friends.add': 'Aggiungi',
   'onboarding.friends.addNamed': 'Aggiungi {name}',
   'onboarding.friends.added': 'Inviata',
@@ -92,7 +92,7 @@ const it = {
   'onboarding.recap.streak.other': 'Fiamma: {days} giorni',
   'onboarding.recap.badges': 'Medaglie: {count}',
   'onboarding.recap.friends': 'Richieste in arrivo: {count}',
-  'onboarding.recap.tomorrow': 'Domani, la tua Fiamma potrà ardere da {next} giorni.',
+  'onboarding.recap.tomorrow': 'Domani, la tua Fiamma arderà da {next} giorni.',
   'onboarding.recap.explore': 'Continua a esplorare',
   'onboarding.recap.game': 'Scopri il gioco con Mee e Meo',
   'onboarding.recap.done': 'Per oggi basta così',

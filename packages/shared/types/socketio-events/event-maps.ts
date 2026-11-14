@@ -192,6 +192,7 @@ import type {
   NowPlayingClearedEventData,
   NowPlayingUpdatePayload,
 } from '../now-playing.js';
+import type { BloodProximityEventData } from '../blood-location.js';
 import type {
   SharedLocationAck,
   SharedLocationChangedEventData,
@@ -384,6 +385,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
+  [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
   [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
   [SERVER_EVENTS.TOGETHER_SYNCED]: (data: TogetherSyncedEventData) => void;

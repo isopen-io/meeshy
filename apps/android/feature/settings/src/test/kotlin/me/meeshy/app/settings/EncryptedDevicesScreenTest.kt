@@ -53,7 +53,7 @@ class EncryptedDevicesScreenTest {
     fun `the screen says why this phone shows no code yet`() {
         show(listOf(tablet))
 
-        compose.onNodeWithText("This Android phone doesn’t read end-to-end encrypted chats yet").assertExists()
+        compose.onNodeWithText("This phone doesn't read your encrypted conversations yet").assertExists()
     }
 
     @Test
@@ -80,6 +80,31 @@ class EncryptedDevicesScreenTest {
     fun `no device is an empty state`() {
         show(emptyList())
 
-        compose.onNodeWithText("No encrypted device yet").assertExists()
+        compose.onNodeWithText("No encrypted device: it shows up here once Meeshy turns encryption on there.").assertExists()
+    }
+
+    @Test
+    fun `the screen says what it is and each row shows when it was added and last used`() {
+        show(listOf(tablet))
+
+        compose.onNodeWithText("The devices that read your end-to-end encrypted conversations. Remove a lost one.").assertExists()
+        compose.onNodeWithText("Added", substring = true).assertExists()
+        compose.onNodeWithText("Last used:", substring = true).assertExists()
+    }
+
+    @Test
+    fun `the code limitation is read behind an info button named by its question`() {
+        show(listOf(tablet))
+
+        compose.onNodeWithText("Not yet: it can't show its own code or scan another device's code.").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Can this phone verify a device's code?").performClick()
+        compose.onNodeWithText("Not yet: it can't show its own code or scan another device's code.").assertExists()
+    }
+
+    @Test
+    fun `the current device says so`() {
+        show(listOf(laptop))
+
+        compose.onNodeWithText("This device", substring = true).assertExists()
     }
 }

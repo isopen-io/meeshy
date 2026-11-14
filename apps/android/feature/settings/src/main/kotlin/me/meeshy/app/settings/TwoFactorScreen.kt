@@ -134,6 +134,7 @@ private fun StatusContent(state: TwoFactorUiState, viewModel: TwoFactorViewModel
         return
     }
 
+    SettingsOrientation(stringResource(R.string.twofactor_orientation))
     MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(MeeshySpacing.lg), verticalAlignment = Alignment.CenterVertically) {
             Icon(

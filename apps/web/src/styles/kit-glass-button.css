@@ -1,0 +1,123 @@
+/* LE BOUTON ROND DE VERRE (K02, #17466) — le fond plein, le voile d'appui et la
+   réponse au toucher du disque. Le VERRE n'est pas ici : il vient de K01
+   (`glass-kit.css`, posé par `meeshyGlassRecipe`). Chaque valeur chiffrée vient
+   de `meeshy-glass-button-recipe.ts`, qui la pose en propriétés `--kit-btn-*` ;
+   `meeshy-glass-button.test.tsx` les compare aux vecteurs de parité
+   (`docs/product/kit/K02-MeeshyGlassButton.vectors.json`). Seuls l'opacité, la
+   couleur et la transformation s'animent. */
+@layer components {
+  .kit-btn {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    box-sizing: border-box;
+    inline-size: var(--kit-btn-d);
+    block-size: var(--kit-btn-d);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background-color: transparent;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  .kit-btn::before {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--kit-btn-slack));
+  }
+}
+
+.kit-btn:disabled {
+  cursor: default;
+}
+
+.kit-btn[data-kit-solid] {
+  box-shadow: var(--kit-btn-shadow);
+}
+
+.kit-btn__fill,
+.kit-btn__veil {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.kit-btn__fill {
+  background-color: var(--kit-btn-fill);
+  opacity: var(--kit-btn-fill-rest);
+  transition:
+    opacity var(--kit-btn-fade) ease,
+    background-color var(--kit-btn-fade) ease;
+}
+
+.kit-btn__veil {
+  background-color: var(--color-on-media);
+  opacity: 0;
+}
+
+.kit-btn__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: var(--kit-btn-ink);
+  font-size: var(--kit-btn-glyph);
+  font-weight: 600;
+  line-height: 1;
+  transition: color var(--kit-btn-fade) ease;
+}
+
+.kit-btn__glyph > svg {
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+.kit-btn__badge {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .kit-btn:hover .kit-btn__fill {
+    opacity: var(--kit-btn-fill-hover);
+  }
+
+  .kit-btn:hover .kit-btn__veil {
+    opacity: var(--kit-btn-veil-hover);
+  }
+}
+
+.kit-btn:active .kit-btn__fill,
+.kit-btn[data-pressed] .kit-btn__fill,
+:where(button,[role='button'],a[href],label,summary):active:not(.kit-btn) > .kit-btn .kit-btn__fill {
+  opacity: var(--kit-btn-fill-pressed);
+  transition: none;
+}
+
+.kit-btn:active .kit-btn__veil,
+.kit-btn[data-pressed] .kit-btn__veil,
+:where(button,[role='button'],a[href],label,summary):active:not(.kit-btn) > .kit-btn .kit-btn__veil {
+  opacity: var(--kit-btn-veil-pressed);
+}
+
+/* Les fonds pleins n'ont pas l'anneau de K01 : un double trait, clair contre le
+   disque et sombre à côté, se lit aussi sur le blanc de l'actif et le rouge. */
+.kit-btn[data-kit-solid]:focus-visible {
+  outline: 2px solid var(--ios-media-backdrop);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px var(--color-on-media),
+    var(--kit-btn-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-btn__fill,
+  .kit-btn__glyph {
+    transition: none;
+  }
+}

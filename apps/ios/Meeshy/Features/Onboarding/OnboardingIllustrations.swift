@@ -235,13 +235,6 @@ struct OnboardingFriendsIllustration: View {
                         .allowsHitTesting(false)
                 }
             }
-            Text(String.localizedStringWithFormat(String(localized: "onboarding.friends.badge", bundle: .main), OnboardingRewards.friendship))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.xsPlus)
-                .background(Capsule().fill(MeeshyColors.success))
-                .offset(x: 64, y: -40)
         }
         .frame(height: 110)
     }

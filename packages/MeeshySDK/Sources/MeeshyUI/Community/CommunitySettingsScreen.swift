@@ -70,7 +70,15 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.", bundle: .module))
+            Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. La communauté et la liste de ses membres seront supprimées définitivement ; ses conversations restent, hors de la communauté.", bundle: .module))
+        }
+        .alert(String(localized: "community.settings.privacy.confirm.title", defaultValue: "Rendre la communauté privée ?", bundle: .module), isPresented: $viewModel.showPrivacyConfirm) {
+            Button(String(localized: "community.settings.privacy.confirm.button", defaultValue: "Rendre privée", bundle: .module), role: .destructive) {
+                commitSave()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+        } message: {
+            Text(String(localized: "community.settings.privacy.confirm.message", defaultValue: "Anciens membres et comptes bloqués quitteront ses conversations, sans retour.", bundle: .module))
         }
         .alert(String(localized: "community.settings.leave.confirm.title", defaultValue: "Quitter la communauté", bundle: .module), isPresented: $viewModel.showLeaveConfirm) {
             Button(String(localized: "community.settings.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
@@ -82,13 +90,23 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux canaux et messages de cette communauté.", bundle: .module))
+            Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux conversations de cette communauté.", bundle: .module))
         }
         .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
         }
         .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
+        }
+    }
+
+    private func commitSave() {
+        Task {
+            let updated = await viewModel.save()
+            if let updated {
+                onUpdated?(updated)
+                dismiss()
+            }
         }
     }
 
@@ -111,12 +129,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             Spacer()
 
             Button {
-                Task {
-                    let updated = await viewModel.save()
-                    if let updated {
-                        onUpdated?(updated)
-                        dismiss()
-                    }
+                if viewModel.needsPrivacyConfirmation {
+                    viewModel.showPrivacyConfirm = true
+                } else {
+                    commitSave()
                 }
             } label: {
                 if viewModel.isSaving {

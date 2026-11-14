@@ -1,14 +1,19 @@
 package me.meeshy.sdk.model.call.group
 
-/** La grille d'un appel de groupe : colonnes × rangées — iOS `GroupCallGridLayout`. */
+/**
+ * La grille d'un appel de groupe : colonnes × rangées — iOS `GroupCallGridLayout`. À quatre, la rangée unique ne se pose
+ * que si la scène est plus large que haute ET que la hauteur de la fenêtre est compacte (L4.1, `CallGroupStageSizing`) ;
+ * sinon 2 × 2 (W2) : une tablette en paysage a la hauteur d'un 2 × 2.
+ */
 data class GroupCallGridLayout(val columns: Int, val rows: Int) {
     val capacity: Int get() = columns * rows
 
     companion object {
-        fun layout(tileCount: Int, isLandscape: Boolean): GroupCallGridLayout = when (maxOf(1, tileCount)) {
+        fun layout(tileCount: Int, isLandscape: Boolean, isCompactHeight: Boolean): GroupCallGridLayout = when (maxOf(1, tileCount)) {
             1 -> GroupCallGridLayout(1, 1)
             2 -> if (isLandscape) GroupCallGridLayout(2, 1) else GroupCallGridLayout(1, 2)
-            3, 4 -> GroupCallGridLayout(2, 2)
+            3 -> GroupCallGridLayout(2, 2)
+            4 -> if (isLandscape && isCompactHeight) GroupCallGridLayout(4, 1) else GroupCallGridLayout(2, 2)
             else -> if (isLandscape) GroupCallGridLayout(3, 2) else GroupCallGridLayout(2, 3)
         }
     }
@@ -26,7 +31,7 @@ data class GroupCallStageTile(
     val showsVideo: Boolean,
     val isScreenSharing: Boolean,
     val isReconnecting: Boolean,
-    /** Le membre parle ([ActiveSpeakerDetector]) : son liseré s'épaissit. Jamais ma vignette, comme iOS. */
+    /** Le membre parle ([ActiveSpeakerDetector]) : sa vignette s'illumine de SA couleur, la mienne comprise. */
     val isSpeaking: Boolean = false,
 )
 
@@ -42,7 +47,17 @@ object GroupCallStageLaw {
     fun isShown(isMeshActive: Boolean, roster: GroupCallRoster): Boolean =
         isMeshActive && (roster.members.size >= 2 || roster.members.any { !it.isPrimary })
 
-    /** Moi d'abord, puis les membres dans l'ordre d'arrivée : la grille ne se réagence jamais. */
+    /**
+     * Les caméras distantes allumées (iOS `tiles(...).filter { !$0.isLocal && $0.showsVideo }.count`) : la règle de scène
+     * vidéo d'un groupe (`CallChromeVisibility.isVideoStage`) en a besoin, sans composer les tuiles.
+     */
+    fun remoteCamerasOn(roster: GroupCallRoster, isPrimaryVideoActive: Boolean): Int =
+        roster.members.count { isRemoteShowingVideo(it, isPrimaryVideoActive) }
+
+    private fun isRemoteShowingVideo(member: GroupCallMember, isPrimaryVideoActive: Boolean): Boolean =
+        if (member.isPrimary) isPrimaryVideoActive else member.isCameraOn || member.isScreenSharing
+
+    /** Les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3) : la grille ne se réagence jamais à la parole. */
     fun tiles(
         roster: GroupCallRoster,
         localName: String,
@@ -61,6 +76,7 @@ object GroupCallStageLaw {
             showsVideo = isLocalVideoEnabled,
             isScreenSharing = false,
             isReconnecting = false,
+            isSpeaking = roster.localUserId.isNotBlank() && roster.localUserId in speakingUserIds,
         )
         val remote = roster.members.map { member ->
             GroupCallStageTile(
@@ -70,13 +86,13 @@ object GroupCallStageLaw {
                 avatarUrl = member.avatarUrl,
                 isLocal = false,
                 isMicMuted = member.isMicMuted,
-                showsVideo = if (member.isPrimary) isPrimaryVideoActive else member.isCameraOn || member.isScreenSharing,
+                showsVideo = isRemoteShowingVideo(member, isPrimaryVideoActive),
                 isScreenSharing = member.isScreenSharing,
                 isReconnecting = member.link == GroupCallLinkState.Reconnecting,
                 isSpeaking = member.userId in speakingUserIds,
             )
         }
-        return listOf(local) + remote
+        return remote + local
     }
 }
 

@@ -120,12 +120,6 @@ fun LicensesScreen(onBack: () -> Unit, sourceCommit: String? = null) {
                     color = MeeshyPalette.Indigo500,
                 )
 
-                Text(
-                    text = stringResource(R.string.licenses_intro),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
-
                 cards.forEach { card ->
                     LicenseCard(card)
                 }

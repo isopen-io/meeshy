@@ -44,8 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.SceneFraming
@@ -55,6 +53,8 @@ import me.meeshy.ui.component.media.MosaicArrangement
 import me.meeshy.ui.component.media.MosaicLayout
 import me.meeshy.ui.component.media.MosaicTile
 import me.meeshy.ui.component.viewer.FullScreenDialogWindow
+import me.meeshy.ui.component.viewer.ViewerDialog
+import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -292,10 +292,7 @@ private const val READER_CAPTION_LINES = 4
  */
 @Composable
 private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, imager: (() -> Unit)?, onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
         FullScreenDialogWindow()
         val pagerState = rememberPagerState(initialPage = start.coerceIn(0, scenes.items.lastIndex), pageCount = { scenes.items.size })
         Box(Modifier.fillMaxSize().background(Color.Black)) {

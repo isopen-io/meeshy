@@ -57,13 +57,13 @@ class GameRulesAtlasComposeTest {
     }
 
     @Test
-    fun `every family opens with its title and its line, then draws every one of its objects`() {
+    fun `every family opens with its title and its line when it has one, then draws every one of its objects`() {
         showAtlas()
         GameRulesAtlas.families.forEach { family ->
             compose.onNodeWithTag(atlasFamilyTag(family), useUnmergedTree = true).assertExists()
             val copy = AtlasCopy.family(family)
             compose.onNodeWithText(context.getString(copy.title), useUnmergedTree = true).assertExists()
-            compose.onNodeWithText(context.getString(copy.line), useUnmergedTree = true).assertExists()
+            copy.line?.let { compose.onNodeWithText(context.getString(it), useUnmergedTree = true).assertExists() }
             GameRulesAtlas.plates(family).forEach { plate ->
                 compose.onNodeWithTag(atlasPlateTag(family, plate), useUnmergedTree = true).assertExists()
             }
@@ -100,5 +100,12 @@ class GameRulesAtlasComposeTest {
         ).assertExists()
         compose.onNodeWithText(context.getString(R.string.game_atlas_tiers_cap_none, rank(GloryRank.Oracle))).assertExists()
         compose.onNodeWithText(context.getString(R.string.game_atlas_tiers_prestige, "100")).assertExists()
+    }
+
+    @Test
+    fun `the Legacy and the Flames open on their title alone, the glossary of the same page says the rest`() {
+        assertThat(AtlasCopy.family(AtlasFamily.Treasury).line).isNull()
+        assertThat(AtlasCopy.family(AtlasFamily.Flames).line).isNull()
+        assertThat(AtlasCopy.family(AtlasFamily.Tiers).line).isNotNull()
     }
 }

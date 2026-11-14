@@ -12,6 +12,7 @@ import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
 import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.call.audioLevels
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantArrival
@@ -73,7 +74,8 @@ class WebRtcCallCoordinator @Inject constructor(
     private val mesh = GroupCallMesh(
         factory = EngineGroupMeshPeerFactory(engine),
         names = names,
-        primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
+        primaryAudioLevels = { engine.peerHandle?.audioLevels() },
+        isLocalMicMuted = { userMuted },
         isPrimaryReconnecting = { iceMonitor.stalled },
         primaryVideoCeiling = { engine.setGroupVideoCeiling(it) },
         sender = { callId, to, from, signal ->
@@ -145,6 +147,12 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** The local camera preview track (video calls only), for the self PiP. */
     val localVideoTrack get() = engine.localVideoTrack
+
+    /** Avant le décroché : ma caméra pour MON aperçu, sans pair ; `true` si elle tourne (accès refusé ou aucune caméra ⇒ `false`). */
+    fun startSelfPreview(): Boolean = engine.startSelfPreview() == null
+
+    /** Ma caméra d'aperçu s'éteint avant le décroché. */
+    fun stopSelfPreview() = engine.stopSelfPreview()
 
     /** The remote video track stream, for the full-screen remote renderer. */
     val remoteVideoTracks get() = engine.remoteVideoTracks
@@ -342,6 +350,9 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
     fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
+
+    /** Le niveau sonore reçu du pair de l'appel (0…1) : le maillage et l'avatar caméra coupée du duo le relèvent (G4.2). */
+    suspend fun peerAudioLevel(): Double? = engine.peerHandle?.inboundAudioLevel()
 
     /**
      * L'aperçu avant décroché devient audible (ou se tait) : la route s'ouvre sur le haut-parleur,

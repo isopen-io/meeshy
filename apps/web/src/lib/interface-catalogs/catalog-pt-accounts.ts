@@ -8,7 +8,7 @@ const ptAccounts = {
   'accounts.row.current': 'Conta atual',
   'accounts.row.signed_in': 'Conectado',
   'accounts.row.forget': 'Remover {name} deste dispositivo',
-  'accounts.add': 'Adicionar uma conta',
+  'accounts.add': 'Adicionar',
   'accounts.keep_signed_in': 'Manter sessão neste dispositivo',
   'settings.switch_account.title': 'Trocar de conta',
   'login.server_origin': 'Conectado a: {origin}',

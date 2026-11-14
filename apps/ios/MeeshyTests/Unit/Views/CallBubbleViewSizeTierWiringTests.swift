@@ -45,7 +45,7 @@ final class CallBubbleViewSizeTierWiringTests: XCTestCase {
     func test_callParticipantVisual_usesInterpolatedRectangleInitializer() throws {
         let source = try callBubbleViewSource()
         XCTAssertTrue(
-            source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)"),
+            source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)"),
             "CallBubbleView must drive CallParticipantVisual's size from the live " +
             "interpolated tier size, not a fixed circle diameter."
         )

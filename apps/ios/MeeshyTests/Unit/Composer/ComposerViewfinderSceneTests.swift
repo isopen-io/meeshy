@@ -151,4 +151,21 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertEqual(apres.textObjects, avant.textObjects, "le texte garde sa place et son rang")
         XCTAssertEqual(apres.stickerObjects, avant.stickerObjects, "le sticker garde sa place et son rang")
     }
+
+    // MARK: - Le rail bas gauche : la scène, un séparateur, les looks
+
+    func test_separatesLooks_onlyWhenBothGroupsAreOnTheRail() {
+        XCTAssertTrue(ComposerViewfinderColumn.separatesLooks(sceneEntries: [.text, .sticker], offersLooks: true))
+        XCTAssertFalse(ComposerViewfinderColumn.separatesLooks(sceneEntries: [], offersLooks: true))
+        XCTAssertFalse(ComposerViewfinderColumn.separatesLooks(sceneEntries: [.text], offersLooks: false))
+    }
+
+    func test_bottomRow_drawsTheSeparator_betweenSceneEntriesAndLooks() throws {
+        let rangee = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
+        let scene = try XCTUnwrap(rangee.range(of: "ComposerViewfinderColumnView("))
+        let trait = try XCTUnwrap(rangee.range(of: "ComposerViewfinderRailSeparator("))
+        let looks = try XCTUnwrap(rangee.range(of: "ComposerLookRail(open:"))
+        XCTAssertLessThan(scene.lowerBound, trait.lowerBound)
+        XCTAssertLessThan(trait.lowerBound, looks.lowerBound)
+    }
 }

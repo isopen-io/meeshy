@@ -14,7 +14,6 @@
         <item quantity="many">%1$s+ de miembros</item>
         <item quantity="other">%1$s+ miembros</item>
     </plurals>
-    <string name="members_sheet_error_title">Error</string>
     <string name="members_sheet_error_ok">OK</string>
     <string name="members_sheet_swipe_remove">Quitar</string>
     <string name="add_participant_failed">No se pudo añadir a este miembro.</string>

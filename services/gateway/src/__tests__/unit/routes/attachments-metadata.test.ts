@@ -645,7 +645,10 @@ describe('GET /conversations/:id/attachments — plancher de lien de partage', (
     await app.close();
   });
 
-  it('ne borne rien quand le lien est INTROUVABLE — posture du dépôt', async () => {
+  // #17140 — le témoin gelait « ne borne rien ». Une pièce jointe est servie
+  // par le MESSAGE qui la porte : sans plancher, la liste rendait celles de
+  // l'avant-jointure d'un invité dont le lien a été supprimé.
+  it('BORNE à l’arrivée quand le lien est INTROUVABLE — fail-CLOSED (#17140)', async () => {
     mockGetConversationAttachments.mockResolvedValue([]);
     const app = await buildApp({
       authMode: 'anonymous',
@@ -662,7 +665,7 @@ describe('GET /conversations/:id/attachments — plancher de lien de partage', (
 
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
     expect(res.statusCode).toBe(200);
-    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({});
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({ createdAt: { gte: JOINED_AT } });
     await app.close();
   });
 

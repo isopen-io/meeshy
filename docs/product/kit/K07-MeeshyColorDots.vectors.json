@@ -1,0 +1,246 @@
+{
+  "kit": "K07",
+  "tapTarget": {
+    "ios": 44,
+    "android": 48,
+    "web": 44
+  },
+  "sizes": [
+    {
+      "size": "s28",
+      "diameter": 28
+    },
+    {
+      "size": "s32",
+      "diameter": 32
+    }
+  ],
+  "ring": {
+    "gap": 2,
+    "width": 2,
+    "enterScale": 0.8,
+    "animationMs": 200
+  },
+  "opacity": {
+    "hairline": 0.25,
+    "hairlineEmphasis": 0.6,
+    "pressedRing": 0.5,
+    "disabled": 0.4
+  },
+  "fadeStart": 0.82,
+  "layout": [
+    {
+      "view": "A3",
+      "count": 14,
+      "available": 358,
+      "cell": 44,
+      "size": "s32",
+      "layout": "wrap",
+      "rows": [
+        8,
+        6
+      ],
+      "scrolls": false,
+      "width": 340,
+      "height": 76
+    },
+    {
+      "view": "S1",
+      "count": 17,
+      "available": 342,
+      "cell": 44,
+      "size": "s28",
+      "layout": "wrap",
+      "rows": [
+        8,
+        8,
+        1
+      ],
+      "scrolls": false,
+      "width": 336,
+      "height": 116
+    },
+    {
+      "view": "A13",
+      "count": 9,
+      "available": 338,
+      "cell": 44,
+      "size": "s28",
+      "layout": "row",
+      "rows": [
+        9
+      ],
+      "scrolls": true,
+      "width": 380,
+      "height": 28
+    },
+    {
+      "view": null,
+      "count": 7,
+      "available": 338,
+      "cell": 44,
+      "size": "s28",
+      "layout": "row",
+      "rows": [
+        7
+      ],
+      "scrolls": false,
+      "width": 292,
+      "height": 28
+    },
+    {
+      "view": null,
+      "count": 3,
+      "available": 10,
+      "cell": 44,
+      "size": "s28",
+      "layout": "wrap",
+      "rows": [
+        1,
+        1,
+        1
+      ],
+      "scrolls": false,
+      "width": 28,
+      "height": 116
+    },
+    {
+      "view": null,
+      "count": 0,
+      "available": 342,
+      "cell": 44,
+      "size": "s28",
+      "layout": "wrap",
+      "rows": [],
+      "scrolls": false,
+      "width": 0,
+      "height": 0
+    }
+  ],
+  "ringStates": [
+    {
+      "selected": true,
+      "pressed": false,
+      "opacity": 1,
+      "scale": 1
+    },
+    {
+      "selected": true,
+      "pressed": true,
+      "opacity": 1,
+      "scale": 1
+    },
+    {
+      "selected": false,
+      "pressed": true,
+      "opacity": 0.5,
+      "scale": 1
+    },
+    {
+      "selected": false,
+      "pressed": false,
+      "opacity": 0,
+      "scale": 0.8
+    }
+  ],
+  "hairline": [
+    {
+      "hovered": false,
+      "increasedContrast": false,
+      "opacity": 0.25
+    },
+    {
+      "hovered": true,
+      "increasedContrast": false,
+      "opacity": 0.6
+    },
+    {
+      "hovered": false,
+      "increasedContrast": true,
+      "opacity": 0.6
+    }
+  ],
+  "ink": [
+    {
+      "tone": "plain",
+      "ink": "onMedia"
+    },
+    {
+      "tone": "deep",
+      "ink": "onMedia"
+    },
+    {
+      "tone": "onLight",
+      "ink": "onMedia"
+    },
+    {
+      "tone": "theme",
+      "ink": "themeInk"
+    }
+  ],
+  "selection": [
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "selection": "b",
+      "ringed": [
+        "b"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "selection": null,
+      "ringed": []
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "selection": "z",
+      "ringed": []
+    }
+  ],
+  "names": [
+    {
+      "name": "Rose",
+      "index": 0,
+      "total": 3,
+      "locale": "fr",
+      "said": "Rose"
+    },
+    {
+      "name": null,
+      "index": 4,
+      "total": 17,
+      "locale": "fr",
+      "said": "Couleur 5 sur 17"
+    },
+    {
+      "name": "",
+      "index": 0,
+      "total": 2,
+      "locale": "fr",
+      "said": "Couleur 1 sur 2"
+    },
+    {
+      "name": null,
+      "index": 2,
+      "total": 17,
+      "locale": "en",
+      "said": "Color 3 of 17"
+    }
+  ],
+  "contrast": {
+    "inkMin": 3.0,
+    "glyphMin": 4.0
+  }
+}

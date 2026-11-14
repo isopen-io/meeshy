@@ -32,3 +32,40 @@ enum class CallRemoteVideoSurface {
             hasEstablishedMedia && elapsedForCallId != null && elapsedForCallId == currentCallId
     }
 }
+
+/**
+ * G4.6 — l'image cède la place à l'avatar (et revient) en fondu : la durée du fondu, une seule loi pour l'image
+ * qui s'efface et pour l'anneau de parole (miroir de iOS `CallRemoteVideoFade`). « Réduire les animations » garde
+ * le fondu, plus court, et ne déplace rien. Seule l'opacité du VOILE (l'avatar posé sur l'image) change : la
+ * surface vidéo n'est jamais fondue elle-même, un `SurfaceView` ne se mélange pas à l'alpha de Compose.
+ */
+object CallRemoteVideoFade {
+    fun durationMillis(reduceMotion: Boolean): Int = if (reduceMotion) 120 else 250
+
+    /** 0 : l'image en direct se voit ; 1 : l'avatar (ou l'attente) la couvre. */
+    fun veilOpacity(surface: CallRemoteVideoSurface, hasTrack: Boolean): Float =
+        if (surface == CallRemoteVideoSurface.Live && hasTrack) 0f else 1f
+
+    /** L'image reste montée sous le voile tant qu'il ne l'a pas entièrement couverte (le fondu aller ET retour). */
+    fun keepsLiveImage(hasTrack: Boolean, veil: Float): Boolean = hasTrack && veil < 1f
+
+    /** L'avatar reste monté tant que le voile n'est pas retombé à zéro. */
+    fun showsVeil(veil: Float): Boolean = veil > 0f
+
+    /**
+     * Le fond de chaque voile : « Caméra désactivée » sur fond NOIR OPAQUE (G4, « Fond noir »), sans quoi l'image
+     * gelée, gardée dessous pendant le fondu, transparaîtrait jusqu'à son retrait puis disparaîtrait d'un coup ;
+     * l'attente n'est que voilée (aucune image n'est montée dessous).
+     */
+    fun backdropOpacity(veiled: CallRemoteVideoSurface): Float =
+        if (veiled == CallRemoteVideoSurface.Connecting) CONNECTING_BACKDROP else 1f
+
+    /** La part de l'image encore visible sous le voile : un fondu croisé propre la mène à 0 avant de la retirer. */
+    fun imageShare(veil: Float, veiled: CallRemoteVideoSurface): Float = 1f - veil * backdropOpacity(veiled)
+
+    /** Ce que montre le voile : l'état courant, ou, pendant que l'image revient, ce qu'il montrait avant elle. */
+    fun veiled(surface: CallRemoteVideoSurface, previous: CallRemoteVideoSurface): CallRemoteVideoSurface =
+        if (surface == CallRemoteVideoSurface.Live) previous else surface
+
+    private const val CONNECTING_BACKDROP = 0.4f
+}

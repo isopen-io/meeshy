@@ -251,6 +251,20 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    /// L1.3 — même règle, deux surfaces : la bannière réduite d'un appel vidéo
+    /// n'allume pas sa sortie quand le haut-parleur est celui d'office ; elle
+    /// demande son état à `CallOutputButtonRule`, comme la pilule de l'écran.
+    func test_speakerButton_takesItsLitStateFromTheOutputRule_withTheCallKind() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var speakerButton", in: source))
+        XCTAssertEqual(body.components(separatedBy: "isOutputLit(route)").count - 1, 2, "la teinte ET le disque suivent la loi")
+        XCTAssertFalse(body.contains("callManager.isSpeaker || route.routesExternally"),
+                       "la bannière ne recompose pas l'état allumé à côté de la loi")
+        let lit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func isOutputLit(", in: source))
+        XCTAssertTrue(lit.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(lit.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
     func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
         let source = AppSourceGuard.stripComments(try pillSource())
         XCTAssertFalse(source.contains("AVRoutePickerView"),
@@ -755,7 +769,7 @@ final class CallParticipantVisualTests: XCTestCase {
     func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
         let src = try source()
         XCTAssertTrue(
-            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
+            src.contains("init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager)"),
             "The circular convenience initializer must stay so existing call sites " +
             "(pill 44pt, bubble circle tier) keep compiling unchanged."
         )

@@ -6,11 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "game2.showcase.order_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.showcase.move_up",
           "status": "adopted"
         },
@@ -26,17 +21,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.league.pseudonym.hint_change",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.league.pseudonym.save",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.league.pseudonym.invalid",
           "status": "adopted"
         }
       ]

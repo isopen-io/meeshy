@@ -1,0 +1,984 @@
+{
+ "kit": "K17",
+ "recipe": {
+  "edge": 8,
+  "barPadding": 4,
+  "keyboardGap": 6,
+  "aboveGap": 4,
+  "barHeight": 52,
+  "barRadius": 26,
+  "toolDiameter": 44,
+  "confirmHeight": 44,
+  "confirmMargin": 16,
+  "maxItems": 5,
+  "maxBarWidth": 480,
+  "fallbackKeyboardHeight": 291,
+  "fallbackShare": 0.45,
+  "minimumKeyboardHeight": 160,
+  "sceneGap": 14,
+  "bottomWithoutKeyboardMargin": 6,
+  "bottomWithoutKeyboardFloor": 12,
+  "panelHorizontalPadding": 16,
+  "panelVerticalPadding": 14,
+  "panelGap": 12,
+  "panelBottomFloor": 14,
+  "barRiseMs": 260,
+  "bandEnterMs": 250,
+  "bandExitMs": 200,
+  "panelFadeMs": 150,
+  "bandTravel": 12,
+  "fallbackKeyboardDurationMs": 250
+ },
+ "rule": [
+  {
+   "isActive": false,
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": false,
+    "showsKeyboard": false,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": false,
+    "attachesToField": false
+   }
+  },
+  {
+   "isActive": false,
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": true,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": false,
+    "showsKeyboard": false,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": false,
+    "attachesToField": false
+   }
+  },
+  {
+   "isActive": true,
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": true,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": true,
+    "bandGap": 4,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "panel:font",
+    "showsBar": true,
+    "showsKeyboard": false,
+    "showsPanel": true,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:color",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": true,
+   "expected": {
+    "input": "panel:color",
+    "showsBar": true,
+    "showsKeyboard": false,
+    "showsPanel": true,
+    "showsBand": true,
+    "bandGap": 4,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:gone",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": false
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:mention",
+   "items": [
+    {
+     "id": "mention",
+     "opensPanel": false,
+     "isEnabled": true
+    },
+    {
+     "id": "hash",
+     "opensPanel": false,
+     "isEnabled": true
+    }
+   ],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "keyboard",
+   "items": [],
+   "hasAbove": false,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": false,
+    "bandGap": 0,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  },
+  {
+   "isActive": true,
+   "input": "panel:font",
+   "items": [],
+   "hasAbove": true,
+   "expected": {
+    "input": "keyboard",
+    "showsBar": true,
+    "showsKeyboard": true,
+    "showsPanel": false,
+    "showsBand": true,
+    "bandGap": 4,
+    "receivesTouches": true,
+    "attachesToField": true
+   }
+  }
+ ],
+ "tapped": [
+  {
+   "item": "font",
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "expected": "panel:font"
+  },
+  {
+   "item": "font",
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "expected": "keyboard"
+  },
+  {
+   "item": "color",
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "expected": "panel:color"
+  },
+  {
+   "item": "mention",
+   "input": "panel:font",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "align",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "background",
+     "opensPanel": true,
+     "isEnabled": true
+    },
+    {
+     "id": "mention",
+     "opensPanel": false,
+     "isEnabled": true
+    }
+   ],
+   "expected": "panel:font"
+  },
+  {
+   "item": "mention",
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "mention",
+     "opensPanel": false,
+     "isEnabled": true
+    }
+   ],
+   "expected": "keyboard"
+  },
+  {
+   "item": "font",
+   "input": "keyboard",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": false
+    }
+   ],
+   "expected": "keyboard"
+  },
+  {
+   "item": "font",
+   "input": "panel:color",
+   "items": [
+    {
+     "id": "font",
+     "opensPanel": true,
+     "isEnabled": false
+    },
+    {
+     "id": "color",
+     "opensPanel": true,
+     "isEnabled": true
+    }
+   ],
+   "expected": "panel:color"
+  }
+ ],
+ "fieldTouched": [
+  {
+   "input": "keyboard",
+   "expected": "keyboard"
+  },
+  {
+   "input": "panel:font",
+   "expected": "keyboard"
+  },
+  {
+   "input": "panel:color",
+   "expected": "keyboard"
+  }
+ ],
+ "retainedKeyboard": [
+  {
+   "previous": 0,
+   "overlap": 343,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 291
+  },
+  {
+   "previous": 291,
+   "overlap": 343,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 291
+  },
+  {
+   "previous": 300,
+   "overlap": 343,
+   "accessoryHeight": 52,
+   "input": "panel:font",
+   "expected": 300
+  },
+  {
+   "previous": 291,
+   "overlap": 52,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 291
+  },
+  {
+   "previous": 291,
+   "overlap": 0,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 291
+  },
+  {
+   "previous": 0,
+   "overlap": 100,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 0
+  },
+  {
+   "previous": 0,
+   "overlap": 211.99,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 0
+  },
+  {
+   "previous": 0,
+   "overlap": 212,
+   "accessoryHeight": 52,
+   "input": "keyboard",
+   "expected": 160
+  },
+  {
+   "previous": 291,
+   "overlap": 433,
+   "accessoryHeight": 110,
+   "input": "keyboard",
+   "expected": 323
+  }
+ ],
+ "panelHeight": [
+  {
+   "retained": 291,
+   "windowHeight": 844,
+   "expected": 291
+  },
+  {
+   "retained": 336,
+   "windowHeight": 844,
+   "expected": 336
+  },
+  {
+   "retained": 159.99,
+   "windowHeight": 844,
+   "expected": 291
+  },
+  {
+   "retained": 0,
+   "windowHeight": 844,
+   "expected": 291
+  },
+  {
+   "retained": 0,
+   "windowHeight": null,
+   "expected": 291
+  },
+  {
+   "retained": 0,
+   "windowHeight": 500,
+   "expected": 225.0
+  },
+  {
+   "retained": 0,
+   "windowHeight": 1000,
+   "expected": 291
+  },
+  {
+   "retained": 0,
+   "windowHeight": 0,
+   "expected": 291
+  },
+  {
+   "retained": 160,
+   "windowHeight": null,
+   "expected": 160
+  }
+ ],
+ "overlap": [
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 501,
+    "w": 390,
+    "h": 343
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "current": 0,
+   "expected": 343,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 844,
+    "w": 390,
+    "h": 343
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "current": 0,
+   "expected": 0,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 0,
+    "w": 0,
+    "h": 0
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "current": 120,
+   "expected": 120,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 100,
+    "y": 400,
+    "w": 300,
+    "h": 260
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "current": 0,
+   "expected": 0,
+   "isFloating": true
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 501,
+    "w": 390,
+    "h": 343
+   },
+   "window": null,
+   "current": 0,
+   "expected": 343,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 300,
+    "w": 390,
+    "h": 300
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 600
+   },
+   "current": 0,
+   "expected": 300,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 640,
+    "w": 390,
+    "h": 204
+   },
+   "window": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "current": 0,
+   "expected": 204,
+   "isFloating": false
+  },
+  {
+   "keyboard": {
+    "x": 0,
+    "y": 620,
+    "w": 390,
+    "h": 224
+   },
+   "window": {
+    "x": 0,
+    "y": 100,
+    "w": 390,
+    "h": 744
+   },
+   "current": 0,
+   "expected": 224,
+   "isFloating": false
+  }
+ ],
+ "reserve": [
+  {
+   "overlap": 0,
+   "expected": 0
+  },
+  {
+   "overlap": 343,
+   "expected": 357
+  },
+  {
+   "overlap": 52,
+   "expected": 66
+  },
+  {
+   "overlap": 433,
+   "expected": 447
+  }
+ ],
+ "fit": [
+  {
+   "availableWidth": 374,
+   "itemCount": 4,
+   "titleWidth": 22,
+   "requiredWidth": 238,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 374,
+   "itemCount": 5,
+   "titleWidth": 22,
+   "requiredWidth": 282,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 304,
+   "itemCount": 5,
+   "titleWidth": 22,
+   "requiredWidth": 282,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 304,
+   "itemCount": 5,
+   "titleWidth": 40,
+   "requiredWidth": 300,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 304,
+   "itemCount": 5,
+   "titleWidth": 60,
+   "requiredWidth": 320,
+   "expected": "check"
+  },
+  {
+   "availableWidth": 304,
+   "itemCount": 5,
+   "titleWidth": 88,
+   "requiredWidth": 348,
+   "expected": "check"
+  },
+  {
+   "availableWidth": 260,
+   "itemCount": 4,
+   "titleWidth": 40,
+   "requiredWidth": 256,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 480,
+   "itemCount": 5,
+   "titleWidth": 22,
+   "requiredWidth": 282,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 200,
+   "itemCount": 0,
+   "titleWidth": 22,
+   "requiredWidth": 62,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 52,
+   "itemCount": 0,
+   "titleWidth": 0,
+   "requiredWidth": 52,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 304,
+   "itemCount": 5,
+   "titleWidth": 22,
+   "requiredWidth": 282,
+   "expected": "title"
+  },
+  {
+   "availableWidth": 374,
+   "itemCount": 7,
+   "titleWidth": 22,
+   "requiredWidth": 282,
+   "expected": "title"
+  }
+ ],
+ "barWidth": [
+  {
+   "containerWidth": 390,
+   "expected": 374
+  },
+  {
+   "containerWidth": 320,
+   "expected": 304
+  },
+  {
+   "containerWidth": 820,
+   "expected": 480
+  },
+  {
+   "containerWidth": 1440,
+   "expected": 480
+  },
+  {
+   "containerWidth": 496,
+   "expected": 480
+  },
+  {
+   "containerWidth": 497,
+   "expected": 480
+  }
+ ],
+ "bottomWithoutKeyboard": [
+  {
+   "safeBottom": 0,
+   "expected": 12
+  },
+  {
+   "safeBottom": 34,
+   "expected": 40
+  },
+  {
+   "safeBottom": 5,
+   "expected": 12
+  },
+  {
+   "safeBottom": 6,
+   "expected": 12
+  },
+  {
+   "safeBottom": 20,
+   "expected": 26
+  }
+ ],
+ "durationMs": [
+  {
+   "seconds": 0.25,
+   "expected": 250
+  },
+  {
+   "seconds": 0.4,
+   "expected": 400
+  },
+  {
+   "seconds": null,
+   "expected": 250
+  },
+  {
+   "seconds": 0,
+   "expected": 250
+  },
+  {
+   "seconds": -1,
+   "expected": 250
+  }
+ ],
+ "contrast": {
+  "solidInkOnWhite": 15.99,
+  "whiteOnPanel": 15.99,
+  "glassMinimum": 3.0,
+  "tolerance": 0.02
+ }
+}

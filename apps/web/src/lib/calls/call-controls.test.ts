@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene } from './call-controls';
+import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene, tapStowsChrome } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -20,14 +20,13 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   canShare: true,
   canEffect: true,
   cameraSwitch: 'flip' as const,
-  canPip: false,
   videoScene: false,
   ...overrides,
 });
 
 describe('ce que (…) sort', () => {
-  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Journal, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436, #8579)', () => {
-    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'journal', 'record', 'invite', 'react'] });
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Ajouter, Journal, Réagir — la conversation vit dans l’en-tête (#8436, #17327)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'invite', 'journal', 'react'] });
   });
 
   test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
@@ -55,7 +54,7 @@ describe('ce que (…) sort', () => {
 
   test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
     expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'journal']);
-    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'journal', 'invite', 'react']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'invite', 'journal', 'react']);
   });
 
   test('Ajouter et Réagir existent en duo comme en groupe, dès qu’un appel identifié est rejoint (#8433, #8439)', () => {
@@ -96,19 +95,15 @@ describe('se retourner, ou choisir sa caméra (#8432, #9094)', () => {
   });
 });
 
-describe('l’image dans l’image rejoint la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
-  test('offerte, elle ferme la rangée, après Ajouter et Réagir — comme iOS', () => {
-    expect(callControlSet(context({ canPip: true })).call).toEqual(['captions', 'journal', 'record', 'invite', 'react', 'pip']);
-  });
-
-  test('non offerte, elle n’y est pas', () => {
-    expect(callControlSet(context({ canPip: false })).call).not.toContain('pip');
+describe('l’image dans l’image a quitté la liste « l’appel » (#17329, elle vit dans l’en-tête)', () => {
+  test('la rangée « l’appel » ne la porte jamais', () => {
+    expect(callControlSet(context({ videoScene: true })).call).not.toContain('pip');
   });
 });
 
 describe('« Capturer » (#8552)', () => {
-  test('une vidéo connectée l’offre dans l’appel, après Enregistrer', () => {
-    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'journal', 'record', 'capture', 'invite', 'react']);
+  test('une vidéo connectée l’offre dans l’appel, après Réagir (#17327)', () => {
+    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'record', 'invite', 'journal', 'react', 'capture']);
   });
 
   test('jamais en audio, ni pendant une reconnexion ou la sonnerie', () => {
@@ -143,6 +138,36 @@ describe('la scène vidéo', () => {
 
   test('pendant la sonnerie, rien ne s’efface', () => {
     expect(isVideoScene(call({ cameraOn: true, phase: { kind: 'outgoing' } }))).toBe(false);
+  });
+});
+
+/* LA LOI 11 VAUT POUR LA SCÈNE, VIDÉO OU AUDIO (#17945, décision porteur du 2026-11-13) : en duo
+   audio, le fond derrière l'avatar range l'en-tête, la pilule et le journal ; en groupe sans caméra,
+   le fond de la grille aussi (extension du 2026-11-13). Vecteurs : vidéo oui · duo audio établi oui ·
+   duo audio pas encore établi non · groupe avec caméra oui · groupe sans caméra oui. Mêmes vecteurs que
+   `CallChromeVisibility.mayToggleByTap` (iOS) et `CallChromeController` (Android). */
+describe('un toucher sur la scène range les commandes, vidéo ou audio (loi 11, #17945)', () => {
+  const call = (overrides: Partial<Parameters<typeof isVideoScene>[0]> = {}) => ({ members: { a: member() }, cameraOn: false, remoteStreams: {}, isGroup: false, phase: { kind: 'connected' } as ActiveCall['phase'], ...overrides });
+
+  test('un duo audio joint : le fond derrière l’avatar est la scène', () => {
+    expect(tapStowsChrome(call())).toBe(true);
+    expect(tapStowsChrome(call({ phase: { kind: 'reconnecting' } }))).toBe(true);
+  });
+
+  test('une scène vidéo, duo ou groupe, comme avant', () => {
+    expect(tapStowsChrome(call({ cameraOn: true }))).toBe(true);
+    expect(tapStowsChrome(call({ isGroup: true, members: { a: member(), b: member({ userId: 'u-b', cameraOn: true }) } }))).toBe(true);
+  });
+
+  test('un groupe SANS AUCUNE caméra range aussi, comme le duo audio (extension porteur du 2026-11-13, #17945)', () => {
+    expect(tapStowsChrome(call({ isGroup: true, members: { a: member(), b: member({ userId: 'u-b' }) } }))).toBe(true);
+    expect(tapStowsChrome(call({ isGroup: true, phase: { kind: 'outgoing' }, members: { a: member(), b: member({ userId: 'u-b' }) } }))).toBe(false);
+  });
+
+  test('pendant la sonnerie et à la fin, rien ne se range', () => {
+    expect(tapStowsChrome(call({ phase: { kind: 'outgoing' } }))).toBe(false);
+    expect(tapStowsChrome(call({ phase: { kind: 'incoming' } }))).toBe(false);
+    expect(tapStowsChrome(call({ phase: { kind: 'ended', reason: 'local', detail: null } }))).toBe(false);
   });
 });
 

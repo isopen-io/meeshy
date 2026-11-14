@@ -8,13 +8,15 @@ import MeeshyUI
 /// (ou « Annuler le lien » à Connaissance), chacun confirmé. Sans lien servi, rien : `linked` reste faux et la fiche garde ce qu'elle montrait avant.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
+    @ObservedObject private var sharing: SharedLocationSharingCenter
     let displayName: String
     @Binding var linked: Bool
     @State private var confirmsLowering = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, linked: Binding<Bool>) {
+    init(userId: String, displayName: String, linked: Binding<Bool>, sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         _viewModel = StateObject(wrappedValue: ProfileCircleViewModel(userId: userId))
+        _sharing = ObservedObject(wrappedValue: sharing)
         self.displayName = displayName
         _linked = linked
     }
@@ -33,10 +35,13 @@ struct ProfileCircleSection: View {
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
                     }
+                    if showsSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
+                    }
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether {
+            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || showsSharedLocation {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
@@ -46,6 +51,9 @@ struct ProfileCircleSection: View {
                     }
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
+                    }
+                    if showsSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
                 }
             } else {
@@ -61,6 +69,11 @@ struct ProfileCircleSection: View {
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
         }
+    }
+
+    /// Proposée dès Ami, la ligne reste tant qu'un partage court vers la personne : « Arrêter » ne part jamais avant lui.
+    private var showsSharedLocation: Bool {
+        sharing.showsRow(for: viewModel.userId, offered: viewModel.offersSharedLocation)
     }
 
     private func row(_ level: RelationLevel) -> some View {

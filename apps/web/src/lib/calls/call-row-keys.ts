@@ -6,9 +6,10 @@
  * (`role="radiogroup"`), aller sur un choix le coche, comme un groupe de
  * radios natif.
  *
- * Le module vit avec l'écran d'appel ; les panneaux chargés à part reçoivent
- * `onRowKeyDown` en propriété, comme leur glyphe de Fermer : ils n'importent
- * rien de `call_overlay`.
+ * Le module vit avec les rangées, pas avec l'écran d'appel (#17499) : seuls les
+ * chunks chargés à part (rangées, rails, panneaux, modes) le lisent, et ils
+ * l'importent eux-mêmes — l'écran d'appel n'en paie rien, et aucun d'eux
+ * n'importe quoi que ce soit de `call_overlay`.
  */
 
 type Step = { readonly key: string; readonly index: number; readonly count: number; readonly rtl: boolean; readonly vertical?: boolean };
@@ -27,6 +28,23 @@ export function rowStep({ key, index, count, rtl, vertical = false }: Step): num
 }
 
 export const ROW_ITEM = 'data-row-item';
+
+/**
+ * LE FONDU DE BORD — ce qui défile n'est jamais coupé net (facture #17406,
+ * P12.8) : il s'efface en fondu à ses DEUX bords, sur les 8 px du retrait
+ * (`px-2`) gardé de chaque côté. Le masque est une LUMINANCE (`#000` = opaque,
+ * pas une couleur), et sa recette est UNIQUE : la rangée (`ROW_EDGE_FADE`, à
+ * l'horizontale), le rail (`RAIL_FADE`, à la verticale) et le bandeau des
+ * vignettes de `call-grid` (axe paramétré) la partagent, plutôt que trois
+ * jumelles qui dérivent en silence. Le dégradé est symétrique : le même masque
+ * vaut en arabe, où le défilement commence à droite. Le fondu est posé sur ce
+ * qui défile, jamais sur le verre.
+ */
+export type EdgeFadeAxis = 'to right' | 'to bottom';
+// harmony-exempt: masque de LUMINANCE (#000 = opaque, jamais une couleur) — le fondu d'un bord qui défile (#17406)
+export const edgeFadeMask = (axis: EdgeFadeAxis): string => `linear-gradient(${axis}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+
+export const ROW_EDGE_FADE = { maskImage: edgeFadeMask('to right') } as const;
 
 type Wheel = { readonly deltaX: number; readonly deltaY: number; readonly scrollLeft: number; readonly maxScroll: number; readonly rtl: boolean };
 

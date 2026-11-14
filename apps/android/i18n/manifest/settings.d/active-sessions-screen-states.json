@@ -6,50 +6,14 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "sessions_current_badge",
-          "androidName": "sessions_current_badge",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions_empty",
           "androidName": "sessions_empty",
           "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "sessions_empty_subtitle",
-          "androidName": "sessions_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions_error_ok",
           "androidName": "sessions_error_ok",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions_error_title",
-          "androidName": "sessions_error_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions_load_error",
-          "androidName": "sessions_load_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions_revoke_error",
-          "androidName": "sessions_revoke_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions_revoke_all_error",
-          "androidName": "sessions_revoke_all_error",
           "status": "adopted"
         },
         {
@@ -78,24 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sessions.offline.title",
-          "androidName": "sessions_offline_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions.offline.subtitle",
-          "androidName": "sessions_offline_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions.error.subtitle",
-          "androidName": "sessions_error_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions.offline.banner",
           "androidName": "sessions_offline_banner",
           "status": "adopted"
@@ -110,12 +56,6 @@
           "catalog": "app",
           "iosKey": "sessions.place.footnote",
           "androidName": "sessions_place_footnote",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions.place.approximate",
-          "androidName": "sessions_place_approximate",
           "status": "adopted"
         },
         {

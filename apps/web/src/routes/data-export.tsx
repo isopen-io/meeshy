@@ -101,12 +101,7 @@ export function DataExportPage({
         glyph="archive"
         tone="brand"
         title={translate(language, 'dataExport.ready.title')}
-        body={
-          <>
-            <LinkText>{translate(language, 'dataExport.ready.body')}</LinkText>
-            {state.undelivered ? <LinkAlert>{translate(language, 'dataExport.undelivered.body')}</LinkAlert> : null}
-          </>
-        }
+        body={state.undelivered ? <LinkAlert>{translate(language, 'dataExport.undelivered.body')}</LinkAlert> : undefined}
       >
         <ActionButton onClick={() => void deliver(state.file)}>{translate(language, 'dataExport.action.deliver')}</ActionButton>
         <ActionLink to="settings" tone="secondary">
@@ -122,10 +117,9 @@ export function DataExportPage({
         glyph="check"
         tone="success"
         title={translate(language, 'dataExport.done.title')}
-        body={<LinkText>{translate(language, 'dataExport.done.body')}</LinkText>}
       >
         <ActionButton disabled={!online} onClick={() => void runExport()}>
-          {translate(language, 'dataExport.action.again')}
+          {translate(language, 'dataExport.action.start')}
         </ActionButton>
         <ActionLink to="settings" tone="secondary">
           {translate(language, 'linkPage.settings')}
@@ -143,7 +137,7 @@ export function DataExportPage({
       body={
         <>
           <LinkText>{translate(language, 'dataExport.info.body')}</LinkText>
-          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
+          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
         </>
       }
     >

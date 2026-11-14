@@ -14,6 +14,7 @@ export type GlassViolation = {
 };
 
 export declare const GLASS_SITE: string;
+export declare const GLASS_KIT_SITE: string;
 export declare const GLASS_INVENTORY: GlassInventory;
 export declare function glassViolations(
   sources: readonly GlassSource[],

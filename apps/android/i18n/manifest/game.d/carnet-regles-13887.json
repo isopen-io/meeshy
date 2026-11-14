@@ -4,30 +4,7 @@
     ":feature:game": {
       "resDir": "feature/game/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.intro",
-          "androidName": "game_rules_intro",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.section_rules",
-          "androidName": "game_rules_section_rules",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.section_concepts",
-          "androidName": "game_rules_section_concepts",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concepts_intro",
-          "androidName": "game_rules_concepts_intro",
-          "status": "adopted"
-        },
+        { "androidName": "game_rules_intro", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.rules.section_steps",
@@ -42,20 +19,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.1.body",
-          "androidName": "game_rules_1_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.2.title",
           "androidName": "game_rules_2_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.2.body",
-          "androidName": "game_rules_2_body",
           "status": "adopted"
         },
         {
@@ -66,20 +31,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.3.body",
-          "androidName": "game_rules_3_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.4.title",
           "androidName": "game_rules_4_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.4.body",
-          "androidName": "game_rules_4_body",
           "status": "adopted"
         },
         {
@@ -90,20 +43,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.5.body",
-          "androidName": "game_rules_5_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.6.title",
           "androidName": "game_rules_6_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.6.body",
-          "androidName": "game_rules_6_body",
           "status": "adopted"
         },
         {
@@ -114,74 +55,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.7.body",
-          "androidName": "game_rules_7_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.8.title",
           "androidName": "game_rules_8_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.8.body",
-          "androidName": "game_rules_8_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.level.body",
-          "androidName": "game_rules_concept_level_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.points.body",
-          "androidName": "game_rules_concept_points_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.meesh.body",
-          "androidName": "game_rules_concept_meesh_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.glory.body",
-          "androidName": "game_rules_concept_glory_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.flame.body",
-          "androidName": "game_rules_concept_flame_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.missions.body",
-          "androidName": "game_rules_concept_missions_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.league.body",
-          "androidName": "game_rules_concept_league_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.season.body",
-          "androidName": "game_rules_concept_season_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.prestige.body",
-          "androidName": "game_rules_concept_prestige_body",
           "status": "adopted"
         },
         {
@@ -208,12 +83,7 @@
           "androidName": "game_rules_concept_succes_body",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.showcase.body",
-          "androidName": "game_rules_concept_showcase_body",
-          "status": "adopted"
-        },
+        { "androidName": "game_rules_concept_showcase_body", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.rules.concept.atlas.body",
@@ -264,32 +134,14 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.concept.tailwind.body",
-          "androidName": "game_rules_concept_tailwind_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.concept.duo.name",
           "androidName": "game_rules_concept_duo_name",
           "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.concept.duo.body",
-          "androidName": "game_rules_concept_duo_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.guide.step_of",
           "androidName": "game_guide_step_of",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.guide.step.welcome.what",
-          "androidName": "game_guide_step_welcome_what",
           "status": "adopted"
         },
         {

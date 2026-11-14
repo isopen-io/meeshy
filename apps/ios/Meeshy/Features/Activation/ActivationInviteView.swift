@@ -54,21 +54,21 @@ struct ActivationInviteView: View {
     private var lead: String {
         switch model.daysLeft {
         case .none, .some(0):
-            return String(localized: "activation.invite.lead", defaultValue: "Validez votre compte pour continuer à l’utiliser sans interruption.", bundle: .main)
+            return String(localized: "activation.invite.lead", defaultValue: "Pour l'utiliser sans interruption.", bundle: .main)
         case .some(1):
-            return String(localized: "activation.invite.daysLeft.one", defaultValue: "Il vous reste 1 jour pour valider votre compte. Ensuite, la connexion demandera un code.", bundle: .main)
+            return String(localized: "activation.invite.daysLeft.one", defaultValue: "Encore 1 jour : ensuite, la connexion demandera un code.", bundle: .main)
         case .some(let days):
-            return String(format: String(localized: "activation.invite.daysLeft", defaultValue: "Il vous reste %lld jours pour valider votre compte. Ensuite, la connexion demandera un code.", bundle: .main), days)
+            return String(format: String(localized: "activation.invite.daysLeft", defaultValue: "Encore %lld jours : ensuite, la connexion demandera un code.", bundle: .main), days)
         }
     }
 
     @ViewBuilder
     private var proofs: some View {
         if model.proven.contains(.email) {
-            proofLine(String(localized: "activation.email.done", defaultValue: "Adresse vérifiée ✓", bundle: .main))
+            proofLine(String(localized: "activation.email.done", defaultValue: "Adresse confirmée ✓", bundle: .main))
         }
         if model.proven.contains(.phone) {
-            proofLine(String(localized: "activation.phone.done", defaultValue: "Numéro vérifié ✓", bundle: .main))
+            proofLine(String(localized: "activation.phone.done", defaultValue: "Numéro confirmé ✓", bundle: .main))
         }
     }
 
@@ -137,7 +137,7 @@ struct ActivationEmailStep: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(theme.textPrimary)
             if sent {
-                Text(String(format: String(localized: "activation.email.sent", defaultValue: "Code envoyé à %@. Saisissez-le ci-dessous.", bundle: .main), code.email))
+                Text(String(format: String(localized: "activation.email.sent", defaultValue: "Code envoyé à %@.", bundle: .main), code.email))
                     .font(.footnote)
                     .foregroundStyle(theme.textSecondary)
                 EmailCodeEntry(viewModel: code)

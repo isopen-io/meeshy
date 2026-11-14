@@ -8,6 +8,9 @@ import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MessageEffectFlags
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.junit.Test
 
 private data class ReaderPrefs(
@@ -30,7 +33,45 @@ private fun replyingTo(quoted: ApiMessageReplyPreview, prefs: ReaderPrefs = Read
         preferences = prefs,
     )
 
+private fun json(raw: String): JsonObject = Json.parseToJsonElement(raw).jsonObject
+
+private const val MISSED_CALL =
+    """{"kind":"call","callId":"c-1","initiatorId":"ama","callType":"audio","outcome":"missed","durationSeconds":0,"bytesTotal":null,"bytesEstimated":false,"networkQuality":null}"""
+
 class BubbleQuotedReplyTest {
+
+    @Test
+    fun `a quoted missed call speaks the reader language and his point of view, never the french fallback`() {
+        val content = replyingTo(
+            ApiMessageReplyPreview(id = "q", content = "Appel manqué", notice = json(MISSED_CALL)),
+            ReaderPrefs("en"),
+        )
+
+        assertThat(content.replyToText).isEqualTo("Missed call")
+    }
+
+    @Test
+    fun `a quoted notice served by an older gateway keeps its content`() {
+        val content = replyingTo(ApiMessageReplyPreview(id = "q", content = "Appel manqué"), ReaderPrefs("en"))
+
+        assertThat(content.replyToText).isEqualTo("Appel manqué")
+    }
+
+    @Test
+    fun `a quotable notice bubble carries its quote in the reader language, an ordinary message none`() {
+        val notice = BubbleContentBuilder.build(
+            ApiMessage(
+                id = "n1", conversationId = "c1", senderId = "ama", content = "Appel manqué",
+                messageSource = "system", messageType = "system", metadata = json(MISSED_CALL),
+            ),
+            currentUserId = "me",
+            preferences = ReaderPrefs("de"),
+        )
+        val ordinary = replyingTo(ApiMessageReplyPreview(id = "q", content = "hi"))
+
+        assertThat(notice.quotedNoticeText).isEqualTo("Verpasster Anruf")
+        assertThat(ordinary.quotedNoticeText).isNull()
+    }
 
     @Test
     fun `a quoted view-once photo shows only the protection placeholder and no thumbnail`() {

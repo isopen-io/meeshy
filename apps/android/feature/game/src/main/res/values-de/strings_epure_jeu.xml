@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Wie nutze ich es?</string>
+    <string name="game2_showcase_empty">Noch keine Trophäe: Pokale, Wiedergeburt und Flamme kommen hierher.</string>
+    <string name="game2_showcase_visibility_hint">Besucher sehen nur den Monat, nie das genaue Datum.</string>
+    <string name="game2_atlas_empty">Noch kein Stempel: Schreibe in einer anderen Sprache.</string>
+    <string name="game2_atlas_privacy">Standardmäßig privat: Das Spiel speichert Sprache und Datum, nie das Gegenüber oder die Unterhaltung.</string>
+    <string name="game2_league_pseudonym_invalid">Ungültig.</string>
+    <string name="game_rules_2_body">Dein Level liest sich an deinem Licht ab: eine Million Funken ergeben Level 100.</string>
+    <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
+    <string name="game2_prestige_meo">Dein Level beginnt wieder bei 1 und deine Funken bei 0; dein Rang, dein Ruhm und deine Meeshes bleiben. Deine Ahnen schenken dir eine nummerierte Trophäe und %1$s Ruhm.</string>
+    <string name="game2_season_seal_body">Rein dekorativ: alle %1$s Rasten ein Sammelobjekt.</string>
+    <string name="game2_settings_friends_league_body">Bestätigte Freunde und du seht euch in der Wochenwertung.</string>
+    <string name="game_rules_section_rules">Regeln</string>
+    <string name="game_rules_section_concepts">Begriffe</string>
+    <string name="game_rules_4_body">Dein Level sinkt um ebenso viel; Rang und Medaillen sinken nicht.</string>
+    <string name="game_rules_5_body">Prägungen, neue Level und Heldentaten lassen deinen Ruhm wachsen, der dir deinen Rang gibt.</string>
+    <string name="game_rules_6_body">Meeshes zu behalten lässt das Erbe wachsen; sie auszugeben wacht über die Flamme.</string>
+    <string name="game_rules_7_body">Jede Nacht ein Traum, eine Gabe, eine Flamme, die wächst, solange du wiederkommst.</string>
+    <string name="game_detail_coin_what">Die Meesh ist dein Licht, gebannt in eine nummerierte Münze.</string>
+    <string name="game_detail_fact_mint_next">Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
+    <string name="game_notebook_empty">Jedes Zeichen deiner Ahnen kann hier zu einem Foto werden.</string>
+    <string name="game_error_league_pseudonym_invalid">Ungültig.</string>
+    <string name="game2_league_pseudonym_hint_change">3 bis 20 Zeichen (Buchstaben, Ziffern, . - _). Weder dein Name noch dein Benutzername.</string>
+    <string name="game_concept_level_what">Dein Level ist die Zahl in der Mitte deines Rings: Es kommt aus deinem Licht.</string>
+    <string name="game_concept_flame_use">Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen.</string>
+    <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen.</string>
+    <string name="game2_prestige_confirm_access">Dein Turnier und dein Bündnis bleiben offen.</string>
+    <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost und wechselt mit jeder Reise.</string>
+    <string name="game2_league_snapshot">Rangliste täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
+    <string name="game2_season_how">Akte und Bündnisse bringen dich ein paar Schritte voran. Die ganze Reise ist kostenlos.</string>
+    <string name="game2_settings_celebrations_switch">Zeichen der Ahnen</string>
+    <string name="game_guide_step_welcome_what">Das Spiel in sieben Karten</string>
+    <string name="game_guide_more">Was bedeutet dieser Moment?</string>
+    <string name="game_progression_empty">Deine erste Medaille leuchtet bei der ersten Aktion auf.</string>
+    <string name="game_photo_camera_denied">Die Kamera ist verweigert: Erlaube sie in den Einstellungen.</string>
+    <string name="game_photo_camera_unsupported">Dieses Gerät erlaubt hier keine Kamera.</string>
+    <string name="game_photo_camera_unavailable">Die Kamera ist nicht verfügbar.</string>
+    <string name="game_mint_blocked_debt_plain">Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben, dann kannst du prägen.</string>
+    <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
+    <string name="game2_settings_hidden_body">Das Spiel verschwindet von diesem Gerät und ist für andere geschlossen.</string>
+    <string name="game2_settings_hidden_question">Was schließt das Ausblenden?</string>
+    <string name="game2_settings_hidden_effects">Blendet das Spiel auf diesem Gerät aus, verbirgt Trophäen, Rang, Erbe und Atlas vor anderen, nimmt dich aus dem öffentlichen Turnier. Funken und Trophäen bleiben erhalten.</string>
+    <string name="game2_settings_visibility_question">Wer sieht, wann ich spiele?</string>
+    <string name="game2_settings_visibility_presence">Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst.</string>
+    <string name="game2_settings_friends_league_question">Was entfernt „Mich zurückziehen“?</string>
+    <string name="game2_settings_friends_league_effects">Der Schalter nimmt dich aus ihrer Wertung und sie aus deiner: beide Richtungen.</string>
+    <string name="reveal_badge_axis_subtitle">Eine Stufe mehr auf dieser Achse.</string>
+    <string name="game_rules_1_body">Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch zählt.</string>
+    <string name="game_rules_1_question">Was lässt mehr Funken sprühen?</string>
+    <string name="game_rules_1_more">Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen.</string>
+    <string name="game_rules_3_body" formatted="false">Eine Meesh prägst du von Hand: Sie bannt einen Teil deines Lichts.</string>
+    <string name="game_rules_3_question">Wie viel Licht kostet eine Prägung?</string>
+    <string name="game_rules_3_more" formatted="false">Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
+    <string name="game2_league_consent_how_question">Wie werde ich eingeteilt?</string>
+    <string name="game_concept_league_use">Achte auf deinen Platz und deine Zone: Die ersten 7 steigen auf, die letzten 5 steigen ab.</string>
+    <string name="game2_season_none">Keine Reise unterwegs.</string>
+    <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten.</string>
+    <string name="reveal_streak_subtitle">%1$d Tage in Folge.</string>
+    <string name="game_progression_offline_empty">Offline – kein Fortschritt gespeichert.</string>
+    <string name="progression_elans_empty">Poste eine Story, einen Beitrag oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken.</string>
+    <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung. Es bringt deine Reise auch ein paar Schritte voran.</string>
+    <string name="game2_guide_moment_league_relegated_means">Die letzten 5 steigen ab; die Funken beginnen wieder bei null, sonst sinkt nichts.</string>
+    <string name="game_concept_points_what">Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht.</string>
+    <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst.</string>
+    <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100; sie ist freiwillig.</string>
+    <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten. Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
+    <string name="game_rules_8_body">Bei jeder Entwicklung wird ein Zeichen deiner Ahnen zu einem Foto mit Mee und Meo, aufbewahrt in deiner Chronik.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % Funken, solange dein Level 7 oder mehr unter deinem hellsten Licht liegt.</string>
+    <string name="game_rules_badges_ribbon_question">Was bedeuten das Band und das Email?</string>
+</resources>

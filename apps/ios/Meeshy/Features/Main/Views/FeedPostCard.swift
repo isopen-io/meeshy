@@ -367,14 +367,14 @@ struct FeedPostCard: View {
         post.media.first { $0.type == .image || $0.type == .video }
     }
 
-    /// **La légende que la carte de scène affiche** — celle du média que la
-    /// scène montre, résolue par le MÊME juge que les deux autres surfaces du
-    /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
-    /// déjà rendu au-dessus de la carte.
+    /// **La légende que la carte de scène affiche** — celle du média que la scène
+    /// montre, servie par le Prisme et le MÊME juge que le fil (`SocialMediaCaption`),
+    /// jamais le texte du post : celui-ci est déjà rendu au-dessus de la carte.
     private var cardSceneCaption: String? {
-        guard let cardSceneDocument else { return cardSceneFullscreenMedia?.caption }
+        guard let cardSceneDocument else {
+            return cardSceneFullscreenMedia?.resolvedCaption(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
         return SceneCaption.resolve(sceneIndex: 0, in: cardSceneDocument, post: post,
-                                    carrierFallback: false)
+                                    carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
     }
 
     /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (dans le lot qui a introduit le plein écran de scène).

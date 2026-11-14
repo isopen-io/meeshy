@@ -12,14 +12,17 @@ import me.meeshy.sdk.model.game.rules.OnboardingStepKey
  * `GameRulesBook` ; ici, seulement quelle chaîne dit chaque morceau.
  */
 internal object RulesBookCopy {
-    data class Rule(@StringRes val title: Int, @StringRes val body: Int)
+    /** Le détail secondaire d'une règle, rangé derrière un (i) : son nom est la [question] à laquelle [detail] répond. */
+    data class RuleInfo(@StringRes val question: Int, @StringRes val detail: Int)
+
+    data class Rule(@StringRes val title: Int, @StringRes val body: Int, val info: RuleInfo? = null)
 
     data class Step(@StringRes val what: Int, @StringRes val means: Int, @StringRes val next: Int)
 
     fun rule(index: Int): Rule = when (index) {
-        1 -> Rule(R.string.game_rules_1_title, R.string.game_rules_1_body)
+        1 -> Rule(R.string.game_rules_1_title, R.string.game_rules_1_body, RuleInfo(R.string.game_rules_1_question, R.string.game_rules_1_more))
         2 -> Rule(R.string.game_rules_2_title, R.string.game_rules_2_body)
-        3 -> Rule(R.string.game_rules_3_title, R.string.game_rules_3_body)
+        3 -> Rule(R.string.game_rules_3_title, R.string.game_rules_3_body, RuleInfo(R.string.game_rules_3_question, R.string.game_rules_3_more))
         4 -> Rule(R.string.game_rules_4_title, R.string.game_rules_4_body)
         5 -> Rule(R.string.game_rules_5_title, R.string.game_rules_5_body)
         6 -> Rule(R.string.game_rules_6_title, R.string.game_rules_6_body)
@@ -47,15 +50,15 @@ internal object RulesBookCopy {
     }
 
     @StringRes private fun conceptBody(concept: ProgressionConcept): Int = when (concept) {
-        ProgressionConcept.Level -> R.string.game_rules_concept_level_body
-        ProgressionConcept.Points -> R.string.game_rules_concept_points_body
-        ProgressionConcept.Meesh -> R.string.game_rules_concept_meesh_body
-        ProgressionConcept.Glory -> R.string.game_rules_concept_glory_body
-        ProgressionConcept.Flame -> R.string.game_rules_concept_flame_body
-        ProgressionConcept.Missions -> R.string.game_rules_concept_missions_body
-        ProgressionConcept.League -> R.string.game_rules_concept_league_body
-        ProgressionConcept.Season -> R.string.game_rules_concept_season_body
-        ProgressionConcept.Prestige -> R.string.game_rules_concept_prestige_body
+        ProgressionConcept.Level -> R.string.game_concept_level_what
+        ProgressionConcept.Points -> R.string.game_concept_points_what
+        ProgressionConcept.Meesh -> R.string.game_concept_meesh_what
+        ProgressionConcept.Glory -> R.string.game_concept_glory_what
+        ProgressionConcept.Flame -> R.string.game_concept_flame_what
+        ProgressionConcept.Missions -> R.string.game_concept_missions_what
+        ProgressionConcept.League -> R.string.game_concept_league_what
+        ProgressionConcept.Season -> R.string.game_concept_season_what
+        ProgressionConcept.Prestige -> R.string.game_concept_prestige_what
         ProgressionConcept.Elans -> R.string.game_rules_concept_elans_body
         ProgressionConcept.Badges -> R.string.game_rules_concept_badges_body
         ProgressionConcept.Defis -> R.string.game_rules_concept_defis_body

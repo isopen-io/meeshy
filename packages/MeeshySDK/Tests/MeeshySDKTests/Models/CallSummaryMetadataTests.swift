@@ -219,4 +219,88 @@ struct CallSummaryMetadataTests {
         )
         #expect(plainMissed.isCancelled(viewerIsInitiator: true) == false)
     }
+
+    // MARK: - A1.2 : la ligne des participants sous le titre de la carte
+    //
+    // Le résumé d'appel est UN message, le même pour chaque lecteur (la direction se dérive déjà par lecteur
+    // depuis `initiatorId`) : la passerelle sert donc TOUS les participants avec leur identifiant, et c'est le
+    // lecteur qui s'en retire pour se nommer « vous ».
+
+    private func summary(participants: [CallSummaryParticipant]?) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "c1", initiatorId: "u_a", callType: .video, outcome: .completed,
+            durationSeconds: 760, bytesTotal: nil, bytesEstimated: false, networkQuality: nil,
+            participants: participants
+        )
+    }
+
+    private let team: [CallSummaryParticipant] = [
+        CallSummaryParticipant(userId: "u_awa", displayName: "Awa"),
+        CallSummaryParticipant(userId: "u_me", displayName: "Charles"),
+        CallSummaryParticipant(userId: "u_karim", displayName: "Karim"),
+        CallSummaryParticipant(userId: "u_lina", displayName: "Lina")
+    ]
+
+    @Test func participantsLine_namesThePeersThenYou_neverMyOwnName() {
+        let line = summary(participants: team)
+            .participantsLine(viewerId: "u_me", youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Awa, Karim, Lina et vous")
+    }
+
+    @Test func participantsLine_isPerViewer_fromTheSameMessage() {
+        let line = summary(participants: team)
+            .participantsLine(viewerId: "u_awa", youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Charles, Karim, Lina et vous")
+    }
+
+    @Test func participantsLine_aDuoReadsAsTwoNames() {
+        let duo = [CallSummaryParticipant(userId: "u_awa", displayName: "Awa"), CallSummaryParticipant(userId: "u_me", displayName: "Charles")]
+        let line = summary(participants: duo)
+            .participantsLine(viewerId: "u_me", youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Awa et vous")
+    }
+
+    @Test func participantsLine_aReaderWhoDidNotTakePart_isNotAddedAsYou() {
+        let line = summary(participants: [team[0], team[2]])
+            .participantsLine(viewerId: "u_me", youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Awa et Karim")
+    }
+
+    @Test func participantsLine_isAbsentWhenNoOtherNameWasServed() {
+        let fr = Locale(identifier: "fr")
+        #expect(summary(participants: nil).participantsLine(viewerId: "u_me", youLabel: "vous", locale: fr) == nil)
+        #expect(summary(participants: []).participantsLine(viewerId: "u_me", youLabel: "vous", locale: fr) == nil)
+        #expect(summary(participants: [team[1]]).participantsLine(viewerId: "u_me", youLabel: "vous", locale: fr) == nil)
+        let blank = [CallSummaryParticipant(userId: "u_x", displayName: "  "), team[1]]
+        #expect(summary(participants: blank).participantsLine(viewerId: "u_me", youLabel: "vous", locale: fr) == nil)
+    }
+
+    @Test func participants_decodeWhenServed_andStayAbsentOtherwise() throws {
+        let served = try decode("""
+        {"kind":"call","callId":"c1","initiatorId":"u","callType":"audio","outcome":"completed",
+         "durationSeconds":5,"participants":[{"userId":"u_awa","displayName":"Awa"},{"userId":"u","displayName":"Karim"}]}
+        """)
+        #expect(served.participants == [
+            CallSummaryParticipant(userId: "u_awa", displayName: "Awa"),
+            CallSummaryParticipant(userId: "u", displayName: "Karim")
+        ])
+        let legacy = try decode(#"{"kind":"call","callId":"c1","initiatorId":"u","callType":"audio","outcome":"completed","durationSeconds":5}"#)
+        #expect(legacy.participants == nil)
+    }
+
+    @Test func participants_aMalformedList_neverLosesTheCard() throws {
+        let meta = try decode("""
+        {"kind":"call","callId":"c1","initiatorId":"u","callType":"audio","outcome":"completed",
+         "durationSeconds":5,"participants":[{"name":"Awa"}]}
+        """)
+        #expect(meta.participants == nil)
+        #expect(meta.callId == "c1")
+    }
+
+    @Test func participants_roundTripThroughEncoding() throws {
+        let original = summary(participants: team)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: data)
+        #expect(decoded.participants == team)
+    }
 }

@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import kotlinx.coroutines.delay
@@ -55,6 +54,7 @@ import me.meeshy.sdk.model.playback.PipAspect
 import me.meeshy.sdk.model.playback.VideoPresentation
 import me.meeshy.ui.R
 import me.meeshy.ui.component.viewer.ImageViewerExit
+import me.meeshy.ui.component.viewer.ViewerDialog
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 import androidx.compose.ui.platform.testTag
 import me.meeshy.ui.icons.MeeshyIcons
@@ -82,7 +82,7 @@ public fun MeeshyVideoViewer(
     exits: List<ImageViewerExit> = emptyList(),
     onExit: (ImageViewerExit) -> Unit = {},
 ) {
-    Dialog(
+    ViewerDialog(
         onDismissRequest = onDismiss,
         properties = viewerDialogProperties(secure),
     ) {

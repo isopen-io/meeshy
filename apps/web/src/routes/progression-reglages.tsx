@@ -10,6 +10,7 @@ import type { PhotoInvitations } from '@meeshy/shared/types/game-photo-settings'
 import { setPhotoInvitations } from '@/lib/game-photo/app-alerts';
 
 import { GameSettings } from '@/components/game-settings';
+import { InfoHintScope } from '@/components/info-hint';
 import { GAME_BRAND } from '@/components/game-surface';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { GameHiddenOutcome } from '@/lib/game/game-hidden';
@@ -99,7 +100,7 @@ export function ReglagesBody({
     });
   };
   return (
-    <>
+    <InfoHintScope>
     <GameSettings
       prefs={prefs}
       visibility={game?.visibility ?? visibility}
@@ -120,7 +121,7 @@ export function ReglagesBody({
       invitations={invitations === undefined ? undefined : { current: game?.photo?.invitations ?? 'every', onChange: changeInvitations, notice: invitationsNotice }}
     />
     {choosing && atmosphere !== undefined ? <GameAtmosphereChoice current={atmosphere.current} tiles={atmosphere.tiles} onChoose={chooseAtmosphere} onClose={() => setChoosing(false)} /> : null}
-    </>
+    </InfoHintScope>
   );
 }
 

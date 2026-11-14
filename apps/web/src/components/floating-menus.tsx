@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
+import { MenuActsRing } from './menu-acts-ring';
 import { MenuGlyph } from './menu-glyph';
 import { UnreadCornerBadge, UnreadRungBadge, unreadBadgeText } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
@@ -26,9 +27,8 @@ import {
   floatingLeft,
   floatingTop,
   ladderExpandsDown,
-  ladderPitch,
   ladderRooms,
-  ladderRungOffset,
+  ladderRungPlaces,
   type LadderRooms,
 } from '@/lib/view/floating-pose';
 import { useAdminAccess } from '@/lib/view/use-admin-access';
@@ -36,6 +36,8 @@ import { useFloatingDrag } from '@/lib/view/use-floating-drag';
 import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useGamePrefs } from '@/lib/game/preferences';
+import { useActsRing } from '@/lib/view/use-acts-ring';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -171,7 +173,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   /* L'ÉCHELLE DE CE LECTEUR (#6458) : le barreau d'administration n'existe que
      sur une matrice SERVIE portant le droit — jamais monté puis masqué. */
-  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable() });
+  const gameHidden = useGamePrefs().hidden;
+  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable(), gameHidden });
   const [rooms, setRooms] = useState<LadderRooms | null>(null);
 
   const roving = useRovingMenu({
@@ -180,7 +183,12 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
     onResize: () => setRooms(measureLadderRooms(roving.buttonRef.current)),
   });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = roving;
-  const pitch = ladderPitch({ count: ladder.length, room: rooms === null ? null : expandsDown ? rooms.down : rooms.up });
+  const places = ladderRungPlaces({
+    count: ladder.length,
+    room: rooms === null ? null : expandsDown ? rooms.down : rooms.up,
+    expandsDown,
+    inward: menu.position.x >= 0.5 ? -1 : 1,
+  });
 
   /* La langue d'INTERFACE, lue au rendu : son catalogue est chargé avec le
      chunk de ce composant (`shell.tsx`, #6206). */
@@ -201,6 +209,10 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
   const maPhoto = session.status === 'authenticated' ? participantAvatarOf(session.user) : undefined;
   /* MON CONTOUR SUR LE DISQUE (#10946) — le même que sur mon profil. */
   const monContour = useMyRing();
+  /* L'ANNEAU DES ACTES DU JOUR (#17768) — lu dans le cache du jeu, décrit par le bouton menu fermé. */
+  const actes = useActsRing();
+  const actesId = useId();
+  const decritActes = actes !== null && !open;
 
   /**
    * **Le second tap ouvre le profil** — la règle d'iOS
@@ -361,8 +373,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
                 style={
                   {
                     '--rung': index,
-                    left: '50%',
-                    top: `calc(50% + ${ladderRungOffset(index, expandsDown, pitch)}px)`,
+                    left: `calc(50% + ${places[index]?.dx ?? 0}px)`,
+                    top: `calc(50% + ${places[index]?.dy ?? 0}px)`,
                     width: LADDER_RUNG,
                     height: LADDER_RUNG,
                     backgroundImage: `linear-gradient(135deg, ${destination.tint}, color-mix(in srgb, ${destination.tint} 70%, var(--color-media-backdrop)))`,
@@ -378,6 +390,12 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
           </div>
         ) : null}
 
+        {actes === null ? null : <MenuActsRing ring={actes} size={FLOATING_BUTTON} />}
+        {decritActes ? (
+          <span id={actesId} className="sr-only">
+            {translate(langue, 'a11y.floating.menu.acts', { done: String(actes.done), total: String(actes.total) })}
+          </span>
+        ) : null}
         <button
           ref={buttonRef}
           /* La PRISE des gates et des recettes. Sans elle, `aria-haspopup` ne
@@ -392,6 +410,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
           onClick={onMenuButton}
           aria-haspopup="menu"
           aria-expanded={open}
+          aria-describedby={decritActes ? actesId : undefined}
           aria-label={open ? translate(langue, PROFILE_DESTINATION.labelKey) : closedMenuLabel(langue, unread)}
           className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{

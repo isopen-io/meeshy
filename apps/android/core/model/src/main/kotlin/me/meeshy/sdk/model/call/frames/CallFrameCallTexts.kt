@@ -57,5 +57,6 @@ public object CallFrameTextsRule {
         return if (CallFrameColor.parse(prefixed) == null) null else prefixed
     }
 
-    private fun meaningful(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
+    /** Un texte qui dit quelque chose : rogné, jamais vide. */
+    public fun meaningful(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
 }

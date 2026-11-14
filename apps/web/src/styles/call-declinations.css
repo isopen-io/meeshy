@@ -1,0 +1,46 @@
+/* LES DÉCLINAISONS D'UN CADRE, DANS SA VIGNETTE (#12685, #17821 C1.6) — feuille de
+   `call-declination-pages.tsx` : elle ne pèse que sur le Montage qui les montre, jamais
+   sur la première peinture (`budgets.json` › `first_paint`).
+
+   La vignette ne réclame au navigateur que le défilement HORIZONTAL (celui du carrousel) :
+   le vertical lui revient, et le geste le lit par ses pointeurs. La piste ne bouge que par
+   `transform` ; sous « Réduire les animations », elle saute et la page arrive en fondu
+   (opacité seule — la règle 32 d'`app.css` en règle la durée). */
+[data-call-declination-pages] {
+  touch-action: pan-x;
+}
+
+[data-call-declination-track] {
+  will-change: transform;
+  transition: transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+[data-call-declination-dots] {
+  inset-inline-end: 0.125rem;
+  filter: drop-shadow(0 1px 1px var(--color-scrim));
+}
+
+[data-call-declination-dot] {
+  width: 0.25rem;
+  height: 0.25rem;
+  opacity: 0.5;
+}
+
+[data-call-declination-dot][data-current] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-declination-track] {
+    transition: none;
+  }
+
+  [data-call-declination-page] {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
+
+  [data-call-declination-page][data-current] {
+    opacity: 1;
+  }
+}

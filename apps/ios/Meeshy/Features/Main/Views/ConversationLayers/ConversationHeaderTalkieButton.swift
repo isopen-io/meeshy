@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// L'appel et, dans un direct, le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
+/// L'appel et, dans un direct, le Bring (#17442, dès Ami, même chiffré) puis le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
 /// un direct chiffré ni dans un aperçu. Le doigt posé enfonce et vibre ; la voix qui part, ou celle du pair qui arrive,
 /// étend le talkie sur toute la barre d'en-tête, son onde suivant le niveau en direct (#17310) ; un `TALKIE_NOT_ALLOWED`
 /// le retire, comme sur la fiche. Le (i) du talkie ne vit que sur la fiche profil.
@@ -19,6 +19,10 @@ struct ConversationHeaderCallCluster: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            if case .peer(let userId)? = entry?.callee {
+                ConversationHeaderBringButton(userId: userId, peerName: peerName)
+                    .id(userId)
+            }
             if let peer = talkiePeer {
                 ConversationHeaderTalkieButton(userId: peer, peerName: peerName, accentColor: accentColor, secondaryColor: secondaryColor)
                     .id(peer)

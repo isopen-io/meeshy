@@ -13,6 +13,13 @@ const ptEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'Esta publicação fez saltar {count} faísca para você',
   'engagement.post.points.other': 'Esta publicação fez saltar {count} faíscas para você',
+  'engagement.card.streak.one': 'dia seguido aqui',
+  'engagement.card.streak.other': 'dias seguidos aqui',
+  'engagement.card.today': 'Hoje',
+  'engagement.card.total': 'Aqui desde o início',
+  'engagement.card.open': 'Ver o jogo',
+  'engagement.card.hide': 'Ocultar a chama',
+  'engagement.card.title': 'Nesta conversa',
 } as const;
 
 export default ptEngagement;

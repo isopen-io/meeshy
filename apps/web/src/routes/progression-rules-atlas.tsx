@@ -6,6 +6,7 @@ import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
+import { GameFold, useOneOpen, type OneOpen } from '@/components/game-fold';
 import { Flame, GameBadge, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { rarityRim } from '@/lib/game/rarity';
@@ -279,40 +280,39 @@ const BODY: Readonly<Record<AtlasFamily, () => ReactNode>> = {
   rarities: Rarities,
 };
 
-function Family({ family }: { readonly family: AtlasFamily }) {
+function Family({ family, folds }: { readonly family: AtlasFamily; readonly folds: OneOpen }) {
   const speaker = atlasSpeaker(family);
   const Body = BODY[family];
   return (
-    <section
-      data-game-atlas-family={family}
-      aria-labelledby={`atlas-${family}`}
-      className="flex flex-col gap-3 rounded-card px-3 py-3"
-      style={{ backgroundColor: GAME_CARD }}
-    >
-      <div className="flex items-center gap-2" data-game-atlas-speaker={speaker}>
-        <GameBird bird={speaker === 'mee' ? 'meeGuide' : 'meoGuide'} size={48} flip={speaker === 'meo'} />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h3 id={`atlas-${family}`} className="text-body font-bold" style={{ color: GAME_INK }}>
-            {TITLE[family]()}
-          </h3>
+    <section data-game-atlas-family={family} aria-label={TITLE[family]()} className="rounded-card px-3" style={{ backgroundColor: GAME_CARD }}>
+      <div data-game-atlas-speaker={speaker}>
+        <GameFold
+          id={`atlas-${family}`}
+          headingId={`atlas-${family}`}
+          open={folds.isOpen(family)}
+          onToggle={() => folds.toggle(family)}
+          lead={<GameBird bird={speaker === 'mee' ? 'meeGuide' : 'meoGuide'} size={32} flip={speaker === 'meo'} />}
+          title={TITLE[family]()}
+        >
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {LINE[family]()}
           </p>
-        </div>
+          <Body />
+        </GameFold>
       </div>
-      <Body />
     </section>
   );
 }
 
 export function RulesAtlas() {
+  const folds = useOneOpen();
   return (
     <section aria-labelledby="atlas-titre" data-game-atlas="" className="flex flex-col gap-3">
       <h2 id="atlas-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
         {gameText('game.rules.atlas.title')}
       </h2>
       {ATLAS_FAMILIES.map((family) => (
-        <Family key={family} family={family} />
+        <Family key={family} family={family} folds={folds} />
       ))}
     </section>
   );

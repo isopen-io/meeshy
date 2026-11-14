@@ -37,6 +37,8 @@ type ContextStringField =
   | 'commentId'
   | 'parentCommentId'
   | 'friendRequestId'
+  | 'communityId'
+  | 'communityName'
   | 'callSessionId'
   | 'postCreatedAt'
   | 'postExpiresAt';
@@ -49,6 +51,8 @@ const CONTEXT_STRING_FIELDS: readonly ContextStringField[] = [
   'commentId',
   'parentCommentId',
   'friendRequestId',
+  'communityId',
+  'communityName',
   'callSessionId',
   'postCreatedAt',
   'postExpiresAt',

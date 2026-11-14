@@ -13,7 +13,7 @@ import MeeshyUI
 
 extension CallView {
     /// Les participants de l'appel, moi compris : deux hors grille, sinon moi et le maillage.
-    private var callParticipantCount: Int {
+    var callParticipantCount: Int {
         isGroupStage ? mesh.roster.members.count + 1 : 2
     }
 
@@ -23,7 +23,7 @@ extension CallView {
 
     /// Le retrait de la zone sûre horizontale, identique des deux côtés : la
     /// fenêtre donne des bords physiques, pas des bords de lecture.
-    private static var railsSafeHorizontal: CGFloat {
+    static var railsSafeHorizontal: CGFloat {
         guard let insets = DeviceLayout.measurementWindow?.safeAreaInsets else { return 0 }
         return max(insets.left, insets.right)
     }
@@ -63,6 +63,7 @@ extension CallView {
             .padding(.top, Self.chromeTopInset + 52)
             .padding(.bottom, bottom)
             .callChromeVisibility(isChromeVisible)
+            .modifier(CallRailStow(side: side, safeHorizontal: safeHorizontal, isVisible: isChromeVisible, reduceMotion: reduceMotion))
             .transition(CallRailSlide.transition(side, safeHorizontal: safeHorizontal, reduceMotion: reduceMotion))
     }
 
@@ -79,13 +80,28 @@ extension CallView {
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             ViewThatFits(in: .vertical) {
                 column
-                ScrollView(.vertical, showsIndicators: false) { column }
+                ScrollView(.vertical, showsIndicators: false) { column }.mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }
             }
         }
         .clipShape(Capsule())
         .callControlsGlass(in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallControlsCopy.familyTitle(row.family))
+    }
+}
+
+/// G1.11 · G2.8 — rangé, le rail sort par son bord de l'écran et en revient (transformation
+/// et opacité seulement) ; Réduire les animations : un fondu, rien ne se déplace.
+private struct CallRailStow: ViewModifier {
+    let side: CallRailSide
+    let safeHorizontal: CGFloat
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion)))
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)
     }
 }
 

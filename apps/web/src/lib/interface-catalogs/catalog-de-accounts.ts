@@ -8,7 +8,7 @@ const deAccounts = {
   'accounts.row.current': 'Aktuelles Konto',
   'accounts.row.signed_in': 'Angemeldet',
   'accounts.row.forget': '{name} von diesem Gerät entfernen',
-  'accounts.add': 'Konto hinzufügen',
+  'accounts.add': 'Hinzufügen',
   'accounts.keep_signed_in': 'Auf diesem Gerät angemeldet bleiben',
   'settings.switch_account.title': 'Konto wechseln',
   'login.server_origin': 'Verbunden mit: {origin}',

@@ -1,5 +1,7 @@
 package me.meeshy.ui.component.document
 
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -7,8 +9,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.AnnotatedString
 import com.google.common.truth.Truth.assertThat
@@ -16,6 +20,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import me.meeshy.sdk.model.fileviewer.CodeLanguage
+import me.meeshy.ui.component.viewer.LocalViewerTopOverlay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,5 +73,18 @@ class CodeFullSheetStatesTest {
         sheet(CodeContent.Ready("secret"), exitAllowed = false)
         compose.onNodeWithTag("code-sheet-line-0").assertIsDisplayed()
         compose.onNodeWithTag("Copy code").assertDoesNotExist()
+    }
+
+    @Test
+    fun `la pastille de l'appel reduit reste posee au-dessus du plein ecran de code`() {
+        val pill: @Composable () -> Unit = { Text("pastille d'appel") }
+        compose.setContent {
+            CompositionLocalProvider(LocalViewerTopOverlay provides pill) {
+                CodeFullSheet("Main.kt", CodeLanguage.KOTLIN, CodeContent.Loading, Color.Blue, isDark = true, onDismiss = {})
+            }
+        }
+        val bottomOfPill = compose.onNodeWithText("pastille d'appel").getUnclippedBoundsInRoot().bottom.value
+        val topOfStatus = compose.onNodeWithTag("code-sheet-status").getUnclippedBoundsInRoot().top.value
+        assertThat(topOfStatus).isAtLeast(bottomOfPill)
     }
 }

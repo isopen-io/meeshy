@@ -26,6 +26,10 @@ private const val UNDERLAY_PARALLAX = 3
  */
 private fun NavBackStackEntry.isReels(): Boolean = destination.route == Routes.REELS
 
+private fun NavBackStackEntry.isCall(): Boolean = destination.route == Routes.CALL
+
+private val reduceMotion: Boolean get() = FeedOverlayTransition.reduceMotion
+
 private fun NavBackStackEntry.isStacked(): Boolean = NavBackChrome.of(destination.route) == BackChrome.ARROW
 
 /**
@@ -35,7 +39,11 @@ private fun NavBackStackEntry.isStacked(): Boolean = NavBackChrome.of(destinatio
  * ([BackChrome.MODAL]) et les racines gardent le fondu par défaut du `NavHost`.
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackEnter(): EnterTransition =
-    if (targetState.isReels()) {
+    if (targetState.isCall()) {
+        CallCapsuleTransitions.enter(reduceMotion)
+    } else if (initialState.isCall()) {
+        CallCapsuleTransitions.underlayEnter(reduceMotion)
+    } else if (targetState.isReels()) {
         fadeIn(tween(RevealGeometry.OPEN_MILLIS), initialAlpha = 1f)
     } else if (targetState.isStacked()) {
         slideIntoContainer(SlideDirection.Start, tween(PUSH_MILLIS), initialOffset = { it / 4 }) + fadeIn(tween(PUSH_MILLIS))
@@ -44,7 +52,11 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackEnter(): Ent
     }
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackExit(): ExitTransition =
-    if (targetState.isReels()) {
+    if (initialState.isCall()) {
+        CallCapsuleTransitions.exit(reduceMotion)
+    } else if (targetState.isCall()) {
+        CallCapsuleTransitions.underlayExit(reduceMotion)
+    } else if (targetState.isReels()) {
         fadeOut(tween(RevealGeometry.OPEN_MILLIS), targetAlpha = 1f)
     } else if (targetState.isStacked()) {
         slideOutOfContainer(SlideDirection.Start, tween(PUSH_MILLIS), targetOffset = { it / UNDERLAY_PARALLAX }) +
@@ -54,7 +66,9 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackExit(): Exit
     }
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackPopEnter(): EnterTransition =
-    if (initialState.isReels()) {
+    if (initialState.isCall()) {
+        CallCapsuleTransitions.underlayEnter(reduceMotion)
+    } else if (initialState.isReels()) {
         EnterTransition.None
     } else if (initialState.isStacked()) {
         slideIntoContainer(SlideDirection.End, tween(PUSH_MILLIS), initialOffset = { it / UNDERLAY_PARALLAX }) +
@@ -64,7 +78,9 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackPopEnter(): 
     }
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackPopExit(): ExitTransition =
-    if (initialState.isReels()) {
+    if (initialState.isCall()) {
+        CallCapsuleTransitions.exit(reduceMotion)
+    } else if (initialState.isReels()) {
         fadeOut(tween(RevealGeometry.CLOSE_MILLIS), targetAlpha = 1f)
     } else if (initialState.isStacked()) {
         slideOutOfContainer(SlideDirection.End, tween(PUSH_MILLIS)) + fadeOut(tween(FADE_MILLIS))

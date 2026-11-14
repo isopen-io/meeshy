@@ -266,11 +266,11 @@ struct GamePhotoFlowView: View {
         let text: String
         switch failure {
         case .denied:
-            text = String(localized: "game.photo.camera.denied", defaultValue: "La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.", bundle: .main)
+            text = String(localized: "game.photo.camera.denied", defaultValue: "Caméra refusée : autorise-la dans les réglages, ou choisis une photo.", bundle: .main)
         case .unsupported:
-            text = String(localized: "game.photo.camera.unsupported", defaultValue: "Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
+            text = String(localized: "game.photo.camera.unsupported", defaultValue: "Caméra indisponible : choisis une photo, ou garde la carte seule.", bundle: .main)
         case .unavailable:
-            text = String(localized: "game.photo.camera.unavailable", defaultValue: "La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
+            text = String(localized: "game.photo.camera.unavailable", defaultValue: "Caméra indisponible. Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
         }
         return Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))

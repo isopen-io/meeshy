@@ -9,23 +9,11 @@
           "status": "android-only"
         },
         {
-          "androidName": "pack_shop_detail_embedded",
-          "status": "android-only"
-        },
-        {
-          "androidName": "pack_shop_detail_embedded_size",
-          "status": "android-only"
-        },
-        {
           "androidName": "pack_shop_detail_price",
           "status": "android-only"
         },
         {
           "androidName": "pack_shop_state_installed",
-          "status": "android-only"
-        },
-        {
-          "androidName": "pack_shop_state_embedded",
           "status": "android-only"
         },
         {

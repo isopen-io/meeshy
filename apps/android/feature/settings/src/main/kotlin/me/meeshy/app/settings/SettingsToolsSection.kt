@@ -25,8 +25,8 @@ internal fun SettingsToolsSection(
                 SettingsHubRowId.STARRED -> SettingsChevronRow(MeeshyIcons.StarFilled, stringResource(R.string.settings_starred_messages), MeeshyPalette.Warning, onOpenStarred)
                 SettingsHubRowId.SAVED -> SettingsChevronRow(MeeshyIcons.BookmarkFilled, stringResource(R.string.settings_saved_posts), MeeshyPalette.Indigo400, onOpenSaved)
                 SettingsHubRowId.STATS -> SettingsChevronRow(MeeshyIcons.ChartBar, stringResource(R.string.settings_tools_stats), MeeshyPalette.Indigo300, onOpenStats)
-                SettingsHubRowId.PROGRESSION -> SettingsChevronRow(MeeshyIcons.Trophy, stringResource(R.string.settings_tools_progression), MeeshyPalette.Warning, onOpenProgression)
-                SettingsHubRowId.SHARE_LINKS -> SettingsChevronRow(MeeshyIcons.Link, stringResource(R.string.settings_share_links), tint, onOpenShareLinks)
+                SettingsHubRowId.PROGRESSION -> SettingsChevronRow(MeeshyIcons.Trophy, stringResource(R.string.settings_tools_progression), MeeshyPalette.Warning, onOpenProgression, subtitle = stringResource(R.string.settings_tools_progression_orientation))
+                SettingsHubRowId.SHARE_LINKS -> SettingsChevronRow(MeeshyIcons.Link, stringResource(R.string.settings_share_links), tint, onOpenShareLinks, subtitle = stringResource(R.string.settings_share_links_orientation))
                 else -> Unit
             }
         }

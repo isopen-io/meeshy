@@ -16,6 +16,10 @@ import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.VideoFilterDegradePolicy
 import me.meeshy.sdk.model.call.VideoFilterDegradeState
+import me.meeshy.sdk.model.call.effects.CallEffectKind
+import me.meeshy.sdk.model.call.effects.CallEffectLayers
+import me.meeshy.sdk.model.call.effects.CallEffectsStackRule
+import me.meeshy.sdk.model.call.effects.CallEffectsCategory
 import me.meeshy.ui.icons.MeeshyIcons
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,6 +58,36 @@ class CallVideoEffectsController internal constructor(
     /** L'appareil se protège : les effets avancés sont coupés (iOS `videoFilters.isAutoDegraded`, indicateur du panneau). */
     val isAutoDegraded: StateFlow<Boolean> = health?.effectsDegraded ?: MutableStateFlow(false).asStateFlow()
 
+    private val _layers = MutableStateFlow(CallEffectLayers.EMPTY)
+
+    /**
+     * La pile de trois couches de l'appel (loi 14, #16979) : UNE pour Effets et Montage, qui la lisent et l'écrivent ;
+     * elle part avec l'appel, comme les effets eux-mêmes.
+     */
+    val layers: StateFlow<CallEffectLayers> = _layers.asStateFlow()
+
+    fun setLayers(layers: CallEffectLayers) {
+        _layers.value = layers
+    }
+
+    /**
+     * Annuler un effet de la liste (appui long sur (+)) : son réglage part de l'image envoyée et sa couche de la pile,
+     * les autres gardent leur ordre. Le cadre ne vit pas ici : le Montage le retire par son propre chemin.
+     */
+    fun removeLayer(kind: CallEffectKind) {
+        apply(CallEffectsStackRule.removing(kind, _config.value))
+        _layers.value = _layers.value.removing(kind)
+    }
+
+    private var requestedCategory: CallEffectsCategory? = null
+
+    /** Le Montage ouvre Effets sur la rangée de [category] (une puce ou (+)) ; Effets la lit une fois, à son ouverture. */
+    fun requestEffectsCategory(category: CallEffectsCategory) {
+        requestedCategory = category
+    }
+
+    fun takeRequestedCategory(): CallEffectsCategory? = requestedCategory.also { requestedCategory = null }
+
     fun apply(config: VideoFilterConfig) {
         if (_config.value == config) return
         _config.value = config
@@ -67,6 +101,8 @@ class CallVideoEffectsController internal constructor(
     override fun onCleared() = reset()
 
     private fun reset() {
+        _layers.value = CallEffectLayers.EMPTY
+        requestedCategory = null
         _config.value = VideoFilterConfig.DEFAULT
         sink.apply(VideoFilterConfig.DEFAULT)
     }
@@ -79,16 +115,22 @@ private val DEGRADED = VideoFilterDegradeState(
 )
 
 /**
- * « Effets » dans la pilule : offert en vidéo établie, caméra allumée — un effet porte sur MON image, il
- * n'a pas de sens sans elle. Allumé tant qu'un effet est choisi. Le mode s'ouvre par l'écran
- * (`CallScreenMode.Effects`), comme « Capturer l'appel ».
+ * Le mode Effets est offert en vidéo établie, caméra allumée — un effet porte sur MON image, il n'a pas de sens sans
+ * elle. La pilule (« Effets ») et la rangée de genres du Montage (Visage · Couleur) lisent ce même prédicat.
+ */
+internal fun CallUiState.offersEffectsMode(): Boolean =
+    status == CallStatus.CONNECTED && isVideoCall && isCameraOn && showsConnectedLayout
+
+/**
+ * « Effets » dans la pilule : offert par [offersEffectsMode]. Allumé tant qu'un effet est choisi. Le mode s'ouvre par
+ * l'écran (`CallScreenMode.Effects`), comme « Capturer l'appel ».
  */
 @Singleton
 class CallEffectsActionHandler @Inject constructor(
     private val effects: CallVideoEffectsController,
 ) : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED && state.isVideoCall && state.isCameraOn && state.showsConnectedLayout) {
+        if (state.offersEffectsMode()) {
             CallActionPresentation(MeeshyIcons.MagicWand, R.string.call_control_effects, isActive = effects.config.value.hasChosenFilters)
         } else {
             null

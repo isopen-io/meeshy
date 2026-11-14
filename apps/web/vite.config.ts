@@ -743,6 +743,20 @@ export default defineConfig({
            */
           if (/\/socketio-events\/(viewing|session|call-recording)-event-names\.[jt]s$/.test(id)) return 'event-names-first-paint';
           /**
+           * QUI PARLE, LU DANS LES SOUS-TITRES (`lib/calls/call-speaking.ts`) — lu par
+           * le mode Effets (les compagnons) ET par la scène de l'appel (l'anneau de la
+           * caméra coupée, G4.2), deux chunks à la demande qui ne doivent pas
+           * s'importer : laissée à Rolldown, la loi entrait dans `call_overlay` et le
+           * mode Effets l'en important statiquement (`call_overlay.dynamic_only`).
+           */
+          if (/\/lib\/calls\/call-speaking\.ts$/.test(id)) return 'call-speaking';
+          /**
+           * LE (i) DES NOTES (#17587) — `info-hint.tsx` sert les écrans d'entrée ET les réglages : seul, il devenait un
+           * chunk de plus, et chaque écran qui le cite allongeait la table de préchargement du socle (première peinture
+           * mesurée à 97,06 Ko > 97). Il voyage avec son unique dépendance, le glyphe, déjà partagé par les mêmes écrans.
+           */
+          if (/\/components\/(glyph|info-hint)\.tsx$/.test(id)) return 'glyph';
+          /**
            * LA LOI DU NIVEAU ET DE LA FRAPPE (#9706) — `levels`, `level-steps`,
            * `level-wire`, `mint` et `rarity` (`@meeshy/shared/utils/game`)
            * sont lus par les seuls écrans du jeu, et chacun pèse moins d'1 Ko.
@@ -756,7 +770,9 @@ export default defineConfig({
            * `photo-catch-up` (#10174) aussi : l'hôte des invitations à
            * immortaliser le lit, comme les écrans du jeu, et Rolldown en faisait
            * un morceau de plus (mesuré : 92,97 → 92,96 Ko, `treasury` qu'il lit
-           * rejoignant la famille avec lui).
+           * rejoignant la famille avec lui). `attention` (#17796) la rejoint :
+           * le bandeau du joueur la lit avec le niveau, et seule elle ferait un
+           * morceau de plus.
            */
           /**
            * LES LOIS PURES DU TRANSPORT MÉDIA (`lib/view/media-transport.ts`) —
@@ -793,7 +809,7 @@ export default defineConfig({
           if (/\/utils\/platform-privilege\.[jt]s$/.test(id)) return 'role-law';
           if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
-          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments|photo-catch-up)\.[jt]s$/.test(id)) return 'game-law';
+          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments|photo-catch-up|attention)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },
       },

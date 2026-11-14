@@ -56,6 +56,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  bringEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -175,7 +176,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
   /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
      recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
      #8112) : la bascule a un effet, elle se montre. */
-  const DISCRETION = 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail';
+  const DISCRETION = 'Masquer mon numéro et mon e-mail';
 
   test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
     const edits: Array<readonly [string, boolean]> = [];
@@ -225,7 +226,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
 
   /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
      réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
-  const RETURN = 'Prévenir mes contacts quand je reviens sur Meeshy';
+  const RETURN = 'Annoncer mon retour';
 
   test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
     const host = dom(
@@ -330,7 +331,7 @@ describe('les packs et téléchargements (#10149)', () => {
     const host = dom(<PacksSection language="fr" />);
     const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
     expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
-    expect(row?.textContent).toContain('Boutique des stickers et des cadres');
+    expect(row?.textContent).toBe('Boutique');
     expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
   });
 });
@@ -347,7 +348,7 @@ describe('le téléchargement automatique des médias (#6333)', () => {
   test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
     const host = dom(<DataSection language="fr" />);
     const row = host.querySelector('[data-settings-media-download]');
-    expect(row?.textContent).toContain('Téléchargement automatique des médias');
+    expect(row?.textContent).toContain('Téléchargement auto');
     expect(row?.textContent).toContain('Sous 100 Ko');
     const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
     const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
@@ -386,9 +387,12 @@ describe('la traduction sur l’appareil (#9898)', () => {
   test('la rangée est légendée : la légende est lue avec la bascule', () => {
     const host = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
     const toggle = switchNamed(host, 'Traduire sur cet appareil');
-    const captionId = toggle?.getAttribute('aria-describedby') ?? '';
-    expect(captionId).not.toBe('');
-    expect(host.querySelector(`[id="${captionId}"]`)?.textContent).toContain('110 Mo');
+    const described = (toggle?.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => host.querySelector(`[id="${id}"]`)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain('Les messages sont traduits ici');
+    expect(described).toContain('110 Mo');
   });
 
   test('chaque langue d’interface la dit, depuis son catalogue chargé à la demande', async () => {
@@ -471,7 +475,7 @@ describe('les notifications', () => {
 
   /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
      qui garde cette préférence ouverte (défaut : ouverte). */
-  const CONTACT_BACK = 'Quand un contact revient sur Meeshy';
+  const CONTACT_BACK = 'Retour d’un contact';
 
   test('« quand un contact revient » se bascule et écrit SA clé', () => {
     const host = dom(
@@ -489,6 +493,34 @@ describe('les notifications', () => {
       const label = host.querySelector('[data-setting="contactActivityEnabled"]')?.getAttribute('aria-label') ?? '';
       expect(label).not.toContain('settings.');
       expect(label).not.toBe(CONTACT_BACK);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* #16588 — l'interrupteur GLOBAL du Bring : coupé, personne ne peut plus
+     faire sonner ce compte (« Bring indisponible » chez l'émetteur). */
+  const BRING = 'Recevoir des Bring';
+
+  test('« Recevoir des Bring » se bascule, écrit SA clé et dit ce qu’il coupe', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ bringEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, BRING);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('bringEnabled');
+    expect(host.textContent).toContain('même en silencieux');
+  });
+
+  test('« Recevoir des Bring » est activé par défaut', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, BRING)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Recevoir des Bring » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="bringEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(BRING);
       expect(label).not.toBe('');
     }
   });
@@ -553,7 +585,7 @@ describe('les réglages ne mènent plus au legacy', () => {
 
 describe('les outils', () => {
   test('la progression mène à son écran', () => {
-    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Progression');
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Ma Légende');
   });
 
   test('les réglages du jeu (#9481) ont leur rangée, juste sous Progression', () => {

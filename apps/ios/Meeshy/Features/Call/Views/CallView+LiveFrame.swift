@@ -24,9 +24,7 @@ extension CallView {
         callManager.isVideoUIActive && liveFrameDisplay.design != nil
     }
 
-    var offersLiveFrame: Bool {
-        !isGroupStage && CallLiveFrameRule.mayOffer(participants: captureSubjects.count, showsVideo: callManager.isVideoUIActive)
-    }
+    var offersLiveFrame: Bool { CallLiveFrameRule.mayShowProposal(participants: captureSubjects.count, showsVideo: callManager.isVideoUIActive, isGroupStage: isGroupStage) }
 
     /// Les personnes du cadre, dans l'ordre des cases du Montage ; le nom que l'autre partage
     /// remplace celui qu'on avait de lui.
@@ -80,13 +78,13 @@ extension CallView {
     }
 
     /// `liveFrameStatus` a-t-il quelque chose à montrer (mêmes conditions) ?
-    var hasLiveFrameStatus: Bool { liveFrame.proposal.flatMap { CallFrameCatalogue.frame(id: $0.frameId) } != nil || liveFrame.answer != nil || (layer.activeMode == nil && liveFrameDisplay.isSuspended) }
+    var hasLiveFrameStatus: Bool { (offersLiveFrame && liveFrame.proposal.flatMap { CallFrameCatalogue.frame(id: $0.frameId) } != nil) || liveFrame.answer != nil || (layer.activeMode == nil && liveFrameDisplay.isSuspended) }
 
     /// Ce qui s'affiche en haut de l'appel au sujet du cadre : une proposition à trancher,
     /// la réponse de l'autre à la mienne, ou la raison d'une pause.
     @ViewBuilder
     var liveFrameStatus: some View {
-        if let proposal = liveFrame.proposal, let design = CallFrameCatalogue.frame(id: proposal.frameId) {
+        if offersLiveFrame, let proposal = liveFrame.proposal, let design = CallFrameCatalogue.frame(id: proposal.frameId) {
             CallLiveFrameProposalCard(
                 text: CallLiveFrameCopy.proposal(from: proposal.from, frame: design.displayName()),
                 onAccept: { Task { await liveFrame.accept() } },

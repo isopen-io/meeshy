@@ -39,7 +39,7 @@ import MeeshyUI
 /// en faire autant pour que le découpage ne change rien à ce qui s'affiche.
 struct ComposerHostObservation: DynamicProperty {
     @ObservedObject var viewModel: StoryComposerViewModel
-    @ObservedObject var sceneCapture: ComposerCaptureSession
+    @ObservedObject var sceneCaptureOwner: ComposerSceneCaptureOwner
     @ObservedObject var preUploads: ComposerPreUploadRegistry
     @ObservedObject var sceneExport: ComposerSceneExportController
     @ObservedObject var sceneMentionBox: ComposerMentionControllerBox
@@ -134,7 +134,7 @@ extension MeeshyComposerHost {
     var observation: ComposerHostObservation {
         ComposerHostObservation(
             viewModel: viewModel,
-            sceneCapture: sceneCapture,
+            sceneCaptureOwner: sceneCaptureOwner,
             preUploads: preUploads,
             sceneExport: sceneExport,
             sceneMentionBox: sceneMentionBox,

@@ -1,8 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -40,5 +42,16 @@ class CallLiveFrameProposalSemanticsTest {
     fun `la phrase de proposition est lue telle quelle`() {
         show()
         rule.onNodeWithText("Bob suggests the “Néon” frame").assertExists()
+    }
+
+    @Test
+    fun `la carte et la ligne de reponse sont annoncees poliment par TalkBack sans voler le focus`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallLiveFrameProposalCard(text = "Bob suggests the “Néon” frame", onAccept = {}, onDecline = {})
+                CallLiveFrameNotice("Bob keeps their own view")
+            }
+        }
+        rule.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)).assertCountEquals(2)
     }
 }

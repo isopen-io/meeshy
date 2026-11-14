@@ -88,7 +88,10 @@ describe('la liste', () => {
     const fields = [...(host.querySelector('[data-e2ee-device="1"]')?.querySelectorAll('[data-e2ee-device-field]') ?? [])].map((field) =>
       field.getAttribute('data-e2ee-device-field'),
     );
-    expect(fields).toEqual(['platform', 'number', 'enrolled', 'lastSeen']);
+    expect(fields).toEqual(['platform', 'enrolled', 'lastSeen']);
+    const more = [...(host.querySelector('[data-e2ee-device="1"]')?.querySelectorAll('button') ?? [])].find((button) => button.textContent === 'Plus');
+    await click(more ?? null);
+    expect(host.querySelector('[data-e2ee-device="1"] [data-e2ee-device-field="number"]')?.textContent).toContain('1');
     expect(host.querySelector('[data-e2ee-device="1"] [data-e2ee-device-field="platform"]')?.textContent).toContain('iPhone ou iPad');
   });
 
@@ -124,7 +127,9 @@ describe('ce navigateur', () => {
     const { element } = harness({}, 'android-shell');
     const host = await mount(element);
     await settle();
-    expect(host.querySelector('[data-e2ee-devices-here]')?.textContent).toContain('Cette application ne lit pas encore');
+    const here = host.querySelector('[data-e2ee-devices-here]')?.textContent ?? '';
+    expect(here).toContain('Cette application ne lit pas encore');
+    expect(here).not.toContain('navigateur');
   });
 });
 

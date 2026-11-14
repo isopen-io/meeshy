@@ -11,6 +11,7 @@ import {
   ladderPitch,
   ladderRooms,
   ladderRungOffset,
+  ladderRungPlaces,
 } from './floating-pose';
 
 /**
@@ -233,5 +234,91 @@ describe('où les menus se montrent', () => {
   test('jamais sur une route qu’on n’a pas nommée', () => {
     expect(showsFloatingMenus('routeQuiNExistePas')).toBe(false);
     expect(showsFloatingMenus('')).toBe(false);
+  });
+});
+
+/**
+ * HUIT BARREAUX À 320 × 568 (#17769) — « Ma Légende » en tête porte l'échelle
+ * d'un administrateur à huit. Au pas le plus serré (46 + 4), une colonne en
+ * demande 61 + 7 × 50 + 23 = 434 quand la place n'en offre que 408 : le
+ * barreau « Administration » sortait de l'écran. Plutôt que de rogner la cible
+ * sous 46 ou l'air sous 4, l'échelle se replie sur une seconde colonne, vers
+ * l'INTÉRIEUR de l'écran — jamais contre le bord.
+ */
+describe('l’échelle qui ne tient plus sur une colonne', () => {
+  const FLOAT_BOTTOM = 110;
+  const LARGEUR = 320;
+  const centreX = { droite: LARGEUR - 20 - FLOATING_BUTTON / 2, gauche: 20 + FLOATING_BUTTON / 2 };
+  const centres = (height: number, safeTop: number) => ({
+    haut: safeTop + FLOATING_TOP + FLOATING_BUTTON / 2,
+    bas: height - FLOAT_BOTTOM - FLOATING_BUTTON / 2,
+  });
+
+  const poses = (height: number, safeTop: number) => {
+    const { haut, bas } = centres(height, safeTop);
+    return [
+      { y: haut, expandsDown: true, room: ladderRooms({ center: haut, frameTop: 0, frameBottom: height, safeTop }).down },
+      { y: bas, expandsDown: false, room: ladderRooms({ center: bas, frameTop: 0, frameBottom: height, safeTop }).up },
+    ];
+  };
+
+  const boites = (x: number, y: number, places: readonly { dx: number; dy: number }[]) =>
+    places.map(({ dx, dy }) => ({
+      gauche: x + dx - LADDER_RUNG / 2,
+      droite: x + dx + LADDER_RUNG / 2,
+      haut: y + dy - LADDER_RUNG / 2,
+      bas: y + dy + LADDER_RUNG / 2,
+    }));
+
+  test('huit barreaux tiennent à 320 × 568, dans les deux sens, des deux côtés, barre d’état ou non', () => {
+    for (const safeTop of [0, 20]) {
+      for (const pose of poses(568, safeTop)) {
+        for (const [cote, x] of Object.entries(centreX)) {
+          const inward = cote === 'droite' ? -1 : 1;
+          const echelle = boites(x, pose.y, ladderRungPlaces({ count: 8, room: pose.room, expandsDown: pose.expandsDown, inward }));
+          expect(echelle).toHaveLength(8);
+          for (const b of echelle) {
+            expect({ safeTop, cote, dedans: b.haut >= safeTop && b.bas <= 568 && b.gauche >= 0 && b.droite <= LARGEUR }).toEqual({ safeTop, cote, dedans: true });
+          }
+          for (const [i, a] of echelle.entries()) {
+            for (const b of echelle.slice(i + 1)) {
+              const air = Math.max(b.haut - a.bas, a.haut - b.bas, b.gauche - a.droite, a.gauche - b.droite);
+              expect(air).toBeGreaterThanOrEqual(4);
+            }
+            const disque = Math.hypot(a.gauche + LADDER_RUNG / 2 - x, a.haut + LADDER_RUNG / 2 - pose.y);
+            expect(disque).toBeGreaterThanOrEqual(FLOATING_BUTTON / 2 + LADDER_RUNG / 2);
+          }
+        }
+      }
+    }
+  });
+
+  test('la seconde colonne part vers l’intérieur de l’écran, et l’ordre descend une colonne avant l’autre', () => {
+    const [pose] = poses(568, 0);
+    const droite = ladderRungPlaces({ count: 8, room: pose!.room, expandsDown: true, inward: -1 });
+    const gauche = ladderRungPlaces({ count: 8, room: pose!.room, expandsDown: true, inward: 1 });
+    expect(droite.every((p) => p.dx <= 0)).toBe(true);
+    expect(gauche.every((p) => p.dx >= 0)).toBe(true);
+    expect(droite[0]?.dx).toBe(0);
+    expect(droite.at(-1)?.dx).toBeLessThan(0);
+    const colonnes = droite.map((p) => p.dx);
+    expect([...colonnes].sort((a, b) => b - a)).toEqual(colonnes);
+  });
+
+  test('une échelle qui tient reste sur une colonne : sept à 320 × 568, huit à 390 × 844', () => {
+    for (const pose of poses(568, 0)) {
+      expect(ladderRungPlaces({ count: 7, room: pose.room, expandsDown: pose.expandsDown, inward: -1 }).every((p) => p.dx === 0)).toBe(true);
+    }
+    for (const pose of poses(844, 0)) {
+      const places = ladderRungPlaces({ count: 8, room: pose.room, expandsDown: pose.expandsDown, inward: -1 });
+      expect(places.every((p) => p.dx === 0)).toBe(true);
+      expect(places.map((p) => p.dy)).toEqual(places.map((_, i) => ladderRungOffset(i, pose.expandsDown, LADDER_PITCH)));
+    }
+  });
+
+  test('sans place mesurée, une colonne au pas d’iOS', () => {
+    expect(ladderRungPlaces({ count: 8, room: null, expandsDown: true, inward: -1 })).toEqual(
+      Array.from({ length: 8 }, (_, i) => ({ dx: 0, dy: ladderRungOffset(i, true, LADDER_PITCH) })),
+    );
   });
 });

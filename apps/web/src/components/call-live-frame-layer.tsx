@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { GlyphSvg } from '@/components/glyph';
@@ -8,6 +8,7 @@ import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import type { FrameChrome } from '@/lib/calls/frames/frame-chrome-reserve';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { startFrameClock } from '@/lib/calls/frame-clock';
+import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -108,14 +109,12 @@ function Capsule({ text, data }: { readonly text: string; readonly data: Readonl
   );
 }
 
-/** Une proposition à trancher, la réponse de l'autre à la mienne, ou un cadre resté chez moi. */
-export function CallLiveFrameStatus({ language, state, nameOf, onAccept, onDecline, onDismissAnswer, onDismissNotice }: StatusProps) {
-  useDismissAfter(state.proposal === null ? state.answer : null, onDismissAnswer);
-  useDismissAfter(state.notice, onDismissNotice);
+/** La carte, ou la capsule, que l'état demande — `null` : rien à montrer. */
+function statusCard({ language, state, nameOf, onAccept, onDecline }: Pick<StatusProps, 'language' | 'state' | 'nameOf' | 'onAccept' | 'onDecline'>): ReactNode {
   const proposed = state.proposal === null ? null : nameOf(state.proposal.frameId);
   if (state.proposal !== null && proposed !== null) {
     return (
-      <div role="group" aria-label={proposalText(language, state.proposal.from, proposed)} className="glass-call-prominent mx-3 flex flex-col gap-3 rounded-[22px] p-3.5" style={{ color: INK }} data-call-live-frame-proposal={state.proposal.frameId}>
+      <div role="group" aria-label={proposalText(language, state.proposal.from, proposed)} className="glass-call-prominent mx-3 flex flex-1 flex-col gap-3 rounded-[22px] p-3.5" style={{ color: INK }} data-call-live-frame-proposal={state.proposal.frameId}>
         <p className="flex items-center gap-2.5 text-body font-semibold">
           <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={20} />
           <span>{proposalText(language, state.proposal.from, proposed)}</span>
@@ -136,21 +135,40 @@ export function CallLiveFrameStatus({ language, state, nameOf, onAccept, onDecli
   return null;
 }
 
+/**
+ * Une proposition à trancher, la réponse de l'autre à la mienne, ou un cadre resté chez moi. Sa case
+ * est celle de la pile des bandeaux, pleine largeur comme le bandeau de partage : la carte y tient sa
+ * marge. Elle ENTRE par le haut et REPART vers lui (`HeldSwap`, forme `top`, C2.7, C3.6) : ce qu'elle
+ * montrait reste en place, ni focus ni clic, le temps de son départ. Le fondu court de « Réduire les
+ * animations » est celui du moteur.
+ */
+export function CallLiveFrameStatus(props: StatusProps) {
+  const { state, onDismissAnswer, onDismissNotice } = props;
+  useDismissAfter(state.proposal === null ? state.answer : null, onDismissAnswer);
+  useDismissAfter(state.notice, onDismissNotice);
+  const card = statusCard(props);
+  return (
+    <HeldSwap value={card} shape="top" appear className="relative z-30 flex w-full justify-center" data-call-live-frame-slot="">
+      {(held) => held}
+    </HeldSwap>
+  );
+}
+
+/** Le cadre gardé : son identifiant et le prénom que l'autre partage — `null` : aucun cadre à montrer. */
+export type ShownFrame = { readonly frameId: string; readonly remoteSharedName: string | null };
+
 type SurfaceProps = {
   readonly language: InterfaceLanguage;
   readonly studio: FrameStudio;
-  readonly frameId: string;
+  readonly shown: ShownFrame | null;
   readonly call: MontageCall;
-  /** Le prénom que l'autre partage : il remplace celui qu'on avait de lui. */
-  readonly remoteSharedName: string | null;
   readonly stage: () => Element | null;
   readonly circleOf?: CircleOf;
 };
 
 const viewportSize = (): { readonly width: number; readonly height: number } => (typeof window === 'undefined' ? { width: 1080, height: 1920 } : { width: window.innerWidth, height: window.innerHeight });
 
-/** Le cadre gardé, composé autour des deux vidéos de la scène — sans prendre un toucher. */
-export function CallLiveFrameSurface({ language, studio, frameId, call, remoteSharedName, stage, circleOf = browserCircle }: SurfaceProps) {
+function FramedCanvas({ language, studio, shown: { frameId, remoteSharedName }, call, stage, circleOf = browserCircle }: Omit<SurfaceProps, 'shown'> & { readonly shown: ShownFrame }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const frame = studio.find(frameId);
   const base = circleOf(call, language);
@@ -180,9 +198,22 @@ export function CallLiveFrameSurface({ language, studio, frameId, call, remoteSh
       height={size.height}
       role="img"
       aria-label={t(language, 'callControls.liveFrame.surface', { frame: frameDisplayName(frame, language) })}
-      className="pointer-events-none absolute inset-0 z-[5] size-full"
+      className="size-full"
       data-call-live-frame-surface={frameId}
     />
+  );
+}
+
+/**
+ * Le cadre gardé, composé autour des deux vidéos de la scène — sans prendre un toucher. Il PARAÎT et
+ * S'EFFACE en fondu (`HeldSwap`, forme `fade`, C3.6) : appliqué, retiré, ou perdu quand l'appel passe
+ * à trois, la toile reste peinte le temps de son départ.
+ */
+export function CallLiveFrameSurface({ shown, ...props }: SurfaceProps) {
+  return (
+    <HeldSwap value={shown} shape="fade" appear className="pointer-events-none absolute inset-0 z-[5]" data-call-live-frame-surface-host="">
+      {(held) => <FramedCanvas {...props} shown={held} />}
+    </HeldSwap>
   );
 }
 

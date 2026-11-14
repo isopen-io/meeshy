@@ -13,14 +13,20 @@ object CallVideoBadgeAccessibility {
         val reconnecting: String,
     )
 
+    /** #17341 — la capsule porte aussi un titre et un nombre (groupe), et n'a pas de durée en audio : la phrase suit. */
     fun label(
         phrases: Phrases,
         signalDegraded: String?,
         peerMuted: Boolean,
         peerNetworkWeak: Boolean,
         reconnecting: Boolean,
+        title: String? = null,
+        participants: String? = null,
+        includesDuration: Boolean = true,
     ): String = listOfNotNull(
-        phrases.duration,
+        title,
+        participants,
+        phrases.duration.takeIf { includesDuration },
         signalDegraded,
         phrases.peerMuted.takeIf { peerMuted },
         phrases.peerNetworkWeak.takeIf { peerNetworkWeak },

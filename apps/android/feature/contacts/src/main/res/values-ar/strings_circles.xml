@@ -3,7 +3,6 @@
 <resources>
     <string name="circles_empty_action">ابحث عن جهات اتصال</string>
     <string name="circles_empty_subtitle">كلما تبادلت مع الأشخاص، انضموا إلى دوائرك</string>
-    <string name="circles_empty_title">ستظهر روابطك هنا</string>
     <string name="circles_error_load">تعذّر تحميل دوائرك</string>
     <string name="circles_error_retry">أعد المحاولة</string>
     <string name="circles_offline_banner">غير متصل — هذه آخر دوائرك المعروفة</string>
@@ -37,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">ستتمكن من سحب كل مشاركة في أي وقت من بطاقة هذا الشخص. قريبًا.</string>
     <string name="circles_ritual_hold">اضغط مطوّلًا للختم</string>
     <string name="circles_ritual_hold_hint">يجب أن يضغط كلاكما على الشاشة في الوقت نفسه.</string>
-    <string name="circles_ritual_lapsed">تركت الطرف الآخر. لم يُسجَّل شيء ولم يتغيّر شيء.</string>
+    <string name="circles_ritual_lapsed">الطرف الآخر تخلّى. لم يُسجَّل شيء ولم يتغيّر شيء.</string>
     <string name="circles_ritual_open_failed">تعذّر فتح الطقس</string>
     <string name="circles_ritual_other_waiting">%1$s ينتظرك</string>
     <string name="circles_ritual_retry">ابدأ من جديد</string>
@@ -54,6 +53,6 @@
     <string name="circles_sheet_close">إغلاق</string>
     <string name="circles_sheet_settings_none">لا شيء لضبطه في هذا المستوى.</string>
     <string name="circles_sheet_settings_title">إعدادات هذا الشخص</string>
-    <string name="circles_sheet_settings_unavailable">ستصل هذه الإعدادات مع الخطوة التالية من Meeshy. وهي معطّلة حاليًا.</string>
+    <string name="circles_sheet_settings_unavailable">قريبًا</string>
     <string name="contacts_tab_circles">الدوائر</string>
 </resources>

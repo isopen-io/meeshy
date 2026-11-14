@@ -81,4 +81,23 @@ final class CallButtonGlassRuleTests: XCTestCase {
         let image = try XCTUnwrap(context.makeImage())
         XCTAssertFalse(CallPillChipArt.image(image).carriesGlass)
     }
+
+    /// L1.3 — en appel vidéo le haut-parleur démarre allumé d'office : c'est l'état
+    /// de REPOS, pas un choix. « Sortie » y reste un verre (Android, web et la
+    /// planche ne l'allument jamais au repos).
+    func test_outputButton_inVideoCall_staysGlassAtRest_evenWithTheSpeakerOn() {
+        XCTAssertEqual(CallOutputButtonRule.kind(isSpeaker: true, routesExternally: false, isVideoCall: true), .normal)
+        XCTAssertEqual(CallOutputButtonRule.kind(isSpeaker: false, routesExternally: false, isVideoCall: true), .normal)
+    }
+
+    func test_outputButton_inAudioCall_isActiveWhenTheSpeakerIsOn() {
+        XCTAssertEqual(CallOutputButtonRule.kind(isSpeaker: true, routesExternally: false, isVideoCall: false), .active)
+        XCTAssertEqual(CallOutputButtonRule.kind(isSpeaker: false, routesExternally: false, isVideoCall: false), .normal)
+    }
+
+    func test_outputButton_routedToAnExternalDevice_isActiveInEveryCall() {
+        for video in [true, false] {
+            XCTAssertEqual(CallOutputButtonRule.kind(isSpeaker: false, routesExternally: true, isVideoCall: video), .active)
+        }
+    }
 }

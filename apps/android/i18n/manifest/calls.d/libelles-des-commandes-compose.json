@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.control.more.show",
+          "androidName": "call_control_more_show",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.more.hide",
+          "androidName": "call_control_more_hide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.camera.on",
+          "androidName": "call_control_camera_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.camera.off",
+          "androidName": "call_control_camera_off",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.output.a11y",
+          "androidName": "call_control_output_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.mute",
+          "androidName": "call_control_mute_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.unmute",
+          "androidName": "call_control_unmute_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.mute.caption",
+          "androidName": "call_control_mute_caption",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

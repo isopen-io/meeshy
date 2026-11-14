@@ -90,4 +90,195 @@ class CallSelfTileLawTest {
         assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = false)).isEqualTo(CallSelfTileScale.X1)
         assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = true)).isEqualTo(CallSelfTileScale.X3)
     }
+
+    @Test
+    fun `stowing is a scale of the chosen frame, never a new frame (G1_11)`() {
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X3, controlsVisible = true)).isEqualTo(1f)
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X3, controlsVisible = false)).isWithin(0.0001f).of(72f / 150f)
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X1, controlsVisible = false)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `what must not shrink with the stowed tile is drawn at the size of a small tile`() {
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 0.5f)).isEqualTo(4f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 1f)).isEqualTo(2f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 0f)).isEqualTo(2f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = Float.NaN)).isEqualTo(2f)
+    }
+
+    @Test
+    fun `the tile shrinks toward its own screen corner, so it keeps its margin`() {
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopStart)).isEqualTo(CallTilePoint(0f, 0f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopEnd)).isEqualTo(CallTilePoint(1f, 0f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomStart)).isEqualTo(CallTilePoint(0f, 1f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomEnd)).isEqualTo(CallTilePoint(1f, 1f))
+    }
+
+    @Test
+    fun `P16_8 - a banner under the header pushes the tile down and shrinks what it may fill`() {
+        val size = CallTileSize(100f, 140f)
+        val banner = CallSafeInsets(bannerDp = 56f)
+
+        val plain = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, noInsets)
+        val lowered = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, banner)
+        assertThat(lowered.yDp).isWithin(0.001f).of(plain.yDp + 56f)
+        assertThat(lowered.xDp).isEqualTo(plain.xDp)
+
+        val bottom = CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, banner)
+        assertThat(bottom.yDp).isEqualTo(CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, noInsets).yDp)
+
+        val tall = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), noInsets, CallSelfTileScale.X3, 1f)
+        val shorter = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), banner, CallSelfTileScale.X3, 1f)
+        assertThat(shorter.heightDp).isLessThan(tall.heightDp)
+        assertThat(shorter.heightDp).isAtMost(400f - 60f - 130f - 56f)
+    }
+
+    private val landscapeWindow = CallTileSize(widthDp = 800f, heightDp = 400f)
+
+    @Test
+    fun `a window wider than tall is landscape, a square or a tall one is not`() {
+        assertThat(CallSelfTileLaw.isLandscape(landscapeWindow)).isTrue()
+        assertThat(CallSelfTileLaw.isLandscape(CallTileSize(500f, 500f))).isFalse()
+        assertThat(CallSelfTileLaw.isLandscape(phone)).isFalse()
+    }
+
+    @Test
+    fun `L1,5 - in landscape the standard tile lies down at 130 by 96`() {
+        val size = CallSelfTileScale.X2.size(isLandscape = true)
+        assertThat(size.widthDp).isWithin(0.01f).of(130f)
+        assertThat(size.heightDp).isWithin(0.01f).of(96f)
+        assertThat(CallSelfTileScale.X2.size(isLandscape = false)).isEqualTo(CallTileSize(100f, 140f))
+    }
+
+    @Test
+    fun `the other scales lie down proportionally`() {
+        assertThat(CallSelfTileScale.X1.size(isLandscape = true).widthDp).isWithin(0.01f).of(93.6f)
+        assertThat(CallSelfTileScale.X3.size(isLandscape = true).widthDp).isWithin(0.01f).of(195f)
+        CallSelfTileScale.entries.forEach {
+            val size = it.size(isLandscape = true)
+            assertThat(size.heightDp / size.widthDp).isWithin(0.001f).of(96f / 130f)
+        }
+    }
+
+    @Test
+    fun `the tile size reads the window shape, not the device`() {
+        val lying = CallSelfTileLaw.tileSize(landscapeWindow, noInsets, CallSelfTileScale.X2, 1f)
+        assertThat(lying.widthDp).isWithin(0.01f).of(130f)
+        assertThat(lying.heightDp).isWithin(0.01f).of(96f)
+        val standing = CallSelfTileLaw.tileSize(phone, noInsets, CallSelfTileScale.X2, 1f)
+        assertThat(standing).isEqualTo(CallTileSize(100f, 140f))
+    }
+
+    @Test
+    fun `a landscape pinch stays within the landscape extremes`() {
+        assertThat(CallSelfTileLaw.liveSize(1.2f, CallSelfTileScale.X2, isLandscape = true).widthDp).isWithin(0.01f).of(156f)
+        assertThat(CallSelfTileLaw.liveSize(9f, CallSelfTileScale.X2, isLandscape = true).widthDp).isWithin(0.01f).of(195f)
+        assertThat(CallSelfTileLaw.liveSize(0.1f, CallSelfTileScale.X2, isLandscape = true).widthDp).isWithin(0.01f).of(93.6f)
+        assertThat(CallSelfTileLaw.liveSize(Float.NaN, CallSelfTileScale.X2, isLandscape = true).widthDp).isWithin(0.01f).of(130f)
+    }
+
+    @Test
+    fun `a landscape tile too tall for a short window is fitted at the lying ratio`() {
+        val tile = CallSelfTileLaw.tileSize(CallTileSize(600f, 260f), noInsets, CallSelfTileScale.X3, 1f)
+        assertThat(tile.heightDp / tile.widthDp).isWithin(0.001f).of(96f / 130f)
+        assertThat(tile.heightDp).isAtMost(260f - 60f - 130f)
+    }
+
+    @Test
+    fun `a rotation starts from the previous size as a ratio of the new one`() {
+        val from = CallTileSize(100f, 140f)
+        val to = CallTileSize(130f, 96f)
+        val start = CallSelfTileLaw.rotationStart(from, to)
+        assertThat(start.xDp).isWithin(0.001f).of(100f / 130f)
+        assertThat(start.yDp).isWithin(0.001f).of(140f / 96f)
+        assertThat(CallSelfTileLaw.rotationStart(to, to)).isEqualTo(CallTilePoint(1f, 1f))
+        assertThat(CallSelfTileLaw.rotationStart(from, CallTileSize(0f, 0f))).isEqualTo(CallTilePoint(1f, 1f))
+    }
+
+    @Test
+    fun `a rotation scale goes from its start to one`() {
+        assertThat(CallSelfTileLaw.rotationScale(start = 0.5f, fraction = 0f)).isWithin(0.0001f).of(0.5f)
+        assertThat(CallSelfTileLaw.rotationScale(start = 0.5f, fraction = 0.5f)).isWithin(0.0001f).of(0.75f)
+        assertThat(CallSelfTileLaw.rotationScale(start = 1.46f, fraction = 1f)).isWithin(0.0001f).of(1f)
+    }
+
+    @Test
+    fun `a rotation interrupted midway restarts from the size shown, not from the laid out one`() {
+        val lying = CallTileSize(130f, 96f)
+        val start = CallSelfTileLaw.rotationStart(CallTileSize(100f, 140f), lying)
+        val shown = CallSelfTileLaw.shownDuringRotation(lying, start, fraction = 0.5f)
+        assertThat(shown.widthDp).isWithin(0.01f).of(115f)
+        assertThat(shown.heightDp).isWithin(0.01f).of(118f)
+        val settled = CallSelfTileLaw.shownDuringRotation(lying, start, fraction = 1f)
+        assertThat(settled.widthDp).isWithin(0.01f).of(130f)
+        assertThat(settled.heightDp).isWithin(0.01f).of(96f)
+        val back = CallSelfTileLaw.rotationStart(shown, CallTileSize(100f, 140f))
+        assertThat(back.xDp).isWithin(0.001f).of(115f / 100f)
+        assertThat(back.yDp).isWithin(0.001f).of(118f / 140f)
+    }
+
+    @Test
+    fun `#17982 - ma vignette de duo porte la plaque Vous, et le nom de qui elle montre une fois permutee`() {
+        assertThat(CallSelfTileLaw.plate(showsPeer = false, peerName = "Alice")).isEqualTo(CallSelfTilePlate.You)
+        assertThat(CallSelfTileLaw.plate(showsPeer = true, peerName = " Alice ")).isEqualTo(CallSelfTilePlate.Named("Alice"))
+        assertThat(CallSelfTileLaw.plate(showsPeer = true, peerName = "  ")).isEqualTo(CallSelfTilePlate.Unknown)
+    }
+
+    @Test
+    fun `#17982 G1_2 - la plaque tient dans la vignette montree, liseré libre, rangee comme posee`() {
+        val inset = 4f
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 100f, stowFactor = 1f, insetDp = inset)).isEqualTo(92f)
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 100f, stowFactor = 0.72f, insetDp = inset)).isWithin(0.001f).of(64f)
+        assertThat(CallSelfTileLaw.plateMaxWidthDp(tileWidthDp = 4f, stowFactor = 1f, insetDp = inset)).isEqualTo(0f)
+    }
+
+    private val landscape = CallTileSize(widthDp = 844f, heightDp = 390f)
+    private val lying = CallTileSize(130f, 96f)
+
+    @Test
+    fun `L2_8 - en paysage, les rails du (…) dehors, ma vignette leur cede son coin et s'arrete a un ecart du rail`() {
+        val yieldDp = CallSelfTileLaw.railYieldDp(isLandscape = true, railsShown = true)
+        assertThat(yieldDp).isEqualTo(CallRailsLayout.EDGE_INSET_DP + CallRailsLayout.RAIL_WIDTH_DP + CallSelfTileLaw.NEIGHBOUR_GAP_DP - CallSelfTileLaw.MARGIN_DP)
+        val insets = CallSafeInsets(railDp = yieldDp)
+        val topEnd = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, landscape, lying, insets)
+        val railInnerEdge = landscape.widthDp - CallRailsLayout.EDGE_INSET_DP - CallRailsLayout.RAIL_WIDTH_DP
+        assertThat(railInnerEdge - (topEnd.xDp + lying.widthDp / 2)).isWithin(0.001f).of(CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        val bottomStart = CallSelfTileLaw.center(CallSelfTileCorner.BottomStart, landscape, lying, insets)
+        val leadingRailInnerEdge = CallRailsLayout.EDGE_INSET_DP + CallRailsLayout.RAIL_WIDTH_DP
+        assertThat((bottomStart.xDp - lying.widthDp / 2) - leadingRailInnerEdge).isWithin(0.001f).of(CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+    }
+
+    @Test
+    fun `L2_8 - les rails rentres ou le portrait, ma vignette reste a son coin`() {
+        assertThat(CallSelfTileLaw.railYieldDp(isLandscape = true, railsShown = false)).isEqualTo(0f)
+        assertThat(CallSelfTileLaw.railYieldDp(isLandscape = false, railsShown = true)).isEqualTo(0f)
+        val back = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, landscape, lying, CallSafeInsets(railDp = 0f))
+        assertThat(back.xDp).isWithin(0.001f).of(844f - 16f - 65f)
+    }
+
+    @Test
+    fun `L2_8 - ma vignette glisse jusqu'a sa nouvelle place depuis celle ou l'oeil la voyait, du bon cote`() {
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopEnd, shownDp = 0f, targetDp = 64f)).isEqualTo(64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.BottomEnd, shownDp = 64f, targetDp = 0f)).isEqualTo(-64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopStart, shownDp = 0f, targetDp = 64f)).isEqualTo(-64f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.BottomStart, shownDp = 32f, targetDp = 64f)).isEqualTo(-32f)
+        assertThat(CallSelfTileLaw.railGlideDp(CallSelfTileCorner.TopEnd, shownDp = 64f, targetDp = 64f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `L2_8 - ceder le coin ne change pas la taille de ma vignette`() {
+        val still = CallSelfTileLaw.tileSize(landscape, CallSafeInsets(), CallSelfTileScale.X2, 1f)
+        val yielded = CallSelfTileLaw.tileSize(landscape, CallSafeInsets(railDp = 64f), CallSelfTileScale.X2, 1f)
+        assertThat(yielded).isEqualTo(still)
+    }
+
+    @Test
+    fun `L1_8 - ma vignette en haut dit a la pile la place qu'elle tient depuis le bord, zone sure et rails compris`() {
+        val reserve = { corner: CallSelfTileCorner, insets: CallSafeInsets -> CallSelfTileLaw.bannerReserveDp(corner, insets, lying.widthDp) }
+        assertThat(reserve(CallSelfTileCorner.TopEnd, CallSafeInsets())).isEqualTo(16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.TopStart, CallSafeInsets(startDp = 32f))).isEqualTo(32f + 16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.TopEnd, CallSafeInsets(startDp = 32f, railDp = 64f))).isEqualTo(32f + 64f + 16f + 130f + CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+        assertThat(reserve(CallSelfTileCorner.BottomEnd, CallSafeInsets(endDp = 20f))).isEqualTo(0f)
+        assertThat(reserve(CallSelfTileCorner.BottomStart, CallSafeInsets())).isEqualTo(0f)
+    }
 }

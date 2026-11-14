@@ -138,16 +138,13 @@ final class EmailSignInWordingTests: XCTestCase {
     private static let imposedVocabulary: [(key: String, fr: String, en: String)] = [
         ("auth.login.passwordless", "Se connecter par e-mail", "Sign in with email"),
         ("auth.magiclink.title", "Connexion par e-mail", "Email sign-in"),
-        ("auth.magiclink.email.title", "Votre adresse e-mail", "Your email address"),
-        ("auth.magiclink.email.hintLabel", "Comment ça marche", "How it works"),
         ("auth.magiclink.email.subtitle",
-         "Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.",
-         "No password to remember: we email you a link. Open it and you're signed in."),
+         "Pas de mot de passe : nous envoyons un lien par e-mail.",
+         "No password: we email you a link."),
         ("auth.magiclink.send", "Recevoir le lien", "Get the link"),
         ("auth.magiclink.resendLabel", "Renvoyer le lien", "Resend the link"),
         ("auth.magiclink.sent.title", "E-mail envoyé", "Email sent"),
         ("auth.magiclink.sent.subtitle", "Ouvrez le lien reçu à", "Open the link sent to"),
-        ("auth.signup.email.hintLabel", "Pourquoi un lien", "Why a link"),
     ]
 
     func test_imposedVocabulary_isServedInFrenchAndEnglish_andShippedInEveryLocale() throws {
@@ -183,48 +180,36 @@ final class EmailSignInWordingTests: XCTestCase {
                       "la baguette reste l'icône de la connexion par e-mail — c'est le mot qui part, pas le signe")
     }
 
-    // MARK: - La mécanique derrière un (i)
+    // MARK: - La phrase propre à Meeshy se lit au repos (épure #17671, règle 7)
 
     /// « Rien reçu ? » n'est plus un (i) : la ligne des spams se lit sans être
     /// cherchée, sous l'annonce de l'envoi (#16937, `EmailSpamFolderHintTests`).
-    func test_magicLinkView_explainsItsMechanicBehindOneInfoHint() throws {
+    /// Et « Comment ça marche » n'est plus un (i) non plus : la connexion par
+    /// lien est propre à Meeshy, sa phrase d'orientation se lit sans cliquer.
+    func test_magicLinkView_saysHowItWorksAtRest_notBehindAnInfoHint() throws {
         let body = try code(Self.magicLinkView)
 
-        XCTAssertEqual(occurrences(of: "AuthInfoHintButton(", in: body), 1,
-                       "« Comment ça marche » à la saisie ; après l'envoi, la ligne des spams est visible")
-        XCTAssertEqual(occurrences(of: "AuthInfoHintText(", in: body), 1,
-                       "le (i) déplie SON texte, sous sa ligne")
-        XCTAssertTrue(body.contains("auth.magiclink.email.hintLabel"))
+        XCTAssertEqual(occurrences(of: "AuthInfoHintButton(", in: body), 0)
+        XCTAssertEqual(occurrences(of: "AuthInfoHintText(", in: body), 0)
+        XCTAssertTrue(body.contains("auth.magiclink.email.subtitle"))
         XCTAssertTrue(body.contains("EmailSpamFolderHint()"))
-        XCTAssertTrue(matches(of: #"(Text\(String\(localized:\s*"auth\.magiclink\.email\.subtitle")"#, in: body).isEmpty,
-                      "le « comment ça marche » ne se pose plus en clair : il est le texte du (i)")
         XCTAssertTrue(body.contains("\"wand.and.stars\""), "le héros de l'écran reste la baguette")
     }
 
-    /// REPLIÉ ne veut pas dire ABSENT : le champ d'adresse porte le même texte
-    /// en `accessibilityHint`, comme les champs de l'inscription.
-    func test_magicLinkView_emailFieldCarriesTheFoldedExplanationForVoiceOver() throws {
-        let body = try code(Self.magicLinkView)
-        XCTAssertTrue(body.contains(".accessibilityHint(howItWorksHint.text)"),
-                      "VoiceOver énonce le fonctionnement sans avoir à trouver le (i)")
-    }
+    // MARK: - Le (i) partagé vit dans MeeshyUI, l'inscription ne le monte plus
 
-    // MARK: - UN composant (i), deux écrans
-
-    func test_infoHint_isOneComponentSharedBySignupAndMagicLink() throws {
+    func test_infoHint_isOneSharedComponent_theSignupDoesNotMountAnymore() throws {
         let hint = try code(Self.infoHint)
         XCTAssertTrue(hint.contains("\"info.circle\""))
-        XCTAssertTrue(hint.contains("HapticFeedback.light()"), "déplier un (i) se sent, sur les deux écrans")
+        XCTAssertTrue(hint.contains("HapticFeedback.light()"), "déplier un (i) se sent")
         XCTAssertTrue(hint.contains("meeshyTapTarget()"), "le (i) est un glyphe : sa cible ne peut pas être son dessin")
         XCTAssertTrue(hint.contains("accessibilityLabel(hint.buttonLabel)"),
                       "plusieurs (i) sur un écran ne se distinguent que par ce qu'ils annoncent")
         XCTAssertTrue(hint.contains("accessibilityValue(hint.text)"))
 
-        for path in [Self.signupView, Self.magicLinkView] {
-            let body = try code(path)
-            XCTAssertTrue(body.contains("AuthInfoHintButton("), "\(path) monte le (i) partagé")
-            XCTAssertFalse(body.contains("Image(systemName: \"info.circle\")"),
-                           "\(path) : un (i) recopié sur place est une jumelle qui divergera")
-        }
+        let body = try code(Self.signupView)
+        XCTAssertFalse(body.contains("AuthInfoHintButton("), "l'inscription dit sa phrase au repos (#17671)")
+        XCTAssertFalse(body.contains("Image(systemName: \"info.circle\")"),
+                       "un (i) recopié sur place est une jumelle qui divergera")
     }
 }

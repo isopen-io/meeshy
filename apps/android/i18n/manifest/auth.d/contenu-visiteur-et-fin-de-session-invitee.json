@@ -30,12 +30,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "visitor.body",
-          "androidName": "visitor_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "visitor.signup",
           "androidName": "visitor_signup",
           "status": "adopted"

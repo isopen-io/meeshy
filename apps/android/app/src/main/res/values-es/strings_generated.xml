@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">Editar perfil</string>
     <string name="a11y_floating_feed_hint">Abre el feed de actividad</string>
+    <string name="a11y_floating_menu_acts">Actos del día: %1$d de %2$d</string>
     <string name="a11y_floating_menu_hint">Abre el menú de navegación</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notificaciones pendientes</string>
     <string name="a11y_menu_item_hint">Abrir esta sección</string>
@@ -49,7 +50,7 @@
     <string name="connection_syncing">Sincronización</string>
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_retry">Reintentar</string>
-    <string name="feed_empty">Ninguna publicación</string>
+    <string name="feed_empty">Ninguna publicación de tus contactos</string>
     <string name="feed_like">Me gusta</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Iniciar sesión</string>
@@ -58,6 +59,7 @@
     <string name="menu_communities">Comunidades</string>
     <string name="menu_contacts">Contactos</string>
     <string name="menu_discover">Descubrir</string>
+    <string name="menu_game">Mi Leyenda</string>
     <string name="menu_my_links">Mis enlaces</string>
     <string name="menu_notifications">Notificaciones</string>
     <string name="menu_settings">Ajustes</string>
@@ -66,7 +68,6 @@
     <string name="notifications_title">Notificaciones</string>
     <string name="profile_back">Atrás</string>
     <string name="profile_bio_label">Biografía</string>
-    <string name="profile_cancel">Cancelar</string>
     <string name="profile_display_name_label">Nombre visible</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_edit_title">Editar perfil</string>
@@ -77,7 +78,7 @@
     <string name="push_action_comment_hint">Comentar…</string>
     <string name="root_pending_changes">Cambios pendientes</string>
     <string name="root_sync_on_reconnect">Se sincronizará al volver a estar en línea</string>
-    <string name="route_title_affiliate">Afiliación</string>
+    <string name="route_title_affiliate">Referidos</string>
     <string name="route_title_bookmarks">Marcadores</string>
     <string name="route_title_communities">Comunidades</string>
     <string name="route_title_community">Comunidad</string>
@@ -96,7 +97,7 @@
     <string name="route_title_notifications">Notificaciones</string>
     <string name="route_title_post">Publicación</string>
     <string name="route_title_profile">Perfil</string>
-    <string name="route_title_progression">Progreso</string>
+    <string name="route_title_progression">Mi Leyenda</string>
     <string name="route_title_settings">Ajustes</string>
     <string name="route_title_share_links">Enlaces para compartir</string>
     <string name="route_title_starred">Mensajes destacados</string>

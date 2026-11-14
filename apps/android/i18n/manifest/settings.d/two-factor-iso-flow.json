@@ -36,12 +36,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "2fa_disable_warning",
-          "androidName": "twofactor_disable_warning",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "2fa_done_button",
           "androidName": "twofactor_done_button",
           "status": "adopted"
@@ -99,10 +93,6 @@
           "iosKey": "a11y_copy_key",
           "androidName": "twofactor_a11y_copy_key",
           "status": "adopted"
-        },
-        {
-          "androidName": "twofactor_regenerate_warning",
-          "status": "android-only"
         }
       ]
     }

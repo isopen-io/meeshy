@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.GroupMeshVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.group.ActiveSpeakerDetector
+import me.meeshy.sdk.model.call.group.CallAudioLevels
 import me.meeshy.sdk.model.call.group.GroupCallArrival
 import me.meeshy.sdk.model.call.group.GroupCallDirectory
 import me.meeshy.sdk.model.call.group.GroupCallEvidence
@@ -59,8 +60,10 @@ internal class GroupCallMesh(
     private val sender: GroupMeshSignalSender,
     /** Les noms des membres et le titre du groupe, lus une fois par appel de groupe (#13754). */
     private val names: GroupCallNameSource = GroupCallNameSource.NONE,
-    /** Le niveau sonore reçu du pair principal, que la connexion de l'appel tient — iOS `primaryAudioLevel`. */
-    private val primaryAudioLevel: suspend () -> Double? = { null },
+    /** Les niveaux sonores de la liaison principale (le reçu du principal et le mien), UN relevé — iOS `primaryAudioLevels`. */
+    private val primaryAudioLevels: suspend () -> CallAudioLevels? = { null },
+    /** Micro coupé : ma vignette n'est jamais nommée parlante (P11.5). */
+    private val isLocalMicMuted: () -> Boolean = { false },
     private val samplingIntervalMillis: Long = ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS,
     /** La part du débit montant posée au pair principal tant que le maillage a des liens (#13752) ; `null` la retire. */
     private val primaryVideoCeiling: (CallVideoBudget?) -> Unit = {},
@@ -434,11 +437,15 @@ internal class GroupCallMesh(
         val levels = HashMap<String, Double>(current.size + 1)
         current.forEach { (userId, link) -> link.audioLevel()?.let { levels[userId] = it } }
         val primary = primaryUserId?.takeIf { !primaryVacated }
-        if (primary != null) primaryAudioLevel()?.let { levels[primary] = it }
+        val primaryLevels = primaryAudioLevels()
+        if (primary != null) primaryLevels?.inbound?.let { levels[primary] = it }
         if (boundCall != callId) return
         val present = primaryUserId?.takeIf { !primaryVacated }
-        levels.keys.retainAll { it in links || it == present }
+        val me = selfId.takeIf { it.isNotBlank() && !isLocalMicMuted() }
+        if (me != null) primaryLevels?.outbound?.let { levels[me] = it }
+        levels.keys.retainAll { it in links || it == present || it == me }
         detector = detector.recording(levels, clock())
+        if (me == null && selfId.isNotBlank()) detector = detector.forgetting(selfId)
         val speakers = detector.speakers
         if (speakers != speakingUserIds) {
             speakingUserIds = speakers

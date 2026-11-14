@@ -293,14 +293,16 @@ class CallRouteTest {
     )
 
     @Test
-    fun `minimising a call that knows its conversation opens that chat`() {
-        assertThat(CallRoute.minimize("conv-1")).isEqualTo(Routes.chat("conv-1"))
+    fun `Reduire returns to the screen behind the call, the list when the call has nothing behind it`() {
+        assertThat(CallRoute.minimizeFallback(hasScreenBehind = true)).isNull()
+        assertThat(CallRoute.minimizeFallback(hasScreenBehind = false)).isEqualTo(Routes.CONVERSATIONS)
     }
 
     @Test
-    fun `minimising a call without conversation returns to the list, never an unmatched chat route`() {
-        assertThat(CallRoute.minimize("")).isEqualTo(Routes.CONVERSATIONS)
-        assertThat(CallRoute.minimize("   ")).isEqualTo(Routes.CONVERSATIONS)
+    fun `Conversation du header opens the call's chat, the list when the room is unknown`() {
+        assertThat(CallRoute.openConversation("conv-1")).isEqualTo(Routes.chat("conv-1"))
+        assertThat(CallRoute.openConversation("")).isEqualTo(Routes.CONVERSATIONS)
+        assertThat(CallRoute.openConversation("   ")).isEqualTo(Routes.CONVERSATIONS)
     }
 
     @Test

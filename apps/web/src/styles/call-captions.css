@@ -1,0 +1,30 @@
+/* LES SOUS-TITRES D'UN APPEL — feuille de leur chunk (`call-captions-panel.tsx`) : elle
+   ne pèse que sur l'appel qui les montre, jamais sur la première peinture
+   (`budgets.json` › `first_paint`). */
+
+/* CE QUI SE POSE SUR UNE PHRASE DES SOUS-TITRES ARRIVE ET REPART EN FONDU (planche P3-P5,
+   #17406) — les trois points d'une traduction attendue (`TypingDots`, leur battement est
+   celui de la frappe) ; la traduction qui remplace l'original à la même place. L'original
+   déplié a sa feuille, partagée avec le journal (`call-unfolded-original.css`).
+   Seules la transformation et l'opacité bougent ; la règle 32 (`app.css`) les ramène à
+   un instant sous « Réduire les animations », où la sortie n'attend pas. */
+[data-call-caption-waiting],
+button[data-call-caption-line] > span[dir='auto'] {
+  animation: call-caption-in 200ms ease-out both;
+}
+
+[data-call-caption-waiting][data-leaving] {
+  animation: call-caption-out 180ms ease-in both;
+}
+
+@keyframes call-caption-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes call-caption-out {
+  to {
+    opacity: 0;
+  }
+}

@@ -4,9 +4,10 @@ import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServ
 import type { Attachment } from '@/lib/api/types';
 
 import { callNoticeTarget } from './call-notice';
+import { formatCallJournalClock } from './call-journal-clock';
 import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
-import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statusPills } from './call-view';
+import { callLayout, callStatusKey, canRetry, gridColumns, membersInArrival, orderedMembers, statusPills, visibleStatusPills } from './call-view';
 
 /**
  * LES RÈGLES DE L'APPEL SANS ÉCRAN (#6382, #8044) — ce que la passerelle
@@ -90,7 +91,16 @@ describe('ce que l’écran dit', () => {
     expect(callLayout({ members: { a: member() }, cameraOn: false, remoteStreams: {}, isGroup: false })).toBe('portrait');
     expect(callLayout({ members: { a: member() }, cameraOn: true, remoteStreams: {}, isGroup: false })).toBe('video-duo');
     expect(callLayout({ members: { a: member(), b: member({ userId: 'b' }) }, cameraOn: false, remoteStreams: {}, isGroup: true })).toBe('grid');
-    expect([1, 2, 4, 5, 9].map(gridColumns)).toEqual([1, 2, 2, 3, 3]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, false, false))).toEqual([1, 1, 2, 2, 2, 2]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, true, false))).toEqual([1, 2, 2, 2, 3, 3]);
+  });
+
+  test('à quatre (L4.1 et W2.1), la rangée de quatre exige le paysage ET la hauteur compacte ; trois tuiles restent 2 × 2', () => {
+    expect(gridColumns(4, true, true)).toBe(4);
+    expect(gridColumns(4, true, false)).toBe(2);
+    expect(gridColumns(4, false, true)).toBe(2);
+    expect(gridColumns(4, false, false)).toBe(2);
+    expect([true, false].map((compact) => gridColumns(3, true, compact))).toEqual([2, 2]);
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
@@ -98,12 +108,26 @@ describe('ce que l’écran dit', () => {
     expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('good'), isGroup: true })).toEqual([]);
   });
 
+  test('« Micro coupé » reste à l’appel audio À DEUX : en vidéo comme dans la grille, le bouton Micro le dit déjà (P7.4, iOS `audioCallLayout`, que la scène de groupe ne monte pas)', () => {
+    const muted = { micMuted: true, screenSharing: false, members: { a: member() }, quality: quality('poor'), isGroup: false };
+    expect(visibleStatusPills(muted, 'portrait')).toEqual(['mic-muted', 'poor-network']);
+    expect(visibleStatusPills(muted, 'video-duo')).toEqual(['poor-network']);
+    expect(visibleStatusPills(muted, 'screen')).toEqual(['poor-network']);
+    expect(visibleStatusPills(muted, 'grid')).toEqual(['poor-network']);
+  });
+
   test('pastilles de survie (#8047) : ma vidéo ralentie, puis en pause, tant que le réseau est faible', () => {
     expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('poor', 'frozen'), isGroup: false })).toEqual(['poor-network', 'video-frozen']);
     expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('good', 'suspended'), isGroup: false })).toEqual(['video-suspended']);
   });
 
-  test('la grille range les connectés d’abord, puis par nom', () => {
+  test('la grille suit l’ORDRE D’ARRIVÉE : un pair qui se reconnecte garde sa case, ma vignette reste en dernier (P11.3)', () => {
+    const arrived = { z: member({ userId: 'z', name: 'Zoé' }), b: member({ userId: 'b', name: 'Bob', link: 'reconnecting' }), a: member({ userId: 'a', name: 'Ana' }) };
+    expect(membersInArrival(arrived).map((m) => m.name)).toEqual(['Zoé', 'Bob', 'Ana']);
+    expect(membersInArrival({ ...arrived, b: { ...arrived.b, link: 'connected' } }).map((m) => m.name)).toEqual(['Zoé', 'Bob', 'Ana']);
+  });
+
+  test('la feuille des personnes, l’enregistrement et le duo gardent « les connectés d’abord, par nom »', () => {
     const ordered = orderedMembers({ z: member({ userId: 'z', name: 'Zoé' }), b: member({ userId: 'b', name: 'Bob', link: 'connecting' }), a: member({ userId: 'a', name: 'Ana' }) });
     expect(ordered.map((m) => m.name)).toEqual(['Ana', 'Zoé', 'Bob']);
   });
@@ -111,6 +135,9 @@ describe('ce que l’écran dit', () => {
   test('horloge d’appel et phase du maillage', () => {
     expect(formatCallClock(65)).toBe('1:05');
     expect(formatCallClock(3_725)).toBe('1:02:05');
+    expect(formatCallJournalClock(4)).toBe('00:04');
+    expect(formatCallJournalClock(65)).toBe('01:05');
+    expect(formatCallJournalClock(3_725)).toBe('1:02:05');
     expect(meshPhase({})).toBeNull();
     expect(meshPhase({ a: member(), b: member({ link: 'reconnecting' }) })).toBe('connected');
     expect(meshPhase({ a: member({ link: 'reconnecting' }) })).toBe('reconnecting');
@@ -147,11 +174,20 @@ describe('la bulle d’appel', () => {
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });
 
-  test('seul un appel TERMINÉ, identifié et qui a DURÉ offre sa transcription (#8048)', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 272 } })?.transcript).toBe(true);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 0 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', durationSeconds: 60 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', durationSeconds: 60 } })?.transcript).toBe(false);
+  test('seul un appel ABOUTI (completed), identifié et qui a DURÉ offre sa transcription (#8048, #17878 A1.1)', () => {
+    const offered = (metadata: Record<string, unknown>) => callNoticeTarget({ conversationId: 'c', metadata })?.transcript;
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 272 })).toBe(true);
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 0 })).toBe(false);
+    expect(offered({ kind: 'call', outcome: 'completed', durationSeconds: 60 })).toBe(false);
+    expect(offered({ kind: 'call-live', outcome: 'completed', callId: 'k', durationSeconds: 60 })).toBe(false);
+  });
+
+  test('un appel connecté puis interrompu (failed, avec sa durée), manqué ou refusé n’offre pas la transcription (#17878 A1.1)', () => {
+    const offered = (outcome: unknown) => callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', outcome, callId: 'k', durationSeconds: 90 } })?.transcript;
+    expect(offered('failed')).toBe(false);
+    expect(offered('missed')).toBe(false);
+    expect(offered('rejected')).toBe(false);
+    expect(offered(undefined)).toBe(false);
   });
 
   test('l’enregistrement consenti rattaché à la bulle se réécoute depuis le fil (#8064)', () => {

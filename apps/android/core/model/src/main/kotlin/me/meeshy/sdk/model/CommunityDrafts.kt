@@ -67,6 +67,13 @@ data class CommunitySettingsDraft(
     val hasLocalChanges: Boolean get() = current.color != original.color || current.emoji != original.emoji
     val canSave: Boolean get() = hasChanges && current.name.trim().isNotEmpty()
 
+    /**
+     * Publique → privée seulement (#16787) : la passerelle fait alors sortir de ses conversations les
+     * anciens membres et les comptes qui ne peuvent pas y entrer, sans retour (#16723). L'écran le dit
+     * avant d'enregistrer, comme iOS (`needsPrivacyConfirmation`) et le web.
+     */
+    val needsPrivacyConfirmation: Boolean get() = !original.isPrivate && current.isPrivate
+
     fun edit(transform: (CommunitySettingsFields) -> CommunitySettingsFields): CommunitySettingsDraft =
         copy(current = transform(current))
 

@@ -96,8 +96,8 @@ fun ForgotPasswordScreen(
             }
             EmailRecoveryStep.SENT -> {
                 SentConfirmation(
-                    title = stringResource(R.string.auth_magic_sent_title),
-                    message = stringResource(R.string.auth_magic_sent, state.recovery.submittedEmail.orEmpty()),
+                    title = stringResource(R.string.auth_forgot_sent_title),
+                    message = state.recovery.submittedEmail.orEmpty(),
                 )
                 SpamFolderHint()
                 TextButton(onClick = onBack) {

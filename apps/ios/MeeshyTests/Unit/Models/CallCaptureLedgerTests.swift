@@ -217,11 +217,6 @@ final class CallCaptureLedgerTests: XCTestCase {
         XCTAssertEqual(captures.first?.userId, "")
     }
 
-    func test_captureAlertClearance_pushesTheSelfTileBelowTheCapsule() {
-        XCTAssertEqual(CallCaptureAlertClearance.top(isAlertShown: false), 0)
-        XCTAssertEqual(CallCaptureAlertClearance.top(isAlertShown: true), 52)
-    }
-
     // MARK: - Collaborateur
 
     func test_journal_recordsThenResetsAtTheEndOfTheCall() {

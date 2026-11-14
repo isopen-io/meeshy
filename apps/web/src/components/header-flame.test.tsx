@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
@@ -10,7 +11,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { StorageLike } from '@/lib/reading-mode/store';
 import { compactCount } from '@/lib/view/compact-count';
-import { localDayOf } from '@/lib/view/engagement-pill';
+import { flameCardModel, localDayOf } from '@/lib/view/engagement-pill';
 import {
   afterFlameDismissed,
   afterHeaderToggle,
@@ -23,7 +24,8 @@ import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { HeaderFlame } from './header-flame';
+import { EngagementPill } from './engagement-pill';
+import { HeaderFlame, loadFlameCard } from './header-flame';
 import { ThreadHeader } from './thread-header';
 
 /**
@@ -40,7 +42,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/c' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadInterfaceCatalog('fr'), loadNotificationRowCatalog('fr')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadNotificationRowCatalog('fr'), loadFlameCard()]);
 });
 
 afterAll(async () => {
@@ -188,11 +190,66 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     expect(renderToStaticMarkup(<HeaderFlame snapshot={snapshot()} replay={3} onDismiss={() => undefined} />)).toContain('header-flame-playing');
   });
 
-  test('le toucher la masque', async () => {
+  test('le toucher ouvre la série de la conversation, il ne la masque plus (#17770)', async () => {
     const touched: string[] = [];
-    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={1} onDismiss={() => touched.push('x')} />);
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => touched.push('x')} />);
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    const mark = host.querySelector<HTMLElement>('[data-header-flame] button');
+    expect(mark?.getAttribute('aria-expanded')).toBe('false');
+    await mounter.click(mark);
+    const card = host.querySelector<HTMLElement>('[data-flame-card]');
+    expect(card).not.toBeNull();
+    expect(mark?.getAttribute('aria-expanded')).toBe('true');
+    expect(card?.querySelector('[data-flame-card-streak]')?.textContent).toBe('4');
+    expect(card?.querySelector('[data-flame-card-today]')?.textContent).toBe('+12');
+    expect(card?.querySelector('[data-flame-card-total]')?.textContent).toBe('120');
+    expect(touched).toEqual([]);
+  });
+
+  test('la carte mène au Jeu et garde le masquage (#17770)', async () => {
+    const touched: string[] = [];
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => touched.push('x')} />);
     await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
+    expect(host.querySelector('[data-flame-card] a')?.getAttribute('href')).toContain('/me/progression');
+    await mounter.click(host.querySelector<HTMLElement>('[data-flame-card-hide]'));
     expect(touched).toEqual(['x']);
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+  });
+
+  test('un second toucher ou Échap referme la carte (#17770)', async () => {
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+    const mark = host.querySelector<HTMLElement>('[data-header-flame] button');
+    await mounter.click(mark);
+    await mounter.click(mark);
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    await mounter.click(mark);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+  });
+
+  test('la pastille de l’en-tête déplié ouvre la MÊME carte que la flamme repliée (#17987)', async () => {
+    const touched: string[] = [];
+    const host = await mounter.mount(<EngagementPill snapshot={snapshot()} interactive onHideFlame={() => touched.push('x')} />);
+    const pill = host.querySelector<HTMLElement>('[data-engagement-pill] button');
+    expect(pill?.getAttribute('aria-expanded')).toBe('false');
+    await mounter.click(pill);
+    const card = host.querySelector<HTMLElement>('[data-flame-card]');
+    expect(pill?.getAttribute('aria-expanded')).toBe('true');
+    expect(card?.querySelector('[data-flame-card-streak]')?.textContent).toBe('4');
+    expect(card?.querySelector('[data-flame-card-today]')?.textContent).toBe('+12');
+    expect(card?.querySelector('[data-flame-card-total]')?.textContent).toBe('120');
+    expect(card?.querySelector('a')?.getAttribute('href')).toContain('/me/progression');
+    await mounter.click(host.querySelector<HTMLElement>('[data-flame-card-hide]'));
+    expect(touched).toEqual(['x']);
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+  });
+
+  test('la carte relit le jour : passé minuit, aujourd’hui vaut 0 (#17770)', () => {
+    expect(flameCardModel(snapshot({ todayPoints: 30 }), localDayOf(Date.now()), 'fr')).toMatchObject({ streakDays: 4, todayText: '+30', totalText: '120' });
+    expect(flameCardModel(snapshot({ todayPoints: 30, day: localDayOf(Date.now() - 86_400_000) }), localDayOf(Date.now()), 'fr')).toMatchObject({ todayText: '+0' });
+    expect(flameCardModel(snapshot({ streakDays: 0 }), localDayOf(Date.now()), 'fr')).toBeNull();
   });
 
   test('sans série en cours, aucune flamme ni aucun point (#9044)', () => {

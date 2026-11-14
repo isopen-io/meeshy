@@ -21,10 +21,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_header_call_hint",
-          "status": "android-only"
-        },
-        {
           "androidName": "chat_header_call_video",
           "status": "android-only"
         },
@@ -33,19 +29,11 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_header_collapse",
-          "status": "android-only"
-        },
-        {
           "androidName": "chat_header_encryption_e2ee",
           "status": "android-only"
         },
         {
           "androidName": "chat_header_encryption_server",
-          "status": "android-only"
-        },
-        {
-          "androidName": "chat_header_expand",
           "status": "android-only"
         },
         {

@@ -166,18 +166,40 @@ final class GroupCallModelTests: XCTestCase {
     // MARK: - Grille
 
     func test_layout_growsWithTileCount() {
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 1, isLandscape: false), GroupCallGridLayout(columns: 1, rows: 1))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: false), GroupCallGridLayout(columns: 1, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: true), GroupCallGridLayout(columns: 2, rows: 1))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 3))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: true), GroupCallGridLayout(columns: 3, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 1, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 1, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 1, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 2, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 3))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 3, rows: 2))
+    }
+
+    /// L4.1 — en paysage de hauteur compacte (téléphone), quatre personnes tiennent sur UNE rangée de quatre (planche `cols:4`).
+    /// La planche ne dessine pas trois personnes en paysage : leur grille 2 × 2 (#3585) ne change pas.
+    /// Le portrait garde sa grille 2 × 2.
+    func test_layout_compactLandscape_putsFourOnASingleRow_andKeepsThreeInTheirGrid() {
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 4, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+    }
+
+    /// W2 · W2.1 — scène large ET haute (iPad ou fenêtre en paysage, hauteur ample) : 2 × 2, jamais une rangée de quatre.
+    /// Une scène large mais basse reste en rangée de quatre ; le seuil est celui de `CallGroupStageSizing`.
+    func test_layout_landscapeWithAmpleHeight_keepsFourInTwoByTwo() {
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertTrue(CallGroupStageSizing.isCompactHeight(390))
+        XCTAssertTrue(CallGroupStageSizing.isCompactHeight(430))
+        XCTAssertFalse(CallGroupStageSizing.isCompactHeight(800))
+        XCTAssertFalse(CallGroupStageSizing.isCompactHeight(820))
     }
 
     func test_layout_alwaysHoldsEveryTileUpToTheMeshCeiling() {
+        let scenes: [(isLandscape: Bool, isCompactHeight: Bool)] = [(false, false), (false, true), (true, false), (true, true)]
         (1...CallRules.maxParticipants).forEach { count in
-            XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: false).capacity, count)
-            XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: true).capacity, count)
+            scenes.forEach { scene in
+                XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: scene.isLandscape, isCompactHeight: scene.isCompactHeight).capacity, count)
+            }
         }
     }
 
@@ -248,9 +270,24 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertEqual(stats.inboundAudioLevel, 0.4, accuracy: 0.0001)
     }
 
+    /// P11.5 — mon propre niveau vient de la source média sortante (`media-source`
+    /// audio) ; il ne se confond jamais avec le niveau reçu.
+    func test_callStatsReduce_readsMyOwnLevelFromTheOutgoingAudioSource() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "a1", type: "inbound-rtp", kind: "audio", values: ["audioLevel": 0.4]),
+            CallStats.RawEntry(id: "s1", type: "media-source", kind: "audio", values: ["audioLevel": 0.25]),
+            CallStats.RawEntry(id: "s2", type: "media-source", kind: "video", values: ["audioLevel": 0.9])
+        ])
+
+        XCTAssertEqual(stats.outboundAudioLevel, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(stats.inboundAudioLevel, 0.4, accuracy: 0.0001)
+    }
+
     // MARK: - Tuiles
 
-    func test_stageTiles_localFirst_thenMembersInArrivalOrder() {
+    /// P11.3 — la planche range ma vignette EN DERNIER : les autres dans leur ordre
+    /// d'arrivée, puis moi. Ce témoin figeait « moi d'abord », antérieur à la planche.
+    func test_stageTiles_membersInArrivalOrder_thenLocalLast() {
         let roster = GroupCallRoster(localUserId: "me")
             .admitting(arrival("b", name: "Bob"), isPrimary: true)
             .admitting(arrival("c", name: "Chloé", audio: false, video: true))
@@ -264,11 +301,43 @@ final class GroupCallModelTests: XCTestCase {
             isPrimaryVideoActive: false
         )
 
-        XCTAssertEqual(tiles.map(\.id), [GroupCallStage.localTileId, "b", "c"])
-        XCTAssertFalse(tiles[1].showsVideo, "le principal suit l'état vidéo que CallManager tient")
-        XCTAssertTrue(tiles[2].showsVideo)
-        XCTAssertTrue(tiles[2].isSpeaking)
-        XCTAssertTrue(tiles[2].isMicMuted)
+        XCTAssertEqual(tiles.map(\.id), ["b", "c", GroupCallStage.localTileId])
+        XCTAssertFalse(tiles[0].showsVideo, "le principal suit l'état vidéo que CallManager tient")
+        XCTAssertTrue(tiles[1].showsVideo)
+        XCTAssertTrue(tiles[1].isSpeaking)
+        XCTAssertTrue(tiles[1].isMicMuted)
+        XCTAssertTrue(tiles[2].isLocal)
+    }
+
+    func test_stageTiles_localLast_whoeverSpeaks_theOrderNeverMoves() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("b"), isPrimary: true)
+            .admitting(arrival("c"))
+        func ids(speaking: Set<String>) -> [String] {
+            GroupCallStage.tiles(
+                roster: roster, speakingUserIds: speaking, localName: "Vous",
+                isLocalMicMuted: false, isLocalVideoEnabled: false, isPrimaryVideoActive: false
+            ).map(\.id)
+        }
+
+        XCTAssertEqual(ids(speaking: []), ids(speaking: ["c"]))
+        XCTAssertEqual(ids(speaking: ["me"]), ids(speaking: ["b", "c"]))
+        XCTAssertEqual(ids(speaking: []).last, GroupCallStage.localTileId)
+    }
+
+    /// P11.5 — ma tuile s'illumine aussi quand JE parle : la planche dit « qui parle »
+    /// sans m'exclure. Le maillage nomme mon identifiant parmi ceux qui parlent.
+    func test_stageTiles_myTileSpeaks_whenTheMeshNamesMe() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("b"), isPrimary: true)
+            .admitting(arrival("c"))
+
+        let tiles = GroupCallStage.tiles(
+            roster: roster, speakingUserIds: ["me"], localName: "Vous",
+            isLocalMicMuted: false, isLocalVideoEnabled: false, isPrimaryVideoActive: false
+        )
+
+        XCTAssertEqual(tiles.filter(\.isSpeaking).map(\.id), [GroupCallStage.localTileId])
     }
 
     func test_stage_shownOnlyFromTwoRemoteMembers() {

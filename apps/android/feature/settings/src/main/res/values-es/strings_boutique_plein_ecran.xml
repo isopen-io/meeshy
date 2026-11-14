@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="pack_shop_detail_items">Elementos del pack</string>
-    <string name="pack_shop_detail_embedded">Incluido en la app</string>
-    <string name="pack_shop_detail_embedded_size">Incluido en la app · %1$s</string>
     <string name="pack_shop_detail_price">%1$d Meeshes</string>
     <string name="pack_shop_state_installed">Instalado</string>
-    <string name="pack_shop_state_embedded">Incluido</string>
     <string name="pack_shop_state_to_download">Por descargar</string>
     <string name="pack_shop_download_required">Descarga necesaria</string>
     <string name="pack_shop_viewer_position">%1$d / %2$d</string>

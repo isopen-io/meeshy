@@ -71,6 +71,78 @@ nonisolated enum CallModeCarouselRule {
         let index = Int((offset / step).rounded())
         return min(max(index, 0), count - 1)
     }
+
+    /// #18192 — la place d'un élément, comptée à partir de 1, pour que la voix dise « 3 sur 12 ».
+    static func ordinal<Item: Equatable>(of item: Item, in items: [Item]) -> CallModeCarouselOrdinal? {
+        guard let index = items.firstIndex(of: item) else { return nil }
+        return CallModeCarouselOrdinal(rank: index + 1, count: items.count)
+    }
+}
+
+nonisolated struct CallModeCarouselOrdinal: Equatable, Sendable {
+    let rank: Int
+    let count: Int
+}
+
+nonisolated enum CallModeCarouselActivation<Item: Equatable>: Equatable {
+    case apply(Item)
+    case confirm
+}
+
+/// #18192 — sous VoiceOver, le carrousel est UN élément ajustable : la position PARCOURUE (ce que
+/// la voix annonce) est distincte de l'effet APPLIQUÉ. Balayer haut/bas déplace la position sans rien
+/// poser ; l'activation applique ce qui est annoncé — ou, si c'est déjà l'effet posé, se contente de
+/// confirmer (la barre rend son menu de base, C1 généralisée) ; quitter l'élément oublie la position.
+/// Un `variant` (la déclinaison d'un cadre) se parcourt de même, à partir de celle qui est posée.
+nonisolated struct CallModeCarouselBrowse<Item: Equatable>: Equatable {
+    private(set) var browsed: Item?
+    private(set) var variant: Item?
+
+    init() {}
+
+    var isBrowsing: Bool {
+        browsed != nil || variant != nil
+    }
+
+    func position(applied: Item) -> Item {
+        browsed ?? applied
+    }
+
+    @discardableResult
+    mutating func step(by offset: Int, in items: [Item], applied: Item) -> Bool {
+        let from = position(applied: applied)
+        let next = CallModeCarouselRule.stepping(from, in: items, by: offset)
+        guard next != from else { return false }
+        browsed = next
+        variant = nil
+        return true
+    }
+
+    @discardableResult
+    mutating func stepVariant(by offset: Int, applied: Item, variants: (Item) -> [Item], current: (Item) -> Item) -> Bool {
+        let base = position(applied: applied)
+        let list = variants(base)
+        let from = variant ?? current(base)
+        guard list.count > 1, list.contains(from) else { return false }
+        let next = CallModeCarouselRule.stepping(from, in: list, by: offset)
+        guard next != from else { return false }
+        browsed = base
+        variant = next
+        return true
+    }
+
+    func activation(applied: Item, current: (Item) -> Item = { $0 }) -> CallModeCarouselActivation<Item> {
+        if let variant {
+            return variant == current(position(applied: applied)) ? .confirm : .apply(variant)
+        }
+        let target = position(applied: applied)
+        return target == applied ? .confirm : .apply(target)
+    }
+
+    mutating func leave() {
+        browsed = nil
+        variant = nil
+    }
 }
 
 /// #8736 — l'état du défilement d'un carrousel : qui le fait bouger (le
@@ -125,9 +197,24 @@ nonisolated struct CallModeCarouselMotion<Item: Equatable> {
     }
 }
 
-enum CallEffectsCategory: String, CaseIterable, Sendable {
+nonisolated enum CallEffectsCategory: String, CaseIterable, Sendable {
     case face
     case color
+
+    var kind: CallEffectKind {
+        switch self {
+        case .face: return .face
+        case .color: return .color
+        }
+    }
+
+    init?(kind: CallEffectKind) {
+        switch kind {
+        case .face: self = .face
+        case .color: self = .color
+        case .frame, .landscape, .voice: return nil
+        }
+    }
 }
 
 enum CallEffectsModeRule {
@@ -141,9 +228,33 @@ enum CallEffectsModeRule {
     static func applying(color preset: VideoFilterPreset, to config: VideoFilterConfig) -> VideoFilterConfig {
         config.applyingPreset(preset == .natural ? nil : preset)
     }
+}
 
-    static func exiting(validated: Bool, current: VideoFilterConfig, original: VideoFilterConfig) -> VideoFilterConfig {
-        validated ? current : original
+/// P8b.6 — Réglages ouvert, la bande de looks et les puces partent en fondu pendant que le
+/// panneau monte depuis la barre resserrée, ≈ 200 ms ; il y redescend au retour.
+/// « Réduire les animations » garde un fondu court, sans montée : l'écran ne change jamais d'un coup.
+nonisolated enum CallEffectsSettingsMotion {
+    static let rise: CGFloat = 20
+
+    static func duration(reduceMotion: Bool) -> Double {
+        reduceMotion ? 0.15 : 0.2
+    }
+
+    static func panelRise(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : rise
+    }
+}
+
+/// #17811 · C1.12 — la barre et le carrousel du Montage montent depuis le bas et y
+/// redescendent, sur la couche qui fond. Effets garde le seul fondu de la couche :
+/// la loi 17 l'excepte (« Effets emprunte au composer », loi 9). « Réduire les
+/// animations » ne laisse que ce fondu court.
+enum CallModeChromeMotion {
+    static func risesFromBottom(_ mode: CallScreenMode, reduceMotion: Bool) -> Bool {
+        switch mode {
+        case .montage: return !reduceMotion
+        case .effects: return false
+        }
     }
 }
 

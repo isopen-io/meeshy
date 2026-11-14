@@ -97,8 +97,7 @@ struct OnboardingFriendsCard: View {
                         : String(localized: "onboarding.contacts.none.body.nosms", bundle: .main))
         default:
             return (String(localized: "onboarding.friends.title", bundle: .main),
-                    String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main),
-                                                     OnboardingRewards.friendship))
+                    String(localized: "onboarding.friends.lead", bundle: .main))
         }
     }
 

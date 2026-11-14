@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performSemanticsAction
@@ -41,6 +43,29 @@ class CallLiveFrameUiTest {
         rule.setContent { MeeshyTheme { CallLiveFrameNotice("Bob keeps their own view") } }
         rule.onNodeWithText("Bob keeps their own view").assertExists()
         assertThat(CallLiveFrameReply.DECLINED.wire).isEqualTo("declined")
+    }
+
+    private fun proposalFrom(controller: CallLiveFrameController) {
+        val frame = me.meeshy.sdk.model.call.frames.CallLiveFrameRule.frames().first().id
+        controller.receive(me.meeshy.sdk.model.call.CallLiveFrameSelected("call-1", "peer", frame, null))
+    }
+
+    @Test
+    fun `#17820 la proposition recue se montre en duo video, et pas en groupe ni en audio`() {
+        val (_, controller) = liveFrames()
+        proposalFrom(controller)
+        var offered by androidx.compose.runtime.mutableStateOf(true)
+        rule.setContent { MeeshyTheme { CallLiveFrameStatus(controller, offersProposal = offered) } }
+        rule.onNodeWithText("Apply").assertExists()
+
+        rule.runOnIdle { offered = false }
+        rule.waitForIdle()
+        rule.onNodeWithText("Apply").assertDoesNotExist()
+
+        rule.runOnIdle { offered = true }
+        rule.waitForIdle()
+        rule.onNodeWithText("Apply").assertExists()
+        controller.onCleared()
     }
 
     private fun liveFrames(): Pair<me.meeshy.sdk.socket.CallSocialSignalManager, CallLiveFrameController> {
@@ -106,8 +131,11 @@ class CallLiveFrameUiTest {
         rule.setContent { Picker(controller, capture) }
 
         rule.onNodeWithText("Classics").assertExists()
-        carousel().assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Screen"))
+        carousel().assert(androidx.compose.ui.test.SemanticsMatcher("announces the style then its rank") { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.StateDescription)?.matches(Regex("Screen, \\d+ of \\d+")) == true })
         rule.runOnIdle { action("Next montage")() }
+        rule.waitForIdle()
+        val activate = carousel().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!
+        rule.runOnIdle { activate() }
         rule.waitForIdle()
 
         assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, 2))

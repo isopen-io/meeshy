@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Loi 15, #17961 : le second appui sur « Plein écran » ne garde que l'écran partagé (U2b). -->
+    <string name="call_spotlight_total_enter">Schermo intero totale</string>
+    <string name="call_spotlight_total_exit">Esci dallo schermo intero totale</string>
+</resources>

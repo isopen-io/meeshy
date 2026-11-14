@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">Übersetzung</string>
     <string name="call_captions_state_original">Originaltext</string>
     <string name="call_captions_peer_active">Dein Gesprächspartner hat die Transkription aktiviert</string>
-    <string name="call_captions_journal">Protokoll</string>
     <string name="call_captions_journal_title">Anrufprotokoll</string>
     <string name="call_captions_journal_hint">Öffnet alle Sätze des Anrufs</string>
     <string name="call_captions_waiting">Untertitel erscheinen hier, sobald jemand spricht.</string>
@@ -17,4 +16,13 @@
     <string name="call_captions_unavailable">Untertitel sind für diesen Anruf noch nicht verfügbar.</string>
     <string name="call_captions_local_unsupported">Deine Worte werden auf diesem Gerät nicht untertitelt: Es braucht Android 13 und Spracherkennung auf dem Gerät. Die Untertitel der anderen Seite liest du weiterhin.</string>
     <string name="call_captions_local_language_missing">Deine Worte werden nicht untertitelt: Auf diesem Gerät fehlt das Sprachmodell deiner Sprache. Die Untertitel der anderen Seite liest du weiterhin.</string>
+    <string name="call_captions_region">Untertitel des Anrufs</string>
+    <string name="call_captions_translating">Übersetzung läuft</string>
+    <string name="call_captions_hide_original_hint">Originaltext ausblenden</string>
+    <string name="call_captions_me">Ich</string>
+    <string name="call_captions_footer_translating">%1$s · Übersetzung läuft</string>
+    <plurals name="call_captions_footer_translated_languages">
+        <item quantity="one">Übersetzt · %1$d Sprache</item>
+        <item quantity="other">Übersetzt · %1$d Sprachen</item>
+    </plurals>
 </resources>

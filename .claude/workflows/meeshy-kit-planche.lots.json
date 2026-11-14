@@ -686,7 +686,8 @@
    "modele_ios": "sonnet",
    "modele_android": "sonnet",
    "depend": [
-    "K00"
+    "K00",
+    "K04"
    ],
    "modele_web": "sonnet",
    "cible_web": "apps/web/src/components/kit/meeshy-tile-strip.tsx",
@@ -703,14 +704,16 @@
     "R6",
     "A7",
     "I1",
-    "I4"
+    "I4",
+    "R10",
+    "I2"
    ],
    "lois": [
     2,
     11
    ],
    "contrat": "Vignettes sans cadre ni verre, la courante cerclée de blanc, « + » toujours en dernier, fantômes (envoi avec anneau K09, attente), toucher = aller, double toucher = dupliquer, appui long = croix + glisser pour réordonner. Contenu de vignette opaque.",
-   "ios_existant": "ComposerSlideRail, ComposerSceneThumbnailTile, ComposerSlideRowJiggle, ComposerSceneIntakeGhost ; SDK SlideMiniPreview",
+   "ios_existant": "ComposerSlideRail (grammaire ComposerSlideRowGrammar, ComposerSlideRowDrag), ComposerSceneThumbnailTile (le contenu, reste à l'app)",
    "android_existant": ":sdk-ui SlideRailTile + SlideRailGeometry (public, générique) ; ComposerSlideRail, SlideReorderResolver",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyThumbnailRow.swift",
    "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyThumbnailRow.kt",
@@ -722,7 +725,7 @@
    ],
    "modele_web": "sonnet",
    "cible_web": "apps/web/src/components/kit/meeshy-thumbnail-row.tsx",
-   "web_existant": "components/story-rail.tsx, rail-tile.tsx"
+   "web_existant": "routes/story-compose-pages.tsx (StudioPageRail, StudioPageTile, StudioPageDelete)"
   },
   {
    "cle": "K21",
@@ -923,7 +926,8 @@
     "K10",
     "K11",
     "K12",
-    "K14"
+    "K14",
+    "K19"
    ],
    "plateformes": [
     "ios",
@@ -986,7 +990,8 @@
     "K14",
     "K15",
     "K20",
-    "K24"
+    "K24",
+    "K19"
    ],
    "plateformes": [
     "ios",
@@ -1016,7 +1021,8 @@
     "A15",
     "A16",
     "A17",
-    "A18"
+    "A18",
+    "A19"
    ],
    "lois": [
     8,
@@ -1046,7 +1052,8 @@
     "K15",
     "K17",
     "K21",
-    "I2"
+    "I2",
+    "K19"
    ],
    "plateformes": [
     "ios",
@@ -1137,12 +1144,14 @@
    ],
    "contrat": "Sélection sans cadre ; TOUCHER un objet affiche DIRECTEMENT ses outils dans la pilule, sans étape « Modifier » ni mode plein écran : ‹ · outils du type · (…) (vues O1, O14, O4, O15) ; un outil ouvre ses options dans la pilule qui grandit (O5 à O8). Le (…) ouvre le menu (Dupliquer, Mettre devant, Mettre en fond, Verrouiller ; Temps, Description, Faire un sticker pour un média ; Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Les outils d'une photo ou d'une vidéo (O4 à O9) sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est la même table d'outils que le lot I9 montre depuis une conversation.",
    "depend": [
+    "K04",
     "K18",
     "K23",
     "K25",
     "K16",
     "K21",
-    "I2"
+    "I2",
+    "K19"
    ],
    "plateformes": [
     "ios",
@@ -1187,10 +1196,12 @@
    ],
    "contrat": "Fond, cadre, transitions, effet, durée dans la pilule ; frise en mode plein écran.",
    "depend": [
+    "K04",
     "K22",
     "K11",
     "K16",
-    "I2"
+    "I2",
+    "K19"
    ],
    "plateformes": [
     "ios",

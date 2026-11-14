@@ -23,9 +23,12 @@ import { browserSpeech, recognitionOf, type RecognitionConstructor } from './cal
  * reconstruite ici.
  */
 
+function readerPrism(): readonly string[] {
+  return resolveReaderLanguages({ source: apiDeps.source, session: sessionStore.getState().session, deviceLocale: currentDeviceLocale() });
+}
+
 function spokenLanguage(): string {
-  const languages = resolveReaderLanguages({ source: apiDeps.source, session: sessionStore.getState().session, deviceLocale: currentDeviceLocale() });
-  return languages[0] ?? 'fr';
+  return readerPrism()[0] ?? 'fr';
 }
 
 function viewerName(): string {
@@ -53,6 +56,7 @@ export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
   return createCaptions(ctx, {
     speech: browserSpeech(recognition()),
     language: spokenLanguage,
+    prism: readerPrism,
     viewerName,
     newId: utteranceId,
     // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.

@@ -96,12 +96,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.badges.intro",
-          "androidName": "game_rules_badges_intro",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.badges.ladder",
           "androidName": "game_rules_badges_ladder",
           "status": "adopted"
@@ -122,12 +116,6 @@
           "catalog": "app",
           "iosKey": "game.rules.badges.families",
           "androidName": "game_rules_badges_families",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.badges.sheet",
-          "androidName": "game_rules_badges_sheet",
           "status": "adopted"
         },
         {

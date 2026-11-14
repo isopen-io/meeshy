@@ -13,8 +13,15 @@ internal data class CallCaptionSemantics(
 
 /** The accessibility law of the live captions (iOS `CallCaptionsViews`: `accessibilityHidden(!isFinal)`, `announcement`). */
 internal object CallCaptionAccessibility {
-    fun of(line: CallLiveCaptionLine): CallCaptionSemantics = CallCaptionSemantics(
-        label = "${line.speakerName} : ${line.text}",
+    /**
+     * The label reads « name : text », then the unfolded original (« Original : … ») and, while a translation is
+     * awaited, [translatingWord] (« Translating ») — null when nothing is awaited or the surface draws no wait.
+     */
+    fun of(line: CallLiveCaptionLine, originalWord: String, translatingWord: String?): CallCaptionSemantics = CallCaptionSemantics(
+        label = listOfNotNull(
+            "${line.speakerName} : ${line.text}",
+            line.originalBelow?.let { ". $originalWord : $it" },
+        ).joinToString("").let { spoken -> translatingWord?.let { "$spoken, $it" } ?: spoken },
         isHidden = !line.isFinal,
         announces = line.announcement != null,
     )

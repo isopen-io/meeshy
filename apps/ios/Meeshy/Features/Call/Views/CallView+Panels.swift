@@ -40,6 +40,7 @@ extension CallView {
     func togglePanel(_ panel: CallScreenPanel) {
         withAnimation(disclosureAnimation) {
             layer = layer.opening(panel)
+            showControls = true
         }
         HapticFeedback.light()
     }

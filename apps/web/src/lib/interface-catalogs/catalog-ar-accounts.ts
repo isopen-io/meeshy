@@ -8,7 +8,7 @@ const arAccounts = {
   'accounts.row.current': 'الحساب الحالي',
   'accounts.row.signed_in': 'متصل',
   'accounts.row.forget': 'إزالة {name} من هذا الجهاز',
-  'accounts.add': 'إضافة حساب',
+  'accounts.add': 'إضافة',
   'accounts.keep_signed_in': 'البقاء متصلاً على هذا الجهاز',
   'settings.switch_account.title': 'تبديل الحساب',
   'login.server_origin': 'متصل بـ: {origin}',

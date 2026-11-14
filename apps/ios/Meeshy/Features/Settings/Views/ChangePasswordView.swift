@@ -84,8 +84,6 @@ struct ChangePasswordView: View {
 
     private var currentPasswordSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "auth.password.change.current.section", defaultValue: "Mot de passe actuel", bundle: .main), icon: "lock.fill", color: MeeshyColors.indigo600Hex)
-
             VStack(spacing: 0) {
                 secureField(
                     icon: "lock.fill",
@@ -111,14 +109,12 @@ struct ChangePasswordView: View {
 
     private var newPasswordSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "auth.password.change.new.section", defaultValue: "Nouveau mot de passe", bundle: .main), icon: "key.fill", color: accentColor)
-
             VStack(spacing: 0) {
                 secureField(
                     icon: "key.fill",
                     title: String(localized: "auth.password.change.new.field", defaultValue: "Nouveau mot de passe", bundle: .main),
                     text: $newPassword,
-                    placeholder: String(localized: "auth.password.change.new.placeholder", defaultValue: "Minimum 8 caractères", bundle: .main),
+                    placeholder: "",
                     color: accentColor,
                     field: .newPass
                 )
@@ -266,22 +262,6 @@ struct ChangePasswordView: View {
     }
 
     // MARK: - Reusable Components
-
-    private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color(hex: color))
-            Text(title.uppercased())
-                .font(.system(.caption2, design: .rounded).weight(.bold))
-                .foregroundColor(Color(hex: color))
-                .tracking(1.2)
-        }
-        .padding(.leading, MeeshySpacing.xs)
-        // Parité DeleteAccountView : titre de section navigable au rotor VoiceOver.
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
 
     private func secureField(
         icon: String,

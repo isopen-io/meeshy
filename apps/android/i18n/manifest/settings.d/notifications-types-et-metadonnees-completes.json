@@ -4,8 +4,10 @@
     ":feature:settings": {
       "resDir": "feature/settings/src/main/res",
       "entries": [
-        {"androidName": "settings_notif_type_contact_activity", "status": "android-only"},
-        {"androidName": "settings_notif_type_game", "status": "android-only"}
+        {
+          "androidName": "settings_notif_type_game",
+          "status": "android-only"
+        }
       ]
     }
   }

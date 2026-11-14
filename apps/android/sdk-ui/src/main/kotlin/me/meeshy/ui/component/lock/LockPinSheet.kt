@@ -92,11 +92,13 @@ public fun LockPinSheet(
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
             )
-            Text(
-                text = texts.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
+            if (texts.subtitle.isNotBlank()) {
+                Text(
+                    text = texts.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
+            }
             ShakingDots(filled = filledCount, total = pinLength, texts = texts, accent = accent)
             texts.errorText?.let { message ->
                 Text(

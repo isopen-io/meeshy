@@ -113,6 +113,10 @@ struct ComposerCaptureBottomRow: View {
                 VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
                     // **Texte · Fond · Galerie · Sticker AVANT les familles** (#17432).
                     ComposerViewfinderColumnView(entries: sceneEntries) { sceneEntry?($0) }
+                    if ComposerViewfinderColumn.separatesLooks(sceneEntries: sceneEntries,
+                                                               offersLooks: ComposerCaptureGesture.offersRail(context)) {
+                        ComposerViewfinderRailSeparator()
+                    }
                     if ComposerCaptureGesture.offersRail(context) {
                         ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
                             session.toggleFamily(famille)
@@ -337,6 +341,16 @@ struct ComposerViewfinderColumnView: View {
             }
             .transition(.opacity)
         }
+    }
+}
+
+/// Le trait du rail bas gauche entre Texte · Fond · Galerie · Sticker et les looks (planche, vue A8).
+struct ComposerViewfinderRailSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.35))
+            .frame(width: MeeshyControlSize.tapTarget, height: 1)
+            .accessibilityHidden(true)
     }
 }
 

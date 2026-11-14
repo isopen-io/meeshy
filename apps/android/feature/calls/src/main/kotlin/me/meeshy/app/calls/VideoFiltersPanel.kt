@@ -102,7 +102,7 @@ private fun PanelHeader(showsReset: Boolean, onReset: () -> Unit) {
 @Composable
 private fun PresetChips(config: VideoFilterConfig, onChange: (VideoFilterConfig) -> Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        VideoFilterPreset.entries.forEach { preset ->
+        VideoFilterPreset.fiveTints.forEach { preset ->
             val isActive = VideoFilterPanelLaw.isSelected(config, preset) && config.isEnabled
             val shape = CircleShape
             Text(
@@ -251,6 +251,13 @@ private fun presetName(preset: VideoFilterPreset): Int = when (preset) {
     VideoFilterPreset.Cool -> R.string.video_filter_preset_cool
     VideoFilterPreset.Vivid -> R.string.video_filter_preset_vivid
     VideoFilterPreset.Muted -> R.string.video_filter_preset_muted
+    VideoFilterPreset.Golden -> R.string.video_filter_preset_golden
+    VideoFilterPreset.Film -> R.string.video_filter_preset_film
+    VideoFilterPreset.SoftNight -> R.string.video_filter_preset_softNight
+    VideoFilterPreset.Bright -> R.string.video_filter_preset_bright
+    VideoFilterPreset.Velvet -> R.string.video_filter_preset_velvet
+    VideoFilterPreset.Sky -> R.string.video_filter_preset_sky
+    VideoFilterPreset.Monochrome -> R.string.video_filter_preset_monochrome
 }
 
 private fun sliderName(slider: VideoFilterSlider): Int = when (slider) {

@@ -191,10 +191,11 @@ export function ActionLink({
   );
 }
 
-export const REACH_FAILURE_BODY = {
-  offline: 'linkPage.offline.body',
+/** La ligne qui DIT l'échec — le titre de la page : « Hors ligne » se comprend seul, aucune phrase ne le paraphrase. */
+export const REACH_FAILURE_LINE = {
+  offline: 'linkPage.offline.title',
   'rate-limited': 'linkPage.rateLimited',
-  unavailable: 'linkPage.unavailable.body',
+  unavailable: 'linkPage.unavailable.title',
 } as const satisfies Readonly<Record<ReachFailure, string>>;
 
 const REACH_FAILURE_TITLE = {
@@ -222,7 +223,7 @@ export function ReachFailurePage({
       glyph="warningCircle"
       tone="brand"
       title={translate(language, REACH_FAILURE_TITLE[failure])}
-      body={<LinkText>{translate(language, REACH_FAILURE_BODY[failure])}</LinkText>}
+      body={failure === 'rate-limited' ? <LinkText>{translate(language, REACH_FAILURE_LINE[failure])}</LinkText> : undefined}
     >
       <ActionButton onClick={onRetry}>{translate(language, 'linkPage.retry')}</ActionButton>
       <ActionLink to="list" tone="secondary">
@@ -235,15 +236,17 @@ export function ReachFailurePage({
 /**
  * Le lien agit sur le compte CONNECTÉ et il n'y a pas de session : rien n'est
  * dépensé, et la page dit quoi faire. La connexion ne sait pas encore ramener
- * ici — d'où « rouvrez-le depuis l'e-mail », qui reste vrai quoi qu'il arrive.
+ * ici — d'où « rouvrez-le depuis l'e-mail », LU AU REPOS (règle 7, #17594) mais
+ * seulement quand on est VENU d'un e-mail (`fromEmail`) : ailleurs, la phrase
+ * serait fausse.
  */
-export function SignedOutPage({ language }: { readonly language: InterfaceLanguage }) {
+export function SignedOutPage({ language, fromEmail = false }: { readonly language: InterfaceLanguage; readonly fromEmail?: boolean }) {
   return (
     <LinkPage
       glyph="lock"
       tone="brand"
       title={translate(language, 'linkPage.signedOut.title')}
-      body={<LinkText>{translate(language, 'linkPage.signedOut.body')}</LinkText>}
+      body={fromEmail ? <LinkText>{translate(language, 'linkPage.signedOut.hint')}</LinkText> : undefined}
     >
       <ActionLink to="login" tone="primary">
         {translate(language, 'linkPage.signIn')}

@@ -12,6 +12,8 @@ final class ThemePaletteInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/iPadRootView.swift",
         "Meeshy/Features/Main/Views/AdaptiveRootView.swift",
+        "Meeshy/Features/Call/Views/CallTranscriptSection.swift",
+        "Meeshy/Features/Main/Views/Bubble/BubbleCallJournalUnderCard.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/AudioEditorToolPanel.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MediaTranscriptionView.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift",

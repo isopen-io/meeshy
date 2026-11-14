@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.atlas.coin.line",
-          "androidName": "game_atlas_coin_line",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.atlas.coin.obverse",
           "androidName": "game_atlas_coin_obverse",
           "status": "adopted"
@@ -38,12 +32,6 @@
           "catalog": "app",
           "iosKey": "game.atlas.coin.title",
           "androidName": "game_atlas_coin_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.flames.line",
-          "androidName": "game_atlas_flames_line",
           "status": "adopted"
         },
         {
@@ -84,12 +72,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.atlas.medals.line",
-          "androidName": "game_atlas_medals_line",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.atlas.medals.record",
           "androidName": "game_atlas_medals_record",
           "status": "adopted"
@@ -98,12 +80,6 @@
           "catalog": "app",
           "iosKey": "game.atlas.medals.title",
           "androidName": "game_atlas_medals_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.ranks.line",
-          "androidName": "game_atlas_ranks_line",
           "status": "adopted"
         },
         {
@@ -196,22 +172,11 @@
           "androidName": "game_atlas_tiers_line",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.tiers.prestige",
-          "androidName": "game_atlas_tiers_prestige",
-          "status": "adopted"
-        },
+        { "androidName": "game_atlas_tiers_prestige", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.atlas.tiers.title",
           "androidName": "game_atlas_tiers_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.treasury.line",
-          "androidName": "game_atlas_treasury_line",
           "status": "adopted"
         },
         {

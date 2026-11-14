@@ -5,12 +5,11 @@ import me.meeshy.sdk.lang.PrismTranslationResolver
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
- * Who reads a replayed transcript: their id (to recognise their own words), their
- * name, and their prism (`ReaderPrism.resolve`) to elect the served translation.
+ * Who reads a replayed transcript: their id (to recognise their own words, which read « Vous »)
+ * and their prism (`ReaderPrism.resolve`) to elect the served translation.
  */
 data class CallTranscriptReader(
     val userId: String?,
-    val name: String?,
     val prism: List<String>,
 )
 
@@ -32,9 +31,35 @@ data class CallTranscriptLine(
     /** #16665 — a capture line: [speakerName] is who captured (blank for a call-recording bound), no text. */
     val captureKind: CallCaptureKind? = null,
 ) {
-    /** What the row shows: the original when asked for, or when nothing was translated. */
-    fun text(showOriginal: Boolean): String = if (showOriginal) original else translated ?: original
+    /** A sentence is served translated only when it is not mine, not a capture, and the translation says something. */
+    val servesTranslation: Boolean get() = !isLocal && captureKind == null && !translated.isNullOrBlank()
+
+    /** Whether the row shows the served translation (its text and its ink): served, and the toggle not on the original. */
+    fun showsTranslation(showOriginal: Boolean): Boolean = servesTranslation && !showOriginal
+
+    /** What the row shows: the served translation, else the original. */
+    fun text(showOriginal: Boolean): String = translated?.takeIf { showsTranslation(showOriginal) } ?: original
+
+    /**
+     * #17340, #17862 — the line unfolded below the leading one: « Original · … » by default, « Traduit · … » once the
+     * switch shows the original. The switch INVERTS the two lines, nothing disappears. Never for my own sentence, a
+     * capture, or a sentence without translation: those read alone in both states.
+     */
+    fun secondary(showOriginal: Boolean): CallTranscriptSecondary? {
+        val served = translated?.takeIf { servesTranslation } ?: return null
+        return if (showOriginal) {
+            CallTranscriptSecondary(CallTranscriptSecondaryKind.TRANSLATED, served)
+        } else {
+            CallTranscriptSecondary(CallTranscriptSecondaryKind.ORIGINAL, original)
+        }
+    }
 }
+
+/** Which version the line below a journal sentence carries — it names its own label (« Original » / « Traduit »). */
+enum class CallTranscriptSecondaryKind { ORIGINAL, TRANSLATED }
+
+/** The line under a journal sentence: its [text] and the [kind] that says how it reads. */
+data class CallTranscriptSecondary(val kind: CallTranscriptSecondaryKind, val text: String)
 
 /**
  * The persisted journal of `GET /calls/{callId}/transcript`, projected for one
@@ -61,31 +86,30 @@ object CallTranscriptReplay {
                 val translation = if (isLocal) null else served(segment, reader.prism)
                 CallTranscriptLine(
                     speakerName = if (isLocal) {
-                        reader.name?.takeIf { it.isNotBlank() } ?: youLabel
+                        youLabel
                     } else {
                         segment.speakerDisplayName?.takeIf { it.isNotBlank() } ?: participantLabel
                     },
                     isLocal = isLocal,
-                    elapsedLabel = startMs?.let { CallDuration.clock(maxOf(0L, segment.capturedAtMs - it) / MILLIS_PER_SECOND) },
+                    elapsedLabel = CallJournalClock.label(segment.capturedAtMs, startMs),
                     original = segment.text,
                     translated = translation?.text,
                     translatedLanguage = translation?.language,
                     speakerId = segment.speakerId,
                 ).let { segment.capturedAtMs to it }
             }
-        val captures = page.captures.mapNotNull { capture(it, startMs, readerId, reader.name, youLabel, participantLabel) }
+        val captures = page.captures.mapNotNull { capture(it, startMs, readerId, youLabel, participantLabel) }
         return (speech + captures).sortedBy { it.first }.map { it.second }
     }
 
     /**
      * #16665 — a capture takes its place among the sentences, at its instant (or the call
-     * start plus its offset). The reader's own capture carries the reader's name.
+     * start plus its offset). The reader's own capture reads « Vous ».
      */
     private fun capture(
         capture: PersistedTranscriptCapture,
         startMs: Long?,
         readerId: String?,
-        readerName: String?,
         youLabel: String,
         participantLabel: String,
     ): Pair<Long, CallTranscriptLine>? {
@@ -95,13 +119,13 @@ object CallTranscriptReplay {
         val isLocal = readerId != null && capturerId == readerId
         val name = when {
             !kind.namesCapturer -> ""
-            isLocal -> readerName?.takeIf { it.isNotBlank() } ?: youLabel
+            isLocal -> youLabel
             else -> capture.displayName?.takeIf { it.isNotBlank() } ?: participantLabel
         }
         return atMs to CallTranscriptLine(
             speakerName = name,
             isLocal = isLocal,
-            elapsedLabel = startMs?.let { CallDuration.clock(maxOf(0L, atMs - it) / MILLIS_PER_SECOND) },
+            elapsedLabel = CallJournalClock.label(atMs, startMs),
             original = "",
             translated = null,
             translatedLanguage = null,
@@ -116,8 +140,6 @@ object CallTranscriptReplay {
             candidates = segment.translations.map { PrismCandidate(it.targetLanguage, it.translatedText) },
             preferredLanguages = prism,
         )
-
-    private const val MILLIS_PER_SECOND = 1_000L
 }
 
 /**
@@ -130,6 +152,16 @@ object CallTranscriptReplay {
 sealed interface CallTranscriptState {
     val isVisible: Boolean
 
+    /**
+     * Nothing is known of the call yet: the encrypted copy on this device is being read (or is about to be). Not a wait
+     * on the network — a copy found here is drawn at once, so no waiting is ever shown on it (A1.14, iOS
+     * `BubbleCallJournalLoading.load(willWaitOnNetwork:)`).
+     */
+    data object ReadingCopy : CallTranscriptState {
+        override val isVisible: Boolean get() = false
+    }
+
+    /** The device holds no copy: the server replay is awaited (the only state that shows a waiting). */
     data object Loading : CallTranscriptState {
         override val isVisible: Boolean get() = false
     }
@@ -146,7 +178,7 @@ sealed interface CallTranscriptState {
         override val isVisible: Boolean get() = true
 
         /** The original/translation toggle only exists when it changes something. */
-        val canShowOriginal: Boolean get() = lines.any { it.translated != null }
+        val canShowOriginal: Boolean get() = lines.any { it.servesTranslation }
     }
 
     companion object {

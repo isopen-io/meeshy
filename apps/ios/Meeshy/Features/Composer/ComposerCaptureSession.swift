@@ -239,7 +239,7 @@ final class ComposerCaptureSession: ObservableObject {
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flipping: camera.isSwitchingCamera || camera.recordingIsPending,
             switchingCamera: camera.isSwitchingCamera,
-            flashIntensity: flashIntensity)
+            flashIntensity: flashIntensity, cameraPosition: controls.currentPosition)
     }
 
     // MARK: - L'armement et la sortie
@@ -369,7 +369,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
-            camera.startRecording()
+            await camera.startRecording(whileWanted: { [weak self] in self?.stage == .recording })
             bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }

@@ -20,7 +20,7 @@ class CallReactionsAndPipActionsTest {
     }
 
     @Test
-    fun `l'action PiP suit le coordinateur et lui demande d'entrer`() {
+    fun `le bouton PiP de l'en-tete suit le coordinateur et lui demande d'entrer`() {
         var entered = false
         val pip = CallPictureInPictureCoordinator().apply {
             attachActivity(Any(), supportsPip = true) { entered = true; true }
@@ -30,11 +30,11 @@ class CallReactionsAndPipActionsTest {
             )
             setCallScreenShown(true)
         }
-        val handler = CallPictureInPictureActionHandler(pip)
+        val viewModel = CallPictureInPictureViewModel(pip)
 
-        assertThat(handler.present(ui(connected = true))?.labelRes).isEqualTo(R.string.call_control_pip)
-        assertThat(handler.present(ui(connected = false))).isNull()
-        handler.perform()
+        assertThat(viewModel.offers(ui(connected = true))).isTrue()
+        assertThat(viewModel.offers(ui(connected = false))).isFalse()
+        viewModel.enter()
         assertThat(entered).isTrue()
     }
 }

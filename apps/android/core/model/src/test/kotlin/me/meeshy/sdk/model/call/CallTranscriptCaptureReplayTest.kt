@@ -43,7 +43,7 @@ class CallTranscriptCaptureReplayTest {
         captures: List<PersistedTranscriptCapture>,
     ) = CallTranscriptReplay.lines(
         page = CallTranscriptPage(callId = "call-1", conversationId = "conv-1", callStartedAt = startIso, segments = segments, captures = captures),
-        reader = CallTranscriptReader(userId = "me", name = "Ada", prism = listOf("fr")),
+        reader = CallTranscriptReader(userId = "me", prism = listOf("fr")),
         recordStartedAt = startIso,
         youLabel = "Vous",
         participantLabel = "Participant",
@@ -69,10 +69,10 @@ class CallTranscriptCaptureReplayTest {
     }
 
     @Test
-    fun `the reader's own capture carries the reader's name`() {
-        val result = lines(captures = listOf(capture(userId = "me", displayName = null))).single()
+    fun `the reader's own capture reads Vous whatever the name`() {
+        val result = lines(captures = listOf(capture(userId = "me", displayName = "Ada"))).single()
 
-        assertThat(result.speakerName).isEqualTo("Ada")
+        assertThat(result.speakerName).isEqualTo("Vous")
         assertThat(result.isLocal).isTrue()
     }
 

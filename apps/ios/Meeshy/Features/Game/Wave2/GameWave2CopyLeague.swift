@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 // MARK: - Ce que la vague 2 du jeu dit — league (suite de `GameText`, voir `GameWave2CopyCommon.swift`)
 
@@ -33,8 +34,9 @@ extension GameText {
         String(localized: "game2.league.week", defaultValue: "Semaine du \(date)", bundle: .main)
     }
 
-    static func leagueLocked(level: String, current: String) -> String {
-        String(localized: "game2.league.locked", defaultValue: "La joute s’ouvre au niveau \(level) : chaque semaine, tu te mesures à 29 héros de lumière semblable. Tu es au niveau \(current).", bundle: .main)
+    /// La porte de la joute, fermée, dit encore ce qu'est la joute (épure, règle 7) : le seuil ne suffit pas à s'orienter.
+    static var leagueLockedWhat: String {
+        String(localized: "game2.league.locked.what", defaultValue: "Chaque semaine, tu te mesures à 29 héros de lumière semblable.", bundle: .main)
     }
 
     static var leagueMinor: String { String(localized: "game2.league.minor", defaultValue: "La joute publique n’est pas ouverte pour ton compte. La Joute des amis, elle, l’est toujours.", bundle: .main) }
@@ -57,8 +59,6 @@ extension GameText {
 
     static var leaguePseudonymLabel: String { String(localized: "game2.league.pseudonym.label", defaultValue: "Nom de joute (facultatif)", bundle: .main) }
 
-    static var leaguePseudonymHint: String { String(localized: "game2.league.pseudonym.hint", defaultValue: "3 à 20 caractères. Ni ton nom, ni ton identifiant. Laisse vide : un nom de joute t’est tiré au sort.", bundle: .main) }
-
     static var leaguePseudonymDrawn: String { String(localized: "game2.league.pseudonym.drawn", defaultValue: "Ton nom de joute est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque voyage.", bundle: .main) }
 
     static var leaguePseudonymSave: String { String(localized: "game2.league.pseudonym.save", defaultValue: "Changer de nom de joute", bundle: .main) }
@@ -67,7 +67,7 @@ extension GameText {
         String(localized: "game2.league.pseudonym.current", defaultValue: "Tu joues sous le nom \(name).", bundle: .main)
     }
 
-    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.", bundle: .main) }
+    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Nom non valable : lettres, chiffres, point, tiret, tiret bas.", bundle: .main) }
 
     static var leagueWaiting: String { String(localized: "game2.league.waiting", defaultValue: "C’est noté. Un groupe t’est attribué au début de la semaine prochaine.", bundle: .main) }
 
@@ -95,7 +95,14 @@ extension GameText {
 
     static var leagueCupBronze: String { String(localized: "game2.league.cup.bronze", defaultValue: "Coupe de bronze", bundle: .main) }
 
-    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Le classement des autres est figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct.", bundle: .main) }
+    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Classement des autres figé chaque jour à 4 h", bundle: .main) }
+
+    static var leagueSnapshotNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game2.league.snapshot.question", defaultValue: "Pourquoi le classement est-il figé ?", bundle: .main),
+            text: String(localized: "game2.league.snapshot.note", defaultValue: "Personne ne voit qui joue en ce moment. Seule ta ligne est en direct.", bundle: .main)
+        )
+    }
 
     static var leagueMe: String { String(localized: "game2.league.me", defaultValue: "Toi", bundle: .main) }
 
@@ -103,7 +110,7 @@ extension GameText {
 
     static var leagueFriendsTitle: String { String(localized: "game2.league.friends.title", defaultValue: "Joute des amis", bundle: .main) }
 
-    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Les étincelles de la semaine, entre amis acceptés. Toujours ouverte, sans consentement à donner.", bundle: .main) }
+    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.", bundle: .main) }
 
     static var leagueFriendsEmpty: String { String(localized: "game2.league.friends.empty", defaultValue: "Ajoute des amis pour te comparer à eux chaque semaine.", bundle: .main) }
 
@@ -111,11 +118,11 @@ extension GameText {
 
     static var duoTitle: String { String(localized: "game2.duo.title", defaultValue: "Alliance", bundle: .main) }
 
-    static func duoLocked(level: String, current: String) -> String {
-        String(localized: "game2.duo.locked", defaultValue: "L’alliance s’ouvre au niveau \(level), pour vous deux. Tu es au niveau \(current).", bundle: .main)
+    static func duoLocked(level: String) -> String {
+        String(localized: "game2.duo.locked", defaultValue: "L’alliance s’ouvre au niveau \(level), pour vous deux.", bundle: .main)
     }
 
-    static var duoNone: String { String(localized: "game2.duo.none", defaultValue: "Choisis un ami pour faire alliance : si chacun réalise sa part dans la semaine, la récompense double.", bundle: .main) }
+    static var duoNone: String { String(localized: "game2.duo.none", defaultValue: "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.", bundle: .main) }
 
     static func duoInvite(name: String) -> String {
         String(localized: "game2.duo.invite", defaultValue: "Inviter \(name)", bundle: .main)
@@ -123,7 +130,6 @@ extension GameText {
 
     static var duoPick: String { String(localized: "game2.duo.pick", defaultValue: "Choisis un ami", bundle: .main) }
 
-    static var duoNoFriends: String { String(localized: "game2.duo.no_friends", defaultValue: "Il te faut un ami accepté pour faire alliance.", bundle: .main) }
 
     static func duoInvitedInviter(name: String) -> String {
         String(localized: "game2.duo.invited.inviter", defaultValue: "Invitation envoyée à \(name). Elle attend sa réponse.", bundle: .main)

@@ -54,7 +54,7 @@ class ActivationInviteSheetTest {
     @Test
     fun `l'accroche suit les jours restants`() {
         show(state(daysLeft = 1))
-        compose.onNodeWithText("You have 1 day left to verify your account. After that, signing in will require a code.").assertIsDisplayed()
+        compose.onNodeWithText("1 day left: after that, signing in will require a code.").assertIsDisplayed()
     }
 
     @Test
@@ -69,7 +69,7 @@ class ActivationInviteSheetTest {
     @Test
     fun `une fois le code envoye la saisie a six chiffres remplace le bouton`() {
         show(state(emailSent = true))
-        compose.onNodeWithText("Code sent to ana@meeshy.me. Enter it below.").assertIsDisplayed()
+        compose.onNodeWithText("Code sent to ana@meeshy.me.").assertIsDisplayed()
         compose.onNodeWithText("Verify").assertIsDisplayed()
         compose.onNodeWithTag(ActivationInviteSheetTags.SEND_CODE).assertDoesNotExistCompat()
     }
@@ -79,8 +79,8 @@ class ActivationInviteSheetTest {
         val events = mutableListOf<ActivationInviteEvent>()
         show(state(missing = emptyList(), proven = listOf(Channel.EMAIL, Channel.PHONE)), events)
         compose.onNodeWithText("Your account is verified. Thank you!").assertIsDisplayed()
-        compose.onNodeWithText("Email verified ✓").assertIsDisplayed()
-        compose.onNodeWithText("Number verified ✓").assertIsDisplayed()
+        compose.onNodeWithText("Email confirmed ✓").assertIsDisplayed()
+        compose.onNodeWithText("Number confirmed ✓").assertIsDisplayed()
         compose.onNodeWithText("Close").tap()
         assertEquals(listOf<ActivationInviteEvent>(ActivationInviteEvent.Dismiss), events)
     }

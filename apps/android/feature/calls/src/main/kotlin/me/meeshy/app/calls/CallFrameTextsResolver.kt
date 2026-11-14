@@ -7,6 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.call.CallHeaderNames
 import me.meeshy.sdk.model.call.frames.CallFrameCallContext
 import me.meeshy.sdk.model.call.frames.CallFrameConversationInfo
 import me.meeshy.sdk.model.call.frames.CallFrameTexts
@@ -34,6 +35,12 @@ class CallFrameTextsResolver internal constructor(
         val id = call.conversationId?.takeIf { it.isNotBlank() } ?: return immediate(call)
         val conversation = runCatching { cached(id) }.getOrNull()
         return CallFrameTextsRule.texts(conversation?.let(::info), call, dateText())
+    }
+
+    /** #17341 — les noms de la capsule d'en-tête, lus dans la même conversation en cache (aucune requête). */
+    suspend fun headerNames(conversationId: String?, knownGroupTitle: String?): CallHeaderNames {
+        val id = conversationId?.takeIf { it.isNotBlank() } ?: return CallHeaderNames.resolve(null, knownGroupTitle)
+        return CallHeaderNames.resolve(runCatching { cached(id) }.getOrNull()?.let(::info), knownGroupTitle)
     }
 
     /** La date du jour, au format court de la langue de l'appareil (iOS `.abbreviated`). */

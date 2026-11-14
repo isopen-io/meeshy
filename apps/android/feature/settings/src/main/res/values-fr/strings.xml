@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_section_chats">Discussions</string>
-    <string name="settings_section_privacy">Confidentialité et sécurité</string>
     <string name="settings_display_language">Langue d\'affichage</string>
-    <string name="settings_language_system">Langue du système</string>
     <string name="settings_regional_language_search">Rechercher une langue</string>
     <string name="settings_regional_language_empty">Aucune langue ne correspond à votre recherche</string>
-    <string name="settings_notification_vibration">Vibration</string>
     <string name="settings_notif_show_preview">Aperçu des messages</string>
     <string name="settings_notif_badge_enabled">Badge de l\'application</string>
     <string name="settings_dnd_start">De</string>
@@ -31,19 +27,9 @@
     <string name="settings_notif_type_friend_content">Activité des amis</string>
     <string name="settings_notif_type_group_invite">Invitations de groupe</string>
     <string name="settings_notif_type_system">Alertes système</string>
-    <string name="settings_two_factor">Authentification à deux facteurs</string>
-    <string name="settings_account_contact">Email et téléphone</string>
-    <string name="settings_clear_media_cache">Vider le cache média</string>
-    <string name="settings_storage_used">Stockage utilisé</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Activée</string>
-    <string name="twofactor_enable_button">Configurer l\'authentification à deux facteurs</string>
     <string name="twofactor_regenerate_button">Régénérer les codes de secours</string>
-    <string name="twofactor_setup_title">Scannez le QR code</string>
-    <string name="twofactor_setup_instructions">Scannez ce QR code avec votre application d\'authentification, ou saisissez le code manuellement.</string>
-    <string name="twofactor_setup_secret_label">Code de saisie manuelle</string>
-    <string name="twofactor_backup_codes_warning">Conservez ces codes en lieu sûr. Chaque code ne peut être utilisé qu\'une seule fois.</string>
-    <string name="twofactor_backup_codes_done">J\'ai enregistré mes codes</string>
     <string name="twofactor_regenerate_title">Régénérer les codes de secours</string>
     <string name="twofactor_regenerate_confirm">Régénérer</string>
     <string name="twofactor_error_status">Impossible de charger le statut 2FA</string>
@@ -57,16 +43,11 @@
     <string name="change_password_error_weak">Nouveau mot de passe trop faible. Choisissez-en un plus long et moins prévisible.</string>
     <string name="change_password_error_rejected">Mot de passe refusé. Vérifiez-le et réessayez.</string>
     <!-- Changement email / téléphone (§K) -->
-    <string name="account_contact_title">Email et téléphone</string>
-    <string name="account_contact_email_resend">Renvoyer l\'email</string>
     <string name="account_contact_email_resend_cooldown">Renvoyer (%1$ds)</string>
-    <string name="account_contact_error_email_change">Impossible d\'envoyer l\'email de vérification. Vérifiez l\'adresse et réessayez.</string>
-    <string name="account_contact_error_email_resend">Impossible de renvoyer l\'email de vérification.</string>
     <string name="account_contact_phone_new_label">Nouveau téléphone</string>
     <string name="account_contact_phone_send_code">Envoyer le code</string>
     <string name="account_contact_error_phone_change">Impossible d\'envoyer le code de vérification. Vérifiez le numéro et réessayez.</string>
     <!-- Confidentialité & visibilité (§L) -->
-    <string name="settings_privacy">Confidentialité et visibilité</string>
     <string name="privacy_title">Confidentialité et visibilité</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">Action irréversible</string>
@@ -80,28 +61,16 @@
     <string name="delete_account_email_body">Vérifiez votre boîte de réception pour confirmer la suppression de votre compte.</string>
 
     <!-- Export de données (RGPD) -->
-    <string name="data_export_info_body">Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.</string>
     <string name="data_export_format_json">JSON</string>
     <string name="data_export_format_csv">CSV</string>
     <string name="data_export_content_profile">Profil (toujours inclus)</string>
     <string name="data_export_ready_title">Export prêt</string>
 
     <!-- Media cache management -->
-    <string name="media_cache_info_title">Média mis en cache</string>
-    <string name="media_cache_info_body">Le cache accélère le chargement des médias et réduit la consommation de données. Le vider est sans risque : les fichiers sont retéléchargés si nécessaire.</string>
-    <string name="media_cache_total_label">Cache total utilisé</string>
-    <string name="media_cache_category_thumbnails">Miniatures</string>
-    <string name="media_cache_clear_all">Vider le cache</string>
-    <string name="media_cache_confirm_title">Vider le cache</string>
-    <string name="media_cache_confirm_message">Cela supprimera tous les médias mis en cache localement. Ils seront retéléchargés si nécessaire.</string>
-    <string name="media_cache_error_scan">Impossible de lire la taille du cache. Tirez pour actualiser.</string>
-    <string name="media_cache_error_clear">Impossible de vider le cache. Veuillez réessayer.</string>
 
     <!-- Diagnostics de plantage -->
     <string name="settings_diagnostics">Diagnostics</string>
     <string name="crash_reports_title">Diagnostics</string>
-    <string name="crash_reports_info_body">Si l\'application se ferme de façon inattendue, un rapport est enregistré ici pour que vous puissiez le partager avec le support. Rien ne quitte votre appareil tant que vous ne le partagez pas.</string>
-    <string name="crash_reports_empty">Aucun rapport de plantage — l\'application fonctionne parfaitement.</string>
     <string name="crash_reports_clear_all">Effacer les rapports</string>
     <string name="crash_reports_confirm_title">Effacer les rapports</string>
     <string name="crash_reports_confirm_message">Cela supprime définitivement tous les rapports de plantage enregistrés sur cet appareil.</string>
@@ -110,13 +79,10 @@
     <string name="crash_kind_anr">ANR</string>
     <string name="about_version_label">Version %1$s</string>
     <string name="about_info_application_id">Identifiant application</string>
-    <string name="settings_help_support">Aide et support</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>
     <string name="support_title">Aide et support</string>
-    <string name="support_link_email">Email support</string>
 
     <!-- Active sessions -->
-    <string name="sessions_revoke_others">Déconnecter tous les autres appareils</string>
 </resources>

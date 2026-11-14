@@ -8,7 +8,6 @@ data class CallActionContext(
     val hasSelectableCameras: Boolean,
     val isConnected: Boolean,
     val mayRecord: Boolean,
-    val canPictureInPicture: Boolean,
     val showsVideo: Boolean = isVideoEnabled,
 )
 
@@ -19,7 +18,7 @@ data class CallActionFamilyRow(val family: CallActionFamily, val actions: List<C
  * The actions the "(…)" unfolds, per family ("my image" / "the call"). Pure rules —
  * which actions, in which order, when — the views only draw them. Mirrors iOS
  * `CallActionSet.resolve` (`CallControlsLayout.swift`). « The call » reads Captions · Record · Add · Journal · React ·
- * Capture (decided on #17329).
+ * Capture (decided on #17329); Picture-in-Picture lives in the header, not here.
  */
 data class CallActionSet(val myImage: List<CallAction>, val theCall: List<CallAction>) {
 
@@ -52,8 +51,7 @@ data class CallActionSet(val myImage: List<CallAction>, val theCall: List<CallAc
             val add = if (c.isConnected) listOf(CallAction.AddPeople) else emptyList()
             val react = if (c.isConnected) listOf(CallAction.React) else emptyList()
             val capture = if (c.isConnected && c.showsVideo) listOf(CallAction.Capture) else emptyList()
-            val pip = if (c.canPictureInPicture) listOf(CallAction.PictureInPicture) else emptyList()
-            return listOf(CallAction.Captions) + recording + add + listOf(CallAction.Journal) + react + capture + pip
+            return listOf(CallAction.Captions) + recording + add + listOf(CallAction.Journal) + react + capture
         }
     }
 }

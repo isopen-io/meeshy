@@ -179,7 +179,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     func test_callBubbleView_injectsOwnCallManagerIntoCallParticipantVisual() throws {
         let source = try source(of: "Call/Views/CallBubbleView.swift")
         XCTAssertTrue(
-            source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)"),
+            source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)"),
             "CallBubbleView must pass its own `callManager` into CallParticipantVisual."
         )
     }

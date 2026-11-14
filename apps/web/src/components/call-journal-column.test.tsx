@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { journalDocks, JOURNAL_COLUMN_MIN_VIEWPORT, JOURNAL_COLUMN_RESERVE } from '@/lib/calls/call-journal-dock';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallScreen } from './call-screen';
@@ -59,6 +60,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 const group: Partial<ActiveCall> = { isGroup: true, title: 'Équipe', members: { 'u-awa': member('u-awa', 'Awa'), 'u-karim': member('u-karim', 'Karim'), 'u-lina': member('u-lina', 'Lina') } };
 
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
@@ -81,7 +83,8 @@ const mount = (overrides: Partial<ActiveCall>, wide: boolean) => {
   const root = createRoot(host);
   const render = (isWide: boolean) => act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: false, blur: false }} wide={isWide} />));
   render(wide);
-  const find = (selector: string) => host.querySelector<HTMLElement>(selector);
+  /* Le double d'une sortie (`data-call-pill-ghost`) s'efface et part : il n'est pas le contenu. */
+  const find = (selector: string) => [...host.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
   const settle = () => act(async () => {});
   const done = () => {
@@ -91,8 +94,12 @@ const mount = (overrides: Partial<ActiveCall>, wide: boolean) => {
   return { host, find, press, settle, render, done };
 };
 
+/* Une colonne qui repart reste montée le temps de son mouvement (`data-leaving`) : elle n'est plus « ouverte ». */
+const COLUMN = '[data-call-journal-column]:not([data-leaving])';
+
 const openJournal = async (view: ReturnType<typeof mount>) => {
   view.press('[data-call-more]');
+  await view.settle();
   view.press('[data-call-control="journal"]');
   await view.settle();
 };
@@ -115,15 +122,19 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     ['en duo (W1)', {}],
     ['en groupe (W2)', group],
   ] as const) {
-    test(`${shape}, « Journal » ouvre la colonne à droite ; la pilule ne grandit pas et les sous-titres restent lus`, async () => {
+    test(`${shape}, « Journal » ouvre la colonne à droite ; la pilule ne grandit pas, (…) range les sous-titres et les rend (#17343)`, async () => {
       const view = mount(overrides, true);
       await openJournal(view);
-      const column = view.find('[data-call-journal-column]');
+      const column = view.find(COLUMN);
       expect(column).not.toBeNull();
       expect(column?.className.split(' ')).toContain('glass-call-prominent');
       expect(column?.querySelectorAll('[data-call-journal-entry]')).toHaveLength(2);
       expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
-      expect(view.find('[data-call-captions-panel]')).not.toBeNull();
+      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+      view.press('[data-call-more]');
+      expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
+      expect(view.find(COLUMN)).not.toBeNull();
+      view.press('[data-call-more]');
       expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('true');
       expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-controls')).toBe(column?.querySelector('[data-call-journal-panel]')?.id ?? 'absent');
       expect(view.find('[data-call-screen]')?.getAttribute('data-call-journal-dock')).toBe('column');
@@ -131,13 +142,149 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     });
   }
 
-  test('la colonne a son ✕ et pas de ‹ : elle n’est pas un sous-menu', async () => {
+  test('la tête de la colonne est « Journal » à gauche et la bascule Traduit · Original à droite, sans ‹ ni ✕ (W1.9) ; « Journal » la referme', async () => {
     const view = mount({}, true);
     await openJournal(view);
-    expect(view.find('[data-call-journal-column] [data-panel-back]')).toBeNull();
-    view.press('[data-call-journal-column] [data-panel-close]');
-    expect(view.find('[data-call-journal-column]')).toBeNull();
+    const column = view.find(COLUMN);
+    expect(column?.querySelector('[data-panel-back]')).toBeNull();
+    expect(column?.querySelector('[data-panel-close]')).toBeNull();
+    const title = column?.querySelector('h2');
+    expect(title?.className).toContain('text-start');
+    expect(title?.className).not.toContain('text-center');
+    expect(title?.nextElementSibling?.hasAttribute('data-call-journal-view')).toBe(true);
+    view.press('[data-call-more]');
+    view.press('[data-call-control="journal"]');
+    expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-screen]')?.hasAttribute('data-call-journal-dock')).toBe(false);
+    view.done();
+  });
+
+  test('la bascule est là même quand rien n’est traduit (W1.9)', async () => {
+    const raw = { id: 'w-9', speakerId: 'u-awa', speakerName: 'Awa', original: 'Same', translated: null, pair: null, isFinal: true, at: 9, mine: false };
+    const view = mount({ captions: [raw] }, true);
+    await openJournal(view);
+    expect(view.find('[data-call-journal-column] [data-call-journal-view]')).not.toBeNull();
+    view.done();
+  });
+
+  test('la colonne retient le toucher et ne compte pas la zone sûre une seconde fois (W1.18, W1.2)', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    const column = view.find(COLUMN);
+    expect(column?.hasAttribute('data-call-chrome-keep')).toBe(true);
+    expect(column?.style.top).not.toContain('safe-area');
+    expect(column?.style.bottom).not.toContain('safe-area');
+    view.done();
+  });
+
+  test('toucher le titre ou la marge de la colonne ne range ni l’en-tête ni la pilule ; toucher l’image, si (W1.18)', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    expect(chrome()).toBe('shown');
+    act(() => (view.find(`${COLUMN} h2`) as HTMLElement).click());
+    expect(chrome()).toBe('shown');
+    act(() => (view.find(COLUMN) as HTMLElement).click());
+    expect(chrome()).toBe('shown');
+    act(() => (view.find('[data-call-stage-surface]') as HTMLElement).click());
+    expect(chrome()).toBe('hidden');
+    view.done();
+  });
+
+  test('la colonne qui entre recentre la scène, la pile des bandeaux, la pilule et le rail de fin en glissant depuis leur centre d’avant, jamais d’un saut (W1.20)', async () => {
+    const played: { readonly element: Element; readonly frames: Keyframe[] }[] = [];
+    const animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    const measure = Object.getOwnPropertyDescriptor(Element.prototype, 'getBoundingClientRect');
+    const half = JOURNAL_COLUMN_RESERVE / 2;
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value(this: Element, frames: Keyframe[]) {
+        played.push({ element: this, frames });
+        return { finished: Promise.resolve(), cancel: () => undefined, effect: null };
+      },
+    });
+    Object.defineProperty(Element.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Element) {
+        const rails = this.closest('[data-call-rail-slot="trailing"]')?.closest<HTMLElement>('[data-call-rails]');
+        const shifted = this.closest('[data-call-journal-reserve]') !== null || (rails?.style.paddingInlineEnd.includes(`${JOURNAL_COLUMN_RESERVE}px`) ?? false);
+        const left = shifted ? -half : 0;
+        return { left, right: left, top: 0, bottom: 0, x: left, y: 0, width: 0, height: 0, toJSON: () => ({}) };
+      },
+    });
+    const view = mount({}, true);
+    await openJournal(view);
+    const slid = (selector: string) => played.filter((move) => move.element === view.find(selector)).map((move) => move.frames.map((frame) => frame.transform));
+    expect(slid('[data-call-stage-surface]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-plane]:not([data-call-header-slot])')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-banner-stack]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-rail-slot="trailing"]')).toContainEqual([`translateX(${half}px)`, 'none']);
+    expect(slid('[data-call-rail-slot="leading"]')).toEqual([]);
+    if (animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    else Object.defineProperty(HTMLElement.prototype, 'animate', animate);
+    if (measure !== undefined) Object.defineProperty(Element.prototype, 'getBoundingClientRect', measure);
+    view.done();
+  });
+
+  test('la colonne entre par le bord de fin et repart par lui, la scène et la pilule glissent à leur nouveau centre (W1.20)', async () => {
+    const played: { readonly element: Element; readonly frames: Keyframe[] }[] = [];
+    const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value(this: Element, frames: Keyframe[]) {
+        played.push({ element: this, frames });
+        return { finished: Promise.resolve(), cancel: () => undefined, effect: null };
+      },
+    });
+    const view = mount({}, true);
+    await openJournal(view);
+    const column = view.find(COLUMN);
+    const entering = played.find((move) => move.element === column);
+    expect(entering?.frames.map((frame) => frame.transform)).toEqual(['translateX(100%)', 'translateX(0)']);
+    view.press('[data-call-more]');
+    view.press('[data-call-control="journal"]');
+    await view.settle();
+    const leaving = played.filter((move) => move.element === column).at(-1);
+    expect(leaving?.frames.map((frame) => frame.transform)).toEqual(['translateX(0)', 'translateX(100%)']);
+    expect(view.find(COLUMN)).toBeNull();
+    if (real === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    else Object.defineProperty(HTMLElement.prototype, 'animate', real);
+    view.done();
+  });
+
+  test('colonne ouverte, la pile des bandeaux se pose dans la place de la scène, comme la bande du bas (W1.4, W1.21)', async () => {
+    const view = mount({ screenSharing: true }, true);
+    expect(view.find('[data-call-banner-stack]')?.style.paddingInlineEnd).toBe('');
+    await openJournal(view);
+    const stack = view.find('[data-call-banner-stack]');
+    expect(stack?.style.paddingInlineEnd).toBe(`${JOURNAL_COLUMN_RESERVE}px`);
+    expect(stack?.hasAttribute('data-call-journal-reserve')).toBe(true);
+    view.done();
+  });
+
+  test('en duo (W1), la colonne reste ouverte quand (…) s’ouvre : le rail « l’appel » s’arrête à elle, celui de « mon image » garde son bord (#17327)', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
+    expect(view.find(COLUMN)).not.toBeNull();
+    expect(view.find('[data-call-journal-column] [data-call-journal-panel]')).not.toBeNull();
+    const rails = view.find('[data-call-rails]');
+    expect(rails).not.toBeNull();
+    expect(rails?.style.paddingInlineEnd).toContain(`${JOURNAL_COLUMN_RESERVE}px`);
+    expect(rails?.style.paddingInlineStart).not.toContain('px)');
+    expect(view.find('[data-call-rail="mine"]')).not.toBeNull();
+    expect(view.find('[data-call-rail="call"]')).not.toBeNull();
+    view.press('[data-call-more]');
+    view.press('[data-call-more]');
+    expect(view.find(COLUMN)).not.toBeNull();
+    expect(view.find('[data-call-rail="call"]')).not.toBeNull();
+    view.done();
+  });
+
+  test('sans colonne, les rails gardent leurs deux bords entiers (#17327)', async () => {
+    const view = mount({}, false);
+    view.press('[data-call-more]');
+    expect(view.find('[data-call-rails]')?.style.paddingInlineEnd).not.toContain('px)');
     view.done();
   });
 
@@ -145,10 +292,63 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     const view = mount({}, true);
     await openJournal(view);
     view.press('[data-call-more]');
-    expect(view.find('[data-call-journal-column]')).not.toBeNull();
+    expect(view.find(COLUMN)).not.toBeNull();
     view.press('[data-call-more]');
     view.press('[data-call-control="journal"]');
-    expect(view.find('[data-call-journal-column]')).toBeNull();
+    expect(view.find(COLUMN)).toBeNull();
+    view.done();
+  });
+
+  /**
+   * #17932 (décision porteur du 2026-11-13, A) — colonne ouverte, « Journal » est ACTIF au
+   * pied de la bande comme dans le rail : un disque blanc plein, encre sombre (loi 1,
+   * la tenue `active` du kit), annoncé enfoncé ; le retoucher referme la colonne, qui ne
+   * porte aucun ✕ (#17922). Refermée, il redevient un disque de verre.
+   */
+  const whiteDisc = (button: HTMLElement | null | undefined) => ({
+    fill: button?.style.background ?? '',
+    ink: button?.style.color ?? '',
+    glass: button?.classList.contains('glass-call-disc') ?? true,
+  });
+  const ACTIVE = { fill: 'var(--color-on-media)', ink: 'var(--ios-indigo-950)', glass: false };
+
+  test('#17932 — colonne ouverte, « Journal » du pied des sous-titres est un disque blanc plein, enfoncé ; le retoucher referme la colonne', async () => {
+    const view = mount({}, true);
+    await view.settle();
+    const foot = () => view.find('[data-call-control-pill] [data-call-captions-journal]');
+    expect(foot()?.getAttribute('aria-pressed')).toBe('false');
+    expect(whiteDisc(foot()).glass).toBe(true);
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find(COLUMN)).not.toBeNull();
+    expect(view.find(COLUMN)?.querySelector('[data-panel-close]')).toBeNull();
+    expect(foot()?.getAttribute('aria-pressed')).toBe('true');
+    expect(whiteDisc(foot())).toEqual(ACTIVE);
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find(COLUMN)).toBeNull();
+    expect(foot()?.getAttribute('aria-pressed')).toBe('false');
+    expect(whiteDisc(foot()).glass).toBe(true);
+    view.done();
+  });
+
+  test('#17932 — colonne ouverte, « Journal » du rail est le même disque blanc ; le retoucher referme la colonne', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    const rail = view.find('[data-call-rail] [data-call-control="journal"]');
+    expect(rail?.getAttribute('aria-expanded')).toBe('true');
+    expect(whiteDisc(rail)).toEqual(ACTIVE);
+    view.press('[data-call-rail] [data-call-control="journal"]');
+    await view.settle();
+    expect(view.find(COLUMN)).toBeNull();
+    expect(view.find('[data-call-rail] [data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  test('#17932 — sur une fenêtre étroite, il n’y a pas de colonne : « Journal » du pied n’est jamais annoncé enfoncé', async () => {
+    const view = mount({}, false);
+    await view.settle();
+    expect(view.find('[data-call-control-pill] [data-call-captions-journal]')?.getAttribute('aria-pressed')).toBe('false');
     view.done();
   });
 
@@ -156,7 +356,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     const view = mount({}, true);
     await openJournal(view);
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
-    expect(view.find('[data-call-journal-column]')).toBeNull();
+    expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-screen]')).not.toBeNull();
     view.done();
   });
@@ -189,32 +389,54 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     await openJournal(view);
     view.render(false);
     await view.settle();
-    expect(view.find('[data-call-journal-column]')).toBeNull();
+    expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
     view.render(true);
     await view.settle();
-    expect(view.find('[data-call-journal-column]')).not.toBeNull();
+    expect(view.find(COLUMN)).not.toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
     view.done();
   });
 
-  test('sur grand écran, la bande des sous-titres reste une bande de lecture centrée (560 px), jamais un bandeau bord à bord', () => {
-    const wideView = mount({}, true);
-    const band = wideView.find('[data-call-captions-band]')?.className.split(' ') ?? [];
-    expect(band).toContain('mx-auto');
-    expect(band).toContain('max-w-[592px]');
-    wideView.done();
-    const narrow = mount({}, false);
-    expect(narrow.find('[data-call-captions-band]')?.className.split(' ')).not.toContain('max-w-[592px]');
-    narrow.done();
+  test('le verre qui porte du texte tient en 560 px SANS condition de fenêtre : grand écran ou téléphone en paysage, jamais bord à bord (P3.10)', async () => {
+    for (const wide of [true, false]) {
+      const view = mount({}, wide);
+      await view.settle();
+      const pill = view.find('[data-call-control-pill]');
+      expect(pill?.querySelector('[data-call-captions-panel]')).not.toBeNull();
+      expect(pill?.className.split(' ')).toContain('w-[min(calc(100%-1.5rem),560px)]');
+      view.done();
+    }
+  });
+
+  test('sur une fenêtre étroite, le journal vit DANS la pilule : « Journal » du pied des sous-titres l’ouvre à leur place (#17343, #17346)', async () => {
+    const view = mount({}, false);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
+    expect(view.find(COLUMN)).toBeNull();
+    expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    view.done();
+  });
+
+  test('sur une fenêtre large, « Journal » du pied des sous-titres ouvre la colonne', async () => {
+    const view = mount({}, true);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find(COLUMN)).not.toBeNull();
+    expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
+    view.done();
   });
 
   test('sur une fenêtre étroite, rien ne change : le journal remplace les rangées dans la pilule', async () => {
     const view = mount({}, false);
     await openJournal(view);
-    expect(view.find('[data-call-journal-column]')).toBeNull();
+    expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.done();
   });
 });

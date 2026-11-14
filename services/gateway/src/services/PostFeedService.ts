@@ -7,7 +7,7 @@ import { withAudienceListFor } from './posts/audienceList';
 import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
-import { buildFeedVisibilityFilter } from './posts/feedVisibility';
+import { buildFeedVisibilityFilter, viewerPostAudience } from './posts/feedVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -913,7 +913,11 @@ export class PostFeedService {
   async getBookmarks(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
-    const where: any = { userId };
+    // L'audience se relit à CHAQUE lecture (#17182) : un favori est posé une
+    // fois, l'audience de la publication bouge (communauté quittée, ami retiré,
+    // passage en PRIVATE, blocage). Posée dans la requête, la page reste pleine.
+    const audience = await viewerPostAudience(this.prisma, userId, this.cache);
+    const where: any = { userId, post: { is: { deletedAt: NOT_DELETED, AND: [audience] } } };
 
     if (cursorData) {
       where.OR = [

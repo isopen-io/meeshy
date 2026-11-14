@@ -223,7 +223,7 @@ private fun GuideHeader(card: GuideCard, expanded: Boolean, onToggle: () -> Unit
         Spacer(Modifier.weight(1f))
         if (card.presentation == GuidePresentation.Short && card.step == null) {
             val more = stringResource(R.string.game_guide_more)
-            IconButton(onClick = onToggle, modifier = Modifier.size(44.dp).testTag(GUIDE_MORE_TAG).semantics { contentDescription = more }) {
+            IconButton(onClick = onToggle, modifier = Modifier.size(48.dp).testTag(GUIDE_MORE_TAG).semantics { contentDescription = more }) {
                 Icon(if (expanded) MeeshyIcons.ChevronUp else MeeshyIcons.Info, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
             }
         }

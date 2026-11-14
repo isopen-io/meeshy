@@ -6,26 +6,8 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "sessionClosed.admin.title",
-          "androidName": "session_closed_admin_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessionClosed.admin.message",
-          "androidName": "session_closed_admin_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessionClosed.userRevoke.title",
           "androidName": "session_closed_user_revoke_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessionClosed.userRevoke.message",
-          "androidName": "session_closed_user_revoke_message",
           "status": "adopted"
         },
         {
@@ -40,32 +22,14 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sessionClosed.allSignedOut.message",
-          "androidName": "session_closed_all_signed_out_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessionClosed.expired.title",
           "androidName": "session_closed_expired_title",
           "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "sessionClosed.expired.message",
-          "androidName": "session_closed_expired_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessionClosed.activation.title",
           "androidName": "session_closed_activation_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessionClosed.activation.message",
-          "androidName": "session_closed_activation_message",
           "status": "adopted"
         },
         {

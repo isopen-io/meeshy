@@ -51,6 +51,7 @@ internal fun InterfaceFeatureRows(
     SettingsSeparator(separatorTint)
     NotificationToggleRow(
         label = stringResource(R.string.settings_interface_lentille_list),
+        subtitle = stringResource(R.string.settings_interface_lentille_list_subtitle),
         checked = flags.lentilleList,
         onCheckedChange = { viewModel.setEnabled(LentilleFeatureFlag.LENTILLE_LIST, it) },
         icon = MeeshyIcons.ListChecklist,
@@ -69,6 +70,7 @@ internal fun InterfaceFeatureRows(
     Column(modifier = Modifier.alpha(riviereAlpha).semantics { if (!flags.isRiviereAdjustable) disabled() }) {
         NotificationToggleRow(
             label = stringResource(R.string.settings_interface_riviere_mode),
+            subtitle = stringResource(R.string.settings_interface_riviere_mode_subtitle),
             checked = flags.riviereMode,
             enabled = flags.isRiviereAdjustable,
             onCheckedChange = { viewModel.setEnabled(LentilleFeatureFlag.RIVIERE_MODE, it) },

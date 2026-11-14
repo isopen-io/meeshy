@@ -5,10 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +16,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -38,7 +35,6 @@ import me.meeshy.sdk.model.relation.TalkieHoldLook
 import me.meeshy.sdk.model.relation.TalkieSendPhase
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R as UiR
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.component.permission.PermissionFlow
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -133,28 +129,19 @@ private fun TalkieGlyph(
             .testTag(CHAT_HEADER_TALKIE_TAG),
         contentAlignment = Alignment.Center,
     ) {
-        MeeshyGlassSurface(
-            modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLASS),
-            shape = CircleShape,
+        ChatHeaderGlassDisc(
             tint = accent.copy(alpha = 0.4f),
+            fill = if (look == TalkieHoldLook.IDLE) Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)) else gradient,
         ) {
-            Box(
-                Modifier
-                    .size(ChatHeaderMetrics.ACTION_GLASS)
-                    .clip(CircleShape)
-                    .background(if (look == TalkieHoldLook.IDLE) Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)) else gradient),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (look == TalkieHoldLook.IDLE) {
-                    GradientIcon(MeeshyIcons.Sensors, gradient, Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()))
-                } else {
-                    Icon(
-                        if (look == TalkieHoldLook.LIVE) MeeshyIcons.Waveform else MeeshyIcons.Sensors,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()),
-                    )
-                }
+            if (look == TalkieHoldLook.IDLE) {
+                GradientIcon(MeeshyIcons.Sensors, gradient, Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()))
+            } else {
+                Icon(
+                    if (look == TalkieHoldLook.LIVE) MeeshyIcons.Waveform else MeeshyIcons.Sensors,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()),
+                )
             }
         }
     }

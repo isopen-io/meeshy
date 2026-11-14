@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -12,7 +11,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
 import { resolveTalkieHeaderDelivery, resolveTalkieHeaderVoice } from '@/lib/talkie/talkie-header-law';
 import { talkieStore, type TalkieStoreApi } from '@/lib/talkie/talkie-live';
-import type { TalkieCaptureFactory, TalkieSendOutcome } from '@/lib/talkie/talkie-sender';
+import type { TalkieCaptureFactory, TalkieSendOutcome, TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { talkieHoldHandlers, talkieOfferedAt, TALKIE_OUTCOME_NOTICE, useTalkieSender } from '@/routes/user-profile-talkie';
 
@@ -20,6 +19,7 @@ import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTalkieLive } from './talkie-header-band';
+import { ThreadHeaderNotice, useTransientNotice } from './thread-header-notice';
 
 export { TalkieHeaderBand, talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTalkieLive } from './talkie-header-band';
 
@@ -38,24 +38,6 @@ export { TalkieHeaderBand, talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTa
  * - Le (i) du talkie ne vit que sur la fiche.
  */
 
-const NOTICE_MS = 4_000;
-
-function TalkieHeaderNotice({ text }: { readonly text: string }) {
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <p
-      role="status"
-      aria-live="polite"
-      data-thread-talkie-notice=""
-      className="pointer-events-none fixed inset-x-0 z-[70] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold shadow-lg"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 72px)', color: 'var(--color-ios-card)', backgroundColor: 'var(--color-ios-ink)' }}
-    >
-      {text}
-    </p>,
-    document.body,
-  );
-}
-
 function useEncodes(supported: () => Promise<boolean>): boolean | null {
   const [encodes, setEncodes] = useState<boolean | null>(null);
   useEffect(() => {
@@ -70,16 +52,6 @@ function useEncodes(supported: () => Promise<boolean>): boolean | null {
   return encodes;
 }
 
-function useTransientNotice(): readonly [string | null, (text: string) => void] {
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    if (notice === null) return undefined;
-    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [notice]);
-  return [notice, setNotice];
-}
-
 export function ThreadHeaderTalkie({
   language,
   peerId,
@@ -91,6 +63,7 @@ export function ThreadHeaderTalkie({
   capture = createTalkieCapture(),
   supported = talkieEncodingSupportedOnce,
   store = talkieStore,
+  copier,
 }: {
   readonly language: InterfaceLanguage;
   readonly peerId: string;
@@ -103,6 +76,7 @@ export function ThreadHeaderTalkie({
   readonly capture?: TalkieCaptureFactory;
   readonly supported?: () => Promise<boolean>;
   readonly store?: TalkieStoreApi;
+  readonly copier?: TalkieVoiceCopier;
 }) {
   const ready = useCirclesCatalog(language);
   const links = useQuery(relationLinksQueryOptions(deps), appQueryClient);
@@ -116,7 +90,7 @@ export function ThreadHeaderTalkie({
     if (outcome === 'not-allowed') return setRefused(true);
     announceNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]));
   };
-  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome });
+  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome, language, ...(copier === undefined ? {} : { copier }) });
   const phase = useStore(sender.store, (state) => state.phase.kind);
   const waking = useStore(sender.store, (state) => state.phase.kind === 'talking' && state.phase.delivery === 'waking');
   const peerSpeaking = useStore(store, (state) => state.active.some((entry) => entry.fromUserId === peerId));
@@ -152,7 +126,7 @@ export function ThreadHeaderTalkie({
             style={{
               width: 'var(--size-header-circle)',
               height: 'var(--size-header-circle)',
-              color: pressed ? '#fff' : 'var(--accent)',
+              color: pressed ? 'var(--color-ios-on-brand)' : 'var(--accent)',
               background: pressed
                 ? `linear-gradient(135deg, var(--accent), ${secondary})`
                 : 'color-mix(in srgb, currentColor 18%, transparent)',
@@ -166,7 +140,7 @@ export function ThreadHeaderTalkie({
       <span data-thread-talkie-announce="" role="status" aria-live="polite" className="sr-only">
         {talkieAnnouncement(language, { voice, delivery })}
       </span>
-      {banner === null ? null : <TalkieHeaderNotice text={banner} />}
+      {banner === null ? null : <ThreadHeaderNotice text={banner} marker="talkie" />}
     </>
   );
 }

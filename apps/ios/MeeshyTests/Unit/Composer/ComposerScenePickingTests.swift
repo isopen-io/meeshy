@@ -163,6 +163,13 @@ final class ComposerOpeningPlanTests: XCTestCase {
                       "au cran moyen, la caméra derrière reste à portée du doigt")
     }
 
+    /// **L'en-tête et ses boutons se voient à MI-HAUTEUR comme déplié** (porteur
+    /// 2026-11-11) : le sélecteur en ligne les masque par défaut au cran moyen.
+    func test_openingLibrary_keepsItsHeaderAndButtons_atEveryDetent() throws {
+        let feuille = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift")
+        XCTAssertTrue(feuille.contains(".photosPickerAccessoryVisibility(.visible, edges: .all)"))
+    }
+
     func test_settings_surfaceBothOpeningToggles() throws {
         let reglages = try AppSourceGuard.unit("Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift")
         XCTAssertTrue(reglages.contains("@AppStorage(ComposerOpeningPreferences.armsCameraKey)"))

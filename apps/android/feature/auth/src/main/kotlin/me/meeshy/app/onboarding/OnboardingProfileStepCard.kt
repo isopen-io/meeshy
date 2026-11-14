@@ -86,41 +86,9 @@ internal fun OnboardingProfileStepCard(state: OnboardingUiState, actions: Onboar
         secondary = if (card.primary == OnboardingProfilePrimary.CONTINUE) laterAction(actions) else null,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
-            ProfileBenefits()
             ProfilePreview(state, actions)
             ProfileFailures(state, actions)
         }
-    }
-}
-
-@Composable
-private fun ProfileBenefits() {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        BenefitPill(MeeshyIcons.Eye, stringResource(R.string.onboarding_profile_benefit_visibility), Modifier.weight(1f))
-        BenefitPill(MeeshyIcons.Groups, stringResource(R.string.onboarding_profile_benefit_contacts), Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun BenefitPill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier) {
-    Row(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f))
-            .heightIn(min = 44.dp)
-            .padding(horizontal = MeeshySpacing.md)
-            .semantics(mergeDescendants = true) {},
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        Icon(icon, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(18.dp))
-        Text(
-            text = label,
-            color = MeeshyTheme.tokens.textPrimary,
-            style = meeshyText(MeeshyFontSize.subhead, FontWeight.SemiBold),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

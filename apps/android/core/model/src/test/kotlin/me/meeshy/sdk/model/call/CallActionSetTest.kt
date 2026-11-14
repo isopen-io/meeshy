@@ -10,9 +10,8 @@ class CallActionSetTest {
         hasSelectableCameras: Boolean = false,
         isConnected: Boolean = true,
         mayRecord: Boolean = false,
-        canPictureInPicture: Boolean = false,
         showsVideo: Boolean = isVideoEnabled,
-    ) = CallActionContext(isDesktop, isVideoEnabled, hasSelectableCameras, isConnected, mayRecord, canPictureInPicture, showsVideo)
+    ) = CallActionContext(isDesktop, isVideoEnabled, hasSelectableCameras, isConnected, mayRecord, showsVideo)
 
     @Test
     fun `audio call not connected offers only camera, captions and journal`() {
@@ -32,14 +31,19 @@ class CallActionSetTest {
 
     @Test
     fun `connected video call on a phone offers the full families in order`() {
-        val set = CallActionSet.resolve(context(isVideoEnabled = true, mayRecord = true, canPictureInPicture = true))
+        val set = CallActionSet.resolve(context(isVideoEnabled = true, mayRecord = true))
         assertThat(set.myImage).containsExactly(
             CallAction.Camera, CallAction.FlipCamera, CallAction.Effects, CallAction.ScreenShare,
         ).inOrder()
         assertThat(set.theCall).containsExactly(
             CallAction.Captions, CallAction.Recording, CallAction.AddPeople, CallAction.Journal,
-            CallAction.React, CallAction.Capture, CallAction.PictureInPicture,
+            CallAction.React, CallAction.Capture,
         ).inOrder()
+    }
+
+    @Test
+    fun `picture in picture left the call list for the header`() {
+        assertThat(CallAction.values().map { it.name }).doesNotContain("PictureInPicture")
     }
 
     @Test

@@ -43,12 +43,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import me.meeshy.sdk.model.fileviewer.CodeLanguage
 import me.meeshy.sdk.model.media.SyntaxHighlighter
 import me.meeshy.sdk.model.media.SyntaxTheme
 import me.meeshy.ui.R
 import me.meeshy.ui.component.viewer.FullScreenDialogWindow
+import me.meeshy.ui.component.viewer.ViewerDialog
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -76,7 +76,7 @@ public fun CodeFullSheet(
 ) {
     val theme = remember(isDark) { SyntaxTheme.github(isDark) }
     val clipboard = LocalClipboardManager.current
-    Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = protectedContent)) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = protectedContent)) {
         FullScreenDialogWindow()
         Column(modifier.fillMaxSize().background(syntaxColor(theme.background)).statusBarsPadding().navigationBarsPadding()) {
             CodeSheetBar(fileName, language, content, accent, theme, exitAllowed, clipboard, onDismiss, onCopied)

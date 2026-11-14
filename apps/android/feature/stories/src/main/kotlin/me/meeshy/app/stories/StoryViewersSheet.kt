@@ -158,12 +158,6 @@ private fun EmptyViewers() {
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = androidx.compose.ui.res.stringResource(R.string.stories_viewers_empty_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

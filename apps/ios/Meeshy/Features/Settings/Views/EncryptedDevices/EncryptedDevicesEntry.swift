@@ -21,6 +21,8 @@ struct EncryptedDevicesEntry: View {
             .foregroundStyle(MeeshyColors.success)
             .padding(.leading, MeeshySpacing.xs)
 
+            SettingsSentence(text: String(localized: "e2ee.devices.entry.summary", defaultValue: "Les appareils qui lisent vos messages chiffrés.", bundle: .main))
+
             Button {
                 HapticFeedback.light()
                 isPresented = true

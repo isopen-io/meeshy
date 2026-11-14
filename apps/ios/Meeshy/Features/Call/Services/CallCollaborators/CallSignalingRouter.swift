@@ -96,11 +96,10 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let call = self?.call, call.currentCallId == event.callId else { return }
-                // Réception liée au panneau : panneau caché ⇒ désabonné du
-                // canal (le segment est ignoré, pas accumulé en silence). Le
-                // journal déjà reçu reste dans le service et se réaffiche à
-                // la réouverture — seule resetForCallEnd le purge.
-                guard call.transcriptionService.isShowingOverlay else { return }
+                // Le journal garde tout l'appel, sous-titres allumés ou non
+                // (#17342) : la phrase relayée s'y range quel que soit l'état du
+                // panneau, et y reste jusqu'à resetForCallEnd. La porte de
+                // confidentialité (#13720) est celle de la CAPTURE.
                 let segment = CallTranscriptionSegmentFactory.makeTranscriptionSegment(from: event)
                 call.transcriptionService.receiveTranslatedSegment(segment)
             }
@@ -458,7 +457,6 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // relance, les allocations gardent des identifiants qui expirent.
                 switch TurnCredentialRefreshPolicy.iceAction(after: call.callState) {
                 case .inert: return
-                case .rearmReconnect: call.reconnector.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
                 case .restartIce: self?.restartIceOnLiveCall(for: call)
                 }
             }

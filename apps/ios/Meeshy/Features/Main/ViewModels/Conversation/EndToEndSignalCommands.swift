@@ -142,7 +142,7 @@ struct EndToEndSignalCommands {
     static var offlineRefusal: ConversationCommandFailure {
         ConversationCommandFailure(userMessage: String(
             localized: "e2ee.signal.offline",
-            defaultValue: "Connectez-vous : dans une conversation chiffrée, ce geste part chiffré et n'attend pas hors ligne.",
+            defaultValue: "Hors ligne : ce geste n'attend pas dans une conversation chiffrée.",
             bundle: .main
         ))
     }

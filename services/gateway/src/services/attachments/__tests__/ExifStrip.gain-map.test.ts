@@ -319,6 +319,12 @@ describe('stripExifFromImageBuffer — un VRAI HEIC HDR d’iPhone (#12268)', ()
     try {
       writeFileSync(join(dir, 'in.heic'), heic);
       const run = spawnSync('heif-convert', ['--with-aux', '--no-colons', join(dir, 'in.heic'), join(dir, 'out.png')]);
+      // `run.stderr` est `null` quand le PROCESSUS n'a pas pu naître (ENOENT :
+      // `heif-convert` absent, cf. `.github/workflows/ci.yml`, qui l'installe
+      // et vérifie `command -v`). Le `.toString()` y levait un
+      // `Cannot read properties of undefined` qui n'accuse personne — un
+      // message d'échec qui cache sa cause coûte plus cher que pas de message.
+      if (run.error) throw new Error(`heif-convert injoignable : ${run.error.message}`);
       if (run.status !== 0) throw new Error(run.stderr.toString());
       return {
         primary: readFileSync(join(dir, 'out.png')),

@@ -3,7 +3,6 @@ package me.meeshy.app.calls
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.call.CallSpeakerColor
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.ui.theme.hexColor
 
@@ -24,8 +23,19 @@ internal object CallTileRim {
     /** Une vignette de la grille de groupe, « moi » compris : sa clé de couleur est l'identifiant du membre. */
     fun groupTile(colorKey: String): String = CallSpeakerColor.hex(colorKey)
 
-    /** Le fond d'avatar du pair hors de l'écran d'appel (l'appel réduit) : la couleur de son PROFIL, l'identifiant primant. */
-    fun peerAvatar(peerUserId: String, peerName: String): String = DynamicColorGenerator.profileAccentHex(peerUserId, peerName)
+    /** Le visage du pair caméra coupée (G4.2) : sa couleur d'auteur, celle de ses sous-titres ; `null` sans identifiant (la marque reste). */
+    fun peerFace(peerUserId: String): String? = peerUserId.takeIf { it.isNotBlank() }?.let(CallSpeakerColor::hex)
+
+    /**
+     * Le fond d'avatar du pair hors de l'écran d'appel (l'appel réduit) : sa couleur d'AUTEUR, la même que celle de ses
+     * sous-titres (P18.4, loi 4) — [CallSpeakerColor] est l'unique palette des appels. L'identifiant prime ; sans lui, le
+     * nom sert de clé à la MÊME palette (jamais à une seconde).
+     */
+    fun peerAvatar(peerUserId: String, peerName: String): String = CallSpeakerColor.hex(peerUserId.ifBlank { peerName })
+
+    /** Le liseré de l'appel réduit (P18.4) : la couleur de l'autre au trait fort, par le même dessin que la vignette du duo. */
+    fun reducedRim(peerUserId: String, peerName: String, warning: Color): BorderStroke =
+        selfTileBorder(paused = false, rimHex = peerAvatar(peerUserId, peerName), warning = warning)
 
     /**
      * Le trait de la vignette du duo (P1 : `border: 2px var(--moi)`) : l'ambre de la pause prime, puis la couleur de qui

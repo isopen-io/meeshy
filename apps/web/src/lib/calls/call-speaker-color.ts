@@ -1,6 +1,8 @@
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { legibleTint } from '@/lib/view/author-ink';
+
+import type { ActiveCall } from './call-store';
 
 /**
  * **LA COULEUR DE L'AUTEUR, DANS L'APPEL AUSSI** (#16614, décision #16612) —
@@ -25,4 +27,13 @@ export const SELF_SPEAKER_COLOR = 'var(--color-on-media)';
 
 export function speakerColor(userId: string, name = ''): string {
   return legibleTint({ tint: authorAccentColor(userId, name).toLowerCase(), toward: WHITE, backgrounds: [CALL_GLASS_WORST_BACKGROUND] });
+}
+
+/**
+ * La couleur de l'AUTRE telle que l'écran d'appel la montre — son portrait et le liseré de sa vignette —, que la
+ * bulle de l'appel réduit garde (P18.4) : réduire l'appel ne change pas sa couleur. Sans pair connu (un groupe),
+ * celle du nom, comme le portrait (`call-portrait.tsx`).
+ */
+export function peerColor({ peerKey, title }: Pick<ActiveCall, 'peerKey' | 'title'>): string {
+  return peerKey == null || peerKey === '' ? colorForName(title) : speakerColor(peerKey, title);
 }

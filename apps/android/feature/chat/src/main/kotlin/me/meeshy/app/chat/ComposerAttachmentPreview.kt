@@ -23,13 +23,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import java.io.File
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentType
+import me.meeshy.ui.component.viewer.ViewerDialog
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -45,7 +45,7 @@ internal fun ComposerAttachmentPreview(
     onDelete: () -> Unit,
 ) {
     val path = item.localPath ?: return
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(MeeshyMediaChromeColors.MediaBackdrop)) {
             when (item.type) {
                 PendingAttachmentType.IMAGE -> ZoomableFile(path)

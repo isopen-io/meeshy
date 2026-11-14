@@ -170,6 +170,11 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                                 snapshot = host.engagement.snapshot?.forDay(
                                     ConversationEngagementSnapshot.dayString(java.time.LocalDate.now()),
                                 ),
+                                onOpenProgression = navigation.onOpenProgression,
+                                onHideFlame = {
+                                    flameDismissed = true
+                                    memory.setFlameDismissed(true, state.conversationId)
+                                },
                             )
                             ChatHeaderSubtitleRow(
                                 subtitle = ChatHeaderSubtitle.of(
@@ -193,6 +198,10 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     onToggle = toggle,
                     talkieChrome = talkieLive.chrome,
                     callSlot = {
+                        // Le Bring (#17442) : tout direct ouvert, dès Ami — la passerelle décide, même chiffré.
+                        state.directPeerUserId?.takeIf { !state.isGroup }?.let { peer ->
+                            ChatHeaderBringButton(peerUserId = peer, peerName = header.peerDisplayName ?: title)
+                        }
                         talkie?.button?.invoke()
                         ChatHeaderCallSlot(
                             conversationId = state.conversationId,
@@ -218,6 +227,7 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                                 flameDismissed = true
                                 memory.setFlameDismissed(true, state.conversationId)
                             },
+                            onOpenProgression = navigation.onOpenProgression,
                         ) { headerAvatar(AvatarContext.ConversationHeaderCollapsed) }
                     },
                     readingModeSlot = {

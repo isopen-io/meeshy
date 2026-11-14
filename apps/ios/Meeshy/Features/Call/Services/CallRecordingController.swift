@@ -28,6 +28,18 @@ enum CallRecordingPhase: Equatable {
         }
     }
 
+    /// #17790 — celui qui a demandé : la carte d'accord le nomme, pas le titre de l'appel.
+    var requesterId: String? {
+        if case .pending(_, _, let requesterId, _, _) = self { return requesterId }
+        return nil
+    }
+
+    /// Le nom de celui qui a demandé, lu dans l'annuaire de l'appel ; inconnu, il est vide et la
+    /// carte dit « Un participant » (`CallRecordingCopy.ask`).
+    func requesterName(resolvedBy name: (String) -> String) -> String {
+        requesterId.map(name) ?? ""
+    }
+
     var isActive: Bool { self != .idle }
 
     var isRecording: Bool {

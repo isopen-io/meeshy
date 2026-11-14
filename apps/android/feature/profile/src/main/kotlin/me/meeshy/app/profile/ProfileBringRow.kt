@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,9 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.ui.R as UiR
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
+import me.meeshy.ui.component.bring.BringConfirmDialog
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -72,15 +72,11 @@ internal fun ProfileBringRow(
             .padding(MeeshySpacing.md),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        Text(
-            text = stringResource(R.string.profile_bring_explain),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
+        BringExplanation()
         when {
             state.ringing != null -> RingingLine(displayName, onCancel = viewModel::cancel)
             availability.isExhausted -> Text(
-                text = stringResource(R.string.profile_bring_quota, displayName),
+                text = stringResource(UiR.string.bring_quota, displayName),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
@@ -101,24 +97,49 @@ internal fun ProfileBringRow(
     }
 }
 
+/**
+ * Ce qu'est le Bring, VISIBLE au repos (repère propre à Meeshy, règle 7 de l'épure #17584) ; seul le cas limite
+ * — un iPhone en silencieux — passe derrière un (i) dont le nom est la question.
+ */
+@Composable
+internal fun BringExplanation() {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    MeeshyInfoNoted(
+        note = MeeshyInfoNote(
+            question = stringResource(UiR.string.bring_silent_question),
+            text = stringResource(UiR.string.bring_silent_note),
+        ),
+        openNoteId = openNote,
+        onOpenNoteIdChange = { openNote = it },
+        modifier = Modifier.fillMaxWidth(),
+        tint = MeeshyTheme.tokens.textSecondary,
+    ) {
+        Text(
+            text = stringResource(UiR.string.bring_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+    }
+}
+
 @Composable
 private fun SendLine(availability: BringAvailability, name: String, isSending: Boolean, onSend: () -> Unit) {
     val haptics = rememberMeeshyHaptics()
     val remaining = availability.remainingToday
-    val a11y = stringResource(R.string.profile_bring_confirm_title, name)
+    val a11y = stringResource(UiR.string.bring_confirm_title, name)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         Text(
             text = if (remaining == null) {
-                stringResource(R.string.profile_bring_unlimited)
+                stringResource(UiR.string.bring_unlimited)
             } else {
-                stringResource(R.string.profile_bring_remaining, remaining)
+                stringResource(UiR.string.bring_remaining, remaining)
             },
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "🔔 " + stringResource(R.string.profile_bring_action),
+            text = "🔔 " + stringResource(UiR.string.bring_action),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White,
@@ -142,7 +163,7 @@ private fun RingingLine(name: String, onCancel: () -> Unit) {
     val haptics = rememberMeeshyHaptics()
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         Text(
-            text = "🔔 " + stringResource(R.string.profile_bring_ringing, name),
+            text = "🔔 " + stringResource(UiR.string.bring_ringing, name),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
@@ -151,7 +172,7 @@ private fun RingingLine(name: String, onCancel: () -> Unit) {
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
         Text(
-            text = stringResource(R.string.profile_bring_cancel),
+            text = stringResource(UiR.string.bring_cancel),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyPalette.Error,
@@ -174,36 +195,14 @@ private fun NoticeLine(notice: BringNotice, name: String, onShown: () -> Unit) {
         onShown()
     }
     val text = when (notice) {
-        BringNotice.QUOTA -> stringResource(R.string.profile_bring_quota, name)
-        BringNotice.OFFLINE -> stringResource(R.string.profile_bring_offline)
-        BringNotice.FAILED -> stringResource(R.string.profile_bring_failed)
+        BringNotice.QUOTA -> stringResource(UiR.string.bring_quota, name)
+        BringNotice.OFFLINE -> stringResource(UiR.string.bring_offline)
+        BringNotice.FAILED -> stringResource(UiR.string.bring_failed)
     }
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = MeeshyPalette.Error,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-    )
-}
-
-/** La confirmation qui dit l'usage et ses limites : « Meeshy n'est pas un service d'urgence ». */
-@Composable
-private fun BringConfirmDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.profile_bring_confirm_title, name)) },
-        text = { Text(stringResource(R.string.profile_bring_confirm_body, name)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    stringResource(R.string.profile_bring_confirm_send),
-                    color = MeeshyPalette.Error,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(UiR.string.common_cancel)) }
-        },
     )
 }

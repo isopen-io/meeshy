@@ -13,4 +13,10 @@ class GroupStageTapRuleTest {
     fun `visible chrome puts the tile in the spotlight`() {
         assertThat(GroupStageTapRule.outcome(isChromeVisible = true)).isEqualTo(GroupStageTapOutcome.Spotlight)
     }
+
+    @Test
+    fun `my tile in a duo follows the same law, hidden controls come back first (G1_9, law 15)`() {
+        assertThat(GroupStageTapRule.tapsTheSwap(isChromeVisible = true)).isTrue()
+        assertThat(GroupStageTapRule.tapsTheSwap(isChromeVisible = false)).isFalse()
+    }
 }

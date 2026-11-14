@@ -24,7 +24,7 @@ extension MeeshyComposerHost {
     /// **L'ouverture d'un composer vierge** (#17269), une fois le composer à l'écran :
     /// la caméra s'arme derrière, la photothèque s'ouvre à mi-hauteur devant.
     func applyOpeningPlan() async {
-        _ = await cancellableSleep(for: .milliseconds(450))
+        guard await cancellableSleep(for: .milliseconds(450)) else { return }
         let plan = ComposerOpeningPlan.resolve(origin: intent.origin, compositionIsEmpty: compositionIsEmpty,
                                                format: selectedFormat, sceneServesCapture: sceneServesCapture,
                                                preferences: .stored())

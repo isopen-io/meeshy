@@ -13,6 +13,47 @@ enum CallEffectsCopy {
         String(localized: "call.effects.brightness", defaultValue: "Luminosité", bundle: .main)
     }
 
+    static var appliedTitle: String {
+        String(localized: "call.mode.effects.applied.title", defaultValue: "Effets appliqués", bundle: .main)
+    }
+
+    static func cancelLayer(_ name: String) -> String {
+        String(format: String(localized: "call.mode.effects.applied.cancel", defaultValue: "Annuler %@", bundle: .main), name)
+    }
+
+    /// « Visage · Crapaud » : le genre de la couche, puis son choix.
+    static func layerTitle(_ layer: CallEffectLayer) -> String {
+        "\(layerKindName(layer.kind)) · \(layerChoiceName(layer))"
+    }
+
+    static func layerKindName(_ kind: CallEffectKind) -> String {
+        switch kind {
+        case .frame: return CallLiveFrameCopy.caption
+        case .color: return CallModeCopy.categoryName(.color)
+        case .face: return CallModeCopy.categoryName(.face)
+        case .landscape, .voice: return kind.rawValue
+        }
+    }
+
+    static func layerChoiceName(_ layer: CallEffectLayer) -> String {
+        switch layer.kind {
+        case .frame: return CallFrameCopy.choiceName(.frame(layer.choice))
+        case .color: return VideoFilterPreset(rawValue: layer.choice).map(presetName) ?? layer.choice
+        case .face: return CallFaceEffect(rawValue: layer.choice).map(name) ?? layer.choice
+        case .landscape, .voice: return layer.choice
+        }
+    }
+
+    static func layerSymbol(_ kind: CallEffectKind) -> String {
+        switch kind {
+        case .frame: return "photo.artframe"
+        case .color: return "camera.filters"
+        case .face: return "face.smiling"
+        case .landscape: return "mountain.2"
+        case .voice: return "waveform"
+        }
+    }
+
     static func name(_ effect: CallFaceEffect) -> String {
         switch effect {
         case .none: return String(localized: "call.effects.face.none", defaultValue: "Aucun", bundle: .main)

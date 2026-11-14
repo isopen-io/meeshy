@@ -388,4 +388,72 @@ final class CallRecordingControllerTests: XCTestCase {
         XCTAssertEqual(env.recorder.finishedFiles.count, 1)
         XCTAssertEqual(env.uploader.mimeTypes, ["audio/mp4"])
     }
+
+    // MARK: - #17790 R2.2 — la carte nomme CELUI QUI DEMANDE
+
+    func test_phase_pending_exposesTheRequester_notThePrimaryPeer() {
+        let env = makeSUT()
+        env.sut.receive(requested(requesterId: "u-karim"))
+
+        XCTAssertEqual(env.sut.phase.requesterId, "u-karim")
+        XCTAssertNil(CallRecordingPhase.idle.requesterId)
+        XCTAssertNil(CallRecordingPhase.asking(callId: "call-1").requesterId)
+        XCTAssertNil(CallRecordingPhase.recording(callId: "c", recordingId: "r", recorderId: "u", mine: false).requesterId)
+    }
+
+    func test_requesterName_isWhoAsked_notThePrimaryPeer_andAnUnknownNameSaysSomeone() {
+        let roster = ["u-awa": "Awa", "u-karim": "Karim"]
+        let resolve: (String) -> String = { roster[$0] ?? "" }
+        let env = makeSUT()
+        env.sut.receive(requested(requesterId: "u-karim"))
+
+        XCTAssertEqual(env.sut.phase.requesterName(resolvedBy: resolve), "Karim", "celui qui demande, pas le pair principal")
+        let stranger = CallRecordingPhase.pending(callId: "c", recordingId: "r", requesterId: "u-inconnu", mine: false, mustAnswer: true)
+        XCTAssertEqual(stranger.requesterName(resolvedBy: resolve), "")
+        XCTAssertEqual(CallRecordingPhase.idle.requesterName(resolvedBy: resolve), "")
+        XCTAssertFalse(CallRecordingCopy.someone.isEmpty)
+        XCTAssertEqual(CallRecordingCopy.ask(name: "", kind: .video), CallRecordingCopy.ask(name: CallRecordingCopy.someone, kind: .video), "un nom inconnu se dit « Un participant »")
+        XCTAssertTrue(CallRecordingCopy.ask(name: "Karim").contains("Karim"))
+    }
+
+    func test_consentCard_namesTheRequesterFromTheRoster_neverTheCallTitle() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("requesterName: recording.phase.requesterName(resolvedBy: participantName)"), "Le nom vient du demandeur résolu")
+        XCTAssertFalse(stack.contains("requesterName: remoteName"), "remoteUsername est le titre du groupe, pas le demandeur")
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertTrue(connected.contains("participantName: callManager.participantName(for:)"))
+    }
+
+    // MARK: - #17790 R2.10 — la carte repart vers le haut
+
+    func test_bannerStage_followsThePhase() {
+        let pending: (Bool) -> CallRecordingPhase = { .pending(callId: "c", recordingId: "r", requesterId: "u", mine: false, mustAnswer: $0) }
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: pending(true), notice: nil), .consent)
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: pending(false), notice: nil), .status)
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: .asking(callId: "c"), notice: nil), .status)
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: .recording(callId: "c", recordingId: "r", recorderId: "u", mine: true), notice: nil), .status)
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: .idle, notice: .saved), .notice)
+        XCTAssertEqual(CallRecordingBannerStage.of(phase: .idle, notice: nil), .none)
+    }
+
+    func test_overlay_leavesAndEntersByTheTop_andFadesAlone_underReduceMotion() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+        XCTAssertTrue(controls.contains(".move(edge: .top).combined(with: .opacity)"))
+        XCTAssertTrue(controls.contains("reduceMotion ? .opacity"))
+        XCTAssertTrue(controls.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: stage)"))
+        let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var content: some View", in: controls))
+        XCTAssertTrue(overlay.contains("case .asking, .pending, .recording:"), "attente puis enregistrement : la MÊME capsule change de mot, elle n'est pas remplacée d'un coup")
+        XCTAssertTrue(controls.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: phase.isRecording)"))
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("value: CallRecordingBannerStage.of("), "Les bandeaux suivants glissent quand la hauteur change")
+    }
+
+    // MARK: - #17790 R3.6 — la capsule se range en montant avec l'en-tête
+
+    func test_statusCapsule_isStowedByTheTopEdge_withTheHeader() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+        XCTAssertTrue(controls.contains("CallEdgeStow(edge: .top, margin: topInset, isVisible: showsStatus, reduceMotion: reduceMotion)"))
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("topInset: topInset"))
+    }
 }

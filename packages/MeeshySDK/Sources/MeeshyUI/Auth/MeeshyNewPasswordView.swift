@@ -202,11 +202,11 @@ public struct MeeshyNewPasswordView: View {
     static func text(for notice: PasswordResetFlow.Notice) -> String {
         switch notice {
         case .secondFactorRequired:
-            return String(localized: "auth.forgotPassword.error.codeRequired", defaultValue: "Ce compte est protégé : saisissez le code de vérification de votre application d’authentification.", bundle: .module)
+            return String(localized: "auth.forgotPassword.error.codeRequired", defaultValue: "Compte protégé : saisissez le code de votre application d'authentification.", bundle: .module)
         case .secondFactorInvalid:
             return String(localized: "auth.forgotPassword.error.codeInvalid", defaultValue: "Code de vérification incorrect.", bundle: .module)
         case .weakPassword:
-            return String(localized: "auth.forgotPassword.error.weak", defaultValue: "Ce mot de passe est trop facile à deviner. Choisissez-en un plus long ou moins prévisible.", bundle: .module)
+            return String(localized: "auth.forgotPassword.error.weak", defaultValue: "Mot de passe trop facile à deviner : choisissez-en un plus long.", bundle: .module)
         case .reusedPassword:
             return String(localized: "auth.forgotPassword.error.reused", defaultValue: "Vous avez déjà utilisé ce mot de passe récemment. Choisissez-en un autre.", bundle: .module)
         case .accountLocked:

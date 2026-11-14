@@ -468,12 +468,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.guide.more",
-          "androidName": "game_guide_more",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.guide.next_label",
           "androidName": "game_guide_next_label",
           "status": "adopted"
@@ -614,12 +608,6 @@
           "catalog": "app",
           "iosKey": "game2.guide.moment.league_promoted.what",
           "androidName": "game2_guide_moment_league_promoted_what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.guide.moment.league_relegated.means",
-          "androidName": "game2_guide_moment_league_relegated_means",
           "status": "adopted"
         },
         {

@@ -34,10 +34,11 @@ type Harness = { readonly allowed?: boolean; readonly canPip?: boolean; readonly
 function Screen({ allowed = true, canPip = false, reducedMotion = false, outcomes }: Harness & { readonly outcomes: SwipeDownOutcome[] }) {
   const root = useRef<HTMLDivElement>(null);
   const swipe = useCallSwipeDown({ root, allowed, canPip, reducedMotion, onOutcome: (outcome) => outcomes.push(outcome) });
-  const { visibility } = useCallChrome({ videoScene: true, root, swallowTap: swipe.swallowTap });
+  const { visibility } = useCallChrome({ scene: true, root, swallowTap: swipe.swallowTap });
   return (
     <div ref={root} data-visibility={visibility} data-offset={String(swipe.offset)}>
       <div data-stage="" />
+      <div data-call-owns-drag="" data-zoomed="" />
       <button type="button" data-micro="">
         Micro
       </button>
@@ -54,9 +55,9 @@ const mount = (harness: Harness = {}) => {
   const at = (selector: string) => host.querySelector(selector) as HTMLElement;
   const clock = { now: 0 };
   /* Un doigt posé à 60 i/s : chaque événement 16 ms après le précédent, sauf un `step` plus long — un glissé LENT. */
-  const pointer = (type: string, target: EventTarget, y: number, step = 16) => {
+  const pointer = (type: string, target: EventTarget, y: number, step = 16, finger = 1) => {
     clock.now += step;
-    const event = new PointerEvent(type, { bubbles: true, clientX: 100, clientY: y, pointerId: 1, isPrimary: true, button: 0, pointerType: 'touch' });
+    const event = new PointerEvent(type, { bubbles: true, clientX: 100, clientY: y, pointerId: finger, isPrimary: finger === 1, button: 0, pointerType: 'touch' });
     Object.defineProperty(event, 'timeStamp', { value: clock.now });
     act(() => void target.dispatchEvent(event));
   };
@@ -145,6 +146,28 @@ describe('useCallSwipeDown', () => {
     const native = new Event('dragstart', { bubbles: true, cancelable: true });
     act(() => void view.at('[data-stage]').dispatchEvent(native));
     expect(native.defaultPrevented).toBe(false);
+    view.done();
+  });
+
+  test('un écran reçu ZOOMÉ garde le doigt pour se déplacer (P15.11) : glisser vers le bas ne réduit pas l’appel', () => {
+    const view = mount();
+    view.drag('[data-zoomed]', 300);
+    expect(view.outcomes).toEqual([]);
+    expect(view.offset()).toBe(0);
+    view.done();
+  });
+
+  test('un second doigt fait du geste un pincement : l’écran ne suit plus et rien ne se réduit', () => {
+    const view = mount();
+    const stage = view.at('[data-stage]');
+    view.pointer('pointerdown', stage, 100);
+    view.pointer('pointermove', stage, 220, 400);
+    view.pointer('pointerdown', stage, 100, 16, 2);
+    expect(view.offset()).toBe(0);
+    view.pointer('pointermove', stage, 360);
+    view.pointer('pointerup', stage, 360);
+    expect(view.offset()).toBe(0);
+    expect(view.outcomes).toEqual([]);
     view.done();
   });
 

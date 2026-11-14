@@ -15,12 +15,19 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.engagement.EngagementProgressRepository
+import me.meeshy.sdk.game.InMemoryGameDevicePrefsStore
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.game.GameActsRing
+import me.meeshy.sdk.model.game.GameMission
+import me.meeshy.sdk.model.game.GameMissions
+import me.meeshy.sdk.model.game.MissionDifficulty
+import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationCountsSocketEvent
 import me.meeshy.sdk.notification.NotificationRepository
@@ -57,6 +64,9 @@ class ChromeViewModelTest {
 
     private val bell = MutableStateFlow(0)
 
+    private val engagement: EngagementProgressRepository = mockk(relaxed = true)
+    private val gamePrefs = InMemoryGameDevicePrefsStore()
+
     private val coordinator = me.meeshy.sdk.notification.UnreadBadgeCoordinator(
         cacheSnapshots = kotlinx.coroutines.flow.emptyFlow(),
         serverUpdates = kotlinx.coroutines.flow.emptyFlow(),
@@ -83,7 +93,7 @@ class ChromeViewModelTest {
             NetworkResult.Success(FriendshipPages(sent = emptyList(), received = emptyList()))
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig(), coordinator)
+        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig(), coordinator, engagement, gamePrefs)
     }
 
     @Test
@@ -185,5 +195,76 @@ class ChromeViewModelTest {
 
         coVerify(exactly = 2) { friendRepository.friendshipGraph(any()) }
         verify(exactly = 2) { notificationRepository.notificationsStream(any(), any()) }
+    }
+
+    private fun progressWithActs(vararg done: Boolean): ApiEngagementProgress {
+        val items = done.mapIndexed { index, isDone ->
+            GameMission(
+                id = "m$index", templateKey = "send-messages", difficulty = MissionDifficulty.Easy, signal = "axis:content.post",
+                prism = false, target = 5, progress = 2, reward = 600, glory = 60,
+                completedAt = if (isDone) "2026-11-14T09:00:00.000Z" else null,
+            )
+        }
+        val missions = GameMissions(dayKey = "2026-11-14", prismDay = false, unlocked = true, items = items, rerollAvailable = false)
+        return mockk { every { game } returns mockk { every { this@mockk.missions } returns missions } }
+    }
+
+    @Test
+    fun `l'anneau des actes du jour se lit dans le cache du jeu, une fois la session ouverte`() = runTest {
+        every { engagement.progress(any()) } returns MutableStateFlow(CacheResult.Stale(progressWithActs(true, false, true), 0L))
+        val vm = viewModel()
+
+        assertThat(vm.actsRing.value).isNull()
+        vm.warmUpIfAuthenticated(true)
+
+        assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 2, total = 3))
+    }
+
+    @Test
+    fun `avant l'authentification, rien n'est lu pour l'anneau`() = runTest {
+        val vm = viewModel()
+
+        assertThat(vm.actsRing.value).isNull()
+        verify(exactly = 0) { engagement.progress(any()) }
+    }
+
+    @Test
+    fun `Jeu masque retire l'anneau et ne lit plus rien, la deconnexion aussi`() = runTest {
+        every { engagement.progress(any()) } returns MutableStateFlow(CacheResult.Fresh(progressWithActs(true, true, false), 0L))
+        val vm = viewModel()
+        vm.warmUpIfAuthenticated(true)
+        assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 2, total = 3))
+
+        gamePrefs.set(hidden = true)
+        assertThat(vm.actsRing.value).isNull()
+
+        gamePrefs.set(hidden = false)
+        assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 2, total = 3))
+
+        vm.warmUpIfAuthenticated(false)
+        assertThat(vm.actsRing.value).isNull()
+    }
+
+    @Test
+    fun `un cache vide ou sans bloc de jeu ne dessine aucun anneau`() = runTest {
+        every { engagement.progress(any()) } returns MutableStateFlow(CacheResult.Empty)
+        val vm = viewModel()
+        vm.warmUpIfAuthenticated(true)
+
+        assertThat(vm.actsRing.value).isNull()
+    }
+
+    @Test
+    fun `un acte realise ailleurs rallume un segment sans requete de plus`() = runTest {
+        val cached = MutableStateFlow<CacheResult<ApiEngagementProgress>>(CacheResult.Fresh(progressWithActs(false, false, false), 0L))
+        every { engagement.progress(any()) } returns cached
+        val vm = viewModel()
+        vm.warmUpIfAuthenticated(true)
+        assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 0, total = 3))
+
+        cached.value = CacheResult.Fresh(progressWithActs(true, false, false), 0L)
+
+        assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 1, total = 3))
+        verify(exactly = 1) { engagement.progress(any()) }
     }
 }

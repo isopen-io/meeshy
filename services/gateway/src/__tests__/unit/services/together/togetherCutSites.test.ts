@@ -48,7 +48,10 @@ const removed = (attachmentMimeTypes: readonly string[]) => ({
   attachmentMimeTypes: [...attachmentMimeTypes],
 });
 
-const userPrisma = () => ({ user: { update: async () => makeUser({ id: USER }) } }) as unknown as PrismaClient;
+const userPrisma = () => ({
+  user: { update: async () => makeUser({ id: USER }), findUnique: async () => ({ isActive: true, deactivatedAt: null, deletedAt: null }) },
+  relationFeatureSetting: { updateMany: async () => ({ count: 0 }) },
+}) as unknown as PrismaClient;
 
 beforeEach(() => cutTogetherWhere.mockClear());
 

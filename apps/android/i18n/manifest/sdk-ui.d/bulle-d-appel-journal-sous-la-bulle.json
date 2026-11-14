@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.transcript.show",
+          "androidName": "focal_call_journal_show",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.transcript.hide",
+          "androidName": "focal_call_journal_hide",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

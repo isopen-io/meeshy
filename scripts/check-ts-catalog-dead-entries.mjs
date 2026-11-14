@@ -546,8 +546,6 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
   // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
   'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
-  // Le partage temporaire de position par personne (#16980) : le serveur sert le rattrapage par emprise avant la carte web.
-  'relations.locations': { issue: 16984, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte web' },
   // Le réveil par push d'un talkie vers un Proche hors ligne (#17142, chapeau #17141) : la
   // passerelle sert déjà le tampon et le jeton ; aucun client (web, iOS, Android) n'appelle encore
   // ces deux routes REST — le relais se fait pour l'instant par socket (`talkie:join`).
@@ -556,6 +554,13 @@ const PENDING_CLIENT_ENTRIES = {
   // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
   // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
   'conversations.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp, depuis le web, iOS et Android' },
+  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
+  // journal et la proximité avant les clients (web, iOS, Android) qui les appelleront.
+  'me.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
+  'me.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
+  'me.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
+  'me.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
+  'relations.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

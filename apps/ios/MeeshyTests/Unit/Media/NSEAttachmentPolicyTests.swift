@@ -265,6 +265,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     private static let routingKeys: Set<String> = [
         "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
         "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "communityId",
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",

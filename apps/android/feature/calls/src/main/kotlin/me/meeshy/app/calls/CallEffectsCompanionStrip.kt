@@ -180,12 +180,11 @@ private fun StripBlock(plan: StripArrangement, trackFor: (GroupCallStageTile) ->
 @Composable
 private fun OverflowChip(count: Int) {
     val label = stringResource(R.string.call_effects_companions_more, count)
-    val tone = LocalCallGlassTone.current
     CallGlassPlate(
         modifier = Modifier.size(CHIP).semantics { contentDescription = label },
         shape = CircleShape,
     ) {
-        Box(Modifier.matchParentSize().background(tone.veil(tone.chipScrimAlpha)))
+        CallToneScrim()
         Text(
             "+$count",
             color = Color.White,

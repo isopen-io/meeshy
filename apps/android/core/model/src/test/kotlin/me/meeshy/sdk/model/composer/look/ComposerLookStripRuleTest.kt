@@ -19,7 +19,7 @@ class ComposerLookStripRuleTest {
     fun `les filtres commencent par Naturel et portent chaque prereglage de l appel`() {
         val filters = ComposerLookStripRule.items(ComposerLookFamily.FILTERS)
         assertThat(filters.first()).isEqualTo(ComposerLookStripItem.Filter(VideoFilterPreset.Natural))
-        assertThat(filters).hasSize(VideoFilterPreset.entries.size)
+        assertThat(filters).hasSize(VideoFilterPreset.fiveTints.size)
     }
 
     @Test

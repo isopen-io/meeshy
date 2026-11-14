@@ -1,4 +1,3 @@
-import type { CallCaption } from './call-captions';
 import type { TileSize } from './call-self-tile';
 
 /**
@@ -96,18 +95,4 @@ export const otherCorner = (corner: CompanionCorner): CompanionCorner => (corner
 export function companionRestingLeft({ corner, blockWidth, containerWidth, margin, rtl }: { readonly corner: CompanionCorner; readonly blockWidth: number; readonly containerWidth: number; readonly margin: number; readonly rtl: boolean }): number {
   const sitsLeft = (corner === 'top-leading') !== rtl;
   return sitsLeft ? margin : containerWidth - margin - blockWidth;
-}
-
-/**
- * Qui parle, faute d'un niveau audio sur le web : un pair dont le DERNIER
- * segment de sous-titre est encore en cours. Sans sous-titres, personne.
- */
-export function speakingPeers(captions: readonly CallCaption[]): ReadonlySet<string> {
-  const latest = new Map(
-    captions
-      .filter((caption) => !caption.mine)
-      .sort((a, b) => a.at - b.at)
-      .map((caption) => [caption.speakerId, caption] as const),
-  );
-  return new Set([...latest.values()].filter((caption) => !caption.isFinal).map((caption) => caption.speakerId));
 }

@@ -149,6 +149,8 @@ public struct SelectiveCachePurgeView: View {
 
     @StateObject private var viewModel = CachePurgeViewModel()
     @State private var showConfirm = false
+    /// Le (i) ouvert : un seul à la fois sur l'écran.
+    @State private var openNoteID: String?
     @Environment(\.colorScheme) private var colorScheme
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -286,15 +288,17 @@ public struct SelectiveCachePurgeView: View {
         let bytes = viewModel.report?.unattributedBytes ?? 0
         if bytes > 0 {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Image(systemName: "questionmark.folder")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    Text(String(localized: "settings.cache.purge.unattributed.title",
-                                defaultValue: "Non attribué", bundle: .module).uppercased())
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                        .tracking(1.2)
+                MeeshyInfoNoted(note: Self.unattributedNote, openNoteID: $openNoteID, tint: MeeshyColors.neutral500) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
+                        Image(systemName: "questionmark.folder")
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        Text(String(localized: "settings.cache.purge.unattributed.title",
+                                    defaultValue: "Non attribué", bundle: .module).uppercased())
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                            .tracking(1.2)
+                    }
+                    .foregroundStyle(MeeshyColors.neutral500)
                 }
-                .foregroundStyle(MeeshyColors.neutral500)
                 .padding(.leading, MeeshySpacing.xs)
 
                 Button {
@@ -306,20 +310,10 @@ public struct SelectiveCachePurgeView: View {
                             .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                             .foregroundStyle(viewModel.includeUnattributed ? Color(hex: accentColor) : theme.textMuted)
 
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                            Text(String(localized: "settings.cache.purge.unattributed.label",
-                                        defaultValue: "Médias orphelins", bundle: .module))
-                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundStyle(theme.textPrimary)
-                            Text(String(
-                                localized: "settings.cache.purge.unattributed.description",
-                                defaultValue: "Fichiers encore sur l'appareil dont la publication, la story ou la conversation d'origine n'est plus en cache. Impossible de les rattacher à un domaine.",
-                                bundle: .module
-                            ))
-                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                                .foregroundStyle(theme.textMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        Text(String(localized: "settings.cache.purge.unattributed.label",
+                                    defaultValue: "Médias orphelins", bundle: .module))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                            .foregroundStyle(theme.textPrimary)
 
                         Spacer()
 
@@ -335,6 +329,20 @@ public struct SelectiveCachePurgeView: View {
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    /// La raison de la ligne « non attribué », derrière un (i) : le nom accessible
+    /// est la question, la note reste lue par le lecteur d'écran.
+    static var unattributedNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.cache.purge.unattributed.question",
+                             defaultValue: "Pourquoi « non attribué » ?", bundle: .module),
+            text: String(
+                localized: "settings.cache.purge.unattributed.description",
+                defaultValue: "Fichiers encore sur l'appareil dont la publication, la story ou la conversation d'origine n'est plus en cache. Impossible de les rattacher à un domaine.",
+                bundle: .module
+            )
+        )
     }
 
     // MARK: - Action
@@ -458,13 +466,13 @@ public struct SelectiveCachePurgeView: View {
         case .embeddedInPayload:
             return String(
                 localized: "settings.cache.limitation.embedded",
-                defaultValue: "Les réactions font partie du contenu qui les porte et n'occupent pas d'entrée propre.",
+                defaultValue: "Incluses dans le contenu qui les porte.",
                 bundle: .module
             )
         case .indivisibleFromPosts:
             return String(
                 localized: "settings.cache.limitation.indivisible",
-                defaultValue: "Les données des réels et des publications partagent le même stockage : videz la ligne Publications.",
+                defaultValue: "Même stockage que Publications : videz la ligne Publications.",
                 bundle: .module
             )
         case .notApplicable:

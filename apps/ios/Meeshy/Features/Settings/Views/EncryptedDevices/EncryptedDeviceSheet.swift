@@ -75,7 +75,7 @@ struct EncryptedDeviceSheet: View {
             title: String(format: String(localized: "e2ee.devices.step.read.title", defaultValue: "Approuver « %@ » sur cet appareil", bundle: .main), title),
             text: current.trust == .approved
                 ? String(localized: "e2ee.devices.step.read.done", defaultValue: "C’est fait : cet appareil lui écrit et le lit.", bundle: .main)
-                : String(format: String(localized: "e2ee.devices.step.read.text", defaultValue: "Sur « %@ », ouvrez Réglages › Sécurité › Mes appareils chiffrés, choisissez cet appareil et touchez « Montrer mon code ». Lisez ce code ici.", bundle: .main), title)
+                : String(format: String(localized: "e2ee.devices.step.read.text", defaultValue: "Sur « %@ », ouvrez Mes appareils chiffrés › Montrer mon code, puis lisez-le ici.", bundle: .main), title)
         ) {
             if current.trust != .approved {
                 actionButton(String(localized: "e2ee.devices.step.read.action", defaultValue: "Lire son code", bundle: .main), systemImage: "qrcode.viewfinder", prominent: true) {

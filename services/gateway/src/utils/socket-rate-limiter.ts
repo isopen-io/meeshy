@@ -55,6 +55,13 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 10000, // 10 seconds
     keyPrefix: 'socket:call:signal'
   },
+  // #17952 — the ringing preview link has its own budget: a preview burst
+  // from one device must never starve the real call's offer/answer.
+  CALL_PREVIEW_SIGNAL: {
+    maxRequests: 100,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:preview-signal'
+  },
   // Audit gateway prod 2026-07-02 (C2) — 50/5s was tuned for a single steady
   // trickle, but real clients flush a full ICE gathering pass (15-25
   // candidates within milliseconds) AND re-gather on every renegotiation
@@ -469,6 +476,14 @@ export class SocketRateLimiter {
   getTrackedCount(): number {
     return this.limits.size;
   }
+}
+
+/**
+ * #17952 — le budget `call:signal` est tenu PAR SOCKET : un appareil du compte
+ * qui inonde de signaux ne fait jamais refuser la réponse SDP d'un autre.
+ */
+export function callSignalBudgetId(userId: string, socketId: string): string {
+  return `${userId}:${socketId}`;
 }
 
 /**

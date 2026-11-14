@@ -121,7 +121,7 @@ export function CallSelfCamera({ stream, local, language, glyphs, column }: Self
   );
 }
 
-type ZoomStepProps = { readonly stream: MediaStream | null; readonly local: LocalZoom; readonly language: InterfaceLanguage; readonly Button: typeof CallButton; readonly rowItem: string };
+type ZoomStepProps = { readonly stream: MediaStream | null; readonly local: LocalZoom; readonly language: InterfaceLanguage; readonly Button: typeof CallButton; readonly rowItem?: string };
 
 /** Le cran du zoom dans ma vignette (#8441) : « 1× », puis 2×, 5×, et retour — la caméra, sinon l'image envoyée recadrée. */
 export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomStepProps) {
@@ -135,7 +135,7 @@ export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomS
       onPress={() => zoom.set(nextZoomStop(zoom.range, zoom.value))}
       tone="disc"
       size={44}
-      data={{ 'data-call-self-control': 'zoom', 'data-call-zoom-mode': zoom.mode, [rowItem]: '' }}
+      data={{ 'data-call-self-control': 'zoom', 'data-call-zoom-mode': zoom.mode, ...(rowItem === undefined ? {} : { [rowItem]: '' }) }}
     />
   );
 }

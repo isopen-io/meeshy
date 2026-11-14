@@ -60,13 +60,34 @@ export function requestCallPip(): void {
   void opener?.();
 }
 
+/** Une fenêtre d'image dans l'image flotte (document ou vidéo seule) : le bouton de l'en-tête y voit une sortie à offrir. Écrit par `call-pip-window.tsx`. */
+export const pipOpenStore = createStore<{ readonly open: boolean }>(() => ({ open: false }));
+
+let closer: (() => void) | null = null;
+
+/** La fenêtre PiP enregistre ici sa sortie : le bouton de l'en-tête la ferme dans le geste, sans charger son chunk. */
+export function registerPipCloser(next: () => void): () => void {
+  closer = next;
+  return () => {
+    if (closer === next) closer = null;
+  };
+}
+
+export function requestCallPipExit(): void {
+  closer?.();
+}
+
 /** `contain` pour un écran partagé (#8164) : un document ou un tableau se lit ENTIER, sur le fond neutre ; une caméra reste recadrée. */
 export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'>;
 
-/** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
-export function pipSource(call: PipCall): PipSource | null {
+/**
+ * Ce que l'AUTRE envoie : son écran partagé d'abord (#8063), puis la vidéo du premier pair qui en
+ * envoie. C'est l'élection PROPRE de la bulle d'appel réduit (P18.3) : sa caméra coupée, la bulle
+ * montre son avatar, jamais ma vidéo.
+ */
+export function remoteSource(call: PipCall): PipSource | null {
   const members = Object.values(call.members);
   const shown = (userId: string): MediaStream | undefined => {
     const stream = call.remoteStreams[userId];
@@ -75,7 +96,13 @@ export function pipSource(call: PipCall): PipSource | null {
   const screen = members.filter((member) => member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
   if (screen !== undefined) return { stream: screen, mirrored: false, fit: 'contain' };
   const camera = members.filter((member) => member.cameraOn && !member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
-  if (camera !== undefined) return { stream: camera, mirrored: false, fit: 'cover' };
+  return camera === undefined ? null : { stream: camera, mirrored: false, fit: 'cover' };
+}
+
+/** Ce qui flotte dans la fenêtre PiP : ce que l'autre envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
+export function pipSource(call: PipCall): PipSource | null {
+  const remote = remoteSource(call);
+  if (remote !== null) return remote;
   if (!call.cameraOn || call.localStream === null || !hasVideo(call.localStream)) return null;
   return { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }), fit: call.screenSharing ? 'contain' : 'cover' };
 }

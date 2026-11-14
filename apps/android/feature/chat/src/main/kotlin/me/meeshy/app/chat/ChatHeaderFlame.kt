@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -72,8 +73,9 @@ private val FLAME_GRADIENT = listOf(FLAME_TIP, MeeshyPalette.Warning, MeeshyPale
 
 /**
  * La Flamme sous l'avatar REPLIÉ de l'en-tête (#13297, iOS `HeaderFlameDecoration`) : « 🔥 4 · 120 »,
- * la série en jours puis les points du jour, tant qu'une série court. Un toucher la masque jusqu'au
- * prochain dépliement de l'en-tête ([HeaderFlameLaw]). À chaque envoi du lecteur ([sent]) elle rejoue
+ * la série en jours puis les points du jour, tant qu'une série court. Un toucher ouvre sa carte
+ * ([HeaderFlameCardMenu], #17770) : la série, « Voir le jeu », et « Masquer la flamme » qui la masque
+ * jusqu'au prochain dépliement de l'en-tête ([HeaderFlameLaw]). À chaque envoi du lecteur ([sent]) elle rejoue
  * sa lueur — l'arc qui fait le tour de l'avatar, puis l'allumage — et TIENT l'ancien compte jusqu'à
  * ce que la lueur l'ait mérité.
  *
@@ -88,6 +90,7 @@ internal fun HeaderFlameDecoration(
     dismissed: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenProgression: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val reduceMotion = LocalReduceMotion.current
@@ -176,6 +179,7 @@ internal fun HeaderFlameDecoration(
                     animates = isPlaying && !reduceMotion,
                     heldPoints = heldPoints,
                     onDismiss = onDismiss,
+                    onOpenProgression = onOpenProgression,
                 )
             }
         }
@@ -189,28 +193,40 @@ private fun FlameButton(
     animates: Boolean,
     heldPoints: Int?,
     onDismiss: () -> Unit,
+    onOpenProgression: () -> Unit,
 ) {
     val locale = rememberReaderLocale()
     val description = flameDescription(snapshot)
-    val hint = stringResource(R.string.chat_header_flame_hint)
+    val hint = stringResource(R.string.chat_header_flame_card_hint)
     val points = heldPoints ?: snapshot.todayPoints
-    Row(
-        modifier = Modifier
-            .clickable(onClickLabel = hint, onClick = onDismiss)
-            .clearAndSetSemantics { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        FlameGlyph(phase = phase, animates = animates)
-        FlameCount(text = "${snapshot.streakDays} ·")
-        AnimatedContent(
-            targetState = CompactCountFormat.text(points, locale),
-            transitionSpec = {
-                (slideInVertically(spring(dampingRatio = 0.7f, stiffness = 380f)) { it / 2 } + fadeIn()) togetherWith
-                    (slideOutVertically { -it / 2 } + fadeOut())
-            },
-            label = "flame-points",
-        ) { text -> FlameCount(text = text) }
+    var cardOpen by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .testTag("chat.header.flame")
+                .clickable(onClickLabel = hint) { cardOpen = !cardOpen }
+                .clearAndSetSemantics { contentDescription = description },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            FlameGlyph(phase = phase, animates = animates)
+            FlameCount(text = "${snapshot.streakDays} ·")
+            AnimatedContent(
+                targetState = CompactCountFormat.text(points, locale),
+                transitionSpec = {
+                    (slideInVertically(spring(dampingRatio = 0.7f, stiffness = 380f)) { it / 2 } + fadeIn()) togetherWith
+                        (slideOutVertically { -it / 2 } + fadeOut())
+                },
+                label = "flame-points",
+            ) { text -> FlameCount(text = text) }
+        }
+        HeaderFlameCardMenu(
+            card = HeaderFlameLaw.card(snapshot),
+            expanded = cardOpen,
+            onClose = { cardOpen = false },
+            onOpenProgression = onOpenProgression,
+            onHide = onDismiss,
+        )
     }
 }
 

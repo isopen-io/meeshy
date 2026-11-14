@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * LE BARREAU « ADMINISTRATION » DU MENU FLOTTANT (#6458) — ce qu'aucun témoin
- * unitaire ne voit : la GÉOMÉTRIE réelle de sept barreaux, le PARCOURS clavier
+ * unitaire ne voit : la GÉOMÉTRIE réelle de huit barreaux, le PARCOURS clavier
  * dans un vrai navigateur, la NAVIGATION vers `/admin`, et le RÉSEAU — la
  * matrice lue une fois, jamais sans session.
  *
@@ -14,17 +14,19 @@
  *  1. SANS session : aucune lecture des permissions (`/login`).
  *  2. Matrice SERVIE avec le droit, deux schémas × deux gabarits (390 × 844,
  *     320 × 568) :
- *     - pose par défaut (échelle qui DESCEND) : sept barreaux, le dernier mène
- *       à `/admin` et se nomme « Administration » ; chacun ENTIÈREMENT dans
- *       l'écran, atteignable en son centre (`elementFromPoint`), quatre d'air
- *       au moins entre deux voisins ;
+ *     - pose par défaut (échelle qui DESCEND) : huit barreaux (« Ma Légende »
+ *       en tête depuis #17769), le dernier mène à `/admin` et se nomme
+ *       « Administration » ; chacun ENTIÈREMENT dans l'écran, atteignable en
+ *       son centre (`elementFromPoint`), quatre d'air au moins entre deux
+ *       barreaux — sur une colonne, ou sur deux quand une seule ne tient plus
+ *       (320 × 568, `ladderRungPlaces`) ;
  *     - le clavier : `Entrée` ouvre, le focus entre sur le premier barreau,
  *       `Fin` le pose sur l'administration, `Bas` revient au premier, `Haut`
  *       y retourne ; `Entrée` y NAVIGUE, l'échelle se referme, et l'écran
  *       `/admin` ne relit PAS la matrice (une seule requête) ;
  *     - pose basse (`menuButtonPosition = "1,1"`, échelle qui MONTE) : les
- *       mêmes sept barreaux dans l'écran, l'administration en haut.
- *  3. Matrice servie SANS le droit, 403, et requête EN VOL : les six d'iOS,
+ *       mêmes huit barreaux dans l'écran, l'administration au rang le plus haut.
+ *  3. Matrice servie SANS le droit, 403, et requête EN VOL : les sept d'iOS,
  *     aucun chemin vers `/admin`.
  *
  * Construit dans `dist-admin-rung` (motif `dist-*` du `.gitignore`).
@@ -54,7 +56,9 @@ const TYPES = {
 /** Un barreau et l'air minimal que la loi de pose garantit (`floating-pose.ts`). */
 const RUNG = 46;
 const MIN_GAP = 4;
-const RUNGS_IOS = 6;
+const RUNGS_IOS = 7;
+/** Le premier barreau de l'échelle : « Ma Légende » (#17769). */
+const FIRST_HREF = '/me/progression';
 
 const PERMISSIONS_PATH = '/api/v1/me/permissions';
 
@@ -180,9 +184,9 @@ const until = async (predicate, timeout = 3_000) => {
   return predicate();
 };
 
-/** La géométrie de sept barreaux : dans l'écran, atteignables, espacés. */
+/** La géométrie des huit barreaux : dans l'écran, atteignables, espacés. */
 function checkLadderGeometry(tag, rungs, { adminEnd }) {
-  check(rungs.length === RUNGS_IOS + 1, `${tag} : sept barreaux (obtenu ${rungs.length})`);
+  check(rungs.length === RUNGS_IOS + 1, `${tag} : ${RUNGS_IOS + 1} barreaux (obtenu ${rungs.length})`);
   const admin = rungs.at(-1);
   check(admin?.href === '/admin', `${tag} : le dernier barreau mène à /admin (obtenu ${admin?.href})`);
   check(admin?.label === 'Administration', `${tag} : le dernier barreau se nomme « Administration » (obtenu ${admin?.label})`);
@@ -197,14 +201,16 @@ function checkLadderGeometry(tag, rungs, { adminEnd }) {
     check(r.reachable, `${tag} : « ${r.label} » reçoit le doigt en son centre`);
   }
 
-  const ordered = [...rungs].sort((a, b) => a.top - b.top);
-  for (let i = 1; i < ordered.length; i += 1) {
-    const gap = ordered[i].top - ordered[i - 1].bottom;
-    check(gap >= MIN_GAP - 0.5, `${tag} : ${MIN_GAP} d'air au moins entre « ${ordered[i - 1].label} » et « ${ordered[i].label} » (${gap.toFixed(1)})`);
+  for (const [i, a] of rungs.entries()) {
+    for (const b of rungs.slice(i + 1)) {
+      const gap = Math.max(b.top - a.bottom, a.top - b.bottom, b.left - a.right, a.left - b.right);
+      check(gap >= MIN_GAP - 0.5, `${tag} : ${MIN_GAP} d'air au moins entre « ${a.label} » et « ${b.label} » (${gap.toFixed(1)})`);
+    }
   }
 
-  const extreme = adminEnd === 'bottom' ? ordered.at(-1) : ordered[0];
-  check(extreme?.href === '/admin', `${tag} : l'administration est le barreau le plus ${adminEnd === 'bottom' ? 'bas' : 'haut'} (obtenu ${extreme?.href})`);
+  const tops = rungs.map((r) => r.top);
+  const extreme = adminEnd === 'bottom' ? Math.max(...tops) : Math.min(...tops);
+  check(admin !== undefined && Math.abs(admin.top - extreme) < 0.5, `${tag} : l'administration est au rang le plus ${adminEnd === 'bottom' ? 'bas' : 'haut'} (obtenu ${admin?.top} pour ${extreme})`);
 }
 
 async function main() {
@@ -264,11 +270,11 @@ async function main() {
           checkLadderGeometry(tag, await readRungs(page), { adminEnd: 'bottom' });
           if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `admin-rung.down.${scheme}.${viewport.width}x${viewport.height}.png`) });
 
-          check((await focusedHref(page)) === '/links', `${tag} : à l'ouverture, le focus entre sur le premier barreau (obtenu ${await focusedHref(page)})`);
+          check((await focusedHref(page)) === FIRST_HREF, `${tag} : à l'ouverture, le focus entre sur le premier barreau (obtenu ${await focusedHref(page)})`);
           await page.keyboard.press('End');
           check((await focusedHref(page)) === '/admin', `${tag} : Fin pose le focus sur l'administration (obtenu ${await focusedHref(page)})`);
           await page.keyboard.press('ArrowDown');
-          check((await focusedHref(page)) === '/links', `${tag} : Bas revient au premier barreau (obtenu ${await focusedHref(page)})`);
+          check((await focusedHref(page)) === FIRST_HREF, `${tag} : Bas revient au premier barreau (obtenu ${await focusedHref(page)})`);
           await page.keyboard.press('ArrowUp');
           check((await focusedHref(page)) === '/admin', `${tag} : Haut retourne à l'administration (obtenu ${await focusedHref(page)})`);
 
@@ -316,7 +322,7 @@ async function main() {
       await page.waitForSelector('[role="menuitem"]');
       await settle(page);
       const rungs = await readRungs(page);
-      check(rungs.length === RUNGS_IOS, `${tag} : les six barreaux d'iOS (obtenu ${rungs.length})`);
+      check(rungs.length === RUNGS_IOS, `${tag} : les ${RUNGS_IOS} barreaux d'iOS (obtenu ${rungs.length})`);
       check(rungs.every((r) => r.href !== '/admin'), `${tag} : aucun chemin vers /admin`);
       if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `admin-rung.absent.${served}.png`) });
       await ctx.close();
@@ -332,8 +338,8 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `check-admin-rung : vert — ${oks} constats ; sept barreaux dans l'écran aux deux poses, 2 schémas × 2 gabarits, ` +
-      'parcours clavier et navigation vers /admin sur une seule lecture de la matrice ; six barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.',
+    `check-admin-rung : vert — ${oks} constats ; huit barreaux dans l'écran aux deux poses, 2 schémas × 2 gabarits, ` +
+      'parcours clavier et navigation vers /admin sur une seule lecture de la matrice ; sept barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.',
   );
 }
 

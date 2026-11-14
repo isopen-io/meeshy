@@ -18,6 +18,7 @@ final class MeeshyLogTests: XCTestCase {
         "auth",
         "background",
         "background-transition",
+        "bring-alarm",
         "cache",
         "cache-accounts",
         "cache-bg-flush",

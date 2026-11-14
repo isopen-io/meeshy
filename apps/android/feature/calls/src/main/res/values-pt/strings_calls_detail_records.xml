@@ -28,7 +28,7 @@
     <string name="call_network_tier_good">Boa</string>
     <string name="call_network_tier_fair">Média</string>
     <string name="call_network_tier_poor">Fraca</string>
-    <string name="call_transcript_disclaimer">Cópia encriptada guardada neste dispositivo. A transcrição da chamada também é guardada no servidor Meeshy, legível apenas pelos seus participantes. Inclui as palavras do seu interlocutor, tal como recebidas durante a chamada.</string>
+    <string name="call_transcript_disclaimer">Cópia encriptada neste dispositivo. A transcrição da chamada também é guardada no servidor Meeshy, legível apenas pelos seus participantes.</string>
     <string name="call_transcript_delete">Eliminar esta transcrição</string>
     <string name="call_transcript_delete_confirm_title">Eliminar esta transcrição?</string>
     <string name="call_transcript_delete_confirm_message">É removida deste dispositivo definitivamente. A transcrição guardada no servidor não é apagada.</string>

@@ -41,24 +41,26 @@ internal object CallPillModel {
             hasSelectableCameras = hasSelectableCameras,
             isConnected = state.status == CallStatus.CONNECTED,
             mayRecord = isRegistered(CallAction.Recording),
-            canPictureInPicture = isRegistered(CallAction.PictureInPicture),
             showsVideo = state.isVideoCall && state.showsConnectedLayout,
         )
 
-    /** The camera toggle: always there on a video call, amber while the app froze the video. */
-    fun cameraItem(state: CallUiState): CallPillItem? {
-        if (!state.isVideoCall) return null
+    /** The camera toggle: always there (on an audio call it upgrades to video, iOS `.camera`), amber while the app froze the video. */
+    fun cameraItem(state: CallUiState): CallPillItem {
         val paused = state.isVideoAutoPaused
         return CallPillItem(
             action = CallAction.Camera,
             icon = if (state.isCameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
-            labelRes = if (paused) R.string.call_control_video_paused else R.string.call_action_camera,
+            labelRes = when {
+                paused -> R.string.call_control_video_paused
+                state.isCameraOn -> R.string.call_control_camera_off
+                else -> R.string.call_control_camera_on
+            },
             kind = when {
                 paused -> CallPillKind.Warning
                 state.isCameraOn -> CallPillKind.Active
                 else -> CallPillKind.Normal
             },
-            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_control_video_caption,
+            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_action_camera,
             hintRes = if (paused) R.string.call_control_video_paused_hint else null,
             isToggle = true,
         )
@@ -77,6 +79,13 @@ internal object CallPillModel {
         )
     }
 
+    /** A toggle that is on is a white disc; one that is a state to stop (the recording) is red, like iOS. */
+    fun kindOf(presentation: CallActionPresentation): CallPillKind = when {
+        presentation.isActive && presentation.isDestructive -> CallPillKind.Destructive
+        presentation.isActive -> CallPillKind.Active
+        else -> CallPillKind.Normal
+    }
+
     /** What the capabilities offer, plus the built-in camera toggle, keyed by action. */
     fun items(state: CallUiState, offered: List<OfferedCallAction>): Map<CallAction, CallPillItem> {
         val fromHandlers = offered.associate { entry ->
@@ -84,13 +93,13 @@ internal object CallPillModel {
                 action = entry.action,
                 icon = entry.presentation.icon,
                 labelRes = entry.presentation.labelRes,
-                kind = if (entry.presentation.isActive) CallPillKind.Active else CallPillKind.Normal,
+                kind = kindOf(entry.presentation),
                 captionRes = entry.presentation.captionRes,
                 hintRes = entry.presentation.hintRes,
                 isToggle = entry.presentation.isActive,
             )
         }
-        val camera = cameraItem(state)?.let { mapOf(CallAction.Camera to it) }.orEmpty()
+        val camera = mapOf(CallAction.Camera to cameraItem(state))
         val flip = flipItem(state)?.let { mapOf(CallAction.FlipCamera to it) }.orEmpty()
         return fromHandlers + camera + flip
     }

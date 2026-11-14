@@ -18,6 +18,7 @@ struct SecurityConversationLockSection: View {
         let lockedCount = lockManager.contentLockedConversationIds.count
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             SecuritySectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
+            SettingsSentence(text: String(localized: "settings.security.locked_conversations.summary", defaultValue: "Verrouillez des conversations derrière un code PIN principal.", bundle: .main))
 
             VStack(spacing: 0) {
                 statusRow(hasMasterPIN: hasMasterPIN, lockedCount: lockedCount)

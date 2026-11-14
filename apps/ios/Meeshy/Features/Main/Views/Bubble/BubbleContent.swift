@@ -216,6 +216,8 @@ nonisolated struct BubbleContent: Equatable {
         let summary: CallSummaryMetadata
         /// Current user initiated this call (emitted) vs received it.
         let isOutgoing: Bool
+        /// Le lecteur, qui se retire de la ligne des participants pour s'y dire « vous ».
+        let viewerId: String
         /// Gateway-localized label ("Appel vidéo · 04:32", "Appel audio manqué"),
         /// used as the human title base + VoiceOver fallback.
         let fallbackText: String

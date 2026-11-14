@@ -19,6 +19,37 @@ class CallColorLookTest {
         }
     }
 
+    private fun mood(id: String) = requireNotNull(VideoFilterPreset.fromId(id)) { "the mood « $id » of iOS is missing" }
+
+    @Test
+    fun `the seven new moods of iOS are graded looks`() {
+        listOf("golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").forEach {
+            assertThat(CallColorLook.recipe(mood(it))).isNotNull()
+        }
+    }
+
+    @Test
+    fun `black and white drops every colour, skin included, and keeps the light`() {
+        val monochrome = recipe(mood("monochrome"))
+        listOf(skin, sky, Rgb(0.9f, 0.2f, 0.2f)).forEach {
+            val g = CallColorLook.grade(it, monochrome)
+            assertThat(g.r).isWithin(1e-4f).of(g.g)
+            assertThat(g.g).isWithin(1e-4f).of(g.b)
+        }
+        assertThat(CallColorLook.grade(Rgb(0.9f, 0.9f, 0.9f), monochrome).r)
+            .isGreaterThan(CallColorLook.grade(Rgb(0.2f, 0.2f, 0.2f), monochrome).r)
+    }
+
+    @Test
+    fun `bright lifts the exposure and soft night cools while golden warms a neutral grey`() {
+        val grey = Rgb(0.4f, 0.4f, 0.4f)
+        assertThat(CallColorLook.grade(grey, recipe(mood("bright"))).g).isGreaterThan(grey.g)
+        val night = CallColorLook.grade(grey, recipe(mood("softNight")))
+        assertThat(night.b).isGreaterThan(night.r)
+        val golden = CallColorLook.grade(grey, recipe(mood("golden")))
+        assertThat(golden.r).isGreaterThan(golden.b)
+    }
+
     @Test
     fun `warm warms and cool cools a neutral grey`() {
         val grey = Rgb(0.5f, 0.5f, 0.5f)
@@ -72,5 +103,23 @@ class CallColorLookTest {
         val blueOnly = texel(4 * 5, 0)
         assertThat(blueOnly[2]).isEqualTo(255)
         assertThat(blueOnly[0]).isEqualTo(0)
+    }
+
+    @Test
+    fun `a look bakes first, then only the neighbours the carousel shows beside it, nearest first`() {
+        assertThat(CallColorLook.bakeOrder(mood("softNight")).map { it.id })
+            .containsExactly("softNight", "bright", "film", "velvet", "golden").inOrder()
+    }
+
+    @Test
+    fun `the bake never reaches past the visible neighbours nor bakes Natural, which has no cube`() {
+        assertThat(CallColorLook.bakeOrder(mood("golden")).map { it.id }).containsExactly("golden", "film", "softNight").inOrder()
+        assertThat(CallColorLook.bakeOrder(mood("monochrome")).map { it.id }).containsExactly("monochrome", "sky", "velvet").inOrder()
+        assertThat(CallColorLook.bakeOrder(mood("film")).size).isAtMost(1 + 2 * CallColorLook.VISIBLE_NEIGHBOURS)
+    }
+
+    @Test
+    fun `an older tint that a call still carries bakes alone, the catalogue does not frame it`() {
+        assertThat(CallColorLook.bakeOrder(VideoFilterPreset.Warm)).containsExactly(VideoFilterPreset.Warm)
     }
 }

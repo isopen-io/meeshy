@@ -15,12 +15,6 @@
           "iosKey": "game.sparks.record.line",
           "androidName": "game_sparks_record_line",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.sparks.cumul.record",
-          "androidName": "game_sparks_cumul_record",
-          "status": "adopted"
         }
       ]
     }

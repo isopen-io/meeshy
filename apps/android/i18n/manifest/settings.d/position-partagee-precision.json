@@ -33,11 +33,6 @@
           "catalog": "app",
           "iosKey": "location.precision.city",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "location.precision.footnote",
-          "status": "adopted"
         }
       ]
     }

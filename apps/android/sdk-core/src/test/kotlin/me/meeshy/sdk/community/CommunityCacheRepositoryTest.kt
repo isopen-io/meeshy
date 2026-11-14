@@ -17,6 +17,8 @@ import me.meeshy.sdk.cache.store.inMemoryDatabase
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ContentFetchFailure
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.api.CommunityApi
 import org.junit.After
 import org.junit.Before
@@ -121,5 +123,14 @@ class CommunityCacheRepositoryTest {
 
         assertThat(c.get("community:detail", "c1", ApiCommunity.serializer())).isNull()
         assertThat(c.get("community:detail", "c2", ApiCommunity.serializer())).isNotNull()
+    }
+
+
+    @Test fun `un refus de lecture porte sa cause, jamais le seul statut`() {
+        assertThat(ApiError("denied", httpStatus = 403).toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.FORBIDDEN)
+        assertThat(ApiError("gone", httpStatus = 404).toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.NOT_FOUND)
+        assertThat(ApiError("boom", httpStatus = 500).toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.SERVER)
+        assertThat(ApiError("offline", code = "NETWORK").toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.NETWORK)
+        assertThat(ApiError("parse", code = "PARSE").toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.SERVER)
     }
 }

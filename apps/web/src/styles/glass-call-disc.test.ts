@@ -45,6 +45,10 @@ describe('glass.css — le disque de verre d’un bouton de l’appel (#17345)',
     expect(reduced).toMatch(/\.glass-call,[^{]*\.glass-call-prominent[^{]*\{[^}]*backdrop-filter:\s*none/);
   });
 
+  test('sous Réduire la transparence, le verre rouge du bandeau « Vous partagez » ne floute plus non plus (P16.12)', () => {
+    expect(reducedTransparency()).toMatch(/\.glass-call-danger[^{]*\{[^}]*backdrop-filter:\s*none/);
+  });
+
   test('sous Réduire les animations, le retour au doigt ne s’anime pas', () => {
     expect(blockOf('.glass-call-disc')).not.toMatch(/transition/);
   });

@@ -110,6 +110,7 @@ extension MeeshyComposerHost {
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
         sceneCameraSize = .armed
+        viewfinderYieldsToScene = false
         sceneCapture.recordingBudget = ComposerCaptureRecordingBudget.maxDuration(for: selectedFormat)
         // **Ce que le viseur prend appartient à la SCÈNE** : le marquage se fait à l'ARMEMENT, car
         // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879).
@@ -119,20 +120,22 @@ extension MeeshyComposerHost {
         sceneCapture.arm(mode: mode)
     }
 
-    /// **Une entrée du viseur** (#17432) : Fond et Galerie coupent la caméra ; Texte et Sticker la
-    /// gardent armée, le viseur cède la scène le temps de l'outil, et la prise passera sous eux.
+    /// **Une entrée du viseur** (#17432) : aucune ne coupe la caméra ; une feuille se pose sur le
+    /// viseur vivant, le texte prend la scène. Seul un choix en Galerie l'arrête (`closeOpeningLibraryForPick`).
     func handleViewfinderEntry(_ entree: ComposerViewfinderEntry) {
-        if entree.camera == .cut { disarmSceneCamera() } else { viewfinderYieldsToScene = true }
         guard let porte = entree.door else {
             openingPickFoundsScenes = true
             showsOpeningLibrary = true
             return
         }
         handleRailDoor(porte)
+        viewfinderYieldsToScene = ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet: presentedPortal != nil)
     }
 
     var viewfinderEntryToolIsOpen: Bool {
-        viewfinderYieldsToScene && (sceneToolOwnsScreen || presentedPortal != nil)
+        ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: viewfinderYieldsToScene, sceneToolOwnsScreen: sceneToolOwnsScreen,
+            sheetIsPresented: presentedPortal != nil, bandIsOpen: requestedSceneBand != nil)
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
@@ -167,22 +170,9 @@ extension MeeshyComposerHost {
 
     // MARK: - Le montage unique
 
-    /// **Le composer monte LE montage de la capture** (#9351) — celui que la
-    /// barre de conversation monte aussi. Ici il s'arme plein écran (A8, #17109), le
-    /// FORMAT dit si la photo et la vidéo sont offertes ; la prise se POSE dans la scène.
+    /// Le montage du viseur vit dans `ComposerSceneViewfinderMount`.
     func withSceneCameraViewfinder<Contenu: View>(_ contenu: Contenu) -> some View {
-        let modes = ComposerSceneCamera.modes(for: selectedFormat)
-        return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
-                                    allowsPhoto: modes.contains(.photo),
-                                    allowsVideo: modes.contains(.video),
-                                    yieldsToScene: viewfinderYieldsToScene, sceneObjects: ComposerViewfinderSceneCanvas.mounted(by: self),
-                                    onDisarm: { disarmSceneCamera() },
-                                    onDeliver: { poseSceneCapture($0) }) {
-            contenu
-        }
-        .environment(\.composerViewfinderSceneEntry, { handleViewfinderEntry($0) })
-        // L'outil fermé, le viseur revient sur la scène composée (#17432).
-        .adaptiveOnChange(of: viewfinderEntryToolIsOpen) { _, ouvert in if !ouvert { viewfinderYieldsToScene = false } }
+        ComposerSceneViewfinderMount(host: self) { contenu }
     }
 }
 

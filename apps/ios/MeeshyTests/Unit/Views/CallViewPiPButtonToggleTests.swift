@@ -15,11 +15,11 @@ final class CallViewPiPButtonToggleTests: XCTestCase {
         try AppSourceGuard.callViewSource()
     }
 
-    /// Le bouton vit dans les actions « l'appel » depuis #8394 ; il n'est
-    /// offert que si l'appel est éligible OU déjà en PiP (`CallActionContext`).
+    /// Le bouton vit dans l'en-tête depuis #17329 ; il n'est offert que si l'appel
+    /// est éligible OU déjà en PiP (`CallHeaderRule`).
     private func pipButtonBlock(in source: String) -> String {
-        guard let range = source.range(of: "func pictureInPictureActionButton(") else {
-            XCTFail("CallView must define pictureInPictureActionButton")
+        guard let range = source.range(of: "func pictureInPictureHeaderButton(") else {
+            XCTFail("CallView must define pictureInPictureHeaderButton")
             return ""
         }
         let end = source.index(range.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
@@ -29,7 +29,8 @@ final class CallViewPiPButtonToggleTests: XCTestCase {
     func test_pipAction_isOfferedWhenEligibleOrAlreadyActive() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive"),
+            source.contains("canActivateSystemPiP: callManager.canActivateSystemPiP,")
+                && source.contains("isSystemPiPActive: callManager.isSystemPiPActive,"),
             "Le bouton PiP doit rester offert tant que le PiP est actif, pour pouvoir en sortir."
         )
     }
