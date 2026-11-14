@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef } from 'react';
 
+import '@/styles/sheet-motion.css';
+
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -78,6 +81,9 @@ export function ConfirmDialog({
   const titleId = useId();
   const bodyId = useId();
   useBackDismiss(onCancel);
+  /* « Annuler » ferme le dialogue, dont l'événement `close` rappelle `onCancel` : un seul chemin, et la
+     sortie jouée par un fantôme (#18362). Un hôte qui démonte la confirmation la joue aussi. */
+  const { leave } = useDialogExit(ref, { kind: 'confirm' });
 
   useEffect(() => {
     const dialog = ref.current;
@@ -98,7 +104,7 @@ export function ConfirmDialog({
       aria-describedby={bodyId}
       onClose={onCancel}
       className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
-      style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
+      style={{ ...DIALOG_MOTION_STYLE, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid gap-3 p-5">
         <h2 id={titleId} className="text-thread font-extrabold">
@@ -120,7 +126,7 @@ export function ConfirmDialog({
           <button
             type="button"
             data-confirm="cancel"
-            onClick={onCancel}
+            onClick={leave}
             className="grid flex-auto place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 48,

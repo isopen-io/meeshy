@@ -231,6 +231,27 @@ const relever = (page, { controls, texts, porteeTextes }) =>
   );
 
 /**
+ * UNE MODALE QUI ENTRE N'EST PAS AU REPOS (#18362) : la feuille monte du bas en 280 ms, la fenêtre
+ * centrée entre en fondu, et le fantôme d'une modale fermée s'efface par-dessus l'écran. Relever
+ * pendant ce temps rendrait « hors viewport » un contrôle qui est en chemin. On attend donc que plus
+ * aucune animation ne joue sur un `<dialog>` et qu'aucun fantôme ne reste ; passé le délai, on relève
+ * quand même, et le verdict dira ce qu'il voit.
+ */
+const modalesAuRepos = (page) =>
+  page
+    .waitForFunction(
+      () =>
+        document.querySelector('[data-dialog-ghost]') === null &&
+        document.getAnimations().every((animation) => {
+          const cible = animation.effect?.target;
+          return animation.playState !== 'running' || !(cible instanceof Element) || !cible.matches('dialog');
+        }),
+      null,
+      { timeout: 3000 },
+    )
+    .catch(() => undefined);
+
+/**
  * AU REPOS : chaque contrôle et chaque texte, à son centre.
  *
  * Rend `{ controls, texts, exclus }`. `controls`/`texts` portent la forme que
@@ -239,6 +260,7 @@ const relever = (page, { controls, texts, porteeTextes }) =>
  * `exclus` porte ce qui a été écarté, et POURQUOI.
  */
 export const reachAtRest = async (page, { controls, texts, porteeTextes } = {}) => {
+  await modalesAuRepos(page);
   const faits = await relever(page, { controls, texts, porteeTextes });
   const out = { controls: [], texts: [], exclus: [] };
   for (const [quoi, cle] of [
