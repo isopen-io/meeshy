@@ -59,7 +59,7 @@
     <string name="game_state_missions_progress">Le rêve de cette nuit : %1$s sur %2$s actes.</string>
     <string name="reveal_streak_subtitle">%1$d jours d’affilée.</string>
     <string name="game_progression_offline_empty">Hors ligne — aucune progression en mémoire.</string>
-    <string name="progression_elans_empty">Publie une story, un post ou lance une conversation.</string>
+    <string name="progression_elans_empty">Publie une story, un post ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.</string>
     <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double.</string>
     <string name="game2_guide_moment_league_relegated_means">Les 5 derniers redescendent ; les étincelles repartent de zéro, rien d’autre ne baisse.</string>
     <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.</string>

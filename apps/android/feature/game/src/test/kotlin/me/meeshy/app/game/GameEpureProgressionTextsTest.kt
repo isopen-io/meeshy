@@ -24,13 +24,20 @@ class GameEpureProgressionTextsTest {
 
     private val shortened = mapOf(
         "game_progression_offline_empty" to "Hors ligne — aucune progression en mémoire.",
-        "progression_elans_empty" to "Publie une story, un post ou lance une conversation.",
         "game2_guide_moment_league_relegated_means" to "Les 5 derniers redescendent ; les étincelles repartent de zéro, rien d’autre ne baisse.",
     )
 
     @Test
-    fun `l avis hors ligne sans instantane, l etat vide de l elan et la descente de joute tiennent en une ligne`() {
+    fun `l avis hors ligne sans instantane et la descente de joute tiennent en une ligne`() {
         shortened.forEach { (name, expected) -> assertThat(valueIn("values-fr", name)).isEqualTo(expected) }
+    }
+
+    @Test
+    fun `l etat vide de l elan dit au repos ce que fait un elan, pas seulement quoi publier`() {
+        assertThat(valueIn("values-fr", "progression_elans_empty"))
+            .isEqualTo("Publie une story, un post ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.")
+        assertThat(valueIn("values", "progression_elans_empty"))
+            .isEqualTo("Post a story, a post or start a conversation: every family you keep going at once multiplies your sparks.")
     }
 
     @Test
@@ -41,7 +48,7 @@ class GameEpureProgressionTextsTest {
 
     @Test
     fun `chaque libelle raccourci est traduit dans les sept langues, jamais copie du francais, et plus court que l ancien`() {
-        val names = shortened.keys + "game_rules_concept_duo_body"
+        val names = shortened.keys + "game_rules_concept_duo_body" + "progression_elans_empty"
         names.forEach { name ->
             languages.forEach { folder ->
                 val value = valueIn(folder, name)
@@ -51,7 +58,7 @@ class GameEpureProgressionTextsTest {
         }
         languages.forEach { folder ->
             assertThat(valueIn(folder, "game_progression_offline_empty").length).isAtMost(60)
-            assertThat(valueIn(folder, "progression_elans_empty").length).isAtMost(90)
+            assertThat(valueIn(folder, "progression_elans_empty").length).isAtMost(140)
             assertThat(valueIn(folder, "game2_guide_moment_league_relegated_means").length).isAtMost(110)
         }
     }
@@ -60,7 +67,7 @@ class GameEpureProgressionTextsTest {
     fun `les quatre libelles ne sont plus generes depuis iOS`() {
         languages.forEach { folder ->
             val generated = generatedNames(folder)
-            (shortened.keys + "game_rules_concept_duo_body").forEach { assertThat(generated).doesNotContain(it) }
+            (shortened.keys + "game_rules_concept_duo_body" + "progression_elans_empty").forEach { assertThat(generated).doesNotContain(it) }
         }
     }
 }

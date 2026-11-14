@@ -59,7 +59,7 @@
     <string name="game_state_missions_progress">حلم هذه الليلة: %1$s من %2$s فصول.</string>
     <string name="reveal_streak_subtitle">%1$d أيام متتالية.</string>
     <string name="game_progression_offline_empty">غير متصل — لا يوجد تقدّم محفوظ.</string>
-    <string name="progression_elans_empty">انشر قصة أو منشورًا أو ابدأ محادثة.</string>
+    <string name="progression_elans_empty">انشر قصة أو منشورًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف شراراتك.</string>
     <string name="game_rules_concept_duo_body">مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة.</string>
     <string name="game2_guide_moment_league_relegated_means">الخمسة الأخيرون يهبطون؛ تبدأ الشرارات من الصفر ولا ينخفض شيء آخر.</string>
     <string name="game_concept_points_what">كل تبادل حقيقي يُطلق شرارات: ومعًا تصنع نورك.</string>
