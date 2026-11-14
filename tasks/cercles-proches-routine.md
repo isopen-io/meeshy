@@ -952,3 +952,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   servie (indigo hors ligne), libellé TalkBack « nom, précision · jusqu'à HH:MM ». Huit chaînes adoptées du catalogue iOS.
 - Reste de #16985 : l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan de type position).
 - Prochain lot recommandé : l'émission iOS (reste de #16983, `location:share-start|update|stop` depuis la fiche d'un Ami).
+
+## 2026-11-14 — réveil du matin : partager ma position depuis la fiche d'un Ami, sur iOS (#16983)
+
+- Réservation : lot `claude/cercles-16983-ios-emission` (émission iOS, reste de #16983). En cours.
