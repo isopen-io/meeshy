@@ -329,6 +329,22 @@ export function registerInviteRoute(
           .catch((err: unknown) => logger.warn('engagement social.conversation_invite failed', { err }));
       }
 
+      // Auto-join the invited user's currently-connected sockets to the
+      // conversation room so they receive message:new events immediately
+      // without a reconnect (mirrors POST /conversations/:id/participants).
+      //
+      // #18384 — AVANT le message d'arrivée, qui part sur `conversation:<id>` :
+      // tant que la socket de l'invité n'y est pas, il ne reçoit pas son propre
+      // message d'arrivée, et la file hors ligne ne le rattrape pas (il figure
+      // déjà dans `connectedUsers`, sans marqueur d'injoignabilité).
+      // ATTENDUE, et fail-OPEN : l'invitation est déjà persistée.
+      const inviteSocketManager = fastify.socketIOHandler?.getManager();
+      if (inviteSocketManager) {
+        await inviteSocketManager.joinUserToConversationRoom(userId, conversationId).catch(
+          (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
+        );
+      }
+
       // Annoncer l'arrivée — troisième des quatre portes, même loi.
       await postJoinSystemMessage(
         {
@@ -346,16 +362,6 @@ export function registerInviteRoute(
           addedBy: noticeActor(inviterMember)
         }
       );
-
-      // Auto-join the invited user's currently-connected sockets to the
-      // conversation room so they receive message:new events immediately
-      // without a reconnect (mirrors POST /conversations/:id/participants).
-      const inviteSocketManager = fastify.socketIOHandler?.getManager();
-      if (inviteSocketManager) {
-        inviteSocketManager.joinUserToConversationRoom(userId, conversationId).catch(
-          (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
-        );
-      }
 
       // #17032 — les TROIS diffusions d'adhésion, par leur site UNIQUE. #16837
       // en avait rapatrié UNE (l'arrivée) ; les deux autres étaient encore

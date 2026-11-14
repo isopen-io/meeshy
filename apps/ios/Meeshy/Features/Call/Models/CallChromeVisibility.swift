@@ -13,6 +13,8 @@ enum CallChromeElement: CaseIterable, Sendable {
     case featuredCapsule
     /// La puce « X capture l'écran de l'appel » (R1) : une bannière du haut (loi 11, #17963).
     case captureAlert
+    /// Les pastilles « En attente » et « Vidéo réduite » (E3 · E4, #18227) : des bannières du haut.
+    case servicePill
 }
 
 struct CallChromeVisibility: Equatable, Sendable {
@@ -36,7 +38,7 @@ struct CallChromeVisibility: Equatable, Sendable {
             return isRevealed && !isStageFullScreen && !isModeActive
         case .featuredCapsule:
             return isRevealed && !isModeActive
-        case .captureAlert:
+        case .captureAlert, .servicePill:
             return isVisible(.screenShareBanner)
         }
     }
