@@ -64,7 +64,8 @@ public struct KeyframeMarkerView: View, Equatable {
     }
 }
 
-nonisolated private struct SmallDiamond: Shape {
+/// Le losange d'une image clé, partagé avec la frise du kit (`MeeshyTimelineFriseKeyMark`).
+nonisolated struct SmallDiamond: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.minY))
