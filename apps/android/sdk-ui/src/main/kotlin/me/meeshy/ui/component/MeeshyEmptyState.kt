@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -124,19 +125,32 @@ private fun EmptyStateAction(label: String, onClick: () -> Unit, accent: Color, 
 
 /**
  * Placeholder plein cadre a froid : un aplat qui respire (shimmer) a la place d'un spinner nu.
- * N'est montre que sur cache VIDE ; masque a TalkBack.
+ * N'est montre que sur cache VIDE ; masque a TalkBack. Sous « Reduire les animations », l'aplat reste
+ * fixe a mi-chemin et aucune transition infinie n'est creee.
  */
 @Composable
 public fun MeeshyShimmerPlaceholder(
     modifier: Modifier = Modifier,
     base: Color = MeeshyTheme.tokens.backgroundTertiary,
 ) {
-    val transition = rememberInfiniteTransition(label = "meeshy-shimmer")
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "meeshy-shimmer-alpha",
-    )
+    val alpha = if (LocalReduceMotion.current) {
+        SHIMMER_RESTING_ALPHA
+    } else {
+        val breathing by rememberInfiniteTransition(label = "meeshy-shimmer").animateFloat(
+            initialValue = SHIMMER_LOW_ALPHA,
+            targetValue = SHIMMER_HIGH_ALPHA,
+            animationSpec = infiniteRepeatable(
+                tween(durationMillis = SHIMMER_PERIOD_MILLIS, easing = LinearEasing),
+                RepeatMode.Reverse,
+            ),
+            label = "meeshy-shimmer-alpha",
+        )
+        breathing
+    }
     Box(modifier.fillMaxSize().background(base.copy(alpha = alpha)).clearAndSetSemantics { })
 }
+
+private const val SHIMMER_LOW_ALPHA = 0.35f
+private const val SHIMMER_HIGH_ALPHA = 0.8f
+private const val SHIMMER_RESTING_ALPHA = (SHIMMER_LOW_ALPHA + SHIMMER_HIGH_ALPHA) / 2f
+private const val SHIMMER_PERIOD_MILLIS = 900

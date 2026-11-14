@@ -26,11 +26,13 @@ import {
   attachmentIsReaderBound,
   signReaderAttachmentUrls,
   type ReaderBoundMessage,
+  type ReaderSigningContext,
   type SignableAttachment,
 } from '../services/attachments/signedAttachmentUrls';
 import { readerFileUrlSignerFromEnv, type ReaderFileUrlSigner } from '../services/attachments/readerFileSignature';
 import { ADMITTED_FILE_READER_WHERE, withoutExpiredShareLinks } from '../services/attachments/fileReaderAdmission';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
+import { servedQuotedAttachments, type QuotedMessageRow } from '../services/messaging/servedQuotedMessage';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ReaderSignedDelivery' });
@@ -75,6 +77,81 @@ export function carriesReaderBoundAttachment(input: {
   return input.signer !== null && asAttachments(input.attachments).some((piece) => attachmentIsReaderBound(input.message, piece));
 }
 
+/** Le tableau `attachments` d'un porteur (charge, citation), signé ; un porteur sans tableau traverse tel quel. */
+function withAttachmentsSigned<H extends object>(holder: H, context: ReaderSigningContext): H {
+  const attachments = (holder as { readonly attachments?: unknown }).attachments;
+  if (!Array.isArray(attachments)) return holder;
+  return {
+    ...holder,
+    attachments: attachments.map((entry: unknown) =>
+      typeof entry === 'object' && entry !== null ? signReaderAttachmentUrls(entry as SignableAttachment, context) : entry
+    ),
+  };
+}
+
+/**
+ * La ligne citée que porte une ligne `Message` relue avec sa citation, ou
+ * `null` — `null` aussi pour une citation d'une AUTRE conversation que la ligne
+ * porteuse (ou dont l'une des deux conversations est illisible) : ses pièces ne
+ * se signent pas pour les lecteurs de celle-ci (calque `quotedContentMayNotTravel`).
+ */
+export function quotedRowOf(message: object): QuotedMessageRow | null {
+  const { replyTo: quoted, conversationId } = message as { readonly replyTo?: unknown; readonly conversationId?: unknown };
+  if (typeof quoted !== 'object' || quoted === null) return null;
+  const quotedConversationId = (quoted as { readonly conversationId?: unknown }).conversationId;
+  return typeof conversationId === 'string' && quotedConversationId === conversationId ? (quoted as QuotedMessageRow) : null;
+}
+
+const carriesUrl = (piece: SignableAttachment): boolean =>
+  typeof piece.fileUrl === 'string' || typeof piece.thumbnailUrl === 'string';
+
+/** Les pièces que la citation SERT (masquées retirées, supprimée vide), celles qui portent une adresse. */
+function servedQuotedPieces(quoted: object | null | undefined): readonly SignableAttachment[] {
+  const row = quoted as QuotedMessageRow | null | undefined;
+  if (!row || row.deletedAt || !Array.isArray(row.attachments)) return [];
+  return asAttachments(servedQuotedAttachments(row, row.attachments)).filter(carriesUrl);
+}
+
+/**
+ * #18470 — une pièce que la CITATION sert se lit-elle par lecteur ? Une réponse
+ * texte qui cite une photo scellée au repos (#13100) n'a aucune pièce à elle,
+ * mais sa citation porte une adresse que la route nue refuse.
+ */
+export function quoteCarriesReaderBoundAttachment(input: {
+  readonly quoted?: object | null;
+  readonly signer: ReaderFileUrlSigner | null;
+}): boolean {
+  if (input.signer === null || !input.quoted) return false;
+  const protection = protectionOfFullMessageRow(input.quoted);
+  return servedQuotedPieces(input.quoted).some((piece) => attachmentIsReaderBound(protection, piece));
+}
+
+/**
+ * La citation SERVIE d'une charge, ses pièces signées pour UN lecteur. La
+ * protection se lit sur la ligne citée BRUTE (`quoted`), jamais sur la
+ * citation servie dont les colonnes sont réécrites pour le lecteur.
+ */
+export function signedQuotedReply<R extends object>(
+  reply: R,
+  input: { readonly quoted: object | null | undefined; readonly participantId: string | undefined; readonly signer: ReaderFileUrlSigner | null }
+): R {
+  if (!input.quoted || !input.signer || !input.participantId) return reply;
+  return withAttachmentsSigned(reply, {
+    message: protectionOfFullMessageRow(input.quoted),
+    readerParticipantId: input.participantId,
+    signer: input.signer,
+  });
+}
+
+const withQuoteSigned = <P extends object>(
+  payload: P,
+  input: { readonly quoted?: object | null; readonly participantId: string; readonly signer: ReaderFileUrlSigner | null }
+): P => {
+  const reply = (payload as { readonly replyTo?: unknown }).replyTo;
+  if (typeof reply !== 'object' || reply === null || !input.quoted) return payload;
+  return { ...payload, replyTo: signedQuotedReply(reply, { ...input, quoted: input.quoted }) };
+};
+
 /**
  * Les destinataires d'une remise par lecteur, ou `null` quand la diffusion de
  * room suffit (sans aucune requête). Les destinataires sont TOUJOURS relus ici,
@@ -91,9 +168,10 @@ export async function readerSignedTargets(
     readonly attachments: unknown;
     readonly signer: ReaderFileUrlSigner | null;
     readonly now: Date;
+    readonly quoted?: object | null;
   }
 ): Promise<ReadonlyArray<ReaderSignedTarget> | null> {
-  if (!carriesReaderBoundAttachment(input)) return null;
+  if (!carriesReaderBoundAttachment(input) && !quoteCarriesReaderBoundAttachment(input)) return null;
   const rows = await prisma.participant.findMany({
     where: { conversationId: input.conversationId, ...ADMITTED_FILE_READER_WHERE },
     select: { id: true, userId: true, shareLinkId: true },
@@ -109,17 +187,18 @@ export async function readerSignedTargets(
 /** La charge d'UN lecteur : la même, ses adresses de pièces signées pour lui. */
 export function signedForReader<P extends object>(
   payload: P,
-  input: { readonly message: ReaderBoundMessage; readonly participantId: string; readonly signer: ReaderFileUrlSigner | null }
+  input: {
+    readonly message: ReaderBoundMessage;
+    readonly participantId: string;
+    readonly signer: ReaderFileUrlSigner | null;
+    readonly quoted?: object | null;
+  }
 ): P {
-  const attachments = (payload as { readonly attachments?: unknown }).attachments;
-  if (!Array.isArray(attachments)) return payload;
-  const context = { message: input.message, readerParticipantId: input.participantId, signer: input.signer };
-  return {
-    ...payload,
-    attachments: attachments.map((entry: unknown) =>
-      typeof entry === 'object' && entry !== null ? signReaderAttachmentUrls(entry as SignableAttachment, context) : entry
-    ),
-  };
+  return withAttachmentsSigned(withQuoteSigned(payload, input), {
+    message: input.message,
+    readerParticipantId: input.participantId,
+    signer: input.signer,
+  });
 }
 
 export type ReaderSignedPlan = {
@@ -138,14 +217,15 @@ async function planFor(
     readonly attachments: unknown;
     readonly signer: ReaderFileUrlSigner | null;
     readonly now: Date;
+    readonly quoted?: object | null;
   }
 ): Promise<ReaderSignedPlan | null> {
-  const { protection, signer } = input;
+  const { protection, signer, quoted } = input;
   const targets = await readerSignedTargets(prisma, { ...input, message: protection });
   if (!targets) return null;
   return {
     targets,
-    signFor: (payload, participantId) => signedForReader(payload, { message: protection, participantId, signer }),
+    signFor: (payload, participantId) => signedForReader(payload, { message: protection, participantId, signer, quoted }),
     signAttachment: (attachment, participantId) =>
       signReaderAttachmentUrls(attachment, { message: protection, readerParticipantId: participantId, signer }),
   };
@@ -168,6 +248,7 @@ export async function readerSignedPlan(
     attachments: input.attachments,
     signer: readerFileUrlSignerFromEnv(now),
     now,
+    quoted: quotedRowOf(input.message),
   });
 }
 

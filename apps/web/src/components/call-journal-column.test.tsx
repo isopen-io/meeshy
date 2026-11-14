@@ -130,7 +130,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
       expect(column?.className.split(' ')).toContain('glass-call-prominent');
       expect(column?.querySelectorAll('[data-call-journal-entry]')).toHaveLength(2);
       expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
-      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
       view.press('[data-call-more]');
       expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
       expect(view.find(COLUMN)).not.toBeNull();
@@ -419,7 +419,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
     expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
     view.done();
   });
 
@@ -438,7 +438,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     await openJournal(view);
     expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
     view.done();
   });
 });

@@ -340,8 +340,8 @@ final class CallAudioStageLayoutTests: XCTestCase {
     func test_duoAudio_morphsOneAvatar_insteadOfSwappingTwoLayouts() throws {
         let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
         let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
-        XCTAssertTrue(duo.contains("CallAudioStage(isCompact: pillText.compactsAudioLayout"))
-        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: pillText.compactsAudioLayout)"))
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"))
+        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: isCompact)"), "#18488 : la scène décide la forme, l'avatar la suit")
         XCTAssertFalse(duo.contains("if pillText.compactsAudioLayout {"), "deux sous-arbres échangés : l'avatar s'effaçait et reparaissait")
         XCTAssertFalse(duo.contains("callAvatarPair(size: 56)"), "un seul avatar, pas un second à 56 pt")
         let audio = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var audioCallLayout: some View", in: connected))
@@ -358,8 +358,8 @@ final class CallAudioStageLayoutTests: XCTestCase {
         XCTAssertTrue(stage.contains("AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))"), "le repos : l'avatar au-dessus du nom")
         XCTAssertTrue(stage.contains("compact.transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
         XCTAssertTrue(stage.contains("rest.transition(.opacity)"))
-        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(isCompact: isCompact, reduceMotion: reduceMotion))"))
-        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: isCompact)"), "≈ 200 ms, pas le ressort du (…)")
+        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(form: form, reduceMotion: reduceMotion))"))
+        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: form.isCompact)"), "≈ 200 ms, pas le ressort du (…)")
         XCTAssertTrue(stage.contains("alignment: isCompact ? .topLeading : .center"), "bord de tête : droite à gauche compris")
         let states = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+States.swift"))
         let pair = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func audioAvatarPair(isCompact: Bool) -> some View", in: states))
@@ -371,3 +371,127 @@ final class CallAudioStageLayoutTests: XCTestCase {
                           "l'anneau entoure le disque de l'autre, pas la pastille locale")
     }
 }
+
+/// #18488 — l'appel vocal à hauteur compacte (iPad en fenêtre basse, Split View, Stage Manager ; l'iPhone
+/// reste en portrait jusqu'à #9771) : la pilule entière, (…) compris, reste dans la fenêtre et touchable.
+/// Le duo audio cède sa place à la pilule : l'avatar, le nom et la durée passent à la forme compacte de
+/// P9b quand la scène n'a plus la hauteur de son repos, et le journal ne prend que ce qu'il reste.
+@MainActor
+final class CallAudioCompactHeightTests: XCTestCase {
+    private let topClearance: CGFloat = 84
+
+    private func form(journal: Bool = false, stage: CGFloat, top: CGFloat? = nil) -> CallAudioStageLayout.Form {
+        CallAudioStageLayout.form(isJournalOpen: journal, stageHeight: stage, topClearance: top ?? topClearance)
+    }
+
+    func test_aTallStage_keepsTheRestLayout() {
+        XCTAssertEqual(form(stage: 700), .rest)
+    }
+
+    func test_anUnmeasuredStage_keepsTheRestLayout_noFlashOfTheCompactForm() {
+        XCTAssertEqual(form(stage: 0), .rest)
+    }
+
+    func test_theRestLayout_needsItsContentBelowTheHeaderRow() {
+        let need = topClearance + CallAudioStageLayout.restContentHeight
+        XCTAssertEqual(form(stage: need), .rest)
+        XCTAssertEqual(form(stage: need - 1), .lowHeight)
+    }
+
+    func test_aLowStage_takesTheCompactForm_ofP9b() {
+        let form = form(stage: 111)
+        XCTAssertEqual(form, .lowHeight)
+        XCTAssertTrue(form.isCompact)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: form), CallAudioStageLayout.compactAvatarSize)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(form: form), CallAudioStageLayout.shrinkScale, accuracy: 0.0001)
+    }
+
+    func test_theOpenJournal_isCompact_whateverTheStageHeight() {
+        XCTAssertEqual(form(journal: true, stage: 900), .journal)
+        XCTAssertEqual(form(journal: true, stage: 90), .journal, "le journal garde la forme de P9b, sans états")
+        XCTAssertTrue(CallAudioStageLayout.Form.journal.isCompact)
+        XCTAssertFalse(CallAudioStageLayout.Form.rest.isCompact)
+    }
+
+    func test_theStates_stayOnScreen_whenOnlyTheHeightIsShort() {
+        XCTAssertTrue(CallAudioStageLayout.Form.lowHeight.showsStatuses, "Micro coupé, Reconnexion… ne disparaissent pas avec la hauteur")
+        XCTAssertFalse(CallAudioStageLayout.Form.journal.showsStatuses, "P9b.2 : aucune rangée d'états sous le journal")
+        XCTAssertFalse(CallAudioStageLayout.Form.rest.showsStatuses, "au repos, les états sont ceux de la disposition de repos")
+    }
+
+    func test_theCompactForm_ofTheJournalIsUntouched() {
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: .journal), 56)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: .rest), 120)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(form: .rest), 1)
+    }
+
+    func test_theFormChange_isOneIdentity_orTwoUnderReduceMotion() {
+        XCTAssertEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: false), CallAudioStageLayout.identity(form: .rest, reduceMotion: false))
+        XCTAssertNotEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: true), CallAudioStageLayout.identity(form: .rest, reduceMotion: true))
+        XCTAssertEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: true), CallAudioStageLayout.identity(form: .journal, reduceMotion: true))
+    }
+
+    // MARK: - Le journal ne prend que ce qu'il reste
+
+    func test_journalBudget_aTallWindow_keepsItsShare() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 844, reservedAround: reserved), 844 * 0.45, accuracy: 0.001)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 1366, reservedAround: reserved), CallJournalSizing.maximum)
+    }
+
+    func test_journalBudget_neverPushesThePillOutOfTheWindow() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        for window in stride(from: CGFloat(360), through: 700, by: 20) {
+            let list = CallJournalSizing.height(windowHeight: window, reservedAround: reserved)
+            XCTAssertLessThanOrEqual(list + reserved, max(window, reserved + CallJournalSizing.compactMinimum),
+                                     "à \(window) pt : le journal, l'avatar et la pilule tiennent, sauf le plancher lisible")
+        }
+    }
+
+    func test_journalBudget_aWindowBelowItsReserve_keepsOnlyTheReadableFloor() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 320, reservedAround: reserved), CallJournalSizing.compactMinimum)
+        XCTAssertLessThan(CallJournalSizing.compactMinimum, CallJournalSizing.minimum)
+    }
+
+    func test_listHeight_theGroupKeepsItsShare_theDuoReadsItsBudget() {
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: true, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.minimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.compactMinimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 844, topClearance: 84, bottomInset: 32), 844 * 0.45, accuracy: 0.001)
+    }
+
+    func test_journalBudget_theReserveCountsTheCompactHeader_theJournalChrome_andTheBaseRow() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: 84, bottomInset: 32)
+        XCTAssertEqual(reserved,
+                       84 + CallAudioStageLayout.compactAvatarSize + CallJournalSizing.compactHeaderGap
+                           + CallJournalSizing.panelChrome + CallJournalSizing.baseRowHeight + 32)
+    }
+
+    // MARK: - La vue
+
+    func test_theStage_yieldsToThePill_andMeasuresItself() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallAudioStage<", in: connected))
+        XCTAssertTrue(stage.contains("minHeight: 0"), "la scène ne pousse plus la pilule hors de la fenêtre : sa hauteur plancher est nulle")
+        XCTAssertTrue(stage.contains(".clipped()"), "ce qui déborde de la scène ne recouvre jamais la pilule")
+        XCTAssertTrue(stage.contains("CallAudioStageLayout.form("), "la forme se décide par la loi pure")
+        XCTAssertTrue(stage.contains("GeometryReader"), "la hauteur de la scène se mesure sur la scène, jamais sur la fenêtre")
+        XCTAssertTrue(stage.contains("isJournalOpen"))
+    }
+
+    func test_duoAudio_handsTheJournalStateToTheStage_notAReadyMadeCompactFlag() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"))
+        XCTAssertFalse(duo.contains("audioAvatarPair(isCompact: pillText.compactsAudioLayout)"), "l'avatar suit la forme que la scène décide")
+        let header = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallCompactAudioHeader", in: connected))
+        XCTAssertTrue(header.contains("CallAudioStatusRow"), "à hauteur courte, les états restent sous la durée")
+    }
+
+    func test_theJournalPanel_ofTheDuo_readsItsBudget() throws {
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        let rows = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var journalPanelRows: some View", in: transcript))
+        XCTAssertTrue(rows.contains("CallJournalSizing.listHeight(isGroup: isGroupStage, windowHeight: DeviceLayout.windowSize.height"), "le duo lit son budget, le groupe garde sa hauteur : sa grille a sa propre loi")
+    }
+}
+

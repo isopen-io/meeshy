@@ -17,12 +17,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.ui.theme.MeeshySpacing
 
 /** One local-action outcome to toast: a localised message and its severity. */
@@ -31,7 +35,8 @@ public data class FeedbackToastRequest(@StringRes val messageRes: Int, val kind:
 /**
  * Presents a stream of [FeedbackToastRequest] as the iOS `FeedbackToastManager` does: one
  * glass pill at a time at the bottom of the screen, announced politely to screen readers,
- * shown for [displayMillis] and then slid away before the next one.
+ * shown for [displayMillis] and then slid away before the next one (a short fade in place under
+ * « Reduire les animations »).
  */
 @Composable
 public fun FeedbackToastHost(
@@ -39,6 +44,7 @@ public fun FeedbackToastHost(
     modifier: Modifier = Modifier,
     displayMillis: Long = FEEDBACK_TOAST_DISPLAY_MS,
 ) {
+    val reduceMotion = LocalReduceMotion.current
     var current by remember { mutableStateOf<FeedbackToastRequest?>(null) }
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(toasts) {
@@ -56,13 +62,22 @@ public fun FeedbackToastHost(
             modifier = Modifier
                 .padding(MeeshySpacing.lg)
                 .semantics { liveRegion = LiveRegionMode.Polite },
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
+            enter = meeshyEnter(reduceMotion, fadeIn() + slideInVertically { it }),
+            exit = meeshyExit(reduceMotion, fadeOut() + slideOutVertically { it }),
         ) {
-            current?.let { MeeshyFeedbackToast(message = stringResource(it.messageRes), kind = it.kind) }
+            current?.let {
+                MeeshyFeedbackToast(
+                    message = stringResource(it.messageRes),
+                    modifier = Modifier.testTag(FEEDBACK_TOAST_TAG),
+                    kind = it.kind,
+                )
+            }
         }
     }
 }
+
+/** L'etiquette de test de la pilule animee. */
+internal const val FEEDBACK_TOAST_TAG: String = "feedback-toast"
 
 private const val FEEDBACK_TOAST_DISPLAY_MS = 2_500L
 private const val FEEDBACK_TOAST_EXIT_MS = 300L

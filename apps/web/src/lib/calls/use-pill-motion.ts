@@ -1,6 +1,7 @@
 import { createElement, type CSSProperties, type ReactNode, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 import { LEAVING, type MorphRect, type SwapShape } from './call-pill-motion';
+import type { WindowFrom } from './call-window-motion';
 
 /**
  * **LE MOUVEMENT DU VERRE, CHARGÉ À PART** (#17536) — les crochets minces que l'écran d'appel
@@ -164,23 +165,30 @@ export type CallView = 'screen' | 'pill';
 
 /**
  * Le rôle d'une vue dans l'échange : `leaving` — elle repart, montée le temps de son mouvement ; `arrives` —
- * elle se monte en prenant la place de l'autre ; `gone` — à appeler quand son départ est fini.
+ * elle se monte en prenant la place de l'autre ; `gone` — à appeler quand son départ est fini. L'écran porte en
+ * plus `from` — l'appel réduit vers lequel il se contracte ou d'où il se redéploie (P18.4) — et `revive` : un
+ * toucher pendant sa contraction la reprend (P18.8, loi 17.11).
  */
-export type ViewMotion = { readonly leaving: boolean; readonly arrives: boolean; readonly gone: () => void };
+export type ViewMotion = { readonly leaving: boolean; readonly arrives: boolean; readonly gone: () => void; readonly from?: WindowFrom; readonly revive?: () => void };
+
+const CAPSULE: WindowFrom = { kind: 'capsule' };
 
 /**
- * **L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT** (S1.7, S2.1, #17774) — la vue qui repart reste montée,
- * marquée {@link LEAVING}, jusqu'à la fin de son mouvement (`useViewMotion`) pendant que l'autre arrive. Seul
- * l'échange de l'une à l'autre se joue : un appel qui s'ouvre, ou une bulle qui rend l'écran, ne jouent rien
- * (aucune vue d'où ils viennent), et la vue qui s'en va vers la bulle se démonte à l'instant. Revenir à la vue
- * qui repart la rend à l'arrivée, sans la remonter.
+ * **L'ÉCRAN D'APPEL ET L'APPEL RÉDUIT S'ÉCHANGENT** (S1.7, S2.1, P18.4, P18.8, #17774) — la vue qui repart reste
+ * montée, marquée {@link LEAVING}, jusqu'à la fin de son mouvement (`useViewMotion`) pendant que l'autre arrive.
+ * L'écran qui revient de la BULLE (la vue d'avant était `null`) se redéploie depuis l'endroit où elle flotte :
+ * elle est relevée AU RENDU qui le monte, quand le DOM la montre encore. Un appel qui s'ouvre ne joue rien, et
+ * la capsule qui se replie en bulle se démonte à l'instant. Revenir à la vue qui repart la rend à l'arrivée, sans
+ * la remonter.
  */
-export function useViewHold(view: CallView | null): { readonly screen: ViewMotion | null; readonly pill: ViewMotion | null } {
+export function useViewHold(view: CallView | null, revive: () => void): { readonly screen: ViewMotion | null; readonly pill: ViewMotion | null } {
   const last = useRef<CallView | null>(view);
   const held = useRef<CallView | null>(null);
+  const bubble = useRef<WindowFrom | null>(null);
   const [, redraw] = useState(0);
   if (view !== last.current) {
     held.current = view !== null && last.current !== null ? last.current : null;
+    bubble.current = view === 'screen' && last.current === null ? (loaded?.bubbleFrom() ?? CAPSULE) : null;
     last.current = view;
   }
   const gone = (which: CallView) => () => {
@@ -188,26 +196,41 @@ export function useViewHold(view: CallView | null): { readonly screen: ViewMotio
     held.current = null;
     redraw((count) => count + 1);
   };
-  const motionOf = (which: CallView): ViewMotion | null => (view === which ? { leaving: false, arrives: held.current !== null, gone: gone(which) } : held.current === which ? { leaving: true, arrives: false, gone: gone(which) } : null);
+  const motionOf = (which: CallView): ViewMotion | null => {
+    const leaving = held.current === which;
+    if (view !== which && !leaving) return null;
+    const base = { leaving: view !== which, arrives: view === which && (held.current !== null || bubble.current !== null), gone: gone(which) };
+    return which === 'screen' ? { ...base, from: bubble.current ?? CAPSULE, revive } : base;
+  };
   return { screen: motionOf('screen'), pill: motionOf('pill') };
+}
+
+/** Un toucher sur la vue qui repart la reprend (P18.8) : le moteur l'écoute (`reviveOnTouch`), ce crochet lui dit quoi rendre. */
+function useReviveTouch(root: RefObject<HTMLElement | null>, motion: ViewMotion | undefined, engine: Engine | null): void {
+  const current = useRef(motion);
+  current.current = motion;
+  useEffect(() => (engine === null || root.current === null ? undefined : engine.reviveOnTouch(root.current, () => (current.current?.leaving ? current.current.revive : undefined))), [engine]);
 }
 
 /**
  * Le mouvement d'une vue sur son propre élément (`root`) : à l'arrivée du fondu et de l'échelle, au départ
- * l'inverse, puis `gone`. Sans moteur ou sans animation, le départ est immédiat. Interruptible.
+ * l'inverse, puis `gone`. L'écran se contracte vers l'appel réduit et s'en redéploie (`from`). Sans moteur ou
+ * sans animation, le départ est immédiat. Interruptible.
  */
 export function useViewMotion(root: RefObject<HTMLElement | null>, motion: ViewMotion | undefined): void {
   const engine = usePillEngine();
   const running = useRef<Animation | null>(null);
   const was = useRef<boolean | null>(null);
   const leaving = motion?.leaving;
+  useReviveTouch(root, motion, engine);
   useLayoutEffect(() => {
     const element = root.current;
     if (motion === undefined || element === null) return;
     const before = was.current;
     was.current = motion.leaving;
     if (before === null ? !motion.arrives && !motion.leaving : before === motion.leaving) return;
-    const played = engine?.playViewSwap(element, !motion.leaving, running.current) ?? null;
+    const entering = !motion.leaving;
+    const played = engine === null ? null : motion.from === undefined ? engine.playViewSwap(element, entering, running.current) : engine.playWindowSwap(element, entering, running.current, motion.from);
     running.current = played;
     if (!motion.leaving) return;
     if (played === null) motion.gone();
@@ -282,10 +305,10 @@ export function useFollowInline(node: RefObject<HTMLElement | null>, reserve: nu
 }
 
 /**
- * **LE MODE QUI REPART RESTE MONTÉ LE TEMPS DE SON DÉPART** (C1.12, #17813) — `mode` est celui que la
- * couche d'appel demande ; quand il retombe à `null`, celui des `plays` qui vient de repartir (le Montage,
- * qui redescend par le bas) reste monté, `leaving`, jusqu'à ce que son mouvement appelle `gone`. Les autres
- * modes se démontent à l'instant. Revenir au mode qui repart le rend à l'arrivée, sans le remonter.
+ * **LE MODE QUI REPART RESTE MONTÉ LE TEMPS DE SON DÉPART** (C1.12, P8.14, #17813, #17831) — `mode` est celui
+ * que la couche d'appel demande ; quand il retombe à `null`, celui des `plays` qui vient de repartir (le Montage,
+ * qui redescend par le bas ; Effets, qui se fond) reste monté, `leaving`, jusqu'à ce que son mouvement appelle
+ * `gone`. Les autres modes se démontent à l'instant. Revenir au mode qui repart le rend à l'arrivée, sans le remonter.
  */
 export function useModeHold<M extends string>(mode: M | null, plays: readonly M[]): { readonly mode: M | null; readonly leaving: boolean; readonly gone: () => void } {
   const last = useRef<M | null>(mode);

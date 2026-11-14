@@ -116,6 +116,10 @@ final class CrashDiagnosticsManager: NSObject {
 
     private nonisolated static let directoryName = "crash_diagnostics"
     private nonisolated static let maxStoredReports = 50
+    /// #18494 — un rapport surfacé n'est plus effacé : il part dans `archive/`,
+    /// où le porteur et les sessions le relisent (`devicectl device copy from`).
+    private nonisolated static let archiveDirectoryName = "archive"
+    nonisolated static let maxArchivedReports = 200
     private nonisolated static let fileExtension = "json"
 
     private var installed = false
@@ -319,14 +323,50 @@ final class CrashDiagnosticsManager: NSObject {
         return result
     }
 
-    /// Deletes only the files we've actually loaded into memory, leaving any
+    /// Archive only the files we've actually loaded into memory, leaving any
     /// unrelated content in the directory untouched and any reports that
-    /// arrive *after* this call intact for the next launch.
+    /// arrive *after* this call intact for the next launch. Un rapport surfacé
+    /// reste lisible (#18494) : des dizaines de hangs ont été montrés puis
+    /// perdus avec leurs piles avant qu'on puisse les analyser.
     private func clearLoadedFiles() {
         for url in loadedFileURLs {
-            FileManager.default.removeItemLogging(at: url, context: "surfaced crash report cleanup", logger: Logger.crash)
+            Self.archive(url)
         }
         loadedFileURLs.removeAll()
+        Self.trimArchive()
+    }
+
+    private nonisolated static func archiveDirectoryURL() -> URL? {
+        guard let dir = directoryURL() else { return nil }
+        let archive = dir.appendingPathComponent(archiveDirectoryName, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: archive.path) {
+            FileManager.default.createDirectoryLogging(at: archive, context: "crash reports archive directory", logger: Logger.crash)
+        }
+        return archive
+    }
+
+    private nonisolated static func archive(_ url: URL) {
+        guard let archive = archiveDirectoryURL() else { return }
+        let destination = archive.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            Logger.crash.error("Surfaced crash report not archived, kept in place: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Les plus anciens partent au-delà du plafond ; la loi dit combien.
+    private nonisolated static func trimArchive() {
+        guard let archive = archiveDirectoryURL(),
+              let files = try? FileManager.default.contentsOfDirectory(at: archive, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let reports = files.filter { $0.pathExtension == fileExtension }.sorted { lhs, rhs in
+            let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return l > r
+        }
+        for url in reports.dropFirst(CrashReportArchiveLaw.kept(count: reports.count, cap: maxArchivedReports)) {
+            FileManager.default.removeItemLogging(at: url, context: "crash report archive cap eviction", logger: Logger.crash)
+        }
     }
 
     private nonisolated static func directoryURL() -> URL? {
@@ -462,5 +502,13 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
         } catch {
             Logger.crash.error("MetricKit payload not persisted: \(error.localizedDescription, privacy: .public)")
         }
+    }
+}
+
+/// **Combien de rapports l'archive garde** (#18494) : les plus récents,
+/// jusqu'au plafond ; jamais un plafond nul, qui viderait l'archive.
+nonisolated enum CrashReportArchiveLaw {
+    static func kept(count: Int, cap: Int) -> Int {
+        max(0, min(count, max(cap, 1)))
     }
 }
