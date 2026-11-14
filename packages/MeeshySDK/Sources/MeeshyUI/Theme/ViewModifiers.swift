@@ -45,14 +45,30 @@ public extension View {
 
 // MARK: - Pressable Button
 
+/// La réponse d'appui d'une surface SANS verre : un léger enfoncement et un
+/// voile sombre. Sous « Réduire les animations », l'échelle reste à 1 et seul
+/// le voile répond (K02 § 4).
 public struct PressableButton: ViewModifier {
     @State private var isPressed = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
+
+    nonisolated static func effectiveScale(isPressed: Bool, reduceMotion: Bool) -> CGFloat {
+        isPressed && !reduceMotion ? 0.93 : 1
+    }
+
+    nonisolated static func effectiveBrightness(isPressed: Bool) -> Double {
+        isPressed ? -0.05 : 0
+    }
 
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isPressed ? 0.93 : 1.0)
-            .brightness(isPressed ? -0.05 : 0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+            .scaleEffect(Self.effectiveScale(isPressed: isPressed, reduceMotion: reduceMotion))
+            .brightness(Self.effectiveBrightness(isPressed: isPressed))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in isPressed = true }
@@ -216,18 +232,29 @@ public struct FloatingAnimation: ViewModifier {
 
 // MARK: - Bounce On Tap
 
+/// L'échelle d'appui d'une surface sans verre ; aucune sous « Réduire les
+/// animations ».
 public struct BounceOnTap: ViewModifier {
     public let scale: CGFloat
     @State private var isPressed = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(scale: CGFloat = 0.92) {
         self.scale = scale
     }
 
+    nonisolated static func effectiveScale(isPressed: Bool, pressedScale: CGFloat, reduceMotion: Bool) -> CGFloat {
+        isPressed && !reduceMotion ? pressedScale : 1
+    }
+
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isPressed ? scale : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+            .scaleEffect(Self.effectiveScale(isPressed: isPressed, pressedScale: scale, reduceMotion: reduceMotion))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -240,17 +267,28 @@ public struct BounceOnTap: ViewModifier {
 
 // MARK: - Bounce On Focus (text fields)
 
+/// Le léger grossissement d'un champ mis au point ; aucun sous « Réduire les
+/// animations ».
 public struct BounceOnFocus: ViewModifier {
     public let focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(focused: Bool) {
         self.focused = focused
     }
 
+    nonisolated static func effectiveScale(focused: Bool, reduceMotion: Bool) -> CGFloat {
+        focused && !reduceMotion ? 1.02 : 1
+    }
+
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(focused ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: focused)
+            .scaleEffect(Self.effectiveScale(focused: focused, reduceMotion: reduceMotion))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: focused)
     }
 }
 
