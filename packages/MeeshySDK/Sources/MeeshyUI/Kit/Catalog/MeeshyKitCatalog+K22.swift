@@ -117,7 +117,10 @@ private struct MeeshyTimelineFriseSample: View {
     }
 
     private var frise: some View {
-        MeeshyTimelineFrise(
+        let playhead: PlayheadClock? = stateID == "sans-tete" ? nil : clock
+        let onWindowCommit: ((String, ClosedRange<Double>, MeeshyTimelineFrisePart) -> Void)? =
+            stateID == "lecture-seule" ? nil : { commit($0, $1, $2) }
+        return MeeshyTimelineFrise(
             MeeshyTimelineFriseSampleScene.names,
             tracks: tracks,
             duration: MeeshyTimelineFriseSampleScene.duration,
@@ -127,9 +130,9 @@ private struct MeeshyTimelineFriseSample: View {
                 selectedID = id
                 if let time { clock.move(to: Float(time)) }
             },
-            playhead: stateID == "sans-tete" ? nil : clock,
+            playhead: playhead,
             onSeek: { clock.move(to: Float($0)) },
-            onWindowCommit: stateID == "lecture-seule" ? nil : commit,
+            onWindowCommit: onWindowCommit,
             onKeyframe: { _, _ in },
             timeText: MeeshyTimelineFriseSampleScene.text,
             content: { MeeshyTimelineFriseSampleContent(track: $0) },
