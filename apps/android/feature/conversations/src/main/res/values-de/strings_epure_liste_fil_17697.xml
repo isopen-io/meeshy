@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">Neuer Empfehlungslink</string>
     <string name="links_affiliate_create_max_uses_label">Anmeldungen begrenzen</string>
     <string name="links_affiliate_create_max_uses_note">Danach meldet der Link niemanden mehr an</string>
+    <string name="links_affiliate_create_max_uses_question">Was passiert, wenn das Limit erreicht ist?</string>
     <string name="links_affiliate_intro">Wer sich über diesen Link bei Meeshy anmeldet, zählt zu deinen Empfohlenen.</string>
     <string name="links_common_created">Erstellt am %1$s</string>
     <string name="links_affiliate_row_uses">%1$d von %2$d</string>

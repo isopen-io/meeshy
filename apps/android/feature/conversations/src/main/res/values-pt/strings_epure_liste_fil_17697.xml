@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">Novo link de indicação</string>
     <string name="links_affiliate_create_max_uses_label">Limitar os cadastros</string>
     <string name="links_affiliate_create_max_uses_note">Depois disso, o link não cadastra mais ninguém</string>
+    <string name="links_affiliate_create_max_uses_question">O que acontece ao atingir o limite?</string>
     <string name="links_affiliate_intro">Quem se cadastrar no Meeshy por este link passa a ser seu indicado.</string>
     <string name="links_common_created">Criado em %1$s</string>
     <string name="links_affiliate_row_uses">%1$d de %2$d</string>

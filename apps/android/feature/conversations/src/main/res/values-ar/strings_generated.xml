@@ -52,7 +52,6 @@
     <string name="conversations_lock_error_code_mismatch">الرمزان غير متطابقين</string>
     <string name="conversations_lock_error_master_incorrect">رمز PIN الرئيسي غير صحيح</string>
     <string name="conversations_lock_error_pin_mismatch">رمزا PIN غير متطابقين</string>
-    <string name="conversations_lock_subtitle_change_verify">أدخل رمز PIN الرئيسي الحالي</string>
     <string name="conversations_lock_subtitle_confirm_code">أكّد الرمز لـ %1$s</string>
     <string name="conversations_lock_subtitle_create_master">اختر رمز PIN رئيسيًا من 6 أرقام لتأمين أقفالك</string>
     <string name="conversations_lock_subtitle_enter_code">اختر رمزًا من 4 أرقام لـ %1$s</string>
@@ -193,7 +192,6 @@
     <string name="links_affiliate_create_max_uses_placeholder">غير محدود</string>
     <string name="links_affiliate_create_name_label">اسم الرابط</string>
     <string name="links_affiliate_create_name_placeholder">مثال: دعوة تويتر</string>
-    <string name="links_affiliate_empty_subtitle">أنشئ رابطًا لدعوة أصدقائك</string>
     <string name="links_affiliate_empty_title">لا توجد روابط إحالة</string>
     <string name="links_affiliate_stat_clicks">النقرات</string>
     <string name="links_affiliate_title">الإحالة</string>
@@ -276,7 +274,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">النقرات الفريدة</string>
     <string name="links_tracking_detail_unknown">غير معروف</string>
     <string name="links_tracking_detail_utm_title">إعداد UTM</string>
-    <string name="links_tracking_empty_subtitle">أنشئ رابطًا لتتبُّع نقراتك وحملاتك</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="zero">%1$d نقرات</item>
         <item quantity="one">%1$d نقرة</item>
@@ -299,7 +296,6 @@
     <string name="my_share_links_back">رجوع</string>
     <string name="my_share_links_copied">تم نسخ الرابط</string>
     <string name="my_share_links_copy">نسخ الرابط</string>
-    <string name="my_share_links_empty_subtitle">أنشئ رابطًا لدعوة أشخاص إلى محادثة</string>
     <string name="my_share_links_empty_title">لا توجد روابط مشاركة</string>
     <string name="my_share_links_expired">منتهٍ</string>
     <string name="my_share_links_expiry_24h">24 ساعة</string>

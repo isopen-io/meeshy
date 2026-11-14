@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -123,7 +124,7 @@ class EpureListeLot3Test {
 
     private fun setLimitField() = compose.setContent {
         MeeshyTheme {
-            var open by mutableStateOf<String?>(null)
+            var open by remember { mutableStateOf<String?>(null) }
             LinkField(
                 label = "Limit sign-ups",
                 value = "",

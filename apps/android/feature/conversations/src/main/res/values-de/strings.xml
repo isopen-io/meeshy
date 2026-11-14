@@ -8,9 +8,7 @@
     <string name="conversations_action_all_notifications">Alle Benachrichtigungen</string>
     <string name="conversations_lock_title_unlock">Unterhaltung entsperren</string>
     <string name="conversations_lock_title_unlock_all">Alles entsperren</string>
-    <string name="conversations_lock_subtitle_verify_master">Gib deine Master-PIN ein, um das Sperren zu erlauben</string>
     <string name="conversations_lock_subtitle_open">Gib den Code für %1$s ein, um sie zu öffnen</string>
-    <string name="conversations_lock_subtitle_unlock_all">Gib deine Master-PIN ein, um alle Unterhaltungen zu entsperren</string>
     <string name="conversations_change_master_pin">Master-PIN ändern</string>
     <string name="conversations_lock_security_menu">Sperreinstellungen</string>
     <string name="conversations_unlock_all">Alle Unterhaltungen entsperren</string>

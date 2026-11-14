@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">New referral link</string>
     <string name="links_affiliate_create_max_uses_label">Limit sign-ups</string>
     <string name="links_affiliate_create_max_uses_note">Beyond that, the link no longer signs anyone up</string>
+    <string name="links_affiliate_create_max_uses_question">What happens when the limit is reached?</string>
     <string name="links_affiliate_intro">Whoever signs up to Meeshy through this link becomes your referral.</string>
     <string name="links_common_created">Created %1$s</string>
     <string name="links_affiliate_row_uses">%1$d of %2$d</string>

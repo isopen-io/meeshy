@@ -8,9 +8,7 @@
     <string name="conversations_action_all_notifications">Tutte le notifiche</string>
     <string name="conversations_lock_title_unlock">Sblocca la conversazione</string>
     <string name="conversations_lock_title_unlock_all">Sblocca tutto</string>
-    <string name="conversations_lock_subtitle_verify_master">Inserisci il tuo PIN principale per autorizzare il blocco</string>
     <string name="conversations_lock_subtitle_open">Inserisci il codice di %1$s per aprirla</string>
-    <string name="conversations_lock_subtitle_unlock_all">Inserisci il tuo PIN principale per sbloccare tutte le conversazioni</string>
     <string name="conversations_change_master_pin">Cambia il PIN principale</string>
     <string name="conversations_lock_security_menu">Impostazioni di blocco</string>
     <string name="conversations_unlock_all">Sblocca tutte le conversazioni</string>

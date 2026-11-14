@@ -252,12 +252,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.lock.subtitle.enterCurrentMasterPin",
-          "androidName": "conversations_lock_subtitle_change_verify",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.lock.subtitle.confirmCodeFor",
           "androidName": "conversations_lock_subtitle_confirm_code",
           "status": "adopted"
@@ -289,14 +283,6 @@
           "iosKey": "conversation.lock.subtitle.enterCodeToUnlock",
           "androidName": "conversations_lock_subtitle_unlock",
           "status": "adopted"
-        },
-        {
-          "androidName": "conversations_lock_subtitle_unlock_all",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversations_lock_subtitle_verify_master",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -656,12 +642,6 @@
           "catalog": "app",
           "iosKey": "share.links.empty.title",
           "androidName": "my_share_links_empty_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.links.empty.subtitle",
-          "androidName": "my_share_links_empty_subtitle",
           "status": "adopted"
         },
         {

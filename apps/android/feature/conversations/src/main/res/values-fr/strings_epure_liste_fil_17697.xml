@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">Nouveau lien de parrainage</string>
     <string name="links_affiliate_create_max_uses_label">Limiter les inscriptions</string>
     <string name="links_affiliate_create_max_uses_note">Au-delà, le lien n’inscrit plus personne</string>
+    <string name="links_affiliate_create_max_uses_question">Que se passe-t-il à la limite ?</string>
     <string name="links_affiliate_intro">Qui s’inscrit sur Meeshy par ce lien devient votre filleul.</string>
     <string name="links_common_created">Créé le %1$s</string>
     <string name="links_affiliate_row_uses">%1$d sur %2$d</string>

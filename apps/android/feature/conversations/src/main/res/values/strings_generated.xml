@@ -52,7 +52,6 @@
     <string name="conversations_lock_error_code_mismatch">The codes don\'t match</string>
     <string name="conversations_lock_error_master_incorrect">Incorrect master PIN</string>
     <string name="conversations_lock_error_pin_mismatch">The PINs don\'t match</string>
-    <string name="conversations_lock_subtitle_change_verify">Enter your current master PIN</string>
     <string name="conversations_lock_subtitle_confirm_code">Confirm the code for %1$s</string>
     <string name="conversations_lock_subtitle_create_master">Choose a 6-digit master PIN to secure your locks</string>
     <string name="conversations_lock_subtitle_enter_code">Choose a 4-digit code for %1$s</string>
@@ -189,7 +188,6 @@
     <string name="links_affiliate_create_max_uses_placeholder">Unlimited</string>
     <string name="links_affiliate_create_name_label">Link name</string>
     <string name="links_affiliate_create_name_placeholder">E.g. Twitter invitation</string>
-    <string name="links_affiliate_empty_subtitle">Create a link to invite your friends</string>
     <string name="links_affiliate_empty_title">No referral links</string>
     <string name="links_affiliate_stat_clicks">Clicks</string>
     <string name="links_affiliate_title">Referral</string>
@@ -260,7 +258,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">Unique clicks</string>
     <string name="links_tracking_detail_unknown">Unknown</string>
     <string name="links_tracking_detail_utm_title">UTM CONFIGURATION</string>
-    <string name="links_tracking_empty_subtitle">Create a link to track your clicks and campaigns</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d click</item>
         <item quantity="other">%1$d clicks</item>
@@ -275,7 +272,6 @@
     <string name="my_share_links_back">Back</string>
     <string name="my_share_links_copied">Link copied</string>
     <string name="my_share_links_copy">Copy link</string>
-    <string name="my_share_links_empty_subtitle">Create a link to invite people into a conversation</string>
     <string name="my_share_links_empty_title">No share links</string>
     <string name="my_share_links_expired">Expired</string>
     <string name="my_share_links_expiry_24h">24 hours</string>

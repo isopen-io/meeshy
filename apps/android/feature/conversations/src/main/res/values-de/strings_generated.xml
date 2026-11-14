@@ -52,7 +52,6 @@
     <string name="conversations_lock_error_code_mismatch">Die Codes stimmen nicht überein</string>
     <string name="conversations_lock_error_master_incorrect">Master-PIN falsch</string>
     <string name="conversations_lock_error_pin_mismatch">Die PINs stimmen nicht überein</string>
-    <string name="conversations_lock_subtitle_change_verify">Geben Sie Ihre aktuelle Master-PIN ein</string>
     <string name="conversations_lock_subtitle_confirm_code">Bestätigen Sie den Code für %1$s</string>
     <string name="conversations_lock_subtitle_create_master">Wählen Sie eine 6-stellige Master-PIN, um Ihre Sperren zu sichern</string>
     <string name="conversations_lock_subtitle_enter_code">Wählen Sie einen 4-stelligen Code für %1$s</string>
@@ -189,7 +188,6 @@
     <string name="links_affiliate_create_max_uses_placeholder">Unbegrenzt</string>
     <string name="links_affiliate_create_name_label">Linkname</string>
     <string name="links_affiliate_create_name_placeholder">z. B. Twitter-Einladung</string>
-    <string name="links_affiliate_empty_subtitle">Erstelle einen Link, um deine Freunde einzuladen</string>
     <string name="links_affiliate_empty_title">Keine Empfehlungslinks</string>
     <string name="links_affiliate_stat_clicks">Klicks</string>
     <string name="links_affiliate_title">Empfehlung</string>
@@ -260,7 +258,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">Eindeutige Klicks</string>
     <string name="links_tracking_detail_unknown">Unbekannt</string>
     <string name="links_tracking_detail_utm_title">UTM-KONFIGURATION</string>
-    <string name="links_tracking_empty_subtitle">Erstelle einen Link, um Klicks und Kampagnen zu verfolgen</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d Klick</item>
         <item quantity="other">%1$d Klicks</item>
@@ -275,7 +272,6 @@
     <string name="my_share_links_back">Zurück</string>
     <string name="my_share_links_copied">Link kopiert</string>
     <string name="my_share_links_copy">Link kopieren</string>
-    <string name="my_share_links_empty_subtitle">Erstelle einen Link, um Personen in eine Unterhaltung einzuladen</string>
     <string name="my_share_links_empty_title">Keine Freigabelinks</string>
     <string name="my_share_links_expired">Abgelaufen</string>
     <string name="my_share_links_expiry_24h">24 Stunden</string>

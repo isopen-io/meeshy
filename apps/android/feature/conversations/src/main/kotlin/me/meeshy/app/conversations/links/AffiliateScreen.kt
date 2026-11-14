@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.AffiliateToken
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -112,7 +113,6 @@ fun AffiliateScreen(
                 LinkEmptyState(
                     MeeshyIcons.Link,
                     stringResource(R.string.links_affiliate_empty_title),
-                    stringResource(R.string.links_affiliate_empty_subtitle),
                     accent = accent,
                 )
             }
@@ -217,22 +217,21 @@ private fun AffiliateCreateSheet(sheet: AffiliateCreateSheet, accent: Color, vie
                 accent = accent,
                 placeholder = stringResource(R.string.links_affiliate_create_name_placeholder),
             )
-            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                LinkField(
-                    label = stringResource(R.string.links_affiliate_create_max_uses_label),
-                    value = sheet.form.maxUses,
-                    onValueChange = { value -> viewModel.editForm { it.withMaxUses(value) } },
-                    accent = accent,
-                    placeholder = stringResource(R.string.links_affiliate_create_max_uses_placeholder),
-                    keyboardType = KeyboardType.Number,
-                )
-                Text(
-                    stringResource(R.string.links_affiliate_create_max_uses_note),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.padding(start = MeeshySpacing.xs),
-                )
-            }
+            var openNoteId by remember { mutableStateOf<String?>(null) }
+            LinkField(
+                label = stringResource(R.string.links_affiliate_create_max_uses_label),
+                value = sheet.form.maxUses,
+                onValueChange = { value -> viewModel.editForm { it.withMaxUses(value) } },
+                accent = accent,
+                placeholder = stringResource(R.string.links_affiliate_create_max_uses_placeholder),
+                keyboardType = KeyboardType.Number,
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.links_affiliate_create_max_uses_question),
+                    text = stringResource(R.string.links_affiliate_create_max_uses_note),
+                ),
+                openNoteId = openNoteId,
+                onOpenNoteIdChange = { openNoteId = it },
+            )
             if (sheet.failed) LinkFormError(stringResource(R.string.links_affiliate_create_error))
             LinkPrimaryButton(
                 text = stringResource(R.string.links_affiliate_create_button),

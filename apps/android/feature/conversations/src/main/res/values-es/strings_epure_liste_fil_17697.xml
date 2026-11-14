@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">Nuevo enlace de referidos</string>
     <string name="links_affiliate_create_max_uses_label">Limitar los registros</string>
     <string name="links_affiliate_create_max_uses_note">Pasado ese límite, el enlace ya no registra a nadie</string>
+    <string name="links_affiliate_create_max_uses_question">¿Qué pasa al alcanzar el límite?</string>
     <string name="links_affiliate_intro">Quien se registre en Meeshy con este enlace pasa a ser tu referido.</string>
     <string name="links_common_created">Creado el %1$s</string>
     <string name="links_affiliate_row_uses">%1$d de %2$d</string>

@@ -97,7 +97,7 @@ class EpureOptionsPlusTest {
         val root = generateSequence(File(System.getProperty("user.dir").orEmpty()).absoluteFile) { it.parentFile }
             .first { File(it, "feature/chat/src/main/kotlin").isDirectory }
         val content = File(root, "feature/chat/src/main/kotlin/me/meeshy/app/chat/options/ConversationOptionsContent.kt").readText()
-        assertThat(content).doesNotContain("R.string.conversation_options_leave)")
-        assertThat(content).doesNotContain("OptionsDialog.LEAVE")
+        assertThat(Regex("OptionsPillButton\\(").findAll(content).count()).isEqualTo(1)
+        assertThat(content).contains("R.string.conversation_options_share")
     }
 }

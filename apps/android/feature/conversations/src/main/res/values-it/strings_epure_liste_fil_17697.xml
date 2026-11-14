@@ -12,6 +12,7 @@
     <string name="links_affiliate_create_title">Nuovo link di referral</string>
     <string name="links_affiliate_create_max_uses_label">Limita le iscrizioni</string>
     <string name="links_affiliate_create_max_uses_note">Oltre il limite, il link non iscrive più nessuno</string>
+    <string name="links_affiliate_create_max_uses_question">Cosa succede al raggiungimento del limite?</string>
     <string name="links_affiliate_intro">Chi si iscrive a Meeshy da questo link diventa un tuo invitato.</string>
     <string name="links_common_created">Creato il %1$s</string>
     <string name="links_affiliate_row_uses">%1$d su %2$d</string>

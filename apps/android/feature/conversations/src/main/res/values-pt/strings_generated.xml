@@ -52,7 +52,6 @@
     <string name="conversations_lock_error_code_mismatch">Os códigos não coincidem</string>
     <string name="conversations_lock_error_master_incorrect">PIN mestre incorreto</string>
     <string name="conversations_lock_error_pin_mismatch">Os PINs não coincidem</string>
-    <string name="conversations_lock_subtitle_change_verify">Digite seu PIN mestre atual</string>
     <string name="conversations_lock_subtitle_confirm_code">Confirme o código para %1$s</string>
     <string name="conversations_lock_subtitle_create_master">Escolha um PIN mestre de 6 dígitos para proteger seus bloqueios</string>
     <string name="conversations_lock_subtitle_enter_code">Escolha um código de 4 dígitos para %1$s</string>
@@ -190,7 +189,6 @@
     <string name="links_affiliate_create_max_uses_placeholder">Ilimitado</string>
     <string name="links_affiliate_create_name_label">Nome do link</string>
     <string name="links_affiliate_create_name_placeholder">Ex.: Convite do Twitter</string>
-    <string name="links_affiliate_empty_subtitle">Crie um link para convidar seus amigos</string>
     <string name="links_affiliate_empty_title">Nenhum link de indicação</string>
     <string name="links_affiliate_stat_clicks">Cliques</string>
     <string name="links_affiliate_title">Indicação</string>
@@ -264,7 +262,6 @@
     <string name="links_tracking_detail_stats_unique_clicks">Cliques únicos</string>
     <string name="links_tracking_detail_unknown">Desconhecido</string>
     <string name="links_tracking_detail_utm_title">CONFIGURAÇÃO UTM</string>
-    <string name="links_tracking_empty_subtitle">Crie um link para acompanhar seus cliques e campanhas</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d clique</item>
         <item quantity="many">%1$d cliques</item>
@@ -281,7 +278,6 @@
     <string name="my_share_links_back">Voltar</string>
     <string name="my_share_links_copied">Link copiado</string>
     <string name="my_share_links_copy">Copiar o link</string>
-    <string name="my_share_links_empty_subtitle">Crie um link para convidar pessoas para uma conversa</string>
     <string name="my_share_links_empty_title">Nenhum link de compartilhamento</string>
     <string name="my_share_links_expired">Expirado</string>
     <string name="my_share_links_expiry_24h">24 horas</string>

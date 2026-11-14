@@ -8,9 +8,7 @@
     <string name="conversations_action_all_notifications">كل الإشعارات</string>
     <string name="conversations_lock_title_unlock">إلغاء قفل المحادثة</string>
     <string name="conversations_lock_title_unlock_all">إلغاء قفل الكل</string>
-    <string name="conversations_lock_subtitle_verify_master">أدخل رمز PIN الرئيسي لتأذن بالقفل</string>
     <string name="conversations_lock_subtitle_open">أدخل رمز %1$s لفتحها</string>
-    <string name="conversations_lock_subtitle_unlock_all">أدخل رمز PIN الرئيسي لإلغاء قفل كل المحادثات</string>
     <string name="conversations_change_master_pin">تغيير رمز PIN الرئيسي</string>
     <string name="conversations_lock_security_menu">إعدادات القفل</string>
     <string name="conversations_unlock_all">إلغاء قفل كل المحادثات</string>
