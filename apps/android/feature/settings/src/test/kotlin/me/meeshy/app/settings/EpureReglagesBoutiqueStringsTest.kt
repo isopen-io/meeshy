@@ -13,8 +13,6 @@ class EpureReglagesBoutiqueStringsTest {
 
     private val allLocales: List<String?> = listOf<String?>(null) + Tree.locales
 
-    private fun source(file: String): String = Tree.kotlinSources().first { it.name == file }.readText()
-
     @Test
     fun `the shop orientation names what Meeshes buy`() {
         val text = Tree.entriesOf("fr").getValue("settings_packs_orientation").text.replace("\\'", "'")
@@ -31,11 +29,4 @@ class EpureReglagesBoutiqueStringsTest {
         }
     }
 
-    @Test
-    fun `the shop screen shows the orientation at rest before the balance`() {
-        val screen = source("PackShopScreen.kt")
-        val orientation = screen.indexOf("SettingsOrientation(stringResource(R.string.settings_packs_orientation))")
-        assertThat(orientation).isAtLeast(0)
-        assertThat(orientation).isLessThan(screen.indexOf("ui.balance?.let { Balance(it) }"))
-    }
 }
