@@ -65,10 +65,10 @@ struct ActivationInviteView: View {
     @ViewBuilder
     private var proofs: some View {
         if model.proven.contains(.email) {
-            proofLine(String(localized: "activation.email.done", defaultValue: "Adresse vérifiée ✓", bundle: .main))
+            proofLine(String(localized: "activation.email.done", defaultValue: "Adresse confirmée ✓", bundle: .main))
         }
         if model.proven.contains(.phone) {
-            proofLine(String(localized: "activation.phone.done", defaultValue: "Numéro vérifié ✓", bundle: .main))
+            proofLine(String(localized: "activation.phone.done", defaultValue: "Numéro confirmé ✓", bundle: .main))
         }
     }
 

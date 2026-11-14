@@ -28,7 +28,7 @@ final class ContactFilterTitleTests: XCTestCase {
         XCTAssertNotEqual(
             ContactFilter.affiliates.title,
             ContactFilter.affiliates.rawValue,
-            "la puce « Affiliés » rendrait la clé d'identité non accentuée"
+            "la puce « Filleuls » rendrait la clé d'identité non accentuée"
         )
 
         let french = try Self.frenchCatalogValues()
@@ -39,7 +39,7 @@ final class ContactFilterTitleTests: XCTestCase {
         )
         XCTAssertEqual(
             french["contacts.list.filter.affiliates"],
-            "Affiliés",
+            "Filleuls",
             "la valeur française du catalogue porte l'accent que le rawValue n'a pas"
         )
     }

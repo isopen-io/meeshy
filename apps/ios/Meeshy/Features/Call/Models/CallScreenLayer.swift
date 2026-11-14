@@ -23,6 +23,12 @@ enum CallScreenPanel: String, CaseIterable, Sendable {
         case .people: return false
         }
     }
+
+    /// #17964 — le journal se LIT au repos : ouvert, il ne déplie pas le (…) (P9b.3), et seul
+    /// son propre « Journal », au pied, en disque blanc, le referme (P13.9) — le rouvrir le garde.
+    var isReadAtRest: Bool {
+        self == .journal
+    }
 }
 
 enum CallScreenMode: String, CaseIterable, Sendable {
@@ -58,7 +64,8 @@ enum CallScreenLayer: Equatable, Sendable {
 
     var isExpanded: Bool {
         switch self {
-        case .menu, .menuOverJournal, .panel: return true
+        case .menu, .menuOverJournal: return true
+        case .panel(let panel): return !panel.isReadAtRest
         case .idle, .mode: return false
         }
     }
@@ -107,7 +114,7 @@ enum CallScreenLayer: Equatable, Sendable {
     func opening(_ panel: CallScreenPanel) -> CallScreenLayer {
         switch self {
         case .mode: return self
-        case .panel(let current) where current == panel: return .menu
+        case .panel(let current) where current == panel: return panel.isReadAtRest ? self : .menu
         case .idle, .menu, .menuOverJournal, .panel: return .panel(panel)
         }
     }

@@ -17,6 +17,7 @@ struct StoryExportShareSheet: View {
     /// — jamais le lecteur devant la story d'un autre (#9953, #10536).
     /// `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
     var author: StoryExportAuthor? = nil
+    @State private var openNoteID: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -83,18 +84,16 @@ struct StoryExportShareSheet: View {
 
     private var header: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "square.and.arrow.up.fill")
-                // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
-                // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
-                // masqué du rotor car le sous-titre adjacent porte le sens.
-                .font(MeeshyFont.fixedGlyph(36, weight: .semibold))
-                .foregroundStyle(MeeshyColors.brandGradient)
-                .accessibilityHidden(true)
-            Text(String(localized: "story.export.share.subtitle",
-                        defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."))
-            .font(MeeshyFont.relative(MeeshyFont.labelSize))
-            .multilineTextAlignment(.center)
-            .foregroundColor(.secondary)
+            // Le (i) se pose À CÔTÉ du glyphe, jamais seul sous lui (#18109).
+            MeeshyInfoNoted(note: StoryExportShareCopy.infoNote, openNoteID: $openNoteID, tint: .secondary) {
+                Image(systemName: "square.and.arrow.up.fill")
+                    // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
+                    // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
+                    // masqué du rotor car le titre de la feuille et le (i) portent le sens.
+                    .font(MeeshyFont.fixedGlyph(36, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.top, MeeshySpacing.sm)
     }

@@ -62,7 +62,7 @@ final class EntryScreensEpureTests: XCTestCase {
         "auth.login.two_factor.description": "Entrez le code à 6 chiffres de votre application d'authentification.",
         "auth.magiclink.email.subtitle": "Pas de mot de passe : nous envoyons un lien par e-mail.",
         "auth.magiclink.sent.heading": "Code et lien envoyés",
-        "auth.signup.email.verificationNotice": "Nous envoyons un lien à cette adresse : ouvrez-le pour valider.",
+        "auth.signup.email.verificationNotice": "Nous envoyons un lien à cette adresse : ouvrez-le pour confirmer.",
         "auth.signup.password.why.detail": "Sans mot de passe, vous vous connectez toujours par un lien reçu par e-mail.",
         "auth.signup.error.phoneOwned": "Numéro déjà rattaché à un compte : saisissez-en un autre ou connectez-vous.",
         "emailVerification.subtitle.accountCreated": "Compte créé. Code et lien envoyés à **%@**.",
@@ -106,10 +106,24 @@ final class EntryScreensEpureTests: XCTestCase {
         "onboarding.contacts.none.body": "Aucun contact n'est encore ici. Invite-les, on te prévient dès qu'un arrive.",
         "onboarding.contacts.none.body.nosms": "Aucun contact n'est encore ici. On te prévient dès qu'un arrive.",
         "onboarding.age.body": "Pour te proposer les bons espaces.",
+        "auth.login.two_factor.title": "Authentification à deux facteurs",
+        "auth.login.two_factor.placeholder": "Code de vérification",
+        "auth.login.two_factor.label": "Code de vérification",
+        "emailProof.secondFactorRequired": "Compte protégé par l'authentification à deux facteurs : connectez-vous avec votre mot de passe et votre code.",
+        "auth.username.placeholder": "Pseudo",
+        "activation.gate.title": "Confirmez votre adresse e-mail",
+        "onboarding.email.title": "Confirme ton adresse e-mail",
+        "activation.email.done": "Adresse confirmée ✓",
+        "activation.phone.done": "Numéro confirmé ✓",
+        "onboarding.story.title": "Ta première story",
+        "auth.signup.legal.consent": "En continuant, vous acceptez les %1$@ et la %2$@.",
+        "auth.signup.legal.terms": "conditions d'utilisation",
+        "auth.signup.legal.privacy": "politique de confidentialité",
     ]
 
     private static let sdkFrench: [String: String] = [
-        "auth.forgotPassword.verifyIdentityPrompt": "Entrez votre nom d'utilisateur et votre e-mail complets.",
+        "auth.forgotPassword.verifyIdentityPrompt": "Entrez votre pseudo et votre e-mail complets.",
+        "auth.forgotPassword.fullUsername": "Pseudo complet",
         "auth.forgotPassword.error.codeRequired": "Compte protégé : saisissez le code de votre application d'authentification.",
         "auth.forgotPassword.error.weak": "Mot de passe trop facile à deviner : choisissez-en un plus long.",
     ]
@@ -179,6 +193,7 @@ final class EntryScreensEpureTests: XCTestCase {
             "auth.magiclink.email.hintLabel", "auth.magiclink.email.title", "auth.magiclink.sent.codeAndLink",
             "auth.signup.subtitle", "emailVerification.nav.title", "emailVerification.noCode",
             "sessionClosed.signedOut.message", "sessionClosed.expired.message",
+            "emailVerification.provenElsewhere.title", "auth.signup.email.hintLabel", "auth.signup.password.why",
         ]
         let kept = unread.filter { app[$0] != nil }
         XCTAssertTrue(kept.isEmpty, "clés sans aucun lecteur, à retirer de toutes les langues : \(kept.joined(separator: ", "))")
@@ -236,10 +251,11 @@ final class EntryScreensEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("auth.signup.title"))
     }
 
-    func test_signup_passwordQuestion_staysVisible_andItsAnswerStaysBehindIt() throws {
+    func test_signup_passwordConsequence_isReadAtRest_noQuestionToUnfold() throws {
         let view = try appCode("Meeshy/Features/Auth/Signup/SignupView+Card.swift")
-        XCTAssertTrue(view.contains("auth.signup.password.why"))
-        XCTAssertTrue(view.contains("auth.signup.password.why.detail"))
+        XCTAssertFalse(view.contains("auth.signup.password.why\""), "la question repliée est retirée")
+        XCTAssertFalse(view.contains("isPasswordWhyExpanded"), "rien à déplier")
+        XCTAssertTrue(view.contains("Text(passwordWhyDetail)"), "la phrase se lit au repos sous le champ")
     }
 
     // MARK: - Vérification de l'e-mail
@@ -368,5 +384,104 @@ final class EntryScreensEpureTests: XCTestCase {
             XCTAssertFalse(french.contains("email"), "« e-mail » partout : \(key)")
             XCTAssertFalse(french.contains("courriel"), key)
         }
+    }
+
+    // MARK: - Épure 1/3, passe 2 (#17671) : les repères restent visibles, un mot pour une idée
+
+    func test_signup_emailNote_isReadAtRest_neverBehindAnInfoButton() throws {
+        let view = try appCode("Meeshy/Features/Auth/Signup/SignupView.swift")
+        XCTAssertTrue(view.contains("note: emailNote"), "le champ e-mail pose sa phrase sous lui")
+        XCTAssertTrue(view.contains("auth.signup.email.verificationNotice"))
+        XCTAssertFalse(view.contains("AuthInfoHint"), "plus de (i) dans l'inscription : la phrase est visible")
+        XCTAssertFalse(view.contains("auth.signup.email.hintLabel"))
+    }
+
+    func test_signup_consent_isOneSentence_whoseTwoWordGroupsAreTheLinks() throws {
+        let view = try appCode("Meeshy/Features/Auth/Signup/SignupView.swift")
+        XCTAssertTrue(view.contains("auth.signup.legal.consent"))
+        XCTAssertFalse(view.contains("\"settings.terms\""), "plus de rangée de deux boutons qui répétaient la phrase")
+        XCTAssertFalse(view.contains("\"settings.privacy_policy\""))
+        XCTAssertTrue(view.contains("isShowingTerms = true") && view.contains("isShowingPrivacy = true"), "les deux fiches restent atteignables")
+    }
+
+    /// Deux liens DANS une phrase ne sont, pour VoiceOver, qu'un élément : sans
+    /// action nommée, ouvrir les conditions passe par le rotor, qu'il faut
+    /// connaître. Les deux fiches s'ouvrent depuis la phrase, par leur nom.
+    func test_signup_consent_opensEachSheetFromVoiceOver_byItsName() throws {
+        let view = try appCode("Meeshy/Features/Auth/Signup/SignupView.swift")
+        XCTAssertTrue(view.contains(".accessibilityAction(named: Text(legalTerms)) { isShowingTerms = true }"))
+        XCTAssertTrue(view.contains(".accessibilityAction(named: Text(legalPrivacy)) { isShowingPrivacy = true }"))
+    }
+
+    func test_signupLegalNotice_linksTheTwoGroupsOfWords_inEveryLanguageOrder() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for language in ["fr"] + Self.otherLanguages {
+            let format = try XCTUnwrap(app["auth.signup.legal.consent"]?[language], language)
+            let terms = try XCTUnwrap(app["auth.signup.legal.terms"]?[language], language)
+            let privacy = try XCTUnwrap(app["auth.signup.legal.privacy"]?[language], language)
+            let text = SignupLegalNotice.attributed(format: format, terms: terms, privacy: privacy)
+            var labels: [SignupLegalLink: String] = [:]
+            for run in text.runs {
+                guard let url = run.link, let link = SignupLegalLink(url: url) else { continue }
+                labels[link] = String(text[run.range].characters)
+            }
+            XCTAssertEqual(labels[.terms], terms, "le lien des conditions couvre son groupe de mots : \(language)")
+            XCTAssertEqual(labels[.privacy], privacy, "le lien de la politique couvre son groupe de mots : \(language)")
+            XCTAssertFalse(String(text.characters).contains("%"), language)
+        }
+    }
+
+    func test_signupLegalLink_roundTripsItsUrl_andIgnoresForeignUrls() throws {
+        for link in SignupLegalLink.allCases { XCTAssertEqual(SignupLegalLink(url: link.url), link) }
+        XCTAssertNil(SignupLegalLink(url: try XCTUnwrap(URL(string: "https://meeshy.me/terms"))))
+    }
+
+    func test_catalog_theAddressIsConfirmed_theAccountIsValidated() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for key in ["activation.gate.title", "onboarding.email.title", "activation.email.done", "activation.phone.done", "auth.signup.email.verificationNotice"] {
+            let french = try XCTUnwrap(app[key]?["fr"], key).lowercased()
+            XCTAssertFalse(french.contains("valid"), "l'adresse et le numéro se CONFIRMENT : \(key)")
+            XCTAssertFalse(french.contains("vérifié"), key)
+        }
+        XCTAssertEqual(app["activation.invite.title"]?["fr"], "Validez votre compte", "le compte, lui, se VALIDE")
+    }
+
+    func test_catalog_twoFactor_usesTheSettingsName_andOneWordForTheCode() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for language in ["fr"] + Self.otherLanguages {
+            XCTAssertEqual(app["auth.login.two_factor.title"]?[language], app["2fa_section_title"]?[language], language)
+            XCTAssertEqual(app["auth.login.two_factor.placeholder"]?[language], app["auth.login.two_factor.label"]?[language], "le champ et son nom accessible disent la même chose : \(language)")
+        }
+        XCTAssertFalse(app["emailProof.secondFactorRequired"]?["fr"]?.lowercased().contains("double") ?? true)
+        let view = try appCode("Meeshy/Features/Auth/Views/LoginView.swift")
+        XCTAssertTrue(view.contains("auth.login.two_factor.label"), "le nom accessible du champ reste")
+    }
+
+    func test_catalog_username_isPseudo_onLoginAndForgottenPassword() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        let sdk = try Self.catalog(Self.sdkCatalogPath)
+        for language in ["fr"] + Self.otherLanguages {
+            XCTAssertEqual(app["auth.username.placeholder"]?[language], app["auth.signup.identity.username"]?[language], "même mot que l'inscription : \(language)")
+        }
+        XCTAssertFalse(sdk["auth.forgotPassword.fullUsername"]?["fr"]?.contains("utilisateur") ?? true)
+    }
+
+    func test_emailVerification_provenAddress_hasOneKey_andAndroidManifestFollowsIt() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        XCTAssertEqual(app["emailVerification.success"]?["fr"], "Adresse confirmée ✓")
+        XCTAssertNil(app["emailVerification.provenElsewhere.title"], "deux clés au même texte : l'une est retirée de toutes les langues")
+        let entry = try appCode("Meeshy/Features/Auth/Views/EmailCodeEntry.swift")
+        XCTAssertTrue(entry.contains("\"emailVerification.success\""))
+        let manifest = try String(contentsOf: Self.repoRoot.appendingPathComponent("apps/android/i18n/manifest/auth.d/verification-email-par-code.json"), encoding: .utf8)
+        XCTAssertFalse(manifest.contains("emailVerification.provenElsewhere.title"), "Android lit encore cette ligne : son manifeste suit la clé conservée")
+        XCTAssertTrue(manifest.contains("\"emailVerification.success\""))
+    }
+
+    func test_onboarding_storyAndProfileCards_dontShareTheirTitle() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for language in ["fr"] + Self.otherLanguages {
+            XCTAssertNotEqual(app["onboarding.story.title"]?[language], app["onboarding.profile.title"]?[language], language)
+        }
+        XCTAssertEqual(app["onboarding.profile.title"]?["fr"], "Montre-toi")
     }
 }

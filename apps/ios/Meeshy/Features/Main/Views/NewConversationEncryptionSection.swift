@@ -12,6 +12,7 @@ struct NewConversationEncryptionSection: View {
     let accentColor: String
     let onSelect: (ConversationCreationEncryption.Mode) -> Void
 
+    @State private var openNoteID: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -27,13 +28,15 @@ struct NewConversationEncryptionSection: View {
                 row(choice)
             }
 
-            Text(String(localized: "conversation.encryption.create.footer",
-                        defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
-                        bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundStyle(theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, MeeshySpacing.mdPlus)
+            MeeshyInfoNoted(note: ConversationEncryptionRevertNote.note(), openNoteID: $openNoteID, tint: theme.textMuted) {
+                Text(String(localized: "conversation.encryption.create.footer",
+                            defaultValue: "Le chiffrement de bout en bout ne se désactive jamais.",
+                            bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                    .foregroundStyle(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, MeeshySpacing.mdPlus)
         }
         .padding(.bottom, MeeshySpacing.sm)
         .accessibilityIdentifier("new-conversation-encryption")

@@ -180,7 +180,7 @@ public struct UnifiedShopView: View {
     private var failureText: String? {
         switch store.state.failure {
         case .insufficientMeeshes:
-            String(localized: "shop.error.insufficient", defaultValue: "Il te manque des Meeshes pour ce pack.", bundle: .module)
+            String(localized: "shop.error.insufficient", defaultValue: "Il vous manque des Meeshes pour ce pack.", bundle: .module)
         case .generic:
             nil
         case nil:
@@ -238,7 +238,7 @@ public struct UnifiedShopView: View {
     private var shelf: some View {
         if store.loadFailed {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger. Réessaie.", bundle: .module))
+                Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger.", bundle: .module))
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
                 Button {

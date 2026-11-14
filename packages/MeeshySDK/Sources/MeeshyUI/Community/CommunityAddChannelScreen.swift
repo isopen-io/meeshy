@@ -34,7 +34,7 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
                     conversationList
                 }
             }
-            .navigationTitle(String(localized: "community.addChannel.title", defaultValue: "Ajouter un channel", bundle: .module))
+            .navigationTitle(String(localized: "community.addChannel.title", defaultValue: "Ajouter une conversation", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.searchText, prompt: String(localized: "community.addChannel.search.prompt", defaultValue: "Rechercher une conversation...", bundle: .module))
             .toolbar {
@@ -65,13 +65,6 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
             Text(viewModel.searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium, design: .rounded))
                 .foregroundStyle(theme.textSecondary)
-            if viewModel.searchText.isEmpty {
-                Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Créez d'abord une conversation pour l'ajouter ici.", bundle: .module))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, MeeshySpacing.xxxl)
-            }
         }
     }
 

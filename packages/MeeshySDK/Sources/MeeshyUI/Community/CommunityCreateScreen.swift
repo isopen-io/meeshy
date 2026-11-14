@@ -265,7 +265,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                 Text(String(localized: "community.create.privacy.title", defaultValue: "Communauté privée", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
-                Text(viewModel.isPrivate ? String(localized: "community.create.privacy.private.description", defaultValue: "Seuls les membres invités peuvent rejoindre", bundle: .module) : String(localized: "community.create.privacy.public.description", defaultValue: "Tout le monde peut découvrir et rejoindre", bundle: .module))
+                Text(viewModel.isPrivate ? String(localized: "community.settings.privacy.byInvitation", defaultValue: "Sur invitation", bundle: .module) : String(localized: "community.settings.privacy.openToAll", defaultValue: "Ouverte à tous", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, design: .rounded))
                     .foregroundStyle(theme.textSecondary)
             }

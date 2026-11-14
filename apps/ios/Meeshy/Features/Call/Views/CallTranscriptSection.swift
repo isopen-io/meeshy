@@ -161,12 +161,22 @@ enum CallTranscriptRetentionNotice: Equatable {
     var text: String? {
         switch self {
         case .deviceOnly:
-            return String(localized: "call.transcript.disclaimer.endToEnd", defaultValue: "Transcription gardée sur cet appareil seulement : dans une conversation chiffrée de bout en bout, rien ne le quitte — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main)
+            return String(localized: "call.transcript.disclaimer.endToEnd", defaultValue: "Transcription gardée sur cet appareil seulement : rien ne quitte une conversation chiffrée de bout en bout.", bundle: .main)
         case .serverKeepsFinalSentences:
-            return String(localized: "call.transcript.disclaimer.server", defaultValue: "Transcription gardée sur cet appareil ; le serveur Meeshy garde aussi les phrases finales de l'appel pour ce journal — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main)
+            return String(localized: "call.transcript.disclaimer.server", defaultValue: "Transcription gardée sur cet appareil et, pour les phrases finales, sur le serveur Meeshy.", bundle: .main)
         case .hidden:
             return nil
         }
+    }
+
+    /// Le détail secondaire derrière le (i) : où d'autre la transcription se retrouve. La phrase de
+    /// conservation reste visible au repos (règle 7) ; la note ne porte que le cas limite.
+    var infoNote: MeeshyInfoNote? {
+        guard self != .hidden else { return nil }
+        return MeeshyInfoNote(
+            question: String(localized: "call.transcript.disclaimer.question", defaultValue: "Où se retrouve cette transcription ?", bundle: .main),
+            text: String(localized: "call.transcript.disclaimer.note", defaultValue: "Elle peut figurer dans une sauvegarde iCloud ou Finder de cet appareil. Elle inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main)
+        )
     }
 }
 
@@ -182,6 +192,7 @@ struct CallTranscriptSection: View {
     @State private var showOriginalText = false
     @State private var showDeleteConfirmation = false
     @State private var retentionNotice: CallTranscriptRetentionNotice = .hidden
+    @State private var openNoteID: String?
     private let localUserId = AuthManager.shared.currentUser?.id ?? ""
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -218,13 +229,11 @@ struct CallTranscriptSection: View {
             }
 
             if let notice = retentionNotice.text {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Image(systemName: "info.circle")
-                        .font(.caption2)
+                MeeshyInfoNoted(note: retentionNotice.infoNote, openNoteID: $openNoteID, tint: theme.textMuted) {
                     Text(notice)
                         .font(.caption2)
+                        .foregroundStyle(theme.textMuted)
                 }
-                .foregroundStyle(theme.textMuted)
                 .transition(.opacity)
             }
 

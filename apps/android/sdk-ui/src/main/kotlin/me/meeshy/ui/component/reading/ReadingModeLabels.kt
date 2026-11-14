@@ -39,20 +39,18 @@ public fun readingModeReasonText(reason: LensUnavailableReason?): String? = when
     LensUnavailableReason.NotYetRendered -> stringResource(R.string.reading_mode_not_yet_rendered)
 }
 
-/** Le sous-titre d'une entrée : sa description, ou la VRAIE raison quand elle est grisée. */
+/** Le sous-titre d'une entrée : sa description, ou la VRAIE raison quand elle est grisée. Le mode usuel (Bulles) n'en a pas. */
 @Composable
 public fun readingModeSubtitle(entry: ReadingModeMenuEntry): String? =
     readingModeReasonText(entry.reason) ?: when (val choice = entry.choice) {
         ReadingModeChoice.Auto -> null
-        is ReadingModeChoice.Mode -> stringResource(
-            when (choice.mode) {
-                ConversationReadingMode.FOCAL -> R.string.reading_mode_focal_subtitle
-                ConversationReadingMode.SCRIPT -> R.string.reading_mode_script_subtitle
-                ConversationReadingMode.SUMMARY -> R.string.reading_mode_summary_subtitle
-                ConversationReadingMode.RIVER -> R.string.reading_mode_river_subtitle
-                ConversationReadingMode.BUBBLES -> R.string.reading_mode_bubbles_subtitle
-            },
-        )
+        is ReadingModeChoice.Mode -> when (choice.mode) {
+            ConversationReadingMode.FOCAL -> stringResource(R.string.reading_mode_focal_subtitle)
+            ConversationReadingMode.SCRIPT -> stringResource(R.string.reading_mode_script_subtitle)
+            ConversationReadingMode.SUMMARY -> stringResource(R.string.reading_mode_summary_subtitle)
+            ConversationReadingMode.RIVER -> stringResource(R.string.reading_mode_river_subtitle)
+            ConversationReadingMode.BUBBLES -> null
+        }
     }
 
 /** « <mode>, <raison>, sélectionné » — l'annonce d'une entrée, sans que la couleur porte l'état. */

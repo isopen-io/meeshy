@@ -167,6 +167,7 @@
 18. **Simplicité : la vue affiche ce qu'elle dessine, rien en plus** (directive porteur du 2026-11-10, #17406).
     - Aucun extra : ni libellé, ni badge, ni bouton, ni panneau d'appoint que la vue ne montre pas.
     - **Ne pas régresser : ce que le code porte en plus de la planche est GARDÉ, et la planche le dessine (ou l'écrit sous la vue), sauf décision contraire du porteur** (directive porteur du 2026-11-14). Un écart où le code fait plus que la vue ne se corrige pas en retirant du code : on dessine ce qu'il porte. Seule une décision du porteur retire une fonction, comme le carrousel qui ne reste plus ouvert après un cadre (loi 14).
+    - **Les extras du code que le porteur garde sont dessinés** (#18226, #18227 ; E1 à E5) : le zoom de ma caméra et son indicateur (E1), le badge du micro coupé de l'autre et le bouton de zoom de ma vignette (E2), la pastille « En attente » (E3), la pastille « Vidéo réduite » (E4) et la rangée « Force du lissage » des réglages (E5). Aucune ne se retire sans décision du porteur. **« En attente » et « Vidéo réduite » existent sur les TROIS plateformes** (décision porteur du 2026-11-14, #18227) : Android les portait seul, iOS et le web s'alignent sur lui, mêmes déclencheurs, en verre partagé, dans la pile des bannières du haut.
     - Rien de ce qui existe ne se recrée : un lot réutilise ou étend le composant, la loi et le texte déjà là.
     - Le verre est partout l'atome adaptatif (`adaptiveLiquidGlass` sur iOS, `MeeshyGlassSurface` sur Android, la surface de verre partagée sur le web).
 
@@ -263,6 +264,18 @@ Les rails restent sur les bords, chacun centré verticalement sur sa hauteur lib
 | L5 · Écran reçu | L6 · Duo, je partage |
 |---|---|
 | ![L5](appels-vue-finale/vues/L5.png) | ![L6](appels-vue-finale/vues/L6.png) |
+
+### Ce que le code porte en plus
+
+Loi 18 : ce que le code porte en plus de la vue est gardé, et la planche le dessine (directive porteur du 2026-11-14). E1 et E2 montrent le zoom de ma caméra et le micro coupé de l'autre (iOS ; le badge est aussi sur le web, #8787) ; E3 et E4 montrent « En attente » et « Vidéo réduite », sur les trois plateformes (#18227) ; E5 montre la rangée « Force du lissage » du panneau de réglages (iOS, #9289).
+
+| E1 · Mon image en plein écran : le zoom | E2 · Le micro de l'autre est coupé | E3 · En attente |
+|---|---|---|
+| ![E1](appels-vue-finale/vues/E1.png) | ![E2](appels-vue-finale/vues/E2.png) | ![E3](appels-vue-finale/vues/E3.png) |
+
+| E4 · Vidéo réduite | E5 · Effets : réglages avec Lissage |
+|---|---|
+| ![E4](appels-vue-finale/vues/E4.png) | ![E5](appels-vue-finale/vues/E5.png) |
 
 ### Après l'appel : le journal fidèle
 

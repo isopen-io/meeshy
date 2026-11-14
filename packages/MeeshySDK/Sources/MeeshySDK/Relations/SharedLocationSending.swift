@@ -106,6 +106,9 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
     case rateLimited
     case unavailable
     case offline
+    /// L'accusé n'est pas revenu à temps : la passerelle a PU prendre l'envoi. Jamais lu comme « rien n'est parti » —
+    /// le centre garde « Arrêter » à portée tant que le doute n'est pas levé (#18166).
+    case unconfirmed
     case failed
 
     private static let refusals: [String: SharedLocationSendOutcome] = [
@@ -141,7 +144,7 @@ public enum SharedLocationStartVerdict: Sendable, Equatable {
         case .refused(let refusal):
             return .refused(SharedLocationSendOutcome.ofRefusal(refusal.code))
         case .timedOut:
-            return .refused(.offline)
+            return .refused(.unconfirmed)
         }
     }
 }

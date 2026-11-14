@@ -152,13 +152,15 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
-  test('→ passe au voisin ; au bout, rien ne boucle', () => {
+  test('→ PARCOURT jusqu’au voisin sans l’appliquer (#18186 : seule l’activation choisit) ; au bout, rien ne boucle', () => {
     const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'volcano' } });
     const last = view.find('[data-carousel-item="volcano"]') as HTMLElement;
+    act(() => last.focus());
     act(() => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
-    expect(view.applied).toEqual([]);
+    expect(document.activeElement).toBe(last);
     act(() => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })));
-    expect(view.applied).toEqual([{ faceEffect: 'demon' }]);
+    expect(document.activeElement?.getAttribute('data-carousel-item')).toBe('demon');
+    expect(view.applied).toEqual([]);
     view.done();
   });
 
@@ -203,10 +205,10 @@ describe('CallEffectsMode', () => {
     expect(view.find('[data-call-effects-categories]')).toBeNull();
     expect(view.find('[data-call-effects-settings-toggle] > span')?.className).toContain('bg-on-media');
     view.press('[data-call-effects-settings-toggle]');
-    expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
     expect(view.find('[data-call-mode-bar] [data-call-effects-categories]')).not.toBeNull();
     await later(260);
     expect(view.find('[data-call-effects-settings]')).toBeNull();
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
     view.done();
   });
 
@@ -229,7 +231,7 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
-  test('#17947 — le panneau reste ouvert tant qu’on règle : un réglage continu n’est pas un choix ; « Réglages » le referme, ‹ rend l’appel (P8b, loi 14)', async () => {
+  test('#17947 — le panneau reste ouvert tant qu’on règle : un réglage continu n’est pas un choix ; « Réglages » ou ‹ le referment sur le menu de base, un second ‹ rend l’appel (P8b, loi 14)', async () => {
     const view = mount({ blur: true });
     view.press('[data-call-effects-settings-toggle]');
     const slider = view.find('input[type="range"]') as HTMLInputElement;
@@ -249,8 +251,10 @@ describe('CallEffectsMode', () => {
     view.press('[data-call-effects-settings-toggle]');
     await later(260);
     expect(view.find('[data-call-effects-settings]')).toBeNull();
-    expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
     view.press('[data-call-effects-settings-toggle]');
+    view.press('[data-call-mode-quit]');
+    expect(view.exits).toEqual([]);
     view.press('[data-call-mode-quit]');
     expect(view.exits).toEqual(['exit']);
     view.done();
@@ -336,14 +340,13 @@ describe('CallEffectsMode', () => {
       view.done();
     });
 
-    test('et le retouche rend la bande de looks et ses puces par le chemin inverse', () => {
+    test('et le retouche rend les puces du menu de base par le chemin inverse (#18186 : la bande de looks attend qu’une puce la rouvre)', () => {
       const view = mount({ blur: true });
       view.press('[data-call-effects-settings-toggle]');
       played.length = 0;
       view.press('[data-call-effects-settings-toggle]');
       expect(played.filter((entry) => entry.what !== 'other').map((entry) => [entry.what, entry.keyframes[0]?.opacity])).toEqual([
         ['puces', 0],
-        ['looks', 0],
         ['panel', 1],
       ]);
       view.done();
@@ -410,6 +413,7 @@ describe('CallEffectsMode', () => {
     const view = mount();
     await view.settle('[data-carousel-item="angel"]');
     expect(view.saved).toEqual([]);
+    await view.settle('[data-call-effects-category="face"]');
     await view.settle('[data-carousel-item="angel"]');
     await view.settle('[data-carousel-item="angel"]');
     expect(view.grabbed).toEqual(['self-preview:angel']);
@@ -500,6 +504,7 @@ describe('CallEffectsMode', () => {
   test('la capture reste MON image : ni une vignette d’un autre, ni une vidéo voisine de l’aperçu (#8737)', async () => {
     const view = mount({ companions: [companion('amina')] });
     await view.settle('[data-carousel-item="angel"]');
+    await view.settle('[data-call-effects-category="face"]');
     await view.settle('[data-carousel-item="angel"]');
     await view.settle('[data-carousel-item="angel"]');
     expect(view.grabbed).toEqual(['self-preview:angel']);

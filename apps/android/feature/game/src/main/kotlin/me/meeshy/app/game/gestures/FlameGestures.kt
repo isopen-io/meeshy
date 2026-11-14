@@ -42,9 +42,7 @@ internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFre
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
         )
-        if (flame.freezes >= flame.maxFreezes) {
-            GameNote(stringResource(R.string.game_flame_panel_freeze_full))
-        } else {
+        if (flame.freezes < flame.maxFreezes) {
             SpendRow(freezeSpend, { meeshes(it) }, { stringResource(R.string.game_spend_missing_freeze, it) })
             GameActionButton(
                 title = stringResource(R.string.game_flame_panel_freeze_buy, meeshes(flame.freezePrice.toLong())),

@@ -222,7 +222,7 @@ struct ParticipantProfileSheet: View {
     @ViewBuilder
     private func capabilitiesSection(_ capabilities: ParticipantEntryCapabilities) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionTitle(capabilitiesLabel)
+            sectionTitle(capabilitiesTitle(capabilities))
 
             if canEditRights {
                 // En lecture, la feuille n'énonce que les refus. En ÉDITION il
@@ -235,7 +235,7 @@ struct ParticipantProfileSheet: View {
                         get: { capabilities.isAllowed(capability) == true },
                         set: { newValue in Task { await setRight(capability, to: newValue) } }
                     )) {
-                        Text(allowedLabel(capability))
+                        Text(capabilityNoun(capability))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                             .foregroundStyle(theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -263,12 +263,14 @@ struct ParticipantProfileSheet: View {
                             .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xs))
                             .foregroundStyle(MeeshyColors.warning)
                             .frame(width: 18)
-                        Text(deniedLabel(capability))
+                        Text(capabilityNoun(capability))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                             .foregroundStyle(theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.deniedAccessibilityLabel(title: capabilitiesTitle(capabilities), noun: capabilityNoun(capability)))
                     .accessibilityIdentifier("participant-profile-denied-\(capability.rawValue)")
                 }
             }
@@ -551,25 +553,36 @@ struct ParticipantProfileSheet: View {
         String(localized: "participantProfile.historyGrant.clear", defaultValue: "Retirer", bundle: .main)
     }
 
-    private func allowedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
+    /// Un nom par capacité, le même en lecture et en édition : le titre de section porte le verbe (règle 3).
+    private func capabilityNoun(_ capability: ParticipantEntryCapabilities.Capability) -> String {
         switch capability {
         case .canViewHistory:
-            return String(localized: "participantProfile.allowed.canViewHistory", defaultValue: "Voir les messages antérieurs", bundle: .main)
+            return String(localized: "participantProfile.capability.canViewHistory", defaultValue: "Historique avant son arrivée", bundle: .main)
         case .canSendMessages:
-            return String(localized: "participantProfile.allowed.canSendMessages", defaultValue: "Écrire des messages", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendMessages", defaultValue: "Messages", bundle: .main)
         case .canSendImages:
-            return String(localized: "participantProfile.allowed.canSendImages", defaultValue: "Envoyer des photos", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendImages", defaultValue: "Images", bundle: .main)
         case .canSendFiles:
-            return String(localized: "participantProfile.allowed.canSendFiles", defaultValue: "Envoyer des fichiers", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendFiles", defaultValue: "Fichiers", bundle: .main)
         case .canSendVideos:
-            return String(localized: "participantProfile.allowed.canSendVideos", defaultValue: "Envoyer des vidéos", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendVideos", defaultValue: "Vidéos", bundle: .main)
         case .canSendAudios:
-            return String(localized: "participantProfile.allowed.canSendAudios", defaultValue: "Envoyer de l’audio", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendAudios", defaultValue: "Audio", bundle: .main)
         case .canSendLinks:
-            return String(localized: "participantProfile.allowed.canSendLinks", defaultValue: "Envoyer des liens", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendLinks", defaultValue: "Liens", bundle: .main)
         case .canSendLocations:
-            return String(localized: "participantProfile.allowed.canSendLocations", defaultValue: "Partager sa position", bundle: .main)
+            return String(localized: "participantProfile.capability.canSendLocations", defaultValue: "Position", bundle: .main)
         }
+    }
+
+    /// Une rangée de refus lue seule par VoiceOver porte son titre : « Images » seul ne dit pas qu'il est refusé.
+    static func deniedAccessibilityLabel(title: String, noun: String) -> String { "\(title), \(noun)" }
+
+    /// « Autoriser » en édition, « Ne peut pas » quand des refus sont listés, « Dans cette conversation » pour « Aucune restriction ».
+    private func capabilitiesTitle(_ capabilities: ParticipantEntryCapabilities) -> String {
+        if canEditRights { return String(localized: "participantProfile.capabilities.allow", defaultValue: "Autoriser", bundle: .main) }
+        if capabilities.denied.isEmpty { return capabilitiesLabel }
+        return String(localized: "participantProfile.capabilities.cannot", defaultValue: "Ne peut pas", bundle: .main)
     }
 
     private var capabilitiesLabel: String { String(localized: "participantProfile.capabilities", defaultValue: "Dans cette conversation", bundle: .main) }
@@ -583,28 +596,4 @@ struct ParticipantProfileSheet: View {
     private var requireNicknameLabel: String { String(localized: "participantProfile.requireNickname", defaultValue: "pseudo", bundle: .main) }
     private var requireEmailLabel: String { String(localized: "participantProfile.requireEmail", defaultValue: "email", bundle: .main) }
     private var requireBirthdayLabel: String { String(localized: "participantProfile.requireBirthday", defaultValue: "date de naissance", bundle: .main) }
-
-    /// Un refus, en toutes lettres. Le `switch` est exhaustif par construction :
-    /// ajouter une capacité au SDK sans lui donner son libellé ici ne compile
-    /// pas — c'est la garde qui empêche une restriction muette.
-    private func deniedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
-        switch capability {
-        case .canViewHistory:
-            return String(localized: "participantProfile.denied.canViewHistory", defaultValue: "Ne voit pas les messages antérieurs à son arrivée", bundle: .main)
-        case .canSendMessages:
-            return String(localized: "participantProfile.denied.canSendMessages", defaultValue: "Ne peut pas écrire", bundle: .main)
-        case .canSendImages:
-            return String(localized: "participantProfile.denied.canSendImages", defaultValue: "Ne peut pas envoyer d’images", bundle: .main)
-        case .canSendFiles:
-            return String(localized: "participantProfile.denied.canSendFiles", defaultValue: "Ne peut pas envoyer de fichiers", bundle: .main)
-        case .canSendVideos:
-            return String(localized: "participantProfile.denied.canSendVideos", defaultValue: "Ne peut pas envoyer de vidéos", bundle: .main)
-        case .canSendAudios:
-            return String(localized: "participantProfile.denied.canSendAudios", defaultValue: "Ne peut pas envoyer d’audio", bundle: .main)
-        case .canSendLinks:
-            return String(localized: "participantProfile.denied.canSendLinks", defaultValue: "Ne peut pas envoyer de liens", bundle: .main)
-        case .canSendLocations:
-            return String(localized: "participantProfile.denied.canSendLocations", defaultValue: "Ne peut pas partager sa position", bundle: .main)
-        }
-    }
 }

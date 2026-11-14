@@ -2,8 +2,8 @@
   "families": {
     "android:app": {
       "labels": 319,
-      "words": 970,
-      "long": 6,
+      "words": 948,
+      "long": 2,
       "explanations": 26
     },
     "android:feature/auth": {
@@ -15,74 +15,74 @@
     "android:feature/calls": {
       "labels": 519,
       "words": 1801,
-      "long": 15,
-      "explanations": 91
+      "long": 12,
+      "explanations": 90
     },
     "android:feature/chat": {
-      "labels": 1136,
-      "words": 4434,
-      "long": 60,
-      "explanations": 114
+      "labels": 1046,
+      "words": 3893,
+      "long": 33,
+      "explanations": 98
     },
     "android:feature/community": {
-      "labels": 118,
+      "labels": 116,
       "words": 313,
       "long": 2,
-      "explanations": 32
+      "explanations": 26
     },
     "android:feature/contacts": {
-      "labels": 160,
-      "words": 775,
-      "long": 11,
-      "explanations": 14
+      "labels": 144,
+      "words": 709,
+      "long": 9,
+      "explanations": 9
     },
     "android:feature/conversations": {
-      "labels": 652,
-      "words": 1999,
-      "long": 11,
-      "explanations": 163
+      "labels": 566,
+      "words": 1657,
+      "long": 6,
+      "explanations": 125
     },
     "android:feature/feed": {
-      "labels": 341,
-      "words": 1063,
-      "long": 5,
-      "explanations": 30
+      "labels": 335,
+      "words": 955,
+      "long": 2,
+      "explanations": 28
     },
     "android:feature/game": {
       "labels": 1269,
-      "words": 8279,
-      "long": 119,
-      "explanations": 116
+      "words": 7909,
+      "long": 106,
+      "explanations": 115
     },
     "android:feature/notifications": {
-      "labels": 65,
-      "words": 164,
+      "labels": 62,
+      "words": 152,
       "long": 0,
-      "explanations": 9
+      "explanations": 7
     },
     "android:feature/profile": {
-      "labels": 188,
-      "words": 509,
+      "labels": 173,
+      "words": 470,
       "long": 1,
-      "explanations": 18
+      "explanations": 17
     },
     "android:feature/reels": {
-      "labels": 55,
-      "words": 126,
+      "labels": 47,
+      "words": 98,
       "long": 0,
-      "explanations": 5
+      "explanations": 2
     },
     "android:feature/settings": {
       "labels": 648,
       "words": 2710,
       "long": 25,
-      "explanations": 59
+      "explanations": 58
     },
     "android:feature/stories": {
-      "labels": 818,
-      "words": 2755,
-      "long": 17,
-      "explanations": 48
+      "labels": 810,
+      "words": 2644,
+      "long": 15,
+      "explanations": 40
     },
     "android:sdk-core": {
       "labels": 4,
@@ -92,9 +92,9 @@
     },
     "android:sdk-ui": {
       "labels": 937,
-      "words": 3384,
-      "long": 32,
-      "explanations": 73
+      "words": 3304,
+      "long": 22,
+      "explanations": 71
     },
     "ios:Meeshy/(phrases)": {
       "labels": 407,
@@ -115,10 +115,10 @@
       "explanations": 31
     },
     "ios:Meeshy/about": {
-      "labels": 45,
-      "words": 177,
+      "labels": 39,
+      "words": 160,
       "long": 2,
-      "explanations": 14
+      "explanations": 11
     },
     "ios:Meeshy/accessibility": {
       "labels": 37,
@@ -160,7 +160,7 @@
       "labels": 22,
       "words": 66,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/ageGate": {
       "labels": 1,
@@ -190,7 +190,7 @@
       "labels": 94,
       "words": 461,
       "long": 1,
-      "explanations": 8
+      "explanations": 7
     },
     "ios:Meeshy/block": {
       "labels": 2,
@@ -205,10 +205,10 @@
       "explanations": 0
     },
     "ios:Meeshy/bookmarks": {
-      "labels": 7,
-      "words": 20,
+      "labels": 6,
+      "words": 10,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/brand": {
       "labels": 2,
@@ -235,10 +235,10 @@
       "explanations": 87
     },
     "ios:Meeshy/calls": {
-      "labels": 50,
-      "words": 132,
+      "labels": 48,
+      "words": 119,
       "long": 0,
-      "explanations": 12
+      "explanations": 10
     },
     "ios:Meeshy/camera": {
       "labels": 13,
@@ -261,7 +261,7 @@
     "ios:Meeshy/circles": {
       "labels": 94,
       "words": 670,
-      "long": 13,
+      "long": 12,
       "explanations": 8
     },
     "ios:Meeshy/commands": {
@@ -295,10 +295,10 @@
       "explanations": 0
     },
     "ios:Meeshy/community": {
-      "labels": 19,
-      "words": 71,
+      "labels": 15,
+      "words": 39,
       "long": 0,
-      "explanations": 6
+      "explanations": 2
     },
     "ios:Meeshy/communityLink": {
       "labels": 7,
@@ -337,10 +337,10 @@
       "explanations": 3
     },
     "ios:Meeshy/contacts": {
-      "labels": 95,
-      "words": 347,
-      "long": 1,
-      "explanations": 5
+      "labels": 91,
+      "words": 301,
+      "long": 0,
+      "explanations": 0
     },
     "ios:Meeshy/content": {
       "labels": 8,
@@ -356,9 +356,9 @@
     },
     "ios:Meeshy/conversation": {
       "labels": 338,
-      "words": 2168,
-      "long": 47,
-      "explanations": 83
+      "words": 1884,
+      "long": 16,
+      "explanations": 79
     },
     "ios:Meeshy/conversationCard": {
       "labels": 23,
@@ -367,10 +367,10 @@
       "explanations": 2
     },
     "ios:Meeshy/conversations": {
-      "labels": 24,
-      "words": 92,
+      "labels": 22,
+      "words": 78,
       "long": 0,
-      "explanations": 3
+      "explanations": 1
     },
     "ios:Meeshy/conversationType": {
       "labels": 8,
@@ -446,13 +446,13 @@
     },
     "ios:Meeshy/emailProof": {
       "labels": 2,
-      "words": 34,
+      "words": 33,
       "long": 2,
       "explanations": 0
     },
     "ios:Meeshy/emailVerification": {
-      "labels": 23,
-      "words": 130,
+      "labels": 22,
+      "words": 127,
       "long": 0,
       "explanations": 4
     },
@@ -475,10 +475,10 @@
       "explanations": 5
     },
     "ios:Meeshy/feed": {
-      "labels": 234,
-      "words": 878,
-      "long": 7,
-      "explanations": 45
+      "labels": 225,
+      "words": 778,
+      "long": 3,
+      "explanations": 38
     },
     "ios:Meeshy/focal": {
       "labels": 23,
@@ -493,10 +493,10 @@
       "explanations": 0
     },
     "ios:Meeshy/friends": {
-      "labels": 5,
-      "words": 15,
+      "labels": 4,
+      "words": 10,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/gallery": {
       "labels": 8,
@@ -505,16 +505,16 @@
       "explanations": 1
     },
     "ios:Meeshy/game": {
-      "labels": 963,
-      "words": 7030,
-      "long": 111,
+      "labels": 962,
+      "words": 6554,
+      "long": 84,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
       "labels": 287,
       "words": 1816,
-      "long": 26,
-      "explanations": 7
+      "long": 22,
+      "explanations": 6
     },
     "ios:Meeshy/guest": {
       "labels": 9,
@@ -541,10 +541,10 @@
       "explanations": 0
     },
     "ios:Meeshy/keypad": {
-      "labels": 10,
-      "words": 43,
+      "labels": 7,
+      "words": 20,
       "long": 0,
-      "explanations": 3
+      "explanations": 1
     },
     "ios:Meeshy/language-picker": {
       "labels": 3,
@@ -583,10 +583,10 @@
       "explanations": 1
     },
     "ios:Meeshy/links": {
-      "labels": 14,
-      "words": 64,
+      "labels": 13,
+      "words": 59,
       "long": 0,
-      "explanations": 5
+      "explanations": 4
     },
     "ios:Meeshy/listening": {
       "labels": 5,
@@ -637,8 +637,8 @@
       "explanations": 0
     },
     "ios:Meeshy/member-management": {
-      "labels": 13,
-      "words": 27,
+      "labels": 10,
+      "words": 25,
       "long": 0,
       "explanations": 0
     },
@@ -650,8 +650,8 @@
     },
     "ios:Meeshy/message": {
       "labels": 34,
-      "words": 144,
-      "long": 3,
+      "words": 141,
+      "long": 2,
       "explanations": 1
     },
     "ios:Meeshy/Message": {
@@ -661,10 +661,10 @@
       "explanations": 0
     },
     "ios:Meeshy/message-detail": {
-      "labels": 82,
-      "words": 187,
+      "labels": 80,
+      "words": 176,
       "long": 0,
-      "explanations": 82
+      "explanations": 80
     },
     "ios:Meeshy/message-more": {
       "labels": 5,
@@ -691,10 +691,10 @@
       "explanations": 0
     },
     "ios:Meeshy/new_conversation": {
-      "labels": 7,
-      "words": 26,
+      "labels": 6,
+      "words": 19,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/notification": {
       "labels": 29,
@@ -703,10 +703,10 @@
       "explanations": 2
     },
     "ios:Meeshy/notifications": {
-      "labels": 24,
-      "words": 71,
+      "labels": 23,
+      "words": 66,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/offline": {
       "labels": 1,
@@ -727,8 +727,8 @@
       "explanations": 0
     },
     "ios:Meeshy/participantProfile": {
-      "labels": 42,
-      "words": 133,
+      "labels": 36,
+      "words": 76,
       "long": 0,
       "explanations": 0
     },
@@ -746,8 +746,8 @@
     },
     "ios:Meeshy/post": {
       "labels": 22,
-      "words": 141,
-      "long": 5,
+      "words": 107,
+      "long": 1,
       "explanations": 3
     },
     "ios:Meeshy/preview": {
@@ -758,14 +758,14 @@
     },
     "ios:Meeshy/profile": {
       "labels": 73,
-      "words": 202,
+      "words": 200,
       "long": 0,
-      "explanations": 10
+      "explanations": 7
     },
     "ios:Meeshy/progression": {
       "labels": 118,
-      "words": 576,
-      "long": 2,
+      "words": 555,
+      "long": 0,
       "explanations": 4
     },
     "ios:Meeshy/protection": {
@@ -859,10 +859,10 @@
       "explanations": 0
     },
     "ios:Meeshy/search": {
-      "labels": 15,
-      "words": 35,
+      "labels": 13,
+      "words": 26,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/security": {
       "labels": 9,
@@ -883,22 +883,28 @@
       "explanations": 0
     },
     "ios:Meeshy/sessions": {
-      "labels": 45,
-      "words": 168,
+      "labels": 41,
+      "words": 159,
       "long": 0,
-      "explanations": 3
+      "explanations": 0
     },
     "ios:Meeshy/settings": {
-      "labels": 233,
-      "words": 984,
-      "long": 14,
-      "explanations": 45
+      "labels": 232,
+      "words": 981,
+      "long": 10,
+      "explanations": 39
     },
     "ios:Meeshy/share": {
-      "labels": 157,
-      "words": 751,
-      "long": 8,
-      "explanations": 25
+      "labels": 151,
+      "words": 651,
+      "long": 3,
+      "explanations": 15
+    },
+    "ios:Meeshy/sharedLocation": {
+      "labels": 19,
+      "words": 105,
+      "long": 0,
+      "explanations": 1
     },
     "ios:Meeshy/shareLink": {
       "labels": 61,
@@ -932,8 +938,8 @@
     },
     "ios:Meeshy/starred": {
       "labels": 7,
-      "words": 31,
-      "long": 1,
+      "words": 26,
+      "long": 0,
       "explanations": 2
     },
     "ios:Meeshy/stats": {
@@ -955,10 +961,10 @@
       "explanations": 0
     },
     "ios:Meeshy/story": {
-      "labels": 192,
-      "words": 812,
-      "long": 8,
-      "explanations": 22
+      "labels": 186,
+      "words": 725,
+      "long": 7,
+      "explanations": 16
     },
     "ios:Meeshy/streak": {
       "labels": 3,
@@ -997,9 +1003,9 @@
       "explanations": 0
     },
     "ios:Meeshy/talkie": {
-      "labels": 29,
-      "words": 214,
-      "long": 3,
+      "labels": 28,
+      "words": 179,
+      "long": 1,
       "explanations": 4
     },
     "ios:Meeshy/thread": {
@@ -1024,7 +1030,7 @@
       "labels": 50,
       "words": 129,
       "long": 0,
-      "explanations": 23
+      "explanations": 22
     },
     "ios:Meeshy/translation": {
       "labels": 2,
@@ -1075,10 +1081,10 @@
       "explanations": 0
     },
     "ios:Meeshy/viewer": {
-      "labels": 23,
-      "words": 81,
+      "labels": 22,
+      "words": 73,
       "long": 0,
-      "explanations": 4
+      "explanations": 3
     },
     "ios:Meeshy/visitor": {
       "labels": 11,
@@ -1087,10 +1093,10 @@
       "explanations": 0
     },
     "ios:Meeshy/voice": {
-      "labels": 62,
-      "words": 301,
-      "long": 3,
-      "explanations": 12
+      "labels": 58,
+      "words": 250,
+      "long": 1,
+      "explanations": 8
     },
     "ios:Meeshy/welcome": {
       "labels": 5,
@@ -1142,7 +1148,7 @@
     },
     "ios:MeeshyUI/auth": {
       "labels": 81,
-      "words": 281,
+      "words": 279,
       "long": 0,
       "explanations": 4
     },
@@ -1171,10 +1177,10 @@
       "explanations": 0
     },
     "ios:MeeshyUI/community": {
-      "labels": 116,
-      "words": 337,
+      "labels": 101,
+      "words": 287,
       "long": 2,
-      "explanations": 40
+      "explanations": 28
     },
     "ios:MeeshyUI/composer": {
       "labels": 7,
@@ -1191,8 +1197,8 @@
     "ios:MeeshyUI/conversation": {
       "labels": 64,
       "words": 170,
-      "long": 2,
-      "explanations": 4
+      "long": 1,
+      "explanations": 3
     },
     "ios:MeeshyUI/emailSent": {
       "labels": 1,
@@ -1267,10 +1273,10 @@
       "explanations": 0
     },
     "ios:MeeshyUI/notifications": {
-      "labels": 43,
-      "words": 101,
+      "labels": 41,
+      "words": 92,
       "long": 0,
-      "explanations": 3
+      "explanations": 1
     },
     "ios:MeeshyUI/pack": {
       "labels": 2,
@@ -1297,8 +1303,8 @@
       "explanations": 0
     },
     "ios:MeeshyUI/profile": {
-      "labels": 59,
-      "words": 158,
+      "labels": 51,
+      "words": 134,
       "long": 0,
       "explanations": 3
     },
@@ -1340,7 +1346,7 @@
     },
     "ios:MeeshyUI/shop": {
       "labels": 57,
-      "words": 195,
+      "words": 189,
       "long": 0,
       "explanations": 13
     },
@@ -1351,8 +1357,8 @@
       "explanations": 41
     },
     "ios:MeeshyUI/story": {
-      "labels": 576,
-      "words": 1672,
+      "labels": 575,
+      "words": 1665,
       "long": 13,
       "explanations": 42
     },
@@ -1369,10 +1375,10 @@
       "explanations": 0
     },
     "ios:MeeshyUI/voiceProfile": {
-      "labels": 58,
-      "words": 288,
-      "long": 5,
-      "explanations": 12
+      "labels": 5,
+      "words": 17,
+      "long": 0,
+      "explanations": 0
     }
   }
 }

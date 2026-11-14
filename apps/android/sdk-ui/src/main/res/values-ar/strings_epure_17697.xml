@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du fil (#17697, 1/3) : sous-titres des modes de lecture, écrits à la main — les clés quittent le catalogue iOS (manifeste android-only). -->
+<resources>
+    <string name="reading_mode_focal_subtitle">تُبرَز رسالة اللحظة في الصف.</string>
+    <string name="reading_mode_script_subtitle">كل الرسائل في صف مسطّح بكثافة متساوية.</string>
+    <string name="reading_mode_summary_subtitle">ملخّص أولًا، والرسائل الأصلية بلمسة.</string>
+    <string name="reading_mode_river_subtitle">في المجموعات النشطة، مسار لكل صوت.</string>
+</resources>

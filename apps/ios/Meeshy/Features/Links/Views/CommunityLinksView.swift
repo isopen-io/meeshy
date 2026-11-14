@@ -124,7 +124,6 @@ struct CommunityLinksView: View {
                 EmptyStateView(
                     icon: "person.3.fill",
                     title: String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main),
-                    subtitle: String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main),
                     accentColor: accentHex,
                     compact: true
                 )

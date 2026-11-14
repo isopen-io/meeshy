@@ -647,13 +647,13 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 packsRequest = PackShopLauncher.Request(domain: nil, pack: nil)
             } label: {
-                settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {
+                settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundStyle(theme.textMuted)
                 }
             }
-            .accessibilityLabel(String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main))
+            .accessibilityLabel(String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main))
             SettingsRowSentence(text: SettingsOrientation.packs)
 
             Button {

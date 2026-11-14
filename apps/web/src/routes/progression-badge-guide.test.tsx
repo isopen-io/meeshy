@@ -101,8 +101,9 @@ describe('la page des badges', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  test('chaque badge montre la suite de ses paliers à venir', () => {
-    expect(page.match(/data-badge-upcoming="/g)).toHaveLength(ENGAGEMENT_AXES.length);
+  test('l’échelle des paliers ne se répète pas sous chaque médaille : elle vit une fois dans le carnet (épure #18148)', () => {
+    expect(page).not.toContain('data-badge-upcoming');
+    expect(page).not.toContain('data-badge-swatch');
   });
 
   test('le même lien « Comprendre les badges » vers la section du carnet', () => {

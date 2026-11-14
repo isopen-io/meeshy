@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -51,7 +52,8 @@ import org.robolectric.annotation.Config
  * #17902 · #16979 — la barre du Montage est celle d'Effets : `‹ · Réglages · (+)` sous les puces de tri dont « Cadres » est
  * pressée, ni « Quitter » ni « Valider ». (+) ouvre Effets sur un genre absent de la pile, trois couches au plus ; son appui
  * long liste les effets appliqués pour en annuler un, et annuler referme la liste. Retirer la couche « cadre » retire aussi
- * le cadre gardé en direct, par le chemin de « Cadre ».
+ * le cadre gardé en direct, par le chemin de « Cadre ». C1 généralisée (#18185) : le Montage s'ouvre sur son carrousel, un
+ * cadre choisi le referme et la barre revient à son menu de base ; ‹ referme ce qui est ouvert avant de rendre l'appel.
  *
  * Le Montage est posé dans un écran de téléphone réel (360 × 800 dp), comme les autres témoins de l'appel : dans la fenêtre
  * Robolectric par défaut (320 × 470 dp), un cadre choisi ajoute l'option « Cadre » au-dessus des ambiances et la barre
@@ -149,12 +151,118 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `sous la barre les puces de tri, Cadres est pressee, et toucher Retour rend l'appel`() {
+    fun `le Montage s'ouvre sur son carrousel, Cadres pressee, et toucher Retour rend l'appel`() {
         val outcome = Outcome()
         show(outcome)
 
         rule.onNodeWithText("Frames").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
         rule.onNodeWithText("Colour").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
+        rule.onNodeWithContentDescription("Call montage").assertExists()
+        rule.onNodeWithContentDescription("Back to the call").performClick()
+        assertThat(outcome.closed).isEqualTo(1)
+    }
+
+    private fun carouselAction(label: String): () -> Boolean =
+        rule.onNodeWithContentDescription("Call montage").fetchSemanticsNode().config[SemanticsActions.CustomActions].first { it.label == label }.action
+
+    private fun activateCarousel() {
+        val activate = rule.onNodeWithContentDescription("Call montage").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        rule.runOnUiThread { activate() }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun `un pas du lecteur d'ecran parcourt sans appliquer ni refermer`() {
+        val capture = capture()
+        show(Outcome(), capture = capture)
+        val before = CallMontagePickRule.choice(capture.pick.value, 2)
+
+        rule.runOnUiThread { carouselAction("Next montage")() }
+        rule.waitForIdle()
+
+        assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isEqualTo(before)
+        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Cover"))
+    }
+
+    /**
+     * C1 généralisée (décision porteur du 2026-11-14, #18185, remplace #17962 point 2) : je touche un cadre, il s'applique
+     * aussitôt et la barre REVIENT à `‹ · Réglages · (+)` — le carrousel ne reste pas ouvert. Le choix passe ici par le
+     * lecteur d'écran (un pas, puis l'activer), le même `onSelect` que le carrousel aimanté au repos.
+     */
+    @Test
+    fun `choisir un cadre l'applique et referme le carrousel, la barre revient au menu de base`() {
+        val capture = capture()
+        show(Outcome(), capture = capture)
+        val before = CallMontagePickRule.choice(capture.pick.value, 2)
+
+        rule.runOnUiThread { carouselAction("Next montage")() }
+        activateCarousel()
+
+        assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isNotEqualTo(before)
+        rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
+        rule.onNodeWithText("Classics").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
+        rule.onNodeWithContentDescription("Back to the call").assertExists()
+        rule.onNodeWithContentDescription("Settings").assertExists()
+        rule.onNodeWithContentDescription("Add another look").assertExists()
+    }
+
+    @Test
+    fun `retoucher Cadres referme le carrousel, la toucher encore le rouvre, sans ouvrir Effets`() {
+        val outcome = Outcome()
+        show(outcome)
+        rule.onNodeWithText("Frames").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
+
+        rule.onNodeWithText("Frames").performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithContentDescription("Call montage").assertExists()
+        assertThat(outcome.opened).isEmpty()
+        assertThat(outcome.closed).isEqualTo(0)
+    }
+
+    @Test
+    fun `une ambiance touchee trie le carrousel sans le refermer`() {
+        show(Outcome())
+
+        rule.onNodeWithText("Signature").performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithContentDescription("Call montage").assertExists()
+    }
+
+    @Test
+    fun `toucher l'option Cadre est un choix, le carrousel se referme et l'option reste sur le menu de base`() {
+        val controller = live()
+        val capture = capture().also { it.show(signature, 2) }
+        show(Outcome(), controller, capture)
+        rule.onNodeWithContentDescription("Live frame").assertExists()
+
+        rule.onNodeWithContentDescription("Live frame").performClick()
+        rule.waitForIdle()
+
+        assertThat(controller.state.value.frameId).isEqualTo(CallFrameLayer.chosen(capture.pick.value, 2))
+        rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Live frame").assertExists()
+        rule.onNodeWithContentDescription("Back to the call").assertExists()
+    }
+
+    @Test
+    fun `Retour referme le panneau Reglages et rend le menu de base, un second Retour rend l'appel (#17947)`() {
+        val outcome = Outcome()
+        show(outcome)
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.waitForIdle()
+        assertThat(outcome.closed).isEqualTo(0)
+        rule.onNodeWithContentDescription("Each face").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assertExists()
+
         rule.onNodeWithContentDescription("Back to the call").performClick()
         assertThat(outcome.closed).isEqualTo(1)
     }
@@ -178,7 +286,7 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `une puce d'un autre genre ouvre Effets sur ce genre, celle de Cadres ne fait rien`() {
+    fun `une puce d'un autre genre ouvre Effets sur ce genre, celle de Cadres n'ouvre pas Effets`() {
         val outcome = Outcome()
         show(outcome)
 
@@ -241,7 +349,8 @@ class CallMontageEffectsBarTest {
 
         assertThat(outcome.removed).containsExactly(CallEffectKind.Color)
         rule.onNodeWithText("Applied effects").assertDoesNotExist()
-        rule.onNodeWithText("Classics").assertExists()
+        rule.onNodeWithText("Classics").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assertExists()
         rule.onNodeWithContentDescription("Settings").assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, androidx.compose.ui.state.ToggleableState.Off))
     }
 
@@ -258,7 +367,7 @@ class CallMontageEffectsBarTest {
         rule.waitForIdle()
 
         rule.onNodeWithText("Applied effects").assertDoesNotExist()
-        rule.onNodeWithText("Classics").assertExists()
+        rule.onNodeWithText("Frames").assertExists()
     }
 
     @Test

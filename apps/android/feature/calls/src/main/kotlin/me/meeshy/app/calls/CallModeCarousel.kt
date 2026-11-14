@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,11 +22,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +45,11 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -105,7 +111,9 @@ internal fun <T> CallModeCarousel(
  * le doigt, le choix ne part qu'au repos (jamais un effet par élément traversé) ; un toucher amène un élément au
  * centre. Avec [shots], l'élément choisi ET centré se déclenche : deux tapes, la photo ; un appui long, le film
  * (`CallModeGestureRule.listensOnTrack`). Les voisins sont plus petits et plus pâles. TalkBack lit un seul
- * élément : son titre, le choix (ou le film en cours), « suivant / précédent » et les deux prises.
+ * élément : son titre, l'élément parcouru (ou le film en cours), « suivant / précédent » et les deux prises. Un pas
+ * « suivant / précédent » PARCOURT sans rien appliquer ni refermer ; seul l'activer (double toucher) choisit l'élément
+ * parcouru — un choix, qui ramène la barre au menu de base (C1 généralisée, #18185).
  */
 @Composable
 internal fun <T> CallModeCarousel(
@@ -128,63 +136,32 @@ internal fun <T> CallModeCarousel(
 ) {
     val selectedIndex = items.indexOf(selection).coerceAtLeast(0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
-    val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val latestSelect by rememberUpdatedState(onSelect)
-    val latestItems by rememberUpdatedState(items)
-    val latestShots by rememberUpdatedState(shots)
-    val centred by remember {
-        derivedStateOf {
-            val layout = list.layoutInfo
-            val centre = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
-            layout.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - centre) }?.index
-        }
-    }
-
-    LaunchedEffect(list) {
-        snapshotFlow { list.isScrollInProgress to centred }
-            .filter { (scrolling, _) -> !scrolling }
-            .distinctUntilChanged()
-            .collect { (_, index) ->
-                val item = index?.let(latestItems::getOrNull) ?: return@collect
-                latestSelect(item)
-            }
-    }
-    LaunchedEffect(selectedIndex) {
-        if (centred != selectedIndex && !list.isScrollInProgress) {
-            if (reduceMotion) list.scrollToItem(selectedIndex) else list.animateScrollToItem(selectedIndex)
-        }
-    }
-
-    val shown = centred?.let(items::getOrNull) ?: selection
-    val shownName = name(shown)
-    val selectedName = name(selection)
+    val centred by rememberCarouselCentre(list, items, selectedIndex, reduceMotion, onSelect)
+    val shownName = name(centred?.let(items::getOrNull) ?: selection)
+    var browsed by remember(selection) { mutableStateOf(selection) }
+    val browsedName = name(browsed)
     val isRecording = shots?.isRecording == true
     val recordingLabel = stringResource(R.string.call_mode_recording)
-    val photoLabel = stringResource(R.string.call_mode_photo)
-    val recordLabel = stringResource(R.string.call_mode_record)
+    val shotActions = rememberShotActions(shots)
     fun step(by: Int): Boolean {
-        val next = CallModeCarouselRule.stepping(selection, items, by)
-        if (next == selection) return false
+        val next = CallModeCarouselRule.stepping(browsed, items, by)
+        if (next == browsed) return false
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        onSelect(next)
+        browsed = next
         return true
     }
-    val shotActions = shots?.takeIf { !it.isRecording }?.let {
-        listOf(
-            CustomAccessibilityAction(photoLabel) { it.onCapturePhoto(); true },
-            CustomAccessibilityAction(recordLabel) { it.onStartRecording(); true },
-        )
-    }.orEmpty()
-    val baseConfiguration = LocalViewConfiguration.current
-    val configuration = remember(baseConfiguration) { CaptureViewConfiguration(baseConfiguration) }
 
     Column(
         modifier
             .fillMaxWidth()
             .clearAndSetSemantics {
                 contentDescription = title
-                stateDescription = if (isRecording) recordingLabel else selectedName
+                stateDescription = if (isRecording) recordingLabel else browsedName
+                onClick {
+                    if (browsed != selection) onSelect(browsed)
+                    true
+                }
                 customActions = listOf(
                     CustomAccessibilityAction(nextLabel) { step(1) },
                     CustomAccessibilityAction(previousLabel) { step(-1) },
@@ -195,56 +172,136 @@ internal fun <T> CallModeCarousel(
     ) {
         Text(shownName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink, maxLines = 1)
         hint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = CallPalette.InkSecondary, maxLines = 1) }
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val inset = CallModeCarouselRule.sideInset(maxWidth.value, itemWidth.value).dp
-            CompositionLocalProvider(LocalViewConfiguration provides configuration) {
-                LazyRow(
-                    state = list,
-                    flingBehavior = rememberSnapFlingBehavior(list),
-                    contentPadding = PaddingValues(horizontal = inset),
-                    horizontalArrangement = Arrangement.spacedBy(spacing),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    itemsIndexed(items) { index, item ->
-                        val isShown = index == (centred ?: selectedIndex)
-                        val listens = shots != null &&
-                            CallModeGestureRule.listensOnTrack(isSelected = item == selection, isCentred = isShown, isRecording = isRecording)
-                        val bringToCentre = {
-                            scope.launch { if (reduceMotion) list.scrollToItem(index) else list.animateScrollToItem(index) }
-                            Unit
-                        }
-                        val gestures = if (listens) {
-                            Modifier.pointerInput(Unit) {
-                                detectTapGestures(
-                                    onDoubleTap = {
-                                        if (shotOutcome(CallModeGesture.DOUBLE_TAP) == CallModeGestureOutcome.CAPTURE_PHOTO) latestShots?.onCapturePhoto?.invoke()
-                                    },
-                                    onLongPress = {
-                                        if (shotOutcome(CallModeGesture.LONG_PRESS) == CallModeGestureOutcome.START_RECORDING) latestShots?.onStartRecording?.invoke()
-                                    },
-                                )
-                            }
-                        } else {
-                            Modifier.clickable(onClick = bringToCentre)
-                        }
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(itemWidth, itemHeight)
-                                .graphicsLayer {
-                                    val scale = CallModeCarouselRule.scale(isShown)
-                                    scaleX = scale
-                                    scaleY = scale
-                                    alpha = CallModeCarouselRule.opacity(isShown)
-                                }
-                                .then(gestures),
-                        ) { cell(item, isShown) }
+        CarouselRow(
+            list = list,
+            items = items,
+            selection = selection,
+            shownIndex = centred ?: selectedIndex,
+            size = DpSize(itemWidth, itemHeight),
+            spacing = spacing,
+            reduceMotion = reduceMotion,
+            shots = shots,
+            cell = cell,
+        )
+    }
+}
+
+/**
+ * L'élément au centre du carrousel, et ce qui le tient : le choix ne part qu'au repos (jamais un effet par élément
+ * traversé), et un choix venu d'ailleurs ramène son élément au centre.
+ */
+@Composable
+private fun <T> rememberCarouselCentre(
+    list: LazyListState,
+    items: List<T>,
+    selectedIndex: Int,
+    reduceMotion: Boolean,
+    onSelect: (T) -> Unit,
+): State<Int?> {
+    val latestSelect by rememberUpdatedState(onSelect)
+    val latestItems by rememberUpdatedState(items)
+    val centred = remember(list) {
+        derivedStateOf {
+            val layout = list.layoutInfo
+            val centre = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
+            layout.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - centre) }?.index
+        }
+    }
+    LaunchedEffect(list) {
+        snapshotFlow { list.isScrollInProgress to centred.value }
+            .filter { (scrolling, _) -> !scrolling }
+            .distinctUntilChanged()
+            .collect { (_, index) ->
+                val item = index?.let(latestItems::getOrNull) ?: return@collect
+                latestSelect(item)
+            }
+    }
+    LaunchedEffect(selectedIndex) {
+        if (centred.value != selectedIndex && !list.isScrollInProgress) {
+            if (reduceMotion) list.scrollToItem(selectedIndex) else list.animateScrollToItem(selectedIndex)
+        }
+    }
+    return centred
+}
+
+/** Les deux prises que TalkBack trouve sur l'élément choisi ; aucune pendant un film. */
+@Composable
+private fun rememberShotActions(shots: CallModeShots?): List<CustomAccessibilityAction> {
+    val photoLabel = stringResource(R.string.call_mode_photo)
+    val recordLabel = stringResource(R.string.call_mode_record)
+    return shots?.takeIf { !it.isRecording }?.let {
+        listOf(
+            CustomAccessibilityAction(photoLabel) { it.onCapturePhoto(); true },
+            CustomAccessibilityAction(recordLabel) { it.onStartRecording(); true },
+        )
+    }.orEmpty()
+}
+
+/** La rangée aimantée : l'élément montré à l'échelle 1, ses voisins plus petits et plus pâles, lus au dessin. */
+@Composable
+private fun <T> CarouselRow(
+    list: LazyListState,
+    items: List<T>,
+    selection: T,
+    shownIndex: Int,
+    size: DpSize,
+    spacing: Dp,
+    reduceMotion: Boolean,
+    shots: CallModeShots?,
+    cell: @Composable (item: T, isShown: Boolean) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val latestShots by rememberUpdatedState(shots)
+    val isRecording = shots?.isRecording == true
+    val baseConfiguration = LocalViewConfiguration.current
+    val configuration = remember(baseConfiguration) { CaptureViewConfiguration(baseConfiguration) }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val inset = CallModeCarouselRule.sideInset(maxWidth.value, size.width.value).dp
+        CompositionLocalProvider(LocalViewConfiguration provides configuration) {
+            LazyRow(
+                state = list,
+                flingBehavior = rememberSnapFlingBehavior(list),
+                contentPadding = PaddingValues(horizontal = inset),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().callScrollEdgeFade(horizontal = true),
+            ) {
+                itemsIndexed(items) { index, item ->
+                    val isShown = index == shownIndex
+                    val listens = shots != null &&
+                        CallModeGestureRule.listensOnTrack(isSelected = item == selection, isCentred = isShown, isRecording = isRecording)
+                    val bringToCentre = {
+                        scope.launch { if (reduceMotion) list.scrollToItem(index) else list.animateScrollToItem(index) }
+                        Unit
                     }
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(size)
+                            .graphicsLayer {
+                                val scale = CallModeCarouselRule.scale(isShown)
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = CallModeCarouselRule.opacity(isShown)
+                            }
+                            .then(if (listens) shotGestures { latestShots } else Modifier.clickable(onClick = bringToCentre)),
+                    ) { cell(item, isShown) }
                 }
             }
         }
     }
+}
+
+/** Sur l'élément choisi ET centré : deux tapes, la photo ; un appui long, le film. */
+private fun shotGestures(shots: () -> CallModeShots?): Modifier = Modifier.pointerInput(Unit) {
+    detectTapGestures(
+        onDoubleTap = {
+            if (shotOutcome(CallModeGesture.DOUBLE_TAP) == CallModeGestureOutcome.CAPTURE_PHOTO) shots()?.onCapturePhoto?.invoke()
+        },
+        onLongPress = {
+            if (shotOutcome(CallModeGesture.LONG_PRESS) == CallModeGestureOutcome.START_RECORDING) shots()?.onStartRecording?.invoke()
+        },
+    )
 }
 
 private fun shotOutcome(gesture: CallModeGesture): CallModeGestureOutcome =

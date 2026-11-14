@@ -13,7 +13,6 @@
     <string name="feed_action_send">Enviar</string>
     <string name="feed_action_share">Compartir</string>
     <string name="feed_action_view_profile">Ver el perfil</string>
-    <string name="feed_bookmark_success">Añadido a favoritos</string>
     <string name="feed_caption_collapse">menos</string>
     <string name="feed_caption_expand">más…</string>
     <string name="feed_carousel_a11y_position">Medio %1$d de %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">Cancelar</string>
     <string name="feed_delete_confirm">Eliminar</string>
     <string name="feed_draft_recovered">Borrador sin conexión restaurado</string>
-    <string name="feed_empty">Ninguna publicación</string>
-    <string name="feed_empty_subtitle">Las publicaciones de tus contactos aparecerán aquí</string>
+    <string name="feed_empty">Ninguna publicación de tus contactos</string>
     <string name="feed_header_nearby">Publicaciones cercanas</string>
     <string name="feed_like">Me gusta</string>
     <string name="feed_link_copied">Enlace copiado</string>
@@ -41,7 +39,6 @@
         <item quantity="many">%1$d publicaciones nuevas</item>
         <item quantity="other">%1$d publicaciones nuevas</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">Error al guardar el marcador</string>
     <string name="feed_notice_delete_failed">Error al eliminar la publicación</string>
     <string name="feed_notice_like_failed">Error al dar me gusta</string>
     <string name="feed_notice_pin_failed">Error al fijar la publicación</string>
@@ -82,11 +79,6 @@
         <item quantity="many">%1$d respuestas</item>
         <item quantity="other">%1$d respuestas</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="one">%1$d republicación</item>
-        <item quantity="many">%1$d republicaciones</item>
-        <item quantity="other">%1$d republicaciones</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d guardados</string>
     <string name="feed_post_stat_shares">%1$d veces compartido</string>
     <string name="feed_quote_cancel">Cancelar</string>
@@ -119,7 +111,7 @@
     <string name="feed_scene_previous">Escena anterior</string>
     <string name="feed_scene_resume">Reanuda la reproducción de la escena</string>
     <string name="feed_scene_sound_mute">Silenciar el sonido</string>
-    <string name="feed_scene_sound_muted">Sonido desactivado: abre en pantalla completa para oírlo</string>
+    <string name="feed_scene_sound_muted">Sonido desactivado</string>
     <string name="feed_scene_sound_track">Sonido de fondo</string>
     <string name="feed_scene_sound_unmute">Reactivar el sonido</string>
     <string name="feed_scene_tile">Escena %1$d</string>
@@ -156,8 +148,6 @@
     <string name="mood_spotlight_unavailable">Este estado de ánimo ya no está disponible</string>
     <string name="nearby_back">Atrás</string>
     <string name="nearby_denied_action">Abrir Ajustes</string>
-    <string name="nearby_denied_detail">Meeshy no tiene acceso a tu ubicación. Permítelo en Ajustes o mueve el mapa manualmente.</string>
-    <string name="nearby_denied_title">Ubicación no autorizada</string>
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_bookmark_removed">Quitado de favoritos</string>
@@ -205,11 +195,8 @@
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
     <string name="profile_posts_empty">Ninguna publicación</string>
-    <string name="profile_posts_empty_filter_subtitle">Toca de nuevo el mosaico para verlo todo</string>
     <string name="profile_posts_empty_posts">Sin publicaciones</string>
     <string name="profile_posts_empty_reels">Sin reels</string>
-    <string name="profile_posts_empty_subtitle">Las publicaciones aparecerán aquí</string>
-    <string name="profile_posts_end_of_content">Ya has visto todo</string>
     <string name="profile_posts_first_published_at">Primer contenido publicado el %1$s</string>
     <string name="profile_posts_load_error">Error al cargar las publicaciones</string>
     <string name="profile_posts_stat_posts">Publicaciones</string>

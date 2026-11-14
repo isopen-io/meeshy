@@ -56,8 +56,13 @@ enum GameCopy {
     }
 
     /// Avant le niveau 5 : où les missions s'ouvrent, et où l'on en est.
+    /// La porte du rêve, fermée, dit encore ce qu'il y a derrière (épure, règle 7) : le seuil ne suffit pas à s'orienter.
+    static var missionsLockedWhat: String {
+        String(localized: "game.missions.locked.what", defaultValue: "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, et une Offrande.", bundle: .main)
+    }
+
     static func missionsLocked(level shown: String) -> String {
-        String(localized: "game.missions.locked", defaultValue: "Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau \(shown).", bundle: .main)
+        String(localized: "game.missions.locked", defaultValue: "Le rêve s’ouvre au niveau 5 · tu es au niveau \(shown).", bundle: .main)
     }
 
     static func meeshes(_ count: Int) -> String {
@@ -497,7 +502,7 @@ enum GameCopy {
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
         case .mintBlockedByDebt:
-            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.", bundle: .main)
+            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera.", bundle: .main)
         case .treasuryLocked:
             String(localized: "game.error.treasury_locked", defaultValue: "Ce contenant de ton Héritage s’ouvre avec un rang plus haut.", bundle: .main)
         case .freezeAtMaximum:

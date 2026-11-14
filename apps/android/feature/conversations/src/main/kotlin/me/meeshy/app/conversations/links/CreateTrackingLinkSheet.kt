@@ -106,19 +106,11 @@ internal fun CreateTrackingLinkSheet(sheet: TrackingCreateSheet, accent: Color, 
                     )
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                LinkField(
-                    stringResource(R.string.links_tracking_create_token_title), form.customToken,
-                    { value -> viewModel.editForm { it.copy(customToken = value) } }, accent,
-                    placeholder = stringResource(R.string.links_tracking_create_token_placeholder), lowercase = true,
-                )
-                Text(
-                    stringResource(R.string.links_tracking_create_token_help),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.padding(start = MeeshySpacing.xs),
-                )
-            }
+            LinkField(
+                stringResource(R.string.links_tracking_create_token_title), form.customToken,
+                { value -> viewModel.editForm { it.copy(customToken = value) } }, accent,
+                placeholder = stringResource(R.string.links_tracking_create_token_placeholder), lowercase = true,
+            )
             sheet.error?.let { LinkFormError(it) }
             LinkPrimaryButton(
                 text = stringResource(R.string.links_tracking_create_button),

@@ -53,7 +53,7 @@
     <string name="connection_syncing">Synchronisation</string>
     <string name="conversations_logout">Se déconnecter</string>
     <string name="conversations_retry">Réessayer</string>
-    <string name="feed_empty">Aucune publication</string>
+    <string name="feed_empty">Aucune publication de vos contacts</string>
     <string name="feed_like">Aimer</string>
     <string name="feed_title">Flux</string>
     <string name="login_button">Se connecter</string>
@@ -71,7 +71,6 @@
     <string name="notifications_title">Notifications</string>
     <string name="profile_back">Retour</string>
     <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Annuler</string>
     <string name="profile_display_name_label">Nom d\'affichage</string>
     <string name="profile_edit">Modifier</string>
     <string name="profile_edit_title">Modifier le profil</string>
@@ -82,7 +81,7 @@
     <string name="push_action_comment_hint">Commenter…</string>
     <string name="root_pending_changes">Modifications en attente</string>
     <string name="root_sync_on_reconnect">Synchronisation au retour en ligne</string>
-    <string name="route_title_affiliate">Affiliation</string>
+    <string name="route_title_affiliate">Parrainage</string>
     <string name="route_title_bookmarks">Signets</string>
     <string name="route_title_communities">Communautés</string>
     <string name="route_title_community">Communauté</string>

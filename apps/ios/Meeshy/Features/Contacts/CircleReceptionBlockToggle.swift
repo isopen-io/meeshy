@@ -9,12 +9,15 @@ struct CircleReceptionBlockToggle: View {
     @StateObject private var viewModel: CircleReceptionBlockViewModel
     let title: String
     let detail: String?
+    let note: MeeshyInfoNote?
     let identifier: String
+    @State private var openNoteID: String?
 
-    init(userId: String, personSwitch: CirclePersonSwitch, title: String, detail: String? = nil, identifier: String) {
+    init(userId: String, personSwitch: CirclePersonSwitch, title: String, detail: String? = nil, note: MeeshyInfoNote? = nil, identifier: String) {
         _viewModel = StateObject(wrappedValue: CircleReceptionBlockViewModel(userId: userId, personSwitch: personSwitch))
         self.title = title
         self.detail = detail
+        self.note = note
         self.identifier = identifier
     }
 
@@ -29,10 +32,12 @@ struct CircleReceptionBlockToggle: View {
             .accessibilityHint(detail ?? "")
             .accessibilityIdentifier(identifier)
             if let detail {
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+                MeeshyInfoNoted(note: note, openNoteID: $openNoteID) {
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .task(id: viewModel.userId) { await viewModel.load() }

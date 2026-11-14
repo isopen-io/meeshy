@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du fil (#17697, 1/3) : sous-titres des modes de lecture, écrits à la main — les clés quittent le catalogue iOS (manifeste android-only). -->
+<resources>
+    <string name="reading_mode_focal_subtitle">Die aktuelle Nachricht wird in der Zeile hervorgehoben.</string>
+    <string name="reading_mode_script_subtitle">Alle Nachrichten in einer flachen Zeile, gleich dicht.</string>
+    <string name="reading_mode_summary_subtitle">Erst die Zusammenfassung, die Originale einen Tipp entfernt.</string>
+    <string name="reading_mode_river_subtitle">In aktiven Gruppen eine Spur pro Stimme.</string>
+</resources>

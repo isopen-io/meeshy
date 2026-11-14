@@ -24,6 +24,23 @@ struct RootFloatingChrome: View {
     @ObservedObject var gamePrefs: GameDevicePrefsStore = .current()
     /// L'anneau des actes du jour autour du disque du menu (#17768), lu dans le cache du jeu.
     @StateObject var actsRingStore = MenuActsRingStore()
+    /// La course VIVE du bouton Menu pendant un glisser, `nil` au repos : l'échelle
+    /// la suit image par image (#18201) au lieu d'attendre la position persistée,
+    /// qui ne s'écrit qu'à la levée du doigt.
+    @State private var menuLiveDrag: CGSize? = nil
+    /// Batterie : en Économie d'énergie, l'échelle suit RIGIDEMENT — ni chaîne ni
+    /// échelle — comme toute décoration animée (`MediaPolicy.animatesDecoration`).
+    @State private var animatesDecoration = MediaPolicyMonitor.shared.policy.animatesDecoration
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    /// La loi de suivi de l'échelle, pour l'état de mouvement et de batterie du moment.
+    private var ladderFollow: FloatingMenuLadderFollow {
+        FloatingMenuLadderFollow(
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            animatesDecoration: animatesDecoration
+        )
+    }
 
     /// « Jeu masqué » : aucun anneau, comme aucun barreau du jeu.
     private var actsRing: GameActsRing? { gamePrefs.prefs.hidden ? nil : actsRingStore.ring }
@@ -67,6 +84,9 @@ struct RootFloatingChrome: View {
         }
         .task(id: gamePrefs.prefs.hidden) { @MainActor in
             await actsRingStore.activate(hidden: gamePrefs.prefs.hidden)
+        }
+        .onReceive(MediaPolicyMonitor.shared.$policy.dropFirst().receive(on: DispatchQueue.main)) { policy in
+            animatesDecoration = policy.animatesDecoration
         }
         // L'aperçu d'appui long d'une conversation passe au-dessus de tout :
         // les bulles s'effacent et ne captent aucun de ses touchers (#17260).
@@ -134,6 +154,9 @@ struct RootFloatingChrome: View {
                 }
                 onPush(.profile)
             },
+            // L'échelle suit le disque pendant le glisser (#18201) : la course vive
+            // est lue ici, jamais persistée — `FeedButtonAnchorTests` y veille.
+            onRightDragChanged: { menuLiveDrag = $0 },
             // L'appui long lance les Réels : un geste que rien ne signale à l'écran
             // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
             // ne peut pas le découvrir par tâtonnement.
@@ -141,35 +164,36 @@ struct RootFloatingChrome: View {
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
             rightA11yValue: menuA11yValue,
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
-            leftContent: {
-                // Feed button content
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    if showFeed {
-                        // Animated logo when feed is open (with breathing effect)
-                        AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
-                            .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
-                    } else {
-                        Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                    }
-                }
-            },
+            leftContent: { feedButtonContent },
             rightContent: { menuButtonContent }
         )
         .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
             if let measured, measured.isMeasured { floatingGeometry = measured }
         }
         .zIndex(100)
+    }
+
+    /// Le disque du Flux : le dégradé, et le logo qui respire quand le flux est ouvert.
+    private var feedButtonContent: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [MeeshyColors.error, MeeshyColors.indigo300],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if showFeed {
+                AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
+                    .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
+            } else {
+                Image(systemName: "square.stack.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
     }
 
     /// Le disque du menu : l'avatar dans l'anneau dégradé, l'anneau des actes du jour autour, et le badge.
@@ -216,16 +240,26 @@ struct RootFloatingChrome: View {
             let geometry = floatingGeometry
                 ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
             let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
-            let menuCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
+            let restingCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
+            // Le centre VIVANT : la position persistée, décalée de la course du doigt
+            // tant qu'il est posé (#18201). Le sens d'ouverture, lui, se lit sur la
+            // position AU REPOS : décidé à l'image sur le centre vivant, il
+            // basculerait haut/bas à chaque passage du seuil sous le doigt ; il se
+            // rejoue à la levée, quand la nouvelle place est écrite.
+            let anchor = LadderFollowAnchor(
+                center: FloatingMenuLadderFollow.liveCenter(resting: restingCenter, drag: menuLiveDrag),
+                dragging: menuLiveDrag != nil
+            )
+            let follow = ladderFollow
             let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
             let ladderExtent = CGFloat(ladder.count) * (menuItemSize + menuSpacing)
             let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
-            let menuX = menuCenter.x
+            let menuX = anchor.center.x
             let menuStartY = expandDown
-                ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
-                : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
+                ? anchor.center.y + halfButton + menuSpacing + menuItemSize / 2
+                : anchor.center.y - halfButton - menuSpacing - menuItemSize / 2
 
             // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
             ForEach(Array(ladder.enumerated()), id: \.offset) { index, entry in
@@ -250,7 +284,13 @@ struct RootFloatingChrome: View {
                     isGlowEnabled: showMenu,
                     action: { openMenuEntry(entry) }
                 )
+                // L'accordéon du glisser : chaque barreau suit le centre vivant avec
+                // un ressort au retard croissant, et une échelle qui décroît depuis
+                // le disque ; rigide et à taille fixe sous Reduce Motion ou en
+                // Économie d'énergie (`FloatingMenuLadderFollow`).
+                .scaleEffect(follow.scale(rung: index, dragging: anchor.dragging))
                 .position(x: menuX, y: itemY)
+                .animation(follow.animation(rung: index), value: anchor)
                 .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
             }
         }
@@ -271,6 +311,14 @@ struct RootFloatingChrome: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
         onPush(entry.route)
     }
+}
+
+/// Ce que l'échelle suit, et ce qui déclenche son ressort : le centre vivant du
+/// disque et l'état du doigt. Une seule valeur `Equatable` pour `.animation(_:value:)`,
+/// pour que la pose ET le retour à l'échelle 1 partent dans la même transaction.
+private struct LadderFollowAnchor: Equatable {
+    let center: CGPoint
+    let dragging: Bool
 }
 
 // MARK: - Menu Animation Modifier

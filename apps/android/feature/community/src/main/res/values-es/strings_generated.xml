@@ -1,7 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_conversation_fallback_name">Conversación</string>
-    <string name="community_add_channel_empty_hint">Crea una conversación primero para añadirla aquí.</string>
     <string name="community_add_channel_empty_no_conversations">Sin conversaciones disponibles</string>
     <string name="community_add_channel_empty_no_results">Sin resultados</string>
     <string name="community_add_channel_move_button">Mover</string>
@@ -13,13 +11,11 @@
     <string name="community_common_cancel">Cancelar</string>
     <string name="community_common_close">Cerrar</string>
     <string name="community_common_done">Listo</string>
-    <string name="community_common_error">Error</string>
     <string name="community_common_ok">OK</string>
     <string name="community_common_retry">Reintentar</string>
     <string name="community_common_save">Guardar</string>
     <string name="community_create_button">Crear comunidad</string>
     <string name="community_create_error_default">Ha ocurrido un error</string>
-    <string name="community_create_error_title">Error</string>
     <string name="community_create_field_description">Descripción</string>
     <string name="community_create_field_description_placeholder">¿De qué trata esta comunidad?</string>
     <string name="community_create_field_emoji">Emoji</string>
@@ -30,8 +26,6 @@
     <string name="community_create_members_search_placeholder">Buscar por nombre o usuario...</string>
     <string name="community_create_members_title">Añadir miembros</string>
     <string name="community_create_preview_placeholder">Mi comunidad</string>
-    <string name="community_create_privacy_private_description">Solo los miembros invitados pueden unirse</string>
-    <string name="community_create_privacy_public_description">Todos pueden descubrir y unirse</string>
     <string name="community_create_privacy_title">Comunidad privada</string>
     <string name="community_create_title">Nueva comunidad</string>
     <string name="community_detail_action_invite">Invitar</string>
@@ -39,24 +33,20 @@
     <string name="community_detail_action_members">Miembros</string>
     <string name="community_detail_action_settings">Ajustes</string>
     <string name="community_detail_leave_button">Salir</string>
-    <string name="community_detail_leave_confirm_message">Ya no tendrás acceso a los canales de esta comunidad.</string>
+    <string name="community_detail_leave_confirm_message">Ya no tendrás acceso a las conversaciones de esta comunidad.</string>
     <string name="community_detail_leave_confirm_title">¿Salir de la comunidad?</string>
     <string name="community_detail_leave_label">Salir de la comunidad</string>
     <string name="community_detail_menu_leave">Salir</string>
     <string name="community_detail_menu_settings">Ajustes</string>
-    <string name="community_detail_posts_empty_action">Crear una publicación</string>
     <string name="community_list_create_accessibility_label">Crear una comunidad</string>
     <string name="community_list_empty_create_button">Crear una comunidad</string>
-    <string name="community_list_empty_subtitle">Únete o crea una comunidad</string>
     <string name="community_list_empty_title">Sin comunidades</string>
     <string name="community_list_search_placeholder">Buscar...</string>
     <string name="community_list_title">Comunidades</string>
-    <string name="community_load_network_body">Comprueba tu conexión y vuelve a intentarlo.</string>
     <string name="community_load_network_title">No se pudo cargar esta comunidad</string>
     <string name="community_load_refused_back">Volver a las comunidades</string>
     <string name="community_load_refused_body">No existe, o es privada y no eres miembro.</string>
     <string name="community_load_refused_title">Comunidad no encontrada</string>
-    <string name="community_load_server_body">El problema es nuestro. Vuelve a intentarlo en un momento.</string>
     <string name="community_load_server_title">Meeshy no pudo cargar esta comunidad</string>
     <string name="community_members_section_creator">Creadores</string>
     <string name="community_members_section_member">Miembros</string>
@@ -69,16 +59,15 @@
     <string name="community_settings_banner_edit">Editar</string>
     <string name="community_settings_color_swatch_a11y">Color %1$d de %2$d</string>
     <string name="community_settings_delete_button">Eliminar comunidad</string>
-    <string name="community_settings_delete_confirm_message">Esta acción es irreversible. Todos los miembros, canales y mensajes serán eliminados.</string>
+    <string name="community_settings_delete_confirm_message">Esta acción es irreversible. La comunidad y su lista de miembros se eliminarán definitivamente; sus conversaciones se conservan, fuera de la comunidad.</string>
     <string name="community_settings_delete_confirm_title">Eliminar comunidad</string>
     <string name="community_settings_delete_label">Eliminar comunidad</string>
     <string name="community_settings_error_default">Ha ocurrido un error</string>
-    <string name="community_settings_error_title">Error</string>
     <string name="community_settings_field_description">Descripción</string>
     <string name="community_settings_field_name">Nombre</string>
     <string name="community_settings_field_name_placeholder">Nombre de la comunidad</string>
     <string name="community_settings_leave_button">Salir de la comunidad</string>
-    <string name="community_settings_leave_confirm_message">Ya no tendrás acceso a los canales y mensajes de esta comunidad.</string>
+    <string name="community_settings_leave_confirm_message">Ya no tendrás acceso a las conversaciones de esta comunidad.</string>
     <string name="community_settings_leave_confirm_title">Salir de la comunidad</string>
     <string name="community_settings_leave_label">Salir de la comunidad</string>
     <string name="community_settings_privacy_by_invitation">Por invitación</string>
