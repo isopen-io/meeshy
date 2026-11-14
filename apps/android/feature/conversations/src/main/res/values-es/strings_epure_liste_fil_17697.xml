@@ -18,6 +18,6 @@
     <string name="links_affiliate_delete_title">¿Eliminar este enlace de referidos?</string>
     <string name="links_affiliate_delete_body">Ya no permitirá registrarse en tu nombre. Tus referidos siguen siendo tuyos.</string>
     <string name="links_affiliate_delete_confirm">Eliminar</string>
-    <string name="dialogs_master_pin_title">Se requiere un PIN principal</string>
+    <string name="dialogs_master_pin_title">Se requiere un PIN maestro</string>
     <string name="dialogs_master_pin_message">Configúralo en los ajustes para bloquear una conversación.</string>
 </resources>

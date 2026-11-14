@@ -18,6 +18,6 @@
     <string name="links_affiliate_delete_title">Supprimer ce lien de parrainage ?</string>
     <string name="links_affiliate_delete_body">Il ne permettra plus de s’inscrire en votre nom. Vos filleuls restent les vôtres.</string>
     <string name="links_affiliate_delete_confirm">Supprimer</string>
-    <string name="dialogs_master_pin_title">Master PIN requis</string>
+    <string name="dialogs_master_pin_title">Code PIN principal requis</string>
     <string name="dialogs_master_pin_message">Définissez-le dans les réglages pour verrouiller une conversation.</string>
 </resources>

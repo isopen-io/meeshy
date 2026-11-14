@@ -229,7 +229,7 @@ private fun FailureBanner(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun LinksList(
+internal fun LinksList(
     listState: LazyListState,
     links: List<MyShareLink>,
     stats: MyShareLinkStats?,
@@ -263,6 +263,13 @@ private fun LinksList(
         }
         if (showFailureBanner) {
             item(key = "failure", contentType = "banner") { FailureBanner(onRetry) }
+        }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_share_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
         }
         stats?.let {
             item(key = "stats", contentType = "stats") { StatsHeader(it) }

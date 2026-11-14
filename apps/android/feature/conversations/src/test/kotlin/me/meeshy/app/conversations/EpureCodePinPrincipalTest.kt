@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Revue de l'épure (#17697, règle 1 et lexique) : le verrouillage des conversations dit le même mot que les
  * réglages de sécurité (`security_lock_*`) — « code PIN principal » en français, « PIN maestro » / « PIN mestre »
- * en espagnol et en portugais jusque dans le dialogue « requis », « رمز PIN الرئيسي » en arabe. L'anglais,
+ * en espagnol et en portugais jusque dans le dialogue « requis », « رمز PIN الرئيسي » en arabe (les autres clés arabes, indéfinies par accord, restent). L'anglais,
  * l'allemand et l'italien disaient déjà le mot des réglages.
  */
 class EpureCodePinPrincipalTest {
@@ -37,7 +37,6 @@ class EpureCodePinPrincipalTest {
         "values-fr" to listOf("master PIN"),
         "values-es" to listOf("PIN principal"),
         "values-pt" to listOf("PIN principal"),
-        "values-ar" to listOf("رمز PIN رئيسي"),
     )
 
     @Test

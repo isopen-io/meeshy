@@ -18,6 +18,6 @@
     <string name="links_affiliate_delete_title">حذف رابط الإحالة هذا؟</string>
     <string name="links_affiliate_delete_body">لن يتيح بعد الآن التسجيل باسمك. يبقى المُحالون من طرفك لك.</string>
     <string name="links_affiliate_delete_confirm">حذف</string>
-    <string name="dialogs_master_pin_title">رمز PIN رئيسي مطلوب</string>
+    <string name="dialogs_master_pin_title">رمز PIN الرئيسي مطلوب</string>
     <string name="dialogs_master_pin_message">حدّده في الإعدادات لقفل محادثة.</string>
 </resources>

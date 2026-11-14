@@ -18,6 +18,6 @@
     <string name="links_affiliate_delete_title">Excluir este link de indicação?</string>
     <string name="links_affiliate_delete_body">Ele não permitirá mais cadastros em seu nome. Seus indicados continuam sendo seus.</string>
     <string name="links_affiliate_delete_confirm">Excluir</string>
-    <string name="dialogs_master_pin_title">PIN principal necessário</string>
+    <string name="dialogs_master_pin_title">PIN mestre necessário</string>
     <string name="dialogs_master_pin_message">Defina-o nas configurações para bloquear uma conversa.</string>
 </resources>
