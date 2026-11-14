@@ -15,6 +15,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { circleSections, listedLinks, pendingRaiseOf, raiseRequests } from '@/lib/relations/circles';
 import { coldStateOf } from '@/lib/view/cold-state';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import {
   CircleLinkRow,
@@ -142,7 +144,12 @@ export function CirclesPanel(props: CirclesPanelProps) {
           data="circles"
           glyph={<Glyph name="users" size={44} />}
           title={translateCircles(language, 'circles.empty.title')}
-          subtitle={translateCircles(language, 'circles.empty.subtitle')}
+        />
+        <p data-circles-empty-intro className="px-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translateCircles(language, 'circles.intro')}
+        </p>
+        <InfoAlone
+          hint={{ label: translateCircles(language, 'circles.empty.question'), text: translateCircles(language, 'circles.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
         />
         <div className="flex justify-center pb-10">
           <button
