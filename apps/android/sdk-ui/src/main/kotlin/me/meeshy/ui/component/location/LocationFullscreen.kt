@@ -2,7 +2,9 @@ package me.meeshy.ui.component.location
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -53,9 +55,13 @@ import me.meeshy.sdk.model.location.GeoPoint
 import me.meeshy.sdk.model.location.PlaceLabels
 import me.meeshy.sdk.model.location.SlippyMap
 import me.meeshy.ui.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.viewer.ViewerDialog
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -78,7 +84,7 @@ fun LocationFullscreen(
     initialStyle: SharedMapStyle = SharedMapStyle.STANDARD,
 ) {
     ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
-        LocationMapPanel(place, accentColor, senderName, onDismiss, modifier, initialStyle)
+        LocationMapPanel(place, accentColor, senderName, this::dismiss, modifier, initialStyle)
     }
 }
 
@@ -138,7 +144,14 @@ fun LocationMapPanel(
         AnimatedVisibility(
             visible = cardShown,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            enter = meeshyEnter(
+                LocalReduceMotion.current,
+                slideInVertically(MeeshyMotion.springDefault()) { it } + fadeIn(MeeshyMotion.springDefault()),
+            ),
+            exit = meeshyExit(
+                LocalReduceMotion.current,
+                slideOutVertically(MeeshyMotion.springDefault()) { it } + fadeOut(MeeshyMotion.springDefault()),
+            ),
         ) {
             PlaceCard(
                 place = place,

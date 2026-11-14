@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import me.meeshy.app.accessibility.AccessibilityLocalsProvider
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
 import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.composer.inbound.ComposerSeedStore
@@ -149,6 +150,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var screenshotSignals: AppScreenshotSignals
 
+    /** « Réduire les animations » pour TOUT l'arbre : le disque flottant, l'écran de démarrage et les couches de la racine vivent hors du NavHost. */
+    @Inject
+    lateinit var accessibilityLocals: AccessibilityLocalsProvider
+
     private val gameSlot = gameProfileSlot()
 
     private var launchRoute by mutableStateOf<String?>(null)
@@ -221,23 +226,25 @@ class MainActivity : ComponentActivity() {
                         LocalVideoPictureInPicture provides videoPictureInPicture,
                         LocalBubbleMediaAutoDownload provides bubbleMediaPolicy,
                     ) {
-                        ProvideRootSplash {
-                            MeeshyApp(
-                                floatingButtonPositions = floatingButtonPositions,
-                                launchRoute = launchRoute,
-                                onLaunchRouteConsumed = {
-                                    launchRoute = null
-                                    pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
-                                },
-                                warmDeepLink = warmDeepLink,
-                                warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
-                                onWarmDeepLinkHandled = {
-                                    warmDeepLink = null
-                                    warmDeepLinkAwaitsAccount = false
-                                },
-                                callLink = callLink,
-                                onCallLinkHandled = { callLink = null },
-                            )
+                        accessibilityLocals.Provide {
+                            ProvideRootSplash {
+                                MeeshyApp(
+                                    floatingButtonPositions = floatingButtonPositions,
+                                    launchRoute = launchRoute,
+                                    onLaunchRouteConsumed = {
+                                        launchRoute = null
+                                        pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
+                                    },
+                                    warmDeepLink = warmDeepLink,
+                                    warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
+                                    onWarmDeepLinkHandled = {
+                                        warmDeepLink = null
+                                        warmDeepLinkAwaitsAccount = false
+                                    },
+                                    callLink = callLink,
+                                    onCallLinkHandled = { callLink = null },
+                                )
+                            }
                         }
                     }
                 }

@@ -63,7 +63,7 @@ internal struct _InlineOverlayControls: View {
             .padding(.top, MeeshySpacing.xsPlus)
             .padding(.bottom, MeeshySpacing.sm)
         }
-        .buttonStyle(BouncyControlButtonStyle())
+        .buttonStyle(MeeshyGlassPressStyle())
         .allowsHitTesting(true)
         // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
         // le conteneur de swipe de la bulle désengage reply/forward tant que le
@@ -192,7 +192,7 @@ internal struct _InlineOverlayControls: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
-                    .adaptiveGlass(in: Capsule())
+                    .meeshyGlass(in: Capsule(), isInteractive: true)
             }
         case .mute:
             // Réutilise EXACTEMENT le même toggle/icônes/clés que
@@ -214,7 +214,7 @@ internal struct _InlineOverlayControls: View {
             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), interactive: true)
+            .meeshyGlass(in: Circle(), isInteractive: true)
     }
 
     // MARK: - Center Controls (skip + play/pause)
@@ -251,7 +251,7 @@ internal struct _InlineOverlayControls: View {
                 .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyGlass(in: Circle(), isInteractive: true)
                 .meeshyTapTarget()
         }
         .accessibilityLabel(seconds < 0 ? String(localized: "media.video.seek.backward", bundle: .module) : String(localized: "media.video.seek.forward", bundle: .module))
@@ -265,6 +265,7 @@ internal struct _InlineOverlayControls: View {
             playPauseIcon
                 .frame(width: 54, height: 54)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
+                .pressable()
         }
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
@@ -410,7 +411,6 @@ internal struct _FullscreenOverlayControls: View {
                     .padding(.bottom, MeeshySpacing.lg)
             }
         }
-        .buttonStyle(BouncyControlButtonStyle())
     }
 
     /// La bande ne porte que la progression : ce que le jeu demande d'autre
@@ -501,16 +501,5 @@ internal struct _FullscreenOverlayControls: View {
         case .saved: return FullscreenChromeSymbol.saved
         case .failed: return FullscreenChromeSymbol.close
         }
-    }
-}
-
-// MARK: - Bouncy press feedback (legacy parity)
-
-private struct BouncyControlButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.86 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
