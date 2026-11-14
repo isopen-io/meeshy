@@ -101,6 +101,15 @@ export function isRepostVisibilityAllowed(
 }
 
 /**
+ * Le geste « Republier » s'offre-t-il sur ce contenu ? La même loi, lue par les
+ * clients pour ne pas proposer un geste que la passerelle refuserait : seul un
+ * contenu `BLOOD` n'a aucune cible (#14501, RG-18).
+ */
+export function isRepostable(original: PostVisibility): boolean {
+  return allowedRepostVisibilities(original).length > 0;
+}
+
+/**
  * `EXCEPT` / `ONLY` ne se lisent pas seules : leur portée EST la liste
  * d'utilisateurs qui les accompagne. Accepter la liste du republieur
  * rouvrirait l'élargissement par la porte de service — « même audience » avec

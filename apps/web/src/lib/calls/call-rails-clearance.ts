@@ -45,28 +45,30 @@ export const NO_RAIL_CLEARANCE: RailClearance = { top: 0, bottom: 0, inline: 0 }
 
 const sideOf = (corner: SelfTileCorner, rtl: boolean): RailSide => (corner.endsWith('right') !== rtl ? 'trailing' : 'leading');
 
-function clearanceFor(tile: TileFootprint, viewport: TileSize, length: number): RailClearance {
+function clearanceFor(tile: TileFootprint, viewport: TileSize, inset: number, length: number): RailClearance {
   const besidePill = viewport.width >= RAILS_BESIDE_PILL_WIDTH;
   const areaBottom = viewport.height - (besidePill ? 0 : RAILS_PILL_CLEARANCE);
   const onTop = tile.corner.startsWith('top');
   const clear = Math.max(0, onTop ? tile.y + tile.height + RAIL_TILE_GAP - RAILS_TOP : areaBottom - tile.y + RAIL_TILE_GAP);
   const band = areaBottom - RAILS_TOP - clear;
   if (band >= Math.min(length, RAIL_MIN_BAND)) return onTop ? { top: clear, bottom: 0, inline: 0 } : { top: 0, bottom: clear, inline: 0 };
-  const fromEdge = tile.corner.endsWith('right') ? viewport.width - tile.x : tile.x + tile.width;
+  const fromEdge = tile.corner.endsWith('right') ? viewport.width - inset - tile.x : tile.x + tile.width;
   return { top: 0, bottom: besidePill ? RAILS_PILL_CLEARANCE : 0, inline: fromEdge + RAIL_TILE_GAP };
 }
 
 type ClearanceInput = {
   readonly tile: TileFootprint | null;
   readonly viewport: TileSize;
+  /** Ce que la colonne du journal retire à la scène (W1) : ma vignette s'y mesure (`selfTileFootprint`), et le rail de fin s'arrête déjà à elle. */
+  readonly inset?: number;
   readonly rtl: boolean;
   /** La longueur de chaque rail ({@link railLength}). */
   readonly lengths: Readonly<Record<RailSide, number>>;
 };
 
-export function railsClearance({ tile, viewport, rtl, lengths }: ClearanceInput): RailsClearance {
+export function railsClearance({ tile, viewport, inset = 0, rtl, lengths }: ClearanceInput): RailsClearance {
   const none: RailsClearance = { leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE };
   if (tile === null) return none;
   const side = sideOf(tile.corner, rtl);
-  return { ...none, [side]: clearanceFor(tile, viewport, lengths[side]) };
+  return { ...none, [side]: clearanceFor(tile, viewport, inset, lengths[side]) };
 }

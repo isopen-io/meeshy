@@ -97,6 +97,16 @@ const fr = {
   'callControls.liveFrame.answer.declined.anonymous': 'Votre correspondant garde son affichage',
   'callControls.liveFrame.notProposed': 'Le cadre est appliqué chez vous, mais n\'a pas pu être proposé',
   'callControls.liveFrame.surface': 'Cadre {frame} autour des deux vidéos',
+  'callControls.mode.frames': 'Cadres',
+  'callControls.layers.title': 'Effets appliqués',
+  'callControls.layers.undo': 'Annuler {name}',
+  'callControls.layers.full': 'Trois effets au plus : retirez-en un pour en ajouter',
+  'callControls.layers.hint': 'Appui long ou Maj + Entrée : effets appliqués',
+  'callControls.layers.genre.frame': 'Cadre',
+  'callControls.layers.genre.color': 'Couleur',
+  'callControls.layers.genre.face': 'Visage',
+  'callControls.layers.genre.landscape': 'Paysage',
+  'callControls.layers.genre.voice': 'Voix',
 } as const;
 
 export default fr;

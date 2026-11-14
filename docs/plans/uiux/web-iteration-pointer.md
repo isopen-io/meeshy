@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-l2dnwf` |
+| Branche de travail de la session courante | `claude/practical-fermat-u8t5dq` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -49,7 +49,26 @@ normal.
 | **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ✅ mergé |
 | **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ✅ mergé |
 | **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ✅ mergé |
-| **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ⏳ ouverte |
+| **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
+| **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ⏳ ouverte |
+
+**86w** — cohérence de positionnement / maintenabilité : le bouton d'envoi de marque
+était recopié en **trois jumelles divergentes** — `composer.tsx` (envoi),
+`composer-tray.tsx` (envoi vocal) et `message-edit-composer.tsx` (soumission d'édition) :
+même fond `linear-gradient(135deg, var(--accent), color-mix(…, white))` et même encre
+`text-white`. Les deux premiers sont hors périmètre du gate (`composer*`), le troisième
+est scanné (2 des 10 violations). Source unique désormais : le jeton composé
+`--send-accent-fill` (`styles/app.css`, `:root`, dérivé de `var(--accent)`, voisin des
+`--recording-*`), consommé par `background: var(--send-accent-fill)` ; l'encre passée à
+`text-ios-on-brand` (= `--ios-on-brand` = `#fff`, byte-identique, nommée par son rôle).
+Le CSS n'étant pas scanné, le littéral `white` quitte entièrement la surface au lieu
+d'être exempté. Témoins : `check-design-harmony.test.ts` (describe « le bouton d'envoi »,
+33→36) + `message-edit-composer`/`composer`/`composer-tray`/`-heif`/`declared-tokens`
+(52/52, non-régression). Gate **10 → 8 violations** (−2, exactement
+`message-edit-composer`), **8 → 7 fichiers** ; `tsc` 0. Housekeeping : 85w confirmée
+mergée (`edgeFadeMask` sur `dev`, gate mesuré 10/8 à l'ouverture) ; appariement
+analyses↔plans 1:1 revérifié (45w→85w). Analyse :
+`docs/analyses/uiux/2026-11-13-iteration-86w.md`.
 
 **85w** — cohérence / maintenabilité (famille appel) : le même fondu de bord
 (`linear-gradient(…, #000 8px, #000 calc(100% - 8px), transparent)`, masque de
@@ -198,14 +217,14 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **86w**
-Revue fraîche `apps/web` — voir les pistes 86w+ en pied de
-`docs/analyses/uiux/2026-11-12-iteration-85w.md` (gate d'harmonie à **10/8** après
-85w : `message-edit-composer` (`, white`/`text-white`), `message-menu` (`, black`),
-`thread-header-bring`/`thread-header-talkie` (`#fff` encre sur média),
-`comment-compose-bar.tsx` (▶ sur vignette), `admin-post-preview` (letterbox `#000`,
-candidat exempt motivé), `conversation-backdrop` (`rgba(`), `rank-blason` (`hsl(`) ;
-+ axe épuration, toujours non entamé).
+## Prochaine itération : **87w**
+Revue fraîche `apps/web` — voir les pistes 87w+ en pied de
+`docs/analyses/uiux/2026-11-13-iteration-86w.md` (gate d'harmonie à **8/7** après
+86w : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt motivé ou
+helper de fondu partagé, cf. `edgeFadeMask` 85w), `thread-header-bring`/`thread-header-talkie`
+(`#fff` encre sur média), `comment-compose-bar.tsx` (▶ sur vignette),
+`admin-post-preview` (letterbox `#000`, candidat exempt motivé), `conversation-backdrop`
+(`rgba(`), `rank-blason` (`hsl(`) ; + axe épuration, toujours non entamé).
 **Toujours REMESURER le gate à l'ouverture** : il peut remonter si `dev` reçoit une
 poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10 → 17/12 entre
-84w et 85w).
+84w et 85w ; 10/8 stable entre 85w et 86w).

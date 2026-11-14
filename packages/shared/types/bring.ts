@@ -36,7 +36,11 @@ export const BRING_RING_WINDOW_MS = 120_000;
 export const BRING_IOS_SOUND = 'Ringtone.caf';
 
 export const BRING_ERROR_CODES = {
-  /** Le destinataire a bloqué le Bring de l'expéditeur — 403. */
+  /**
+   * N'est plus servi depuis #14677 : un blocage se sert en `NOT_ALLOWED`, que
+   * rien ne distingue d'un niveau insuffisant. Gardé pour qu'un client le lise
+   * encore comme « indisponible » face à une passerelle plus ancienne.
+   */
   BLOCKED: 'BRING_BLOCKED',
   /** Pas de lien d'au moins Ami, compte bloqué ou introuvable — 403, sans distinction. */
   NOT_ALLOWED: 'BRING_NOT_ALLOWED',

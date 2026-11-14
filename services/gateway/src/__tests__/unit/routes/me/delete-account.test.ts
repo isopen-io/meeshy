@@ -55,6 +55,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       }),
       update: jest.fn<any>().mockResolvedValue({ id: USER_ID }),
     },
+    relationFeatureSetting: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;
@@ -170,6 +171,26 @@ describe('DELETE /delete-account — expired requests cleanup', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(prisma.$transaction).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('DELETE /delete-account — a returning account keeps no ritual share (#14924)', () => {
+  it('withdraws every ritual share of the account before the transaction makes it active again', async () => {
+    const order: string[] = [];
+    const prisma = makePrisma({
+      relationFeatureSetting: { updateMany: jest.fn<any>(async () => { order.push('shares'); return { count: 0 }; }) },
+      $transaction: jest.fn<any>(async () => { order.push('return'); return []; }),
+    });
+    prisma.accountDeletionRequest.count = jest.fn<any>().mockResolvedValue(1);
+    const { app } = await buildApp({ prisma });
+    await app.inject({ method: 'DELETE', url: '/delete-account', payload: { confirmationPhrase: VALID_PHRASE } });
+
+    expect(order).toEqual(['shares', 'return']);
+    expect(prisma.relationFeatureSetting.updateMany).toHaveBeenCalledWith({
+      where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }] },
+      data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false },
+    });
     await app.close();
   });
 });

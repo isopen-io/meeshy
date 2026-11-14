@@ -51,7 +51,6 @@ const ar = {
   'callStudio.preset.sky': 'سماء',
   'callStudio.preset.monochrome': 'أبيض وأسود',
   'callStudio.mode.montage': 'التقاط المكالمة',
-  'callStudio.mode.quit': 'خروج',
   'callStudio.mode.backEffects': 'العودة إلى المكالمة',
   'callStudio.mode.addLook': 'إضافة مظهر آخر',
   'callStudio.mode.face': 'الوجه',

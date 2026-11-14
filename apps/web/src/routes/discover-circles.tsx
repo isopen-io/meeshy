@@ -14,7 +14,8 @@ import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { circleSections, listedLinks, pendingRaiseOf, raiseRequests } from '@/lib/relations/circles';
 import { coldStateOf } from '@/lib/view/cold-state';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import {
   CircleLinkRow,
   CircleLinkSheet,
@@ -24,6 +25,7 @@ import {
   type CircleRequestHandlers,
 } from '@/routes/discover-circles-parts';
 import { DiscoverEmpty, DiscoverError, DiscoverOfflineNotice, DiscoverSkeleton } from '@/routes/discover-parts';
+import { Link } from '@/routes/route-table';
 
 /**
  * **« MES CERCLES »** (#13938) — l'onglet « Cercles » de Découvrir, miroir de
@@ -161,6 +163,18 @@ export function CirclesPanel(props: CirclesPanelProps) {
   return (
     <section data-circles className="flex flex-col pb-8">
       {query.isError ? <CirclesErrorBanner language={language} onRetry={() => void query.refetch()} /> : online ? null : <DiscoverOfflineNotice language={language} cold={false} />}
+      <Link
+        to="sharedLocations"
+        data-circles-positions
+        className="mx-5 mt-3 flex min-h-[44px] items-center gap-3 rounded-card px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-ios-ink)', border: '1px solid var(--color-border)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)' }}>
+          <GlyphSvg glyph={FEED_GLYPHS.mapPin} size={18} />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{translateCircles(language, 'positions.title')}</span>
+        <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={14} className="rtl:-scale-x-100" />
+      </Link>
       {hasRaises ? (
         <>
           <h2 className="px-5 pt-4 pb-1.5 text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>

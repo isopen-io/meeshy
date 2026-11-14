@@ -20,5 +20,9 @@ export const PILL_TEXT_EXIT: ExitTiming = { exitMs: 180, reducedExitMs: 0 };
  */
 export const CAPTIONS_EXIT: ExitTiming = { exitMs: PILL_TEXT_EXIT.exitMs, reducedExitMs: STOW_REDUCED_MS };
 
-/** Ce que porte un texte qui repart : ce que porte tout ce qui repart (`use-pill-motion.ts`). */
-export { LEAVING as PILL_TEXT_LEAVING } from './use-pill-motion';
+/**
+ * Ce que porte un texte qui repart : ce que porte tout ce qui repart, pris à sa source (`call-pill-motion.ts`,
+ * que `use-pill-motion.ts` réexporte) — le journal du fil le lit aussi (`call-unfolded-original.tsx`), et passer
+ * par les moteurs de la pilule découperait l'écran d'appel d'un chunk de plus au préchargement (#17878).
+ */
+export { LEAVING as PILL_TEXT_LEAVING } from './call-pill-motion';

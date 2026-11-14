@@ -22,13 +22,18 @@ nonisolated enum ComposerMediaLookMapping {
             faceEffect: look.effect == .none ? nil : look.effect.rawValue,
             framing: framing.isIdentity ? nil : StoryMediaFraming(centerX: Double(framing.center.x),
                                                                   centerY: Double(framing.center.y),
-                                                                  scale: Double(framing.scale)))
+                                                                  scale: Double(framing.scale)),
+            filterIntensity: look.filter == .natural || look.tuning.intensity >= 1 ? nil : look.tuning.intensity,
+            warmth: look.tuning.warmth == 0 ? nil : look.tuning.warmth,
+            contrast: look.tuning.contrast == 0 ? nil : look.tuning.contrast)
     }
 
     static func photoLook(_ look: StoryMediaLook?) -> ComposerPhotoLook {
         ComposerPhotoLook(filter: look?.filterPreset.flatMap(VideoFilterPreset.init(rawValue:)) ?? .natural,
                           frame: frame(token: look?.frameId),
-                          effect: look?.faceEffect.flatMap(CallFaceEffect.init(rawValue:)) ?? .none)
+                          effect: look?.faceEffect.flatMap(CallFaceEffect.init(rawValue:)) ?? .none,
+                          tuning: ComposerLookTuning(intensity: look?.filterIntensity ?? 1, warmth: look?.warmth ?? 0,
+                                                     contrast: look?.contrast ?? 0))
     }
 
     static func framing(_ look: StoryMediaLook?) -> ComposerFraming {

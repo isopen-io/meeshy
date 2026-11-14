@@ -264,6 +264,24 @@ export function useFollowPlace(node: RefObject<HTMLElement | null>, place: numbe
 }
 
 /**
+ * CE QUI SE RECENTRE QUAND LA COLONNE DU JOURNAL ENTRE OU REPART (W1.20) — la scène, la rangée du milieu, la
+ * pilule : quand `reserve` (ce que la colonne leur retire) change, le centre de l'élément est relevé AU RENDU qui
+ * le change, puis il rejoint le nouveau par la transformation seule, au lieu de sauter.
+ */
+export function useFollowInline(node: RefObject<HTMLElement | null>, reserve: number): void {
+  const engine = usePillEngine();
+  const committed = useRef(reserve);
+  const first = useRef<number | undefined>(undefined);
+  if (reserve !== committed.current && first.current === undefined && loaded !== null) first.current = loaded.centerOf(node.current);
+  useLayoutEffect(() => {
+    const from = first.current;
+    first.current = undefined;
+    committed.current = reserve;
+    if (from !== undefined && node.current !== null) engine?.slideInlineFrom(node.current, from);
+  }, [reserve]);
+}
+
+/**
  * **LE MODE QUI REPART RESTE MONTÉ LE TEMPS DE SON DÉPART** (C1.12, #17813) — `mode` est celui que la
  * couche d'appel demande ; quand il retombe à `null`, celui des `plays` qui vient de repartir (le Montage,
  * qui redescend par le bas) reste monté, `leaving`, jusqu'à ce que son mouvement appelle `gone`. Les autres

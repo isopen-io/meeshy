@@ -5,7 +5,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
+import { PILL_TEXT_WIDTH_CLASS, pillTakesBound, type CallPillText } from '@/lib/calls/call-pill-text';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useGlassTone, usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
@@ -31,7 +31,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * vivent DANS son verre, au-dessus de sa rangée de base, en duo comme en groupe ;
  * le journal s'ouvre à leur place, et la rangée de base reste touchable ; `(…)`
  * les range tous deux et refermer les actions les rend. Le verre qui porte du
- * texte tient en 560 px, quelle que soit la fenêtre.
+ * texte tient en 560 px, quelle que soit la fenêtre — et celui qui a grandi aussi : une
+ * seule borne pour toute pilule, duo comme groupe (#17935, `pillTakesBound`).
  *
  * UN SEUL VERRE, QUI SE DÉFORME (#17536, loi 17) : le verre est un élément à lui
  * (`data-call-pill-skin`), seul mis à l'échelle (`use-pill-motion.ts`). Il s'allonge et
@@ -94,7 +95,7 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
     <>
       <div
         ref={box}
-        className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${pillTakesBound(text, grown) ? PILL_TEXT_WIDTH_CLASS : 'w-fit'}`}
         data-call-control-pill={grown ? 'grown' : 'pill'}
         data-call-pill-stowed={stowed ? '' : undefined}
         data-call-chrome-keep=""

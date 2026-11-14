@@ -183,6 +183,28 @@ struct CallFrameMoodChip: View {
     }
 }
 
+/// C1 · loi 16 — l'option « Cadre » : garder le cadre choisi pour les deux et le proposer. Une puce
+/// de verre au-dessus des ambiances, pressée en blanc quand le cadre est gardé.
+struct CallFrameHoldChip: View {
+    let isOn: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            CallFrameMoodChipLabel(title: CallLiveFrameCopy.caption, isSelected: isOn, symbol: "photo.artframe")
+        }
+        .buttonStyle(CallPressButtonStyle())
+        .disabled(!isEnabled)
+        .accessibilityLabel(CallLiveFrameCopy.label)
+        .accessibilityHint(CallLiveFrameCopy.hint)
+        .toggleStateAccessibility(isToggle: true, isActive: isOn)
+    }
+}
+
 private struct CallFrameMoodChipLabel: View {
     let title: String
     let isSelected: Bool

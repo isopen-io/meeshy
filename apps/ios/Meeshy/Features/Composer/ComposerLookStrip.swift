@@ -201,6 +201,8 @@ struct ComposerLookStrip: View {
     /// que mettre à jour à chaque image n'invalide pas la vue.
     @State private var settle = ComposerLookStripScrollSettle()
     @State private var blink: Double = 1
+    /// Le réglage de l'ambiance est ouvert au-dessus de la bande (OPUS-2).
+    @State private var tuningOpen = false
     /// Retombe d'elle-même quand le système annule l'appui long sans `onEnded`.
     @GestureState private var pressing = false
     /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
@@ -274,6 +276,7 @@ struct ComposerLookStrip: View {
                     // Le cadre de la choisie déborde de la case (#10309) : la
                     // bande lui garde sa place, sans quoi le défilement le rognerait.
                     band.frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset)
+                        .overlay(alignment: .top) { if !recording { tuning } }
                     Text(chosenItemName)
                         .font(MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold))
                         .foregroundStyle(.white)
@@ -293,10 +296,34 @@ struct ComposerLookStrip: View {
             session.releaseStaleHold()
         }
         .environment(\.composerCaptureProgress, captureProgress)
+        .modifier(ComposerCameraAmbianceFollow(session: session))
         .adaptiveOnChange(of: session.openFamily) { _, famille in
             guard let famille else { return }
             focus = ComposerLookStripFilterRule.focus(opening: famille, look: session.look)
         }
+    }
+
+    // MARK: - Le réglage de l'ambiance (OPUS-2)
+
+    /// Au-dessus de la bande, jamais sur la miniature : elle déclenche, et son
+    /// appui long filme. Le bouton ouvre la dose et le pavé chaleur × contraste.
+    private var tuning: some View {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xs) {
+            if tuningOpen {
+                ComposerLookTuningPanel(look: session.look) { reglage in
+                    var look = session.look
+                    look.tuning = reglage
+                    session.look = look
+                }
+                .transition(.opacity)
+            }
+            ComposerLookTuningToggle(open: tuningOpen, tuned: session.look.tuning != .neutral) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { tuningOpen.toggle() }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.md)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
     }
 
     // MARK: - Repliée, sans look : le déclencheur simple (#9557)

@@ -125,7 +125,7 @@ jobs:
   # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
   i18n:
     name: Chaînes Android générées à jour
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -170,7 +170,7 @@ jobs:
   # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
   routes:
     name: Routes Android générées à jour
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -191,7 +191,7 @@ jobs:
   # régénération fait échouer ce contrôle.
   tokens:
     name: Jetons de design générés à jour
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -213,7 +213,7 @@ jobs:
   # Pur shell, aucun SDK Android requis.
   modules:
     name: Graphe des modules Android
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

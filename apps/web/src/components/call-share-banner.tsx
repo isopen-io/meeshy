@@ -3,6 +3,7 @@ import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
+import type { CallMember } from '@/lib/calls/call-store';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -36,5 +37,27 @@ export default function CallScreenShareBanner({ sharing, language, hidden }: { r
         </div>
       )}
     </HeldSwap>
+  );
+}
+
+/**
+ * La capsule de capture (R1, loi 13) : rouge, 44 px, posée UNE fois sous
+ * l'en-tête, en audio comme en vidéo. Elle ne suit pas le chrome : une capture
+ * ne se cache pas (iOS `CallCaptureAlertLayer`). Elle vit dans le chunk des
+ * bandeaux du haut (`call_top_banners`), que l'appel vivant précharge : elle
+ * ne paraît qu'avec une capture, et l'écran d'appel n'en paie que l'`import()`.
+ */
+export function CallCaptureAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
+  return (
+    <div className="pointer-events-none flex max-w-full flex-col items-center gap-1 px-4" aria-live="assertive" data-call-capture-row="">
+      {Object.values(members)
+        .filter((member) => member.capturing)
+        .map((member) => (
+          <span key={`capture-${member.userId}`} role="alert" className="inline-flex h-11 max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold leading-none" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
+            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full border-2 border-current" data-call-alert-dot=""></span>
+            <span className="truncate">{translate(language, 'call.alert.capturing', { name: member.name })}</span>
+          </span>
+        ))}
+    </div>
   );
 }

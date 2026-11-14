@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { bannerCloseKeyframes, GLASS_REGULAR_DENSITY, glassToneKeyframes, glassToneMs, glassVeil, followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
+import { bannerCloseKeyframes, GLASS_REGULAR_DENSITY, glassToneKeyframes, glassToneMs, glassVeil, followKeyframes, inlineSlideKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -184,6 +184,26 @@ export function slideFrom(element: HTMLElement, before: number | undefined, redu
   SLIDING.get(element)?.cancel();
   const frames = before === undefined || typeof element.animate !== 'function' ? null : bannerCloseKeyframes(before - element.getBoundingClientRect().top, reduced);
   if (frames !== null) SLIDING.set(element, quiet(element.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
+}
+
+/** Où se voit le centre horizontal d'un élément à cet instant — un mouvement en cours compris. */
+export const centerOf = (element: Element | null): number | undefined => {
+  const rect = element?.getBoundingClientRect();
+  return rect === undefined ? undefined : rect.left + rect.width / 2;
+};
+
+const SLID_INLINE = new WeakMap<Element, Animation>();
+
+/**
+ * CE QUI SE RECENTRE REJOINT SON NOUVEAU CENTRE EN GLISSANT (W1.20) : l'élément repart du centre d'avant
+ * (`before`, relevé avant que la mise en page ne change) et rejoint le nouveau. Interruptible : le glissé en cours
+ * est annulé, `before` comptant déjà là où il se voyait.
+ */
+export function slideInlineFrom(element: HTMLElement, before: number | undefined, reduced = prefersReducedMotion()): void {
+  SLID_INLINE.get(element)?.cancel();
+  const now = centerOf(element);
+  const frames = before === undefined || now === undefined || typeof element.animate !== 'function' ? null : inlineSlideKeyframes(before - now, reduced);
+  if (frames !== null) SLID_INLINE.set(element, quiet(element.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
 }
 
 /**

@@ -51,6 +51,13 @@
     <string name="community_list_empty_title">No community</string>
     <string name="community_list_search_placeholder">Search...</string>
     <string name="community_list_title">Communities</string>
+    <string name="community_load_network_body">Check your connection, then try again.</string>
+    <string name="community_load_network_title">Couldn\'t load this community</string>
+    <string name="community_load_refused_back">Back to communities</string>
+    <string name="community_load_refused_body">It doesn\'t exist, or it\'s private and you\'re not a member.</string>
+    <string name="community_load_refused_title">Community not found</string>
+    <string name="community_load_server_body">The problem is on our side. Try again in a moment.</string>
+    <string name="community_load_server_title">Meeshy couldn\'t load this community</string>
     <string name="community_members_section_creator">Creators</string>
     <string name="community_members_section_member">Members</string>
     <string name="community_members_section_moderator">Moderators</string>
@@ -75,6 +82,9 @@
     <string name="community_settings_leave_confirm_title">Leave community</string>
     <string name="community_settings_leave_label">Leave community</string>
     <string name="community_settings_privacy_by_invitation">By invitation</string>
+    <string name="community_settings_privacy_confirm_button">Make private</string>
+    <string name="community_settings_privacy_confirm_message">Former members and blocked accounts will leave its conversations for good.</string>
+    <string name="community_settings_privacy_confirm_title">Make the community private?</string>
     <string name="community_settings_privacy_open_to_all">Open to all</string>
     <string name="community_settings_privacy_title">Private community</string>
     <string name="community_settings_section_danger">Danger zone</string>

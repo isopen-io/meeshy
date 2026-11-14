@@ -45,7 +45,7 @@ Emplacements : `buttons(size)` et `primary` (ceux de K10, inchangés), `content(
 - Vide, chargement, erreur, hors ligne : ceux du corps ; la pilule garde sa largeur et suit sa hauteur.
 
 Loi 13 :
-- pas de ‹ sans `onBack`, pas de ✕ sans `onClose`, pas d'en-tête sans titre peint ni bouton ni accessoire ; le titre reste centré, la place d'un bouton absent est réservée ;
+- pas de ‹ sans `onBack`, pas de ✕ sans `onClose`, pas d'en-tête sans titre peint ni bouton ni accessoire ; le titre reste centré, la place d'un bouton absent est réservée ; quand il ne tient plus à marge égale (grande police, accessoire large comme le compteur d'O9), il glisse vers le bord le plus libre et prend toute la place entre ses bords, jamais sous un bouton ni sous l'accessoire (vecteurs `headerTitle`) ;
 - pas de bouton « OK » ni « Valider » : un réglage s'applique en direct (loi 7) ; pas de poignée de glissé ; pas de voile sur la scène, qui garde sa taille et reste touchable ;
 - pas de filet sans rangée ; pas de rouge hors du choix destructif d'une confirmation ; pas de second verre ;
 - un corps de hauteur nulle sans en-tête : la pilule reste fermée, jamais une bande vide ;

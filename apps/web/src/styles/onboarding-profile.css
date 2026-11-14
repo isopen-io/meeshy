@@ -1,29 +1,6 @@
 /* « Montre-toi » (#17237) — l'aperçu du profil tel que les autres le verront :
    bannière 3:1, avatar rond de 96 px qui en chevauche le bas, nom et @pseudo. */
 
-.onb-profile-perks {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.onb-profile-perks li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--onb-soft);
-  color: var(--onb-ink);
-  font-family: var(--onb-rounded);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
 .onb-profile-preview {
   display: flex;
   flex-direction: column;

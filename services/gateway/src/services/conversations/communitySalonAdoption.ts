@@ -3,10 +3,11 @@ import { applyCommunityAdmission } from './communityMembershipSync';
 import { exitCommunitySalons, type SalonExitDeps } from './communitySalonExit';
 import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
-export type SalonAdoptionPrisma = Pick<PrismaClient, 'conversation' | 'participant' | 'communityMember' | 'user'>;
+export type SalonAdoptionPrisma = Pick<PrismaClient, 'community' | 'conversation' | 'participant' | 'communityMember' | 'user'>;
 
 export type SalonAdoptionRequest = {
   readonly communityId: string;
@@ -79,11 +80,14 @@ export async function admitSalonOccupants(
   if (strangers.length === 0) return former;
 
   const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
+  const admitted = strangers.filter((userId) => addable.has(userId));
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
     reactivations: [],
-    creations: strangers.filter((userId) => addable.has(userId)).map((userId) => ({ userId, role: 'member' as const })),
+    creations: admitted.map((userId) => ({ userId, role: 'member' as const })),
   });
+  // #18052 — qui entre l'apprend, au nom du créateur dont l'autorité l'a fait entrer.
+  scheduleCommunityAddedAnnouncement(prisma, { communityId: request.communityId, actorId: request.createdBy, recipientIds: admitted });
   return [...former, ...strangers.filter((userId) => !addable.has(userId))];
 }
 

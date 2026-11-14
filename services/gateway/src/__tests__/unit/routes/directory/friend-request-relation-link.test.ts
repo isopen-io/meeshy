@@ -46,6 +46,7 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 
 import { directoryFriendRequestsRoutes } from '../../../../routes/directory/friend-requests';
 import { relationStore } from '../../../helpers/user-relation-store';
+import { ritualSharesStore } from '../../../helpers/ritual-shares-store';
 
 const PREFIXE = '/api/v1/directory';
 const MOI = '507f1f77bcf86cd799439011';
@@ -86,6 +87,7 @@ async function repondre(params: {
       update: jest.fn(async (args: Parameters<typeof store.prisma.friendRequest.update>[0]) => ({ ...(await store.prisma.friendRequest.update(args)), sender: PARTIE, receiver: PARTIE })),
     },
     userRelation: params.userRelation ?? store.prisma.userRelation,
+    relationFeatureSetting: ritualSharesStore([]).relationFeatureSetting,
     conversation: {
       findFirst: jest.fn(async () => null),
       create: jest.fn(async () => ({ id: 'convid00000000000000001', identifier: 'abc', type: 'direct' })),

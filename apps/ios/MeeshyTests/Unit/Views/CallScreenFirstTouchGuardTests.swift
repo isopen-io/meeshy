@@ -72,8 +72,33 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
             XCTAssertFalse(unit.contains(minuterie), "Le masquage minuté est revenu : \(minuterie)")
         }
         let toggle = try block("func toggleControls() {", until: "\n    }\n", in: unit)
-        XCTAssertTrue(toggle.contains("CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage)"))
+        XCTAssertTrue(toggle.contains("guard isTapStage else { return }"), "#17945 — la scène de la loi 11 : vidéo, duo audio, groupe sans caméra")
+        XCTAssertFalse(toggle.contains("mayToggleByTap(isVideoStage:"))
         XCTAssertTrue(toggle.contains("showControls.toggle()"))
+    }
+
+    /// #17945 (loi 11) — en duo audio, un toucher sur le fond derrière l'avatar range l'en-tête,
+    /// la pilule et le journal, et l'avatar reprend 120 pt (la loi pure `CallPillText` le décide) ;
+    /// un nouveau toucher les rend. Sous VoiceOver les contrôles restent en place.
+    func test_audioDuo_aTapOnTheBackground_stowsTheChrome() throws {
+        let connected = try view("CallView+Connected.swift")
+        let duo = try block("private var duoLayout: some View {", until: "private var swipeDownToLeaveGesture: some Gesture {", in: connected)
+        XCTAssertTrue(duo.contains(".onTapGesture { if exposesTheTapToggle { toggleControls() } }"), "Le fond de l'audio est la scène")
+        XCTAssertTrue(duo.contains("if pillText.compactsAudioLayout {"), "L'avatar compact suit le journal servi, rangé ou non")
+        let exposes = try block("private var exposesTheTapToggle: Bool {", until: "\n    }\n", in: connected)
+        XCTAssertTrue(exposes.contains("CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
+        let stage = try block("private var isTapStage: Bool {", until: "\n    }\n", in: connected)
+        XCTAssertTrue(stage.contains("CallChromeVisibility.isTapStage(isVideoStage: isVideoStage, isConnected: showsConnectedLayout)"))
+        XCTAssertFalse(stage.contains("isGroup"), "#17945 étendu — un groupe sans caméra range aussi son chrome")
+    }
+
+    /// #17945 étendu — la scène qui ne range plus rien rend le chrome : la règle suit la SCÈNE DU
+    /// TOUCHER, pas la vidéo (un duo qui passe en audio ou un groupe dont la dernière caméra s'éteint
+    /// gardent leur chrome rangé, comme Android dont la visibilité se dérive de `isTapStage`).
+    func test_chromeComesBack_whenTheStageNoLongerStows() throws {
+        let connected = try view("CallView+Connected.swift")
+        XCTAssertTrue(connected.contains(".adaptiveOnChange(of: isTapStage) { _, stows in"))
+        XCTAssertFalse(connected.contains(".adaptiveOnChange(of: isVideoStage)"))
     }
 
     func test_pillRows_reportTheirScrolling_andFlickFreely() throws {
@@ -98,6 +123,8 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
 
     // MARK: - Scène de groupe
 
+    /// #17945 étendu — vidéo ou non, la scène de groupe prend le toucher partout (`stageRevealTarget`)
+    /// et la pilule reste dans le flux de la grille : rangée, elle ne la fait pas sauter.
     func test_groupStage_revealsFromAnywhere_andTilesFollowTheRule() throws {
         let connected = try view("CallView+Connected.swift")
         let layout = try block("private var groupStageLayout: some View {", until: "private var stageRevealTarget: some View {", in: connected)

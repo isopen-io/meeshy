@@ -4270,7 +4270,7 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **La langue parlée est le rang 1 du Prisme du lecteur** (`resolveReaderLanguages`), la même descente que celle par laquelle la passerelle résout ses auditeurs. Aucune langue n'est reconstruite ici.
 - **La transcription après l'appel se lit dans la bulle d'appel du fil**, comme `CallSummaryDetailSheet` d'iOS.
   - Un bouton « Transcription » (44 px, `aria-expanded`) la déplie sous « Rappeler ». Il n'est offert qu'à un appel TERMINÉ, identifié, qui a duré (`callNoticeTarget.transcript`).
-  - La ligne d'un autre descend le Prisme (`served`) : jamais `translations[0]`, et l'original quand aucune traduction ne sert. « Voir l'original » rend ce qui a été dit.
+  - La ligne d'un autre descend le Prisme (`served`) : jamais `translations[0]`, et l'original quand aucune traduction ne sert. « Voir l'original » rend ce qui a été dit (depuis #17897, il INVERSE les deux lignes : l'original en tête, « Traduit · … » dessous, `transcriptReading`).
   - Un refus (403) ou un appel inconnu (404) se lit « aucune transcription », sans détail : la donnée est sensible.
 - **L'accessibilité.**
   - Le bandeau des deux dernières lignes est une région `aria-live` POLIE. Une ligne encore en révision y est `aria-hidden`, pour qu'un lecteur d'écran annonce la phrase dite et non chaque mot corrigé.

@@ -63,7 +63,7 @@ describe('#13935 — talkieBlocked', () => {
     const res = await lire(app);
     await app.close();
 
-    expect(res.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, ...AUCUN_PARTAGE });
+    expect(res.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, ...AUCUN_PARTAGE });
   });
 
   it('se coupe et se relit, sans toucher au Bring', async () => {
@@ -73,7 +73,7 @@ describe('#13935 — talkieBlocked', () => {
     const relu = await lire(app);
     await app.close();
 
-    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: true, ...AUCUN_PARTAGE });
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: true, togetherBlocked: false, ...AUCUN_PARTAGE });
     expect(relu.body.data).toEqual(pose.body.data);
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ bringBlockedAt: NOW, talkieBlockedAt: NOW });
   });
@@ -105,6 +105,47 @@ describe('#13935 — talkieBlocked', () => {
     expect(vide.status).toBe(400);
     expect(inconnu.status).toBe(400);
     expect(app.reglages.size).toBe(0);
+  });
+});
+
+describe('#17023 — togetherBlocked : couper les invitations « ensemble » d\'une personne', () => {
+  it('se coupe, se relit et se rouvre, sans toucher au Bring ni au talkie', async () => {
+    const app = await appli();
+    const pose = await regler(app, { togetherBlocked: true });
+    const relu = await lire(app);
+    const rouvert = await regler(app, { togetherBlocked: false });
+    await app.close();
+
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: true, ...AUCUN_PARTAGE });
+    expect(relu.body.data).toEqual(pose.body.data);
+    expect(rouvert.body.data.togetherBlocked).toBe(false);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ togetherBlockedAt: null });
+  });
+
+  it('se date au moment de la coupure, sur MA ligne pour l\'autre', async () => {
+    const app = await appli();
+    await regler(app, { togetherBlocked: true });
+    await app.close();
+
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ togetherBlockedAt: NOW });
+    expect(app.reglages.has(`${MOI}:${AUTRE}`)).toBe(false);
+  });
+
+  it('sans lien, rien ne s\'écrit : le même 404 qu\'une personne inconnue', async () => {
+    const app = await appli({ liens: [] });
+    const res = await regler(app, { togetherBlocked: true });
+    await app.close();
+
+    expect(res.status).toBe(404);
+    expect(app.reglages.size).toBe(0);
+  });
+
+  it('une valeur qui n\'est pas un booléen : 400', async () => {
+    const app = await appli();
+    const res = await regler(app, { togetherBlocked: 'oui' });
+    await app.close();
+
+    expect(res.status).toBe(400);
   });
 });
 

@@ -51,7 +51,6 @@ const pt = {
   'callStudio.preset.sky': 'Céu',
   'callStudio.preset.monochrome': 'Preto e branco',
   'callStudio.mode.montage': 'Capturar a chamada',
-  'callStudio.mode.quit': 'Sair',
   'callStudio.mode.backEffects': 'Voltar à chamada',
   'callStudio.mode.addLook': 'Adicionar outro look',
   'callStudio.mode.face': 'Rosto',

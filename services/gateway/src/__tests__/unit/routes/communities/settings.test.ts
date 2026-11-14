@@ -287,6 +287,9 @@ describe('PUT /communities/:id — avatar et bannière (#16788)', () => {
     ['un autre schéma', 'ftp://exemple.org/a.png'],
     ['un chemin protocole-relatif', '//evil.example/a.png'],
     ['une remontée de dossier', '2026/../../etc/passwd'],
+    ["une remontée de dossier derrière /api/ (#16810)", '/api/../../etc/passwd'],
+    ['une remontée encodée dans la clé du flux (#16810)', '/api/v1/attachments/file/2026%2F..%2F..%2Fetc%2Fpasswd'],
+    ["une autre route de l'API (#16810)", '/api/v1/auth/logout'],
   ])('refuse %s en 400 INVALID_COMMUNITY sans rien écrire', async (_label, url) => {
     for (const field of ['avatar', 'banner'] as const) {
       const prisma = creatorPrisma();

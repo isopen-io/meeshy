@@ -413,6 +413,7 @@ struct RootView: View {
         StatusBubbleController.shared.onRepublish = { entry in
             republishStatusEntry = entry
         }
+        StatusBubbleController.shared.reactionHandler = statusViewModel.reactionHandler
 
         // Pilier 22 V3 wiring — register the StoryViewModel as the
         // queue's upload executor. setExecutor also registers the

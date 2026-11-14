@@ -65,12 +65,20 @@ enum class CallPillText {
 /**
  * #17343 — ONE width for the glass: the pill that carries text, stowed or not, is limited to
  * [TEXT_DP] so the eye does not sweep the whole screen (landscape, tablet); the resting pill keeps its [RESTING_DP].
+ *
+ * #17935 — and ONE cap for any grown pill on a wide window, duo as group: [isUnfolded] (the group's two labelled rows,
+ * or an option the pill holds — [CallControlsDisposition.unfoldsPill]) takes [TEXT_DP] too, never a group cap of its
+ * own. Only the base row alone keeps [RESTING_DP]; a duo's (…) brings out the rails and leaves the pill at rest. On a
+ * phone in portrait the window is narrower than both caps: nothing changes there. Vectors shared with iOS
+ * `CallPillWidth.maxWidth(for:)` and web `PILL_TEXT_MAX_WIDTH`: (None, folded) → 440 · (None, unfolded) → 560 ·
+ * (any text, either) → 560.
  */
 object CallPillWidth {
     const val RESTING_DP: Float = 440f
     const val TEXT_DP: Float = 560f
 
-    fun maxWidthDp(content: CallPillText): Float = if (content == CallPillText.None) RESTING_DP else TEXT_DP
+    fun maxWidthDp(content: CallPillText, isUnfolded: Boolean = false): Float =
+        if (content == CallPillText.None && !isUnfolded) RESTING_DP else TEXT_DP
 }
 
 /**

@@ -5,7 +5,8 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import { parseBbox } from '../../../../routes/relations/locations';
+import fastJson from 'fast-json-stringify';
+import { parseBbox, sharedLocationItemSchema } from '../../../../routes/relations/locations';
 
 describe('parseBbox', () => {
   it('absente : toute la carte', () => {
@@ -23,5 +24,27 @@ describe('parseBbox', () => {
 
   it('refuse une emprise répétée dans l\'adresse', () => {
     expect(parseBbox(['1,1,2,2', '3,3,4,4'])).toBeNull();
+  });
+});
+
+describe('la forme servie au rattrapage (#17966)', () => {
+  const serialize = fastJson(sharedLocationItemSchema as unknown as Parameters<typeof fastJson>[0]);
+  const servie = {
+    userId: '6300000000000000000000e1',
+    latitude: 48.85,
+    longitude: 2.35,
+    precision: 'city',
+    radiusMeters: 8000,
+    circle: 'CLOSE',
+    updatedAt: '2026-11-08T12:00:00.000Z',
+    expiresAt: '2026-11-08T13:00:00.000Z',
+  };
+
+  it('le cercle traverse le sérialiseur', () => {
+    expect(JSON.parse(serialize(servie))).toEqual(servie);
+  });
+
+  it('rien de plus riche ne part à côté : un champ non déclaré est retiré', () => {
+    expect(JSON.parse(serialize({ ...servie, accuracy: 4, recipients: ['x'] }))).toEqual(servie);
   });
 });

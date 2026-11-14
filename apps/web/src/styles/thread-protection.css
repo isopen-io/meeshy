@@ -15,18 +15,36 @@
 
 /* LE VOILE — bouton plein bloc, substitut flouté (BLUR_RADIUS_PX porté en
    style inline par `ProtectedContent`, dérivé de `protection.ts`). */
+/* LE FLOU SE FOND DANS LE FIL (#18021) — miroir de `BlurRevealModifier`
+   (`BubbleBlurRevealLifecycle.swift`), qui masque le flou par un rectangle
+   arrondi LUI-MÊME flouté : aucun bord ne se lit. Le voile ne rogne donc
+   plus son substitut ; il s'étend d'une marge de fondu (marge négative =
+   rembourrage, rien ne bouge) et un masque en dégradé, dans les deux axes,
+   l'estompe jusqu'à zéro au bord. Le substitut reste flou, sans cadre. */
 .protected-veil {
+  --veil-feather-x: 24px;
+  --veil-feather-y: 14px;
   display: block;
-  width: 100%;
-  min-height: 44px;
+  box-sizing: border-box;
+  width: calc(100% + 2 * var(--veil-feather-x));
+  min-height: calc(44px + 2 * var(--veil-feather-y));
+  margin: calc(-1 * var(--veil-feather-y)) calc(-1 * var(--veil-feather-x));
+  padding: var(--veil-feather-y) var(--veil-feather-x);
   text-align: start;
   cursor: pointer;
   position: relative;
-  overflow: hidden;
-  border-radius: 10px;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 var(--veil-feather-x), #000 calc(100% - var(--veil-feather-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--veil-feather-y), #000 calc(100% - var(--veil-feather-y)), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--veil-feather-x), #000 calc(100% - var(--veil-feather-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--veil-feather-y), #000 calc(100% - var(--veil-feather-y)), transparent);
+  mask-composite: intersect;
 }
-.protected-veil[data-surface='bubble'] {
-  border-radius: var(--radius-bubble);
+.protected-veil:focus-visible {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 [data-surrogate] {

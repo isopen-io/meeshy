@@ -8,10 +8,10 @@ enum class CallChromeElement {
 }
 
 /**
- * What the call chrome shows. It hides only on a video stage, by a tap, in
- * [FADE_DURATION_MILLIS]; never on audio or under TalkBack (the caller passes
- * `isStageFullScreen = false`). Captions and the consent card always stay.
- * Mirrors iOS `CallChromeVisibility`.
+ * What the call chrome shows. It hides by a tap on the stage ([isTapStage]: the image on video, the background of a call
+ * in progress with no image — behind the avatar of a duo, around the tiles of a group with no camera), in
+ * [FADE_DURATION_MILLIS]; never under TalkBack. Captions and the consent card
+ * always stay. Mirrors iOS `CallChromeVisibility`.
  */
 data class CallChromeVisibility(
     val isRevealed: Boolean = true,
@@ -36,8 +36,17 @@ data class CallChromeVisibility(
     companion object {
         const val FADE_DURATION_MILLIS: Long = 250
 
-        fun mayToggleByTap(isVideoStage: Boolean, isTouchExplorationOn: Boolean = false): Boolean =
-            isVideoStage && !isTouchExplorationOn
+        fun mayToggleByTap(isTapStage: Boolean, isTouchExplorationOn: Boolean = false): Boolean =
+            isTapStage && !isTouchExplorationOn
+
+        /**
+         * Law 11 (#16663; extended to audio by #17945, then to a group with no camera by the owner on 2026-11-13): a tap
+         * on the STAGE stows the chrome — the image on video, the background of a call in progress with no image (behind
+         * the avatar of a duo, around the tiles of a group). Vectors shared with iOS and the web: (duo, video) → true ·
+         * (duo, audio, in progress) → true · (duo, audio, not yet in progress) → false · (group, a camera) → true ·
+         * (group, none) → true.
+         */
+        fun isTapStage(isVideoStage: Boolean, isConnected: Boolean): Boolean = isVideoStage || isConnected
 
         fun isVideoStage(
             isGroup: Boolean,

@@ -63,8 +63,12 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
         XCTAssertTrue(hero.contains(".contentShape("),
                       "The banner's hit area must be bounded to its own frame.")
 
-        XCTAssertTrue(source.contains("headerBar\n                    .zIndex(1)"),
-                      "The header bar must sit above the content that follows it, so no overflow can cover its buttons.")
+        // #17907 — Fermer et Réglages flottent en surimpression du défilement, comme sur la fiche profil :
+        // aucun débordement du contenu ne peut les recouvrir.
+        XCTAssertTrue(source.contains(".overlay(alignment: .topLeading) { closeButton }"),
+                      "Close must float above the scrolling content, so no overflow can cover it.")
+        XCTAssertTrue(source.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
+                      "Settings must float above the scrolling content, so no overflow can cover it.")
     }
 
     func test_callParticipantVisualAvatar_migratesToCachedAvatarImage() throws {

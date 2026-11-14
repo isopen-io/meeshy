@@ -192,16 +192,8 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertEqual(cool.activeFaceEffect, .toad)
     }
 
-    /// P8b · loi 14 — « (+) Ajouter un autre look » pose, par-dessus ce qu'on a, un look d'un
-    /// AUTRE genre : Visage et Couleur se cumulent dans la même configuration.
-    func test_addingALook_fromFace_opensTheColorLooks() {
-        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .face), .color)
-    }
-
-    func test_addingALook_fromColor_opensTheFaceLooks() {
-        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .color), .face)
-    }
-
+    /// P8b · loi 14 — « (+) Ajouter un autre look » : la règle généralisée à la pile de trois couches
+    /// se lit dans `CallEffectLayersTests` ; ici, ce que le cumul garde.
     func test_addingALook_keepsTheLookAlreadyChosen() {
         let toad = VideoFilterConfig().selectingFaceEffect(.toad)
         let cumulated = CallEffectsModeRule.applying(color: .golden, to: toad)

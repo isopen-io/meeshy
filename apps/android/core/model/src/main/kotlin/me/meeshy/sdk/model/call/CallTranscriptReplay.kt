@@ -41,12 +41,25 @@ data class CallTranscriptLine(
     fun text(showOriginal: Boolean): String = translated?.takeIf { showsTranslation(showOriginal) } ?: original
 
     /**
-     * #17340 — the original of a translated sentence, unfolded below it. Never for my own sentence, never without a
-     * translation, never when the toggle already shows it in place of the translation.
+     * #17340, #17862 — the line unfolded below the leading one: « Original · … » by default, « Traduit · … » once the
+     * switch shows the original. The switch INVERTS the two lines, nothing disappears. Never for my own sentence, a
+     * capture, or a sentence without translation: those read alone in both states.
      */
-    fun originalBelow(showsOriginalInstead: Boolean): String? =
-        original.takeIf { showsTranslation(showsOriginalInstead) }
+    fun secondary(showOriginal: Boolean): CallTranscriptSecondary? {
+        val served = translated?.takeIf { servesTranslation } ?: return null
+        return if (showOriginal) {
+            CallTranscriptSecondary(CallTranscriptSecondaryKind.TRANSLATED, served)
+        } else {
+            CallTranscriptSecondary(CallTranscriptSecondaryKind.ORIGINAL, original)
+        }
+    }
 }
+
+/** Which version the line below a journal sentence carries — it names its own label (« Original » / « Traduit »). */
+enum class CallTranscriptSecondaryKind { ORIGINAL, TRANSLATED }
+
+/** The line under a journal sentence: its [text] and the [kind] that says how it reads. */
+data class CallTranscriptSecondary(val kind: CallTranscriptSecondaryKind, val text: String)
 
 /**
  * The persisted journal of `GET /calls/{callId}/transcript`, projected for one

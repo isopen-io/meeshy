@@ -22,4 +22,7 @@
     <string name="call_effects_percent">%1$d %%</string>
     <string name="call_effects_next">Nächster Effekt</string>
     <string name="call_effects_previous">Vorheriger Effekt</string>
+    <string name="call_effects_category_landscape">Landschaft</string>
+    <string name="call_effects_category_voice">Stimme</string>
+    <string name="call_effects_layer_entry">%1$s · %2$s</string>
 </resources>

@@ -16,9 +16,9 @@ const small = { width: 375, height: 667 };
 const landscape = { width: 568, height: 240 };
 const landscapeRoomy = { width: 568, height: 320 };
 
-const tile = (corner: SelfTileCorner, viewport: { readonly width: number; readonly height: number }, scale: 1 | 2 | 3 = 2): TileFootprint => ({
+const tile = (corner: SelfTileCorner, viewport: { readonly width: number; readonly height: number }, scale: 1 | 2 | 3 = 2, bleed = 0): TileFootprint => ({
   corner,
-  ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport }),
+  ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, bleed }),
 });
 
 const lengths = { leading: railLength(2), trailing: railLength(7) };
@@ -114,6 +114,45 @@ describe('railsClearance', () => {
     const clearance = railsClearance({ tile: mine, viewport: landscape, rtl: false, lengths });
     expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
     expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
+  });
+});
+
+/**
+ * **W1 — LA COLONNE DU JOURNAL RÉDUIT LA SCÈNE, PAS LA FENÊTRE** (W1.5, #17918) : ma vignette se mesure dans la
+ * scène que la colonne laisse (`selfTileBox`, `bleed`), et le rail de fin, déjà arrêté à la colonne (`inset`),
+ * se décale d'elle depuis le bord de cette scène — la colonne ne se compte jamais deux fois, quel que soit le sens
+ * de lecture.
+ */
+describe('W1 — colonne ouverte, le rail longe ma vignette depuis le bord de la scène', () => {
+  const wideShort = { width: 1400, height: 240 };
+  const column = 384;
+
+  test('en gauche à droite, ma vignette au coin de fin : le rail de fin se pose à côté d’elle, sans la largeur de la colonne', () => {
+    const mine = tile('top-right', wideShort, 2, column);
+    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: false, lengths });
+    expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
+    expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
+  });
+
+  test('en droite à gauche, ma vignette au coin de fin (haut-gauche, contre la colonne) : idem, côté fin', () => {
+    const mine = tile('top-left', wideShort, 2, column);
+    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: true, lengths });
+    expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
+    expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
+  });
+
+  test('en droite à gauche, ma vignette posée au coin de début (haut-droite, loin de la colonne) : le rail de début s’en écarte d’autant', () => {
+    const mine = tile('top-right', wideShort, 2, column);
+    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: true, lengths });
+    expect(clearance.leading).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
+    expect(clearance.trailing).toEqual(NO_RAIL_CLEARANCE);
+  });
+
+  test('selfTileFootprint remet ma vignette où la scène réduite la pose, et l’écran partagé aussi', () => {
+    const base = { cameraOn: true, swapped: false, framed: false, immersive: false, scale: 2 as const, viewport: wideShort, topInset: 0, bleed: column };
+    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-right' })).toEqual(tile('top-right', wideShort, 2, column));
+    expect(selfTileFootprint({ ...base, layout: 'video-duo', corner: 'top-left' })).toEqual(tile('top-left', wideShort, 2, column));
+    expect(selfTileFootprint({ ...base, layout: 'screen', corner: 'top-right' })?.x).toBe(wideShort.width - column - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width);
   });
 });
 

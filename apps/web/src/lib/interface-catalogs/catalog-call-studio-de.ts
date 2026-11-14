@@ -51,7 +51,6 @@ const de = {
   'callStudio.preset.sky': 'Himmel',
   'callStudio.preset.monochrome': 'Schwarzweiß',
   'callStudio.mode.montage': 'Anruf festhalten',
-  'callStudio.mode.quit': 'Beenden',
   'callStudio.mode.backEffects': 'Zurück zum Anruf',
   'callStudio.mode.addLook': 'Weiteren Look hinzufügen',
   'callStudio.mode.face': 'Gesicht',

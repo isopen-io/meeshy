@@ -192,6 +192,9 @@ model User {
   /// (2 lettres lowercase) par le middleware gateway X-Device-Locale.
   /// Null = pas encore propagee (comportement legacy preserve).
   deviceLocale              String?
+  /// Non nul = le compte est en FANTÔME GLOBAL pour la position du Sang depuis cette date (#13937) :
+  /// rien n'est enregistré ni servi, et rien ne le distingue d'un compte sans historique.
+  locationGhostAt           DateTime?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -2192,6 +2195,8 @@ model PairInteractionDay {
 
   @@unique([userLowId, userHighId, day])
   @@index([day])
+  /// La branche haute de la paire (#14529) : la purge et l'export lisent `OR: [{ userLowId }, { userHighId }]`.
+  @@index([userHighId, day])
 }
 
 /// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
@@ -2230,16 +2235,27 @@ model RelationFeatureSetting {
   locationWithdrawnAt        DateTime?
   locationHistoryWithdrawnAt DateTime?
   proximityWithdrawnAt       DateTime?
+  /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
+  /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
+  /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.
+  ghostAt                    DateTime?
+  /// Le rayon (mètres) auquel `ownerId` veut l'alerte de proximité avec `otherId` ; absent = 500.
+  proximityRadiusMeters      Int?
   bringBlockedAt        DateTime?
   /// Non nul = `ownerId` a coupé la réception DIRECTE du talkie de `otherId` (#13935) :
   /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
   /// écrite en date nullable — aucun couple booléen + horodatage).
   talkieBlockedAt       DateTime?
+  /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
+  /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
+  togetherBlockedAt     DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   @@unique([ownerId, otherId])
+  /// Le sens « ce qu'on m'a accordé » (#14529) : la purge lit `OR: [{ ownerId }, { otherId }]`.
+  @@index([otherId])
 }
 
 /// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
@@ -6892,4 +6908,32 @@ model UserStickerPack {
 
   @@unique([userId, packSlug])
   @@index([userId, installedAt])
+}
+
+/// L'HISTORIQUE DE POSITION DU SANG (#13937) : un point par ligne, SCELLÉ au repos
+/// (`sealed` = AES-256-GCM de `{latitude, longitude, accuracy, hiddenFrom}`, lié au compte),
+/// 30 jours. Aucune coordonnée en clair ; `expiresAt` porte l'index TTL posé par
+/// `migrations/2026-11-09-blood-location-indexes.mongodb.js` (Prisma ne sait pas le déclarer).
+/// Créé parce qu'aucun modèle de position n'existait : l'existant ne garde que le partage en cours,
+/// en cache et sans historique.
+model BloodLocationPoint {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String   @db.ObjectId
+  sealed     String
+  recordedAt DateTime
+  expiresAt  DateTime
+
+  @@index([ownerId, recordedAt])
+}
+
+/// Le JOURNAL DES CONSULTATIONS de l'historique (#13937) : qui a lu l'historique de `observedId`
+/// et quand. Lisible du seul observé ; 30 jours (index TTL sur `expiresAt`, même migration).
+model BloodLocationConsultation {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  observedId  String   @db.ObjectId
+  observerId  String   @db.ObjectId
+  consultedAt DateTime
+  expiresAt   DateTime
+
+  @@index([observedId, consultedAt])
 }

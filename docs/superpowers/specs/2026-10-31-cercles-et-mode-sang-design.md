@@ -24,7 +24,7 @@ Chaque lot commence par l'**inventaire de l'existant** (à étendre · à modifi
 | 6 | `ATOM` | Atome | ⚛️ | lien parent/tuteur vérifié — **hors MVP** (modèle prêt, aucune route) |
 
 Règles de passage :
-- **Cran par cran.** Le serveur refuse toute demande qui saute un niveau.
+- **Cran par cran, sauf Ami.** Le serveur refuse toute demande qui saute un niveau, à une exception : une demande d'ami simple fait passer **Ami directement** depuis Public, Communauté ou Connaissance (décision porteur du 2026-11-13, #18101 — sans elle, une demande d'ami normale échouait en `RELATION_PHASE_SKIP`). Proche et Sang restent cran par cran.
 - **Pas de plafond** pour Proche ni pour Sang.
 - **Libellés, icônes et seuils** viennent d'une config localisable (7 langues). Ils sont abaissables sur staging.
 - **Niveau effectif** = minimum des niveaux accordés par chacun (RG-01). **Aucun accès à sens unique.**
@@ -107,7 +107,7 @@ Au-dessous d'Ami :
 - **Bring (CAL-04, RG-29) — décision du porteur du 2026-10-31, troisième passage, qui remplace « Proche, OFF par défaut, 3 par heure »).**
   - **Ce que c'est, et ce que l'interface en dit** : le Bring **force un son** sur le téléphone de l'autre, **pour les cas d'urgence extrême**. Il joue même en silencieux et passe Ne pas déranger et les heures calmes, jusqu'à ce que l'autre l'arrête d'un geste. Ce n'est pas une notification.
   - **Ouvert dès Ami, avec un quota par jour selon le niveau effectif** : Ami 1, Proche 3, Sang 30, Atome illimité (hors MVP). Le quota court par jour calendaire du destinataire et par paire (expéditeur → destinataire). Il vient de la config (`bring.perDay`).
-  - **Disponible par défaut**, avec un **blocage par personne** côté destinataire. Quand j'ai bloqué le Bring de quelqu'un, il **ne peut plus m'en envoyer** : refus serveur `BRING_BLOCKED`, et son bouton disparaît. Le blocage ne lui est pas notifié, il voit seulement « Bring indisponible ».
+  - **Disponible par défaut**, avec un **blocage par personne** côté destinataire. Quand j'ai bloqué le Bring de quelqu'un, il **ne peut plus m'en envoyer** : refus serveur `BRING_NOT_ALLOWED`, le même que pour un niveau insuffisant ou une réception coupée (#14677), et son bouton disparaît. Le blocage ne lui est pas notifié, il voit seulement « Bring indisponible ».
   - **iOS** : on demande l'entitlement **Critical Alerts** (D-3, tranchée), avec cette justification d'urgence extrême. En attendant qu'Apple l'accorde, on reste sur time-sensitive et l'interface dit que le silencieux de l'autre l'emporte. Une fois accordé, `criticalSoundNamed(withAudioVolume:)` est utilisé, derrière la permission `.criticalAlert` de l'utilisateur.
   - **Android** : canal `USAGE_ALARM` (volume alarme, passe Ne pas déranger si les alarmes y sont permises), via un service au premier plan. **Web** : onglet ouvert.
 - **Position Sang (LOC-03/04/11, RG-12/13/14/16/27)**, **derrière un flag OFF**, sur liste blanche de comptes de test.

@@ -16,6 +16,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.montage.CallMontageHold
 import me.meeshy.sdk.model.call.montage.CallMontageMoodChip
+import me.meeshy.sdk.model.call.montage.CallMontagePickRule
 import me.meeshy.sdk.model.call.montage.CallMontageScopeToggle
 import me.meeshy.ui.theme.MeeshyTheme
 import java.io.File
@@ -97,17 +98,10 @@ class CallMontageModeSemanticsTest {
         assertThat(showsAll).isFalse()
     }
 
-    private fun actionBar(isRecording: Boolean, onHold: (String) -> Unit = {}) {
+    private fun holdChip(isRecording: Boolean, onHold: (String) -> Unit = {}) {
         rule.setContent {
             MeeshyTheme {
-                MontageActionBar(
-                    hold = CallMontageHold("frame", isOn = false),
-                    isRecording = isRecording,
-                    facesEnabled = !isRecording,
-                    onFaces = {},
-                    onQuit = {},
-                    onHold = onHold,
-                )
+                FrameHoldChip(CallMontageHold("frame", isOn = false), enabled = CallMontagePickRule.holdEnabled(isRecording)) { onHold("frame") }
             }
         }
     }
@@ -115,7 +109,7 @@ class CallMontageModeSemanticsTest {
     @Test
     fun `C1_8 - pendant une prise Cadre est desactive, pas seulement sourd au toucher`() {
         val held = mutableListOf<String>()
-        actionBar(isRecording = true) { held += it }
+        holdChip(isRecording = true) { held += it }
 
         rule.onNodeWithContentDescription(context.getString(R.string.call_live_frame_label)).assertIsNotEnabled().performClick()
 
@@ -125,7 +119,7 @@ class CallMontageModeSemanticsTest {
     @Test
     fun `C1_8 - hors prise Cadre est actif et garde le cadre au toucher`() {
         val held = mutableListOf<String>()
-        actionBar(isRecording = false) { held += it }
+        holdChip(isRecording = false) { held += it }
 
         rule.onNodeWithContentDescription(context.getString(R.string.call_live_frame_label)).assertIsEnabled().performClick()
 

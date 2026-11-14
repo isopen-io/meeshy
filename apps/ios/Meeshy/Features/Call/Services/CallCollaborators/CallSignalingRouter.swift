@@ -457,7 +457,6 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // relance, les allocations gardent des identifiants qui expirent.
                 switch TurnCredentialRefreshPolicy.iceAction(after: call.callState) {
                 case .inert: return
-                case .rearmReconnect: call.reconnector.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
                 case .restartIce: self?.restartIceOnLiveCall(for: call)
                 }
             }

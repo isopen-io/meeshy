@@ -232,7 +232,7 @@ jobs:
   # l'engage pas pour lire une ligne de log git.
   scope:
     name: Portée du run
-    if: ${{ (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -332,7 +332,7 @@ jobs:
   # garde neuve fait donc rougir le jour où elle est écrite.
   gardes-outillage:
     name: Gardes iOS (texte, ubuntu)
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1103,7 +1103,7 @@ jobs:
   # répartition, pas un succès.
   ios-tests:
     needs: [scope, ios-build, ios-test-shard]
-    if: ${{ always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (needs.scope.outputs.run_tests == 'true') }}
+    if: ${{ always() && ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) && (needs.scope.outputs.run_tests == 'true') }}
     # Nom STATIQUE : un job sauté (compilation seule) n'évalue pas son nom, et
     # l'expression brute s'affichait telle quelle dans la liste des checks
     # (run 37830972768). Sauté (compilation seule), « Verdict iOS (tests) » dit juste.

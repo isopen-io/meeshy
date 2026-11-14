@@ -264,14 +264,13 @@ describe('l’adresse parue porte son (i)', () => {
     return harness.el;
   }
 
-  test('le (i) « Pourquoi un lien » est replié, et le champ cite sa note', async () => {
+  test('UNE seule phrase, lisible sous le champ : lien ET code, et ce qu’ils valident — plus de (i) qui la contredit (épure #17666)', async () => {
     const el = await emailShown();
-    const bouton = el.querySelector('button[aria-label="Pourquoi un lien"]') as HTMLButtonElement;
-    expect(bouton.getAttribute('aria-expanded')).toBe('false');
-    const note = el.querySelector(`#${bouton.getAttribute('aria-controls') ?? ''}`) as HTMLElement;
-    expect(note.textContent).toBe('Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.');
-    expect(note.className).toContain('sr-only');
-    expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(note.id);
+    const lead = el.querySelector('[data-field-note]') as HTMLElement;
+    expect(lead.textContent).toBe('Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit à valider votre compte.');
+    expect(lead.classList.contains('sr-only')).toBe(false);
+    expect(el.querySelector('button[aria-label="Un lien ou un code ?"]')).toBeNull();
+    expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(lead.id);
   });
 
   test('le champ vide ne s’annonce pas invalide pour autant', async () => {
@@ -444,5 +443,51 @@ describe('« S’inscrire » depuis la carte', () => {
     expect(phase(el)).toBe('code');
     expect(primary(el).disabled).toBe(true);
     expect(location()).toBe('/signup');
+  });
+});
+
+/**
+ * ÉPURE DES ÉCRANS D'ENTRÉE (#17584, #17666) — l'inscription ne dit rien deux fois.
+ */
+describe('l’inscription ne dit rien deux fois', () => {
+  test('les conditions et la confidentialité ne sont liées QU’UNE fois : par la phrase de consentement, pas aussi par le pied de page', () => {
+    const { el } = mount();
+    expect(el.querySelectorAll('a[href$="/terms"]').length).toBe(1);
+    expect(el.querySelectorAll('a[href$="/privacy"]').length).toBe(1);
+    expect(has(el, '[data-auth-site-footer]')).toBe(true);
+    expect(has(el, '[data-auth-site-link="contact"]')).toBe(true);
+  });
+
+  test('ce que fait l’absence de mot de passe se dit en UNE phrase lisible au repos, sans déroulant ni « facultatif » (#6582, épure #17666)', () => {
+    const { el } = mount();
+    toCard(el);
+    const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
+    const phrase = [...block.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Sans mot de passe'));
+    expect(phrase?.textContent).toBe('Sans mot de passe, vous vous connectez par un lien reçu par e-mail.');
+    expect(phrase?.classList.contains('sr-only')).toBe(false);
+    expect(phrase?.hasAttribute('hidden')).toBe(false);
+    expect(block.textContent).not.toMatch(/Facultatif/u);
+    expect(has(el, '#signup-password-why')).toBe(false);
+    expect(has(block, 'button[aria-expanded]')).toBe(false);
+    expect(el.textContent).not.toMatch(/Pourquoi mettre un mot de passe/u);
+  });
+
+  test('un mot de passe valable se DIT, pas seulement par la couleur du bord (règle 17) — et la phrase « sans mot de passe » se retire', () => {
+    const { el } = mount();
+    toCard(el);
+    type(el, '#signup-password', 'Un-mot-de-passe-solide-2026!');
+    const status = el.querySelector('[data-signup-password-block] [role="status"]');
+    expect(status?.textContent).toBe('Votre compte sera actif immédiatement.');
+    expect(el.querySelector('[data-signup-password-block]')?.textContent).not.toMatch(/Sans mot de passe/u);
+  });
+
+  test('le consentement légal garde ses deux liens DANS la phrase, sans rangée de liens à côté', () => {
+    const { el } = mount();
+    const sentence = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('En continuant'));
+    expect(sentence?.textContent).toBe('En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité.');
+    expect(sentence?.querySelector('a[href$="/terms"]')?.textContent).toBe('conditions d’utilisation');
+    expect(sentence?.querySelector('a[href$="/privacy"]')?.textContent).toBe('politique de confidentialité');
+    expect(el.querySelectorAll('a[href$="/terms"]').length).toBe(1);
+    expect(el.querySelectorAll('a[href$="/privacy"]').length).toBe(1);
   });
 });

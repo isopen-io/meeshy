@@ -3,7 +3,8 @@
  * — tranche du catalogue, extraite pour tenir le budget de taille (motif
  * `catalog-fr-quote.ts`) : chaque langue RÉPAND la sienne dans son catalogue.
  * La discrétion de la recherche par identifiant, l'annonce de mon retour sur
- * Meeshy (réglage de l'ÉMETTEUR) et sa réception (préférence du DESTINATAIRE).
+ * Meeshy (réglage de l'ÉMETTEUR) et sa réception (préférence du DESTINATAIRE),
+ * et ce qu'un proche peut déclencher chez moi : « Recevoir des Bring » (#16588).
  */
 const frContactDiscovery = {
   'settings.privacy.hide_from_search': 'Masquer mon numéro et mon e-mail',
@@ -14,6 +15,9 @@ const frContactDiscovery = {
     'Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.',
   'settings.notif.contact_activity': 'Retour d’un contact',
   'settings.notif.contact_activity.info': 'Une notification quand un contact revient sur Meeshy.',
+  'settings.notif.bring': 'Recevoir des Bring',
+  'settings.notif.bring.info':
+    'Un Proche peut faire sonner votre téléphone pour une urgence extrême, même en silencieux. Coupé, personne ne peut plus vous faire sonner.',
 } as const;
 
 export type ContactDiscoveryCatalogSlice = Readonly<Record<keyof typeof frContactDiscovery, string>>;

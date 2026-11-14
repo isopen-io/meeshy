@@ -100,6 +100,57 @@ public nonisolated enum MeeshyExpandingPillRule {
     public static func hasBack(onBack: Bool) -> Bool { onBack }
     public static func hasClose(onClose: Bool) -> Bool { onClose }
 
+    /// Ce que l'en-tête pose à ses deux bords.
+    public nonisolated struct HeaderSlots: Equatable, Sendable {
+        public let back: Bool
+        public let close: Bool
+        /// ‹ absent : sa place reste réservée, le titre ne glisse pas vers le début.
+        public let reservesStart: Bool
+        /// Ni ✕ ni accessoire : la place de ✕ reste réservée. Sans ✕, un accessoire
+        /// prend le bord de fin (O9).
+        public let reservesEnd: Bool
+    }
+
+    public static func headerSlots(hasBack: Bool, hasClose: Bool, hasTrailing: Bool) -> HeaderSlots {
+        HeaderSlots(back: hasBack, close: hasClose, reservesStart: !hasBack, reservesEnd: !hasClose && !hasTrailing)
+    }
+
+    /// La marge du titre, la même des deux côtés : la plus large des deux bords plus
+    /// l'écart. Le titre reste centré et ne passe jamais sous un bouton ni sous
+    /// l'accessoire.
+    public static func headerTitleInset(start: CGFloat, end: CGFloat, gap: CGFloat) -> CGFloat {
+        let widest = [start, end].filter(\.isFinite).max() ?? 0
+        return max(widest, 0) + (gap.isFinite ? max(gap, 0) : 0)
+    }
+
+    /// La place du titre dans l'en-tête : son centre, compté depuis le bord de début,
+    /// et la largeur qu'on lui propose.
+    public nonisolated struct HeaderTitleSlot: Equatable, Sendable {
+        public let center: CGFloat
+        public let width: CGFloat
+    }
+
+    /// Le titre reste centré, à marge égale, tant qu'il y tient (la planche). Sinon
+    /// (grande police, accessoire large comme le compteur d'O9), il prend toute la
+    /// place libre entre ses deux bords et glisse vers le plus libre, juste assez :
+    /// jamais sous un bouton ni sous l'accessoire, jamais réduit à une lettre.
+    public static func headerTitleSlot(
+        width: CGFloat, start: CGFloat, end: CGFloat, gap: CGFloat, natural: CGFloat
+    ) -> HeaderTitleSlot {
+        let clean: (CGFloat) -> CGFloat = { $0.isFinite ? max($0, 0) : 0 }
+        let total = clean(width), lead = clean(start), tail = clean(end), space = clean(gap)
+        let inset = headerTitleInset(start: lead, end: tail, gap: space)
+        let mid = total / 2
+        guard clean(natural) > total - 2 * inset else {
+            return HeaderTitleSlot(center: mid, width: max(total - 2 * inset, 0))
+        }
+        let titleWidth = min(clean(natural), max(total - lead - tail - 2 * space, 0))
+        let lowest = lead + space + titleWidth / 2
+        let highest = total - tail - space - titleWidth / 2
+        let center = highest < lowest ? (lowest + highest) / 2 : min(max(mid, lowest), highest)
+        return HeaderTitleSlot(center: center, width: titleWidth)
+    }
+
     /// Échap, retour matériel, échappement du lecteur d'écran : le rappel dédié de
     /// l'hôte, sinon ‹, sinon ✕. Fermée, K11 n'écoute rien.
     public static func escapeTarget(isOpen: Bool, hasEscape: Bool, hasBack: Bool, hasClose: Bool) -> EscapeTarget {

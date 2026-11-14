@@ -24,6 +24,7 @@ import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { EngagementPill } from './engagement-pill';
 import { HeaderFlame, loadFlameCard } from './header-flame';
 import { ThreadHeader } from './thread-header';
 
@@ -225,6 +226,23 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+  });
+
+  test('la pastille de l’en-tête déplié ouvre la MÊME carte que la flamme repliée (#17987)', async () => {
+    const touched: string[] = [];
+    const host = await mounter.mount(<EngagementPill snapshot={snapshot()} interactive onHideFlame={() => touched.push('x')} />);
+    const pill = host.querySelector<HTMLElement>('[data-engagement-pill] button');
+    expect(pill?.getAttribute('aria-expanded')).toBe('false');
+    await mounter.click(pill);
+    const card = host.querySelector<HTMLElement>('[data-flame-card]');
+    expect(pill?.getAttribute('aria-expanded')).toBe('true');
+    expect(card?.querySelector('[data-flame-card-streak]')?.textContent).toBe('4');
+    expect(card?.querySelector('[data-flame-card-today]')?.textContent).toBe('+12');
+    expect(card?.querySelector('[data-flame-card-total]')?.textContent).toBe('120');
+    expect(card?.querySelector('a')?.getAttribute('href')).toContain('/me/progression');
+    await mounter.click(host.querySelector<HTMLElement>('[data-flame-card-hide]'));
+    expect(touched).toEqual(['x']);
     expect(host.querySelector('[data-flame-card]')).toBeNull();
   });
 

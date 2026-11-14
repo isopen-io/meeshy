@@ -198,7 +198,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
     ...Object.fromEntries(
-      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting', 'bloodLocationPoint', 'bloodLocationConsultation'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
       ),
     ),

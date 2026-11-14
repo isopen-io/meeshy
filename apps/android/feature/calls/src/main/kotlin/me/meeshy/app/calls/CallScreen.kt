@@ -32,7 +32,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
-import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.sdk.model.call.CallVerticalEdge
@@ -206,14 +205,7 @@ fun CallScreen(
             CallBackdrop(imageUrl = backdropUrl)
 
             val touchExploration = rememberCallTouchExploration()
-            val videoScene = callIsVideoStage(state, groupVideo)
-            val sceneTap = remember(chrome, videoScene, touchExploration) {
-                if (CallChromeVisibility.mayToggleByTap(videoScene, touchExploration)) {
-                    { chrome.onSceneTap(videoScene, touchExploration) }
-                } else {
-                    null
-                }
-            }
+            val sceneTap = rememberCallSceneTap(chrome, state, groupVideo, touchExploration)
             val selfCamera = remember(viewModel) {
                 CallSelfCameraActions(viewModel.cameraZoom)
             }
@@ -240,6 +232,10 @@ fun CallScreen(
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerSpeech = peerSpeech,
                 )
+            } else if ((groupShown || !duo.videoStage) && chromeState.layer.activeMode == null) {
+                // #17945 : le fond (derrière l'avatar d'un duo audio, autour de la grille d'un groupe, caméras allumées ou non)
+                // prend le toucher qui range l'en-tête, la pilule et le journal — et, rangés, les rend (iOS `stageRevealTarget`).
+                sceneTap?.let { CallSceneBackgroundTapTarget(onTap = it) }
             }
 
             // L'aperçu avant décroché : la vidéo de l'appelant derrière la sonnerie, jusqu'au vrai lien.
@@ -267,7 +263,7 @@ fun CallScreen(
                     groupVideo = groupVideo,
                     peerSpeech = peerSpeech,
                     groupStage = if (groupShown) {
-                        { stageModifier ->
+                        { stageModifier, isCompactHeight ->
                             CallGroupStage(
                                 state = state,
                                 mesh = groupMesh,
@@ -282,6 +278,7 @@ fun CallScreen(
                                 onStageTap = sceneTap,
                                 modifier = stageModifier,
                                 onFocusChange = { groupFocus = it },
+                                isCompactHeight = isCompactHeight,
                             )
                         }
                     } else {
@@ -410,6 +407,7 @@ fun CallScreen(
                 eglContext = viewModel.eglBaseContext,
                 reduceMotion = reduceMotion,
                 onClose = chrome::exitMode,
+                onOpenEffects = { chrome.enter(CallScreenMode.Effects) },
             )
 
             // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
@@ -421,6 +419,7 @@ fun CallScreen(
                     eglContext = viewModel.eglBaseContext,
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
+                    onOpenFrames = { chrome.enter(CallScreenMode.Montage) },
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerAvatarUrl = avatarUrl,
                 )

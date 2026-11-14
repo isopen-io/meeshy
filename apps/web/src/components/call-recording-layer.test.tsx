@@ -49,6 +49,21 @@ const pending = (mine: boolean, mustAnswer: boolean): CallRecordingState => ({
   notice: null,
 });
 
+describe('colonne du journal ouverte (W1.4, W1.21)', () => {
+  const placed = (reserveEnd: number, state: CallRecordingState) =>
+    renderToStaticMarkup(<CallRecordingPanel state={state} requesterName="Nadia" language="fr" onAnswer={noop} onStop={noop} onDismiss={noop} reserveEnd={reserveEnd} />);
+
+  test('la carte d’accord et la capsule se centrent sur la scène que la colonne laisse, pas sur la fenêtre', () => {
+    const column = 380;
+    expect(placed(column, pending(false, true))).toContain(`inset-inline-end:calc(0.75rem + ${column}px)`);
+    expect(placed(column, { view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null })).toContain(`inset-inline-end:${column}px`);
+  });
+
+  test('sans colonne, rien ne change', () => {
+    expect(placed(0, pending(false, true))).not.toContain('inset-inline-end');
+  });
+});
+
 describe('le panneau d’enregistrement d’appel (#8064)', () => {
   test('celui qui doit consentir voit qui demande, et deux réponses de 44 px', () => {
     const html = render(pending(false, true));

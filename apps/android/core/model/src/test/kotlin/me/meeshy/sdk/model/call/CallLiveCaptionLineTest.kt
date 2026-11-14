@@ -228,6 +228,44 @@ class CallLiveCaptionLineTest {
     }
 
     @Test
+    fun `in a group each sentence carries the name of ITS author, read in the roster by speakerId (W2_6)`() {
+        val names = mapOf("awa" to "Awa", "karim" to "Karim", "peer" to "Ada")
+        val segments = listOf(
+            seg(key = "a", speakerId = "awa", name = null),
+            seg(key = "k", speakerId = "karim", name = null),
+            seg(key = "p", speakerId = "peer", name = null),
+        )
+
+        val lines = CallLiveCaptionLines.lines(
+            segments, reader, "Ada", prefersOriginal = false, revealed = emptySet(), labels = labels, participantNames = names,
+        )
+
+        assertThat(lines.map { it.speakerName }).containsExactly("Awa", "Karim", "Ada").inOrder()
+        assertThat(lines.map { it.speakerId }).containsExactly("awa", "karim", "peer").inOrder()
+        assertThat(lines.map { it.announcement }).containsExactly("Awa : Comment vas-tu ?", "Karim : Comment vas-tu ?", "Ada : Comment vas-tu ?").inOrder()
+    }
+
+    @Test
+    fun `a group author missing from the roster falls back to the call's name, then the wire, then « Unknown »`() {
+        val names = mapOf("awa" to "Awa", "blank" to "  ")
+
+        fun nameOf(segment: CallJournalSegment, peerName: String? = "Ada") =
+            CallLiveCaptionLines.line(segment, reader, peerName, false, false, labels, participantNames = names).speakerName
+
+        assertThat(nameOf(seg(speakerId = "stranger"))).isEqualTo("Ada")
+        assertThat(nameOf(seg(speakerId = "blank"))).isEqualTo("Ada")
+        assertThat(nameOf(seg(speakerId = "stranger"), peerName = null)).isEqualTo("Ada (wire)")
+        assertThat(nameOf(seg(speakerId = "stranger", name = null), peerName = " ")).isEqualTo("Unknown")
+    }
+
+    @Test
+    fun `my own sentence stays « Me » even when the roster names my id`() {
+        val line = CallLiveCaptionLines.line(seg(speakerId = "me"), reader, "Ada", false, false, labels, participantNames = mapOf("me" to "Jo"))
+
+        assertThat(line.speakerName).isEqualTo("Me")
+    }
+
+    @Test
     fun `only a peer's FINAL sentence is announced`() {
         val lines = CallLiveCaptionLines.lines(
             listOf(seg(key = "a", text = "One.", translatedText = null), seg(key = "b", text = "Tw", translatedText = null, isFinal = false)),

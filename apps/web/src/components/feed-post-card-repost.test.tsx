@@ -130,6 +130,26 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
     expect(results.at(-1)).toEqual({ ok: true, notice: 'feed.post.repost.success' });
   });
 
+  test('un post de SANG n’offre pas « Republier » : le compte reste lu, aucun bouton, aucune requête (#14501, RG-18)', async () => {
+    const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, visibility: 'BLOOD', isRepostedByMe: false, repostCount: 3 }]);
+    const { requests, transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));
+
+    const host = await mount(gatewayDeps(queryClient, transport), []);
+
+    expect(repostButton(host)).toBeNull();
+    expect(host.querySelector('[data-feed-actions]')?.textContent).toContain('3');
+    expect(requests).toEqual([]);
+  });
+
+  test('un post de PROCHES garde « Republier » (vers les Proches ou le Sang)', async () => {
+    const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, visibility: 'CLOSE', isRepostedByMe: false, repostCount: 3 }]);
+    const { transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));
+
+    const host = await mount(gatewayDeps(queryClient, transport), []);
+
+    expect(repostButton(host)).not.toBeNull();
+  });
+
   test('le CACHE seed initial se peint tel quel, sans qu’aucun clic n’ait eu lieu (cache-first)', async () => {
     const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, isRepostedByMe: true, repostCount: 9 }]);
     const { transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));

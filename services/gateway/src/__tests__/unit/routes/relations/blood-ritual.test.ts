@@ -32,7 +32,15 @@ jest.mock('../../../../services/CacheStore', () => ({
   }),
 }));
 
+const rejeuPosition = jest.fn(async (..._args: unknown[]) => undefined);
+jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => ({
+  ...(jest.requireActual('../../../../services/sharedLocation/sharedLocationDeps') as object),
+  refreshSharedLocationAfter: (...args: unknown[]) => rejeuPosition(...args),
+}));
+
 import { relationsRoutes } from '../../../../routes/relations';
+import { lowerPair } from '../../../../services/relations/userRelationWriter';
+import { RELATION_RITUAL_SHARE_WITHDRAWN_AT } from '@meeshy/shared/types/relation-person-settings';
 import {
   AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
   type AppOptions, type TestApp,
@@ -69,7 +77,7 @@ async function jusquAuxDeuxHolds(app: TestApp) {
   return { token, a, b };
 }
 
-beforeEach(() => { cache.clear(); freezeClock(NOW); });
+beforeEach(() => { cache.clear(); rejeuPosition.mockClear(); freezeClock(NOW); });
 afterEach(() => thawClock());
 
 describe('#13933 — le jeton : démarrer et rejoindre', () => {
@@ -267,6 +275,18 @@ describe('#13933 — la double confirmation et le consentement feature par featu
     }
   });
 
+  it('#16987 — le Sang scellé rejoue la projection de la position partagée de la paire, une fois, et seulement à l’achèvement', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    expect(rejeuPosition).not.toHaveBeenCalled();
+    await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(rejeuPosition).toHaveBeenCalledTimes(1);
+    expect(rejeuPosition.mock.calls[0][1]).toMatchObject({ userA: AUTRE, userB: MOI });
+  });
+
   it('refuser un partage ne bloque pas le Sang : il est enregistré à faux, par feature', async () => {
     const app = await appli();
     const { token } = await jusquAuxDeuxHolds(app);
@@ -364,5 +384,73 @@ describe('#13933 — la double confirmation et le consentement feature par featu
 
     expect(app.notifier.createSystemNotification).not.toHaveBeenCalled();
     expect(app.notifier.createFriendAcceptedNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('#14924 — course rituel ↔ baisse : un Sang qui tombe pendant l’écriture des consentements ne laisse aucun partage', () => {
+  it('le lien tombe sous le Sang entre le scellement et l’écriture des consentements : les partages sont éteints', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const upsert = app.prisma.relationFeatureSetting.upsert as (args: unknown) => Promise<unknown>;
+    let dropped = false;
+    app.prisma.relationFeatureSetting.upsert = async (args: unknown) => {
+      if (!dropped) {
+        dropped = true;
+        await lowerPair(app.store.prisma, { userA: MOI, userB: AUTRE, level: 'CLOSE', at: new Date(Date.now()) });
+      }
+      return upsert(args);
+    };
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    const fin = await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(fin.status).toBe(200);
+    expect(dropped).toBe(true);
+    const lignes = app.reglages();
+    expect(lignes).toHaveLength(2);
+    lignes.forEach((ligne) => expect(ligne).toMatchObject({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }));
+  });
+
+  it('le retrait de la course n’est le geste de personne : aucune date de retrait chez l’un ni chez l’autre', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const upsert = app.prisma.relationFeatureSetting.upsert as (args: unknown) => Promise<unknown>;
+    let dropped = false;
+    app.prisma.relationFeatureSetting.upsert = async (args: unknown) => {
+      if (!dropped) {
+        dropped = true;
+        await lowerPair(app.store.prisma, { userA: MOI, userB: AUTRE, level: 'CLOSE', at: new Date(Date.now()) });
+      }
+      return upsert(args);
+    };
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    const dates = Object.values(RELATION_RITUAL_SHARE_WITHDRAWN_AT);
+    app.reglages().forEach((ligne) => dates.forEach((date) => expect(ligne[date] ?? null).toBeNull()));
+  });
+
+  it('un blocage posé entre le scellement et l’écriture des consentements : les partages sont éteints', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const upsert = app.prisma.relationFeatureSetting.upsert as (args: unknown) => Promise<unknown>;
+    let blocked = false;
+    app.prisma.relationFeatureSetting.upsert = async (args: unknown) => {
+      if (!blocked) {
+        blocked = true;
+        app.prisma.user.findFirst = jest.fn(async () => ({ id: AUTRE, blockedUserIds: [MOI] })) as never;
+      }
+      return upsert(args);
+    };
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    const fin = await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(fin.status).toBe(200);
+    expect(blocked).toBe(true);
+    const lignes = app.reglages();
+    expect(lignes).toHaveLength(2);
+    lignes.forEach((ligne) => expect(ligne).toMatchObject({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }));
   });
 });

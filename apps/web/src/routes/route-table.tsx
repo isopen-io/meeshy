@@ -603,6 +603,8 @@ export const ROUTES = {
   callKeypad: { pattern: '/calls/keypad', screen: () => import('@/routes/calls-keypad') },
   call: { pattern: '/call/$callId', screen: () => import('@/routes/call-detail') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
+  /* LES POSITIONS QU'ON ME PARTAGE (#16984) — la carte du partage temporaire de position (spec cercles § 1.3) ; le web reçoit, il n'émet pas. */
+  sharedLocations: { pattern: '/positions', screen: () => import('@/routes/shared-locations') },
   communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
   /* CRÉER, PUIS UNE COMMUNAUTÉ (#6364, D-60) — miroir `Route.communityCreate` et
      `Route.communityDetail` (`Router.swift`). `/communities/:id` est l'adresse

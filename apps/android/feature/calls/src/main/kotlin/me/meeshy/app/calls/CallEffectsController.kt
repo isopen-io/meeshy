@@ -8,25 +8,30 @@ import me.meeshy.sdk.model.call.effects.CallEffectsModeState
 
 /**
  * La session du mode « Effets de ma caméra » (iOS `CallEffectsModeControls`) : chaque essai ([state]) part aussitôt
- * sur l'image envoyée et SE GARDE — ni Quitter ni Valider (loi 14), ‹ revient à l'appel avec le look. Une session
- * ne se termine qu'une fois ; passé ce point, plus rien ne bouge.
+ * sur l'image envoyée et SE GARDE — ni Quitter ni Valider (loi 14), ‹ revient à l'appel avec le look. La pile de trois
+ * couches est celle de l'appel, que le Montage partage : la session la reprend à l'ouverture et la rend à chaque
+ * changement. Une session ne se termine qu'une fois ; passé ce point, plus rien ne bouge.
  */
 internal class CallEffectsController(
     private val effects: CallVideoEffectsController,
 ) {
-    private val _state = MutableStateFlow(CallEffectsModeState.opening(effects.config.value))
+    private val _state = MutableStateFlow(
+        CallEffectsModeState.opening(effects.config.value, effects.layers.value, effects.takeRequestedCategory()),
+    )
     val state: StateFlow<CallEffectsModeState> = _state.asStateFlow()
 
     private var finished = false
 
     init {
         effects.apply(_state.value.current)
+        effects.setLayers(_state.value.layers)
     }
 
     fun change(transform: (CallEffectsModeState) -> CallEffectsModeState) {
         if (finished) return
         _state.update(transform)
         effects.apply(_state.value.current)
+        effects.setLayers(_state.value.layers)
     }
 
     /** Ferme la session en gardant le look ; rend `false` si elle l'était déjà (un double toucher ne ferme pas deux fois). */

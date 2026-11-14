@@ -157,8 +157,9 @@ extension CallView {
         let actions = currentActionSet
         let disposition = controlsDisposition
         let text = pillText
+        let unfoldsAbove = text.hasBaseRow && disposition.unfoldsPill(for: layer)
         return VStack(spacing: 0) {
-            if text.hasBaseRow, disposition.unfoldsPill(for: layer) {
+            if unfoldsAbove {
                 VStack(spacing: 0) {
                     if layer.pillPanel == .journal {
                         journalPanelRows
@@ -183,13 +184,12 @@ extension CallView {
                 .transition(.opacity)
             }
             if text.hasBaseRow {
-                baseRow
-                    .transition(unfoldTransition)
+                baseRow.transition(unfoldTransition)
             }
         }
         .clipShape(Self.pillShape)
         .callControlsGlass(in: Self.pillShape)
-        .frame(maxWidth: CallPillWidth.maxWidth(for: text))
+        .frame(maxWidth: CallPillWidth.maxWidth(for: text, unfoldsAbove: unfoldsAbove))
         .animation(disclosureAnimation, value: layer)
         .animation(disclosureAnimation, value: text)
     }

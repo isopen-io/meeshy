@@ -26,6 +26,7 @@ const cached: AppPreferences = {
   acceptCallsFromNonContacts: false,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  bringEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,

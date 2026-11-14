@@ -246,7 +246,8 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
   const fwdGroupHtml = await rowOf('st-fwd-group').innerHTML();
   expect(!fwdGroupHtml.includes('Privé'), `${label} st-fwd-group : « Privé » absent du HTML (attributs compris)`);
 
-  // st-call, st-join, st-notice — rangée système : plate en Focal, capsule en Bulles.
+  // st-call, st-join, st-notice — rangée système : plate en Focal, capsule en Bulles. L'appel est une CARTE
+  // sur les deux peaux (#17878, A1.2) : ni rangée plate ni capsule, son titre porte le texte.
   for (const id of ['st-call', 'st-join', 'st-notice']) {
     const row = rowOf(id);
     expect((await row.locator('[data-system]').count()) > 0, `${label} ${id} porte [data-system]`);
@@ -256,6 +257,8 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
         !html.includes('rounded-bubble') && !html.includes('system-notice'),
         `${label} ${id} : aucune .rounded-bubble ni .system-notice en Focal`,
       );
+    } else if (id === 'st-call') {
+      expect(html.includes('data-call-card'), `${label} ${id} : carte d'appel en Bulles`);
     } else {
       expect(html.includes('system-notice'), `${label} ${id} : capsule .system-notice en Bulles`);
     }
@@ -271,7 +274,8 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
        ci-dessus, donc `expectQuantifiedContrast` : QUANTIFIÉ, pas exigé à
        l'AA (défaut majeur 9, un gap de la CIBLE iOS, pas de web-v2). */
     await expectQuantifiedContrast(page, `[data-message="${id}"] [data-system] time`, label, `${id} : contraste de l'heure système`, expect);
-    await expectQuantifiedContrast(page, `[data-message="${id}"] [data-system] > span`, label, `${id} : contraste du texte système`, expect);
+    const textOf = id === 'st-call' ? `[data-message="${id}"] [data-call-card-title]` : `[data-message="${id}"] [data-system] > span`;
+    await expectQuantifiedContrast(page, textOf, label, `${id} : contraste du texte système`, expect);
   }
 
   /* LOI 4 SUR LES RANGÉES SYSTÈME (revue-correction #5936, défaut BLOQUANT

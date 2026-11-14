@@ -10,8 +10,9 @@ import { Link } from '@/routes/route-table';
 /**
  * **LA CARTE DE LA SÉRIE** (#17770) — ce que le toucher sur la flamme ouvre :
  * la série en grand, les étincelles du jour, le total gagné ici, puis « Voir
- * le jeu » (`/me/progression`, la même destination que la pastille dépliée)
- * et « Masquer la flamme ». Échap ou un toucher hors de la carte la referme.
+ * le jeu » (`/me/progression`, « Ma Légende ») et « Masquer la flamme ». La
+ * pastille de l'en-tête déplié ouvre la même carte (#17987). Échap ou un
+ * toucher hors de la carte la referme.
  * Les nombres sont lus depuis l'instantané déjà en main : aucune attente.
  */
 export function FlameCard({
@@ -27,7 +28,8 @@ export function FlameCard({
   readonly day: string;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
-  readonly onHide: () => void;
+  /** Absent : la carte ne propose pas « Masquer la flamme ». */
+  readonly onHide?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -88,9 +90,11 @@ export function FlameCard({
         <Link to="progression" className="header-flame-card-primary min-h-11 flex-1">
           {translate(language, 'engagement.card.open')}
         </Link>
-        <button type="button" data-flame-card-hide onClick={onHide} className="header-flame-card-secondary min-h-11">
-          {translate(language, 'engagement.card.hide')}
-        </button>
+        {onHide === undefined ? null : (
+          <button type="button" data-flame-card-hide onClick={onHide} className="header-flame-card-secondary min-h-11">
+            {translate(language, 'engagement.card.hide')}
+          </button>
+        )}
       </div>
     </div>
   );

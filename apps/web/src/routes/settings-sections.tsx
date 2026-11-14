@@ -503,6 +503,9 @@ const NOTIFICATION_TOGGLES = [
   { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
   { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
   { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', caption: 'settings.notif.contact_activity.info', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
+  /* « Recevoir des Bring » (#16588) — l'interrupteur GLOBAL que la passerelle lit
+     avant de faire sonner ; le blocage par personne reste sur la fiche d'un lien. */
+  { key: 'bringEnabled', label: 'settings.notif.bring', caption: 'settings.notif.bring.info', icon: { set: 'socle', name: 'phone' }, tint: 'var(--color-error)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {

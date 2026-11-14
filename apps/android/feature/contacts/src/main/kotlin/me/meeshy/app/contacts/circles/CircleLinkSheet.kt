@@ -45,7 +45,8 @@ import me.meeshy.ui.theme.hexColor
 /**
  * Les réglages PAR PERSONNE — blocage du Bring, talkie, écoute, position, selon ce que le cercle ouvre
  * ([CirclePersonSetting]) — arrivent chacun avec son lot du jalon 2 (`PUT /relations/:userId/settings`, #14229).
- * « Bloquer ses Bring » (#16617) et « Couper son talkie » (#16675) sont ACTIFS ([CircleReceptionBlockToggle]). Tant qu'un réglage n'est pas
+ * « Bloquer ses Bring » (#16617), « Couper son talkie » (#16675) et « Ce que j'écoute » (#16836) sont ACTIFS
+ * ([CircleReceptionBlockToggle]). Tant qu'un réglage n'est pas
  * livré, la fiche le MONTRE désactivé et DIT pourquoi :
  * ni cachés (on chercherait où ils sont), ni simulés (un interrupteur sans effet est un mensonge). Miroir du drapeau iOS
  * `circle_person_settings`, fermé.
@@ -119,7 +120,7 @@ internal fun CircleLinkSheet(
                     color = tokens.textMuted,
                 )
             } else {
-                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it.reception == null }) {
+                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it.personSwitch == null }) {
                     Text(
                         text = stringResource(R.string.circles_sheet_settings_unavailable),
                         style = MaterialTheme.typography.bodySmall,
@@ -127,11 +128,11 @@ internal fun CircleLinkSheet(
                     )
                 }
                 settings.forEach { setting ->
-                    val reception = setting.reception
-                    if (reception != null) {
+                    val personSwitch = setting.personSwitch
+                    if (personSwitch != null) {
                         CircleReceptionBlockToggle(
                             userId = link.userId,
-                            setting = reception,
+                            personSwitch = personSwitch,
                             title = stringResource(setting.titleRes()),
                             detail = setting.detailRes()?.let { stringResource(it) },
                         )

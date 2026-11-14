@@ -34,6 +34,8 @@ class StatusViewModel: ObservableObject {
     let mode: StatusService.Mode
     private let statusService: StatusServiceProviding
     private var cancellables = Set<AnyCancellable>()
+    /// Emojis envoyés par statut pendant la session : le même ne repart pas deux fois (#18110).
+    private var sessionReactions: [String: Set<String>] = [:]
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
@@ -637,7 +639,9 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - React to Status
 
-    func reactToStatus(_ statusId: String, emoji: String) async {
+    @discardableResult
+    func reactToStatus(_ statusId: String, emoji: String) async -> StatusReactionOutcome {
+        guard sessionReactions[statusId, default: []].insert(emoji).inserted else { return .alreadyPlaced }
         // Optimistic : refleter la reaction dans reactionSummary avant le reseau
         // (parite avec les reactions de post/commentaire). Snapshot pour rollback.
         let previousSummary = statuses.first(where: { $0.id == statusId })?.reactionSummary
@@ -648,14 +652,34 @@ class StatusViewModel: ObservableObject {
         }
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
+            return .sent
         } catch {
             // Rollback de l'optimisme + toast. (Sur succes, le broadcast
             // `status:reacted` reconcilie l'etat autoritaire cote serveur.)
+            sessionReactions[statusId]?.remove(emoji)
             if let index = statuses.firstIndex(where: { $0.id == statusId }) {
                 statuses[index].reactionSummary = previousSummary
             }
             FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Impossible de réagir au statut", bundle: .main))
+            return .failed
         }
+    }
+
+    func placedReactions(on statusId: String) -> Set<String> {
+        sessionReactions[statusId] ?? []
+    }
+
+    /// Injecté depuis la racine dans `StatusBubbleController` (#18110) : la
+    /// bulle et la page plein écran réagissent par CETTE instance, celle qui
+    /// tient la barre — sa mise à jour optimiste y est donc visible.
+    var reactionHandler: MoodReactionHandler {
+        MoodReactionHandler(
+            react: { [weak self] statusId, emoji in
+                guard let self else { return .failed }
+                return await self.reactToStatus(statusId, emoji: emoji)
+            },
+            placed: { [weak self] statusId in self?.placedReactions(on: statusId) ?? [] }
+        )
     }
 
 }

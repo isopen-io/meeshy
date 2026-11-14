@@ -10,25 +10,32 @@ class GroupCallStageLawTest {
 
     @Test
     fun `the grid follows iOS from one to six tiles`() {
-        assertThat(GroupCallGridLayout.layout(1, isLandscape = false)).isEqualTo(GroupCallGridLayout(1, 1))
-        assertThat(GroupCallGridLayout.layout(2, isLandscape = false)).isEqualTo(GroupCallGridLayout(1, 2))
-        assertThat(GroupCallGridLayout.layout(2, isLandscape = true)).isEqualTo(GroupCallGridLayout(2, 1))
-        assertThat(GroupCallGridLayout.layout(3, isLandscape = false)).isEqualTo(GroupCallGridLayout(2, 2))
-        assertThat(GroupCallGridLayout.layout(6, isLandscape = false)).isEqualTo(GroupCallGridLayout(2, 3))
-        assertThat(GroupCallGridLayout.layout(6, isLandscape = true)).isEqualTo(GroupCallGridLayout(3, 2))
-        assertThat(GroupCallGridLayout.layout(0, isLandscape = true).capacity).isEqualTo(1)
+        assertThat(GroupCallGridLayout.layout(1, isLandscape = false, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(1, 1))
+        assertThat(GroupCallGridLayout.layout(2, isLandscape = false, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(1, 2))
+        assertThat(GroupCallGridLayout.layout(2, isLandscape = true, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 1))
+        assertThat(GroupCallGridLayout.layout(3, isLandscape = false, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(6, isLandscape = false, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 3))
+        assertThat(GroupCallGridLayout.layout(6, isLandscape = true, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(3, 2))
+        assertThat(GroupCallGridLayout.layout(0, isLandscape = true, isCompactHeight = false).capacity).isEqualTo(1)
     }
 
     @Test
-    fun `L4,1 - four people fit on one row in landscape and stay 2 by 2 standing`() {
-        assertThat(GroupCallGridLayout.layout(4, isLandscape = true)).isEqualTo(GroupCallGridLayout(4, 1))
-        assertThat(GroupCallGridLayout.layout(4, isLandscape = false)).isEqualTo(GroupCallGridLayout(2, 2))
+    fun `L4,1 - four people fit on one row in a landscape window of compact height`() {
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = true, isCompactHeight = true)).isEqualTo(GroupCallGridLayout(4, 1))
+    }
+
+    @Test
+    fun `W2 - four people stay 2 by 2 on a wide window of ample height, and standing`() {
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = true, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = false, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = false, isCompactHeight = true)).isEqualTo(GroupCallGridLayout(2, 2))
     }
 
     @Test
     fun `three people keep the 2 by 2 grid in both orientations, like iOS`() {
-        assertThat(GroupCallGridLayout.layout(3, isLandscape = true)).isEqualTo(GroupCallGridLayout(2, 2))
-        assertThat(GroupCallGridLayout.layout(5, isLandscape = true)).isEqualTo(GroupCallGridLayout(3, 2))
+        assertThat(GroupCallGridLayout.layout(3, isLandscape = true, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(3, isLandscape = true, isCompactHeight = true)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(5, isLandscape = true, isCompactHeight = false)).isEqualTo(GroupCallGridLayout(3, 2))
     }
 
     @Test

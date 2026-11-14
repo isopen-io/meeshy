@@ -10,6 +10,9 @@ const ptContactDiscovery = {
     'Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se o seu status online estiver oculto.',
   'settings.notif.contact_activity': 'Retorno de um contato',
   'settings.notif.contact_activity.info': 'Uma notificação quando um contato volta ao Meeshy.',
+  'settings.notif.bring': 'Receber Brings',
+  'settings.notif.bring.info':
+    'Uma pessoa próxima pode fazer seu telefone tocar numa emergência extrema, mesmo no silencioso. Desativado, ninguém poderá fazer você tocar.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default ptContactDiscovery;

@@ -251,7 +251,7 @@ extension ConversationView {
             section: conversationSection,
             showsEngagement: !headerLayout.showsActions,
             accentColor: accentColor,
-            successColor: theme.success
+            successColor: theme.success, onOpenGame: { router.push(.progression) }, onHideFlame: { dismissHeaderFlame() }
         )
     }
 

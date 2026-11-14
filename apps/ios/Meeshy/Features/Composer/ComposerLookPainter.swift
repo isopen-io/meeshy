@@ -183,7 +183,8 @@ nonisolated enum ComposerLookPainter {
                       scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil,
                       faces: ComposerFaceEffects = .live, still: Bool = false, overlay: ComposerTextOverlay? = nil) -> CIImage {
         let couches = [
-            LensPass(.lut) { image, _ in ComposerLiveLookRule.graded(image, filter: look.filter, declared: declared) },
+            LensPass(.lut) { image, _ in ComposerLiveLookRule.graded(image, filter: look.filter, tuning: look.tuning,
+                                                                     declared: declared) },
             LensPass(.face) { tonifiee, _ in faces.apply(look.effect, to: tonifiee, probing: source, still: still) },
             LensPass(.frame) { image, _ in framed(image, framing: framing, scene: scene, canvas: canvas) },
         ] + overlayPasses(overlay, canvas: canvas)

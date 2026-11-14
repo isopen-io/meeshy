@@ -159,14 +159,16 @@ export const membersInArrival = (members: Readonly<Record<string, CallMember>>):
 /**
  * Colonnes d'une grille de `count` tuiles (soi compris) — `GroupCallGridLayout.layout` d'iOS et
  * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois font 2 × 2, quatre
- * font 2 × 2 en portrait et tiennent sur UNE rangée de quatre en paysage (L4.1), cinq et six font 2 × 3
- * en portrait et 3 × 2 en paysage.
+ * font 2 × 2 sauf UNE rangée de quatre quand la scène est en paysage ET la FENÊTRE de hauteur compacte
+ * (L4.1 : téléphone couché ; W2.1 : une fenêtre de bureau ou un iPad gardent le 2 × 2 de W2), cinq et six
+ * font 2 × 3 en portrait et 3 × 2 en paysage. `compact` se lit sur la fenêtre (`isCompactHeight`), pas
+ * sur la scène, que la colonne du journal ou la pilule raccourcissent.
  */
-export function gridColumns(count: number, landscape: boolean): number {
+export function gridColumns(count: number, landscape: boolean, compact: boolean): number {
   if (count <= 1) return 1;
   if (count === 2) return landscape ? 2 : 1;
   if (count === 3) return 2;
-  if (count === 4) return landscape ? 4 : 2;
+  if (count === 4) return landscape && compact ? 4 : 2;
   return landscape ? 3 : 2;
 }
 

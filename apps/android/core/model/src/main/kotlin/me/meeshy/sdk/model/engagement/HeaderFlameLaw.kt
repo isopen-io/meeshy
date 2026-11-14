@@ -28,6 +28,16 @@ object HeaderFlameLaw {
             HeaderFlameCard(streakDays = it.streakDays, todayPoints = it.todayPoints, totalPoints = it.totalPoints)
         }
 
+    /**
+     * Ce que fait le toucher sur la pastille de l'en-tête DÉPLIÉ (#17987, iOS
+     * `ConversationEngagementPillTap`) : une série en cours ouvre la MÊME carte que la flamme
+     * repliée ; le cumul seul, sans flamme donc sans carte, mène à « Ma Légende » ; sans point, rien.
+     */
+    fun pillTap(displayed: ConversationEngagementSnapshot?): EngagementPillTap? {
+        if (displayed == null || displayed.totalPoints <= 0) return null
+        return card(displayed)?.let { EngagementPillTap.FlameCard(it) } ?: EngagementPillTap.Legend
+    }
+
     /** Déplier l'en-tête RENDRE la flamme (le masquage ne dure que jusque-là) ; replié, il tient. */
     fun dismissedAfterHeaderExpanded(expanded: Boolean, wasDismissed: Boolean): Boolean =
         if (expanded) false else wasDismissed
@@ -90,3 +100,9 @@ object HeaderFlameLaw {
 
 /** Ce que montre la carte de la flamme (#17770). */
 data class HeaderFlameCard(val streakDays: Int, val todayPoints: Int, val totalPoints: Int)
+
+/** Ce que fait le toucher sur la pastille de l'en-tête déplié (#17987). */
+sealed interface EngagementPillTap {
+    data class FlameCard(val card: HeaderFlameCard) : EngagementPillTap
+    data object Legend : EngagementPillTap
+}

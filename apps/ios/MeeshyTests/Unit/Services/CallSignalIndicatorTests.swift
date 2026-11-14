@@ -405,10 +405,10 @@ final class CallHangupFastPathTests: XCTestCase {
         let row = String(view[start.upperBound ..< end.lowerBound])
         XCTAssertTrue(row.contains("if let original = line.originalBelow"))
         XCTAssertTrue(
-            row.contains("CallOriginalBelowText(original: original, ink: MeeshyColors.mediaChromeSecondary)"),
+            row.contains("CallOriginalBelowText(text: original, ink: MeeshyColors.mediaChromeSecondary)"),
             "« Original · … » en encre secondaire, sous la traduction (#17340)."
         )
-        XCTAssertTrue(view.contains("Text(verbatim: \"\\(CallCaptionsCopy.original) · \\(original)\")"), "La pièce partagée pose la ligne.")
+        XCTAssertTrue(view.contains("Text(verbatim: \"\\(kind.label) · \\(text)\")"), "La pièce partagée pose la ligne.")
     }
 
     func test_localSpeaker_isSignedMoi_notWithTheNameNorVous() throws {

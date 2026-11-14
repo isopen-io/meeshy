@@ -119,7 +119,8 @@ public struct MeeshyExpandingPill<Buttons: View, Primary: View, HeaderTrailing: 
 
     /// Le dessus : le panneau de l'option, qui entre et sort en fondu (échelle de
     /// 0,94 ancrée en bas ; fondu seul sous « réduire les animations »). Le
-    /// changement d'`id` est un fondu enchaîné dans le même verre.
+    /// changement d'`id` est un fondu enchaîné dans le même verre ; ce qui part reste
+    /// peint jusqu'au terme, inerte et absent du lecteur d'écran.
     private func opening(reduceMotion: Bool) -> some View {
         ZStack(alignment: .bottom) {
             if let option {
@@ -143,6 +144,7 @@ public struct MeeshyExpandingPill<Buttons: View, Primary: View, HeaderTrailing: 
             maxBodyHeight: maxBodyHeight,
             isBodyScrollLocked: isBodyScrollLocked,
             takesFocus: takesFocus,
+            isCollapsed: !MeeshyExpandingPillRule.isOpen(option: option, bodyIsEmpty: bodyIsEmpty),
             bodyIsEmpty: $bodyIsEmpty,
             headerTrailing: headerTrailing,
             content: content(option)
@@ -160,10 +162,13 @@ public struct MeeshyExpandingPill<Buttons: View, Primary: View, HeaderTrailing: 
         }
     }
 
+    /// Ce qui part reste peint jusqu'au terme du fondu, inerte et muet.
     private static func transition(reduceMotion: Bool) -> AnyTransition {
-        reduceMotion
-            ? .opacity
-            : .opacity.combined(with: .scale(scale: MeeshyExpandingPillRecipe.enterScale, anchor: .bottom))
+        .meeshyExpandingPill(
+            reduceMotion
+                ? .opacity
+                : .opacity.combined(with: .scale(scale: MeeshyExpandingPillRecipe.enterScale, anchor: .bottom))
+        )
     }
 }
 

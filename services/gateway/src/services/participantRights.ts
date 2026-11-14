@@ -259,8 +259,21 @@ export function wasBornWithClosedMemberTable(participant: ClosedBirthCandidate):
  *
  * L'appelant passe alors ce que le LIEN autorise, exactement comme le fait
  * `historyFloorFor` pour la lecture : sans quoi la fiche annoncerait un droit
- * que la lecture ne respecte pas. Défaut `true` — un lien introuvable ne borne
- * rien, posture unique du dépôt.
+ * que la lecture ne respecte pas.
+ *
+ * #17140 — et « ce que le lien autorise » se demande à `linkGrantsHistory`
+ * (`services/historyFloor.ts`), jamais à un `shareLink?.allowViewHistory ?? …`
+ * retapé sur place. Ce repli-là confond les deux raisons d'avoir `null` en
+ * face : « cette participation n'a emprunté AUCUN lien » (accorde) et « son
+ * lien a DISPARU » (refuse — c'est le fail-CLOSED de #17140, et la seconde
+ * forme est FABRIQUÉE par la purge d'un compte et par le balayage des liens
+ * échus). La phrase qui vivait ici — « défaut `true`, un lien introuvable ne
+ * borne rien, posture unique du dépôt » — énonçait la posture que #17140 a
+ * renversée : laissée debout, elle l'aurait fait recroire.
+ *
+ * Le défaut `true` du paramètre survit pour l'unique appelant qui ne lit AUCUN
+ * lien (`participant-rights-core.ts`, la réponse d'une écriture de droits par
+ * l'hôte) — son alignement est un lot à lui, il coûterait une requête.
  */
 export function resolveEntryRights(
   participant: ParticipantRightsSource,

@@ -4,7 +4,6 @@
     <string name="call_outgoing_waiting">En attente du correspondant…</string>
     <string name="call_outgoing_waiting_hint">Le correspondant n\'a pas encore répondu.</string>
     <string name="call_connecting_label">Connexion…</string>
-    <string name="call_unknown_peer">Inconnu</string>
     <string name="call_type_audio">Appel audio</string>
     <string name="call_type_video">Appel vidéo</string>
     <string name="call_incoming_audio">Appel entrant</string>

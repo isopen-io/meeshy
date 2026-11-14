@@ -24,10 +24,12 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.Community
 import me.meeshy.sdk.model.CommunityAccess
+import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityMembership
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.toCommunity
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.displayTitle
 import javax.inject.Inject
@@ -51,20 +53,18 @@ data class CommunityDetailUiState(
     val channels: List<CommunityChannelRow> = emptyList(),
     val tab: CommunityDetailTab = CommunityDetailTab.CHANNELS,
     val isLoading: Boolean = true,
-    val failed: Boolean = false,
+    val failure: CommunityLoadFailure? = null,
     val isJoining: Boolean = false,
     val isLeaving: Boolean = false,
 ) {
     val showSkeleton: Boolean get() = community == null && isLoading
-    val showError: Boolean get() = community == null && !isLoading && failed
+    val showError: Boolean get() = community == null && !isLoading && failure != null
 }
 
 sealed interface CommunityDetailEffect {
     /** La communauté n'est plus la mienne (sortie) : l'écran se referme. */
     data object Left : CommunityDetailEffect
     data object Joined : CommunityDetailEffect
-    /** La passerelle répond 404 : la communauté n'existe plus, retour à la liste. */
-    data object NotFound : CommunityDetailEffect
     data object ActionFailed : CommunityDetailEffect
 }
 
@@ -99,7 +99,7 @@ class CommunityDetailViewModel @Inject constructor(
     }
 
     fun retry() {
-        _state.update { it.copy(isLoading = true, failed = false) }
+        _state.update { it.copy(isLoading = true, failure = null) }
         observeDetail()
     }
 
@@ -170,22 +170,30 @@ class CommunityDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Un refus (403 ou 404, rendus pareils) efface la fiche en cache — une communauté privée qu'on
+     * ne lit plus ne se relit pas hors ligne — et l'écran le DIT, avec le seul retour. Réseau et
+     * serveur ne cachent pas une fiche déjà peinte (cache d'abord).
+     */
     private fun onDetailFailure(error: Throwable) {
-        if ((error as? CommunityFetchException)?.isNotFound == true) {
+        val cause = (error as? CommunityFetchException)?.failure ?: error.toContentFetchFailure()
+        val failure = CommunityLoadFailure.of(cause)
+        if (failure == CommunityLoadFailure.REFUSED) {
+            channelsJob?.cancel()
+            _state.update { it.copy(community = null, access = null, channels = emptyList(), isLoading = false, failure = failure) }
             viewModelScope.launch {
                 cache.forget(communityId)
                 cache.refreshList()
-                _effects.send(CommunityDetailEffect.NotFound)
             }
             return
         }
-        if (_state.value.community == null) _state.update { it.copy(isLoading = false, failed = true) }
+        if (_state.value.community == null) _state.update { it.copy(isLoading = false, failure = failure) }
     }
 
     private fun onDetail(api: ApiCommunity) {
         val access = CommunityAccess.resolve(api.createdBy, api.isPrivate, session.currentUserId, api.members.orEmpty())
         _state.update {
-            it.copy(community = api.toCommunity(), access = access, isLoading = false, failed = false)
+            it.copy(community = api.toCommunity(), access = access, isLoading = false, failure = null)
         }
         observeAppearance(api)
         if (access.isMember) observeChannels() else channelsJob?.cancel()

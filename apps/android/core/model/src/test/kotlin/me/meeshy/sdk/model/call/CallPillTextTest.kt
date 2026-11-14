@@ -109,6 +109,37 @@ class CallPillTextTest {
     }
 
     @Test
+    fun `#17935 an unfolded pill, the group rows or an option it holds, takes the one cap of a wide window, duo as group`() {
+        assertThat(CallPillWidth.maxWidthDp(CallPillText.None, isUnfolded = true)).isEqualTo(560f)
+        assertThat(CallPillWidth.maxWidthDp(CallPillText.None, isUnfolded = false)).isEqualTo(440f)
+        CallPillText.entries.filter { it != CallPillText.None }.forEach { content ->
+            assertThat(CallPillWidth.maxWidthDp(content, isUnfolded = true)).isEqualTo(560f)
+            assertThat(CallPillWidth.maxWidthDp(content, isUnfolded = false)).isEqualTo(560f)
+        }
+    }
+
+    @Test
+    fun `#17935 the cap of a grown pill is the one of the text, never a group cap of its own`() {
+        assertThat(CallPillWidth.maxWidthDp(CallPillText.None, isUnfolded = true)).isEqualTo(CallPillWidth.TEXT_DP)
+        assertThat(CallPillWidth.maxWidthDp(CallPillText.None, isUnfolded = true))
+            .isEqualTo(CallPillWidth.maxWidthDp(CallPillText.Captions))
+    }
+
+    @Test
+    fun `#17935 a group pill unfolds on its rows, a duo pill only for an option, so a duo's open menu keeps 440`() {
+        fun cap(disposition: CallControlsDisposition, layer: CallScreenLayer) =
+            CallPillWidth.maxWidthDp(CallPillText.None, isUnfolded = disposition.unfoldsPill(layer))
+        val record = CallScreenLayer.Panel(CallScreenPanel.Record)
+        val people = CallScreenLayer.Panel(CallScreenPanel.People)
+        assertThat(cap(CallControlsDisposition.Rows, CallScreenLayer.Menu)).isEqualTo(560f)
+        assertThat(cap(CallControlsDisposition.Rows, people)).isEqualTo(560f)
+        assertThat(cap(CallControlsDisposition.Rows, record)).isEqualTo(560f)
+        assertThat(cap(CallControlsDisposition.Rails, record)).isEqualTo(560f)
+        assertThat(cap(CallControlsDisposition.Rails, CallScreenLayer.Menu)).isEqualTo(440f)
+        assertThat(cap(CallControlsDisposition.Rows, CallScreenLayer.Idle)).isEqualTo(440f)
+    }
+
+    @Test
     fun `the journal height is a share of the window, never below a readable minimum`() {
         assertThat(CallJournalSizing.heightDp(windowHeightDp = 844f)).isWithin(0.001f).of(844f * 0.45f)
         assertThat(CallJournalSizing.heightDp(windowHeightDp = 320f)).isEqualTo(CallJournalSizing.MINIMUM_DP)

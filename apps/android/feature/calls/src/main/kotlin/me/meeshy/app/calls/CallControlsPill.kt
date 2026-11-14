@@ -117,7 +117,7 @@ internal fun CallControlsPill(
     val shrink = shrinkVertically(tween(millis), shrinkTowards = Alignment.Bottom)
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
-    val maxWidth = rememberCallPillMaxWidth(pillText, reduceMotion)
+    val maxWidth = rememberCallPillMaxWidth(pillText, isUnfolded = expanded, reduceMotion = reduceMotion)
     CallControlsGlass(modifier = modifier.animatedMaxWidth(maxWidth)) {
         AnimatedVisibility(
             visible = expanded,
@@ -163,12 +163,15 @@ internal fun CallControlsPill(
     }
 }
 
-/** L3.3 — 440 → 560 dp sur la même courbe que la hauteur ; un State lu à la mise en page, la composition ne repasse pas par image. */
+/**
+ * L3.3 — 440 → 560 dp sur la même courbe que la hauteur ; un State lu à la mise en page, la composition ne repasse pas par
+ * image. #17935 — la pilule agrandie (rangées du groupe, option tenue) prend la même borne que celle qui porte du texte.
+ */
 @Composable
-private fun rememberCallPillMaxWidth(pillText: CallPillText, reduceMotion: Boolean): State<Dp> {
+private fun rememberCallPillMaxWidth(pillText: CallPillText, isUnfolded: Boolean, reduceMotion: Boolean): State<Dp> {
     val widthMillis = CallPillMotion.widthMillis(reduceMotion)
     val widthSpec: AnimationSpec<Dp> = if (widthMillis == 0) snap() else tween(widthMillis)
-    return animateDpAsState(CallPillWidth.maxWidthDp(pillText).dp, widthSpec, label = "callPillWidth")
+    return animateDpAsState(CallPillWidth.maxWidthDp(pillText, isUnfolded = isUnfolded).dp, widthSpec, label = "callPillWidth")
 }
 
 /** Le plafond de largeur de la pilule, animé : la pilule remplit la largeur offerte jusqu'à [maxWidth], lue à la mise en page. */

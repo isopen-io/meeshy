@@ -80,11 +80,30 @@ enum CallJournalAfterCall {
         !localUserId.isEmpty && userId == localUserId
     }
 
-    /// L'original d'une phrase servie traduite, déplié d'office dessous (#17340). Jamais pour ma phrase,
-    /// jamais sans traduction, jamais quand la bascule le montre déjà à la place de la traduction.
-    static func originalBelow(_ segment: CallTranscriptSegment, showsOriginalInstead: Bool) -> String? {
-        guard servesTranslation(segment), !showsOriginalInstead else { return nil }
-        return segment.text
+    /// Les deux lignes d'une phrase après l'appel (loi 7, #17862). Par défaut la traduction en tête et
+    /// « Original · … » dessous (#17340) ; « Voir l'original » INVERSE : l'original en tête, « Traduit · … »
+    /// dessous. Rien ne disparaît. Ma phrase et une phrase sans traduction restent seules dans les deux états.
+    static func lines(for segment: CallTranscriptSegment, showsOriginal: Bool) -> CallJournalLines {
+        guard servesTranslation(segment), let translated = segment.translatedText else {
+            return CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: nil)
+        }
+        return showsOriginal
+            ? CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: CallJournalLines.Below(kind: .translated, text: translated))
+            : CallJournalLines(primary: translated, primaryIsTranslation: true, below: CallJournalLines.Below(kind: .original, text: segment.text))
+    }
+
+    /// Le pied du journal : « Voir l'original », puis « Voir la traduction » une fois la bascule posée.
+    static func toggleLabel(showsOriginal: Bool) -> String {
+        showsOriginal
+            ? String(localized: "call.transcript.toggle.showTranslation", defaultValue: "Voir la traduction", bundle: .main)
+            : String(localized: "call.transcript.toggle.showOriginal", defaultValue: "Voir l'original", bundle: .main)
+    }
+
+    /// Le lecteur d'écran lit la ligne principale, puis « Traduit : … » ou « Original : … ».
+    static func spokenLabel(name: String, elapsed: String, lines: CallJournalLines) -> String {
+        let spoken = "\(name), \(elapsed) : \(lines.primary)"
+        guard let below = lines.below else { return spoken }
+        return "\(spoken). \(below.kind.label) : \(below.text)"
     }
 
     /// La bascule « Voir l'original » n'a de sens que si au moins une phrase sert une traduction.
@@ -92,7 +111,7 @@ enum CallJournalAfterCall {
         segments.contains(where: servesTranslation)
     }
 
-    private static func servesTranslation(_ segment: CallTranscriptSegment) -> Bool {
+    static func servesTranslation(_ segment: CallTranscriptSegment) -> Bool {
         guard !segment.isLocal, let translated = segment.translatedText else { return false }
         return !translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -107,6 +126,31 @@ enum CallJournalAfterCall {
         case .unresolved: return .hidden
         }
     }
+}
+
+/// Ce que la ligne dessous d'une phrase contient : son original ou sa traduction.
+enum CallJournalLineKind: Equatable {
+    case original
+    case translated
+
+    var label: String {
+        switch self {
+        case .original: return CallCaptionsCopy.original
+        case .translated: return CallCaptionsCopy.translated
+        }
+    }
+}
+
+/// La ligne principale d'une phrase et, quand elle en a une, la ligne dessous.
+struct CallJournalLines: Equatable {
+    struct Below: Equatable {
+        let kind: CallJournalLineKind
+        let text: String
+    }
+
+    let primary: String
+    let primaryIsTranslation: Bool
+    let below: Below?
 }
 
 enum CallTranscriptRetentionNotice: Equatable {
@@ -139,7 +183,13 @@ struct CallTranscriptSection: View {
     @State private var showDeleteConfirmation = false
     @State private var retentionNotice: CallTranscriptRetentionNotice = .hidden
     private let localUserId = AuthManager.shared.currentUser?.id ?? ""
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @ResolvedThemePalette private var theme
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -203,19 +253,20 @@ struct CallTranscriptSection: View {
         }
     }
 
-    /// « Voir l'original » au pied du journal : une bascule pour tout l'appel, au libellé et à l'effet
-    /// inchangés (#17862).
+    /// « Voir l'original » au pied du journal : une bascule pour tout l'appel qui inverse les deux lignes de
+    /// chaque phrase traduite, en fondu (#17862, #17895). « Voir la traduction » rend l'état par défaut.
     private var originalToggle: some View {
         Button {
-            withAnimation { showOriginalText.toggle() }
+            withAnimation(.easeInOut(duration: reduceMotion ? 0.12 : 0.2)) { showOriginalText.toggle() }
         } label: {
-            Text(showOriginalText ? CallCaptionsCopy.showTranslatedHint : CallCaptionsCopy.showOriginalHint)
+            Text(CallJournalAfterCall.toggleLabel(showsOriginal: showOriginalText))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundStyle(Color(hex: accentHex))
                 .meeshyTapTarget()
                 .padding(.vertical, -MeeshyTapTarget.inset(forVisualSide: 17))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(showOriginalText ? .isSelected : [])
     }
 
     /// #16665 — les captures à leur heure parmi les phrases, comme pendant l'appel.
@@ -249,9 +300,7 @@ struct CallTranscriptSection: View {
         let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
         let speakerColor = authorColor(segment.speakerId)
-        let servesTranslation = !segment.isLocal && !showOriginalText && segment.translatedText != nil
-        let displayText = servesTranslation ? (segment.translatedText ?? segment.text) : segment.text
-        let original = CallJournalAfterCall.originalBelow(segment, showsOriginalInstead: showOriginalText)
+        let lines = CallJournalAfterCall.lines(for: segment, showsOriginal: showOriginalText)
         let name = CallJournalAfterCall.authorName(speakerName: segment.speakerName, isMine: segment.isLocal, you: CallJournalAfterCall.youLabel)
         return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -263,21 +312,16 @@ struct CallTranscriptSection: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(theme.textMuted)
             }
-            Text(displayText)
+            Text(lines.primary)
                 .font(.callout)
-                .foregroundStyle(servesTranslation ? speakerColor : theme.textPrimary)
-            if let original {
-                CallOriginalBelowText(original: original, ink: theme.textSecondary)
+                .foregroundStyle(lines.primaryIsTranslation ? speakerColor : theme.textPrimary)
+                .contentTransition(.opacity)
+            if let below = lines.below {
+                CallOriginalBelowText(text: below.text, kind: below.kind, ink: theme.textSecondary)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(rowAccessibilityLabel(name: name, elapsed: elapsedLabel, text: displayText, original: original))
-    }
-
-    private func rowAccessibilityLabel(name: String, elapsed: String, text: String, original: String?) -> String {
-        let spoken = "\(name), \(elapsed) : \(text)"
-        guard let original else { return spoken }
-        return "\(spoken). \(CallCaptionsCopy.original) : \(original)"
+        .accessibilityLabel(CallJournalAfterCall.spokenLabel(name: name, elapsed: elapsedLabel, lines: lines))
     }
 
     /// La couleur d'une personne, la même avant et après la fin de l'appel,

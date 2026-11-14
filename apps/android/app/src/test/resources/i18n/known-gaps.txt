@@ -432,7 +432,6 @@ missing-key :feature:calls ar call_stage_video_paused_short
 missing-key :feature:calls ar call_status_reconnecting
 missing-key :feature:calls ar call_type_audio
 missing-key :feature:calls ar call_type_video
-missing-key :feature:calls ar call_unknown_peer
 missing-key :feature:calls ar call_waiting_answer
 missing-key :feature:calls ar call_waiting_answer_a11y
 missing-key :feature:calls ar call_waiting_answer_hint
@@ -531,7 +530,6 @@ missing-key :feature:calls de call_stage_video_paused_short
 missing-key :feature:calls de call_status_reconnecting
 missing-key :feature:calls de call_type_audio
 missing-key :feature:calls de call_type_video
-missing-key :feature:calls de call_unknown_peer
 missing-key :feature:calls de call_waiting_answer
 missing-key :feature:calls de call_waiting_answer_a11y
 missing-key :feature:calls de call_waiting_answer_hint
@@ -630,7 +628,6 @@ missing-key :feature:calls it call_stage_video_paused_short
 missing-key :feature:calls it call_status_reconnecting
 missing-key :feature:calls it call_type_audio
 missing-key :feature:calls it call_type_video
-missing-key :feature:calls it call_unknown_peer
 missing-key :feature:calls it call_waiting_answer
 missing-key :feature:calls it call_waiting_answer_a11y
 missing-key :feature:calls it call_waiting_answer_hint

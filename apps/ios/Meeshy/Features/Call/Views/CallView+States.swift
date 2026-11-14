@@ -276,8 +276,16 @@ extension CallView {
                 : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main)
         )
     }
+}
 
-    func statusPill(icon: String, text: String, color: Color) -> some View {
+/// Une pastille d'état de l'appel audio (reconnexion, micro coupé, haut-parleur…) : une vue
+/// feuille, sortie de `CallView` pour qu'elle ne porte que des primitives.
+struct CallStatusPill: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(.caption2.weight(.semibold))

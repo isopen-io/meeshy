@@ -415,7 +415,7 @@ export function ThreadHeader({
             ) : null}
           </div>
         ) : null}
-        {expanded && !preview ? <EngagementPill snapshot={engagement} opensProgression /> : null}
+        {expanded && !preview ? <EngagementPill snapshot={engagement} interactive {...(onDismissFlame === undefined ? {} : { onHideFlame: onDismissFlame })} /> : null}
         {besideIdentity || !expanded ? (
           /* GRAPPE D'ACTIONS (#5774, travail 3/3) — c'est ELLE seule qui
              s'efface en mode Bulles pendant le geste

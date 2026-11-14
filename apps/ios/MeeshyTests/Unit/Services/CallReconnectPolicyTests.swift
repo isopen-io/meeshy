@@ -583,8 +583,11 @@ final class CallClockPolicyTests: XCTestCase {
 /// kept its old allocations would lose its path at expiry.
 final class TurnCredentialRefreshPolicyTests: XCTestCase {
 
-    func test_iceAction_reconnecting_rearmsTheReconnect() {
-        XCTAssertEqual(TurnCredentialRefreshPolicy.iceAction(after: .reconnecting(attempt: 2)), .rearmReconnect)
+    func test_iceAction_reconnecting_staysInert_soTheReconnectSendsASingleOffer() {
+        XCTAssertEqual(
+            TurnCredentialRefreshPolicy.iceAction(after: .reconnecting(attempt: 2)), .inert,
+            "a second ICE restart on fresh credentials sends a second offer and scrambles the negotiation (#17955)"
+        )
     }
 
     func test_iceAction_connected_restartsIce() {

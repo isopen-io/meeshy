@@ -14,6 +14,7 @@ import Foundation
 public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case byUserId(userId: String)
     case byUserIdLevel(userId: String)
+    case byUserIdLocationHistory(userId: String)
     case byUserIdRitual(userId: String)
     case byUserIdSettings(userId: String)
     case config
@@ -25,6 +26,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
         switch self {
         case .byUserId(let userId): return "/api/v1/relations/\(userId)"
         case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"
+        case .byUserIdLocationHistory(let userId): return "/api/v1/relations/\(userId)/location/history"
         case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
         case .byUserIdSettings(let userId): return "/api/v1/relations/\(userId)/settings"
         case .config: return "/api/v1/relations/config"

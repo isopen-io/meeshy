@@ -101,6 +101,8 @@ struct GroupCallStageView: View {
     /// U1.10 · #8550 — la capsule de la une se range AVEC les contrôles, mais survit au plein
     /// écran : c'est par elle qu'on en sort (`CallChromeElement.featuredCapsule`).
     var chrome = CallChromeVisibility()
+    /// W2.1 — la hauteur de la scène est compacte (`CallGroupStageSizing`) : seule elle autorise la rangée de quatre.
+    var isCompactHeight = false
     var onStageTap: () -> Void = {}
     var onSelfFeaturedChange: (Bool) -> Void = { _ in }
 
@@ -190,7 +192,7 @@ struct GroupCallStageView: View {
     // MARK: - Grille
 
     private func grid(_ current: [GroupCallStageTile], in size: CGSize) -> some View {
-        let layout = GroupCallGridLayout.layout(tileCount: current.count, isLandscape: size.width > size.height)
+        let layout = GroupCallGridLayout.layout(tileCount: current.count, isLandscape: size.width > size.height, isCompactHeight: isCompactHeight)
         let width = max(0, (size.width - Self.spacing * CGFloat(layout.columns - 1)) / CGFloat(layout.columns))
         let height = max(0, (size.height - Self.spacing * CGFloat(layout.rows - 1)) / CGFloat(layout.rows))
         let columns = Array(repeating: GridItem(.fixed(width), spacing: Self.spacing), count: layout.columns)

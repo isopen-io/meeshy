@@ -85,10 +85,11 @@ internal fun rememberCallStageMotion(
     isFullScreen: Boolean,
     width: Dp,
     height: Dp,
+    isCompactHeight: Boolean,
 ): (String) -> CallTileMotion? {
     val reduceMotion = rememberCallReduceMotion()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val rects = GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isFullScreen, isRtl)
+    val rects = GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isFullScreen, isRtl, isCompactHeight)
     val layout = focus to isFullScreen
     val memory = remember { StageMotionMemory(layout, rects) }
     if (memory.layout != layout) {

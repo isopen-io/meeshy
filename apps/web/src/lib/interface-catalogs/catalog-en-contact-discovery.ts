@@ -10,6 +10,9 @@ const enContactDiscovery = {
     'Your friends and anyone who has your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden.',
   'settings.notif.contact_activity': 'Contact is back',
   'settings.notif.contact_activity.info': 'A notification when a contact comes back to Meeshy.',
+  'settings.notif.bring': 'Receive Brings',
+  'settings.notif.bring.info':
+    'A close friend can ring your phone for an extreme emergency, even on silent. Off, no one can ring you.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default enContactDiscovery;

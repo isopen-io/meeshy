@@ -78,8 +78,6 @@ class CallEffectsModeRuleTest {
 
     @Test
     fun `(+) opens the looks of the other kind to stack on the one in hand, and closes the settings`() {
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face)).isEqualTo(CallEffectsCategory.Color)
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Color)).isEqualTo(CallEffectsCategory.Face)
         val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Angel).togglingSettings()
         val added = open.addingLook()
         assertThat(added.showsSettings).isFalse()
@@ -103,6 +101,22 @@ class CallEffectsModeRuleTest {
         assertThat(state.withBrightness(0.1f).current.isEnabled).isTrue()
         assertThat(state.withSmoothing(0f).current.skinSmoothingIntensity).isEqualTo(0.1f)
         assertThat(state.withSmoothing(4f).current.skinSmoothingIntensity).isEqualTo(1f)
+    }
+
+    /**
+     * #17947 (A) : un réglage continu n'est pas un choix — le panneau Luminosité · Flou du fond reste ouvert tant qu'on
+     * règle, et ne se referme qu'en retouchant « Réglages » (‹ quitte le mode). La fermeture automatique de #16979 vaut
+     * pour les choix discrets (look, cadre). Vecteurs partagés avec iOS et le web.
+     */
+    @Test
+    fun `the settings panel stays open while adjusting and closes only on Settings (#17947)`() {
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Smoothing).togglingSettings()
+        assertThat(open.showsSettings).isTrue()
+        val adjusted = open.withBrightness(-0.2f).withBrightness(0.1f).withSmoothing(0.6f).togglingBlur().togglingBlur()
+        assertThat(adjusted.bar).isEqualTo(CallEffectsBarMode.Settings)
+        assertThat(adjusted.current.brightness).isEqualTo(0.1f)
+        assertThat(adjusted.togglingSettings().bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
     }
 
     @Test

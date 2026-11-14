@@ -4,6 +4,3 @@
  * même configuration d'effets.
  */
 export type EffectsCategory = 'face' | 'color';
-
-/** « (+) Ajouter un autre look » ouvre les looks d'un AUTRE genre, à poser par-dessus celui qu'on a. */
-export const addingLook = (from: EffectsCategory): EffectsCategory => (from === 'face' ? 'color' : 'face');

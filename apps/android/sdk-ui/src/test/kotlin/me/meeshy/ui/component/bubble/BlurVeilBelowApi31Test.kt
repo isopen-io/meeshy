@@ -23,9 +23,23 @@ class BlurVeilBelowApi31Test {
     }
 
     @Test
-    fun `from API 31 the real blur conceals, the content draws under a translucent veil`() {
+    fun `from API 31 the real blur alone conceals, with no resting veil over it (#18021)`() {
         assertThat(BlurVeil.contentAlpha(sdkInt = 31, concealed = true)).isEqualTo(1f)
-        assertThat(BlurVeil.restingScrimAlpha(sdkInt = 31)).isLessThan(1f)
+        assertThat(BlurVeil.restingScrimAlpha(sdkInt = 31)).isEqualTo(0f)
+        assertThat(BlurVeil.restingScrimAlpha(sdkInt = 34)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a plain blur carries no label, only a view-once offers its gesture (#18021, iOS ProtectedVeilAffordance)`() {
+        assertThat(BlurVeil.showsRevealHint(isViewOnce = false)).isFalse()
+        assertThat(BlurVeil.showsRevealHint(isViewOnce = true)).isTrue()
+    }
+
+    @Test
+    fun `the feathered edge never exceeds half the side, so a short bubble keeps a solid core`() {
+        assertThat(BlurVeil.featherFraction(featherPx = 30f, sidePx = 300f)).isEqualTo(0.1f)
+        assertThat(BlurVeil.featherFraction(featherPx = 30f, sidePx = 40f)).isEqualTo(0.5f)
+        assertThat(BlurVeil.featherFraction(featherPx = 30f, sidePx = 0f)).isEqualTo(0.5f)
     }
 
     @Test

@@ -116,7 +116,7 @@ describe('P9b — le journal ouvert dans la pilule réduit l’avatar en en-têt
     const view = mount();
     await view.settle();
     expect(view.stage()).toBe('full');
-    expect(view.portraitSize()).toBe('136px');
+    expect(view.portraitSize()).toBe('144px');
     view.done();
   });
 
@@ -166,6 +166,88 @@ describe('P9b — le journal ouvert dans la pilule réduit l’avatar en en-têt
   });
 });
 
+/* #17945 (décision porteur du 2026-11-13, loi 11 « un toucher sur la scène ») : en duo audio, le fond
+   derrière l'avatar est la scène. Le premier toucher range l'en-tête, la pilule et le journal, l'avatar
+   reprend ses 120 ; le second les rend, journal compris. Seuls les sous-titres restent, dans leur verre. */
+describe('#17945 — en duo audio, un toucher sur le fond range en-tête, pilule et journal ; un nouveau les rend', () => {
+  const tapBackground = async (view: View) => {
+    act(() => view.find(STAGE)?.click());
+    await view.settle();
+  };
+  const chrome = (view: View) => view.find('[data-call-screen]')?.getAttribute('data-call-chrome') ?? null;
+
+  test('l’avatar plein mesure 120, comme iOS (P9) ; la sonnerie garde son portrait', async () => {
+    const view = mount();
+    await view.settle();
+    expect(view.portraitSize()).toBe('144px');
+    view.done();
+    const ringing = mount({ phase: { kind: 'outgoing' } });
+    await ringing.settle();
+    expect(ringing.portraitSize()).toBe('136px');
+    ringing.done();
+  });
+
+  test('sous-titres éteints : le toucher range l’en-tête et la pilule entière, le second les rend', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    await tapBackground(view);
+    expect(chrome(view)).toBe('hidden');
+    expect(view.find('[data-call-header]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBe('true');
+    await tapBackground(view);
+    expect(chrome(view)).toBe('shown');
+    expect(view.find('[data-call-header]')?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBeNull();
+    view.done();
+  });
+
+  test('toucher l’avatar lui-même range aussi : il est la scène, pas un bouton', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    act(() => view.find(PORTRAIT)?.click());
+    await view.settle();
+    expect(chrome(view)).toBe('hidden');
+    view.done();
+  });
+
+  test('journal ouvert : il se range avec la pilule et l’avatar reprend sa taille ; le second toucher rend le journal et l’en-tête compact', async () => {
+    const view = mount();
+    await view.settle();
+    await openJournal(view);
+    expect(view.stage()).toBe('compact');
+    await tapBackground(view);
+    expect(chrome(view)).toBe('hidden');
+    expect(view.stage()).toBe('full');
+    expect(view.portraitSize()).toBe('144px');
+    expect(view.find('[data-call-journal-panel]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-control-pill] [data-call-captions-panel]')?.closest('[aria-hidden="true"]')).toBeNull();
+    await tapBackground(view);
+    expect(chrome(view)).toBe('shown');
+    expect(view.stage()).toBe('compact');
+    expect(view.find('[data-call-control-pill] [data-call-journal-panel]')?.closest('[aria-hidden="true"]')).toBeNull();
+    view.done();
+  });
+
+  test('un bouton touché n’est pas la scène : couper le micro ne range rien', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    view.press('[data-call-screen] button[aria-label="Couper le micro"]');
+    await view.settle();
+    expect(chrome(view)).toBe('shown');
+    view.done();
+  });
+
+  test('le clavier rend toujours les commandes', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    await tapBackground(view);
+    act(() => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+    await view.settle();
+    expect(chrome(view)).toBe('shown');
+    view.done();
+  });
+});
+
 describe('le passage est un morphisme, un fondu court sous « Réduire les animations »', () => {
   test('l’avatar part de sa place et de sa taille d’avant (FLIP) et la rejoint, en transformation seule', async () => {
     const view = mount();
@@ -198,7 +280,7 @@ describe('le passage est un morphisme, un fondu court sous « Réduire les anima
     view.press('[data-call-control-pill] [data-call-journal-panel] [data-panel-close]');
     await view.settle();
     expect(view.stage()).toBe('full');
-    expect(view.portraitSize()).toBe('136px');
+    expect(view.portraitSize()).toBe('144px');
     expect(portraitRuns()[0]?.frames).toEqual([{ transform: 'translate(-131px, -248px) scale(0.5882352941176471)' }, { transform: 'none' }]);
     view.done();
   });

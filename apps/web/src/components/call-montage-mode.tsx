@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react';
+import { useStore } from 'zustand/react';
 
 import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { browserCanvas, captureDrawn, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
@@ -15,15 +16,19 @@ import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { FrameScope } from '@/lib/calls/frames/frame-filter';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
-import { loadModeMotion, useModeRise } from '@/lib/calls/use-mode-motion';
+import { loadModeMotion, useModeRise, useSwapPresence } from '@/lib/calls/use-mode-motion';
+import { videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { LiveFrameHoldOption, type LiveFrameHold } from './call-live-frame-hold-option';
-import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
+import { appliedLabel, applyNow, EffectsBar, SettingsGlass, STACKED, useLayersList } from './call-effects-bar';
+import { ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
+import { useMontageLayers } from './use-montage-layers';
 import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader, type ShelfLoader } from './use-montage-frames';
 
 /**
@@ -67,7 +72,7 @@ import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFram
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -88,7 +93,6 @@ type Shelf = typeof CLASSICS | FrameMood;
 
 type ModeProps = {
   readonly language: InterfaceLanguage;
-  readonly quitGlyph: ReactNode;
   readonly onExit: () => void;
   /** La scène : l'écran d'appel dont on capture les vidéos affichées. */
   readonly stage: () => Element | null;
@@ -111,10 +115,15 @@ type ModeProps = {
   /** Le mode repart (C1.12) : il redescend par le bord du bas, puis appelle `onGone`. */
   readonly leaving?: boolean;
   readonly onGone?: () => void;
+  /** Le traitement d'images et le flou de ma caméra, là où elle les offre : Réglages (Luminosité · Flou du fond) en dépend. */
+  readonly colorAvailable?: boolean;
+  readonly blurAvailable?: boolean;
+  readonly apply?: (patch: Partial<VideoEffects>) => void;
+  /** (+) ou une puce Visage · Couleur : ouvre Effets sur ce genre. Sans lui, la rangée ne montre que « Cadres ». */
+  readonly onAddLook?: ((genre: 'face' | 'color') => void) | undefined;
 };
 
 export type { LiveFrameHold };
-
 
 const browserEnv = (): CaptureEnv => ({ canvas: browserCanvas, detector: browserFaceDetector(), now: () => new Date() });
 
@@ -145,9 +154,12 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined }: ModeProps) {
+export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined, colorAvailable = false, blurAvailable = false, apply = applyNow, onAddLook }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
+  const list = useLayersList();
+  const effects = useStore(videoEffectsStore, (state) => state.effects);
   const [requestedScope, setRequestedScope] = useState<FrameScope>('spotlight');
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
   const people = circle?.people.length ?? 0;
@@ -158,6 +170,10 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
   const controls = useRef<HTMLDivElement>(null);
+  const rider = useRef<HTMLDivElement>(null);
+  const looks = useSwapPresence<HTMLDivElement>(!settings);
+  const puces = useSwapPresence<HTMLDivElement>(!settings);
+  const panel = useSwapPresence<HTMLDivElement>(settings);
   const backdrop = useRef<HTMLDivElement>(null);
   const leavingAttributes = useModeRise(controls, backdrop, leaving, onGone);
   const thumbs = useRef(new Map<string, HTMLCanvasElement>());
@@ -226,6 +242,8 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
     ...(clipEnv === undefined ? {} : { clipEnv }),
   });
 
+  const layers = useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame: () => setFrameId(null), closeSettings: () => setSettings(false), closeList: list.hide, say: (text) => studio.setStatus({ text, tone: 'error' }) });
+
   useEffect(() => {
     const big = (): void => paintRef.current(preview.current, current.current, 'preview');
     const small = (): void => thumbs.current.forEach((canvas, id) => paintRef.current(canvas, id, 'thumb'));
@@ -282,7 +300,8 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    onExit();
+    if (list.open) list.hide();
+    else onExit();
   };
 
   const thumbRef = (id: string) => (canvas: HTMLCanvasElement | null) => void (canvas === null ? thumbs.current.delete(id) : thumbs.current.set(id, canvas));
@@ -325,20 +344,24 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
 
   const choose = (id: string): void => {
     const picked = frames?.find(id) ?? null;
+    list.hide();
     if (picked === null) {
       setStyle(MONTAGE_STYLES.find((option) => option === id) ?? style);
       return;
     }
+    if (!layers.framePermitted()) return;
     lastInMood.current.set(picked.mood, picked.id);
     setFrameId(picked.id);
   };
 
   const pickShelf = (id: string): void => {
     const mood = moods.find((option) => option === id);
+    list.hide();
     if (frames === null || mood === undefined) {
       setFrameId(null);
       return;
     }
+    if (!layers.framePermitted()) return;
     const remembered = lastInMood.current.get(mood);
     const again = remembered === undefined ? null : frames.reconcile(remembered, people);
     const offered = frames.framesOf(people, mood, scope);
@@ -364,22 +387,43 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
       <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3" data-call-montage-controls="">
         <CaptureStatus status={studio.status} />
-        <CaptureHint language={language} />
-        {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} scopeToggle={scopeToggle} />}
-        <ModeCarousel
-          key={`${shelf}:${scope}`}
-          label={t(language, shelf === CLASSICS ? 'callStudio.mode.pickMontage' : 'callStudio.mode.pickFrame')}
-          items={items}
-          selected={chosenBase}
-          itemSize={THUMBNAIL}
-          onSelect={choose}
-          onWheel={onWheel}
-          capture={{ recording: studio.recording, onCapture: studio.capture, hint: t(language, 'callStudio.capture.gestures') }}
-        />
-        <CallModeBar
-          quit={{ label: t(language, 'callStudio.mode.quit'), glyph: quitGlyph, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
-          center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
-          options={<><LiveFrameHoldOption hold={hold} frame={frame} frames={frames} language={language} /><ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} /></>}
+        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+          <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+            {looks.mounted ? (
+              <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-montage-looks="">
+                <div className="flex items-center justify-center gap-2" data-call-montage-options="">
+                  <LiveFrameHoldOption hold={hold} frame={frame} frames={frames} language={language} />
+                  <ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} />
+                </div>
+                <CaptureHint language={language} />
+                {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} scopeToggle={scopeToggle} />}
+                <ModeCarousel
+                  key={`${shelf}:${scope}`}
+                  label={t(language, shelf === CLASSICS ? 'callStudio.mode.pickMontage' : 'callStudio.mode.pickFrame')}
+                  items={items}
+                  selected={chosenBase}
+                  itemSize={THUMBNAIL}
+                  onSelect={choose}
+                  onWheel={onWheel}
+                  capture={{ recording: studio.recording, onCapture: studio.capture, hint: t(language, 'callStudio.capture.gestures') }}
+                />
+              </div>
+            ) : null}
+            {panel.mounted ? <SettingsGlass presence={panel} open={settings} language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} /> : null}
+          </div>
+          <KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />
+        </div>
+        <EffectsBar
+          language={language}
+          rider={rider}
+          stack={layers.stack}
+          full={layers.crowded}
+          chips={{ mounted: puces.mounted, ref: puces.ref, leaving: settings }}
+          categories={{ entries: layers.sortEntries, pressed: 'frames', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : undefined) }}
+          settings={colorAvailable || blurAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
+          add={{ onAdd: layers.addLook }}
+          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
+          onBack={onExit}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}
