@@ -347,7 +347,7 @@ struct ConversationPreferencesTab: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(showMoreActions ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("conversation-prefs-more")
 
             if showMoreActions {

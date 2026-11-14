@@ -558,7 +558,7 @@ public struct ConversationSettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(showMoreActions ? [.isButton, .isSelected] : .isButton)
 
             if showMoreActions {
                 moreActions

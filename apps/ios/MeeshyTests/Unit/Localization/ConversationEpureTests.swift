@@ -898,4 +898,13 @@ final class ConversationEpureTests: XCTestCase {
             XCTAssertLessThanOrEqual(value.count, 80, language)
         }
     }
+
+    func test_moreDisclosure_tellsVoiceOverWhetherTheRareGesturesAreShown() throws {
+        let tab = try code("Meeshy/Features/Main/Components/ConversationPreferencesTab.swift")
+        let view = try uiCode("Conversation/ConversationSettingsView.swift")
+        for source in [tab, view] {
+            XCTAssertTrue(source.contains("showMoreActions ? [.isButton, .isSelected] : .isButton"),
+                          "« Plus » dit au lecteur d'écran s'il est déplié : sans cela, rien n'annonce que Supprimer et Quitter viennent d'apparaître")
+        }
+    }
 }
