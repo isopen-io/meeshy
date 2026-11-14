@@ -143,7 +143,7 @@ class MeeshySegmentedTest {
 
     @Test
     fun `l'encre du courant sur la pastille tient le contraste de 15,99`() {
-        val palette = MeeshySegmentedPalette(tone = MeeshySegmentedTone.Media, isDark = true)
+        val palette = MeeshySegmentedPalette.of(tone = MeeshySegmentedTone.Media, isDark = true)
 
         assertThat(contrast(palette.currentInk, palette.pill)).isAtLeast(15.98)
     }
@@ -151,7 +151,7 @@ class MeeshySegmentedTest {
     @Test
     fun `le ton theme inverse la pastille a l'encre du texte, clair comme sombre`() {
         listOf(false, true).forEach { isDark ->
-            val palette = MeeshySegmentedPalette(tone = MeeshySegmentedTone.Theme, isDark = isDark)
+            val palette = MeeshySegmentedPalette.of(tone = MeeshySegmentedTone.Theme, isDark = isDark)
 
             assertThat(palette.pill).isEqualTo(MeeshyAdaptiveColors.textPrimary(isDark))
             assertThat(palette.currentInk).isEqualTo(MeeshyAdaptiveColors.backgroundPrimary(isDark))
