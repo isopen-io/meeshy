@@ -16,7 +16,7 @@ import { useOptionalRoute } from '@/lib/router';
 import { ProgressionShell } from '@/routes/progression-shell';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
 import { RulesBadges } from '@/routes/progression-rules-badges';
-import { RULES_COUNT, RULES_SECTIONS, rulesSectionValue, rulesTarget, type RulesSection, type RulesTarget } from '@/lib/game/rules-address';
+import { RULES_SECTIONS, rulesSectionValue, rulesTarget, type RulesSection, type RulesTarget } from '@/lib/game/rules-address';
 
 /**
  * « COMMENT ÇA MARCHE » (#9379) — le carnet des règles. Le texte que Mee et Meo
@@ -62,13 +62,6 @@ function StepCard({ step }: { readonly step: (typeof ONBOARDING_STEPS)[number] }
       </div>
     </li>
   );
-}
-
-/** La règle que l'adresse désigne (`?regle=1`) : un entier de 1 à 8, sinon aucune. */
-export function ruleTarget(value: string | null): number | undefined {
-  if (value === null || !/^\d+$/.test(value)) return undefined;
-  const index = Number(value);
-  return index >= 1 && index <= RULES_COUNT ? index : undefined;
 }
 
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
