@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">Your phone rings for a Bring, even on silent</string>
+    <string name="bring_channel_description">Rings when a close one triggers a Bring, even on silent</string>
     <string name="call_channel_description">Incoming voice and video calls</string>
     <string name="a11y_floating_menu">Navigation menu</string>
 

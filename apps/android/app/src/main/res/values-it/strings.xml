@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">Il telefono squilla per un Bring, anche in silenzioso</string>
+    <string name="bring_channel_description">Squilla quando una persona vicina attiva un Bring, anche in silenzioso</string>
     <string name="call_channel_description">Chiamate vocali e video in arrivo</string>
     <string name="a11y_floating_menu">Menu di navigazione</string>
 

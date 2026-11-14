@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">O telefone toca com um Bring, mesmo no silencioso</string>
+    <string name="bring_channel_description">Toca quando alguém próximo aciona um Bring, mesmo no silencioso</string>
     <string name="call_channel_description">Chamadas de voz e vídeo recebidas</string>
     <string name="a11y_floating_menu">Menu de navegação</string>
 

@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">El teléfono suena con un Bring, incluso en silencio</string>
+    <string name="bring_channel_description">Suena cuando alguien cercano activa un Bring, incluso en silencio</string>
     <string name="call_channel_description">Llamadas de voz y vídeo entrantes</string>
     <string name="a11y_floating_menu">Menú de navegación</string>
 

@@ -60,7 +60,7 @@ class EpureCoqueStringsTest {
 
     @Test
     fun `les textes de la coque en francais`() {
-        assertThat(text("fr", "bring_channel_description")).isEqualTo("Le téléphone sonne pour un Bring, même en silencieux")
+        assertThat(text("fr", "bring_channel_description")).isEqualTo("Sonne quand un proche déclenche un Bring, même en silencieux")
         assertThat(text("fr", "talkie_wake_channel_description")).isEqualTo("Un proche vous parle : sa voix sort, même en arrière-plan")
         assertThat(text("fr", "gesture_refusal_slow_mode")).isEqualTo("Nouveaux comptes : un message toutes les 30 s. Réessayez dans %1\$d s.")
         assertThat(text("fr", "share_sheet_sign_in_body_reshare")).isEqualTo("Rien n’a été copié : connectez-vous, puis repartagez.")

@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">يرنّ الهاتف عند Bring، حتى في الوضع الصامت</string>
+    <string name="bring_channel_description">يرنّ عندما يطلق شخص مقرّب Bring، حتى في الوضع الصامت</string>
     <string name="call_channel_description">مكالمات صوتية ومرئية واردة</string>
     <string name="a11y_floating_menu">قائمة التنقّل</string>
 
