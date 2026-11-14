@@ -15,7 +15,7 @@
  *
  * Le niveau visé illisible est refusé en amont (`RELATION_LEVEL_INVALID`, 400).
  */
-import { compareRelationLevel, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
+import { relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
 
 export type RelationRequestRefusalCode = 'RELATION_PHASE_SKIP' | 'RELATION_COOLDOWN' | 'RELATION_NOT_ELIGIBLE';
 
@@ -36,9 +36,11 @@ const SERIES_LEVELS: ReadonlySet<RelationRequestLevel> = new Set<RelationRequest
 const refuse = (code: RelationRequestRefusalCode): RelationRequestVerdict => ({ allowed: false, code });
 
 /** Ami se demande directement tant qu'on est sous Ami ; tout autre cran est le suivant, ou rien. */
+const BELOW_FRIEND: ReadonlySet<RelationLevel> = new Set(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE']);
+
 const reachable = (currentLevel: RelationLevel, targetLevel: RelationRequestLevel): boolean =>
   targetLevel === 'FRIEND'
-    ? compareRelationLevel(currentLevel, 'FRIEND') < 0
+    ? BELOW_FRIEND.has(currentLevel)
     : relationRungAfter(currentLevel) === targetLevel;
 
 export function evaluateRelationRequest(input: RelationRequestInput): RelationRequestVerdict {

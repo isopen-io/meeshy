@@ -952,3 +952,27 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   servie (indigo hors ligne), libellé TalkBack « nom, précision · jusqu'à HH:MM ». Huit chaînes adoptées du catalogue iOS.
 - Reste de #16985 : l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan de type position).
 - Prochain lot recommandé : l'émission iOS (reste de #16983, `location:share-start|update|stop` depuis la fiche d'un Ami).
+
+## 2026-11-14 — réveil du matin : partager ma position depuis la fiche d'un Ami, sur iOS (#16983)
+
+- Reprise : aucune PR cercles ouverte ; #18094 (carte Android) fusionnée. Aucune branche n'écrit l'émission iOS : lot
+  réservé sur `claude/cercles-16983-ios-emission`.
+- Lot : l'ÉMISSION iOS, dernier morceau de #16983. SDK : `SharedLocationSending.swift` (la charge de
+  `location:share-start|update|stop` bornée comme `sharedLocationStartPayloadSchema` — relevé hors du globe refusé,
+  précision plafonnée, doublons fondus, plafond de 50 —, la lecture de l'accusé et la cadence `SharedLocationUpdateGate`,
+  5 s au plus et 50 m ou un battement de 2 min, dix fois sous le débit servi) et `SharedLocationSocketEmitter`, type à
+  part. App (`Features/SharedLocation/`) : la ligne « Partager ma position » de la fiche dès Ami
+  (`offersSharedLocation`, miroir `RelationFeature.locationTemporary`), sa feuille (1 h · 8 h ; ville par défaut,
+  quartier, exacte), « X voit ta position (…) jusqu'à HH:MM » et « Arrêter ». `SharedLocationSharingCenter`, un par
+  compte : le serveur ne connaît qu'UN partage dont la durée vaut pour tous, donc le centre garde l'échéance de CHAQUE
+  personne et la retire du partage serveur à la sienne ; il suit l'appareil au premier plan seulement
+  (`SharedLocationFixSource`, « pendant l'utilisation ») et garde la liste (identifiants et échéances, jamais une
+  position) d'un lancement à l'autre, pour que « Arrêter » reste à un geste après que l'app a été tuée. Dix-sept
+  chaînes en sept langues ; les chaînes de permission (`InfoPlist.xcstrings`) existaient déjà en sept langues.
+- Gates locaux : `check_localization.py` vert, `check_house_rules.sh` vert (aucun compteur ne monte),
+  `check_cohesion_budget.sh` identique avec et sans le lot, parité des événements socket Swift ↔ contrat
+  (`ios-socket-event-enum-parity`, `socket-event-name-gate`) verte. Swift ne compile pas en conteneur : la preuve est
+  la CI de `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Reste : la mise à jour en arrière-plan (l'app suspendue se tait, le terme serveur borne tout), l'émission Android
+  (#16985), l'émission web, et un indicateur global « tu partages ta position » hors de la fiche.
+- Prochain lot recommandé : l'émission Android depuis la fiche d'un Ami (reste de #16985).
