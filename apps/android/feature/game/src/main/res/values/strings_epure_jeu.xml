@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date.</string>
     <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
     <string name="game2_atlas_privacy">Private by default: the game keeps the language and the date, never the other person or the conversation.</string>
-    <string name="game2_settings_visibility_body">Choose who sees your rank, Legacy, trophies and Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Not valid.</string>
     <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100. Each level asks for a little more than the one before.</string>
     <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">A dream each night, an Offering, a Flame that grows as you come back.</string>
     <string name="game_detail_coin_what">The Meesh is your light bound into a numbered coin.</string>
     <string name="game_detail_fact_mint_next">One in a hundred is gold, one in a thousand prism.</string>
-    <string name="game_flame_panel_freeze_full">All your Vigils are here.</string>
     <string name="game_notebook_empty">Each sign from your ancestors can become a photo here.</string>
     <string name="game_error_league_pseudonym_invalid">Not valid.</string>
     <string name="game2_league_pseudonym_hint_change">3 to 20 characters (letters, digits, . - _). Not your name or your username.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">Post a story, a post or start a conversation.</string>
     <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles.</string>
     <string name="game2_guide_moment_league_relegated_means">The bottom 5 go back down; the sparks start again from zero, nothing else goes down.</string>
+    <string name="game_concept_points_what">Every real exchange makes sparks fly: together, they form your light.</string>
+    <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move.</string>
+    <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100; it is optional.</string>
+    <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero; the rest is kept. At most five rebirths lead to the Sixth Age.</string>
 </resources>

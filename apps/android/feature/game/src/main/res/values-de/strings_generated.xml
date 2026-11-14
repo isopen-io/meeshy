@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">Bereich</string>
     <string name="game_concept_flame_name">Die Flamme</string>
     <string name="game_concept_flame_tip_1">Mach jeden Tag mindestens eine Aktion.</string>
-    <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und wechselt dabei ihre Form, von der Glut bis zur Sonne.</string>
     <string name="game_concept_glory_name">Der Rang</string>
     <string name="game_concept_glory_tip_1">Präge eine Meesh: Jede Prägung lässt deinen Ruhm wachsen.</string>
     <string name="game_concept_glory_tip_2">Trag dein Licht höher als je zuvor und vollbringe Heldentaten.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">Komm jeden Tag wieder: Eine brennende Flamme nährt deine Funken.</string>
     <string name="game_concept_points_tip_2">Löse einen Schwung aus, um deine Funken zu vervielfachen.</string>
     <string name="game_concept_points_use">Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel.</string>
-    <string name="game_concept_points_what">Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht. Je mehr es wächst, desto heller strahlt es, und sein Glanz ist dein Level.</string>
     <string name="game_concept_prestige_name">Die Wiedergeburt</string>
     <string name="game_concept_prestige_tip_1">Trag dein Licht bis Level 100.</string>
-    <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten.</string>
-    <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig: Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Die Reise</string>
     <string name="game_concept_season_use">Hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst.</string>

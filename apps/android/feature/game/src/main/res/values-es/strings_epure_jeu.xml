@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta.</string>
     <string name="game2_atlas_empty">Aún no hay sellos: escribe en otro idioma.</string>
     <string name="game2_atlas_privacy">Privado por defecto: el juego guarda el idioma y la fecha, nunca al interlocutor ni la conversación.</string>
-    <string name="game2_settings_visibility_body">Elige quién ve tu rango, tu Legado, tus trofeos y tu Atlas.</string>
     <string name="game2_league_pseudonym_invalid">No válido.</string>
     <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100. Cada nivel pide un poco más que el anterior.</string>
     <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">Un sueño cada noche, una Ofrenda, una Llama que crece mientras vuelvas.</string>
     <string name="game_detail_coin_what">La Meesh es tu luz fijada en una moneda numerada.</string>
     <string name="game_detail_fact_mint_next">Una de cada cien es de oro, una de cada mil de prisma.</string>
-    <string name="game_flame_panel_freeze_full">Todas tus Velas están aquí.</string>
     <string name="game_notebook_empty">Cada señal de tus ancestros puede convertirse aquí en una foto.</string>
     <string name="game_error_league_pseudonym_invalid">No válido.</string>
     <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Ni tu nombre ni tu usuario.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">Publica una historia, una publicación o inicia una conversación.</string>
     <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica.</string>
     <string name="game2_guide_moment_league_relegated_means">Los 5 últimos bajan; las chispas vuelven a cero, nada más baja.</string>
+    <string name="game_concept_points_what">Cada intercambio de verdad hace brotar chispas: juntas forman tu luz.</string>
+    <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto.</string>
+    <string name="game_concept_prestige_what">El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100; es opcional.</string>
+    <string name="game_concept_prestige_use">En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero; el resto se conserva. Cinco renacimientos como máximo llevan a la Sexta Edad.</string>
 </resources>

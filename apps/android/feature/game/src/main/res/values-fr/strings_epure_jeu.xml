@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">Un visiteur ne voit que le mois d’obtention, jamais la date exacte.</string>
     <string name="game2_atlas_empty">Pas encore de tampon : écris dans une autre langue.</string>
     <string name="game2_atlas_privacy">Privé par défaut : le jeu garde la langue et la date, jamais l’interlocuteur ni la conversation.</string>
-    <string name="game2_settings_visibility_body">Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Non valable.</string>
     <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100. Chaque niveau demande un peu plus que le précédent.</string>
     <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">Un rêve chaque nuit, une Offrande, une Flamme qui grandit tant qu’on revient.</string>
     <string name="game_detail_coin_what">La Meesh, c’est ta lumière figée dans une pièce numérotée.</string>
     <string name="game_detail_fact_mint_next">Une sur cent est en or, une sur mille en prisme.</string>
-    <string name="game_flame_panel_freeze_full">Toutes tes Veilleuses sont là.</string>
     <string name="game_notebook_empty">Chaque signe de tes aïeux peut devenir une photo ici.</string>
     <string name="game_error_league_pseudonym_invalid">Non valable.</string>
     <string name="game2_league_pseudonym_hint_change">3 à 20 caractères (lettres, chiffres, . - _). Ni ton nom, ni ton identifiant.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">Publie une story, un post ou lance une conversation.</string>
     <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double.</string>
     <string name="game2_guide_moment_league_relegated_means">Les 5 derniers redescendent ; les étincelles repartent de zéro, rien d’autre ne baisse.</string>
+    <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.</string>
+    <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.</string>
+    <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.</string>
+    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé. Cinq renaissances au plus mènent au Sixième Âge.</string>
 </resources>

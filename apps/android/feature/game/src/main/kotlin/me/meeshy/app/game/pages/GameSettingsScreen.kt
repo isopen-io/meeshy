@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.game.GameVisibility
 import me.meeshy.sdk.model.game.LeagueAccess
 import me.meeshy.sdk.model.game.pages.GameVisibilityEdit
 import me.meeshy.sdk.model.game.pages.VisibilityField
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -85,12 +86,13 @@ private fun HiddenCard(state: GameSettingsUiState, onChange: (Boolean) -> Unit) 
 
 @Composable
 private fun VisibilityCard(visibility: GameVisibility, writes: GameArrangementUiState, arrangement: GameArrangementViewModel, hidden: Boolean) {
-    GameCard(title = stringResource(R.string.game2_settings_visibility_title)) {
-        GameNoteWithInfo(
-            text = stringResource(R.string.game2_settings_visibility_body),
+    GameCard(
+        title = stringResource(R.string.game2_settings_visibility_title),
+        info = MeeshyInfoNote(
             question = stringResource(R.string.game2_settings_visibility_question),
-            detail = stringResource(R.string.game2_settings_visibility_presence),
-        )
+            text = stringResource(R.string.game2_settings_visibility_presence),
+        ),
+    ) {
         listOf(
             R.string.game2_visibility_field_rank to VisibilityField.Rank,
             R.string.game2_visibility_field_treasury to VisibilityField.Treasury,

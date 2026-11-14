@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Llama</string>
     <string name="game_concept_flame_tip_1">Haz al menos un gesto cada día.</string>
-    <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto, y cambia de forma al crecer, de la Brasa al Sol.</string>
     <string name="game_concept_glory_name">El Rango</string>
     <string name="game_concept_glory_tip_1">Acuña una Meesh: cada acuñación hace crecer tu gloria.</string>
     <string name="game_concept_glory_tip_2">Lleva tu luz más alto que nunca y logra hazañas.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">Vuelve cada día: una Llama encendida alimenta tus chispas.</string>
     <string name="game_concept_points_tip_2">Activa un impulso para multiplicar tus chispas.</string>
     <string name="game_concept_points_use">Tu luz acuña las Meeshes de tu legado. Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto.</string>
-    <string name="game_concept_points_what">Cada intercambio de verdad hace brotar chispas: juntas forman tu luz. Cuanto más crece, más brilla, y su brillo es tu nivel.</string>
     <string name="game_concept_prestige_name">El Renacimiento</string>
     <string name="game_concept_prestige_tip_1">Lleva tu luz hasta el nivel 100.</string>
-    <string name="game_concept_prestige_use">En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero; el resto se conserva.</string>
-    <string name="game_concept_prestige_what">El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100, cuando tu luz se ha vuelto Galaxia. Es opcional: cinco renacimientos como máximo llevan a la Sexta Edad.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">El Viaje</string>
     <string name="game_concept_season_use">Reclama cada parada a la que llegues: chispas, un fragmento de estrella, una Vela. El viaje terminado da la copa del viaje. El Sello del viaje es un objeto de colección, que se consigue con Meeshes.</string>

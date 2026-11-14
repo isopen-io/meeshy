@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">Um visitante só vê o mês de obtenção, nunca a data exata.</string>
     <string name="game2_atlas_empty">Ainda sem carimbos: escreva em outro idioma.</string>
     <string name="game2_atlas_privacy">Privado por padrão: o jogo guarda o idioma e a data, nunca o interlocutor nem a conversa.</string>
-    <string name="game2_settings_visibility_body">Escolha quem vê seu título, sua Herança, seus troféus e seu Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Não válido.</string>
     <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100. Cada nível pede um pouco mais do que o anterior.</string>
     <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">Um sonho a cada noite, uma Oferenda, uma Chama que cresce enquanto você volta.</string>
     <string name="game_detail_coin_what">A Meesh é a sua luz cristalizada numa moeda numerada.</string>
     <string name="game_detail_fact_mint_next">Uma em cem é de ouro, uma em mil de prisma.</string>
-    <string name="game_flame_panel_freeze_full">Todas as suas Lamparinas estão aqui.</string>
     <string name="game_notebook_empty">Cada sinal dos seus ancestrais pode virar uma foto aqui.</string>
     <string name="game_error_league_pseudonym_invalid">Não válido.</string>
     <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Nem seu nome, nem seu usuário.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">Publique um story, um post ou inicie uma conversa.</string>
     <string name="game_rules_concept_duo_body">Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra.</string>
     <string name="game2_guide_moment_league_relegated_means">Os 5 últimos voltam a descer; as faíscas recomeçam do zero, nada mais baixa.</string>
+    <string name="game_concept_points_what">Cada troca de verdade faz saltar faíscas: juntas, elas formam a sua luz.</string>
+    <string name="game_concept_flame_what">Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto.</string>
+    <string name="game_concept_prestige_what">O renascimento abre uma nova Era da sua lenda, oferecida no nível 100; ele é opcional.</string>
+    <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero; o resto é mantido. Cinco renascimentos no máximo levam à Sexta Era.</string>
 </resources>

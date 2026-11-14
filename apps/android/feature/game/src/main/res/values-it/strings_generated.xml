@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Fiamma</string>
     <string name="game_concept_flame_tip_1">Fai almeno un gesto ogni giorno.</string>
-    <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo, dalla Brace al Sole.</string>
     <string name="game_concept_glory_name">Il Rango</string>
     <string name="game_concept_glory_tip_1">Conia una Meesh: ogni conio fa crescere la tua gloria.</string>
     <string name="game_concept_glory_tip_2">Porta la tua luce più in alto che mai e compi imprese.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">Torna ogni giorno: una Fiamma accesa nutre le tue scintille.</string>
     <string name="game_concept_points_tip_2">Attiva uno slancio per moltiplicare le tue scintille.</string>
     <string name="game_concept_points_use">La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto.</string>
-    <string name="game_concept_points_what">Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce. Più cresce, più brilla, e il suo splendore è il tuo livello.</string>
     <string name="game_concept_prestige_name">La Rinascita</string>
     <string name="game_concept_prestige_tip_1">Porta la tua luce fino al livello 100.</string>
-    <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero; il resto resta tuo.</string>
-    <string name="game_concept_prestige_what">La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa: cinque rinascite al massimo portano alla Sesta Era.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Il Viaggio</string>
     <string name="game_concept_season_use">Riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh.</string>

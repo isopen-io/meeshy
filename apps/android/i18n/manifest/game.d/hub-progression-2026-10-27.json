@@ -337,11 +337,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.points.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.points.use",
           "status": "adopted"
         },
@@ -393,11 +388,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.flame.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.flame.what",
           "status": "adopted"
         },
         {
@@ -458,16 +448,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.prestige.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.use",
           "status": "adopted"
         },
         {

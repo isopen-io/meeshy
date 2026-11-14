@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">المنطقة</string>
     <string name="game_concept_flame_name">اللهب</string>
     <string name="game_concept_flame_tip_1">قم بإجراء واحد على الأقل كل يوم.</string>
-    <string name="game_concept_flame_what">لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل، ويتغيّر شكله كلما كبر، من الجمرة إلى الشمس.</string>
     <string name="game_concept_glory_name">الرتبة</string>
     <string name="game_concept_glory_tip_1">سُكّ Meesh: كل سكّ يُنمّي مجدك.</string>
     <string name="game_concept_glory_tip_2">احمل نورك أعلى من أي وقت مضى وحقّق المآثر.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">عُد كل يوم: لهب مشتعل يغذّي شراراتك.</string>
     <string name="game_concept_points_tip_2">ابنِ زخمًا لتضاعف شراراتك.</string>
     <string name="game_concept_points_use">نورك يسكّ عملات Meesh لإرثك. وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره.</string>
-    <string name="game_concept_points_what">كل تبادل حقيقي يُطلق شرارات: ومعًا تصنع نورك. وكلما نما، اشتدّ سطوعه، وتألّقه هو مستواك.</string>
     <string name="game_concept_prestige_name">الانبعاث</string>
     <string name="game_concept_prestige_tip_1">احمل نورك حتى المستوى ⁦100⁩.</string>
-    <string name="game_concept_prestige_use">عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر؛ والباقي يبقى لك.</string>
-    <string name="game_concept_prestige_what">الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100، حين يصير نورك مجرّة. وهو اختياري: خمسة انبعاثات على الأكثر تقود إلى العصر السادس.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">الرحلة</string>
     <string name="game_concept_season_use">استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh.</string>

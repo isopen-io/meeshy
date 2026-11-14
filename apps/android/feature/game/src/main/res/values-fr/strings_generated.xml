@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
-    <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_glory_name">Le Rang</string>
     <string name="game_concept_glory_tip_1">Frappe une Meesh : chaque frappe fait grandir ta gloire.</string>
     <string name="game_concept_glory_tip_2">Porte ta lumière plus haut que jamais et accomplis des hauts faits.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">Reviens chaque jour : une Flamme allumée nourrit tes étincelles.</string>
     <string name="game_concept_points_tip_2">Déclenche un élan pour multiplier tes étincelles.</string>
     <string name="game_concept_points_use">Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.</string>
-    <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.</string>
     <string name="game_concept_prestige_name">La Renaissance</string>
     <string name="game_concept_prestige_tip_1">Porte ta lumière jusqu’au niveau 100.</string>
-    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.</string>
-    <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Le Voyage</string>
     <string name="game_concept_season_use">Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>

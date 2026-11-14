@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">Besucher sehen nur den Monat, nie das genaue Datum.</string>
     <string name="game2_atlas_empty">Noch kein Stempel: Schreibe in einer anderen Sprache.</string>
     <string name="game2_atlas_privacy">Standardmäßig privat: Das Spiel speichert Sprache und Datum, nie das Gegenüber oder die Unterhaltung.</string>
-    <string name="game2_settings_visibility_body">Wähle, wer Rang, Erbe, Trophäen und Atlas sieht.</string>
     <string name="game2_league_pseudonym_invalid">Ungültig.</string>
     <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus. Eine Million Funken für Level 100. Jedes Level verlangt etwas mehr als das vorherige.</string>
     <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">Jede Nacht ein Traum, eine Gabe, eine Flamme, die wächst, solange du wiederkommst.</string>
     <string name="game_detail_coin_what">Die Meesh ist dein Licht, gebannt in eine nummerierte Münze.</string>
     <string name="game_detail_fact_mint_next">Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
-    <string name="game_flame_panel_freeze_full">Alle deine Hüterinnen sind da.</string>
     <string name="game_notebook_empty">Jedes Zeichen deiner Ahnen kann hier zu einem Foto werden.</string>
     <string name="game_error_league_pseudonym_invalid">Ungültig.</string>
     <string name="game2_league_pseudonym_hint_change">3 bis 20 Zeichen (Buchstaben, Ziffern, . - _). Weder dein Name noch dein Benutzername.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">Poste eine Story, einen Beitrag oder starte eine Unterhaltung.</string>
     <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung.</string>
     <string name="game2_guide_moment_league_relegated_means">Die letzten 5 steigen ab; die Funken beginnen wieder bei null, sonst sinkt nichts.</string>
+    <string name="game_concept_points_what">Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht.</string>
+    <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst.</string>
+    <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100; sie ist freiwillig.</string>
+    <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten. Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
 </resources>

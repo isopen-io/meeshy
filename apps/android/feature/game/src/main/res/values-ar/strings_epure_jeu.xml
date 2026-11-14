@@ -6,7 +6,6 @@
     <string name="game2_showcase_visibility_hint">يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا.</string>
     <string name="game2_atlas_empty">لا أختام بعد: اكتب بلغة أخرى.</string>
     <string name="game2_atlas_privacy">خاص افتراضيًا: تحتفظ اللعبة باللغة والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة.</string>
-    <string name="game2_settings_visibility_body">اختر من يرى رتبتك وإرثك وكؤوسك وأطلسك.</string>
     <string name="game2_league_pseudonym_invalid">غير صالح.</string>
     <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
     <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
@@ -21,7 +20,6 @@
     <string name="game_rules_7_body">حلم كل ليلة، وعطيّة، ولهب يكبر ما دمت تعود.</string>
     <string name="game_detail_coin_what">‏Meesh هي نورك مصوغًا في قطعة مرقّمة.</string>
     <string name="game_detail_fact_mint_next">واحدة من كل مئة ذهبية، وواحدة من كل ألف من المنشور.</string>
-    <string name="game_flame_panel_freeze_full">كل قناديلك هنا.</string>
     <string name="game_notebook_empty">كل علامة من أجدادك يمكن أن تصبح هنا صورة.</string>
     <string name="game_error_league_pseudonym_invalid">غير صالح.</string>
     <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا (حروف وأرقام . - _). لا اسمك ولا معرّفك.</string>
@@ -64,4 +62,8 @@
     <string name="progression_elans_empty">انشر قصة أو منشورًا أو ابدأ محادثة.</string>
     <string name="game_rules_concept_duo_body">مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة.</string>
     <string name="game2_guide_moment_league_relegated_means">الخمسة الأخيرون يهبطون؛ تبدأ الشرارات من الصفر ولا ينخفض شيء آخر.</string>
+    <string name="game_concept_points_what">كل تبادل حقيقي يُطلق شرارات: ومعًا تصنع نورك.</string>
+    <string name="game_concept_flame_what">لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل.</string>
+    <string name="game_concept_prestige_what">الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100؛ وهو اختياري.</string>
+    <string name="game_concept_prestige_use">عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر؛ والباقي يبقى لك. خمسة انبعاثات على الأكثر تقود إلى العصر السادس.</string>
 </resources>

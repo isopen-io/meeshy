@@ -403,7 +403,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">The Flame</string>
     <string name="game_concept_flame_tip_1">Do at least one action every day.</string>
-    <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move, and changes form as it grows, from Ember to Sun.</string>
     <string name="game_concept_glory_name">Rank</string>
     <string name="game_concept_glory_tip_1">Mint a Meesh: every mint makes your glory grow.</string>
     <string name="game_concept_glory_tip_2">Carry your light higher than ever and perform great deeds.</string>
@@ -437,11 +436,8 @@
     <string name="game_concept_points_tip_1">Come back every day: a lit Flame feeds your sparks.</string>
     <string name="game_concept_points_tip_2">Build momentum to multiply your sparks.</string>
     <string name="game_concept_points_use">Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much.</string>
-    <string name="game_concept_points_what">Every real exchange makes sparks fly: together, they form your light. The more it grows, the brighter it shines, and how bright it shines is your level.</string>
     <string name="game_concept_prestige_name">Rebirth</string>
     <string name="game_concept_prestige_tip_1">Carry your light all the way to level 100.</string>
-    <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero; the rest is kept.</string>
-    <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional: five rebirths at most lead to the Sixth Age.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">The Journey</string>
     <string name="game_concept_season_use">Claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes.</string>

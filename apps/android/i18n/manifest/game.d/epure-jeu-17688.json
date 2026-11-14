@@ -85,10 +85,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "game2_settings_visibility_body",
-          "status": "android-only"
-        },
-        {
           "androidName": "game2_settings_visibility_presence",
           "status": "android-only"
         },
@@ -109,6 +105,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_concept_flame_what",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_concept_league_use",
           "status": "android-only"
         },
@@ -118,6 +118,18 @@
         },
         {
           "androidName": "game_concept_missions_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_points_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_prestige_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_prestige_what",
           "status": "android-only"
         },
         {
@@ -134,10 +146,6 @@
         },
         {
           "androidName": "game_error_league_pseudonym_invalid",
-          "status": "android-only"
-        },
-        {
-          "androidName": "game_flame_panel_freeze_full",
           "status": "android-only"
         },
         {
