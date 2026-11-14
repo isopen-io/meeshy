@@ -84,7 +84,7 @@ export const demandeAvecPresenceSchema = {
       type: 'string',
       nullable: true,
       enum: ['ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD', null],
-      description: 'The relation level the request aims at — null reads FRIEND (rows older than the circles)',
+      description: 'The relation level the request aims at — null (rows older than the circles) is accepted at the next rung, capped at FRIEND',
     },
     sender: { ...partieAvecPresenceSchema, description: 'Sender user info' },
     receiver: { ...partieAvecPresenceSchema, description: 'Receiver user info' },
@@ -310,7 +310,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         properties: {
           receiverId: { type: 'string' },
           message: { type: 'string', maxLength: 200 },
-          targetLevel: { type: 'string', description: 'ACQUAINTANCE | FRIEND | CLOSE | BLOOD — absent reads FRIEND' },
+          targetLevel: { type: 'string', description: 'ACQUAINTANCE | FRIEND | CLOSE | BLOOD — absent aims at the next rung, capped at FRIEND' },
         },
       },
       response: {
