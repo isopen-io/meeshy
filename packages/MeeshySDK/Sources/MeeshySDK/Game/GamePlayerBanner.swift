@@ -88,9 +88,10 @@ public struct GamePlayerBanner: Equatable, Sendable {
         }
     }
 
-    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846).
+    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846). L'Offrande prête (#18199) est la seule qui
+    /// ne mène nulle part : l'hôte l'ouvre sur place ; sa fiche reste celle du Rêve, qui la fait naître.
     public enum Piece: String, CaseIterable, Hashable, Sendable {
-        case level, sparks, meesh, rank, league, flame, trophies, mission, season, treasury
+        case level, sparks, meesh, rank, league, flame, trophies, mission, offering, season, treasury
 
         /// La fiche que la pièce ouvre.
         public var concept: ProgressionConcept {
@@ -103,6 +104,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
             case .flame: .flame
             case .trophies: .showcase
             case .mission: .missions
+            case .offering: .missions
             case .season: .season
             case .treasury: .meesh
             }
@@ -212,6 +214,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         if flame != nil { shown.append(.flame) }
         if trophies != nil { shown.append(.trophies) }
         if dailyMission != nil { shown.append(.mission) }
+        if attention.chestReady { shown.append(.offering) }
         if treasury != nil { shown.append(.treasury) }
         if season != nil { shown.append(.season) }
         return shown

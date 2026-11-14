@@ -197,6 +197,7 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
     model.flame === null ? null : translateGame(language, 'game.banner.flame', { days: translateGamePlural(language, 'game.days', model.flame.days) }),
     model.meeshes === null ? null : translateGamePlural(language, 'game.meeshes', model.meeshes),
     model.missions === null ? null : translateGame(language, 'game.banner.link.missions', { done: count(model.missions.done), total: count(model.missions.total) }),
+    model.attention.chestReady ? translateGame(language, 'game.banner.offering.ready') : null,
     treasurySentence(model, language),
     model.league === null
       ? null
@@ -224,6 +225,8 @@ export type PlayerBannerPieceLabels = {
   readonly missions: string | null;
   readonly season: string | null;
   readonly treasury: string | null;
+  /** L'Offrande prête, qui s'ouvre sur place (#18199) ; `null` quand elle ne l'est pas. */
+  readonly offering: string | null;
 };
 
 export function playerBannerPieceLabels(model: PlayerBannerModel, language: InterfaceLanguage = currentInterfaceLanguage()): PlayerBannerPieceLabels {
@@ -259,8 +262,13 @@ export function playerBannerPieceLabels(model: PlayerBannerModel, language: Inte
     missions: model.missions === null ? null : translateGame(language, 'game.banner.link.missions', { done: count(model.missions.done), total: count(model.missions.total) }),
     season: model.season === null ? null : translateGame(language, 'game.banner.link.season', { stars: count(model.season.stars) }),
     treasury: treasurySentence(model, language),
+    offering: model.attention.chestReady ? translateGame(language, 'game.banner.offering.open') : null,
   };
 }
+
+/** « Offrande ouverte : +40 étincelles » — ce que le bandeau annonce, quelques secondes, à la place de la pièce (#18199). */
+export const offeringRewardLabel = (points: number, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.banner.offering.opened', points);
 
 /** Le seuil du chiffre compact du bandeau : plein en dessous, compact à partir de lui. */
 const COMPACT_FROM = 10_000;
