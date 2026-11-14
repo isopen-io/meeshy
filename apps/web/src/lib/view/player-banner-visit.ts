@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-export { PLAYER_BANNER_RECALL_MS } from '@meeshy/shared/utils/game/banner-recall';
+export { PLAYER_BANNER_RECALL_MS } from '@meeshy/shared/utils/game/banner-recall-timing';
 
 /**
  * LA VISITE DE LA BANNIÈRE DU JOUEUR (#9536, directive porteur 2026-10-06) —
@@ -38,7 +38,7 @@ export type VisitEvent = 'shown' | 'missed' | 'expired' | 'exited' | 'reopened' 
 
 /**
  * LE RAPPEL (#17366, retouche 3) — hors de l'ouverture, un acte réalisé, l'Offrande prête, la Flamme à risque
- * (`bannerRecall`, `@meeshy/shared/utils/game/banner-recall`) ou le geste « tirer la liste » remontrent le bandeau
+ * (`bannerRecall`, `@meeshy/shared/utils/game/banner-recall`, chargée après la première peinture) ou le geste « tirer la liste » remontrent le bandeau
  * `PLAYER_BANNER_RECALL_MS`, puis il repart seul. Pendant l'ouverture, ou avant sa première peinture, le rappel ne
  * change rien : les trente secondes de l'ouverture couvrent déjà le moment.
  */

@@ -15,7 +15,6 @@ import {
   playerBannerVisitStore,
   watchPlayerBannerAbsence,
 } from '@/lib/view/player-banner-visit';
-import { useBannerRecall } from '@/lib/view/use-banner-recall';
 import {
   BANNER_EXIT_MS,
   callResumeShownStore,
@@ -176,6 +175,28 @@ function useBannerVisitClock({ holdMs, exitMs, recallMs = PLAYER_BANNER_RECALL_M
     }
     return undefined;
   }, [phase, visit, recall, signedIn, holdMs, exitMs, recallMs]);
+}
+
+/**
+ * LE GUET DU RAPPEL (#17366) — chargé après la première peinture (`lib/view/use-banner-recall.ts`) : il s'abonne au
+ * cache de la progression et rappelle le bandeau quand un acte, l'Offrande prête ou la Flamme à risque vient de naître.
+ */
+function useBannerRecall(signedIn: boolean): void {
+  const hidden = useGamePrefs().hidden;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void import('@/lib/view/use-banner-recall').then((module) => {
+      if (!cancelled) stop = module.startBannerRecall(() => hiddenRef.current);
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [signedIn]);
 }
 
 /**

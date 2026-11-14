@@ -29,6 +29,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadGameCatalog('fr');
+  await import('@/lib/view/use-banner-recall');
   const cached = await loadEngagementProgress({ source: 'fixtures', transport: httpTransport });
   if (!cached.ok) throw new Error('progression de démonstration attendue');
   appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, cached.data);

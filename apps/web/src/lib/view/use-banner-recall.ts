@@ -1,10 +1,7 @@
-import { useEffect, useRef } from 'react';
-
 import { bannerMoment, bannerRecall, type BannerMomentSource, type BannerRecallReason } from '@meeshy/shared/utils/game/banner-recall';
 
 import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/game-state-order';
 import { appQueryClient } from '@/lib/api/query-client';
-import { useGamePrefs } from '@/lib/game/preferences';
 
 import { recallPlayerBanner } from './player-banner-visit';
 
@@ -32,21 +29,18 @@ export function watchBannerRecall(options: {
   });
 }
 
-/** Monté par le bandeau du haut, qui vit sur toutes les routes : le guet tient tant que la session est ouverte. */
-export function useBannerRecall(signedIn: boolean): void {
-  const hidden = useGamePrefs().hidden;
-  const hiddenRef = useRef(hidden);
-  hiddenRef.current = hidden;
-  useEffect(() => {
-    if (!signedIn) return undefined;
-    const cache = appQueryClient.getQueryCache();
-    return watchBannerRecall({
-      read: () => appQueryClient.getQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY),
-      subscribe: (listener) => cache.subscribe(listener),
-      hidden: () => hiddenRef.current,
-      onRecall: recallPlayerBanner,
-    });
-  }, [signedIn]);
+/**
+ * Le guet de l'application, branché sur le cache de la progression. Chargé par le bandeau du haut APRÈS la première
+ * peinture (`top-band.tsx`) : les lois du Jeu qu'il compare n'ont rien à faire avant le premier pixel.
+ */
+export function startBannerRecall(hidden: () => boolean): () => void {
+  const cache = appQueryClient.getQueryCache();
+  return watchBannerRecall({
+    read: () => appQueryClient.getQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY),
+    subscribe: (listener) => cache.subscribe(listener),
+    hidden,
+    onRecall: recallPlayerBanner,
+  });
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;

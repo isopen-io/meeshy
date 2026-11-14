@@ -26,8 +26,7 @@ export type BannerMoment = {
 
 export type BannerMomentSource = GameActsRingSource & GameAttentionSource;
 
-/** Le temps pendant lequel le bandeau rappelé reste à l'écran — « quelques secondes », bien moins que l'ouverture. */
-export const PLAYER_BANNER_RECALL_MS = 5_000;
+export { PLAYER_BANNER_RECALL_MS } from './banner-recall-timing.js';
 
 export function bannerMoment(game: BannerMomentSource | null | undefined, options: { readonly hidden: boolean }): BannerMoment | null {
   if (options.hidden || game === null || game === undefined) return null;
