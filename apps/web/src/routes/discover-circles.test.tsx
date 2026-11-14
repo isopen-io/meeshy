@@ -224,6 +224,15 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(host.querySelector('[data-circles-find]')).not.toBeNull();
   });
 
+  test('l’état vide se lit d’un bloc : la phrase du cercle et son (i) sont sous le titre, pas reléguées près du bouton (épure #18196)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, []);
+    const host = await mount(panel([]));
+    const block = host.querySelector('[data-circles-empty] [data-discover-empty]');
+    expect(block?.textContent).toContain('Vos liens apparaîtront ici');
+    expect(block?.querySelector('[data-circles-empty-intro]')).not.toBeNull();
+    expect(block?.querySelector('button[aria-expanded]')).not.toBeNull();
+  });
+
   test('la phrase d’orientation est lisible au repos, une ligne au-dessus de la liste, sans clic (épure #17584, règle 7)', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
     const host = await mount(panel([]));
