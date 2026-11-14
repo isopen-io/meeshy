@@ -56,6 +56,11 @@ enum GameCopy {
     }
 
     /// Avant le niveau 5 : où les missions s'ouvrent, et où l'on en est.
+    /// La porte du rêve, fermée, dit encore ce qu'il y a derrière (épure, règle 7) : le seuil ne suffit pas à s'orienter.
+    static var missionsLockedWhat: String {
+        String(localized: "game.missions.locked.what", defaultValue: "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, et une Offrande.", bundle: .main)
+    }
+
     static func missionsLocked(level shown: String) -> String {
         String(localized: "game.missions.locked", defaultValue: "Le rêve s’ouvre au niveau 5 · tu es au niveau \(shown).", bundle: .main)
     }

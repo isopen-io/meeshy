@@ -338146,6 +338146,100 @@
           }
         }
       }
+    },
+    "game2.league.locked.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل أسبوع تقيس نفسك مع 29 بطلًا بنور متقارب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Woche misst du dich mit 29 Helden von ähnlichem Licht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each week, you measure yourself against 29 heroes whose light is like yours."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada semana te mides con 29 héroes de luz parecida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque semaine, tu te mesures à 29 héros de lumière semblable."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni settimana ti misuri con 29 eroi di luce simile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda semana, você se mede com 29 heróis de luz parecida."
+          }
+        }
+      }
+    },
+    "game.missions.locked.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل ليلة يرسل إليك أجدادك حلمًا من ثلاثة فصول، وعطيّة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Nacht schicken dir deine Ahnen einen Traum in drei Akten, und eine Gabe."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each night, your ancestors send you a dream in three acts, and an Offering."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada noche, tus ancestros te envían un sueño en tres actos, y una Ofrenda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, et une Offrande."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni notte, i tuoi antenati ti mandano un sogno in tre atti, e un’Offerta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda noite, seus ancestrais enviam um sonho em três atos, e uma Oferenda."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

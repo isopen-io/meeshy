@@ -34,6 +34,11 @@ extension GameText {
         String(localized: "game2.league.week", defaultValue: "Semaine du \(date)", bundle: .main)
     }
 
+    /// La porte de la joute, fermée, dit encore ce qu'est la joute (épure, règle 7) : le seuil ne suffit pas à s'orienter.
+    static var leagueLockedWhat: String {
+        String(localized: "game2.league.locked.what", defaultValue: "Chaque semaine, tu te mesures à 29 héros de lumière semblable.", bundle: .main)
+    }
+
     static func leagueLocked(level: String, current: String) -> String {
         String(localized: "game2.league.locked", defaultValue: "La joute s’ouvre au niveau \(level) · tu es au niveau \(current)", bundle: .main)
     }

@@ -803,6 +803,27 @@ final class GameEpureTests: XCTestCase {
         XCTAssertFalse((catalog["game.concept.league.why"]?["fr"] ?? "").isEmpty, "le « à quoi ça sert » reste à la fiche")
     }
 
+    func test_lockedDoors_stillSayWhatIsBehindThem_atRest_beforeTheThreshold() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(catalog["game2.league.locked.what"]?["fr"], "Chaque semaine, tu te mesures à 29 héros de lumière semblable.")
+        XCTAssertEqual(catalog["game.missions.locked.what"]?["fr"], "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, et une Offrande.")
+        for key in ["game2.league.locked.what", "game.missions.locked.what"] {
+            let french = try XCTUnwrap(catalog[key]?["fr"])
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+            }
+        }
+        let league = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
+        let what = try XCTUnwrap(league.range(of: "GameNote(text: GameText.leagueLockedWhat)"), "la joute fermée ne dit plus ce qu'est la joute")
+        let threshold = try XCTUnwrap(league.range(of: "GameNote(text: GameText.leagueLocked("))
+        XCTAssertLessThan(what.lowerBound, threshold.lowerBound, "ce qu'est la joute se lit avant son seuil")
+        let missions = try code("Meeshy/Features/Game/GameMissionsView.swift")
+        let dream = try XCTUnwrap(missions.range(of: "GameNote(text: GameCopy.missionsLockedWhat)"), "le rêve fermé ne dit plus ce qu'est le rêve")
+        let door = try XCTUnwrap(missions.range(of: "GameNote(text: GameCopy.missionsLocked("))
+        XCTAssertLessThan(dream.lowerBound, door.lowerBound, "ce qu'est le rêve se lit avant son seuil")
+    }
+
     private static let frenchStateLines: [String: String] = [
         "game.state.points.ready_plain": "Ta lumière compte %1$@ : de quoi frapper la Meesh n° %2$@.",
         "game.state.points.missing_plain": "Ta lumière compte %1$@ : il manque %2$@ pour la Meesh n° %3$@.",
