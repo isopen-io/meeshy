@@ -1,5 +1,7 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.ui.graphics.Color
 import kotlin.math.pow
 import me.meeshy.ui.theme.MeeshyAdaptiveColors
@@ -54,11 +56,20 @@ public data class MeeshyLabeledSliderRecipe(
         public const val SHADOW_OPACITY: Float = 0.35f
         public const val FOCUS_RING_WIDTH_DP: Float = 2f
 
-        /** Le glissé ne part qu'au-delà de ce seuil : un toucher bref reste un toucher. */
+        /** L'anneau de focus clavier entoure le pouce : son bord extérieur, comme `focusRingDiameter` (iOS). */
+        public const val FOCUS_RING_DIAMETER_DP: Float = THUMB_DIAMETER_DP + 8f
+
+        /**
+         * Le glissé ne part qu'au-delà de ce seuil sur iOS : un toucher bref reste un toucher. Android garde la pente
+         * système (`touchSlop`), que partage le défilement de l'hôte — c'est elle qui décide de l'axe.
+         */
         public const val DRAG_THRESHOLD_DP: Float = 6f
 
         /** Valeur changée hors du doigt (remise, annulation, clavier) : le pouce glisse en 200 ms. */
         public const val SETTLE_MILLIS: Int = 200
+
+        /** La courbe de ce glissement : `easeOut` d'iOS. */
+        public val SettleEasing: Easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
 
         /** La cible tactile : 48 dp sur Android, la bande tient dans la rangée et déborde le dessin. */
         public val HIT_HEIGHT_DP: Float = MeeshyControlSize.minTouchTarget.value

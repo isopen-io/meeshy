@@ -16,6 +16,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -141,7 +142,8 @@ class MeeshyLabeledSliderBehaviorTest {
     fun `deux touchers sur la valeur la remettent au neutre, en une paire d'edition`() {
         show { Contrast() }
 
-        compose.onRoot().performTouchInput { doubleClick(valueCentre()) }
+        val target = valueCentre()
+        compose.onRoot().performTouchInput { doubleClick(target) }
         compose.waitForIdle()
 
         assertThat(values).containsExactly(0f)
@@ -152,7 +154,8 @@ class MeeshyLabeledSliderBehaviorTest {
     fun `sans neutre, deux touchers sur la valeur ne changent rien`() {
         show { Contrast(neutral = null) }
 
-        compose.onRoot().performTouchInput { doubleClick(valueCentre()) }
+        val target = valueCentre()
+        compose.onRoot().performTouchInput { doubleClick(target) }
         compose.waitForIdle()
 
         assertThat(values).isEmpty()

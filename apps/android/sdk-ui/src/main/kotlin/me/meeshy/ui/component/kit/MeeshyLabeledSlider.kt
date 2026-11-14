@@ -11,51 +11,52 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -81,6 +82,9 @@ public val LocalMeeshyLabeledSliderForcesPressed: ProvidableCompositionLocal<Boo
  * - [showsValue] faux : la valeur ne s'affiche pas, mais elle reste annoncée ; aucune place n'est gardée à droite du nom.
  * - [neutral] : deux touchers sur la valeur la remettent au neutre ; [resetLabel] nomme cette action au lecteur d'écran.
  * - [enabled] faux : contenu à 40 %, ni geste ni haptique, aucun focus.
+ *
+ * L'en-tête est sa propre portée de recomposition, à paramètres stables : glisser ne le recompose que si le texte de la
+ * valeur (ou son encre) change.
  */
 @Composable
 public fun MeeshyLabeledSlider(
@@ -99,39 +103,41 @@ public fun MeeshyLabeledSlider(
     enabled: Boolean = true,
     onEditingChanged: ((Boolean) -> Unit)? = null,
 ) {
+    val rule = remember(range, step) { MeeshyLabeledSliderRule(range = range, step = step) }
+    val interaction = remember(rule, neutral, haptic, enabled) { MeeshyLabeledSliderInteraction(rule, neutral, haptic, enabled) }
     val recipe = MeeshyLabeledSliderRecipe.resolve(
         tone = LocalMeeshyGlassTone.current,
         isEnabled = enabled,
         isPressed = false,
-        isOffNeutral = isOffNeutral(value, step, range, neutral),
+        isOffNeutral = rule.isOffNeutral(value, neutral),
         tint = tint,
     )
     val isDark = MeeshyTheme.isDark
-    Column(
-        modifier = modifier.graphicsLayer { alpha = recipe.contentOpacity },
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
-    ) {
-        Row(
-            modifier = Modifier.clearAndSetSemantics {},
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        ) {
-            Text(
-                text = label,
-                modifier = Modifier.weight(1f),
-                color = recipe.inkColor(isDark),
-                style = TextStyle(fontSize = MeeshyFontSize.subhead, fontWeight = FontWeight.SemiBold),
-                maxLines = 2,
-            )
-            if (showsValue) {
-                Text(
-                    text = valueText,
-                    color = recipe.valueColor(isDark),
-                    style = TextStyle(fontSize = MeeshyFontSize.small, fontFeatureSettings = "tnum"),
-                    maxLines = 1,
-                )
+    val latestValue = rememberUpdatedState(value)
+    val latestOnChange = rememberUpdatedState(onValueChange)
+    val latestEditing = rememberUpdatedState(onEditingChanged)
+    val haptics: MeeshyHaptics = rememberMeeshyHaptics()
+    val canReset = enabled && interaction.neutral != null
+    val reset: (() -> Unit)? = remember(interaction, haptics, canReset) {
+        if (canReset) {
+            val action: () -> Unit = {
+                val effects = interaction.perform(MeeshyLabeledSliderCommand.Reset, latestValue.value, isRtl = false)
+                playEffects(effects, latestOnChange, latestEditing, haptics)
             }
+            action
+        } else {
+            null
         }
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
+        MeeshyLabeledSliderHeader(
+            label = label,
+            valueText = if (showsValue) valueText else null,
+            ink = recipe.inkColor(isDark),
+            valueColor = recipe.valueColor(isDark),
+            alpha = recipe.contentOpacity,
+            onReset = reset,
+        )
         MeeshySliderTrack(
             label = label,
             value = value,
@@ -150,9 +156,58 @@ public fun MeeshyLabeledSlider(
 }
 
 /**
+ * L'en-tête : le nom au bord de début, la valeur lue au bord de fin, alignés sur la première ligne de base (le nom peut
+ * passer à deux lignes). Masqué au lecteur d'écran — la piste porte le nom et la valeur. Sans valeur visible, aucune place
+ * n'est gardée. Deux touchers sur la valeur remettent au neutre, seulement si [onReset] existe.
+ */
+@Composable
+private fun MeeshyLabeledSliderHeader(
+    label: String,
+    valueText: String?,
+    ink: Color,
+    valueColor: Color,
+    alpha: Float,
+    onReset: (() -> Unit)?,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { this.alpha = alpha }
+            .clearAndSetSemantics {},
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f).alignByBaseline(),
+            color = ink,
+            style = TextStyle(fontSize = MeeshyFontSize.subhead, fontWeight = FontWeight.SemiBold),
+            maxLines = 2,
+        )
+        if (valueText != null) {
+            val resetGesture = if (onReset == null) {
+                Modifier
+            } else {
+                Modifier.pointerInput(onReset) { detectTapGestures(onDoubleTap = { onReset() }) }
+            }
+            Text(
+                text = valueText,
+                modifier = Modifier.alignByBaseline().then(resetGesture),
+                color = valueColor,
+                style = TextStyle(fontSize = MeeshyFontSize.small, fontFeatureSettings = "tnum"),
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+/**
  * La piste seule d'un curseur : même loi, même accessibilité, sans en-tête visible. L'élément d'accessibilité porte le nom
  * [label], la valeur lue [valueText] et l'action de remise. Glisser à l'horizontale règle ; un toucher bref y porte le pouce ;
  * un glissé vertical reste à l'hôte. Pendant iOS : `MeeshySliderTrack`.
+ *
+ * Le glissé part au-delà de la pente système (`touchSlop`), celle que partage le défilement de l'hôte : c'est elle qui
+ * décide de l'axe sur Android, là où iOS pose son propre seuil ([MeeshyLabeledSliderRecipe.DRAG_THRESHOLD_DP]).
  */
 @Composable
 public fun MeeshySliderTrack(
@@ -172,7 +227,7 @@ public fun MeeshySliderTrack(
 ) {
     require(label.isNotEmpty()) { "MeeshySliderTrack : le nom accessible est obligatoire et non vide" }
     val rule = remember(range, step) { MeeshyLabeledSliderRule(range = range, step = step) }
-    val interaction = MeeshyLabeledSliderInteraction(rule, neutral, haptic, enabled)
+    val interaction = remember(rule, neutral, haptic, enabled) { MeeshyLabeledSliderInteraction(rule, neutral, haptic, enabled) }
     val latestInteraction = rememberUpdatedState(interaction)
     val latestValue = rememberUpdatedState(value)
     val latestOnChange = rememberUpdatedState(onValueChange)
@@ -181,76 +236,58 @@ public fun MeeshySliderTrack(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduceMotion = LocalReduceMotion.current
     val isDark = MeeshyTheme.isDark
-    val density = LocalDensity.current
-    val insetPx = with(density) { MeeshyLabeledSliderRecipe.THUMB_INSET_DP.dp.toPx() }
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     var isTouching by remember { mutableStateOf(false) }
     val forcesPressed = LocalMeeshyLabeledSliderForcesPressed.current
     var isFocused by remember { mutableStateOf(false) }
-    var widthPx by remember { mutableIntStateOf(0) }
 
     val recipe = MeeshyLabeledSliderRecipe.resolve(
         tone = LocalMeeshyGlassTone.current,
         isEnabled = enabled,
         isPressed = isTouching || forcesPressed,
-        isOffNeutral = isOffNeutral(value, step, range, neutral),
+        isOffNeutral = rule.isOffNeutral(value, neutral),
         tint = tint,
         reduceMotion = reduceMotion,
         isHovered = isHovered,
     )
     val fraction = rule.fraction(of = value, isRtl = isRtl)
-    val animatedFraction by animateFloatAsState(
+    val settledFraction: State<Float> = animateFloatAsState(
         targetValue = fraction,
-        animationSpec = if (isTouching || reduceMotion) snap<Float>() else tween<Float>(MeeshyLabeledSliderRecipe.SETTLE_MILLIS),
+        animationSpec = if (isTouching || reduceMotion) {
+            snap<Float>()
+        } else {
+            tween<Float>(MeeshyLabeledSliderRecipe.SETTLE_MILLIS, easing = MeeshyLabeledSliderRecipe.SettleEasing)
+        },
         label = "meeshy-labeled-slider-fraction",
     )
-    val animatedThumbScale by animateFloatAsState(
+    val thumbScale: State<Float> = animateFloatAsState(
         targetValue = recipe.thumbScale,
         animationSpec = MeeshyMotion.springFast<Float>(),
         label = "meeshy-labeled-slider-scale",
     )
-    val animatedHalo by animateFloatAsState(
+    val haloOpacity: State<Float> = animateFloatAsState(
         targetValue = recipe.haloOpacity,
         animationSpec = MeeshyMotion.springFast<Float>(),
         label = "meeshy-labeled-slider-halo",
     )
 
-    val play: (List<MeeshyLabeledSliderEffect>) -> Unit = { effects ->
-        effects.forEach { effect ->
-            when (effect) {
-                is MeeshyLabeledSliderEffect.Editing -> latestEditing.value?.invoke(effect.isEditing)
-                is MeeshyLabeledSliderEffect.Value -> latestOnChange.value(effect.value)
-                MeeshyLabeledSliderEffect.Haptic -> haptics.light()
+    val play: (List<MeeshyLabeledSliderEffect>) -> Unit = remember(haptics) {
+        { effects: List<MeeshyLabeledSliderEffect> -> playEffects(effects, latestOnChange, latestEditing, haptics) }
+    }
+    DisposableEffect(enabled, isRtl) {
+        onDispose {
+            if (isTouching) {
+                isTouching = false
+                latestEditing.value?.invoke(false)
             }
         }
     }
-    DisposableEffect(Unit) {
-        onDispose { if (isTouching) latestEditing.value?.invoke(false) }
-    }
 
-    val fractionAt: (Float) -> Float = { x ->
-        val usable = (widthPx - 2f * insetPx).coerceAtLeast(1f)
-        (x - insetPx) / usable
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(MeeshyLabeledSliderRecipe.HIT_HEIGHT_DP.dp)
-            .onSizeChanged { widthPx = it.width }
-            .hoverable(interactionSource)
-            .focusable(enabled = enabled)
-            .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { event ->
-                val command = event.toCommandOrNull()
-                if (command == null || event.type != KeyEventType.KeyDown) {
-                    false
-                } else {
-                    play(latestInteraction.value.perform(command, latestValue.value, isRtl))
-                    true
-                }
-            }
+    val gestures = if (!enabled) {
+        Modifier
+    } else {
+        Modifier
             .pointerInput(isRtl) {
                 detectTapGestures(onTap = { offset ->
                     play(latestInteraction.value.jump(latestValue.value, fractionAt(offset.x), isRtl))
@@ -276,6 +313,25 @@ public fun MeeshySliderTrack(
                     },
                 )
             }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(MeeshyLabeledSliderRecipe.HIT_HEIGHT_DP.dp)
+            .hoverable(interactionSource, enabled = enabled)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable(enabled = enabled)
+            .onKeyEvent { event ->
+                val command = event.toCommandOrNull()
+                if (command == null || event.type != KeyEventType.KeyDown) {
+                    false
+                } else {
+                    play(latestInteraction.value.perform(command, latestValue.value, isRtl))
+                    true
+                }
+            }
+            .then(gestures)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 stateDescription = valueText
@@ -292,7 +348,7 @@ public fun MeeshySliderTrack(
                         true
                     }
                 }
-                latestInteraction.value.resetActionName(resetLabel)?.let { name ->
+                interaction.resetActionName(resetLabel)?.let { name ->
                     customActions = listOf(
                         CustomAccessibilityAction(name) {
                             play(latestInteraction.value.perform(MeeshyLabeledSliderCommand.Reset, latestValue.value, isRtl))
@@ -302,61 +358,126 @@ public fun MeeshySliderTrack(
                 }
             },
     ) {
-        Canvas(modifier = Modifier.fillMaxWidth().height(MeeshyLabeledSliderRecipe.HIT_HEIGHT_DP.dp)) {
-            val width = size.width
-            val centreY = size.height / 2f
-            val usable = (width - 2f * insetPx).coerceAtLeast(0f)
-            val thumbX = insetPx + animatedFraction * usable
-            val railHeight = MeeshyLabeledSliderRecipe.TRACK_HEIGHT_DP.dp.toPx()
-            val railTop = centreY - railHeight / 2f
-            val ink = recipe.inkColor(isDark)
-            drawRoundRect(
-                color = recipe.emptyTrackColor(isDark),
-                topLeft = Offset(0f, railTop),
-                size = Size(width, railHeight),
-                cornerRadius = CornerRadius(railHeight / 2f),
+        Canvas(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = recipe.contentOpacity }) {
+            drawSlider(
+                fraction = if (isTouching) fraction else settledFraction.value,
+                isRtl = isRtl,
+                recipe = recipe,
+                isDark = isDark,
+                thumbScale = thumbScale.value,
+                haloOpacity = haloOpacity.value,
+                showsFocusRing = isFocused && enabled,
             )
-            val fillStart = if (isRtl) thumbX else 0f
-            val fillWidth = if (isRtl) width - thumbX else thumbX
-            drawRoundRect(
-                color = recipe.fillColor(isDark),
-                topLeft = Offset(fillStart, railTop),
-                size = Size(fillWidth, railHeight),
-                cornerRadius = CornerRadius(railHeight / 2f),
-            )
-            val centre = Offset(thumbX, centreY)
-            drawCircle(
-                color = recipe.haloColor(isDark).copy(alpha = animatedHalo),
-                radius = MeeshyLabeledSliderRecipe.HALO_DIAMETER_DP.dp.toPx() / 2f,
-                center = centre,
-            )
-            drawCircle(
-                color = recipe.shadowColor(),
-                radius = MeeshyLabeledSliderRecipe.THUMB_DIAMETER_DP.dp.toPx() / 2f * animatedThumbScale,
-                center = centre.copy(y = centre.y + MeeshyLabeledSliderRecipe.SHADOW_OFFSET_Y_DP.dp.toPx()),
-            )
-            drawCircle(
-                color = ink,
-                radius = MeeshyLabeledSliderRecipe.THUMB_DIAMETER_DP.dp.toPx() / 2f * animatedThumbScale,
-                center = centre,
-            )
-            if (isFocused && enabled) {
-                drawCircle(
-                    color = ink,
-                    radius = (MeeshyLabeledSliderRecipe.THUMB_DIAMETER_DP + 8f).dp.toPx() / 2f,
-                    center = centre,
-                    style = Stroke(width = MeeshyLabeledSliderRecipe.FOCUS_RING_WIDTH_DP.dp.toPx()),
-                )
-            }
         }
     }
 }
 
-private fun isOffNeutral(value: Float, step: Float?, range: ClosedFloatingPointRange<Float>, neutral: Float?): Boolean {
-    val rule = MeeshyLabeledSliderRule(range = range, step = step)
-    return neutral != null && rule.snap(value) != rule.snap(neutral)
+/**
+ * Le dessin de la piste, en coordonnées de GAUCHE à droite (le miroir RTL est déjà dans [fraction]). Lu en phase de dessin :
+ * le doigt qui glisse, la pression et le relâchement repeignent sans remesurer. Doigt posé, le pouce prend la fraction de la
+ * valeur dans la même image ; hors du doigt, il glisse en [MeeshyLabeledSliderRecipe.SETTLE_MILLIS].
+ */
+private fun DrawScope.drawSlider(
+    fraction: Float,
+    isRtl: Boolean,
+    recipe: MeeshyLabeledSliderRecipe,
+    isDark: Boolean,
+    thumbScale: Float,
+    haloOpacity: Float,
+    showsFocusRing: Boolean,
+) {
+    val width = size.width
+    val centreY = size.height / 2f
+    val inset = MeeshyLabeledSliderRecipe.THUMB_INSET_DP.dp.toPx()
+    val thumbX = inset + fraction * (width - 2f * inset).coerceAtLeast(0f)
+    val railHeight = MeeshyLabeledSliderRecipe.TRACK_HEIGHT_DP.dp.toPx()
+    val railTop = centreY - railHeight / 2f
+    val ink = recipe.inkColor(isDark)
+    drawRoundRect(
+        color = recipe.emptyTrackColor(isDark),
+        topLeft = Offset(0f, railTop),
+        size = Size(width, railHeight),
+        cornerRadius = CornerRadius(railHeight / 2f),
+    )
+    drawRoundRect(
+        color = recipe.fillColor(isDark),
+        topLeft = Offset(if (isRtl) thumbX else 0f, railTop),
+        size = Size(if (isRtl) width - thumbX else thumbX, railHeight),
+        cornerRadius = CornerRadius(railHeight / 2f),
+    )
+    val centre = Offset(thumbX, centreY)
+    drawCircle(
+        color = recipe.haloColor(isDark).copy(alpha = haloOpacity),
+        radius = MeeshyLabeledSliderRecipe.HALO_DIAMETER_DP.dp.toPx() / 2f,
+        center = centre,
+    )
+    val thumbRadius = MeeshyLabeledSliderRecipe.THUMB_DIAMETER_DP.dp.toPx() / 2f * thumbScale
+    drawThumbShadow(centre = centre, thumbRadius = thumbRadius, shadow = recipe.shadowColor())
+    drawCircle(color = ink, radius = thumbRadius, center = centre)
+    if (showsFocusRing) {
+        val ringWidth = MeeshyLabeledSliderRecipe.FOCUS_RING_WIDTH_DP.dp.toPx()
+        drawCircle(
+            color = ink,
+            radius = (MeeshyLabeledSliderRecipe.FOCUS_RING_DIAMETER_DP.dp.toPx() - ringWidth) / 2f,
+            center = centre,
+            style = Stroke(width = ringWidth),
+        )
+    }
 }
 
+/**
+ * L'ombre portée du pouce, adoucie sur [MeeshyLabeledSliderRecipe.SHADOW_RADIUS_DP] par un dégradé radial repeint : le
+ * pendant de `.shadow(radius:y:)` d'iOS, sans flou ni calque hors écran.
+ */
+private fun DrawScope.drawThumbShadow(centre: Offset, thumbRadius: Float, shadow: Color) {
+    val softness = MeeshyLabeledSliderRecipe.SHADOW_RADIUS_DP.dp.toPx()
+    val outer = thumbRadius + softness
+    if (outer <= 0f) return
+    val shadowCentre = centre.copy(y = centre.y + MeeshyLabeledSliderRecipe.SHADOW_OFFSET_Y_DP.dp.toPx())
+    val solidUntil = ((thumbRadius - softness / 2f) / outer).coerceIn(0f, 1f)
+    drawCircle(
+        brush = Brush.radialGradient(
+            0f to shadow,
+            solidUntil to shadow,
+            1f to shadow.copy(alpha = 0f),
+            center = shadowCentre,
+            radius = outer,
+        ),
+        radius = outer,
+        center = shadowCentre,
+    )
+}
+
+/** La fraction lue sous le doigt, depuis le bord de GAUCHE : le centre du pouce reste dans la piste. */
+private fun PointerInputScope.fractionAt(x: Float): Float {
+    val inset = MeeshyLabeledSliderRecipe.THUMB_INSET_DP.dp.toPx()
+    val usable = (size.width - 2f * inset).coerceAtLeast(1f)
+    return (x - inset) / usable
+}
+
+private fun MeeshyLabeledSliderRule.isOffNeutral(value: Float, neutral: Float?): Boolean =
+    neutral != null && snap(value) != snap(neutral)
+
+/** Joue les effets d'une interaction : l'hôte reçoit l'édition et la valeur, le tic passe par [MeeshyHaptics]. */
+private fun playEffects(
+    effects: List<MeeshyLabeledSliderEffect>,
+    onValueChange: State<(Float) -> Unit>,
+    onEditingChanged: State<((Boolean) -> Unit)?>,
+    haptics: MeeshyHaptics,
+) {
+    effects.forEach { effect ->
+        when (effect) {
+            is MeeshyLabeledSliderEffect.Editing -> onEditingChanged.value?.invoke(effect.isEditing)
+            is MeeshyLabeledSliderEffect.Value -> onValueChange.value(effect.value)
+            MeeshyLabeledSliderEffect.Haptic -> haptics.light()
+        }
+    }
+}
+
+/**
+ * Le clavier : flèches, Page préc. / suiv., Début / Fin ; Suppr et retour arrière remettent au neutre (iOS : `.delete` et
+ * `.deleteForward`).
+ */
 private fun KeyEvent.toCommandOrNull(): MeeshyLabeledSliderCommand? = when (key) {
     Key.DirectionLeft -> MeeshyLabeledSliderCommand.ArrowLeft
     Key.DirectionRight -> MeeshyLabeledSliderCommand.ArrowRight
@@ -366,6 +487,6 @@ private fun KeyEvent.toCommandOrNull(): MeeshyLabeledSliderCommand? = when (key)
     Key.PageDown -> MeeshyLabeledSliderCommand.PageDown
     Key.MoveHome -> MeeshyLabeledSliderCommand.Home
     Key.MoveEnd -> MeeshyLabeledSliderCommand.End
-    Key.Delete -> MeeshyLabeledSliderCommand.Reset
+    Key.Delete, Key.Backspace -> MeeshyLabeledSliderCommand.Reset
     else -> null
 }
