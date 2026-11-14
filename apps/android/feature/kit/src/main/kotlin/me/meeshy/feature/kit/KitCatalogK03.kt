@@ -62,7 +62,7 @@ private const val SPECIMEN_WIDTH_DP = 320
 private const val SPECIMEN_LABEL = "Choix"
 
 /**
- * L'échantillon d'un état : le choix posé sur un panneau opaque, à la largeur d'un panneau de téléphone ; [isPressed] fige
+ * L'échantillon d'un état, celui d'iOS : une piste de 320 dp posée sur un panneau opaque qui la borde ; [isPressed] fige
  * l'appui sur le premier segment non courant (un contrôle ne se tient pas pressé hors écran).
  */
 @Composable
@@ -72,9 +72,8 @@ internal fun ContentK03(state: MeeshyKitCatalogState, isPressed: Boolean) {
     val panelIsDark = if (state.id == STATE_THEME) MeeshyTheme.isDark else true
     Box(
         modifier = Modifier
-            .width(SPECIMEN_WIDTH_DP.dp)
-            .padding(MeeshySpacing.sm)
-            .background(MeeshyAdaptiveColors.backgroundPrimary(isDark = panelIsDark), RoundedCornerShape(MeeshyRadius.lg)),
+            .background(MeeshyAdaptiveColors.backgroundPrimary(isDark = panelIsDark), RoundedCornerShape(MeeshyRadius.lg))
+            .padding(MeeshySpacing.sm),
     ) {
         MeeshySegmented(
             label = SPECIMEN_LABEL,
@@ -85,6 +84,7 @@ internal fun ContentK03(state: MeeshyKitCatalogState, isPressed: Boolean) {
             tone = spec.tone,
             enabled = spec.enabled,
             pressed = if (isPressed) spec.titles.indices.firstOrNull { it != selection } else null,
+            modifier = Modifier.width(SPECIMEN_WIDTH_DP.dp),
         )
     }
 }

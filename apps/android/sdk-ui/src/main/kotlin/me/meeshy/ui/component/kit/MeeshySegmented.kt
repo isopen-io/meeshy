@@ -1,9 +1,11 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -19,18 +21,19 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key as ComposeKey
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -61,6 +64,7 @@ import kotlin.math.roundToInt
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyAdaptiveColors
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -127,8 +131,10 @@ public data class MeeshySegmentedPalette(
  *
  * - Toucher un segment non courant : [onSelect] part avec sa valeur, un haptique léger ; toucher le courant ne fait rien.
  * - Hors de deux à quatre options, rien n'est rendu, pas même la piste (loi 13).
- * - [pressed] fige l'appui sur un segment non courant (catalogue) ; [enabled] faux : ni rappel, ni haptique, contenu à 40 %.
- * - Clavier : flèches vers le voisin qui se sélectionne (en boucle, sens de lecture pris en compte), Début et Fin.
+ * - [pressed] fige l'appui sur un segment non courant (catalogue) ; [enabled] faux : ni rappel, ni haptique, toute la
+ *   piste à l'opacité désactivée du kit, aucun segment grisé seul.
+ * - Clavier : UN seul arrêt de focus, la piste, cerclée à l'encre du ton quand il la tient ; flèches vers le voisin qui
+ *   se sélectionne (en boucle, sens de lecture pris en compte), Début et Fin.
  * - Réduire les animations : la pastille est posée, sans glissement.
  *
  * Pendant iOS : `MeeshySegmented`.
@@ -151,22 +157,18 @@ public fun <T> MeeshySegmented(
     val current = MeeshySegmentedLaw.currentIndex(selected, ids)
     val palette = MeeshySegmentedPalette.of(tone, MeeshyTheme.isDark)
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val reduceMotion = LocalReduceMotion.current
     val pillIndex by animateFloatAsState(
         targetValue = (current ?: 0).toFloat(),
-        animationSpec = if (reduceMotion) snap() else MeeshyMotion.springFast(),
+        animationSpec = meeshySegmentedPillMotion(reduceMotion = LocalReduceMotion.current),
         label = "meeshySegmentedPill",
     )
     val geometry = remember { SegmentGeometry() }
     val sources = remember(options.size) { List(options.size) { MutableInteractionSource() } }
-    val focusers = remember(options.size) { List(options.size) { FocusRequester() } }
+    val trackSource = remember { MutableInteractionSource() }
+    val trackFocused by trackSource.collectIsFocusedAsState()
     val segmentRole = if (role == MeeshySegmentedRole.Tabs) Role.Tab else Role.RadioButton
-    val choose: (Int) -> Unit = { target ->
-        MeeshySegmentedLaw.tapResult(current, target, isEnabled = enabled)?.let { next ->
-            haptics.light()
-            onSelect(options[next].id)
-        }
-    }
+    val latest = rememberUpdatedState(SegmentedChoice(current, enabled, options, onSelect, haptics))
+    val choose: (Int) -> Unit = remember(latest) { { target: Int -> latest.value.choose(target) } }
 
     Box(
         modifier = modifier.minimumInteractiveComponentSize(),
@@ -185,13 +187,25 @@ public fun <T> MeeshySegmented(
                             enabled = enabled,
                             role = segmentRole,
                             source = sources[index],
-                            focus = focusers[index],
-                            onChoose = { choose(index) },
+                            onChoose = choose,
                         )
                     }
                 }
             },
             modifier = Modifier
+                .drawBehind {
+                    if (!trackFocused) return@drawBehind
+                    val stroke = MeeshySpacing.xxs.toPx()
+                    val outset = MeeshySpacing.xxs.toPx() + stroke / 2f
+                    drawRoundRect(
+                        color = palette.restInk,
+                        topLeft = Offset(-outset, -outset),
+                        size = Size(size.width + 2f * outset, size.height + 2f * outset),
+                        cornerRadius = CornerRadius(MeeshyRadius.xl.toPx() + outset),
+                        style = Stroke(width = stroke),
+                    )
+                }
+                .alpha(if (enabled) 1f else MeeshyGlassButtonRecipe.DISABLED_OPACITY)
                 .background(palette.track, RoundedCornerShape(MeeshyRadius.xl))
                 .drawBehind {
                     if (current == null) return@drawBehind
@@ -209,7 +223,6 @@ public fun <T> MeeshySegmented(
                         cornerRadius = CornerRadius(slot.height / 2f),
                     )
                 }
-                .alpha(if (enabled) 1f else MeeshyGlassButtonRecipe.DISABLED_OPACITY)
                 .selectableGroup()
                 .semantics {
                     contentDescription = label
@@ -220,12 +233,38 @@ public fun <T> MeeshySegmented(
                     val law = event.lawKey() ?: return@onKeyEvent false
                     val target = MeeshySegmentedLaw.keyboardTarget(law, current ?: 0, options.size, isRtl)
                         ?: return@onKeyEvent false
-                    focusers[target].requestFocus()
                     choose(target)
                     true
-                },
+                }
+                .focusable(enabled = enabled, interactionSource = trackSource),
         ) { measurables, constraints ->
             placeSegments(measurables, constraints, geometry)
+        }
+    }
+}
+
+/**
+ * Le mouvement de la pastille : le ressort rapide du kit, ou posée d'un coup quand l'utilisateur réduit les animations.
+ */
+internal fun meeshySegmentedPillMotion(reduceMotion: Boolean): FiniteAnimationSpec<Float> =
+    meeshySpec(reduce = reduceMotion, full = MeeshyMotion.springFast())
+
+/**
+ * Ce qu'un toucher ou une touche lit au moment où il arrive : tenu par `rememberUpdatedState`, il laisse le rappel des
+ * segments STABLE, donc un changement de sélection ne recompose que les deux segments dont l'encre bascule.
+ */
+private class SegmentedChoice<T>(
+    private val current: Int?,
+    private val enabled: Boolean,
+    private val options: List<MeeshySegmentedOption<T>>,
+    private val onSelect: (T) -> Unit,
+    private val haptics: MeeshyHaptics,
+) {
+    fun choose(target: Int) {
+        if (target !in options.indices) return
+        MeeshySegmentedLaw.tapResult(current, target, isEnabled = enabled)?.let { next ->
+            haptics.light()
+            onSelect(options[next].id)
         }
     }
 }
@@ -245,8 +284,7 @@ private fun <T> Segment(
     enabled: Boolean,
     role: Role,
     source: MutableInteractionSource,
-    focus: FocusRequester,
-    onChoose: () -> Unit,
+    onChoose: (Int) -> Unit,
 ) {
     val pressedNow by source.collectIsPressedAsState()
     val hovered by source.collectIsHoveredAsState()
@@ -254,15 +292,15 @@ private fun <T> Segment(
     val spokenName = option.contentDescription ?: option.title
     Box(
         modifier = Modifier
-            .focusRequester(focus)
             .heightIn(min = MeeshyControlSize.regular)
+            .focusProperties { canFocus = false }
             .selectable(
                 selected = isCurrent,
                 enabled = enabled,
                 role = role,
                 interactionSource = source,
                 indication = null,
-                onClick = onChoose,
+                onClick = { onChoose(index) },
             )
             .semantics(mergeDescendants = true) {
                 contentDescription = spokenName
@@ -280,6 +318,12 @@ private fun <T> Segment(
     }
 }
 
+/**
+ * La répartition de la planche (parts égales, plancher au texte, repli en rangées), comme le `Layout` iOS : chaque
+ * segment d'une rangée en prend toute la hauteur, les rangées se touchent, et une option seule plus large que la piste y
+ * est bornée (son texte passe à la ligne plutôt que de déborder). Les places s'écrivent de gauche à droite :
+ * `placeRelative` les retourne en RTL.
+ */
 private fun MeasureScope.placeSegments(
     measurables: List<Measurable>,
     constraints: Constraints,
@@ -287,7 +331,7 @@ private fun MeasureScope.placeSegments(
 ): MeasureResult {
     val inset = MeeshySpacing.xs.roundToPx()
     val minHeight = MeeshyControlSize.regular.roundToPx()
-    val ideal = measurables.map { it.maxIntrinsicWidth(Int.MAX_VALUE).toDouble() }
+    val ideal = measurables.map { it.maxIntrinsicWidth(Constraints.Infinity).toDouble() }
     val available = if (constraints.hasBoundedWidth) {
         (constraints.maxWidth - 2 * inset).coerceAtLeast(0).toDouble()
     } else {
@@ -295,11 +339,10 @@ private fun MeasureScope.placeSegments(
     }
     val rows = MeeshySegmentedLaw.rows(ideal, available)
     val shares = MeeshySegmentedLaw.partition(ideal, available)
-    val placed = rows.zip(shares).fold(PlacedRows()) { acc, (row, widths) ->
-        val measured = row.zip(widths).map { (index, width) ->
-            index to measurables[index].measure(Constraints(minWidth = width.roundToInt(), maxWidth = width.roundToInt()))
-        }
-        val height = measured.maxOfOrNull { it.second.height }?.coerceAtLeast(minHeight) ?: minHeight
+    val placed = rows.zip(shares).fold(PlacedRows(bottom = inset)) { acc, (row, widths) ->
+        val sized = row.zip(widths) { index, width -> index to min(width, available).roundToInt() }
+        val height = sized.maxOf { (index, width) -> measurables[index].maxIntrinsicHeight(width) }.coerceAtLeast(minHeight)
+        val measured = sized.map { (index, width) -> index to measurables[index].measure(Constraints.fixed(width, height)) }
         acc.append(measured, height, inset)
     }
     val width = if (constraints.hasBoundedWidth) constraints.maxWidth else (available + 2 * inset).roundToInt()
@@ -311,26 +354,25 @@ private fun MeasureScope.placeSegments(
 }
 
 /** Une cellule posée : son index d'option, sa mesure, et sa place (coordonnées de la piste, sens LTR). */
-private class PlacedCell(val index: Int, val placeable: Placeable, val x: Int, val y: Int, val height: Int) {
+private class PlacedCell(val index: Int, val placeable: Placeable, val x: Int, val y: Int) {
     val rect: Rect
         get() = Rect(
             left = x.toFloat(),
             top = y.toFloat(),
             right = (x + placeable.width).toFloat(),
-            bottom = (y + height).toFloat(),
+            bottom = (y + placeable.height).toFloat(),
         )
 }
 
-/** Les rangées posées, accumulées sans mutation : chaque rangée rend la suivante. Les index restent dans l'ordre. */
+/** Les rangées posées, accumulées sans mutation : chaque rangée rend la suivante, collée à elle. Les index restent dans l'ordre. */
 private data class PlacedRows(
     val cells: List<PlacedCell> = emptyList(),
     val bottom: Int = 0,
 ) {
     fun append(row: List<Pair<Int, Placeable>>, height: Int, inset: Int): PlacedRows {
-        val top = bottom + inset
         val offsets = row.runningFold(0) { x, (_, placeable) -> x + placeable.width }
-        val laid = row.zip(offsets) { (index, placeable), x -> PlacedCell(index, placeable, inset + x, top, height) }
-        return PlacedRows(cells = cells + laid, bottom = top + height)
+        val laid = row.zip(offsets) { (index, placeable), x -> PlacedCell(index, placeable, inset + x, bottom) }
+        return PlacedRows(cells = cells + laid, bottom = bottom + height)
     }
 }
 

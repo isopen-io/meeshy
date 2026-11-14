@@ -1,7 +1,26 @@
 package me.meeshy.ui.component.kit
 
+import android.view.KeyEvent as NativeKeyEvent
+import androidx.compose.animation.core.SnapSpec
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.isSelected
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.performKeyPress
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -19,7 +38,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
@@ -31,6 +49,7 @@ import me.meeshy.sdk.feedback.HapticSink
 import me.meeshy.sdk.feedback.HapticSurfacing
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyAdaptiveColors
+import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -158,6 +177,37 @@ class MeeshySegmentedTest {
         }
     }
 
+    @Test
+    fun `le ton media ne suit pas le theme, et tient AA sur la piste des panneaux opaques`() {
+        val palette = MeeshySegmentedPalette.of(tone = MeeshySegmentedTone.Media, isDark = false)
+
+        assertThat(palette).isEqualTo(MeeshySegmentedPalette.of(tone = MeeshySegmentedTone.Media, isDark = true))
+        listOf(MeeshyAdaptiveColors.backgroundPrimary(true), MeeshyAdaptiveColors.backgroundSecondary(true)).forEach { panel ->
+            val track = palette.track.compositeOver(panel)
+            assertThat(contrast(palette.restInk, track)).isAtLeast(AA)
+            assertThat(contrast(palette.pill, track)).isAtLeast(AA)
+        }
+    }
+
+    @Test
+    fun `le ton theme tient AA, en clair comme en sombre`() {
+        listOf(false, true).forEach { isDark ->
+            val palette = MeeshySegmentedPalette.of(tone = MeeshySegmentedTone.Theme, isDark = isDark)
+            assertThat(contrast(palette.currentInk, palette.pill)).isAtLeast(AA)
+            listOf(MeeshyAdaptiveColors.backgroundPrimary(isDark), MeeshyAdaptiveColors.backgroundSecondary(isDark)).forEach { panel ->
+                val track = palette.track.compositeOver(panel)
+                assertThat(contrast(palette.restInk, track)).isAtLeast(AA)
+                assertThat(contrast(palette.pill, track)).isAtLeast(AA)
+            }
+        }
+    }
+
+    @Test
+    fun `reduire les animations pose la pastille, sans glissement`() {
+        assertThat(meeshySegmentedPillMotion(reduceMotion = true)).isInstanceOf(SnapSpec::class.java)
+        assertThat(meeshySegmentedPillMotion(reduceMotion = false)).isNotInstanceOf(SnapSpec::class.java)
+    }
+
     private fun contrast(a: Color, b: Color): Double {
         val (light, dark) = listOf(a.relativeLuminance(), b.relativeLuminance()).sortedDescending()
         return (light + 0.05) / (dark + 0.05)
@@ -189,7 +239,7 @@ class MeeshySegmentedTest {
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
                 MeeshySegmented(
-                    label = "Ajustement",
+                    label = GROUP_LABEL,
                     selected = selected,
                     onSelect = onSelect,
                     options = options,
@@ -254,7 +304,7 @@ class MeeshySegmentedTest {
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
                 MeeshySegmented(
-                    label = "Ajustement",
+                    label = GROUP_LABEL,
                     selected = selected,
                     onSelect = { selected = it },
                     options = listOf(MeeshySegmentedOption("a", "Ajuster"), MeeshySegmentedOption("b", "Remplir")),
@@ -273,9 +323,120 @@ class MeeshySegmentedTest {
         assertThat(after).isEqualTo(before)
     }
 
+    @Test
+    fun `moins de deux options ne rend rien, pas meme la piste`() {
+        show(options = listOf(MeeshySegmentedOption("a", "Seul")))
+
+        compose.onNodeWithTag(TRACK_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `une selection absente des options ne montre aucun segment courant`() {
+        show(selected = "z")
+
+        compose.onAllNodes(isSelected()).assertCountEquals(0)
+    }
+
+    @Test
+    fun `le groupe porte son nom, et chaque option est lue une seule fois`() {
+        show()
+
+        compose.onNodeWithContentDescription(GROUP_LABEL).assertExists()
+        compose.onAllNodesWithContentDescription("Ajuster").assertCountEquals(1)
+        compose.onAllNodes(isSelected()).assertCountEquals(1)
+    }
+
+    @Test
+    fun `une piste de 44 dp au repos, et une cible de 48 dp`() {
+        show()
+
+        compose.onNodeWithContentDescription(GROUP_LABEL).assertHeightIsAtLeast(MeeshyControlSize.tapTarget)
+        compose.onNodeWithTag(TRACK_TAG).assertHeightIsAtLeast(MeeshyControlSize.minTouchTarget)
+    }
+
+    @Test
+    fun `trop etroit pour une rangee, le choix se replie en rangees sans deborder`() {
+        val titles = listOf("Fin", "Normal", "Semi-gras", "Gras")
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                Column {
+                    Specimen(label = ONE_ROW, titles = titles.take(2), width = 320.dp)
+                    Specimen(label = FOLDED, titles = titles, width = 60.dp)
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        val oneRow = heightOf(ONE_ROW)
+        val folded = heightOf(FOLDED)
+
+        assertThat(folded.value).isGreaterThan((oneRow + MeeshyControlSize.regular - 1.dp).value)
+        assertThat(widthOf(FOLDED).value).isAtMost(60f + 0.5f)
+    }
+
+    @Test
+    fun `la fleche droite avance d'une option de gauche a droite`() {
+        assertThat(rightArrowFromMiddle(LayoutDirection.Ltr)).containsExactly("c")
+    }
+
+    @Test
+    fun `en RTL la fleche droite recule, sur un segment du milieu`() {
+        assertThat(rightArrowFromMiddle(LayoutDirection.Rtl)).containsExactly("a")
+    }
+
+    private fun rightArrowFromMiddle(direction: LayoutDirection): List<String> {
+        val picked = mutableListOf<String>()
+        val recorder = Recorder()
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                MeeshyTheme(darkTheme = false) {
+                    MeeshySegmented(
+                        label = GROUP_LABEL,
+                        selected = "b",
+                        onSelect = { picked += it },
+                        options = listOf(
+                            MeeshySegmentedOption("a", "Sur la scène"),
+                            MeeshySegmentedOption("b", "Fond"),
+                            MeeshySegmentedOption("c", "Pièce"),
+                        ),
+                        haptics = MeeshyHaptics(HapticSurfacing(recorder, 35)),
+                    )
+                }
+            }
+        }
+        val track = compose.onNodeWithContentDescription(GROUP_LABEL)
+        track.performSemanticsAction(SemanticsActions.RequestFocus)
+        track.performKeyPress(KeyEvent(NativeKeyEvent(NativeKeyEvent.ACTION_DOWN, NativeKeyEvent.KEYCODE_DPAD_RIGHT)))
+        compose.waitForIdle()
+        assertThat(recorder.received).hasSize(picked.size)
+        return picked
+    }
+
+    @Composable
+    private fun Specimen(label: String, titles: List<String>, width: Dp) {
+        MeeshySegmented(
+            label = label,
+            selected = 0,
+            onSelect = {},
+            options = titles.mapIndexed { index, title -> MeeshySegmentedOption(index, title) },
+            haptics = MeeshyHaptics(HapticSurfacing(Recorder(), 35)),
+            modifier = Modifier.width(width),
+        )
+    }
+
+    private fun heightOf(label: String): Dp =
+        with(compose.density) { compose.onNodeWithContentDescription(label).fetchSemanticsNode().size.height.toDp() }
+
+    private fun widthOf(label: String): Dp =
+        with(compose.density) { compose.onNodeWithContentDescription(label).fetchSemanticsNode().size.width.toDp() }
+
     // endregion
 
     private companion object {
         const val TRACK_TAG = "meeshy-segmented-track"
+        const val GROUP_LABEL = "Ajustement"
+        const val ONE_ROW = "Une rangée"
+        const val FOLDED = "Repliée"
+        const val AA = 4.5
     }
 }
