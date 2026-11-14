@@ -72,6 +72,30 @@ class CallServicePillsGuardTest {
         assertThat(code("CallScreen.kt")).doesNotContain("CallVideoNoticePill(")
     }
 
+    /**
+     * #18398 (loi 11, #17961 point 5) — au premier toucher, les deux pastilles sortent par le haut AVEC les bannières et
+     * reviennent au second, par le chemin de la puce de capture (#18376) : [CallChromeFade] lit l'élément partagé
+     * `CallChromeElement.ServicePill` (iOS `.servicePill`, #18396) ; « Réduire les animations » ⇒ fondu seul ; sous TalkBack,
+     * la visibilité ne bascule jamais. Le fondu enveloppe la pastille, sous [CallBannerPresence] qui garde son entrée et sa
+     * sortie, et la mesure de hauteur de la pile reste sur la pastille.
+     */
+    @Test
+    fun `#18398 - En attente et Video reduite se rangent au premier toucher avec les bannieres`() {
+        val overlays = mapOf(
+            "CallHoldBadge(" to block(code("CallHoldOverlay.kt"), "class CallHoldOverlay", "@Module"),
+            "CallVideoNoticePill(" to block(code("CallVideoNoticePill.kt"), "class CallVideoNoticeOverlay", "@Module"),
+        )
+        overlays.forEach { (pill, overlay) ->
+            assertWithMessage(pill).that(overlay).contains("CallChromeFade(")
+            assertWithMessage(pill).that(overlay).contains("isVisible = context.chrome.isVisible(CallChromeElement.ServicePill)")
+            assertWithMessage(pill).that(overlay).contains("onRevive = context.onChromeRevive")
+            assertWithMessage(pill).that(overlay).contains("stowsToward = CallVerticalEdge.Top")
+            assertWithMessage(pill).that(overlay).contains("edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp")
+            assertWithMessage(pill).that(overlay.indexOf("CallBannerPresence(")).isLessThan(overlay.indexOf("CallChromeFade("))
+            assertWithMessage(pill).that(overlay.indexOf("CallChromeFade(")).isLessThan(overlay.indexOf(pill))
+        }
+    }
+
     @Test
     fun `#18227 - le declenchement des deux pastilles est la loi pure, lue en un seul site`() {
         val hold = code("CallHoldOverlay.kt")
