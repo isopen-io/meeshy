@@ -198,3 +198,52 @@ sans objet depuis ce lot.
 (`DIVERGENCES_CONNUES` et, depuis le cycle 94, `FROZEN_INVENTORY`). C'est un état
 à défendre : quand l'un tombe, la réparation est le correctif, jamais une ligne
 d'inventaire.
+
+---
+
+## Verdict de CI, et le blocage qui n'est pas de ce lot
+
+| preuve | résultat |
+|---|---|
+| `apps/web` `lib/api` + `lib/view` + `routes`, arbre fusionné | **13 402 témoins, 0 échec** (951 fichiers), mesuré DEUX fois |
+| `packages/shared/__tests__/ci/` | 23 fichiers, 198 témoins |
+| `tsc --noEmit` web et shared | EXIT=0 |
+| `android.yml` · `assembleDebug` | **BUILD SUCCESSFUL** |
+| `android.yml` · 17 tâches `testDebugUnitTest` | **16 vertes**, dont `:core:model` et `:sdk-core` — les deux modules de #18115 |
+| `android.yml` · `:feature:calls:testDebugUnitTest` | **ROUGE**, 8 témoins — **#18569**, aucun de ce lot |
+
+**Le critère de fin de #18115 est donc atteint sur SON code** : le retrait de la
+jumelle compile, et la garde de #18070 portée sur le miroir vivant passe. Le seul
+rouge vit dans un module que ce lot n'ouvre pas.
+
+### Trois des quatre rouges de la PR venaient de `dev`
+
+1. **Le cliquet de mes leçons** — le seul qui était à moi : un fichier de
+   `tasks/lessons/` doit porter EXACTEMENT un titre `## ` (#7711), et j'avais
+   écrit un journal de cycle à sa place. Découpé en quatre entrées.
+2. **Le cliquet des icônes directes** — rouge sur `dev` (`d6ecb0fa2`, #18488).
+   Porté ici ; une autre session a trouvé le même correctif en parallèle (#18564).
+3. **Le budget des mots visibles** — `dev` avait BAISSÉ trois budgets après mon
+   branchement (`fcdc5b4ac`), et une copie plus ANCIENNE d'un budget qui descend
+   se lit mécaniquement comme un relèvement. Résolu en refusionnant `dev`, qui
+   apporte la baisse ET les mots retirés qui la justifient.
+4. **Les 8 témoins de `:feature:calls`** — #18569.
+
+> **Un gate qui échoue TÔT cache tout ce qui est en aval, et sa réparation a
+> l'air d'une régression.** Réparer le cliquet des icônes a fait dépasser
+> `:sdk-ui` à Gradle, qui a alors atteint `:feature:calls` — une tâche JAMAIS
+> exécutée jusque-là. Les 8 rouges n'ont pas été créés, ils ont été RÉVÉLÉS.
+> C'est « une panne peut tenir la porte, et la réparer l'ouvre » (cycle 84),
+> appliqué à un graphe de tâches Gradle au lieu d'un sérialiseur.
+
+### Et le régime de `dev` rend chaque diagnostic deux fois plus long
+
+Aucun run `android.yml` ni `CI` de `dev` ne CONCLUT : ils sont tous `cancelled`
+par la fusion suivante (concurrence par `ref`). Un « rouge sur la base » ne peut
+donc pas se LIRE — il faut le REJOUER, en réimplémentant la mesure du cliquet
+hors de Gradle. C'est ce qui a été fait trois fois dans ce cycle. Le régime était
+déjà décrit au cycle 161 ; ce cycle mesure ce qu'il COÛTE.
+
+**Mesure de bonne nouvelle, pour qui reprend** : les 17 tâches de test ont TOUTES
+tourné, donc il n'y a **pas** de troisième couche en aval de `:feature:calls`.
+Un lot qui solde #18569 rend `android.yml` vert, sans découvrir une couche de plus.
