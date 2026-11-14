@@ -366,6 +366,6 @@ private fun KeyEvent.toCommandOrNull(): MeeshyLabeledSliderCommand? = when (key)
     Key.PageDown -> MeeshyLabeledSliderCommand.PageDown
     Key.MoveHome -> MeeshyLabeledSliderCommand.Home
     Key.MoveEnd -> MeeshyLabeledSliderCommand.End
-    Key.Delete, Key.ForwardDelete -> MeeshyLabeledSliderCommand.Reset
+    Key.Delete -> MeeshyLabeledSliderCommand.Reset
     else -> null
 }

@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import androidx.compose.ui.graphics.Color
+import kotlin.math.pow
 import me.meeshy.ui.theme.MeeshyAdaptiveColors
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -99,11 +100,31 @@ public data class MeeshyLabeledSliderRecipe(
                 MeeshyLabeledSliderInk.OnMedia -> MeeshyMediaChromeColors.MediaBackdrop
                 MeeshyLabeledSliderInk.Theme -> MeeshyAdaptiveColors.backgroundPrimary(isDark)
             }
-            val lighter = maxOf(inkColor.luminance(), ground.luminance()).toDouble()
-            val darker = minOf(inkColor.luminance(), ground.luminance()).toDouble()
+            val inkLuminance = inkColor.relativeLuminance()
+            val groundLuminance = ground.relativeLuminance()
+            val lighter = maxOf(inkLuminance, groundLuminance)
+            val darker = minOf(inkLuminance, groundLuminance)
             return (lighter + CONTRAST_OFFSET) / (darker + CONTRAST_OFFSET)
         }
 
         private const val CONTRAST_OFFSET: Double = 0.05
     }
 }
+
+/** La luminance relative WCAG 2.x d'une couleur sRGB, de 0 (noir) à 1 (blanc). */
+private fun Color.relativeLuminance(): Double {
+    fun channel(value: Float): Double {
+        val linear = value.toDouble()
+        return if (linear <= LINEAR_THRESHOLD) linear / LINEAR_SLOPE else ((linear + GAMMA_OFFSET) / GAMMA_SCALE).pow(GAMMA)
+    }
+    return RED_WEIGHT * channel(red) + GREEN_WEIGHT * channel(green) + BLUE_WEIGHT * channel(blue)
+}
+
+private const val LINEAR_THRESHOLD: Double = 0.03928
+private const val LINEAR_SLOPE: Double = 12.92
+private const val GAMMA_OFFSET: Double = 0.055
+private const val GAMMA_SCALE: Double = 1.055
+private const val GAMMA: Double = 2.4
+private const val RED_WEIGHT: Double = 0.2126
+private const val GREEN_WEIGHT: Double = 0.7152
+private const val BLUE_WEIGHT: Double = 0.0722
