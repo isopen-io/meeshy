@@ -47,7 +47,7 @@ internal fun ConversationEncryptionExplanationSections(explanation: Conversation
             val note = topic.questionRes?.let { question ->
                 MeeshyInfoNote(
                     question = stringResource(question),
-                    text = topic.noted.joinToString(" ") { stringResource(it.textRes()) },
+                    text = topic.noted.map { stringResource(it.textRes()) }.joinToString(" "),
                 )
             }
             MeeshyInfoNoted(
