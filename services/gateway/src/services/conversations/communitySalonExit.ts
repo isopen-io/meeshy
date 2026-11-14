@@ -5,6 +5,8 @@ import { invalidateParticipantLookup } from '../../utils/participant-lookup-cach
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import { endConversationMembership, type DepartedMemberEphemeralState, type MembershipRoomReader } from '../../socketio/endConversationMembership';
+import { runWithRetries } from '../../socketio/closeShareLinkRevokingGuests';
+import type { GuestSocketRegistry } from '../../socketio/revokeShareLinkGuests';
 import { resoudreSuccessionDuCreateur } from './creatorSuccession';
 import { announceParticipantRoleWithCapabilities } from './obsoleteCapability';
 import { postConversationNotice, noticeActor, noticeBroadcast, type SocketNoticeGateway } from './conversationNotice';
@@ -13,7 +15,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonExit' });
 
-type SalonIo = ConversationRoomEmitter & MembershipRoomReader;
+type SalonIo = ConversationRoomEmitter & MembershipRoomReader & GuestSocketRegistry;
 
 type SalonExitManager = DepartedMemberEphemeralState & {
   getIO(): SalonIo | null | undefined;
@@ -82,6 +84,14 @@ export function communityGuardsItsSalons(community: {
  * CLORE le salon — la clôture est un geste du créateur sur SON fil, pas la
  * conséquence d'une décision prise dans la communauté.
  *
+ * Mais un salon sans créateur ni héritier INSCRIT n'a plus personne pour
+ * gouverner ses liens de partage (#16712) : les invités venus par lien y
+ * restaient seuls, sans modération. Ses liens se FERMENT donc et se MARQUENT
+ * (`guestRevocationPendingAt`) pendant la requête — la garde commune
+ * (`guestAccessEnd`) refuse dès cet instant chaque invité — puis leurs invités
+ * sont révoqués en arrière-plan par `runWithRetries` (nouvelles tentatives à
+ * 1 puis 5 minutes), la reprise que le balayage horaire rejoue si elle échoue.
+ *
  * Contrat : NE REJETTE JAMAIS, `announcements` non plus — les deux routes
  * appelantes ont déjà commis le départ, et un 500 nierait un fait durable que le
  * client ne peut plus rejouer (le second appel répondrait « vous n'êtes pas
@@ -149,11 +159,57 @@ async function exitEverySalon(deps: SalonExitDeps, request: SalonExitRequest): P
   }
   for (const { row } of departures) invalidateParticipantLookup(row.id, row.conversationId);
 
+  const orphanedSalons = departures
+    .filter(({ row, successor }) => foundsLiveSalon(row) && successor === null)
+    .map(({ row }) => row.conversationId);
+  const closedLinkIds = await closeOrphanedSalonLinks(prisma, orphanedSalons, request.now);
+
   const announced = departures.filter(({ row }) => liveSalons.has(row.conversationId));
   return {
     exitedConversationIds: departures.map(({ row }) => row.conversationId),
-    announcements: announceEveryExit(deps, request, announced),
+    announcements: announceEveryExit(deps, request, announced)
+      .then(() => revokeOrphanedSalonGuests(deps, request, closedLinkIds)),
   };
+}
+
+async function closeOrphanedSalonLinks(
+  prisma: PrismaClient,
+  conversationIds: readonly string[],
+  now: Date,
+): Promise<readonly string[]> {
+  const closed: string[] = [];
+  for (const conversationId of conversationIds) {
+    try {
+      const links = await prisma.conversationShareLink.findMany({ where: { conversationId }, select: { id: true } });
+      if (links.length === 0) continue;
+      const ids = links.map((link) => link.id);
+      await prisma.conversationShareLink.updateMany({
+        where: { id: { in: ids } },
+        data: { isActive: false, guestRevocationPendingAt: now },
+      });
+      closed.push(...ids);
+    } catch (error) {
+      logger.error('Orphaned community salon links could not be closed', { conversationId, error });
+    }
+  }
+  return closed;
+}
+
+async function revokeOrphanedSalonGuests(
+  deps: SalonExitDeps,
+  request: SalonExitRequest,
+  shareLinkIds: readonly string[],
+): Promise<void> {
+  if (shareLinkIds.length === 0) return;
+  const manager = deps.socketIOHandler?.getManager();
+  const io = manager?.getIO();
+  for (const shareLinkId of shareLinkIds) {
+    try {
+      await runWithRetries({ prisma: deps.prisma, io, manager, shareLinkId, pendingSince: request.now }, 0);
+    } catch (error) {
+      logger.error('Orphaned community salon guest revocation failed', { shareLinkId, error });
+    }
+  }
 }
 
 function announceEveryExit(

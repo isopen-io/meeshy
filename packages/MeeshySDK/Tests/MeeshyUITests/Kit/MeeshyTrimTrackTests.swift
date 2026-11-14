@@ -49,7 +49,8 @@ struct MeeshyTrimTrackTests {
     func rule_stop_followsTheVectors() throws {
         for row in try Self.rows("butee") {
             let rule = try Self.rule(row)
-            let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(row["partie"] as? String)))
+            let rawMeeshyTrimTrackPart = try #require(row["partie"] as? String)
+            let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
             let stop = rule.stop(part: part, requested: try #require(row["entree"] as? Double), range: try Self.range(row, "plage"))
             #expect(stop?.rawValue == row["butee"] as? String, "\(row["nom"] ?? "")")
         }
@@ -59,7 +60,8 @@ struct MeeshyTrimTrackTests {
     func rule_adjusted_followsTheVectors() throws {
         for row in try Self.rows("ajustement") {
             let rule = try Self.rule(row)
-            let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(row["partie"] as? String)))
+            let rawMeeshyTrimTrackPart = try #require(row["partie"] as? String)
+            let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
             let selection = MeeshyTrimTrackSelection(rawValue: row["selection"] as? String ?? "kept") ?? .kept
             let result = rule.adjusted(
                 part: part, up: try #require(row["haut"] as? Bool), step: try #require(row["pas"] as? Double),
@@ -412,7 +414,8 @@ struct MeeshyTrimTrackTests {
                 part, up: try #require(row["haut"] as? Bool), range: range, playhead: try #require(row["tete"] as? Double)
             ), isAtStop: false)
         default:
-            let command = try #require(MeeshyTrimTrackCommand(rawValue: try #require(row["commande"] as? String)))
+            let rawMeeshyTrimTrackCommand = try #require(row["commande"] as? String)
+            let command = try #require(MeeshyTrimTrackCommand(rawValue: rawMeeshyTrimTrackCommand))
             return MeeshyTrimTrackStep(effects: interaction.perform(command, on: part, range: range, playhead: try #require(row["tete"] as? Double)), isAtStop: false)
         }
     }
@@ -421,12 +424,14 @@ struct MeeshyTrimTrackTests {
         let effects = try #require(row["effets"] as? [[String: Any]])
         return try effects.map { effect in
             if let editing = effect["editing"] as? [Any] {
-                let part = try #require(MeeshyTrimTrackPart(rawValue: try #require(editing[0] as? String)))
+                let rawMeeshyTrimTrackPart = try #require(editing[0] as? String)
+                let part = try #require(MeeshyTrimTrackPart(rawValue: rawMeeshyTrimTrackPart))
                 return .editing(part, try #require(editing[1] as? Bool))
             }
             if let bounds = effect["range"] as? [Double] { return .range(bounds[0]...bounds[1]) }
             if let time = effect["seek"] as? Double { return .seek(time) }
-            let kind = try #require(MeeshyTrimTrackHapticKind(rawValue: try #require(effect["haptic"] as? String)))
+            let rawMeeshyTrimTrackHapticKind = try #require(effect["haptic"] as? String)
+            let kind = try #require(MeeshyTrimTrackHapticKind(rawValue: rawMeeshyTrimTrackHapticKind))
             return .haptic(kind)
         }
     }
