@@ -59,6 +59,7 @@ final class FeedPositionRetentionTests: XCTestCase {
             XCTAssertEqual(shown.scale, 1)
             XCTAssertEqual(shown.drop, 0)
             XCTAssertEqual(shown.opacity, 1)
+            XCTAssertEqual(shown.slides, !reduce, "sous réduction, le fil entre aussi en fondu")
         }
     }
 
