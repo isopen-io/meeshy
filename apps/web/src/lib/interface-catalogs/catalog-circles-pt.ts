@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const pt = {
   'circles.section.requests': 'Pedidos de subida',
+  'circles.intro': 'Cada círculo define o que uma pessoa vê de você: quanto mais próximo, mais você compartilha.',
   'circles.empty.title': 'Seus vínculos aparecerão aqui',
   'circles.empty.subtitle': 'À medida que você conversa com pessoas, elas entram nos seus círculos.',
   'circles.empty.action': 'Encontrar contatos',
@@ -81,7 +82,9 @@ const pt = {
   'circles.settings.blockBring.detail': 'Esta pessoa não poderá mais fazer seu telefone tocar. Ela não é avisada.',
   'circles.settings.blockBring.failed': 'Não foi possível salvar a configuração',
   'bring.action': 'Bring',
-  'bring.explain': 'Para uma emergência extrema: o telefone toca, mesmo bloqueado. Exceções: um iPhone no silencioso com o Meeshy fechado só mostra um alerta prioritário, e na web só toca com a aba aberta.',
+  'bring.explain': 'Para uma emergência extrema: o telefone toca, mesmo bloqueado.',
+  'bring.exceptions.question': 'Quando o Bring não toca?',
+  'bring.exceptions': 'Exceções: um iPhone no silencioso com o Meeshy fechado só mostra um alerta prioritário, e na web só toca com a aba aberta.',
   'bring.remaining': 'Restam hoje: {count}',
   'bring.unlimited': 'Sem limite hoje',
   'bring.confirm.title': 'Fazer o telefone de {name} tocar?',

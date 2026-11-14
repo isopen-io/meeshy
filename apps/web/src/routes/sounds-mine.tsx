@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -155,7 +157,7 @@ export function MySoundRow({
   );
 }
 
-function SoundsMineEmpty({ language }: { readonly language: InterfaceLanguage }) {
+export function SoundsMineEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <li className="grid flex-1 content-center justify-items-center gap-3 px-6 py-12 text-center" data-my-sounds-empty>
       <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)', opacity: 0.4 }}>
@@ -164,9 +166,9 @@ function SoundsMineEmpty({ language }: { readonly language: InterfaceLanguage })
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translateSoundsMine(language, 'soundsMine.empty.title')}
       </p>
-      <p className="max-w-xs text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translateSoundsMine(language, 'soundsMine.empty.subtitle')}
-      </p>
+      <InfoAlone
+        hint={{ label: translateSoundsMine(language, 'soundsMine.empty.question'), text: translateSoundsMine(language, 'soundsMine.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+      />
     </li>
   );
 }

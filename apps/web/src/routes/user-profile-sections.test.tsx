@@ -132,13 +132,14 @@ describe('ProfileStatsSection — le défaut d’iOS qu’on ne copie pas', () =
 
 describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un COMPTE', () => {
   const empty = (filter: 'all' | 'posts' | 'reels') =>
-    parse(renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter={filter} />));
+    parse(renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter={filter} onClear={() => undefined} />));
 
   test('sans filtre, c’est le compte qui ne publie rien', () => {
     const el = empty('all');
     expect(el.querySelector('[data-profile-posts-empty]')?.getAttribute('data-profile-posts-empty')).toBe('all');
     expect(el.textContent).toContain('Aucune publication');
-    expect(el.textContent).toContain('Rien de public à lire');
+    expect(el.textContent).not.toContain('Rien de public à lire');
+    expect(el.querySelectorAll('p').length).toBe(1);
   });
 
   /* Le bandeau annonce « 2 Réels » au-dessus : lui répondre « Aucune
@@ -148,7 +149,10 @@ describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un
     const reels = empty('reels');
     expect(reels.textContent).toContain('Aucun réel');
     expect(reels.textContent).not.toContain('Aucune publication');
-    expect(reels.textContent).toContain('Touchez à nouveau la tuile');
+    expect(reels.textContent).not.toContain('Touchez à nouveau');
+    expect(reels.querySelectorAll('p').length).toBe(1);
+    expect(reels.querySelector('[data-profile-posts-clear]')?.textContent).toBe('Tout afficher');
+    expect(empty('all').querySelector('[data-profile-posts-clear]')).toBeNull();
     expect(empty('posts').textContent).toContain('Aucun poste');
   });
 });
@@ -202,9 +206,10 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect(card.textContent).not.toContain('demandent un compte');
   });
 
-  test('sans relation : ajouter, écrire, bloquer', () => {
+  test('sans relation : ajouter et écrire au repos ; bloquer et signaler derrière ⋯', () => {
     const el = relationSection({ relation: { kind: 'none' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write']);
+    expect(el.querySelector('[data-profile-more]')?.getAttribute('aria-expanded')).toBe('false');
   });
 
   /* AMENDÉ PAR #7122 — la ligne de la demande arrive AVEC l'identité, et ce
@@ -233,9 +238,9 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect([...el.querySelectorAll('[data-profile-action]')].every((n) => n.hasAttribute('disabled'))).toBe(true);
   });
 
-  test('un CONTACT ne se redemande pas : écrire et bloquer, rien d’autre', () => {
+  test('un CONTACT ne se redemande pas : écrire au repos, bloquer et signaler derrière ⋯', () => {
     const el = relationSection({ relation: { kind: 'friend' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write', 'block', 'report']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write']);
     expect(el.querySelector('[data-profile-context]')).toBeNull();
   });
 });

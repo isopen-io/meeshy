@@ -34,7 +34,7 @@ const post = (id: string, type: 'POST' | 'REEL'): FeedPost => ({ id, type, creat
 describe('l’en-tête', () => {
   test('porte le titre d’iOS et un retour NOMMÉ vers les réglages, cible 44', () => {
     const html = renderToStaticMarkup(<BookmarksHeader />);
-    expect(html).toContain('Publications enregistrées');
+    expect(html).toContain('Enregistrés');
     expect(html).toContain('href="/settings"');
     expect(html).toContain('aria-label="Retour aux réglages"');
     expect(html).toContain('size-11');

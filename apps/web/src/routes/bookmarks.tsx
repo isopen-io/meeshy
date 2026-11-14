@@ -1,4 +1,6 @@
 import { useListingScrollTelemetry } from '@/lib/telemetry/listing-scroll';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { useListingSessionId } from '@/lib/telemetry/listing-session';
 import { listingAt } from '@/lib/telemetry/served-listing';
 import { useMemo, useRef, useState } from 'react';
@@ -122,9 +124,9 @@ export function BookmarksEmpty() {
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'bookmarks.empty.title')}
       </p>
-      <p className="max-w-xs text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'bookmarks.empty.subtitle')}
-      </p>
+      <InfoAlone
+        hint={{ label: translate(language, 'bookmarks.empty.question'), text: translate(language, 'bookmarks.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+      />
       <Link
         to="feed"
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
