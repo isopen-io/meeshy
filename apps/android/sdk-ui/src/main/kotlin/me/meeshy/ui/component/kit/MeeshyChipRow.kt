@@ -157,6 +157,7 @@ private fun <T> ScrollingChips(
     val density = LocalDensity.current
     val geometry = remember { ChipRowGeometry<T>() }
     val fades = rememberEdgeFades(scroll, reduceMotion)
+    LaunchedEffect(chips) { geometry.retain(chips.map { it.id }) }
 
     if (revealsSelection) {
         val latestChips = rememberUpdatedState(chips)
@@ -204,6 +205,12 @@ internal class ChipRowGeometry<T> {
     var viewportPx: Int = 0
     var previous: Set<T> = emptySet()
     var isFirstReveal: Boolean = true
+
+    /** Oublie la largeur des puces qui ont quitté la rangée : la carte reste bornée aux puces présentes. */
+    fun retain(ids: Collection<T>) {
+        val present = ids.toHashSet()
+        widths.keys.retainAll(present)
+    }
 
     /**
      * Le décalage qui centre [target] dans la fenêtre, borné à la course du défilement. Les distances sont LOGIQUES (du
