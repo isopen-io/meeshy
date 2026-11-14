@@ -25,6 +25,7 @@ export type SharedLocationRoster = {
 
 const [ONE_HOUR, EIGHT_HOURS] = SHARED_LOCATION_DURATIONS_MINUTES;
 const MINUTE = 60_000;
+const SECOND = 1_000;
 
 /** Une personne présente dans la liste n'a jamais de retrait en attente. */
 const rosterOf = (entries: SharedLocationRoster['entries'], withdrawals: SharedLocationRoster['withdrawals'] = {}): SharedLocationRoster =>
@@ -91,6 +92,17 @@ export const rosterOps = {
   serverDurationMinutes: (roster: SharedLocationRoster, now: number): SharedLocationDurationMinutes => {
     const farthest = Math.max(now, ...Object.values(roster.entries).map((entry) => entry.until));
     return farthest - now <= ONE_HOUR * MINUTE ? ONE_HOUR : EIGHT_HOURS;
+  },
+  /**
+   * La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
+   * la passerelle la tient, même onglet fermé (#18205). Arrondie à la seconde au-dessus, jamais nulle.
+   */
+  deadlinedRecipients: (roster: SharedLocationRoster, now: number): readonly SharedLocationRecipient[] => {
+    const term = now + rosterOps.serverDurationMinutes(roster, now) * MINUTE;
+    return rosterOps.recipients(roster).map((recipient) => {
+      const until = roster.entries[recipient.userId]!.until;
+      return until < term ? { ...recipient, expiresInSeconds: Math.max(1, Math.ceil((until - now) / SECOND)) } : recipient;
+    });
   },
   /** La liste telle que le serveur la reçoit, dans un ordre stable. */
   recipients: (roster: SharedLocationRoster): readonly SharedLocationRecipient[] =>

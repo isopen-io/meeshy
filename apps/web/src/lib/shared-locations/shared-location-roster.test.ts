@@ -145,3 +145,24 @@ describe('le retrait en attente (#18388, iso #18204)', () => {
     expect(rosterOps.hasRecipients(roster)).toBe(false);
   });
 });
+
+describe('l’échéance de chacun, telle que la passerelle la tient (#18205)', () => {
+  const T = Date.parse('2026-11-14T08:00:00.000Z');
+  test('seule une échéance plus proche que le terme part, en secondes entières arrondies au-dessus', () => {
+    const roster = rosterOps.adding(rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T }), {
+      userId: AUTRE,
+      precision: 'exact',
+      durationMinutes: 480,
+      now: T + 1500,
+    });
+    expect(rosterOps.deadlinedRecipients(roster, T + 1500)).toEqual([
+      { userId: AMI, precision: 'city', expiresInSeconds: 3599 },
+      { userId: AUTRE, precision: 'exact' },
+    ]);
+  });
+
+  test('une seule personne au terme du partage n’en porte pas', () => {
+    const roster = rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T });
+    expect(rosterOps.deadlinedRecipients(roster, T)).toEqual([{ userId: AMI, precision: 'city' }]);
+  });
+});
