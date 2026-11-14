@@ -28,7 +28,7 @@ struct MeeshyDragTargetsTests {
                 offered: offered
             )
             let expected = try Self.points(row["centres"])
-            #expect(Set(centers.keys) == Set(expected.keys), name)
+            #expect(Set(centers.keys) == Set(expected.keys), "\(name)")
             for (target, point) in expected {
                 let center = try #require(centers[target])
                 #expect(abs(Double(center.x) - Double(point.x)) < 1e-6 && abs(Double(center.y) - Double(point.y)) < 1e-6, "\(name) \(target)")
@@ -61,8 +61,8 @@ struct MeeshyDragTargetsTests {
     @Test("la loi seule : un point non fini ne survole rien, deux cibles à égale distance ne se disputent pas")
     func rule_hovered_edgeCases() {
         let centers: [MeeshyDragTarget: CGPoint] = [.duplicate: CGPoint(x: 100, y: 100), .remove: CGPoint(x: 100, y: 500)]
-        #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: .nan, y: 100), centers: centers, previous: .duplicate) == nil)
-        #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: 100, y: .infinity), centers: centers, previous: nil) == nil)
+        #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: CGFloat.nan, y: 100), centers: centers, previous: .duplicate) == nil)
+        #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: 100, y: CGFloat.infinity), centers: centers, previous: nil) == nil)
         #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: 100, y: 100), centers: [:], previous: nil) == nil)
         #expect(MeeshyDragTargetsRule.hovered(finger: CGPoint(x: 100, y: 100), centers: centers, previous: .remove) == .duplicate)
     }
@@ -122,9 +122,9 @@ struct MeeshyDragTargetsTests {
             } else {
                 result = state.end()
             }
-            #expect(result?.rawValue == row["rend"] as? String, name)
-            #expect(calls == (row["rappels"] as? [String] ?? []), name)
-            #expect(!state.isActive && state.hovered == nil, name)
+            #expect(result?.rawValue == row["rend"] as? String, "\(name)")
+            #expect(calls == (row["rappels"] as? [String] ?? []), "\(name)")
+            #expect(!state.isActive && state.hovered == nil, "\(name)")
         }
     }
 
@@ -264,8 +264,8 @@ struct MeeshyDragTargetsTests {
     func source_doesNotMirror() throws {
         for file in Self.files {
             let code = try Self.code(file)
-            #expect(!code.contains("layoutDirection"), file)
-            #expect(!code.contains("flipsForRightToLeftLayoutDirection"), file)
+            #expect(!code.contains("layoutDirection"), "\(file)")
+            #expect(!code.contains("flipsForRightToLeftLayoutDirection"), "\(file)")
         }
     }
 
@@ -298,7 +298,7 @@ struct MeeshyDragTargetsTests {
         #expect(state.contains("HapticFeedback.medium()"))
         for file in Self.files where file != "MeeshyDragTargetsState.swift" {
             let code = try Self.code(file)
-            #expect(!code.contains("UIImpactFeedbackGenerator") && !code.contains("HapticFeedback"), file)
+            #expect(!code.contains("UIImpactFeedbackGenerator") && !code.contains("HapticFeedback"), "\(file)")
         }
     }
 
