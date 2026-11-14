@@ -84,7 +84,7 @@ describe('rien n’est dit deux fois', () => {
     const host = await mount(<GeneratedAchievements sections={sections} />);
     const shown = visibleText(host);
     expect(shown).toContain('Chaque défi est un palier à atteindre dans une famille de gestes.');
-    expect(host.querySelector('#progression-generated')?.className).toContain('sr-only');
+    expect(host.querySelector('section[aria-labelledby="progression-generated"] h2')?.textContent).toBe('Défis');
     expect(shown).not.toMatch(/^Défis/);
   });
 
@@ -104,7 +104,6 @@ describe('rien n’est dit deux fois', () => {
     );
     const head = visibleText(host.querySelector('#game-showcase') as Element);
     expect(head).not.toMatch(/\d+ trophées/);
-    expect(host.querySelector('#game-showcase-title')?.className).toContain('sr-only');
     expect(host.querySelector('#game-showcase-title')?.textContent).toContain('3 trophées');
   });
 });
@@ -211,7 +210,7 @@ describe('les verrous : une ligne d’état et une jauge sans légende', () => {
     const shown = visibleText(host);
     expect(shown).not.toContain('Tu es au niveau');
     expect(shown).toContain('4 / 10');
-    expect(host.querySelector('#game-league-locked-title')?.className).toContain('sr-only');
+    expect(host.querySelector('[aria-labelledby="game-league-locked-title"] h2')?.textContent).toBe('Joute');
   });
 });
 

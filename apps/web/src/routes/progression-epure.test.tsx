@@ -85,13 +85,12 @@ describe('les réglages du jeu : un libellé nomme, le détail est derrière un 
     expect(shown).not.toContain('restent fermés');
     const button = infoButton(host, 'Que cache le masque ?');
     const note = noteOf(host, button);
-    expect(note.className).toContain('sr-only');
     expect(note.textContent).toContain('te retire de la joute publique');
     expect(note.textContent).toContain('Étincelles et trophées gardés');
     expect(note.textContent).toContain('restent fermés');
     await click(button);
     expect(button.getAttribute('aria-expanded')).toBe('true');
-    expect(noteOf(host, button).className).not.toContain('sr-only');
+    expect(visibleText(host.querySelector('#game-settings-hidden') as Element)).toContain('te retire de la joute publique');
   });
 
   test('« Mon atmosphère » : « dès Ambassadeur » au repos, la suite derrière « Que change mon atmosphère ? »', async () => {
@@ -158,10 +157,10 @@ describe('l’Atlas, la vitrine, le voyage et la joute ne disent rien deux fois'
     expect(shown).not.toContain('Atlas des langues');
     expect(shown).not.toMatch(/à découvrir/);
     expect(shown).not.toContain('Tampon du');
-    expect(host.querySelector('legend')?.className).toContain('sr-only');
+    expect(host.querySelector('fieldset legend')?.textContent).toBe('Atlas des langues');
     const stamp = host.querySelector('[data-game-atlas-language]') as Element;
     expect(stamp.textContent).toContain('Tampon du');
-    expect(host.querySelector('#game-atlas-title')?.className).toContain('sr-only');
+    expect(host.querySelector('[aria-labelledby="game-atlas-title"] h2')?.textContent).toBe('Atlas des langues');
   });
 
   test('Atlas : « privé par défaut » reste lu au repos ; ce que le jeu garde est derrière « Que garde le jeu de mes échanges ? »', async () => {
@@ -180,8 +179,9 @@ describe('l’Atlas, la vitrine, le voyage et la joute ne disent rien deux fois'
     const head = visibleText(host.querySelector('#game-showcase') as Element);
     expect(head).not.toMatch(/\d+ trophées/);
     expect(head).not.toContain('Tes trophées');
-    expect(host.querySelector('#game-showcase-title')?.className).toContain('sr-only');
-    expect(host.querySelector('#game-showcase-visibility legend')?.className).toContain('sr-only');
+    expect(host.querySelector('[aria-labelledby="game-showcase-title"] h2')?.textContent).toMatch(/\d+ trophées/);
+    expect(visibleText(host.querySelector('#game-showcase-visibility fieldset') as Element)).not.toContain('Trophées');
+    expect(host.querySelector('#game-showcase-visibility legend')?.textContent).toBe('Trophées');
     expect(visibleText(host.querySelector('#game-showcase-visibility') as Element)).not.toContain('jamais la date exacte');
     expect(noteOf(host, infoButton(host, 'Un visiteur voit-il la date exacte ?')).textContent).toContain('jamais la date exacte');
   });
