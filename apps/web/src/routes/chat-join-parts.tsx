@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
@@ -284,21 +284,22 @@ function LinkRow({
   readonly onReshare: () => void;
 }) {
   const [opened, setOpened] = useState(false);
+  const rowId = useId();
   return (
     <div className="grid gap-2.5">
       <button
         type="button"
         data-invite-more
         aria-expanded={opened}
-        aria-controls="chat-join-link-row"
+        aria-controls={rowId}
         onClick={() => setOpened((v) => !v)}
         className={`${INVITE_OUTLINE_BUTTON} justify-self-start`}
         style={{ ...INVITE_OUTLINE_STYLE, minHeight: 44 }}
       >
-        {translateInvite(language, 'invite.more')}
+        <MoreLabel language={language} context={translateInvite(language, 'invite.link.label')} />
       </button>
       {opened ? (
-        <div id="chat-join-link-row" className="grid gap-2.5 md:flex md:items-center">
+        <div id={rowId} className="grid gap-2.5 md:flex md:items-center">
             <p
               data-invite-url
               className={`flex min-w-0 items-center gap-2.5 rounded-field px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
@@ -331,11 +332,25 @@ function LinkRow({
 }
 
 /**
+ * « Plus » VU, et ce qu'il ouvre ENTENDU : la page en porte deux, que le lecteur d'écran doit distinguer sans
+ * contredire le libellé visible (le nom commence par « Plus », WCAG 2.5.3).
+ */
+function MoreLabel({ language, context }: { readonly language: InterfaceLanguage; readonly context: string }) {
+  return (
+    <>
+      <span>{translateInvite(language, 'invite.more')}</span>
+      <span className="sr-only"> — {context}</span>
+    </>
+  );
+}
+
+/**
  * c. Les chiffres sans identité — UNE ligne (« 248 personnes · 6 langues parlées »), et la ventilation par langue
  * derrière « Plus » (épure #18361, règles 5 et 6) : la barre n'est pas à l'arrivée, elle reste atteignable.
  */
 export function InvitationFigures({ language, invitation }: { readonly language: InterfaceLanguage; readonly invitation: LinkInvitation }) {
   const [opened, setOpened] = useState(false);
+  const sharesId = useId();
   const { people, languages } = invitation.stats;
   if (people === null && languages.length === 0) return null;
   const format = new Intl.NumberFormat(language);
@@ -357,17 +372,17 @@ export function InvitationFigures({ language, invitation }: { readonly language:
             type="button"
             data-invite-figures-more
             aria-expanded={opened}
-            aria-controls="chat-join-language-shares"
+            aria-controls={sharesId}
             onClick={() => setOpened((v) => !v)}
             className="min-h-11 shrink-0 rounded-chip px-3 text-title font-semibold"
             style={{ color: 'var(--color-ios-brand)' }}
           >
-            {translateInvite(language, 'invite.more')}
+            <MoreLabel language={language} context={translateInvite(language, 'invite.stats.spoken')} />
           </button>
         )}
       </div>
       {shares.length === 0 || !opened ? null : (
-        <div id="chat-join-language-shares" className="grid gap-3 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
+        <div id={sharesId} className="grid gap-3 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
           <LanguageShareBar language={language} shares={shares} compose={(name, percent) => translateInvite(language, 'invite.stats.share', { language: name, percent })} />
         </div>
       )}

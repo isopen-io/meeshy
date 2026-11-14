@@ -336,7 +336,7 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     const el = await mount(deps);
     expect(text(el.querySelector('[data-invite-figures-line]'))).toBe('248 personnes · 2 langues parlées');
     expect(el.querySelector('[data-language-share]')).toBeNull();
-    expect(text(el)).not.toContain('On y parle');
+    expect(el.querySelector('[data-invite-figures] h2')).toBeNull();
     const more = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
     expect(more?.getAttribute('aria-expanded')).toBe('false');
     await click(more);
@@ -352,12 +352,25 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     expect(el.querySelector('[data-invite-copy]')).toBeNull();
     expect(el.querySelector('[data-invite-reshare]')).toBeNull();
     const more = el.querySelector<HTMLButtonElement>('[data-invite-more]');
-    expect(more?.textContent).toBe('Plus');
+    expect(text(more?.querySelector(':scope > :not(.sr-only)') ?? null)).toBe('Plus');
     expect(more?.getAttribute('aria-expanded')).toBe('false');
     await click(more);
     expect(more?.getAttribute('aria-expanded')).toBe('true');
     expect(el.querySelector('[data-invite-copy]')).not.toBeNull();
     expect(el.querySelector('[data-invite-reshare]')).not.toBeNull();
+  });
+
+  test('les deux « Plus » de la page se distinguent au lecteur d’écran, chacun commençant par son libellé visible', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const link = el.querySelector<HTMLButtonElement>('[data-invite-more]');
+    const figures = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
+    expect(text(link)).toBe('Plus — Lien de la conversation');
+    expect(text(figures)).toBe('Plus — On y parle');
+    for (const more of [link, figures]) {
+      await click(more);
+      expect(document.getElementById(more?.getAttribute('aria-controls') ?? '')).not.toBeNull();
+    }
   });
 
   test('sans chiffres servis, la section ne s’affiche pas', async () => {
