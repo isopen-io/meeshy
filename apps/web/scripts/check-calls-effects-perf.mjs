@@ -267,10 +267,12 @@ try {
   await page.click('[data-carousel-item="golden"]');
   await page.click('[data-call-effects-category="face"]');
   await page.click('[data-carousel-item="volcano"]');
+  /* Un choix rend le menu de base (#18186) : la mesure fait glisser le carrousel, rouvert par sa puce. */
+  await page.click('[data-call-effects-category="face"]');
   await measure(page, 'effet (Doré + Éruption)');
 
-  await page.click('[data-call-effects-category="face"]');
-  await page.click('[data-carousel-item="none"]');
+  /* « Aucun » est au bout de la piste, que la mesure vient de faire glisser : activé comme au lecteur d'écran, sans défilement qui le dispute au centrage. */
+  await page.$eval('[data-carousel-item="none"]', (button) => button.click());
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
   await until(page, () => (document.querySelector('[data-call-mode-preview] video')?.videoWidth ?? 0) > 0);
@@ -307,6 +309,7 @@ try {
     await elapse(page, 3000);
     await capture(page, 'perf-flou');
     console.log(`  netteté avec le masque : ${((await sharpness(page)) ?? 0).toFixed(2)} (sans flou : ${(sharp ?? 0).toFixed(2)})`);
+    await page.click('[data-call-effects-category="face"]');
     await measure(page, 'flou d’arrière-plan (segmentation)');
     await page.click('[data-call-effects-settings-toggle]');
     await page.click('[data-call-effects-blur]');
