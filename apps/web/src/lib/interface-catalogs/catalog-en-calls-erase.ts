@@ -12,6 +12,7 @@ const enCallsErase = {
   'calls.clearAll.cancel': 'Cancel',
   'calls.erase.failed': 'The call log could not be cleared. Try again.',
   'calls.search': 'Search a name',
+  'calls.search.placeholder': 'Search',
   'calls.search.clear': 'Clear search',
   'calls.search.empty': 'No call matches “{query}”',
   'calls.participants.more': '{names} +{count}',

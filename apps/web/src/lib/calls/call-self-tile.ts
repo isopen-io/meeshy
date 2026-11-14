@@ -117,8 +117,29 @@ export type TileBox = TileSize & { readonly x: number; readonly y: number };
 /** Ma vignette quand l'autre partage son écran : en haut à droite, 4,5 rem sous la zone sûre, à la taille x2. */
 export const SCREEN_SELF_TILE = { y: 72, width: 112, height: 160 } as const;
 
-/** Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte). */
-export type TileFootprint = TileBox & { readonly corner: SelfTileCorner };
+/**
+ * Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte).
+ * `yields` : elle cède le coin au rail de son bord ({@link selfTileRailShift}), qui reste alors à ce bord, ouvert comme sortant.
+ */
+export type TileFootprint = TileBox & { readonly corner: SelfTileCorner; readonly yields?: boolean };
+
+/**
+ * **L2.8 — EN PAYSAGE, MA VIGNETTE CÈDE LE COIN AU RAIL** (décision porteur du 2026-11-13, #17965 point 1 ; capture L2 ;
+ * le web s'aligne, #17438). Dans une fenêtre plus large que haute, `(…)` ouvert, le rail de son bord reste à ce bord,
+ * centré sur toute sa hauteur, et ma vignette glisse vers l'intérieur, contre lui ; les rails rangés, elle revient à son
+ * coin. Debout, rien ne change : le rail se pose sous elle (P2, `call-rails-clearance.ts`).
+ *
+ * Le pas est celui du rail : posé à 12 du bord (`call-rails.tsx`, `EDGE`), large de 60 (un bouton de 44 et 8 de verre
+ * de chaque côté, `railLength(1)`), plus l'écart de 8 (`RAIL_TILE_GAP`), moins la marge de ma vignette — recopiés ici,
+ * car le chunk des rails n'importe rien de l'écran d'appel ; un témoin tient les deux ensemble.
+ */
+export const RAIL_YIELD = 64;
+
+/** Le décalage horizontal de ma vignette, en pixels : vers la gauche pour un coin droit, vers la droite pour un coin gauche. Les coins sont physiques, le sens de lecture n'y change rien. */
+export function selfTileRailShift({ corner, viewport, railsOpen }: { readonly corner: SelfTileCorner; readonly viewport: TileSize; readonly railsOpen: boolean }): number {
+  if (!railsOpen || !isLandscapeWindow(viewport)) return 0;
+  return corner.endsWith('right') ? -RAIL_YIELD : RAIL_YIELD;
+}
 
 /** Ce que l'écran d'appel sait de ma vignette ; son coin et sa taille sont ceux que je lui ai choisis (`selfTileStore`). */
 type FootprintInput = {
@@ -137,13 +158,16 @@ type FootprintInput = {
   readonly topInset: number;
   /** Ce que la colonne du journal retire à la scène (W1) : ma vignette se mesure dans la scène qui reste. */
   readonly bleed?: number;
+  /** Les rails du duo sont sortis : en paysage, ma vignette leur cède le coin (L2.8). */
+  readonly railsOpen?: boolean;
 };
 
-/** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429). */
-export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0 }: FootprintInput): TileFootprint | null {
+/** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429), ou, en paysage, elle leur cède le coin (L2.8). L'écran reçu de l'autre garde sa place (#17730). */
+export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0, railsOpen = false }: FootprintInput): TileFootprint | null {
   if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - bleed - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
   if (layout !== 'video-duo' || !(swapped || cameraOn) || (framed && !swapped)) return null;
-  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed }) };
+  const box = selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed });
+  return { corner, ...box, x: box.x + selfTileRailShift({ corner, viewport, railsOpen }), yields: isLandscapeWindow(viewport) };
 }
 
 /** L'écran de l'appel ; hors navigateur, celui de la planche. */

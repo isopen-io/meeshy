@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const it = {
   'circles.section.requests': 'Richieste di salita',
+  'circles.intro': 'Ogni cerchia decide cosa una persona vede di te: più è vicina, più condividi.',
   'circles.empty.title': 'I tuoi legami appariranno qui',
   'circles.empty.subtitle': 'Man mano che parli con le persone, entrano nelle tue cerchie.',
   'circles.empty.action': 'Trova contatti',
@@ -81,7 +82,9 @@ const it = {
   'circles.settings.blockBring.detail': 'Questa persona non potrà più far squillare il tuo telefono. Non viene avvisata.',
   'circles.settings.blockBring.failed': 'Impossibile salvare l’impostazione',
   'bring.action': 'Bring',
-  'bring.explain': 'Per un’emergenza estrema: il suo telefono squilla, anche bloccato. Eccezioni: un iPhone in silenzioso con Meeshy chiuso mostra solo un avviso prioritario, e sul web squilla solo con la scheda aperta.',
+  'bring.explain': 'Per un’emergenza estrema: il suo telefono squilla, anche bloccato.',
+  'bring.exceptions.question': 'Quando il Bring non squilla?',
+  'bring.exceptions': 'Eccezioni: un iPhone in silenzioso con Meeshy chiuso mostra solo un avviso prioritario, e sul web squilla solo con la scheda aperta.',
   'bring.remaining': 'Rimasti oggi: {count}',
   'bring.unlimited': 'Nessun limite oggi',
   'bring.confirm.title': 'Far squillare il telefono di {name}?',

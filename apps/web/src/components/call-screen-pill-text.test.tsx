@@ -409,6 +409,70 @@ describe('le journal, DANS la pilule, à la place des sous-titres (P6)', () => {
   });
 });
 
+/**
+ * #17964 (point 3, tranché le 2026-11-13 ; P6, P9b.3, P13.9) — « Journal » referme le journal :
+ * tant qu'il est ouvert DANS la pilule, le bouton « Journal » reste au pied, en disque blanc
+ * plein, et le retoucher rend ce que le journal remplaçait — les sous-titres s'ils sont allumés,
+ * sinon la pilule de base. (…) n'est pas ouvert pour autant : il reste un disque au repos.
+ */
+describe('#17964 — « Journal » en disque blanc referme le journal dans la pilule', () => {
+  for (const [shape, overrides] of [
+    ['en duo', {}],
+    ['en groupe', group],
+  ] as const) {
+    test(`${shape} : journal ouvert, « Journal » reste au pied, pressé, et (…) reste au repos (P9b.3, P13.9)`, async () => {
+      const view = mount(overrides);
+      await view.settle();
+      view.press('[data-call-captions-journal]');
+      await view.settle();
+      const toggle = inPill(view, '[data-call-journal-panel] [data-call-journal-toggle]');
+      expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+      /* Loi 1, P6 : actif, il porte le pictogramme du Journal — la page et ses lignes du rail « L'appel » (`list.bullet.rectangle` d'iOS). */
+      expect([...(toggle?.querySelectorAll('svg[aria-hidden="true"] path') ?? [])].map((path) => path.getAttribute('d'))).toEqual(['M6 3.5h9l3 3v14H6z', 'M9 9.5h6M9 13h6M9 16.5h3.5']);
+      expect(toggle?.closest('[aria-hidden="true"], [inert]')).toBeNull();
+      expect(inPill(view, '[data-call-journal-panel] [data-panel-close]')).toBeNull();
+      expect(inPill(view, '[data-call-journal-panel] [data-panel-back]')).toBeNull();
+      const more = inPill(view, '[data-call-more]');
+      expect(more?.getAttribute('aria-expanded')).toBe('false');
+      expect(more?.getAttribute('aria-label')).toBe('Afficher les actions');
+      expect(more?.style.background).not.toBe('var(--color-on-media)');
+      view.done();
+    });
+
+    test(`${shape} : retoucher « Journal » rend les sous-titres, et leur « Journal » reprend le focus`, async () => {
+      const view = mount(overrides);
+      await view.settle();
+      view.press('[data-call-captions-journal]');
+      await view.settle();
+      view.find('[data-call-journal-toggle]')?.focus();
+      view.press('[data-call-journal-toggle]');
+      await view.settle();
+      expect(view.layer()).toBe('idle');
+      expect(view.find('[data-call-journal-panel]')).toBeNull();
+      expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
+      expect(document.activeElement?.hasAttribute('data-call-captions-journal')).toBe(true);
+      view.done();
+    });
+  }
+
+  test('sous-titres éteints : retoucher « Journal » rend la pilule de base, et le focus à (…)', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    view.press('[data-call-control="journal"]');
+    await view.settle();
+    expect(inPill(view, '[data-call-journal-toggle]')?.getAttribute('aria-pressed')).toBe('true');
+    view.press('[data-call-journal-toggle]');
+    await view.settle();
+    expect(view.layer()).toBe('idle');
+    expect(view.find('[data-call-journal-panel]')).toBeNull();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect(document.activeElement?.hasAttribute('data-call-more')).toBe(true);
+    view.done();
+  });
+});
+
 describe('un toucher range la pilule : UN SEUL verre se resserre autour des sous-titres (loi 11, G1.3)', () => {
   test('la pilule rangée ne s’efface pas et ne laisse pas un second verre : le même verre garde les sous-titres, lus et annoncés', async () => {
     const view = mount();
@@ -528,6 +592,7 @@ describe('#17933 — en groupe, la bande des sous-titres est celle du duo', () =
       const journal = panel?.querySelector('[data-call-captions-journal]');
       expect(journal?.tagName).toBe('BUTTON');
       expect(journal?.textContent).toBe('Journal');
+      expect(journal?.querySelector('svg')).toBeNull();
       expect(panel?.querySelector('.rounded-card, .glass-call, .glass-call-prominent')).toBeNull();
       expect(panel?.className).not.toContain('glass-call');
       view.done();

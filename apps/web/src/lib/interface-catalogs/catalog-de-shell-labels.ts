@@ -224,7 +224,6 @@ const deShellLabels = {
   'hashtag.loading': 'Beiträge werden geladen',
   'hashtag.error': 'Dieser Hashtag konnte nicht geladen werden',
   'hashtag.empty.title': 'Nichts unter #{tag}',
-  'hashtag.empty.body': 'Kein sichtbarer Beitrag trägt diesen Hashtag.',
   'hashtag.loadMore': 'Mehr laden',
   'hashtag.loadingMore': 'Wird geladen…',
 } satisfies ShellLabelsCatalogSlice;

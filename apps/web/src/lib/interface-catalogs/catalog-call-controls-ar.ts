@@ -41,7 +41,6 @@ const ar = {
   'callControls.incoming.silent': 'لن يراك {name} ولن يسمعك',
   'callControls.incoming.noVideo': 'بدون فيديو',
   'callControls.incoming.answer': 'رد',
-  'callControls.incoming.me': 'أنا',
   'callControls.error.invite': 'تعذّرت دعوة {name}',
   'callControls.error.mute': 'تعذّر كتم ميكروفون {name}',
   'callControls.error.remove': 'تعذّرت إزالة {name}',

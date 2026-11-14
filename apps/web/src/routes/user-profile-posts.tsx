@@ -121,7 +121,7 @@ export function ProfilePostsPanel({
       ) : /* UNE ABSENCE NE S'AFFIRME QUE QUAND PLUS RIEN N'EST À LIRE (revue
             #7083) — miroir de `ProfileUserPostsList.swift:497-510`. */
       showsEmptyState({ visible: models.length, filter, hasNextPage: posts.hasNextPage }) ? (
-        <ProfilePostsEmpty language={language} filter={filter} />
+        <ProfilePostsEmpty language={language} filter={filter} onClear={() => setFilter('all')} />
       ) : models.length === 0 ? null : (
         models.map((model, index) => (
           <FeedPostCard

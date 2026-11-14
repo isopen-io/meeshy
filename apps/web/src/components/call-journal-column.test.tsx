@@ -152,6 +152,8 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(title?.className).toContain('text-start');
     expect(title?.className).not.toContain('text-center');
     expect(title?.nextElementSibling?.hasAttribute('data-call-journal-view')).toBe(true);
+    /* #17964 : le pied « Journal » est celui de la pilule ; la colonne garde le sien, au pied de la bande, qui la referme. */
+    expect(column?.querySelector('[data-call-journal-toggle], [data-call-journal-foot]')).toBeNull();
     view.press('[data-call-more]');
     view.press('[data-call-control="journal"]');
     expect(view.find(COLUMN)).toBeNull();

@@ -254,6 +254,11 @@
   transition: scale 0.3s ease-out;
 }
 
+/* Sa plaque « Vous » (#17982) se contre-met à l'échelle au même tempo : elle garde sa taille de petite vignette. */
+[data-call-corner-frame] [data-call-tile-plate] {
+  transition: scale 0.3s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-call-chrome='hidden'] [data-call-stow],
   [data-call-stow][data-call-stowed],

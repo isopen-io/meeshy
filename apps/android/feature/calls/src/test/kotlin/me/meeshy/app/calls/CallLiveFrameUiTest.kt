@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performSemanticsAction

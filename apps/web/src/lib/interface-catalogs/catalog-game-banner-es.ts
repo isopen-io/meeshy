@@ -64,8 +64,6 @@ const es = {
   'game.banner.link.meesh': '{count} Meeshes en tu legado',
   'game.banner.glory': 'gloria {glory}',
   'game.banner.glory_missing': '{glory} de gloria hasta {rank}',
-  'game.banner.level_short': '{n} hasta el {level}',
-  'game.banner.glory_short': '{n} hasta {rank}',
   'game.banner.glory_top': 'gloria {n}',
   'game.league.name.quartz': 'Cuarzo',
   'game.league.name.ambre': 'Ámbar',
