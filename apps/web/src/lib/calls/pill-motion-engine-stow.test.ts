@@ -25,6 +25,9 @@ describe('fadeStow — sous « Réduire les animations »', () => {
     Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value(this: Element) { faded.push(this.id); return {}; } });
     fadeStow(root, true);
     expect(faded.sort()).toEqual(['header', 'menu']);
+    faded.length = 0;
+    fadeStow(root.querySelector<HTMLElement>('#place') as HTMLElement, true);
+    expect(faded).toEqual(['place']);
     if (real_animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
     else Object.defineProperty(HTMLElement.prototype, 'animate', real_animate);
     window.matchMedia = real;

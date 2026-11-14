@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Arrives } from '@/components/call-arrives';
-import { HeldSwap } from '@/lib/calls/use-pill-motion';
+import { HeldSwap, useStowFade } from '@/lib/calls/use-pill-motion';
 import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
@@ -40,7 +40,7 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
-import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import type { CornerSight } from '@/components/call-duo-corner';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
@@ -122,6 +122,9 @@ export const CALL_GRID_KIT: CallGridKit = {
   useStageFlip,
   Arrives,
   HeldSwap,
+  useStowFade,
+  CameraOff: CameraOffStage,
+  isDrag: isTileDrag,
 };
 
 /**
@@ -147,8 +150,9 @@ type StageProps = {
   readonly language: InterfaceLanguage;
   readonly choice: SpotlightChoice;
   readonly onChoose: (choice: SpotlightChoice) => void;
-  readonly immersive: boolean;
-  readonly onToggleImmersive: () => void;
+  /** Le plein écran de la scène (loi 15, #17961) : un duo n'a qu'un niveau, la une d'un groupe en a deux pour un écran partagé. */
+  readonly fullScreen: FullScreenLevel;
+  readonly onFullScreen: (level: FullScreenLevel) => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
   /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
@@ -196,8 +200,10 @@ function PeerMuted() {
 }
 
 
-function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
+function DuoScreen({ call, language, fullScreen, onFullScreen }: Pick<StageProps, 'call' | 'language' | 'fullScreen' | 'onFullScreen'>) {
   const sharer = screenSharer(call.members);
+  const immersive = fullScreen !== 'off';
+  const onToggleImmersive = () => onFullScreen(immersive ? 'off' : 'full');
   const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
   const screen = <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />;
@@ -383,7 +389,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
  * qu'il contient : passer de 2 × 3 à 3 × 2 ne le redimensionne pas, aucune boucle. Avant sa première mesure
  * (rendu serveur, scène encore sans taille), la fenêtre.
  */
-function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
+function GroupStage({ call, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const viewport = useCallViewport();
   const [frame, measured] = useElementSize();
@@ -398,8 +404,8 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
           self={{ id: me?.id ?? null, stream: selfCameraStream(call), cameraOn: selfCameraShown(call), mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
           onChoose={onChoose}
-          immersive={immersive}
-          onToggleImmersive={onToggleImmersive}
+          fullScreen={fullScreen}
+          onFullScreen={onFullScreen}
           moderation={moderation}
           language={language}
           chromeVisible={chromeVisible}
@@ -413,9 +419,9 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
-  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} immersive={immersive} onToggleImmersive={onToggleImmersive} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
-  if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
+export function CallStage({ call, layout, language, choice, onChoose, fullScreen, onFullScreen, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} fullScreen={fullScreen} onFullScreen={onFullScreen} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
+  if (layout === 'screen') return <DuoScreen call={call} language={language} fullScreen={fullScreen} onFullScreen={onFullScreen} />;
   if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;
 }

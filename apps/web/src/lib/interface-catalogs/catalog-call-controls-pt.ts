@@ -81,6 +81,8 @@ const pt = {
   'callControls.selfTile.corner.bottom-left': 'Minha miniatura: embaixo à esquerda',
   'callControls.selfTile.corner.bottom-right': 'Minha miniatura: embaixo à direita',
   'callControls.spotlight.self': 'Destacar minha imagem',
+  'callControls.fullscreen.total.enter': 'Ecrã inteiro total',
+  'callControls.fullscreen.total.exit': 'Sair do ecrã inteiro total',
   'callControls.screenZoom.hint': 'Tela compartilhada: pince ou Ctrl + roda para ampliar, toque duas vezes para vê-la inteira',
   'callControls.liveFrame.proposal': '{name} sugere a moldura «{frame}»',
   'callControls.liveFrame.proposal.anonymous': 'A outra pessoa sugere a moldura «{frame}»',

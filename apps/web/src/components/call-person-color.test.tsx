@@ -1,20 +1,15 @@
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { shellPipStore } from '@/lib/calls/call-pip';
 import { personTint, speakerColor } from '@/lib/calls/call-speaker-color';
-import { callStore, type ActiveCall, type CallMember, type WaitingCall } from '@/lib/calls/call-store';
+import type { ActiveCall, CallMember, WaitingCall } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
-import { createActMounter } from '@/test-support/act-mount';
-import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallButton } from './call-glass-button';
 import { CallPeopleSheet } from './call-people-sheet';
-import { CallPipLayer } from './call-pip-window';
+import { PipStage } from './call-pip-window';
 import { Portrait } from './call-portrait';
 import { CallWaitingBanner } from './call-waiting-banner';
 
@@ -25,26 +20,8 @@ import { CallWaitingBanner } from './call-waiting-banner';
  * portent toutes. Sans identifiant connu, le nom reste le seul repère.
  */
 
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
-  ensureHappyDomRegistered();
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
-});
-
-afterAll(async () => {
-  await act(async () => {});
-  delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await releaseHappyDomIfRegistered();
-});
-
-const mounter = createActMounter();
-
-afterEach(() => {
-  mounter.unmountAll();
-  callStore.setState({ call: null });
-  shellPipStore.setState({ active: false });
 });
 
 const gradient = (color: string) => `linear-gradient(135deg, ${color}`;
@@ -104,20 +81,14 @@ describe('la couleur d’une personne (loi 18.2)', () => {
     expect(renderToStaticMarkup(<CallWaitingBanner waiting={waiting()} />)).toContain(gradient(colorForName('Awa Ndiaye')));
   });
 
-  test('la fenêtre flottante peint l’autre à sa couleur, comme l’écran d’appel', async () => {
-    callStore.setState({ call: call({ peerKey: 'u-amina' }) });
-    shellPipStore.setState({ active: true });
-    const host = await mounter.mount(<CallPipLayer />);
-    expect(host.innerHTML).toContain(gradient(speakerColor('u-amina', 'Amina Diallo')));
+  test('la fenêtre flottante peint l’autre à sa couleur, comme l’écran d’appel', () => {
+    expect(renderToStaticMarkup(<PipStage call={call({ peerKey: 'u-amina' })} />)).toContain(gradient(speakerColor('u-amina', 'Amina Diallo')));
+    expect(renderToStaticMarkup(<PipStage call={call({ peerKey: null, isGroup: true, title: 'Équipe' })} />)).toContain(gradient(colorForName('Équipe')));
   });
 
   test('la feuille « Ajouter » peint chaque participant à sa couleur d’identifiant', () => {
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    act(() => root.render(<CallPeopleSheet Button={CallButton} id="people" closeGlyph="x" language="fr" members={[member('u-awa', 'Awa')]} onClose={() => undefined} renderModeration={() => null} />));
-    expect(host.querySelector('[data-call-person="u-awa"]')?.innerHTML).toContain(gradient(speakerColor('u-awa', 'Awa')));
-    act(() => root.unmount());
-    host.remove();
+    const html = renderToStaticMarkup(<CallPeopleSheet Button={CallButton} id="people" closeGlyph="x" language="fr" members={[member('u-awa', 'Awa')]} onClose={() => undefined} renderModeration={() => null} />);
+    const row = /data-call-person="u-awa"[\s\S]*?<\/li>/.exec(html)?.[0] ?? '';
+    expect(row).toContain(gradient(speakerColor('u-awa', 'Awa')));
   });
 });

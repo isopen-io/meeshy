@@ -13,6 +13,7 @@ import { hasVideo } from './call-view';
  *   qu'il a congédié : dès que ce partage finit (ou qu'un autre commence), la
  *   règle reprend la main — sans effet à rejouer, parce que le choix NOMME le
  *   partage qu'il écarte.
+ * - Un partage qui COMMENCE fait tomber tout choix (#18180) : `choiceAfterSharerChange`.
  *
  * - MA tuile passe à la une comme les autres (#9098, `featuresLocal` sur
  *   iOS) : `featured` nul dit « moi », tous les pairs passent en bandeau.
@@ -63,8 +64,21 @@ export function resolveSpotlight(input: SpotlightInput): SpotlightView | null {
 }
 
 /**
- * « Grille » ne vaut que pour le partage qu'il a congédié (`GroupCallSpotlight.choice(afterSharerChangedFrom:)`
- * d'iOS) : dès que le partageur change — il s'arrête, un autre partage, ou le même qui repart —, le choix
- * tombe et la règle reprend la main. Un membre épinglé ou ma tuile restent.
+ * Un partage qui COMMENCE prend la une, même après un choix manuel (#18180, loi 15) : tout choix tombe. « Grille » ne
+ * vaut que pour le partage qu'il a congédié : sa fin rend aussi la main à la règle. Une vignette épinglée, ou ma tuile,
+ * restent quand le partage FINIT — miroir de `GroupCallSpotlight.choiceAfterSharerChanged` d'Android (#18248).
  */
-export const choiceAfterSharerChange = (choice: SpotlightChoice, from: string | null, to: string | null): SpotlightChoice => (from !== to && choice?.kind === 'grid' ? null : choice);
+export const choiceAfterSharerChange = (choice: SpotlightChoice, from: string | null, to: string | null): SpotlightChoice => {
+  if (from === to) return choice;
+  if (to !== null || choice?.kind === 'grid') return null;
+  return choice;
+};
+
+/**
+ * Les niveaux du plein écran de la une (loi 15, #17961) : `full` (U2) range l'en-tête, la pilule et les bannières et
+ * GARDE les caméras des autres ; `total` (U2b) ne montre que l'écran partagé — miroir de `GroupCallFullScreenLevel`.
+ */
+export type FullScreenLevel = 'off' | 'full' | 'total';
+
+/** Le niveau total est réservé à un écran partagé : une caméra à la une n'en a qu'un (#17961, 2026-11-14). */
+export const fullScreenLevelFor = (level: FullScreenLevel, screen: boolean): FullScreenLevel => (level === 'total' && !screen ? 'full' : level);

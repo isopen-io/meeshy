@@ -1,14 +1,12 @@
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-
 import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
-import { useScreenZoom } from '@/components/use-screen-zoom';
-import type { HeldSwap } from '@/lib/calls/use-pill-motion';
-import type { PeerSpeechRing } from '@/components/call-camera-off';
+import { useScreenZoom, type ScreenZoomLayer } from '@/components/use-screen-zoom';
+import type { HeldSwap, useStowFade } from '@/lib/calls/use-pill-motion';
+import type { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
@@ -16,8 +14,8 @@ import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
-import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
+import type { autoSharer, FullScreenLevel, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, spotlightCapsuleButtons, type SpotlightButton } from '@/lib/calls/call-spotlight-gestures';
 import { edgeFadeMask } from '@/lib/calls/call-row-keys';
 import type { CallMember } from '@/lib/calls/call-store';
 import { zoomLabel } from '@/lib/calls/camera-zoom';
@@ -42,9 +40,12 @@ const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => 
  *
  * Dès qu'un membre partage son écran, son ÉCRAN monte seul à la une, affiché
  * ENTIER (`contain` : rogner un écran en cache le texte), son portrait en
- * médaillon, sous « Écran de X ». Un choix manuel l'emporte ; la règle vit dans
- * `lib/calls/call-spotlight.ts`, le choix reste local. Le plein écran s'offre
- * sur toute tuile à la une (#9098). MA tuile passe à la une comme les autres,
+ * médaillon, sous « Écran de X » — même après un choix manuel (#18180), et le
+ * lecteur d'écran l'annonce. La règle vit dans `lib/calls/call-spotlight.ts`,
+ * le choix reste local. Le plein écran s'offre sur toute tuile à la une
+ * (#9098) ; un écran partagé en a DEUX niveaux (#17961) : le plein écran garde
+ * le bandeau des autres, un second appui passe au plein écran total, l'écran
+ * seul. Un toucher range la capsule et la puce vers le haut, et les rend. MA tuile passe à la une comme les autres,
  * les commandes de ma caméra en haut au centre (comme iOS), porte mon
  * micro coupé ET le zoom de ma caméra (#9182, `call-self-camera.tsx` —
  * pincer, Ctrl + molette, capsule sur le bord) ; un écran partagé à la une se
@@ -89,8 +90,14 @@ export type CallGridKit = {
   readonly useStageFlip: typeof useStageFlip;
   /** Ce qui arrive avec la une (la capsule) y entre en fondu, et repart de même (`leaving`), plus court sous « Réduire les animations » : rien n'apparaît ni ne disparaît d'un coup. */
   readonly Arrives: typeof Arrives;
-  /** Le bandeau des autres sort par son bord quand l'écran devient plein, et revient par lui (U2.10). */
+  /** Le bandeau des autres sort par son bord au plein écran total, et revient par lui (U2.10). */
   readonly HeldSwap: typeof HeldSwap;
+  /** La capsule et la puce rangées par le toucher (U2.4, U2.5) : leur fondu court sous « Réduire les animations ». */
+  readonly useStowFade: typeof useStowFade;
+  /** L'image d'une vignette cède à son avatar en fondu, et revient de même (loi 17.12) : la scène noire du duo. */
+  readonly CameraOff: typeof CameraOffStage;
+  /** La loi qui sépare un glissé d'un toucher, celle de ma vignette : zoomé, l'écran partagé se déplace au doigt (U2.7). */
+  readonly isDrag: ScreenZoomLayer['isDrag'];
 };
 
 export type CallGridProps = {
@@ -112,9 +119,12 @@ export type CallGridProps = {
   readonly selfZoom?: { readonly local: LocalZoom; readonly column: (capsule: ReactNode) => ReactNode } | null;
   readonly choice: SpotlightChoice;
   readonly onChoose: (choice: SpotlightChoice) => void;
-  /** Le plein écran de la tuile à la une : le bandeau et tout le reste s'effacent. */
-  readonly immersive: boolean;
-  readonly onToggleImmersive: () => void;
+  /**
+   * Le plein écran de la une (loi 15, #17961) : `full` range l'en-tête, la pilule et les bannières et GARDE le bandeau
+   * des autres ; `total` — un écran partagé seulement — ne montre que lui. La capsule monte ou descend d'un niveau.
+   */
+  readonly fullScreen: FullScreenLevel;
+  readonly onFullScreen: (level: FullScreenLevel) => void;
   readonly moderation: CallModeration | null;
   readonly language: InterfaceLanguage;
   /** Le chrome est-il affiché (#9183, `GroupStageTapRule.outcome(isChromeVisible:)` sur iOS). Par défaut visible : une scène sans chrome à gérer (témoins qui n'en parlent pas) garde l'ancien comportement. */
@@ -200,7 +210,11 @@ type TileProps = {
 function Tile({ kit, subject, held, onPress, label, portrait, press }: TileProps) {
   const body = (
     <>
-      {subject.video ? <HeldVideo held={held} subject={subject} /> : <kit.Portrait name={subject.name} avatar={subject.avatar} size={portrait} pulse={subject.ringing} presenceKey={subject.presenceKey} tint={subject.color} />}
+      {subject.ringing ? (
+        <kit.Portrait name={subject.name} avatar={subject.avatar} size={portrait} pulse presenceKey={subject.presenceKey} tint={subject.color} />
+      ) : (
+        <kit.CameraOff videoOn={subject.video} video={<HeldVideo held={held} subject={subject} />} name={subject.name} avatar={subject.avatar} presenceKey={subject.presenceKey} color={subject.color} speech={null} label={null} size={portrait} tile />
+      )}
       <CallTileNameplate name={subject.shown} muted={subject.muted} suffix={subject.suffix} />
     </>
   );
@@ -230,22 +244,33 @@ function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode 
   );
 }
 
-function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage }) {
+type SharedScreenProps = { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage; readonly stowed: boolean };
+
+/**
+ * L'ÉCRAN PARTAGÉ À LA UNE (U2) — entier (`contain`), zoomé par UN calque GPU (`translate3d + scale`, écrit une fois par
+ * image pendant le geste, U2.7) et, zoomé, déplacé au doigt, borné à son cadre ; deux tapes le rendent entier et le
+ * recentrent. Le médaillon de qui partage porte SA couleur (loi 18.2). La puce « Écran de X · 2× » se range et revient
+ * avec la capsule, vers le haut (U2.5).
+ */
+function SharedScreen({ kit, member, stream, language, stowed }: SharedScreenProps) {
   const title = translate(language, 'call.screen.of', { name: member.name });
-  const { zoom, pinching, handlers } = useScreenZoom();
+  const layer = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLSpanElement>(null);
+  const { zoom, transform, handlers } = useScreenZoom({ layer, isDrag: kit.isDrag });
+  kit.useStowFade(chip, stowed);
   const hint = useId();
   return (
-    <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
-      <div className={`absolute inset-0 ${pinching ? '' : 'transition-transform duration-200 motion-reduce:transition-none'}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})` }}>
+    <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} data-call-owns-drag={zoom > 1 ? '' : undefined} {...handlers}>
+      <div ref={layer} className="absolute inset-0 transition-transform duration-200 motion-reduce:transition-none" style={{ transform, transformOrigin: 'center' }} data-call-screen-layer="">
         <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={title} member={member.userId} />
       </div>
       <span id={hint} hidden>
         {translateCallControls(language, 'callControls.screenZoom.hint')}
       </span>
       <div className="absolute bottom-2 right-2 overflow-hidden rounded-full border-2" style={{ borderColor: kit.colorOf(member.userId) }} data-call-screen-medallion="">
-        <PeerAvatar presenceKey={member.userId} initials={initialsOf(member.name)} color={colorForName(member.name)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
+        <PeerAvatar presenceKey={member.userId} initials={initialsOf(member.name)} color={kit.colorOf(member.userId)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
       </div>
-      <span className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" role="status" data-call-screen-banner="">
+      <span ref={chip} className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" aria-hidden={stowed ? true : undefined} data-call-stow="top" data-call-chrome-keep="" data-call-stowed={stowed ? '' : undefined} data-call-screen-banner="">
         <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={14} />
         <span className="truncate">{title}</span>
         {zoom > 1 ? <span aria-hidden="true">{` · ${zoomLabel(zoom, language)}`}</span> : null}
@@ -266,6 +291,16 @@ const stripBox = (strip: Filmstrip): CSSProperties => {
 };
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
+/** Le bandeau des autres, qui sort par son bord au plein écran total (U2b) et revient par lui (U2.10) ; il reste au plein écran (U2). */
+function OthersStrip({ kit, side, hidden, children }: { readonly kit: CallGridKit; readonly side: Filmstrip; readonly hidden: boolean; readonly children: ReactNode }) {
+  const axis = side === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2';
+  return (
+    <kit.HeldSwap value={hidden ? null : side} shape={side === 'bottom' ? 'bottom' : 'end'} className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${axis}`} style={stripBox(side)} data-call-strip="" data-call-strip-edge={side}>
+      {() => children}
+    </kit.HeldSwap>
+  );
+}
 
 /** Les `<video>` tenus par identité : celui d'un membre parti se retire, tous partent avec la grille. */
 function useHeldVideos(members: readonly CallMember[]) {
@@ -297,51 +332,71 @@ type CapsuleProps = {
   readonly kit: CallGridKit;
   readonly language: InterfaceLanguage;
   readonly screen: boolean;
-  readonly full: boolean;
+  readonly level: FullScreenLevel;
   readonly leaving: boolean;
-  readonly onGrid: () => void;
-  readonly onToggleImmersive: () => void;
+  readonly stowed: boolean;
+  readonly onButton: (button: SpotlightButton) => void;
   readonly children: ReactNode;
+};
+
+type CapsuleFace = { readonly label: string; readonly glyph: 'squaresFour' | 'cornersOut' | 'cornersIn'; readonly data: Readonly<Record<`data-${string}`, string>>; readonly pressed?: boolean };
+
+const capsuleFace = (button: SpotlightButton, language: InterfaceLanguage): CapsuleFace => {
+  if (button === 'grid') return { label: translate(language, 'call.spotlight.back'), glyph: 'squaresFour', data: { 'data-call-grid-back': '' } };
+  if (button === 'full-screen') return { label: translate(language, 'call.fullscreen.enter'), glyph: 'cornersOut', data: { 'data-call-fullscreen': 'enter' }, pressed: false };
+  if (button === 'total-full-screen') return { label: translateCallControls(language, 'callControls.fullscreen.total.enter'), glyph: 'cornersOut', data: { 'data-call-fullscreen': 'total' }, pressed: false };
+  if (button === 'exit-full-screen') return { label: translate(language, 'call.fullscreen.exit'), glyph: 'cornersIn', data: { 'data-call-fullscreen': 'exit' }, pressed: true };
+  return { label: translateCallControls(language, 'callControls.fullscreen.total.exit'), glyph: 'cornersIn', data: { 'data-call-fullscreen': 'exit-total' }, pressed: true };
 };
 
 /**
  * La capsule « Revenir à la grille · Plein écran » : en place avec la une, ou — `leaving` — retenue au retour à la
- * grille le temps de son fondu (U1.12). Plein écran, elle échappe au rangement du chrome (U2.4).
+ * grille le temps de son fondu (U1.12). Plein écran, elle porte le niveau suivant et la descente d'un niveau (U2, U2b).
+ * Un toucher la range vers le HAUT avec l'en-tête et la rend avec lui (U1.10), en plein écran aussi (U2.4) : son
+ * rangement est le SIEN (`data-call-stowed`), car le plein écran range l'en-tête sans elle.
  */
-function SpotlightCapsule({ kit, language, screen, full, leaving, onGrid, onToggleImmersive, children }: CapsuleProps) {
+function SpotlightCapsule({ kit, language, screen, level, leaving, stowed, onButton, children }: CapsuleProps) {
+  const place = useRef<HTMLDivElement>(null);
+  kit.useStowFade(place, stowed);
   return (
-    <div className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} data-call-chrome-fade="" {...(full ? { 'data-call-chrome-keep': '' } : {})}>
+    <div ref={place} className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} style={STOW_CLEARANCE} aria-hidden={stowed ? true : undefined} data-call-stow="top" data-call-chrome-keep="" data-call-stowed={stowed ? '' : undefined} data-call-spotlight-place="">
       <kit.Arrives leaving={leaving} prominent={screen} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
-        <kit.Button label={translate(language, 'call.spotlight.back')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={onGrid} size={44} data={{ 'data-call-grid-back': '' }} />
-        <kit.Button
-          label={translate(language, full ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
-          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[full ? 'cornersIn' : 'cornersOut']} size={20} />}
-          onPress={onToggleImmersive}
-          pressed={full}
-          size={44}
-          data={{ 'data-call-fullscreen': '' }}
-        />
+        {spotlightCapsuleButtons(level, screen).map((button) => {
+          const face = capsuleFace(button, language);
+          return <kit.Button key={button} label={face.label} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[face.glyph]} size={20} />} onPress={() => onButton(button)} size={44} data={face.data} {...(face.pressed === undefined ? {} : { pressed: face.pressed })} />;
+        })}
       </kit.Arrives>
       {children}
     </div>
   );
 }
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false, compact = false }: CallGridProps) {
+/** Qui partage son écran, dit au lecteur d'écran dans une zone vive TOUJOURS montée (U2.1, #18180) : un partage qui commence s'annonce, une fois. */
+function ShareAnnounce({ sharer, language }: { readonly sharer: CallMember | null; readonly language: InterfaceLanguage }) {
+  return (
+    <span role="status" className="sr-only" data-call-share-announce="">
+      {sharer === null ? '' : translate(language, 'call.screen.peerSharing', { name: sharer.name })}
+    </span>
+  );
+}
+
+const STOW_CLEARANCE = { '--stow-clearance': '3.75rem' } as CSSProperties;
+
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, fullScreen, onFullScreen, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false, compact = false }: CallGridProps) {
   const press = kit.usePressedChrome(chromeVisible);
   /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
   const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = kit.resolveSpotlight({ members, choice, remoteStreams });
   const held = useHeldVideos(members);
-  const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
+  const shown = useRef<{ readonly screen: boolean; readonly level: FullScreenLevel } | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const fullscreen = immersive;
-  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}|${compact}`);
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullScreen}|${landscape}|${compact}`);
   const mine = selfSubject(kit, self, language);
   const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
   const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
   const selfLabel = translateCallControls(language, 'callControls.spotlight.self');
+  const stowed = !chromeVisible;
 
   const gridScene = (ghost: ReactNode) => (
     <div className="relative grid min-h-[140px] w-full max-w-[1064px] mx-auto flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape, compact)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
@@ -360,14 +415,21 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
   );
 
   const sharer = kit.autoSharer(members, remoteStreams);
-  const capsuleOf = (screen: boolean, full: boolean, leaving: boolean, below: ReactNode = null) => (
-    <SpotlightCapsule kit={kit} language={language} screen={screen} full={full} leaving={leaving} onGrid={() => onChoose(chooseGrid(sharer?.userId ?? null))} onToggleImmersive={onToggleImmersive}>
-      {below}
-    </SpotlightCapsule>
-  );
-  if (view !== null) shown.current = { screen: view.screen, full: fullscreen };
+  const announce = <ShareAnnounce sharer={sharer} language={language} />;
+  const capsuleOf = (screen: boolean, level: FullScreenLevel, leaving: boolean, below: ReactNode = null) => {
+    const onButton = (button: SpotlightButton) => {
+      if (button === 'grid') onChoose(chooseGrid(sharer?.userId ?? null));
+      if (level !== 'off' || button !== 'grid') onFullScreen(fullScreenLevelAfter(button, level, screen));
+    };
+    return (
+      <SpotlightCapsule kit={kit} language={language} screen={screen} level={level} leaving={leaving} stowed={stowed} onButton={onButton}>
+        {below}
+      </SpotlightCapsule>
+    );
+  };
+  if (view !== null) shown.current = { screen: view.screen, level: fullScreen };
 
-  if (view === null) return <div ref={root} className="contents">{gridScene(shown.current === null ? null : capsuleOf(shown.current.screen, shown.current.full, true))}</div>;
+  if (view === null) return <div ref={root} className="contents">{gridScene(shown.current === null ? null : capsuleOf(shown.current.screen, shown.current.level, true))}{announce}</div>;
 
   const { featured, others, screen } = view;
   const moderated = featured !== null && moderation !== null && moderation.canModerate(featured.userId);
@@ -382,24 +444,21 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               <Slot {...tile(mine, null, selfLabel, 96)} />
             </div>
           ) : screen ? (
-            <SharedScreen key={featured.userId} kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} />
+            <SharedScreen key={featured.userId} kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} stowed={stowed} />
           ) : (
             <div className="grid min-h-0 min-w-0 flex-1">
               <Slot {...tile(peer(featured), null, featured.name, 96)} />
             </div>
           )}
           {featured === null && selfZoom !== null ? <SelfZoom zoom={selfZoom} stream={self.cameraOn ? self.stream : null} language={language} /> : null}
-          {capsuleOf(screen, fullscreen, false, moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null)}
+          {capsuleOf(screen, fullScreen, false, moderated && featured !== null && fullScreen === 'off' ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null)}
         </div>
-        <kit.HeldSwap value={fullscreen ? null : side} shape={side === 'bottom' ? 'bottom' : 'end'} className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${side === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(side)} data-call-strip="" data-call-strip-edge={side}>
-          {() => (
-            <>
-              {peerTiles}
-              {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
-            </>
-          )}
-        </kit.HeldSwap>
+        <OthersStrip kit={kit} side={side} hidden={fullScreenHidesStrip(fullScreen)}>
+          {peerTiles}
+          {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
+        </OthersStrip>
       </div>
+      {announce}
     </div>
   );
 }

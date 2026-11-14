@@ -40,6 +40,9 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
 
 const sharing = { members: [member('u-a', 'Awa'), member('u-k', 'Kofi', { screenSharing: true })], remoteStreams: { 'u-k': liveVideo }, choice: null };
 
+/** Monté, l'écran partagé pose son flux sur un vrai `<video>` : un vrai `MediaStream` du DOM (`srcObject` refuse tout autre objet). */
+const sharingLive = () => ({ ...sharing, remoteStreams: { 'u-k': Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] }) } });
+
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   await loadPillMotion();
@@ -143,12 +146,13 @@ describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)
 describe('CallGrid — le bandeau des autres sort par son bord et revient par lui (U2.10)', () => {
   test('plein écran total (U2b, #17961) : le bandeau quitte la mise en page à l’instant et repart vers le bas, tuiles comprises, sans prendre le doigt', async () => {
     const motion = recordAnimations();
-    const view = mount(sharing);
+    const live = sharingLive();
+    const view = mount(live);
     expect(view.host.querySelector('[data-call-strip]')?.getAttribute('data-call-strip-edge')).toBe('bottom');
-    view.render({ ...sharing, fullScreen: 'full' });
+    view.render({ ...live, fullScreen: 'full' });
     expect(view.host.querySelector('[data-call-strip]')?.hasAttribute('data-leaving')).toBe(false);
     motion.played.length = 0;
-    view.render({ ...sharing, fullScreen: 'total' });
+    view.render({ ...live, fullScreen: 'total' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.hasAttribute('data-leaving')).toBe(true);
     expect(strip?.hasAttribute('inert')).toBe(true);
@@ -165,10 +169,11 @@ describe('CallGrid — le bandeau des autres sort par son bord et revient par lu
 
   test('en paysage, la colonne repart par le bord de fin de l’écran, à gauche en droite à gauche', async () => {
     const motion = recordAnimations();
-    const view = mount({ ...sharing, landscape: true });
+    const live = sharingLive();
+    const view = mount({ ...live, landscape: true });
     motion.played.length = 0;
     view.host.style.direction = 'rtl';
-    view.render({ ...sharing, landscape: true, fullScreen: 'total' });
+    view.render({ ...live, landscape: true, fullScreen: 'total' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.getAttribute('data-call-strip-edge')).toBe('trailing');
     expect(motion.played.find((move) => move.element === strip)?.frames[1]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
@@ -178,10 +183,11 @@ describe('CallGrid — le bandeau des autres sort par son bord et revient par lu
 
   test('quitter le plein écran total : le bandeau revient par son bord', () => {
     const motion = recordAnimations();
-    const view = mount({ ...sharing, fullScreen: 'total' });
+    const live = sharingLive();
+    const view = mount({ ...live, fullScreen: 'total' });
     expect(view.host.querySelector('[data-call-strip]')).toBeNull();
     motion.played.length = 0;
-    view.render({ ...sharing, fullScreen: 'full' });
+    view.render({ ...live, fullScreen: 'full' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.hasAttribute('data-leaving')).toBe(false);
     expect(motion.played.find((move) => move.element === strip)?.frames[0]).toEqual({ opacity: 0, transform: 'translateY(100%)' });
