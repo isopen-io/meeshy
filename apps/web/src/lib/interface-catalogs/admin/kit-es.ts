@@ -162,7 +162,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Solo el creador',
 
   'admin.enum.encryption.e2ee': 'Cifrada de extremo a extremo',
-  'admin.enum.encryption.e2ee.explain': 'De extremo a extremo: el servidor ni lee ni traduce los mensajes.',
+  'admin.enum.encryption.e2ee.explain': 'El servidor ni lee ni traduce los mensajes: cada dispositivo los traduce, y este cifrado nunca se retira.',
   'admin.enum.encryption.server': 'Cifrada en el servidor',
   'admin.enum.encryption.hybrid': 'Híbrida',
   'admin.enum.encryption.none': 'Sin cifrar',

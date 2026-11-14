@@ -169,8 +169,14 @@ describe('les repères restent visibles (règle 7)', () => {
     expect(entry('fr', 'admin.security.events.intro')).toBe('Connexions et changements de sécurité du compte, du plus récent au plus ancien.');
   });
 
-  test('Chiffrement de la conversation : la rangée dit ce que le serveur ne fait pas', () => {
-    expect(entry('fr', 'admin.enum.encryption.e2ee.explain')).toBe('De bout en bout : le serveur ne lit pas les messages ni ne les traduit.');
+  test('Chiffrement de bout en bout : la rangée dit que la traduction reste (sur l’appareil) et que le mode ne se retire pas', () => {
+    const said: Record<AdminLanguage, RegExp> = {
+      fr: /appareil.*ne se retire jamais/,
+      en: /device.*can never be turned off/,
+      es: /dispositivo.*nunca se retira/,
+      pt: /dispositivo.*nunca é removida/,
+    };
+    for (const language of ADMIN_LANGUAGES) expect({ language, text: entry(language, 'admin.enum.encryption.e2ee.explain') ?? '' }).toEqual({ language, text: expect.stringMatching(said[language]) });
   });
 
   test('Lien de partage : les permissions disent ce qu’un invité peut faire', () => {

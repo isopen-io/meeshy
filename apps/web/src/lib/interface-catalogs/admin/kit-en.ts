@@ -162,7 +162,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Creator only',
 
   'admin.enum.encryption.e2ee': 'End-to-end encrypted',
-  'admin.enum.encryption.e2ee.explain': 'End-to-end: the server neither reads nor translates the messages.',
+  'admin.enum.encryption.e2ee.explain': 'The server neither reads nor translates the messages: each device translates them, and this encryption can never be turned off.',
   'admin.enum.encryption.server': 'Encrypted on the server',
   'admin.enum.encryption.hybrid': 'Hybrid',
   'admin.enum.encryption.none': 'Not encrypted',

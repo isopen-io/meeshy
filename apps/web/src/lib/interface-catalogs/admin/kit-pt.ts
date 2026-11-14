@@ -162,7 +162,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Somente o criador',
 
   'admin.enum.encryption.e2ee': 'Criptografada de ponta a ponta',
-  'admin.enum.encryption.e2ee.explain': 'Ponta a ponta: o servidor não lê nem traduz as mensagens.',
+  'admin.enum.encryption.e2ee.explain': 'O servidor não lê nem traduz as mensagens: cada dispositivo as traduz, e esta criptografia nunca é removida.',
   'admin.enum.encryption.server': 'Criptografada no servidor',
   'admin.enum.encryption.hybrid': 'Híbrida',
   'admin.enum.encryption.none': 'Sem criptografia',

@@ -165,7 +165,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Créateur seulement',
 
   'admin.enum.encryption.e2ee': 'Chiffrée de bout en bout',
-  'admin.enum.encryption.e2ee.explain': 'De bout en bout : le serveur ne lit pas les messages ni ne les traduit.',
+  'admin.enum.encryption.e2ee.explain': 'Le serveur ne lit ni ne traduit les messages : chaque appareil les traduit, et ce chiffrement ne se retire jamais.',
   'admin.enum.encryption.server': 'Chiffrée sur le serveur',
   'admin.enum.encryption.hybrid': 'Hybride',
   'admin.enum.encryption.none': 'Non chiffrée',
