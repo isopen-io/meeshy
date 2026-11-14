@@ -1,12 +1,8 @@
 package me.meeshy.ui.component.bubble
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,8 +53,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.ui.component.focal.ElectedMetrics
 import me.meeshy.ui.component.focal.FocalElectedFrame
@@ -118,12 +112,11 @@ public fun FocalFlatRow(
         isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
-    val reduceMotion = LocalReduceMotion.current
-    AnimatedVisibility(
+    EphemeralBurnVisibility(
         visible = !renderKind.isEphemeralExpired,
+        isOutgoing = content.isOutgoing,
+        seedKey = content.messageId,
         modifier = modifier,
-        enter = EnterTransition.None,
-        exit = meeshyExit(reduceMotion, fadeOut() + shrinkVertically()),
     ) {
         Box(
             modifier = Modifier
