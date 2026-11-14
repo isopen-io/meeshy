@@ -32,6 +32,9 @@ struct SummaryProtectionEntry: Identifiable, Equatable {
     /// disparaît d'un coup d'une section intitulée « Ce qui va disparaître »
     /// serait la seule à ne pas le montrer.
     let isBurning: Bool
+    /// Le côté de la bulle d'origine : le vent par défaut de la combustion
+    /// souffle vers le bord extérieur, et le résumé le reproduit (#17938).
+    let isMe: Bool
 }
 
 enum LivingSummaryProtections {
@@ -51,7 +54,8 @@ enum LivingSummaryProtections {
                 id: message.id,
                 senderDisplayName: message.senderName ?? message.senderUsername ?? message.senderId,
                 descriptor: descriptor,
-                isBurning: message.isBurning
+                isBurning: message.isBurning,
+                isMe: message.isMe
             )
         }
     }
@@ -98,7 +102,7 @@ struct SummaryProtectionsView: View {
                                       : Color.black.opacity(FocalMetrics.SurfaceTint.lightFill))
                         )
                         .accessibilityElement(children: .combine)
-                        .ephemeralBurn(isBurning: entry.isBurning)
+                        .ephemeralBurn(isBurning: entry.isBurning, side: .init(isMine: entry.isMe))
                     }
                 }
             }
