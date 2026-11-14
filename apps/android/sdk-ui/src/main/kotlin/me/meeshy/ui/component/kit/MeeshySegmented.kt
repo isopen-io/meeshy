@@ -321,8 +321,9 @@ private fun <T> Segment(
 /**
  * La répartition de la planche (parts égales, plancher au texte, repli en rangées), comme le `Layout` iOS : chaque
  * segment d'une rangée en prend toute la hauteur, les rangées se touchent, et une option seule plus large que la piste y
- * est bornée (son texte passe à la ligne plutôt que de déborder). Les places s'écrivent de gauche à droite :
- * `placeRelative` les retourne en RTL.
+ * est bornée (son texte passe à la ligne plutôt que de déborder). La taille rendue respecte les contraintes de l'hôte :
+ * un hôte trop bas voit le contrôle déborder vers le bas, jamais recentré sur son voisin du dessus. Les places s'écrivent
+ * de gauche à droite : `placeRelative` les retourne en RTL.
  */
 private fun MeasureScope.placeSegments(
     measurables: List<Measurable>,
@@ -346,9 +347,9 @@ private fun MeasureScope.placeSegments(
         acc.append(measured, height, inset)
     }
     val width = if (constraints.hasBoundedWidth) constraints.maxWidth else (available + 2 * inset).roundToInt()
-    val height = placed.bottom + inset
     geometry.rects = placed.cells.sortedBy { it.index }.map { it.rect }
-    return layout(width, height) {
+    val height = (placed.bottom + inset).coerceIn(constraints.minHeight, constraints.maxHeight)
+    return layout(width.coerceIn(constraints.minWidth, constraints.maxWidth), height) {
         placed.cells.forEach { cell -> cell.placeable.placeRelative(cell.x, cell.y) }
     }
 }
