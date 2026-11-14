@@ -548,7 +548,7 @@
     <string name="story_voiceRecorder_stop">إيقاف التسجيل</string>
     <string name="story_voiceRecorder_title">التسجيل</string>
     <string name="talkie_header_announce_live">اتصال لاسلكي مباشر: صوتك يُسمع الآن</string>
-    <string name="talkie_header_announce_recorded">تعذّر الاتصال اللاسلكي: سيُرسل صوتك كرسالة صوتية</string>
+    <string name="talkie_header_announce_recorded">تعذّر الاتصال: أُرسل كرسالة صوتية.</string>
     <string name="talkie_header_announce_relayed">غير متصل: سيُعاد تشغيل صوتك عند عودته</string>
     <string name="talkie_header_badge_live">مباشر</string>
     <string name="talkie_header_badge_recorded">مسجّل</string>
@@ -556,7 +556,7 @@
     <string name="talkie_header_live">الاتصال اللاسلكي جارٍ</string>
     <string name="talkie_info_a11y">متى أستخدم جهاز اللاسلكي؟</string>
     <string name="talkie_send_connecting">جارٍ الاتصال…</string>
-    <string name="talkie_send_e2ee">جهاز اللاسلكي غير مشفّر تشفيرًا تامًا بين الطرفين: يبقى مغلقًا مع محادثة مشفّرة.</string>
+    <string name="talkie_send_e2ee">غير متاح في محادثة مشفّرة.</string>
     <string name="talkie_send_explain">اضغط مطولًا وتحدّث: يخرج صوتك مباشرةً لدى %1$s دون الحاجة إلى الرد.</string>
     <string name="talkie_send_failed">تعذّر إرسال جهاز اللاسلكي.</string>
     <string name="talkie_send_hold">اضغط مطولًا للتحدث</string>
@@ -568,7 +568,7 @@
     <string name="talkie_send_rate_limited">مداخلات كثيرة جدًا: أعد المحاولة بعد لحظة.</string>
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
-    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
+    <string name="talkie_send_voice">تعذّر الاتصال: أُرسل كرسالة صوتية.</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>

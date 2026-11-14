@@ -528,7 +528,7 @@
     <string name="story_voiceRecorder_stop">Aufnahme beenden</string>
     <string name="story_voiceRecorder_title">Aufnahme</string>
     <string name="talkie_header_announce_live">Walkie-Talkie live: Deine Stimme wird jetzt gehört</string>
-    <string name="talkie_header_announce_recorded">Das Walkie-Talkie kommt nicht durch: Deine Stimme wird als Sprachnachricht gesendet</string>
+    <string name="talkie_header_announce_recorded">Kommt nicht durch: als Sprachnachricht gesendet.</string>
     <string name="talkie_header_announce_relayed">Offline: Deine Stimme wird abgespielt, sobald die Person zurück ist</string>
     <string name="talkie_header_badge_live">Live</string>
     <string name="talkie_header_badge_recorded">Aufnahme</string>
@@ -536,7 +536,7 @@
     <string name="talkie_header_live">Walkie-Talkie läuft</string>
     <string name="talkie_info_a11y">Wann das Walkie-Talkie nutzen?</string>
     <string name="talkie_send_connecting">Verbinde…</string>
-    <string name="talkie_send_e2ee">Das Walkie-Talkie ist nicht Ende-zu-Ende-verschlüsselt: Bei einer verschlüsselten Unterhaltung bleibt es geschlossen.</string>
+    <string name="talkie_send_e2ee">In einer verschlüsselten Unterhaltung nicht verfügbar.</string>
     <string name="talkie_send_explain">Gedrückt halten und sprechen: Deine Stimme ist bei %1$s sofort zu hören, ohne Abheben.</string>
     <string name="talkie_send_failed">Das Walkie-Talkie konnte nicht gesendet werden.</string>
     <string name="talkie_send_hold">Zum Sprechen halten</string>
@@ -548,7 +548,7 @@
     <string name="talkie_send_rate_limited">Zu viele Durchsagen: Versuche es gleich noch einmal.</string>
     <string name="talkie_send_recording_copy">Sprachnachricht wird aufgenommen…</string>
     <string name="talkie_send_talking">Du sprichst mit %1$s…</string>
-    <string name="talkie_send_voice">Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht.</string>
+    <string name="talkie_send_voice">Kommt nicht durch: als Sprachnachricht gesendet.</string>
     <string name="talkie_send_waking">%1$s wird geweckt…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>
     <string name="time_lastSeen_dateAt">Am %1$s um %2$s gesehen</string>

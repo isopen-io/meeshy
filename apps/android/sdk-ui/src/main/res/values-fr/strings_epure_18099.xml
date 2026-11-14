@@ -9,8 +9,8 @@
     <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même verrouillé.</string>
     <string name="bring_silent_question">Et si son téléphone est en silencieux ?</string>
     <string name="bring_silent_note">Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.</string>
-    <string name="talkie_info_note">Réservé à vos très proches, en cas d’extrême urgence.</string>
-    <string name="talkie_send_voice_copy">Accès d’urgence indisponible : un message vocal part dans votre dernière conversation avec cette personne.</string>
+    <string name="talkie_info_note">Réservé à vos très proches, en cas d’extrême urgence. Il n’est pas chiffré de bout en bout : il reste fermé dans une conversation chiffrée. S’il ne passe pas, un message vocal part dans votre dernière conversation avec cette personne.</string>
+    <string name="talkie_send_voice_copy">Envoyé en message vocal à la place.</string>
     <string name="voiceProfile_processing_description">Traitement en cours, quelques minutes.</string>
     <string name="voiceProfile_recording_description">Lisez le texte à voix haute : 3 échantillons de 10 secondes au moins.</string>
     <string name="audio_consent_notice_message">Activez le consentement vocal pour transcrire et traduire vos audios.</string>

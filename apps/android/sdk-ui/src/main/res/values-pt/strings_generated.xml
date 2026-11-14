@@ -533,7 +533,7 @@
     <string name="story_voiceRecorder_stop">Parar a gravação</string>
     <string name="story_voiceRecorder_title">Gravação</string>
     <string name="talkie_header_announce_live">Talkie ao vivo: sua voz está sendo ouvida agora</string>
-    <string name="talkie_header_announce_recorded">O talkie não passou: sua voz será enviada como mensagem de voz</string>
+    <string name="talkie_header_announce_recorded">Não passou: enviado como mensagem de voz.</string>
     <string name="talkie_header_announce_relayed">Offline: sua voz será reproduzida quando a pessoa voltar</string>
     <string name="talkie_header_badge_live">Ao vivo</string>
     <string name="talkie_header_badge_recorded">Gravado</string>
@@ -541,7 +541,7 @@
     <string name="talkie_header_live">Talkie em andamento</string>
     <string name="talkie_info_a11y">Quando usar o walkie-talkie?</string>
     <string name="talkie_send_connecting">Conectando…</string>
-    <string name="talkie_send_e2ee">O walkie-talkie não é criptografado de ponta a ponta: fica fechado com uma conversa criptografada.</string>
+    <string name="talkie_send_e2ee">Indisponível em uma conversa criptografada.</string>
     <string name="talkie_send_explain">Segure e fale: sua voz sai diretamente do lado de %1$s, sem atender.</string>
     <string name="talkie_send_failed">O walkie-talkie não pôde ser enviado.</string>
     <string name="talkie_send_hold">Segure para falar</string>
@@ -553,7 +553,7 @@
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
-    <string name="talkie_send_voice">O walkie-talkie não passa agora: envie uma mensagem de voz.</string>
+    <string name="talkie_send_voice">Não passou: enviado como mensagem de voz.</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>
     <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>

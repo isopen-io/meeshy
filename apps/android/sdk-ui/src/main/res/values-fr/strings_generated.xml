@@ -533,7 +533,7 @@
     <string name="story_voiceRecorder_stop">Arrêter l\'enregistrement</string>
     <string name="story_voiceRecorder_title">Enregistrement</string>
     <string name="talkie_header_announce_live">Talkie en direct : votre voix est entendue maintenant</string>
-    <string name="talkie_header_announce_recorded">Le talkie ne passe pas : votre voix part en message vocal</string>
+    <string name="talkie_header_announce_recorded">Ne passe pas : envoyé en message vocal.</string>
     <string name="talkie_header_announce_relayed">Hors ligne : votre voix lui sera rejouée à son retour</string>
     <string name="talkie_header_badge_live">En direct</string>
     <string name="talkie_header_badge_recorded">Enregistré</string>
@@ -541,7 +541,7 @@
     <string name="talkie_header_live">Talkie en cours</string>
     <string name="talkie_info_a11y">Quand utiliser le talkie ?</string>
     <string name="talkie_send_connecting">Connexion…</string>
-    <string name="talkie_send_e2ee">Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée.</string>
+    <string name="talkie_send_e2ee">Indisponible dans une conversation chiffrée.</string>
     <string name="talkie_send_explain">Maintenez et parlez : votre voix sort directement chez %1$s, sans décrocher.</string>
     <string name="talkie_send_failed">Le talkie n’a pas pu partir.</string>
     <string name="talkie_send_hold">Maintenir pour parler</string>
@@ -553,7 +553,7 @@
     <string name="talkie_send_rate_limited">Trop de prises de parole : réessayez dans un instant.</string>
     <string name="talkie_send_recording_copy">Enregistrement du message vocal…</string>
     <string name="talkie_send_talking">Vous parlez à %1$s…</string>
-    <string name="talkie_send_voice">Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.</string>
+    <string name="talkie_send_voice">Ne passe pas : envoyé en message vocal.</string>
     <string name="talkie_send_waking">Réveil de %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>
     <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>

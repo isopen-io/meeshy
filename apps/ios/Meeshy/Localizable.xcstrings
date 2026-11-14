@@ -202135,43 +202135,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر الاتصال اللاسلكي: سيُرسل صوتك كرسالة صوتية"
+            "value": "تعذّر الاتصال: أُرسل كرسالة صوتية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Walkie-Talkie kommt nicht durch: Deine Stimme wird als Sprachnachricht gesendet"
+            "value": "Kommt nicht durch: als Sprachnachricht gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The talkie can't get through: your voice will be sent as a voice message"
+            "value": "Can’t get through: sent as a voice message."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El talkie no pasa: tu voz se enviará como mensaje de voz"
+            "value": "No pasa: enviado como mensaje de voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le talkie ne passe pas : votre voix part en message vocal"
+            "value": "Ne passe pas : envoyé en message vocal."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il talkie non passa: la tua voce partirà come messaggio vocale"
+            "value": "Non passa: inviato come messaggio vocale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O talkie não passou: sua voz será enviada como mensagem de voz"
+            "value": "Não passou: enviado como mensagem de voz."
           }
         }
       }
@@ -335579,43 +335579,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك."
+            "value": "تعذّر الاتصال: أُرسل كرسالة صوتية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht."
+            "value": "Kommt nicht durch: als Sprachnachricht gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The walkie-talkie can’t get through right now: send a voice message instead."
+            "value": "Can’t get through: sent as a voice message."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El walkie-talkie no pasa ahora mismo: envía un mensaje de voz."
+            "value": "No pasa: enviado como mensaje de voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal."
+            "value": "Ne passe pas : envoyé en message vocal."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il walkie-talkie ora non passa: invia un messaggio vocale."
+            "value": "Non passa: inviato come messaggio vocale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O walkie-talkie não passa agora: envie uma mensagem de voz."
+            "value": "Não passou: enviado como mensagem de voz."
           }
         }
       }
@@ -335861,43 +335861,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهاز اللاسلكي غير مشفّر تشفيرًا تامًا بين الطرفين: يبقى مغلقًا مع محادثة مشفّرة."
+            "value": "غير متاح في محادثة مشفّرة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Walkie-Talkie ist nicht Ende-zu-Ende-verschlüsselt: Bei einer verschlüsselten Unterhaltung bleibt es geschlossen."
+            "value": "In einer verschlüsselten Unterhaltung nicht verfügbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The walkie-talkie is not end-to-end encrypted: it stays closed with an encrypted conversation."
+            "value": "Not available in an encrypted conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El walkie-talkie no está cifrado de extremo a extremo: sigue cerrado con una conversación cifrada."
+            "value": "No disponible en una conversación cifrada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée."
+            "value": "Indisponible dans une conversation chiffrée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il walkie-talkie non è cifrato end-to-end: resta chiuso con una conversazione cifrata."
+            "value": "Non disponibile in una conversazione cifrata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O walkie-talkie não é criptografado de ponta a ponta: fica fechado com uma conversa criptografada."
+            "value": "Indisponível em uma conversa criptografada."
           }
         }
       }

@@ -238,7 +238,7 @@ nonisolated enum TalkieHeaderWording {
         case .relayed:
             String(localized: "talkie.header.announce.relayed", defaultValue: "Hors ligne : votre voix lui sera rejouée à son retour", bundle: .main)
         case .recorded:
-            String(localized: "talkie.header.announce.recorded", defaultValue: "Le talkie ne passe pas : votre voix part en message vocal", bundle: .main)
+            String(localized: "talkie.header.announce.recorded", defaultValue: "Ne passe pas : envoyé en message vocal.", bundle: .main)
         }
     }
 

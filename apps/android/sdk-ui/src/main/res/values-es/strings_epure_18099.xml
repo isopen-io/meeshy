@@ -9,8 +9,8 @@
     <string name="bring_explain">Para una urgencia extrema: su teléfono suena, incluso bloqueado.</string>
     <string name="bring_silent_question">¿Y si su teléfono está en silencio?</string>
     <string name="bring_silent_note">Según sus ajustes, un iPhone en silencio puede mostrar solo una alerta prioritaria.</string>
-    <string name="talkie_info_note">Solo para tus personas más cercanas, en caso de extrema urgencia.</string>
-    <string name="talkie_send_voice_copy">Acceso de urgencia no disponible: un mensaje de voz va a tu última conversación con esa persona.</string>
+    <string name="talkie_info_note">Solo para tus personas más cercanas, en caso de extrema urgencia. No está cifrado de extremo a extremo: sigue cerrado en una conversación cifrada. Si no pasa, un mensaje de voz va a tu última conversación con esa persona.</string>
+    <string name="talkie_send_voice_copy">Enviado como mensaje de voz.</string>
     <string name="voiceProfile_processing_description">Procesando, unos minutos.</string>
     <string name="voiceProfile_recording_description">Lee el texto en voz alta: al menos 3 muestras de 10 segundos.</string>
     <string name="audio_consent_notice_message">Activa el consentimiento de voz para transcribir y traducir tus audios.</string>

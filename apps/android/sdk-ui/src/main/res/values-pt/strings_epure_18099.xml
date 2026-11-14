@@ -9,8 +9,8 @@
     <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado.</string>
     <string name="bring_silent_question">E se o telefone dela estiver no silencioso?</string>
     <string name="bring_silent_note">Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário.</string>
-    <string name="talkie_info_note">Só para as pessoas mais próximas, em caso de extrema urgência.</string>
-    <string name="talkie_send_voice_copy">Acesso de emergência indisponível: uma mensagem de voz vai para a sua conversa mais recente com ela.</string>
+    <string name="talkie_info_note">Só para as pessoas mais próximas, em caso de extrema urgência. Não é criptografado de ponta a ponta: fica fechado em uma conversa criptografada. Se não passar, uma mensagem de voz vai para a sua conversa mais recente com ela.</string>
+    <string name="talkie_send_voice_copy">Enviado como mensagem de voz.</string>
     <string name="voiceProfile_processing_description">Processando, alguns minutos.</string>
     <string name="voiceProfile_recording_description">Leia o texto em voz alta: pelo menos 3 amostras de 10 segundos.</string>
     <string name="audio_consent_notice_message">Ative o consentimento de voz para transcrever e traduzir seus áudios.</string>
