@@ -26,7 +26,7 @@ class MeeshyLabeledSliderTest {
     // region La loi
 
     @Test
-    fun `la loi suit les vecteurs : bornage, calage, fraction, ajustement, tic et emission`() {
+    fun `la loi suit les vecteurs pour bornage, calage, fraction, ajustement, tic et emission`() {
         val rows = vectors().getValue("loi").jsonArray.map { it.jsonObject }
         assertThat(rows).isNotEmpty()
         rows.forEach { row ->
