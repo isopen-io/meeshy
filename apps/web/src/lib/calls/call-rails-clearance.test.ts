@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { NO_RAIL_CLEARANCE, RAIL_MIN_BAND, RAIL_TILE_GAP, railLength, railsClearance } from './call-rails-clearance';
-import { SCREEN_SELF_TILE, SELF_TILE_MARGIN, selfTileBox, selfTileFootprint, selfTileSize, type SelfTileCorner, type TileFootprint } from './call-self-tile';
+import { RAIL_YIELD, SCREEN_SELF_TILE, SELF_TILE_MARGIN, selfTileBox, selfTileFootprint, selfTileRailShift, selfTileSize, type SelfTileCorner, type TileFootprint } from './call-self-tile';
 
 /**
  * **UN RAIL NE MASQUE JAMAIS MA VIGNETTE** (#17327, #17429) — la planche P2
@@ -81,7 +81,7 @@ describe('railsClearance', () => {
 
   test('chaque coin, chaque taille, trois écrans : le rail de son côté ne recouvre jamais ma vignette', () => {
     const corners: readonly SelfTileCorner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-    for (const viewport of [phone, small, landscape]) {
+    for (const viewport of [phone, small]) {
       for (const scale of [1, 2, 3] as const) {
         for (const corner of corners) {
           const mine = tile(corner, viewport, scale);
@@ -103,17 +103,70 @@ describe('railsClearance', () => {
     expect(railSpan(small, clearance.trailing, lengths.trailing).bottom - railSpan(small, clearance.trailing, lengths.trailing).top).toBeGreaterThanOrEqual(RAIL_MIN_BAND);
   });
 
-  test('en paysage, ma vignette couchée est plus basse que haute : le rail tient encore sous elle (L1.5)', () => {
-    const mine = tile('top-right', landscapeRoomy);
-    const clearance = railsClearance({ tile: mine, viewport: landscapeRoomy, rtl: false, lengths });
-    expect(clearance.trailing).toEqual({ top: mine.y + mine.height - 56 + RAIL_TILE_GAP, bottom: 0, inline: 0 });
+  test('L2.8 (#17965) — en paysage, le rail reste à son BORD, centré sur toute sa hauteur : c’est ma vignette qui lui cède le coin', () => {
+    for (const viewport of [landscapeRoomy, landscape]) {
+      for (const corner of ['top-right', 'top-left', 'bottom-right', 'bottom-left'] as const) {
+        expect(railsClearance({ tile: tile(corner, viewport), viewport, rtl: false, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+        expect(railsClearance({ tile: tile(corner, viewport), viewport, rtl: true, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+      }
+    }
   });
 
-  test('en paysage court, sans bande utile sous ma vignette, le rail se pose À CÔTÉ d’elle et s’arrête au-dessus de la pilule', () => {
-    const mine = tile('top-right', landscape);
-    const clearance = railsClearance({ tile: mine, viewport: landscape, rtl: false, lengths });
-    expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
+  test('un écran debout trop court pour une bande utile garde le rail À CÔTÉ de ma vignette, au-dessus de la pilule (l’ancien recours, hors paysage)', () => {
+    const shortPortrait = { width: 400, height: 480 };
+    const mine = tile('top-right', shortPortrait);
+    const clearance = railsClearance({ tile: mine, viewport: shortPortrait, rtl: false, lengths });
+    expect(clearance.trailing).toEqual({ top: 0, bottom: 0, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
     expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
+  });
+});
+
+/**
+ * **L2.8 — EN PAYSAGE, MA VIGNETTE CÈDE LE COIN AU RAIL** (décision porteur du 2026-11-13, #17965 point 1 ; capture L2) :
+ * `(…)` ouvert, le rail reste à son bord et ma vignette se décale vers l'intérieur, contre lui ; les rails rangés,
+ * elle revient à son coin. Debout (P2), rien ne change : le rail se pose sous elle. La loi vit avec ma vignette
+ * (`selfTileRailShift`), le rail n'a qu'à rester au bord en paysage (`railsClearance`) : les deux lisent la MÊME forme de
+ * fenêtre, plus large que haute.
+ */
+describe('L2.8 — en paysage, ma vignette cède le coin au rail, et y revient', () => {
+  const wide = { width: 844, height: 390 };
+
+  test('le pas de côté : le rail (44 de bouton, 8 de verre de chaque côté) posé à 12 du bord, plus l’écart de 8, moins la marge de ma vignette', () => {
+    expect(SELF_TILE_MARGIN + RAIL_YIELD).toBe(12 + railLength(1) + RAIL_TILE_GAP);
+  });
+
+  test('(…) ouvert en paysage : un coin droit glisse vers la gauche, un coin gauche vers la droite ; rangés, aucun pas', () => {
+    expect(selfTileRailShift({ corner: 'top-right', viewport: wide, railsOpen: true })).toBe(-RAIL_YIELD);
+    expect(selfTileRailShift({ corner: 'bottom-right', viewport: wide, railsOpen: true })).toBe(-RAIL_YIELD);
+    expect(selfTileRailShift({ corner: 'top-left', viewport: wide, railsOpen: true })).toBe(RAIL_YIELD);
+    expect(selfTileRailShift({ corner: 'bottom-left', viewport: wide, railsOpen: true })).toBe(RAIL_YIELD);
+    expect(selfTileRailShift({ corner: 'top-right', viewport: wide, railsOpen: false })).toBe(0);
+  });
+
+  test('debout, ma vignette garde son coin : le rail se pose sous elle (P2)', () => {
+    expect(selfTileRailShift({ corner: 'top-right', viewport: phone, railsOpen: true })).toBe(0);
+  });
+
+  test('l’empreinte remise aux rails est la vignette décalée : aucun rail resté au bord ne la recouvre, dans aucun coin, aucune taille, aucun sens', () => {
+    const corners: readonly SelfTileCorner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+    for (const viewport of [wide, landscapeRoomy, landscape]) {
+      for (const scale of [1, 2, 3] as const) {
+        for (const corner of corners) {
+          const mine = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner, scale, viewport, topInset: 0, railsOpen: true });
+          const rested = tile(corner, viewport, scale);
+          expect(mine?.x).toBe(rested.x + selfTileRailShift({ corner, viewport, railsOpen: true }));
+          const railInner = 12 + railLength(1);
+          const clear = corner.endsWith('right') ? viewport.width - ((mine?.x ?? 0) + (mine?.width ?? 0)) >= railInner + RAIL_TILE_GAP : (mine?.x ?? 0) >= railInner + RAIL_TILE_GAP;
+          for (const rtl of [false, true]) expect({ viewport, scale, corner, rtl, clear, none: railsClearance({ tile: mine, viewport, rtl, lengths }) }).toEqual({ viewport, scale, corner, rtl, clear: true, none: { leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE } });
+        }
+      }
+    }
+  });
+
+  test('les rails rangés, l’empreinte reprend son coin', () => {
+    const base = { layout: 'video-duo' as const, cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right' as const, scale: 2 as const, viewport: wide, topInset: 0 };
+    expect(selfTileFootprint({ ...base, railsOpen: false })).toEqual(tile('top-right', wide));
+    expect(selfTileFootprint(base)).toEqual(tile('top-right', wide));
   });
 });
 
@@ -126,26 +179,23 @@ describe('railsClearance', () => {
 describe('W1 — colonne ouverte, le rail longe ma vignette depuis le bord de la scène', () => {
   const wideShort = { width: 1400, height: 240 };
   const column = 384;
+  const tallNarrow = { width: 900, height: 1000 };
 
-  test('en gauche à droite, ma vignette au coin de fin : le rail de fin se pose à côté d’elle, sans la largeur de la colonne', () => {
-    const mine = tile('top-right', wideShort, 2, column);
-    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: false, lengths });
-    expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
-    expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
+  test('L2.8 — fenêtre couchée, colonne ouverte : le rail de fin reste au bord de la scène réduite, ma vignette lui cède le coin', () => {
+    for (const rtl of [false, true]) {
+      for (const corner of ['top-right', 'top-left'] as const) {
+        expect(railsClearance({ tile: tile(corner, wideShort, 2, column), viewport: wideShort, inset: column, rtl, lengths })).toEqual({ leading: NO_RAIL_CLEARANCE, trailing: NO_RAIL_CLEARANCE });
+      }
+    }
+    const mine = selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: 2, viewport: wideShort, topInset: 0, bleed: column, railsOpen: true });
+    expect(mine?.x).toBe(tile('top-right', wideShort, 2, column).x - RAIL_YIELD);
   });
 
-  test('en droite à gauche, ma vignette au coin de fin (haut-gauche, contre la colonne) : idem, côté fin', () => {
-    const mine = tile('top-left', wideShort, 2, column);
-    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: true, lengths });
-    expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
+  test('fenêtre debout, colonne ouverte : le rail de fin se pose sous ma vignette, depuis le bord de la scène réduite', () => {
+    const mine = tile('top-right', tallNarrow, 2, column);
+    const clearance = railsClearance({ tile: mine, viewport: tallNarrow, inset: column, rtl: false, lengths });
+    expect(clearance.trailing).toEqual({ top: mine.y + mine.height - 56 + RAIL_TILE_GAP, bottom: 0, inline: 0 });
     expect(clearance.leading).toEqual(NO_RAIL_CLEARANCE);
-  });
-
-  test('en droite à gauche, ma vignette posée au coin de début (haut-droite, loin de la colonne) : le rail de début s’en écarte d’autant', () => {
-    const mine = tile('top-right', wideShort, 2, column);
-    const clearance = railsClearance({ tile: mine, viewport: wideShort, inset: column, rtl: true, lengths });
-    expect(clearance.leading).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });
-    expect(clearance.trailing).toEqual(NO_RAIL_CLEARANCE);
   });
 
   test('selfTileFootprint remet ma vignette où la scène réduite la pose, et l’écran partagé aussi', () => {

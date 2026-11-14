@@ -12,6 +12,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 import { CallIncomingAnswer } from './call-incoming-answer';
+import { CallTileNameplate } from './call-tile-nameplate';
 import { CallScreen, loadColdCallViews } from './call-screen';
 
 const colorOf = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -99,6 +100,7 @@ const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = ne
       onDecline={() => void (counts.declined += 1)}
       onDeclineMessage={() => void (counts.messages += 1)}
       colorOf={colorOf}
+      Nameplate={CallTileNameplate}
     />,
   );
   return { ...view, accepted, counts };
@@ -149,13 +151,25 @@ describe('la barre de ce qui part en décrochant', () => {
     const view = answer(ringing());
     const mic = () => view.find('[data-call-incoming-mic]');
     expect(mic()?.getAttribute('aria-pressed')).toBe('false');
-    expect(mic()?.className).toContain('bg-media-fill');
+    expect(mic()?.className.split(' ')).toContain('glass-call-disc');
     view.press('[data-call-incoming-mic]');
     expect(mic()?.getAttribute('aria-pressed')).toBe('true');
-    expect(mic()?.className).not.toContain('bg-media-fill');
+    expect(mic()?.className.split(' ')).not.toContain('glass-call-disc');
     expect(mic()?.style.background).toBe('var(--color-on-media)');
     expect(mic()?.style.color).toBe('var(--ios-indigo-950)');
     expect(mic()?.getAttribute('aria-label')).toBe('Réactiver le micro');
+    view.done();
+  });
+
+  test('P17.13 — les deux bascules au repos sont le disque de verre dessiné des boutons d’un verre (`callButtonGlassTreatment`), jamais un fond uni ; sans flou à elles : la barre porte le seul flou', () => {
+    const view = answer(ringing());
+    view.press('[data-call-incoming-camera]');
+    for (const selector of ['[data-call-incoming-mic]', '[data-call-incoming-camera]']) {
+      const classes = view.find(selector)?.className.split(' ') ?? [];
+      expect(classes).toContain('glass-call-disc');
+      expect(classes).not.toContain('bg-media-fill');
+      expect(classes).not.toContain('glass-call');
+    }
     view.done();
   });
 
@@ -223,7 +237,8 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(tile).not.toBeNull();
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
     expect(tile?.style.borderColor).not.toBe('');
-    expect(tile?.querySelector('[data-call-incoming-self-label]')?.textContent).toBe('moi');
+    expect(tile?.querySelector('[data-call-tile-plate]')?.textContent).toBe('Vous');
+    expect(tile?.querySelector('[data-call-tile-plate]')?.className.split(' ')).toContain('glass-call');
     view.press('[data-call-incoming-camera]');
     expect(camera.readyState).toBe('ended');
     view.done();
