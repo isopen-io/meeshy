@@ -183,8 +183,8 @@ final class FloatingCallPillViewTests: XCTestCase {
     // La réduction/expansion entre le plein écran et la bannière est un MORPH
     // interne (contraction/étirement vers le haut), pas l'animation système du
     // fullScreenCover : les deux bascules de displayMode passent par
-    // withTransaction(disablesAnimations) et CallView porte le trio
-    // scale/opacité/coins (pipMorphProgress).
+    // withTransaction(disablesAnimations) et CallView porte l'échelle et
+    // l'opacité (pipMorphProgress, `CallPipMorphEffect`).
 
     func test_expandToFullScreen_usesMorphNotSystemCoverAnimation() throws {
         let source = try pillSource()
@@ -208,7 +208,7 @@ final class FloatingCallPillViewTests: XCTestCase {
         // `CallView+Header.swift` depuis le découpage.
         let source = try AppSourceGuard.callViewSource()
         XCTAssertTrue(
-            source.contains(".scaleEffect(pipMorphTarget.scale(at: pipMorphProgress), anchor: pipMorphTarget.anchor)"),
+            source.contains(".modifier(CallPipMorphEffect(target: pipMorphTarget, progress: $pipMorphProgress))"),
             "CallView must scale its root content toward the reduced call during the PiP " +
             "morph — the banner at the top, the bubble where it floats (P18.4)."
         )
@@ -772,7 +772,7 @@ final class CallParticipantVisualTests: XCTestCase {
     func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
         let src = try source()
         XCTAssertTrue(
-            src.contains("init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager)"),
+            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
             "The circular convenience initializer must stay so existing call sites " +
             "(pill 44pt, bubble circle tier) keep compiling unchanged."
         )

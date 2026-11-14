@@ -108,8 +108,8 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "P18.8 — le morph ne joue que sur la transformation et l'opacité : aucun rayon de coins animé."
         )
         let clip = try XCTUnwrap(
-            source.range(of: ".clipped()\n        .scaleEffect(pipMorphTarget"),
-            "Le morph PiP découpe sa racine, d'une découpe droite et constante, avant de la mettre à l'échelle."
+            source.range(of: ".modifier(CallPipMorphEffect("),
+            "Le morph PiP (`CallPipMorphEffect`) découpe sa racine, d'une découpe droite et constante, avant de la mettre à l'échelle."
         )
         let before = String(source[source.startIndex ..< clip.lowerBound])
         let ignore = try XCTUnwrap(
