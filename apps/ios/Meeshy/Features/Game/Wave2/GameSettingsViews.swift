@@ -28,6 +28,7 @@ struct GameSettingsScreen: View {
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
     @ObservedObject private var notificationPrefs: UserPreferencesManager
     let game: GameBlock
+    @State private var openNoteID: String?
 
     init(model: GameWave2Model, game: GameBlock, notificationPrefs: UserPreferencesManager = .shared) {
         self.model = model
@@ -49,8 +50,8 @@ struct GameSettingsScreen: View {
     // MARK: Les célébrations
 
     private var celebrations: some View {
-        GameCard(title: GameText.settingsCelebrationsTitle) {
-            GameNote(text: GameText.settingsCelebrationsBody)
+        GameCard {
+            GameNoteInfo(text: GameText.settingsCelebrationsBody, note: GameText.settingsCelebrationsNote, openNoteID: $openNoteID)
             GameSwitchRow(
                 label: GameText.settingsCelebrationsSwitch, isOn: prefs.prefs.celebrations,
                 identifier: "game.settings.celebrations"
@@ -65,7 +66,7 @@ struct GameSettingsScreen: View {
 
     private var hidden: some View {
         GameCard(title: GameText.settingsHiddenTitle) {
-            GameNote(text: GameText.settingsHiddenBody)
+            GameNoteInfo(text: GameText.settingsHiddenBody, note: GameText.settingsHiddenNote, openNoteID: $openNoteID)
             GameSwitchRow(
                 label: GameText.settingsHiddenSwitch, isOn: prefs.prefs.hidden,
                 disabled: (!model.isOnline && !prefs.prefs.hidden) || model.pending.hide, identifier: "game.settings.hidden"
@@ -85,8 +86,7 @@ struct GameSettingsScreen: View {
     /// (`notification.gameEnabled`, activé par défaut). Il suit le geste ordinaire des réglages : appliqué tout de suite,
     /// envoyé au serveur en arrière-plan par le gestionnaire de préférences.
     private var notifications: some View {
-        GameCard(title: GameText.settingsNotificationsTitle) {
-            GameNote(text: GameText.settingsNotificationsBody)
+        GameCard(title: GameText.settingsNotificationsTitle, note: GameText.settingsNotificationsNote) {
             GameSwitchRow(
                 label: GameText.settingsNotificationsSwitch, isOn: notificationPrefs.notification.gameEnabled,
                 identifier: "game.settings.notifications"
@@ -101,7 +101,7 @@ struct GameSettingsScreen: View {
 
     private func visibilityCard(_ visibility: GameVisibility) -> some View {
         GameCard(title: GameText.settingsVisibilityTitle) {
-            GameNote(text: GameText.settingsVisibilityBody)
+            GameNoteInfo(text: GameText.settingsVisibilityBody, note: GameText.settingsVisibilityNote, openNoteID: $openNoteID)
             picker(GameText.visibilityFieldRank, value: visibility.rank) { await model.setVisibility(rank: $0) }
             picker(GameText.visibilityFieldTreasury, value: visibility.treasury) { await model.setVisibility(treasury: $0) }
             picker(GameText.visibilityFieldShowcase, value: visibility.showcase) { await model.setVisibility(showcase: $0) }
@@ -148,7 +148,8 @@ struct GameSettingsScreen: View {
             GameNote(text: GameText.settingsFriendsLeagueBody)
             GameSwitchRow(
                 label: GameText.settingsFriendsLeagueSwitch, isOn: model.friendsLeagueOptedOut,
-                disabled: !model.isOnline || model.pending.friendsOptOut, identifier: "game.settings.friends-league"
+                disabled: !model.isOnline || model.pending.friendsOptOut,
+                spokenLabel: "\(GameText.settingsFriendsLeagueTitle), \(GameText.settingsFriendsLeagueSwitch)", identifier: "game.settings.friends-league"
             ) { on in
                 Task { await model.setFriendsLeagueOptOut(on) }
             }

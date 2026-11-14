@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 // MARK: - Ce que la vague 2 du jeu dit — league (suite de `GameText`, voir `GameWave2CopyCommon.swift`)
 
@@ -95,7 +96,14 @@ extension GameText {
 
     static var leagueCupBronze: String { String(localized: "game2.league.cup.bronze", defaultValue: "Coupe de bronze", bundle: .main) }
 
-    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Le classement des autres est figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct.", bundle: .main) }
+    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Classement figé chaque jour à 4 h", bundle: .main) }
+
+    static var leagueSnapshotNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game2.league.snapshot.question", defaultValue: "Pourquoi le classement est-il figé ?", bundle: .main),
+            text: String(localized: "game2.league.snapshot.note", defaultValue: "Personne ne voit qui joue en ce moment. Seule ta ligne est en direct.", bundle: .main)
+        )
+    }
 
     static var leagueMe: String { String(localized: "game2.league.me", defaultValue: "Toi", bundle: .main) }
 

@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Ce que disent les concepts de Progression (#9564)
 //
@@ -54,25 +55,29 @@ enum ConceptText {
         }
     }
 
-    /// Comment ça marche — UNE phrase. La carte la dit, la fiche la reprend à la suite du pourquoi.
-    static func how(_ concept: ProgressionConcept) -> String {
+    /// Comment ça marche — UNE phrase, rangée derrière le (i) de la fiche. Quatre concepts n'ont pas de phrase : ce que
+    /// `what` dit déjà (la frappe fige la lumière, la Flamme grandit chaque jour de geste, l'élan s'allume avec les
+    /// familles, le haut fait s'accomplit d'un coup) n'est pas redit — leur clé n'a plus de lecteur et n'existe plus.
+    static func how(_ concept: ProgressionConcept) -> String? {
         switch concept {
+        case .meesh, .flame, .elans, .succes: nil
         case .level: String(localized: "game.concept.level.how", defaultValue: "Tes étincelles nourrissent l’anneau : plein, ta lumière gagne un niveau.", bundle: .main)
         case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque vrai échange en fait jaillir : écrire, parler, publier, réagir.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Frapper une Meesh fige une part de ta lumière dans une pièce.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.how", defaultValue: "Frappes, nouveaux niveaux et hauts faits font grandir ta gloire.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.how", defaultValue: "Elle grandit d’un jour à chaque jour où tu fais un geste.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.how", defaultValue: "Trois actes par rêve. Quand ils sont réalisés, l’Offrande apparaît.", bundle: .main)
         case .league: String(localized: "game.concept.league.how", defaultValue: "Tes étincelles de la semaine font ta place ; les premiers montent.", bundle: .main)
         case .season: String(localized: "game.concept.season.how", defaultValue: "Chaque acte réalisé te fait avancer de quelques pas, de halte en halte.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Ta lumière redevient Étincelle et ta légende entre dans un nouvel Âge.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.how", defaultValue: "Fais des gestes de plusieurs familles ces jours-ci pour le déclencher.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.how", defaultValue: "Répète un geste : sa médaille change de matière, du cuivre au prisme.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.how", defaultValue: "Chaque palier atteint ouvre le suivant, un peu plus haut.", bundle: .main)
-        case .succes: String(localized: "game.concept.succes.how", defaultValue: "Il s’accomplit d’un coup, quand tu réunis ce qu’il demande.", bundle: .main)
         case .showcase: String(localized: "game.concept.showcase.how", defaultValue: "Chaque coupe s’y range toute seule. Tu choisis l’ordre et qui la voit.", bundle: .main)
         case .atlas: String(localized: "game.concept.atlas.how", defaultValue: "Envoie un message et reçois-en un dans une langue : le tampon se pose.", bundle: .main)
         }
+    }
+
+    /// Le (i) de « Comment ça marche ? » : sa question est son nom accessible, sa note la phrase `how`.
+    static func howNote(_ concept: ProgressionConcept) -> MeeshyInfoNote? {
+        how(concept).map { MeeshyInfoNote(question: ficheHow, text: $0) }
     }
 
     /// Le premier conseil de la fiche, sous « Comment en gagner ».
@@ -303,6 +308,8 @@ enum ConceptText {
     static var factYes: String { String(localized: "game.concept.fact.yes", defaultValue: "Oui", bundle: .main) }
 
     static var factNo: String { String(localized: "game.concept.fact.no", defaultValue: "Non", bundle: .main) }
+
+    static var ficheHow: String { String(localized: "game.fiche.how.question", defaultValue: "Comment ça marche ?", bundle: .main) }
 
     static var ficheWhat: String { String(localized: "game.fiche.what", defaultValue: "C’est quoi ?", bundle: .main) }
 

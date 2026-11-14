@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Ce que la vague 2 du jeu dit — collection (suite de `GameText`, voir `GameWave2CopyCommon.swift`)
 
@@ -144,6 +145,13 @@ extension GameText {
 
     static var showcaseVisibilityHint: String { String(localized: "game2.showcase.visibility_hint", defaultValue: "Un visiteur ne voit que le mois d’obtention, jamais la date exacte.", bundle: .main) }
 
+    static var showcaseVisibilityNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game2.showcase.visibility_question", defaultValue: "Qu’est-ce qu’un visiteur voit de mes trophées ?", bundle: .main),
+            text: showcaseVisibilityHint
+        )
+    }
+
     static var atlasTitle: String { String(localized: "game2.atlas.title", defaultValue: "Atlas des langues", bundle: .main) }
 
     static var atlasIntro: String { String(localized: "game2.atlas.intro", defaultValue: "Un tampon par langue vraiment échangée : un message envoyé, un reçu.", bundle: .main) }
@@ -170,7 +178,14 @@ extension GameText {
 
     static var atlasEmpty: String { String(localized: "game2.atlas.empty", defaultValue: "Pas encore de tampon : écris dans une autre langue.", bundle: .main) }
 
-    static var atlasPrivacy: String { String(localized: "game2.atlas.privacy", defaultValue: "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.", bundle: .main) }
+    static var atlasPrivacy: String { String(localized: "game2.atlas.privacy", defaultValue: "Ton Atlas est privé par défaut : une langue peut en dire long sur toi.", bundle: .main) }
+
+    static var atlasPrivacyNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game2.atlas.privacy.question", defaultValue: "Que garde le jeu de mes échanges ?", bundle: .main),
+            text: String(localized: "game2.atlas.privacy.note", defaultValue: "Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.", bundle: .main)
+        )
+    }
 
     static var atlasVisibility: String { String(localized: "game2.atlas.visibility", defaultValue: "Qui voit ton Atlas", bundle: .main) }
 
@@ -279,7 +294,10 @@ extension GameText {
         }
     }
 
-    static var constellationVisibility: String {
-        String(localized: "game.constellation.visibility", defaultValue: "Ton ciel et ses parures se montrent selon le réglage de tes trophées.", bundle: .main)
+    static var constellationVisibilityNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game.constellation.visibility.question", defaultValue: "Qui voit mon ciel ?", bundle: .main),
+            text: String(localized: "game.constellation.visibility", defaultValue: "Ton ciel et ses parures se montrent selon le réglage de tes trophées.", bundle: .main)
+        )
     }
 }

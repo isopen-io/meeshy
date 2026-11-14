@@ -233,6 +233,8 @@ struct GameSwitchRow: View {
     let label: String
     let isOn: Bool
     var disabled = false
+    /// Ce que lit le lecteur d'écran quand le libellé court ne se comprend pas hors de sa carte (« Me retirer »).
+    var spokenLabel: String?
     let identifier: String
     let onChange: (Bool) -> Void
 
@@ -243,6 +245,7 @@ struct GameSwitchRow: View {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
+                .accessibilityLabel(spokenLabel ?? label)
         }
         .tint(MeeshyColors.brandPrimary)
         .frame(minHeight: MeeshyControlSize.tapTarget)

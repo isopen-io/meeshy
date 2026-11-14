@@ -32585,6 +32585,53 @@
         }
       }
     },
+    "game.constellation.visibility.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يرى سمائي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer sieht meinen Himmel?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who sees my sky?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién ve mi cielo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui voit mon ciel ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi vede il mio cielo?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem vê meu céu?"
+          }
+        }
+      }
+    },
     "listening.category.browsing": {
       "extractionState": "manual",
       "localizations": {
@@ -277551,43 +277598,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الانسحاب من مبارزة الأصدقاء"
+            "value": "الانسحاب"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mich vom Turnier der Freunde zurückziehen"
+            "value": "Mich zurückziehen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opt out of the Friends’ Joust"
+            "value": "Opt out"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retirarme de la Justa de los amigos"
+            "value": "Retirarme"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Me retirer de la joute des amis"
+            "value": "Me retirer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ritirami dal Torneo degli amici"
+            "value": "Ritirami"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Me retirar do Torneio dos amigos"
+            "value": "Me retirar"
           }
         }
       }
@@ -279009,6 +279056,100 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
+            "value": "اختر من يرى رتبتك وإرثك وكؤوسك وأطلسك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle, wer Rang, Erbe, Trophäen und Atlas sieht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose who sees your rank, Legacy, trophies and Atlas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige quién ve tu rango, tu Legado, tus trofeos y tu Atlas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli chi vede rango, Eredità, trofei e Atlante"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha quem vê seu título, sua Herança, seus troféus e seu Atlas"
+          }
+        }
+      }
+    },
+    "game2.settings.visibility.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يرى إن كنت متصلًا؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer sieht, ob ich online bin?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who sees whether I am online?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién ve si estoy en línea?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui voit si je suis en ligne ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi vede se sono online?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem vê se estou online?"
+          }
+        }
+      }
+    },
+    "game2.settings.visibility.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
             "value": "خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب."
           }
         },
@@ -279291,6 +279432,100 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
+            "value": "يخفي اللعبة ويغلقها أمام الآخرين؛ لا يضيع شيء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blendet das Spiel aus und schließt es für andere; nichts geht verloren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hides the game and closes it to others; nothing is lost."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oculta el juego y lo cierra a los demás; no se pierde nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masque le jeu et le ferme aux autres ; rien n’est perdu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nasconde il gioco e lo chiude agli altri; non si perde nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esconde o jogo e o fecha para os outros; nada é perdido."
+          }
+        }
+      }
+    },
+    "game2.settings.hidden.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تغلق «اللعبة مخفية»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was schließt „Spiel ausgeblendet“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does “Hidden game” close?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cierra «Juego oculto»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qu’est-ce que « Jeu masqué » ferme ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Che cosa chiude «Gioco nascosto»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que o “Jogo oculto” fecha?"
+          }
+        }
+      }
+    },
+    "game2.settings.hidden.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
             "value": "يخفي اللعبة على هذا الجهاز، ويغلق كؤوسك ورتبتك وإرثك وأطلسك أمام الآخرين، ويخرجك من المبارزة العامة. تبقى الشرارات والكؤوس محفوظة."
           }
         },
@@ -279432,90 +279667,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بطاقات مي وميو في التقدّم. هذا الجهاز فقط."
+            "value": "تظهر بطاقات مي وميو في التقدّم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Karten von Mee und Meo unter Fortschritt. Nur dieses Gerät."
+            "value": "Die Karten von Mee und Meo erscheinen unter Fortschritt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee and Meo’s cards on Progress. This device only."
+            "value": "Mee and Meo’s cards show on Progress"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tarjetas de Mee y Meo en Progreso. Solo este dispositivo."
+            "value": "Las tarjetas de Mee y Meo se muestran en Progreso"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cartes de Mee et Meo sur Progression. Cet appareil seulement."
+            "value": "Les cartes de Mee et Meo s’affichent sur Progression"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Carte di Mee e Meo in Progressi. Solo questo dispositivo."
+            "value": "Le carte di Mee e Meo compaiono in Progressi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cartões de Mee e Meo em Progresso. Só este aparelho."
+            "value": "Os cartões de Mee e Meo aparecem em Progresso"
           }
         }
       }
     },
-    "game2.settings.celebrations.title": {
+    "game2.settings.celebrations.question": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مي وميو"
+            "value": "هل ينطبق هذا الإعداد على أجهزتي الأخرى؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee und Meo"
+            "value": "Gilt diese Einstellung auf meinen anderen Geräten?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee and Meo"
+            "value": "Does this setting apply on my other devices?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee y Meo"
+            "value": "¿Este ajuste vale en mis otros dispositivos?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee et Meo"
+            "value": "Ce réglage vaut-il sur mes autres appareils ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee e Meo"
+            "value": "Questa impostazione vale sugli altri miei dispositivi?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mee e Meo"
+            "value": "Este ajuste vale nos meus outros aparelhos?"
+          }
+        }
+      }
+    },
+    "game2.settings.celebrations.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا: ينطبق على هذا الجهاز فقط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nein: Sie gilt nur auf diesem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No: it applies to this device only."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No: vale solo en este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non : il vaut pour cet appareil seulement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No: vale solo su questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não: vale só neste aparelho."
           }
         }
       }
@@ -282863,43 +283145,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أطلسك خاص افتراضيًا: قد تكشف اللغة الكثير عنك. تحتفظ اللعبة باللغة والاتجاهين والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة."
+            "value": "أطلسك خاص افتراضيًا: قد تكشف اللغة الكثير عنك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Atlas ist standardmäßig privat: Eine Sprache kann viel über dich verraten. Das Spiel speichert die Sprache, beide Richtungen und das Datum — nie das Gegenüber oder die Unterhaltung."
+            "value": "Dein Atlas ist standardmäßig privat: Eine Sprache kann viel über dich verraten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Atlas is private by default: a language can say a lot about you. The game keeps the language, both directions and the date — never the other person or the conversation."
+            "value": "Your Atlas is private by default: a language can say a lot about you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu Atlas es privado por defecto: un idioma puede decir mucho de ti. El juego guarda el idioma, los dos sentidos y la fecha, nunca al interlocutor ni la conversación."
+            "value": "Tu Atlas es privado por defecto: un idioma puede decir mucho de ti."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation."
+            "value": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo Atlante è privato per impostazione predefinita: una lingua può dire molto di te. Il gioco conserva la lingua, i due sensi e la data — mai l’interlocutore né la conversazione."
+            "value": "Il tuo Atlante è privato per impostazione predefinita: una lingua può dire molto di te."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu Atlas é privado por padrão: um idioma pode dizer muito sobre você. O jogo guarda o idioma, os dois sentidos e a data — nunca o interlocutor nem a conversa."
+            "value": "Seu Atlas é privado por padrão: um idioma pode dizer muito sobre você."
+          }
+        }
+      }
+    },
+    "game2.atlas.privacy.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تحتفظ اللعبة من تبادلاتي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was speichert das Spiel von meinen Gesprächen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does the game keep of my exchanges?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué guarda el juego de mis intercambios?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que garde le jeu de mes échanges ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Che cosa conserva il gioco dei miei scambi?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que o jogo guarda das minhas trocas?"
+          }
+        }
+      }
+    },
+    "game2.atlas.privacy.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحتفظ اللعبة باللغة والاتجاهين والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Spiel speichert die Sprache, beide Richtungen und das Datum — nie das Gegenüber oder die Unterhaltung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The game keeps the language, both directions and the date — never the other person or the conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El juego guarda el idioma, los dos sentidos y la fecha, nunca al interlocutor ni la conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il gioco conserva la lingua, i due sensi e la data — mai l’interlocutore né la conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O jogo guarda o idioma, os dois sentidos e a data — nunca o interlocutor nem a conversa."
           }
         }
       }
@@ -283652,6 +284028,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Um visitante só vê o mês de obtenção, nunca a data exata."
+          }
+        }
+      }
+    },
+    "game2.showcase.visibility_question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يرى الزائر من كؤوسي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was sehen Besucher von meinen Trophäen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does a visitor see of my trophies?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué ve un visitante de mis trofeos?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qu’est-ce qu’un visiteur voit de mes trophées ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Che cosa vede un visitatore dei miei trofei?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que um visitante vê dos meus troféus?"
           }
         }
       }
@@ -287234,43 +287657,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُجمَّد ترتيب الآخرين كل يوم عند الساعة 4 صباحًا: لا أحد يرى من يلعب الآن. سطرك وحده مباشر."
+            "value": "الترتيب مجمّد كل يوم عند الساعة 4 صباحًا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Plätze der anderen werden täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live."
+            "value": "Rangliste täglich um 4 Uhr festgehalten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The others’ places are set every day at 4 a.m.: nobody sees who is playing right now. Only your own row is live."
+            "value": "Standings set every day at 4 a.m."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La clasificación de los demás se fija cada día a las 4 h: nadie ve quién está jugando ahora. Solo tu fila está en directo."
+            "value": "Clasificación fijada cada día a las 4 h"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le classement des autres est figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct."
+            "value": "Classement figé chaque jour à 4 h"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La classifica degli altri si fissa ogni giorno alle 4: nessuno vede chi sta giocando ora. Solo la tua riga è in diretta."
+            "value": "Classifica fissata ogni giorno alle 4"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A classificação dos outros se fixa todo dia às 4 h: ninguém vê quem está jogando agora. Só a sua linha é ao vivo."
+            "value": "Classificação fixada todo dia às 4 h"
+          }
+        }
+      }
+    },
+    "game2.league.snapshot.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا الترتيب مجمّد؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum ist die Rangliste festgehalten?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why are the standings frozen?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué está fijada la clasificación?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi le classement est-il figé ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché la classifica è fissata?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que a classificação está fixada?"
+          }
+        }
+      }
+    },
+    "game2.league.snapshot.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد يرى من يلعب الآن. سطرك وحده مباشر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niemand sieht, wer gerade spielt. Nur deine Zeile ist live."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nobody sees who is playing right now. Only your own row is live."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nadie ve quién está jugando ahora. Solo tu fila está en directo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personne ne voit qui joue en ce moment. Seule ta ligne est en direct."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno vede chi sta giocando ora. Solo la tua riga è in diretta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguém vê quem está jogando agora. Só a sua linha é ao vivo."
           }
         }
       }
@@ -290853,43 +291370,90 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils."
+            "value": "Au plus une par jour, sur tous tes appareils."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joust, journey: at most one a day, on all your devices."
+            "value": "At most one a day, on all your devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alianza, justa, viaje: como máximo una al día, en todos tus dispositivos."
+            "value": "Como máximo una al día, en todos tus dispositivos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bündnis, Turnier, Reise: höchstens eine pro Tag, auf allen deinen Geräten."
+            "value": "Höchstens eine pro Tag, auf allen deinen Geräten."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alleanza, torneo, viaggio: al massimo una al giorno, su tutti i tuoi dispositivi."
+            "value": "Al massimo una al giorno, su tutti i tuoi dispositivi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aliança, torneio, viagem: no máximo uma por dia, em todos os seus aparelhos."
+            "value": "No máximo uma por dia, em todos os seus aparelhos."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحالف، مبارزة، رحلة: إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
+            "value": "إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
+          }
+        }
+      }
+    },
+    "game2.settings.notifications.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كم إشعارًا ترسل اللعبة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Mitteilungen sendet das Spiel?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many notifications does the game send?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuántas notificaciones envía el juego?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combien de notifications le jeu envoie-t-il ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quante notifiche invia il gioco?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantas notificações o jogo envia?"
           }
         }
       }
@@ -290900,43 +291464,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notifications"
+            "value": "Alliance, joute, voyage"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notifications"
+            "value": "Alliance, joust, journey"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notificaciones"
+            "value": "Alianza, justa, viaje"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mitteilungen"
+            "value": "Bündnis, Turnier, Reise"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notifiche"
+            "value": "Alleanza, torneo, viaggio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notificações"
+            "value": "Aliança, torneio, viagem"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الإشعارات"
+            "value": "تحالف، مبارزة، رحلة"
           }
         }
       }
@@ -295500,53 +296064,6 @@
         }
       }
     },
-    "game.concept.meesh.how": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سكّ Meesh يصوغ جزءًا من نورك في قطعة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Meesh zu prägen bannt einen Teil deines Lichts in eine Münze."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minting a Meesh binds part of your light into a coin."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acuñar una Meesh fija una parte de tu luz en una moneda."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Frapper une Meesh fige une part de ta lumière dans une pièce."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coniare una Meesh fissa una parte della tua luce in una moneta."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cunhar uma Meesh cristaliza uma parte da sua luz numa moeda."
-          }
-        }
-      }
-    },
     "game.concept.meesh.tip.1": {
       "extractionState": "manual",
       "localizations": {
@@ -295966,53 +296483,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sua Chama mostra os seus dias seguidos, e ela alimenta seus sonhos."
-          }
-        }
-      }
-    },
-    "game.concept.flame.how": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ينمو يومًا عن كل يوم تقوم فيه بإجراء."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie wächst um einen Tag für jeden Tag, an dem du eine Aktion ausführst."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It grows by one day for each day you make a move."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crece un día por cada día en que haces un gesto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elle grandit d’un jour à chaque jour où tu fais un geste."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cresce di un giorno per ogni giorno in cui fai un gesto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ela cresce um dia a cada dia em que você faz um gesto."
           }
         }
       }
@@ -297145,53 +297615,6 @@
         }
       }
     },
-    "game.concept.elans.how": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قم بإجراءات من عدة فئات في هذه الأيام لتفعيله."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mach in diesen Tagen Aktionen aus mehreren Familien, um ihn auszulösen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Do actions from several families these days to trigger it."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Haz gestos de varias familias estos días para activarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fais des gestes de plusieurs familles ces jours-ci pour le déclencher."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fai gesti di più famiglie in questi giorni per attivarlo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faça gestos de várias famílias nestes dias para ativá-lo."
-          }
-        }
-      }
-    },
     "game.concept.elans.tip.1": {
       "extractionState": "manual",
       "localizations": {
@@ -297850,53 +298273,6 @@
         }
       }
     },
-    "game.concept.succes.how": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تتحقّق دفعة واحدة، حين تجمع ما تطلبه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie gelingt auf einmal, wenn du erfüllst, was sie verlangt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It is done in one go, when you gather what it asks for."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se logra de una vez, cuando reúnes lo que pide."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il s’accomplit d’un coup, quand tu réunis ce qu’il demande."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si compie in un colpo solo, quando riunisci ciò che chiede."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ela se cumpre de uma vez, quando você reúne o que ela pede."
-          }
-        }
-      }
-    },
     "game.concept.succes.tip.1": {
       "extractionState": "manual",
       "localizations": {
@@ -298504,6 +298880,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "O que é?"
+          }
+        }
+      }
+    },
+    "game.fiche.how.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف يعمل؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie funktioniert das?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How does it work?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo funciona?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment ça marche ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come funziona?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como funciona?"
           }
         }
       }
