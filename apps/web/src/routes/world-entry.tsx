@@ -320,8 +320,8 @@ export function WorldGuestEntry({
           <h1 id="world-name-title" className="mt-3 text-[28px] font-bold" style={{ color: 'var(--color-ios-brand)' }}>
             {title}
           </h1>
-          <p className="text-[17px]" style={{ color: INK_2 }}>
-            {translateInvite(language, 'world.name.prompt')}
+          <p data-world-about className="mt-1 text-[15px]" style={{ color: INK_2 }}>
+            {translateInvite(language, 'world.about')}
           </p>
           <label className="mt-4 flex w-full flex-col gap-1.5 text-start text-[14px]" style={{ color: INK_2 }}>
             {translateInvite(language, 'world.name.label')}
@@ -345,6 +345,9 @@ export function WorldGuestEntry({
               style={{ borderColor: 'var(--color-ios-brand)', color: INK }}
             />
           </label>
+          <p data-world-anonymous className="w-full text-start text-caption" style={{ color: INK_2 }}>
+            {translateInvite(language, 'world.name.anonymous')}
+          </p>
           {nameRefusal === null ? null : (
             <p id="world-name-refusal" role="alert" className="w-full text-start text-caption font-semibold" style={{ color: 'var(--ios-error)' }}>
               {nameRefusal}

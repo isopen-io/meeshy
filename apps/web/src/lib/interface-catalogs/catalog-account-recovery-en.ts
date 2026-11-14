@@ -2,11 +2,10 @@ import type { AccountRecoveryCatalog } from '@/lib/i18n-account-recovery-catalog
 
 /** Le mot de passe oublié et sa réinitialisation (#10823) — voir `catalog-account-recovery-fr.ts`. */
 const en = {
-  'recovery.forgot.lead': 'Get a link by email to choose a new password.',
+  'recovery.forgot.lead': 'Get a link by email.',
   'recovery.forgot.neverHad': 'Never had a password?',
   'recovery.forgot.neverHad.text': 'The same link lets you create one.',
   'recovery.reset.newPassword': 'New password',
-  'recovery.reset.lead': 'Choose a new password.',
   'recovery.reset.confirm': 'Confirm password',
   'recovery.reset.tooShort': 'Password too short (min {min} characters)',
   'recovery.reset.mismatch': 'Passwords do not match',

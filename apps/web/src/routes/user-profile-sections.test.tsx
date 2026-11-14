@@ -195,6 +195,13 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect(el.querySelector('[data-profile-signin-cta]')?.hasAttribute('disabled')).toBe(false);
   });
 
+  test('la porte du visiteur dit une fois ce qu’elle propose : le titre, puis le geste — pas de seconde phrase qui le répète (épure #17584, règle 2)', () => {
+    const el = relationSection({ relation: { kind: 'none' }, signedIn: false });
+    const card = el.querySelector('[data-profile-signin]') as HTMLElement;
+    expect(card.querySelectorAll('p').length).toBe(1);
+    expect(card.textContent).not.toContain('demandent un compte');
+  });
+
   test('sans relation : ajouter, écrire, bloquer', () => {
     const el = relationSection({ relation: { kind: 'none' } });
     expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);

@@ -145,8 +145,8 @@
       "firstScreen": 70
     },
     "download": {
-      "total": 74,
-      "firstScreen": 32
+      "total": 54,
+      "firstScreen": 28
     },
     "faq": {
       "total": 875,
@@ -157,8 +157,8 @@
       "firstScreen": 66
     },
     "forgot-password": {
-      "total": 31,
-      "firstScreen": 31
+      "total": 28,
+      "firstScreen": 28
     },
     "help": {
       "total": 757,
@@ -277,8 +277,8 @@
       "firstScreen": 133
     },
     "onboarding": {
-      "total": 65,
-      "firstScreen": 65
+      "total": 64,
+      "firstScreen": 64
     },
     "partners": {
       "total": 283,
@@ -333,8 +333,8 @@
       "firstScreen": 137
     },
     "signup": {
-      "total": 61,
-      "firstScreen": 61
+      "total": 52,
+      "firstScreen": 52
     },
     "stories": {
       "total": 20,
