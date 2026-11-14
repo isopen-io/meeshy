@@ -32,9 +32,10 @@ const sourcesOfTree = () =>
  * LE COMPTE DU JOUR (#18412), mesuré par ce script sur la tête de dev du
  * commit : 1 105 balises, dont 1 019 sans réponse d'appui ; 21 durées
  * littérales dans 20 fichiers. Il ne descend que par un lot d'écran, et se
- * grave plus bas dans le même commit.
+ * grave plus bas dans le même commit. 20 durées dans 19 fichiers depuis que
+ * le disque du Bring laisse la feuille porter son fondu.
  */
-const PLAFOND = { mute: 1019, durations: 21 } as const;
+const PLAFOND = { mute: 1019, durations: 20 } as const;
 
 const source = (path: string, text: string) => ({ path, text });
 
