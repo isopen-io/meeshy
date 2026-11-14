@@ -26,8 +26,11 @@ export type QuickAction = {
   readonly label: string;
   /** L'explication, derrière un (i) : lue repliée, ouverte au toucher (épure #18361, règle 1). */
   readonly hint: string;
-  /** Le nom accessible du (i) : la QUESTION à laquelle `hint` répond. */
-  readonly hintQuestion: string;
+  /**
+   * Le nom accessible du (i) : la QUESTION à laquelle `hint` répond. Seule l'action NOMINALE en porte un ; une porte
+   * rangée derrière « Plus » garde son indice en `title`, sans (i) (règle « un (i) n'est pas un dépotoir »).
+   */
+  readonly hintQuestion?: string;
   readonly glyph: GlyphName;
   /**
    * HÉROS au démarrage — miroir de `ConversationListQuickActions.Action.heroes`
@@ -114,8 +117,7 @@ export function QuickActions({ moreLabel, actions, conversationCount }: QuickAct
           >
             {moreLabel}
           </button>
-          {opened ? (
-            <ul id={moreId} className="grid w-full grid-cols-3 gap-2">
+          <ul id={moreId} hidden={!opened} className="grid w-full grid-cols-3 gap-2">
               {rangees.map((action) => (
                 <li key={action.key}>
                   <button
@@ -137,8 +139,7 @@ export function QuickActions({ moreLabel, actions, conversationCount }: QuickAct
                   </button>
                 </li>
               ))}
-            </ul>
-          ) : null}
+          </ul>
         </div>
       )}
 
@@ -153,7 +154,7 @@ export function QuickActions({ moreLabel, actions, conversationCount }: QuickAct
 
 function PrimaryAction({ action, quiet, onRun }: { readonly action: QuickAction; readonly quiet: boolean; readonly onRun: (action: QuickAction) => void }) {
   const state = useInfoHint();
-  const hint = { text: action.hint, label: action.hintQuestion, glyph: SETTINGS_GLYPHS.info };
+  const hint = action.hintQuestion === undefined ? null : { text: action.hint, label: action.hintQuestion, glyph: SETTINGS_GLYPHS.info };
   return (
     <div className="grid gap-1" data-quick-action-primary={quiet ? 'quiet' : 'hero'}>
       <div className="flex items-center gap-1">
@@ -175,9 +176,9 @@ function PrimaryAction({ action, quiet, onRun }: { readonly action: QuickAction;
           <Glyph name={action.glyph} size={22} />
           <span className="flex-1 text-start">{action.label}</span>
         </button>
-        <InfoHintButton hint={hint} state={state} />
+        {hint === null ? null : <InfoHintButton hint={hint} state={state} />}
       </div>
-      <InfoHintText hint={hint} state={state} className="px-1" />
+      {hint === null ? null : <InfoHintText hint={hint} state={state} className="px-1" />}
     </div>
   );
 }

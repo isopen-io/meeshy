@@ -240,7 +240,6 @@ const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[]
     key: 'story',
     label: translate(language, 'list.quick.story'),
     hint: translate(language, 'list.quick.story.hint'),
-    hintQuestion: translate(language, 'list.quick.story.question'),
     glyph: 'image',
     run: () => {
       navigate('/stories/new');
@@ -251,7 +250,6 @@ const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[]
     key: 'humeur',
     label: translate(language, 'list.quick.mood'),
     hint: translate(language, 'list.quick.mood.hint'),
-    hintQuestion: translate(language, 'list.quick.mood.question'),
     glyph: 'smiley',
     run: () => {
       navigate('/status/new');

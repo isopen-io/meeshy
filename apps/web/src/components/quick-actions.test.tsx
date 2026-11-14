@@ -28,8 +28,8 @@ const action = (partial: Partial<QuickAction> = {}): QuickAction => ({
   ...partial,
 });
 
-const story = (run: QuickAction['run'] = () => null) => action({ key: 'story', label: 'Créer une story', hint: 'Une image, vingt heures.', hintQuestion: 'Que devient une story ?', run });
-const mood = () => action({ key: 'humeur', label: 'Partager une humeur', hint: 'Un emoji.', hintQuestion: 'Que montre une humeur ?' });
+const story = (run: QuickAction['run'] = () => null) => ({ key: 'story', label: 'Créer une story', hint: 'Une image, vingt heures.', glyph: 'image', run }) satisfies QuickAction;
+const mood = () => ({ key: 'humeur', label: 'Partager une humeur', hint: 'Un emoji.', glyph: 'smiley', run: () => null }) satisfies QuickAction;
 
 const rendu = (actions: readonly QuickAction[], conversationCount: number) => <QuickActions moreLabel="Plus" actions={actions} conversationCount={conversationCount} />;
 
@@ -46,6 +46,17 @@ describe('showsHeroes — le seuil de démarrage', () => {
  * l'explication derrière un (i) dont le nom est la question.
  */
 describe('QuickActions', () => {
+  test('« Plus » désigne une liste présente même repliée, que le lecteur d’écran peut suivre', async () => {
+    const host = await mount(rendu([action({ hero: true }), story(), mood()], 0));
+    const more = buttonNamed(host, 'Plus');
+    const target = document.getElementById(more?.getAttribute('aria-controls') ?? '');
+    expect(target).not.toBeNull();
+    expect(target?.hidden).toBe(true);
+    await click(more);
+    expect(target?.hidden).toBe(false);
+    expect(target?.textContent).toContain('Créer une story');
+  });
+
   test('rien à proposer ⇒ rien ne se peint', async () => {
     const host = await mount(rendu([], 0));
     expect(host.innerHTML).toBe('');
@@ -54,8 +65,8 @@ describe('QuickActions', () => {
   test('l’action nominale seule est à l’écran ; le reste attend « Plus »', async () => {
     const host = await mount(rendu([action({ hero: true }), story(), mood()], 0));
     expect(buttonNamed(host, 'Inviter des amis')).not.toBeNull();
-    expect(host.textContent).not.toContain('Créer une story');
-    expect(host.textContent).not.toContain('Partager une humeur');
+    expect(buttonNamed(host, 'Créer une story')?.closest('[hidden]')).not.toBeNull();
+    expect(buttonNamed(host, 'Partager une humeur')?.closest('[hidden]')).not.toBeNull();
     expect(host.textContent).not.toContain('Et maintenant');
     expect(buttonNamed(host, 'Plus')?.getAttribute('aria-expanded')).toBe('false');
   });
