@@ -13753,43 +13753,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الإجراء لا رجعة فيه. سيُحذف جميع الأعضاء والمحادثات نهائيًا."
+            "value": "هذا الإجراء لا رجعة فيه. سيُحذف المجتمع وقائمة أعضائه نهائيًا، وتبقى محادثاته خارج المجتمع."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Aktion ist unwiderruflich. Alle Mitglieder und Unterhaltungen werden dauerhaft gelöscht."
+            "value": "Diese Aktion ist unwiderruflich. Die Community und ihre Mitgliederliste werden dauerhaft gelöscht; ihre Unterhaltungen bleiben bestehen, außerhalb der Community."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This action is irreversible. All members and conversations will be permanently deleted."
+            "value": "This action is irreversible. The community and its member list will be permanently deleted; its conversations remain, outside the community."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta acción es irreversible. Todos los miembros y conversaciones serán eliminados."
+            "value": "Esta acción es irreversible. La comunidad y su lista de miembros se eliminarán definitivamente; sus conversaciones se conservan, fuera de la comunidad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette action est irréversible. Tous les membres et conversations seront supprimés définitivement."
+            "value": "Cette action est irréversible. La communauté et la liste de ses membres seront supprimées définitivement ; ses conversations restent, hors de la communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa azione è irreversibile. Tutti i membri e le conversazioni saranno eliminati definitivamente."
+            "value": "Questa azione è irreversibile. La community e l'elenco dei suoi membri saranno eliminati definitivamente; le sue conversazioni restano, fuori dalla community."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta ação é irreversível. Todos os membros e conversas serão excluídos."
+            "value": "Esta ação é irreversível. A comunidade e a lista de membros serão excluídas definitivamente; as conversas continuam, fora da comunidade."
           }
         }
       }

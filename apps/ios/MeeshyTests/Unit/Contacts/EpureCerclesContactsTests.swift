@@ -569,7 +569,7 @@ final class EpureCerclesContactsTests: XCTestCase {
         try assertTranslated(kit, "community.detail.channels.empty.action", french: "Créer une conversation")
         try assertTranslated(kit, "community.detail.leave.confirm.message", french: "Vous n'aurez plus accès aux conversations de cette communauté.")
         try assertTranslated(kit, "community.settings.leave.confirm.message", french: "Vous n'aurez plus accès aux conversations de cette communauté.")
-        try assertTranslated(kit, "community.settings.delete.confirm.message", french: "Cette action est irréversible. Tous les membres et conversations seront supprimés définitivement.")
+        try assertTranslated(kit, "community.settings.delete.confirm.message", french: "Cette action est irréversible. La communauté et la liste de ses membres seront supprimées définitivement ; ses conversations restent, hors de la communauté.")
         XCTAssertEqual(kit["community.detail.channels.empty.title"]?["fr"], "Aucune conversation pour l’instant")
         XCTAssertEqual(kit["community.detail.channels.empty.title"]?["en"], "No conversations yet", "le catalogue anglais disait encore « channels »")
         for key in ["community.detail.leave.confirm.message", "community.settings.leave.confirm.message", "community.settings.delete.confirm.message"] {
@@ -577,6 +577,18 @@ final class EpureCerclesContactsTests: XCTestCase {
             XCTAssertFalse(try XCTUnwrap(kit[key]?["fr"]).contains("channels"), key)
         }
         XCTAssertTrue(try XCTUnwrap(kit["community.settings.delete.confirm.message"]?["fr"]).contains("irréversible"), "la conséquence irréversible reste")
+    }
+
+    /// La suppression d'une communauté efface ses membres et DÉTACHE ses conversations (`communityId: null`,
+    /// `routes/communities/settings.ts`) : la conséquence dite doit être celle que le serveur exécute, ni plus, ni moins.
+    func test_communityDeleteConfirmation_saysWhatTheServerDeletes_andThatConversationsRemain() throws {
+        let values = try XCTUnwrap(try kit()["community.settings.delete.confirm.message"])
+        let french = try XCTUnwrap(values["fr"])
+        XCTAssertTrue(french.contains("membres"))
+        XCTAssertTrue(french.contains("conversations restent"), "les conversations ne sont pas supprimées : elles quittent la communauté")
+        XCTAssertFalse(french.contains("conversations seront supprimées"))
+        XCTAssertTrue(try XCTUnwrap(values["en"]).contains("conversations remain"))
+        XCTAssertTrue(try XCTUnwrap(values["de"]).contains("unwiderruflich"))
     }
 
     func test_communitySources_defaultValuesAgreeWithTheCatalog() throws {
