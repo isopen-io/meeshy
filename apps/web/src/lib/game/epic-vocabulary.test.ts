@@ -207,6 +207,50 @@ describe('les paliers des médailles et la série d’une conversation ne repren
   }
 });
 
+/**
+ * LE NIVEAU NE SE PERD PAS, IL SUIT TA LUMIÈRE (#17394, décision du porteur du 2026-11-10 : le Rang en tête, le
+ * niveau en second) — la frappe change une part de ta lumière en pièce, gardée pour toujours ; aucun texte du jeu ne
+ * présente la baisse du niveau comme une perte. Chaque lexique voit les deux tournures qui la disent : le niveau qui
+ * baisse, et le niveau qu'on perd. Le rang, la joute et les médailles gardent leurs propres mots.
+ */
+const LEVEL_DROP_OF: Readonly<Record<InterfaceLanguage, readonly [string, string]>> = {
+  fr: ['Frapper fige 40 de ta lumière : ton niveau baisse d’autant.', 'Frapper, sans te faire perdre un niveau.'],
+  en: ['Minting binds 40 of your light: your level drops by as much.', 'Minting, without making you lose a level.'],
+  es: ['Acuñar fija 40 de tu luz: tu nivel baja otro tanto.', 'Acuñar, sin hacerte perder un nivel.'],
+  de: ['Prägen bannt 40 deines Lichts: Dein Level sinkt um ebenso viel.', 'Prägen, ohne dass du ein Level verlierst.'],
+  it: ['Coniare fissa 40 della tua luce: il tuo livello scende di altrettanto.', 'Coniare, senza farti perdere un livello.'],
+  pt: ['Cunhar cristaliza 40 da sua luz: seu nível baixa na mesma medida.', 'Cunhar, sem fazer você perder um nível.'],
+  ar: ['السكّ يصوغ 40 من نورك: فينخفض مستواك بقدره.', 'السكّ، دون أن تفقد مستوى.'],
+};
+
+const LEVEL_FOLLOWS_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Ton niveau suit la lumière qui te reste. Ton rang ne baisse jamais.',
+  en: 'Your level follows the light you still hold. Your rank never drops.',
+  es: 'Tu nivel sigue la luz que te queda. Tu rango nunca baja.',
+  de: 'Dein Level folgt dem Licht, das dir bleibt. Dein Rang sinkt nie.',
+  it: 'Il tuo livello segue la luce che ti resta. Il tuo rango non scende mai.',
+  pt: 'Seu nível acompanha a luz que lhe resta. Seu título nunca baixa.',
+  ar: 'مستواك يتبع النور الباقي لك. أما رتبتك فلا تنخفض أبدًا.',
+};
+
+describe('aucun texte du jeu ne présente la baisse du niveau comme une perte (#17394)', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit le niveau qui baisse et le niveau qu’on perd`, () => {
+      const [drops, lost] = LEVEL_DROP_OF[vocabulary.language];
+      const caught = bannedWordsIn(vocabulary, { 'game.trap.drops': drops, 'game.trap.lost': lost }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['game.trap.drops', 'game.trap.lost'],
+      });
+    });
+
+    test(`${vocabulary.language} : la garde laisse passer le niveau qui suit la lumière, et le rang qui ne baisse jamais`, () => {
+      const caught = bannedWordsIn(vocabulary, { 'game.trap.follows': LEVEL_FOLLOWS_OF[vocabulary.language] });
+      expect({ language: vocabulary.language, caught }).toEqual({ language: vocabulary.language, caught: [] });
+    });
+  }
+});
+
 describe('aucune valeur du jeu ne porte un mot banni, dans aucune langue posée', () => {
   for (const vocabulary of vocabularies) {
     test(`${vocabulary.language} : aucun mot banni`, async () => {

@@ -221,6 +221,16 @@
       "keys": [
         "engagement.pill.streak."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])livell[oi](?![\\p{L}\\p{N}])[^.!?;:]*(?<![\\p{L}\\p{N}])(?:scend\\p{L}*|sces[oai]|cal(?:a|ano|ato|ata)|diminu\\p{L}*)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«il tuo livello segue la luce che ti resta»: coniare trasforma una parte della tua luce in moneta, non toglie nulla (#17394)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:un\\s+)?livell[oi](?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«senza toccare il tuo livello» (#17394)"
     }
   ],
   "names": {

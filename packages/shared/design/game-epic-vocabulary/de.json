@@ -213,6 +213,16 @@
       "keys": [
         "engagement.pill.streak."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])levels?(?![\\p{L}\\p{N}])[^.!?;:]*(?<![\\p{L}\\p{N}])(?:sinkt|sinken|sank|gesunken|fällt|verlier\\p{L}*|verloren)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„dein Level folgt dem Licht, das dir bleibt“: Prägen verwandelt einen Teil deines Lichts in eine Münze, es nimmt nichts weg (#17394)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])verlier\\p{L}*\\s+(?:ein\\s+|einen\\s+)?levels?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„ohne dein Level anzutasten“ (#17394)"
     }
   ],
   "names": {

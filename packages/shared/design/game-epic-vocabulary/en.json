@@ -224,6 +224,16 @@
       "keys": [
         "engagement.pill.streak."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])levels?(?![\\p{L}\\p{N}])[^.!?;:]*(?<![\\p{L}\\p{N}])(?:drop|dropp|fall|fell|sink|sank|sunk|decreas|go(?:es)?\\s+down|went\\s+down)\\p{L}*",
+      "flags": "iu",
+      "instead": "“your level follows the light you still hold”: minting turns part of your light into a coin, it takes nothing away (#17394)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])los(?:e|es|ing|t)\\s+(?:a\\s+|one\\s+)?levels?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“without touching your level” (#17394)"
     }
   ],
   "names": {
