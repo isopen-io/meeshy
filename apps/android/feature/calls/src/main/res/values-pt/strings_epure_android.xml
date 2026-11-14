@@ -3,5 +3,5 @@
 <resources>
     <string name="call_journal_search_empty">Nenhuma chamada corresponde a “%1$s” nos últimos três meses.</string>
     <string name="call_transcript_note">Inclui as palavras do seu interlocutor, tal como recebidas durante a chamada.</string>
-    <string name="call_transcript_note_question">O que contém este registro?</string>
+    <string name="call_transcript_note_question">O que contém esta transcrição?</string>
 </resources>

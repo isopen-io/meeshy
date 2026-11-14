@@ -30,7 +30,7 @@ class CallTranscriptDisclaimerTest {
     val compose = createComposeRule()
 
     private val place = "Encrypted copy on this device. The call transcript is also kept on the Meeshy server, readable only by the call’s participants."
-    private val question = "What does this log contain?"
+    private val question = "What does this transcript contain?"
     private val note = "It includes what the other person said, as received during the call."
 
     private fun show() {
