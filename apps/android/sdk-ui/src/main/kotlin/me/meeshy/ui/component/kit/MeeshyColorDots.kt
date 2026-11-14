@@ -78,7 +78,7 @@ public fun MeeshyColorDots(
     size: MeeshyColorDotSize = MeeshyColorDotSize.S28,
     layout: MeeshyColorDotsLayout = MeeshyColorDotsLayout.Wrap,
     tone: MeeshyGlassTone? = null,
-    haptic: MeeshyGlassButtonHaptic = MeeshyGlassButtonHaptic.Light,
+    haptic: MeeshyColorDotHaptic = MeeshyGlassButtonHaptic.Light,
     enabled: Boolean = true,
     pressedDot: String? = null,
     onSelect: (String) -> Unit,

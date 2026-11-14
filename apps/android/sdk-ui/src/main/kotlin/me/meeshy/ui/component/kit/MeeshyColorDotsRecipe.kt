@@ -2,6 +2,7 @@ package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.ui.theme.MeeshyControlSize
@@ -43,6 +44,9 @@ public enum class MeeshyColorDotSize(public val diameter: Double) {
 
 /** `Wrap` passe à la ligne ; `Row` tient sur une ligne, défile et s'estompe au bord de fin s'il déborde. */
 public enum class MeeshyColorDotsLayout { Wrap, Row }
+
+/** L'haptique d'un choix : la loi de K02 (`Light` par le site unique, `None` laisse l'hôte jouer la sienne). Nom d'iOS. */
+public typealias MeeshyColorDotHaptic = MeeshyGlassButtonHaptic
 
 /** L'encre d'un groupe : celle du média, ou celle du thème (ton [MeeshyGlassTone.Theme]). */
 public enum class MeeshyColorDotsInk { OnMedia, ThemeInk }
