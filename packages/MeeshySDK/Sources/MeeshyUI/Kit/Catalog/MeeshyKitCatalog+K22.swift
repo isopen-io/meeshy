@@ -117,7 +117,12 @@ private struct MeeshyTimelineFriseSample: View {
     }
 
     private var frise: some View {
-        let playhead: PlayheadClock? = stateID == "sans-tete" ? nil : clock
+        let playhead: PlayheadClock?
+        if stateID == "sans-tete" {
+            playhead = nil
+        } else {
+            playhead = clock
+        }
         let onWindowCommit: ((String, ClosedRange<Double>, MeeshyTimelineFrisePart) -> Void)? =
             stateID == "lecture-seule" ? nil : { commit($0, $1, $2) }
         return MeeshyTimelineFrise(
