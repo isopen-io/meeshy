@@ -115,6 +115,9 @@ private fun CommunityRow(link: CommunityLink, accent: Color, onOpen: () -> Unit,
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
+            communityRowCreatedText(link)?.let { created ->
+                Text(created, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
+            }
         }
         IconButton(onClick = onCopy) {
             Icon(MeeshyIcons.Copy, stringResource(R.string.links_common_copy_link), tint = accent, modifier = Modifier.size(20.dp))

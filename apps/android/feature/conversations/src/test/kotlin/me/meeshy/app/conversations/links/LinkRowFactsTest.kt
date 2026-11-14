@@ -2,6 +2,7 @@ package me.meeshy.app.conversations.links
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.AffiliateToken
+import me.meeshy.sdk.model.CommunityLink
 import me.meeshy.sdk.model.TrackingLink
 import org.junit.Test
 
@@ -48,5 +49,13 @@ class LinkRowFactsTest {
     fun `a referral row with neither date nor cap shows nothing`() {
         val facts = affiliateRowFacts(token())
         assertThat(facts).isEqualTo(AffiliateRowFacts(createdMillis = null, used = null, max = null))
+    }
+
+    @Test
+    fun `a community row names its creation date, like the other link rows`() {
+        val created = communityRowCreatedMillis(CommunityLink(id = "c1", name = "Voisins", createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(created).isEqualTo(1_790_841_600_000L)
+        assertThat(communityRowCreatedMillis(CommunityLink(id = "c2", name = "Voisins"))).isNull()
+        assertThat(communityRowCreatedMillis(CommunityLink(id = "c3", name = "Voisins", createdAt = "n'importe quoi"))).isNull()
     }
 }

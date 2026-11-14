@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.AffiliateToken
+import me.meeshy.sdk.model.CommunityLink
 import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.sdk.model.TrackingLink
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -26,6 +27,13 @@ internal fun affiliateRowFacts(token: AffiliateToken): AffiliateRowFacts = Affil
     used = token.maxUses?.takeIf { it > 0 }?.let { token.currentUses },
     max = token.maxUses?.takeIf { it > 0 },
 )
+
+/** Ce qui permet de reconnaître un lien de communauté : sa création. */
+internal fun communityRowCreatedMillis(link: CommunityLink): Long? = isoToEpochMillisOrNull(link.createdAt)?.takeIf { it > 0 }
+
+@Composable
+internal fun communityRowCreatedText(link: CommunityLink): String? =
+    communityRowCreatedMillis(link)?.let { stringResource(R.string.links_common_created, ShareLinkDateFormat.day(it)) }
 
 @Composable
 internal fun trackingRowDateText(link: TrackingLink): String? = trackingRowDate(link)?.let { date ->
