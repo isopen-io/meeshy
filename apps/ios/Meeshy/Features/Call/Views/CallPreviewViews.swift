@@ -45,7 +45,7 @@ struct CallPreviewCallerDisc<Disc: View>: View {
 }
 
 /// Chez l'appelé : entendre l'appelant avant de décrocher. Proposé dès que
-/// l'appel 1:1 sonne (#8627) : un bouton plein, qu'on ne peut pas manquer,
+/// l'appel 1:1 sonne (#8627) : une puce de verre (P17.2), teintée
 /// tant que le son est coupé ; le choix s'applique dès que l'appelant arrive.
 struct CallPreviewSoundButton: View {
     @ObservedObject var preview: CallPreviewCoordinator
@@ -64,11 +64,14 @@ struct CallPreviewSoundButton: View {
                         systemImage: audible ? "speaker.wave.2.fill" : "speaker.slash.fill"
                     )
                     .font(.body.weight(.semibold))
-                    .foregroundColor(audible ? .white : .black)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .frame(minHeight: 50)
-                    .background(Capsule().fill(audible ? Color.clear : Color.white))
-                    .adaptiveGlass(in: Capsule())
+                    .adaptiveLiquidGlass(
+                        in: Capsule(),
+                        tint: audible ? nil : Color.white.opacity(MeeshyOpacity.light),
+                        interactive: true
+                    )
                 }
                 .pressable()
                 .accessibilityHint(String(localized: "call.preview.sound.hint", defaultValue: "Écoute l'appelant avant de décrocher", bundle: .main))
