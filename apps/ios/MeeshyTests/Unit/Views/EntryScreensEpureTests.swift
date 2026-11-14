@@ -404,6 +404,15 @@ final class EntryScreensEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("isShowingTerms = true") && view.contains("isShowingPrivacy = true"), "les deux fiches restent atteignables")
     }
 
+    /// Deux liens DANS une phrase ne sont, pour VoiceOver, qu'un élément : sans
+    /// action nommée, ouvrir les conditions passe par le rotor, qu'il faut
+    /// connaître. Les deux fiches s'ouvrent depuis la phrase, par leur nom.
+    func test_signup_consent_opensEachSheetFromVoiceOver_byItsName() throws {
+        let view = try appCode("Meeshy/Features/Auth/Signup/SignupView.swift")
+        XCTAssertTrue(view.contains(".accessibilityAction(named: Text(legalTerms)) { isShowingTerms = true }"))
+        XCTAssertTrue(view.contains(".accessibilityAction(named: Text(legalPrivacy)) { isShowingPrivacy = true }"))
+    }
+
     func test_signupLegalNotice_linksTheTwoGroupsOfWords_inEveryLanguageOrder() throws {
         let app = try Self.catalog(Self.appCatalogPath)
         for language in ["fr"] + Self.otherLanguages {
