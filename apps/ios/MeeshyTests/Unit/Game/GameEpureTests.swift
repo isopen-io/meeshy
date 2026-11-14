@@ -729,6 +729,12 @@ final class GameEpureTests: XCTestCase {
         XCTAssertFalse(try fr("game.concept.level.use").contains("même quand ton niveau baisse"))
         XCTAssertTrue(try fr("game.concept.league.use").contains("Joute des amis reste toujours ouverte"), "le consentement de la joute publique reste visible")
         XCTAssertFalse(try fr("game.concept.league.use").contains("chaque lundi"))
+        XCTAssertFalse(try fr("game.concept.league.use_cases").contains("accord"), "un consentement ne vit jamais derrière un (i)")
+        for language in Self.otherLanguages {
+            let use = try XCTUnwrap(catalog["game.concept.league.use"]?[language], language)
+            let cases = try XCTUnwrap(catalog["game.concept.league.use_cases"]?[language], language)
+            XCTAssertGreaterThan(use.count, cases.count, "\(language) : l'accord de la joute publique se lit au repos, la remise à zéro du lundi derrière le (i)")
+        }
         XCTAssertFalse(try fr("game.concept.badges.use").contains("Une frappe n’en éteint aucune"))
         XCTAssertEqual(try fr("game.concept.elans.use"), "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.")
         let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
@@ -1111,8 +1117,8 @@ final class GameEpureTests: XCTestCase {
         "game.concept.points.use": "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.",
         "game.concept.level.use": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100.",
         "game.concept.level.use_cases": "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.",
-        "game.concept.league.use": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent.",
-        "game.concept.league.use_cases": "Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.",
+        "game.concept.league.use": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.",
+        "game.concept.league.use_cases": "Tout repart de zéro chaque lundi.",
     ]
 
     func test_sheets_whatAndUse_sayTheirNewFrench_inTheSevenLanguages_neverCopiedFromFrench() throws {

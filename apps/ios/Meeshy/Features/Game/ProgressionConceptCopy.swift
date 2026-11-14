@@ -378,7 +378,7 @@ enum ConceptText {
         case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.use", defaultValue: "Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre un acte pour voir où tu en es.", bundle: .main)
-        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
         case .season: String(localized: "game.concept.season.use", defaultValue: "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.", bundle: .main)
@@ -397,7 +397,7 @@ enum ConceptText {
         case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use_cases", defaultValue: "Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.use_cases", defaultValue: "L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
-        case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi.", bundle: .main)
         case .season: String(localized: "game.concept.season.use_cases", defaultValue: "Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.use_cases", defaultValue: "Une frappe n’en éteint aucune : une médaille dit ton total réel.", bundle: .main)
         case .points, .meesh, .flame, .prestige, .elans, .defis, .succes, .showcase, .atlas: nil

@@ -312579,43 +312579,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون."
+            "value": "انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون. المبارزة العامة تطلب موافقتك؛ أما مبارزة الأصدقاء فتبقى مفتوحة دائمًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Achte auf deinen Platz und deine Zone: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab."
+            "value": "Achte auf deinen Platz und deine Zone: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab. Das öffentliche Turnier braucht deine Zustimmung; das Turnier der Freunde ist immer offen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Look at your place and your zone: the top 7 climb to the next circle, the bottom 5 go back down."
+            "value": "Look at your place and your zone: the top 7 climb to the next circle, the bottom 5 go back down. The public joust needs your consent; the Friends’ Joust is always open."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mira tu puesto y tu zona: los 7 primeros suben al círculo siguiente, los 5 últimos bajan."
+            "value": "Mira tu puesto y tu zona: los 7 primeros suben al círculo siguiente, los 5 últimos bajan. La justa pública pide tu consentimiento; la Justa de los amigos siempre está abierta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent."
+            "value": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda il tuo posto e la tua zona: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono."
+            "value": "Guarda il tuo posto e la tua zona: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono. Il torneo pubblico chiede il tuo consenso; il Torneo degli amici resta sempre aperto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olhe o seu lugar e a sua zona: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer."
+            "value": "Olhe o seu lugar e a sua zona: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer. O torneio público pede o seu acordo; o Torneio dos amigos continua sempre aberto."
           }
         }
       }
@@ -337495,43 +337495,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل شيء يبدأ من الصفر كل اثنين. المبارزة العامة تطلب موافقتك؛ أما مبارزة الأصدقاء فتبقى مفتوحة دائمًا."
+            "value": "كل شيء يبدأ من الصفر كل اثنين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeden Montag beginnt alles bei null. Das öffentliche Turnier braucht deine Zustimmung; das Turnier der Freunde ist immer offen."
+            "value": "Jeden Montag beginnt alles bei null."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Everything starts again from zero each Monday. The public joust needs your consent; the Friends’ Joust is always open."
+            "value": "Everything starts again from zero each Monday."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todo vuelve a cero cada lunes. La justa pública pide tu consentimiento; la Justa de los amigos siempre está abierta."
+            "value": "Todo vuelve a cero cada lunes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte."
+            "value": "Tout repart de zéro chaque lundi."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tutto riparte da zero ogni lunedì. Il torneo pubblico chiede il tuo consenso; il Torneo degli amici resta sempre aperto."
+            "value": "Tutto riparte da zero ogni lunedì."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tudo recomeça do zero toda segunda-feira. O torneio público pede o seu acordo; o Torneio dos amigos continua sempre aberto."
+            "value": "Tudo recomeça do zero toda segunda-feira."
           }
         }
       }
