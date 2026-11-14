@@ -487,7 +487,8 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertTrue(zoom.contains("including: isZoomed ? .all : .subviews"), "à 1×, aucun glissé n'est posé : le toucher et le balayage vers le bas restent")
         XCTAssertTrue(zoom.contains("CallReceivedScreenZoomedKey"), "zoomé, l'écran garde le doigt : le balayage qui réduit l'appel n'en part pas")
         let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
-        XCTAssertTrue(connected.contains(".simultaneousGesture(swipeDownToLeaveGesture, including: isReceivedScreenZoomed ? .subviews : .all)"))
+        XCTAssertTrue(connected.contains(".modifier(CallSwipeDownGate(gesture: swipeDownToLeaveGesture))"))
+        XCTAssertTrue(zoom.contains(".simultaneousGesture(gesture, including: isScreenZoomed ? .subviews : .all)"))
     }
 
     // MARK: - U2.6 · #16972 — le verre s'assombrit sur l'écran partagé à la une d'un groupe

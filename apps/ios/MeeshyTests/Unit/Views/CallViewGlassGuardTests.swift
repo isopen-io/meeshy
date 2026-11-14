@@ -488,7 +488,9 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift")
         )
         XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
-        XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
+        XCTAssertTrue(stage.contains("onFocusChange(newFocus)"), "la scène dit à la racine ce qui est à la une")
+        let rail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+CameraRail.swift"))
+        XCTAssertTrue(rail.contains("GroupCallSpotlight.featuresLocal(groupStageFocus)"), "mon image à la une se lit de la une servie")
     }
 
     /// Le bouton PiP et le glissé quittent le plein écran par la même entrée.
