@@ -106,4 +106,32 @@ final class MotionRootPropagationTests: XCTestCase {
         }
         XCTAssertEqual(animation, MeeshyMotion.reducedFade)
     }
+
+    // MARK: - Les fondus réduits voulus traversent la racine
+
+    func test_reelsReveal_underReduce_keepsItsCrossFade() throws {
+        guard #available(iOS 17, *) else { throw XCTSkip("iOS 16 n'a pas de clé de transaction") }
+        for opening in [true, false] {
+            let animation = try received(systemReduce: true, userForced: false) { probe in
+                ReelsRevealMotion.animate(opening: opening, reduceMotion: true) { probe.expanded = true }
+            }
+            let seconds = ReelsRevealMotion.duration(opening: opening, reduceMotion: true)
+            XCTAssertEqual(animation, opening ? .easeOut(duration: seconds) : .easeIn(duration: seconds))
+        }
+    }
+
+    func test_reelsReveal_withoutReduce_keepsItsWave() throws {
+        let animation = try received(systemReduce: false, userForced: false) { probe in
+            ReelsRevealMotion.animate(opening: true, reduceMotion: false) { probe.expanded = true }
+        }
+        XCTAssertEqual(animation, .easeOut(duration: ReelsRevealMotion.duration(opening: true, reduceMotion: false)))
+    }
+
+    func test_headerFlameReplay_underReduce_keepsItsGlowFade() throws {
+        guard #available(iOS 17, *) else { throw XCTSkip("iOS 16 n'a pas de clé de transaction") }
+        let animation = try received(systemReduce: true, userForced: false) { probe in
+            HeaderFlameReplayMotion.animate(reduceMotion: true) { probe.expanded = true }
+        }
+        XCTAssertEqual(animation, .linear(duration: HeaderFlameReplayMotion.reducedDuration))
+    }
 }
