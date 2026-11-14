@@ -29,6 +29,12 @@ public class SharedLocationRoster private constructor(private val entries: Map<S
 
     public fun removing(userId: String): SharedLocationRoster = SharedLocationRoster(entries - userId.lowercase())
 
+    /**
+     * Ceux de cette liste ET de [other], [other] l'emportant pour une même personne : quand on ne sait pas laquelle des
+     * deux listes le serveur sert, on garde « Arrêter » pour toutes les personnes qu'il peut servir.
+     */
+    public fun union(other: SharedLocationRoster): SharedLocationRoster = SharedLocationRoster(entries + other.entries)
+
     /** Sans ceux dont l'échéance est passée. */
     public fun pruned(nowMillis: Long): SharedLocationRoster =
         SharedLocationRoster(entries.filterValues { it.untilMillis > nowMillis })

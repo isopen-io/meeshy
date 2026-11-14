@@ -18,7 +18,10 @@ import me.meeshy.sdk.relation.SharedLocationSharing
 
 /** Ce que la ligne « Partager ma position » d'une fiche peint. */
 data class ProfileShareLocationState(
-    /** Ce que la personne voit de ma position et jusqu'à quand ; `null` : je ne la lui montre pas. */
+    /**
+     * Ce que la personne voit de ma position et jusqu'à quand ; `null` : je ne la lui montre pas. Une échéance passée
+     * reste là tant que le serveur ne l'a pas soldée : « Arrêter » ne disparaît jamais avant le partage.
+     */
     val entry: SharedLocationRoster.Entry? = null,
     val isBusy: Boolean = false,
     /** Ce qui n'a pas abouti, dit une fois puis consommé. */
@@ -41,7 +44,7 @@ class ProfileShareLocationViewModel @Inject constructor(
     val state: StateFlow<ProfileShareLocationState> =
         combine(userId, sharing.roster, sharing.isBusy, problem) { id, roster, busy, notice ->
             ProfileShareLocationState(
-                entry = id?.let { roster.pruned(sharing.nowMillis()).entry(it) },
+                entry = id?.let { roster.entry(it) },
                 isBusy = busy,
                 problem = notice,
             )

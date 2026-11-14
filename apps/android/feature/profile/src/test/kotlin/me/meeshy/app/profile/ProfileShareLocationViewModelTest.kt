@@ -49,7 +49,6 @@ class ProfileShareLocationViewModelTest {
             rosterFlow.value = rosterFlow.value.removing(userId)
             return null
         }
-        override fun nowMillis(): Long = now
     }
 
     @Test
@@ -69,14 +68,16 @@ class ProfileShareLocationViewModelTest {
     }
 
     @Test
-    fun `une echeance passee ne s'affiche plus meme avant que le serveur l'ait soldee`() {
+    fun `une echeance passee reste arretable tant que le serveur ne l'a pas soldee`() {
         val sharing = FakeSharing()
         sharing.rosterFlow.value = SharedLocationRoster.EMPTY
             .adding(friend, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, 0L)
-        sharing.now = SharedLocationShareDuration.ONE_HOUR.millis
+        sharing.now = SharedLocationShareDuration.ONE_HOUR.millis + 1
         val vm = ProfileShareLocationViewModel(sharing).also { it.load(friend) }
 
-        assertThat(vm.state.value.entry).isNull()
+        assertThat(vm.state.value.entry).isNotNull()
+        vm.stop()
+        assertThat(sharing.stopped).containsExactly(friend)
     }
 
     @Test

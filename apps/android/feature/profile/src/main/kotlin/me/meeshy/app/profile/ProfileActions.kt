@@ -139,9 +139,11 @@ internal fun ProfileActionsSection(
                         allowPromote = group.actions.isEmpty(),
                     )
                     ProfileBringRow(userId = circle.link.userId, displayName = displayName)
-                    if (SharedLocationOfferRule.offers(circle.level)) {
-                        ProfileShareLocationRow(userId = circle.link.userId, displayName = displayName)
-                    }
+                    ProfileShareLocationRow(
+                        userId = circle.link.userId,
+                        displayName = displayName,
+                        offered = SharedLocationOfferRule.offers(circle.level),
+                    )
                     if (TalkieOfferRule.offers(circle.level)) {
                         ProfileTalkieRow(userId = circle.link.userId, displayName = displayName)
                     }

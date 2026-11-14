@@ -998,6 +998,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   4, `SocketEventNamesParityTest` 5), le témoin de l'accusé vu rouge d'abord ; `xcstrings_to_android.py --check`,
   `check-feature-edges.sh`, `check-file-budget.sh`, `check-verbosity-native.mjs` verts. `sdk-core` et `feature/profile`
   se prouvent par `android.yml` sur `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Audit adversarial avant PR : cinq constats bloquants de RÉVOCATION, tous corrigés et témoignés dans le lot. Un
+  seul verrou sérialise démarrages, arrêts, échéances et mises à jour (une mise à jour ne part pas pendant qu'un
+  démarrage attend son accusé) ; chaque opération porte un ticket de compte et de session, et une réponse arrivée après
+  la déconnexion n'adopte, n'écrit ni ne rallume rien ; sans relevé, retirer une personne ARRÊTE tout ; un accusé perdu
+  (`UNCONFIRMED`) garde « Arrêter » pour chaque personne que le serveur peut servir (`SharedLocationRoster.union`) ; une
+  échéance non soldée est rejouée toutes les 30 s et à chaque socket accrochée (sans ouvrir de fiche) ; la ligne reste
+  sur la fiche tant qu'un partage existe, même sous Ami. L'iOS fusionné porte les mêmes défauts : #18166.
 - Reste : l'émission web (#14109), l'arrière-plan (#18135), l'indicateur global « tu partages » (#18136, iOS ;
-  Android à suivre).
-- Prochain lot recommandé : l'émission web depuis la fiche d'un Ami (#14109), pour fermer le trio.
+  Android à suivre), la révocation iOS (#18166).
+- Prochain lot recommandé : la révocation iOS (#18166, sécurité), puis l'émission web (#14109).

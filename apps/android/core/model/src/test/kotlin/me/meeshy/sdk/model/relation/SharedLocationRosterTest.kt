@@ -57,4 +57,18 @@ class SharedLocationRosterTest {
         assertThat(SharedLocationRoster.fromStored(future).entry(alice))
             .isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.CITY, 42L))
     }
+
+    @Test
+    fun `l'union garde toutes les personnes que le serveur peut servir et la plus recente l'emporte`() {
+        val previous = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+        val next = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+
+        val union = previous.union(next)
+
+        assertThat(union.entry(bob)).isNotNull()
+        assertThat(union.entry(alice)).isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.EXACT, 8 * hour))
+    }
 }

@@ -76,11 +76,14 @@ private val PRECISION_ORDER = listOf(SharedLocationPrecision.CITY, SharedLocatio
  * 8 h) et ce que la personne voit (la ville par défaut, le quartier, l'endroit exact) se choisissent dans une feuille,
  * puis la ligne dit « X voit ta position (…) jusqu'à HH:MM » et « Arrêter » d'un geste, tant que ça dure. La permission
  * demandée est celle « pendant l'utilisation » (`PermissionNature.LOCATION`), au moment du partage, jamais avant.
+ * Proposer exige [offered] (dès Ami) ; ARRÊTER ne l'exige jamais : un partage en cours reste arrêtable depuis la fiche,
+ * même quand la personne est passée sous Ami.
  */
 @Composable
 internal fun ProfileShareLocationRow(
     userId: String,
     displayName: String,
+    offered: Boolean,
     viewModel: ProfileShareLocationViewModel = hiltViewModel(key = "share-location-$userId"),
 ) {
     LaunchedEffect(userId) { viewModel.load(userId) }
@@ -88,6 +91,7 @@ internal fun ProfileShareLocationRow(
     val permissions = rememberPermissionFlow()
     val scope = rememberCoroutineScope()
     var choosing by rememberSaveable(userId) { mutableStateOf(false) }
+    if (state.entry == null && !offered) return
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,7 +287,7 @@ private fun SharedLocationShareProblem.messageRes(): Int = when (this) {
     SharedLocationShareProblem.LocationDenied -> R.string.shared_location_share_denied
     SharedLocationShareProblem.LocationUnavailable -> R.string.shared_location_share_unavailable
     is SharedLocationShareProblem.Refused -> when (outcome) {
-        SharedLocationSendOutcome.OFFLINE -> R.string.shared_location_share_offline
+        SharedLocationSendOutcome.OFFLINE, SharedLocationSendOutcome.UNCONFIRMED -> R.string.shared_location_share_offline
         SharedLocationSendOutcome.RATE_LIMITED -> R.string.shared_location_share_rate_limited
         else -> R.string.shared_location_share_failed
     }

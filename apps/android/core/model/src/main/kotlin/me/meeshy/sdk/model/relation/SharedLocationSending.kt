@@ -112,6 +112,12 @@ public enum class SharedLocationSendOutcome {
     RATE_LIMITED,
     UNAVAILABLE,
     OFFLINE,
+
+    /**
+     * L'accusé n'est pas revenu à temps : la passerelle a PU prendre l'envoi. Jamais lu comme « rien n'est parti » — le
+     * centre garde « Arrêter » à portée tant que le doute n'est pas levé.
+     */
+    UNCONFIRMED,
     FAILED;
 
     public companion object {
@@ -139,7 +145,7 @@ public sealed interface SharedLocationStartVerdict {
         public fun read(ack: SocketAck<JsonObject>): SharedLocationStartVerdict = when (ack) {
             is SocketAck.Accepted -> ack.payload.expiresAtMillis()?.let(::Started) ?: Refused(SharedLocationSendOutcome.FAILED)
             is SocketAck.Refused -> Refused(SharedLocationSendOutcome.ofRefusal(ack.refusal.code))
-            SocketAck.Timeout -> Refused(SharedLocationSendOutcome.OFFLINE)
+            SocketAck.Timeout -> Refused(SharedLocationSendOutcome.UNCONFIRMED)
         }
 
         private fun JsonObject?.expiresAtMillis(): Long? {

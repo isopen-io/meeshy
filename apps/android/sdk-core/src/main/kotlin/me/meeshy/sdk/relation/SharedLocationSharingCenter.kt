@@ -14,13 +14,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.location.LiveLocationFixSource
 import me.meeshy.sdk.location.LocationPermissionGate
@@ -34,6 +39,8 @@ import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocketConnectionState
+import me.meeshy.sdk.socket.SocketManager
 
 /** Pourquoi un partage n'a pas démarré ou ne s'est pas arrêté. */
 sealed interface SharedLocationShareProblem {
@@ -57,7 +64,7 @@ interface SharedLocationSharing {
     val roster: StateFlow<SharedLocationRoster>
     val isBusy: StateFlow<Boolean>
 
-    /** Reprend la liste gardée du compte connecté, et solde une échéance passée pendant que l'app dormait. */
+    /** Reprend la liste gardée du compte connecté, et solde une échéance passée pendant que l'app dormait (aussi à chaque socket accrochée). */
     fun restore()
 
     /** Montrer ma position à une personne, à cette précision et pour cette durée. `null` : c'est parti. */
@@ -65,8 +72,6 @@ interface SharedLocationSharing {
 
     /** Ne plus montrer ma position à cette personne ; les autres gardent la leur. */
     suspend fun stopSharing(userId: String): SharedLocationShareProblem?
-
-    fun nowMillis(): Long
 }
 
 /**
@@ -74,6 +79,15 @@ interface SharedLocationSharing {
  * l'émission, le suivi de l'appareil et les échéances, pour le compte connecté. Le serveur garde la position complète,
  * scellée, et la tronque pour chaque personne ; ce centre ne floute rien et ne décide d'aucun droit — la passerelle
  * rejuge la loi à chaque envoi.
+ *
+ * Trois lois de révocation, que l'audit adversarial du lot a fait écrire :
+ * - UN verrou sérialise démarrages, arrêts, échéances et mises à jour : une mise à jour en vol ne peut pas effacer un
+ *   partage que le démarrage suivant vient de poser ;
+ * - chaque opération porte le TICKET du compte qui l'a lancée : une réponse arrivée après une déconnexion ou un
+ *   changement de compte n'adopte rien, n'écrit rien et ne rallume rien ;
+ * - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
+ *   garde « Arrêter » à portée pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder
+ *   est rejouée, et à chaque socket accrochée.
  *
  * Le suivi ne vit que tant que l'app est utilisée : la permission demandée est celle « pendant l'utilisation » (fine ou
  * approximative, jamais `ACCESS_BACKGROUND_LOCATION`), et aucun service de premier plan ne la prolonge — l'émission en
@@ -86,6 +100,7 @@ class SharedLocationSharingCenter internal constructor(
     private val permission: LocationPermissionGate,
     private val store: SharedLocationRosterStoring,
     private val accountId: () -> String?,
+    connected: Flow<Boolean>,
     private val clock: () -> Long,
     dispatcher: CoroutineDispatcher,
 ) : SharedLocationSharing, PerAccountCache {
@@ -97,32 +112,42 @@ class SharedLocationSharingCenter internal constructor(
         permission: LocationPermissionGate,
         store: SharedLocationRosterStoring,
         sessionRepository: SessionRepository,
+        socketManager: SocketManager,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
-    ) : this(emitter, fixes, permission, store, { sessionRepository.currentUserId }, System::currentTimeMillis, dispatcher)
+    ) : this(
+        emitter,
+        fixes,
+        permission,
+        store,
+        { sessionRepository.currentUserId },
+        socketManager.connectionState.map { it == SocketConnectionState.CONNECTED },
+        System::currentTimeMillis,
+        dispatcher,
+    )
 
-    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val busy = Mutex()
+    /** Le compte d'une opération, et la génération de session à laquelle elle appartient. */
+    private data class Ticket(val account: String, val generation: Int)
+
+    private val root = SupervisorJob()
+    private val scope = CoroutineScope(root + dispatcher)
+    private val lock = Mutex()
     private val _roster = MutableStateFlow(SharedLocationRoster.EMPTY)
     private val _isBusy = MutableStateFlow(false)
     override val roster: StateFlow<SharedLocationRoster> = _roster.asStateFlow()
     override val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
-    private var loadedFor: String? = null
-    private var lastSent: SharedLocationUpdateGate.Sent? = null
-    private var following: Job? = null
-    private var deadline: Job? = null
+    @Volatile private var generation = 0
+    @Volatile private var session: Job = SupervisorJob(root)
+    @Volatile private var loadedFor: String? = null
+    @Volatile private var lastSent: SharedLocationUpdateGate.Sent? = null
+    @Volatile private var following: Job? = null
+    @Volatile private var deadline: Job? = null
 
-    override fun nowMillis(): Long = clock()
+    init {
+        scope.launch { connected.distinctUntilChanged().filter { it }.collect { reconcile() } }
+    }
 
     override fun restore() {
-        val account = accountId()?.takeIf { it.isNotEmpty() } ?: return
-        if (account == loadedFor) return
-        abandon()
-        loadedFor = account
-        _roster.value = SharedLocationRoster.fromStored(store.load(account))
-        if (_roster.value.isEmpty) return
-        startFollowing()
-        scheduleDeadline()
         scope.launch { reconcile() }
     }
 
@@ -130,85 +155,152 @@ class SharedLocationSharingCenter internal constructor(
         userId: String,
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
-    ): SharedLocationShareProblem? = exclusively {
-        if (!permission.isGranted()) return@exclusively SharedLocationShareProblem.LocationDenied
-        val fix = deviceFix() ?: return@exclusively SharedLocationShareProblem.LocationUnavailable
-        publish(_roster.value.pruned(clock()).adding(userId, precision, duration, clock()), fix)
+    ): SharedLocationShareProblem? = locked { ticket ->
+        if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
+        val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
+        val previous = _roster.value
+        publish(ticket, previous.pruned(clock()).adding(userId, precision, duration, clock()), fix, previous)
     }
 
-    override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = exclusively {
-        republish(_roster.value.pruned(clock()).removing(userId))
+    override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
+        republish(ticket, _roster.value.pruned(clock()).removing(userId))
     }
 
-    /** Une échéance est passée : la retirer du partage serveur. */
+    /** Reprend la liste du compte connecté et retire du partage serveur chaque personne dont l'échéance est passée. */
     suspend fun reconcile() {
-        val pruned = _roster.value.pruned(clock())
-        if (pruned == _roster.value) return
-        exclusively { republish(pruned) }
+        locked { ticket ->
+            val current = _roster.value
+            val pruned = current.pruned(clock())
+            if (pruned == current) return@locked null
+            republish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
+        }
     }
 
-    /** Un relevé de l'appareil pendant le partage. */
+    /** Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. */
     internal suspend fun didMove(fix: SharedLocationFix) {
-        if (_roster.value.isEmpty || !SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
-        lastSent = SharedLocationUpdateGate.Sent(fix, clock())
-        val verdict = emitter.update(fix)
-        if (verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)) wipe()
+        if (!lock.tryLock()) return
+        try {
+            val ticket = currentTicket() ?: return
+            if (_roster.value.isEmpty || !SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
+            lastSent = SharedLocationUpdateGate.Sent(fix, clock())
+            val verdict = emitter.update(fix)
+            if (isCurrent(ticket) && verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)) {
+                wipe(ticket)
+            }
+        } finally {
+            lock.unlock()
+        }
     }
 
     /**
      * Le compte change ou se déconnecte : cet appareil cesse de suivre la position pour lui sans rien émettre (la socket
-     * appartient déjà au suivant), le terme serveur coupera son partage, et la liste gardée attend son retour pour qu'il
-     * puisse encore l'arrêter.
+     * appartient déjà au suivant), toute réponse encore en vol est écartée, le terme serveur coupera son partage, et la
+     * liste gardée attend son retour pour qu'il puisse encore l'arrêter.
      */
-    override suspend fun clear() = abandon()
+    override suspend fun clear() = resetSession(account = null)
 
-    private suspend fun exclusively(block: suspend () -> SharedLocationShareProblem?): SharedLocationShareProblem? {
-        if (!busy.tryLock()) return null
-        _isBusy.value = true
-        return try {
-            block()
-        } finally {
-            _isBusy.value = false
-            busy.unlock()
+    private suspend fun locked(block: suspend (Ticket) -> SharedLocationShareProblem?): SharedLocationShareProblem? =
+        lock.withLock {
+            _isBusy.value = true
+            try {
+                val ticket = ensureLoaded() ?: return@withLock SharedLocationShareProblem.LocationUnavailable
+                block(ticket)
+            } finally {
+                _isBusy.value = false
+            }
         }
+
+    /** Sous le verrou : la liste gardée du compte connecté, chargée une fois par session. */
+    private fun ensureLoaded(): Ticket? {
+        val account = accountId()?.takeIf { it.isNotEmpty() } ?: return null
+        if (account != loadedFor) {
+            resetSession(account)
+            _roster.value = SharedLocationRoster.fromStored(store.load(account))
+            if (!_roster.value.isEmpty) {
+                startFollowing()
+                scheduleDeadline()
+            }
+        }
+        return Ticket(account, generation)
     }
 
-    /** Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon l'appareil. */
-    private suspend fun republish(next: SharedLocationRoster): SharedLocationShareProblem? {
-        if (next.isEmpty) return publish(next, fix = null)
-        val fix = lastSent?.fix ?: deviceFix() ?: return SharedLocationShareProblem.LocationUnavailable
-        return publish(next, fix)
+    private fun resetSession(account: String?) {
+        generation += 1
+        session.cancel()
+        session = SupervisorJob(root)
+        following = null
+        deadline = null
+        lastSent = null
+        loadedFor = account
+        _roster.value = SharedLocationRoster.EMPTY
     }
 
-    private suspend fun publish(next: SharedLocationRoster, fix: SharedLocationFix?): SharedLocationShareProblem? {
-        if (next.isEmpty) {
-            if (!emitter.stop()) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
-            wipe()
-            return null
-        }
-        val request = fix?.let { SharedLocationStartRequest.of(next.recipients, next.serverDuration(clock()), it) }
-            ?: return SharedLocationShareProblem.LocationUnavailable
+    private fun currentTicket(): Ticket? = loadedFor?.let { Ticket(it, generation) }
+
+    private fun isCurrent(ticket: Ticket): Boolean = ticket.generation == generation && accountId() == ticket.account
+
+    /**
+     * Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon l'appareil.
+     * Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
+     * de la localisation.
+     */
+    private suspend fun republish(ticket: Ticket, next: SharedLocationRoster): SharedLocationShareProblem? {
+        if (next.isEmpty) return stopAll(ticket)
+        val fix = lastSent?.fix ?: deviceFix() ?: return stopAll(ticket)
+        return publish(ticket, next, fix, previous = _roster.value)
+    }
+
+    private suspend fun publish(
+        ticket: Ticket,
+        next: SharedLocationRoster,
+        fix: SharedLocationFix,
+        previous: SharedLocationRoster,
+    ): SharedLocationShareProblem? {
+        val request = SharedLocationStartRequest.of(next.recipients, next.serverDuration(clock()), fix)
+            ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val verdict = emitter.start(request)
-        if (verdict is SharedLocationStartVerdict.Refused) return SharedLocationShareProblem.Refused(verdict.outcome)
-        adopt(next)
-        lastSent = SharedLocationUpdateGate.Sent(request.fix, clock())
-        startFollowing()
-        scheduleDeadline()
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        return when (verdict) {
+            is SharedLocationStartVerdict.Started -> {
+                engage(ticket, next, fix)
+                null
+            }
+            SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
+                engage(ticket, previous.union(next), fix)
+                SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+            }
+            is SharedLocationStartVerdict.Refused -> SharedLocationShareProblem.Refused(verdict.outcome)
+        }
+    }
+
+    private suspend fun stopAll(ticket: Ticket): SharedLocationShareProblem? {
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        val stopped = emitter.stop()
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        if (!stopped) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
+        wipe(ticket)
         return null
     }
 
     private suspend fun deviceFix(): SharedLocationFix? =
         if (permission.isGranted()) fixes.currentFix()?.let { SharedLocationFix.of(it.latitude, it.longitude, it.accuracy) } else null
 
-    private fun adopt(next: SharedLocationRoster) {
+    private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix) {
+        adopt(ticket, next)
+        lastSent = SharedLocationUpdateGate.Sent(fix, clock())
+        startFollowing()
+        scheduleDeadline()
+    }
+
+    private fun adopt(ticket: Ticket, next: SharedLocationRoster) {
         _roster.value = next
-        loadedFor = loadedFor ?: accountId()
-        loadedFor?.let { store.save(it, if (next.isEmpty) null else next.stored()) }
+        store.save(ticket.account, if (next.isEmpty) null else next.stored())
     }
 
     private fun startFollowing() {
         if (following?.isActive == true) return
-        following = scope.launch {
+        following = CoroutineScope(session + scope.coroutineContext.minusKey(Job)).launch {
             fixes.updates(SharedLocationUpdateGate.MINIMUM_INTERVAL_MS)
                 .mapNotNull { SharedLocationFix.of(it.latitude, it.longitude, it.accuracy) }
                 .catch { }
@@ -217,37 +309,41 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     private fun scheduleDeadline() {
-        deadline?.cancel()
-        val at = _roster.value.nextDeadlineMillis ?: return
-        deadline = scope.launch {
-            delay((at - clock()).coerceAtLeast(0L) + DEADLINE_SLACK_MS)
-            reconcile()
+        val at = _roster.value.nextDeadlineMillis ?: return cancelDeadline()
+        armDeadline((at - clock()).coerceAtLeast(0L) + DEADLINE_SLACK_MS)
+    }
+
+    private fun scheduleRetry() = armDeadline(RETRY_MS)
+
+    /** Le minuteur ne fait que réveiller : la réconciliation tourne à part, pour qu'un nouveau minuteur ne l'annule pas. */
+    private fun armDeadline(delayMillis: Long) {
+        cancelDeadline()
+        val sessionScope = CoroutineScope(session + scope.coroutineContext.minusKey(Job))
+        deadline = sessionScope.launch {
+            delay(delayMillis)
+            sessionScope.launch { reconcile() }
         }
     }
 
-    private fun wipe() {
-        adopt(SharedLocationRoster.EMPTY)
-        lastSent = null
-        stopTimers()
-    }
-
-    private fun abandon() {
-        stopTimers()
-        lastSent = null
-        loadedFor = null
-        _roster.value = SharedLocationRoster.EMPTY
-    }
-
-    private fun stopTimers() {
+    private fun cancelDeadline() {
         deadline?.cancel()
         deadline = null
+    }
+
+    private fun wipe(ticket: Ticket) {
+        adopt(ticket, SharedLocationRoster.EMPTY)
+        lastSent = null
         following?.cancel()
         following = null
+        cancelDeadline()
     }
 
     private companion object {
         /** Une seconde après l'échéance, pour que la personne soit bien sortie de la liste élaguée. */
         const val DEADLINE_SLACK_MS = 1_000L
+
+        /** Une échéance qui n'a pas pu se solder (hors ligne, refus) est rejouée à ce rythme, et à chaque reconnexion. */
+        const val RETRY_MS = 30_000L
     }
 }
 

@@ -72,7 +72,7 @@ class SharedLocationSendingTest {
     }
 
     @Test
-    fun `l'accuse rend le terme servi ou le refus code et une socket absente vaut hors ligne`() {
+    fun `l'accuse rend le terme servi ou le refus code une socket absente vaut hors ligne et un accuse perdu reste incertain`() {
         val accepted = SocketAck.Accepted(buildJsonObject { put("expiresAt", JsonPrimitive("2026-11-14T13:00:00.000Z")) })
         assertThat(SharedLocationStartVerdict.read(accepted))
             .isEqualTo(SharedLocationStartVerdict.Started(1_794_661_200_000L))
@@ -85,7 +85,7 @@ class SharedLocationSendingTest {
         assertThat(SharedLocationStartVerdict.read(SocketAck.Refused(SocketAckRefusal.NO_SOCKET)))
             .isEqualTo(SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE))
         assertThat(SharedLocationStartVerdict.read(SocketAck.Timeout))
-            .isEqualTo(SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE))
+            .isEqualTo(SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED))
     }
 
     @Test

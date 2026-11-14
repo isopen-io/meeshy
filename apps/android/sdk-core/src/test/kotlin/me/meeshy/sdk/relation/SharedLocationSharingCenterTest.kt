@@ -1,7 +1,10 @@
 package me.meeshy.sdk.relation
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -38,6 +41,10 @@ class SharedLocationSharingCenterTest {
         var updateVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L),
         var stopConfirmed: Boolean = true,
     ) {
+        /** Posé : la prochaine émission attend qu'on la complète, pour rejouer une réponse en vol. */
+        var startGate: CompletableDeferred<SharedLocationStartVerdict>? = null
+        var updateGate: CompletableDeferred<SharedLocationStartVerdict>? = null
+        val connected = MutableStateFlow(false)
         val starts = mutableListOf<SharedLocationStartRequest>()
         val updates = mutableListOf<SharedLocationFix>()
         var stops = 0
@@ -49,11 +56,11 @@ class SharedLocationSharingCenterTest {
             emitter = object : SharedLocationEmitting {
                 override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
                     starts += request
-                    return startVerdict
+                    return startGate?.await() ?: startVerdict
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
-                    return updateVerdict
+                    return updateGate?.await() ?: updateVerdict
                 }
                 override suspend fun stop(): Boolean {
                     stops++
@@ -73,6 +80,7 @@ class SharedLocationSharingCenterTest {
                 override fun save(accountId: String, stored: String?) { saved[accountId] = stored }
             },
             accountId = { account },
+            connected = connected,
             clock = { scope.currentTime },
             dispatcher = StandardTestDispatcher(scope.testScheduler),
         )
@@ -200,6 +208,7 @@ class SharedLocationSharingCenterTest {
 
         rig.account = "other"
         rig.center.restore()
+        runCurrent()
         assertThat(rig.center.roster.value.entry(bob)).isNull()
         assertThat(rig.center.roster.value.entry(alice)).isNotNull()
     }
@@ -220,5 +229,111 @@ class SharedLocationSharingCenterTest {
         assertThat(rig.starts).hasSize(1)
         assertThat(rig.center.roster.value.isEmpty).isTrue()
         assertThat(rig.saved["me"]).isNotNull()
+    }
+
+    @Test
+    fun `aucune mise a jour ne part pendant qu'un demarrage attend son accuse et le partage pose reste entier`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        advanceTimeBy(6_000L)
+        val inFlight = CompletableDeferred<SharedLocationStartVerdict>()
+        rig.startGate = inFlight
+        val adding = launch { rig.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR) }
+        runCurrent()
+
+        rig.stream.emit(LiveLocationFix(48.8566 + 0.01, 2.3522))
+        runCurrent()
+        inFlight.complete(SharedLocationStartVerdict.Started(0L))
+        adding.join()
+
+        assertThat(rig.updates).isEmpty()
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice, bob).inOrder()
+        assertThat(rig.center.roster.value.entry(bob)).isNotNull()
+        assertThat(rig.saved["me"]).isNotNull()
+    }
+
+    @Test
+    fun `sans permission arreter une personne arrete tout plutot que de la laisser voir`() = runTest {
+        val rig = Rig(this)
+        rig.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .stored()
+        rig.granted = false
+
+        val problem = rig.center.stopSharing(alice)
+
+        assertThat(problem).isNull()
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.starts).isEmpty()
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `une echeance qui n'a pas pu se solder est rejouee jusqu'a ce que le serveur l'accepte`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        rig.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE)
+
+        advanceTimeBy(hour + 2_000L)
+        runCurrent()
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+
+        rig.startVerdict = SharedLocationStartVerdict.Started(0L)
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(rig.center.roster.value.entry(alice)).isNull()
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(bob)
+    }
+
+    @Test
+    fun `un accuse perdu garde Arreter a portee pour chaque personne que le serveur peut servir`() = runTest {
+        val rig = Rig(this, startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED))
+
+        val problem = rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED))
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+        rig.center.stopSharing(alice)
+        assertThat(rig.stops).isEqualTo(1)
+    }
+
+    @Test
+    fun `une reponse arrivee apres la deconnexion n'adopte rien n'ecrit rien et ne rallume rien`() = runTest {
+        val rig = Rig(this)
+        val inFlight = CompletableDeferred<SharedLocationStartVerdict>()
+        rig.startGate = inFlight
+        val sharing = launch { rig.center.share(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS) }
+        runCurrent()
+
+        rig.center.clear()
+        rig.account = "other"
+        inFlight.complete(SharedLocationStartVerdict.Started(0L))
+        sharing.join()
+        advanceTimeBy(8 * hour + 2_000L)
+        runCurrent()
+
+        assertThat(rig.starts).hasSize(1)
+        assertThat(rig.following).isEqualTo(0)
+        assertThat(rig.saved).doesNotContainKey("other")
+        assertThat(rig.saved["me"]).isNull()
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `une socket accrochee reprend la liste gardee et solde l'echeance passee sans ouvrir de fiche`() = runTest {
+        val rig = Rig(this)
+        rig.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = -2 * hour)
+            .stored()
+
+        rig.connected.value = true
+        runCurrent()
+
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.saved["me"]).isNull()
     }
 }
