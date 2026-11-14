@@ -56,7 +56,7 @@ describe('la ligne des participants de la carte d’appel', () => {
   });
 
   test('elle suit la langue de la rangée', () => {
-    expect(render(target(), 'en')).toContain('Awa, Karim and you');
+    expect(render(target(), 'en')).toContain('Awa, Karim, and you');
   });
 
   test('un seul nom ou une liste absente : aucune ligne, le libellé reste celui d’avant', () => {
