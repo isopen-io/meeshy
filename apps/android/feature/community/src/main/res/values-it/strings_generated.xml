@@ -12,13 +12,11 @@
     <string name="community_common_cancel">Annulla</string>
     <string name="community_common_close">Chiudi</string>
     <string name="community_common_done">Fatto</string>
-    <string name="community_common_error">Errore</string>
     <string name="community_common_ok">OK</string>
     <string name="community_common_retry">Riprova</string>
     <string name="community_common_save">Salva</string>
     <string name="community_create_button">Crea la community</string>
     <string name="community_create_error_default">Si è verificato un errore</string>
-    <string name="community_create_error_title">Errore</string>
     <string name="community_create_field_description">Descrizione</string>
     <string name="community_create_field_description_placeholder">Di cosa parla questa community?</string>
     <string name="community_create_field_emoji">Emoji</string>
@@ -68,7 +66,6 @@
     <string name="community_settings_delete_confirm_title">Elimina la community</string>
     <string name="community_settings_delete_label">Elimina la community</string>
     <string name="community_settings_error_default">Si è verificato un errore</string>
-    <string name="community_settings_error_title">Errore</string>
     <string name="community_settings_field_description">Descrizione</string>
     <string name="community_settings_field_name">Nome</string>
     <string name="community_settings_field_name_placeholder">Nome della community</string>

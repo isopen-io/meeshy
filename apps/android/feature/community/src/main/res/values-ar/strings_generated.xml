@@ -12,13 +12,11 @@
     <string name="community_common_cancel">إلغاء</string>
     <string name="community_common_close">إغلاق</string>
     <string name="community_common_done">تم</string>
-    <string name="community_common_error">خطأ</string>
     <string name="community_common_ok">حسنًا</string>
     <string name="community_common_retry">إعادة المحاولة</string>
     <string name="community_common_save">حفظ</string>
     <string name="community_create_button">إنشاء المجتمع</string>
     <string name="community_create_error_default">حدث خطأ</string>
-    <string name="community_create_error_title">خطأ</string>
     <string name="community_create_field_description">الوصف</string>
     <string name="community_create_field_description_placeholder">عمّ يتحدّث هذا المجتمع؟</string>
     <string name="community_create_field_emoji">رمز تعبيري</string>
@@ -68,7 +66,6 @@
     <string name="community_settings_delete_confirm_title">حذف المجتمع</string>
     <string name="community_settings_delete_label">حذف المجتمع</string>
     <string name="community_settings_error_default">حدث خطأ</string>
-    <string name="community_settings_error_title">خطأ</string>
     <string name="community_settings_field_description">الوصف</string>
     <string name="community_settings_field_name">الاسم</string>
     <string name="community_settings_field_name_placeholder">اسم المجتمع</string>

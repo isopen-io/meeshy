@@ -86,12 +86,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "common.error",
-          "androidName": "community_common_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "common.ok",
           "androidName": "community_common_ok",
           "status": "adopted"
@@ -118,12 +112,6 @@
           "catalog": "ui",
           "iosKey": "community.create.error.default",
           "androidName": "community_create_error_default",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.create.error.title",
-          "androidName": "community_create_error_title",
           "status": "adopted"
         },
         {
@@ -514,12 +502,6 @@
           "catalog": "ui",
           "iosKey": "community.settings.error.default",
           "androidName": "community_settings_error_default",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.settings.error.title",
-          "androidName": "community_settings_error_title",
           "status": "adopted"
         },
         {
