@@ -72,7 +72,7 @@ struct AffiliatesListView: View {
 
     /// Le parrainage est propre à Meeshy : son état vide dit, au repos, qui apparaîtra ici (règle 7, revue #18088).
     static var emptyOrientation: String {
-        String(localized: "contacts.affiliates.empty.orientation", defaultValue: "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici.", bundle: .main)
+        String(localized: "contacts.affiliates.empty.orientation", defaultValue: "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici.", bundle: .main)
     }
 
     private func shareReferralLink() {

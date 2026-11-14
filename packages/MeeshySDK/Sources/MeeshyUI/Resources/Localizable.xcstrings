@@ -79501,7 +79501,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il te manque des Meeshes pour ce pack."
+            "value": "Il vous manque des Meeshes pour ce pack."
           }
         },
         "it": {
@@ -79524,43 +79524,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر تحميل المتجر. حاول مرة أخرى."
+            "value": "تعذّر تحميل المتجر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Shop konnte nicht geladen werden. Versuche es erneut."
+            "value": "Der Shop konnte nicht geladen werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The shop could not load. Try again."
+            "value": "The shop could not load."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo cargar la tienda. Inténtalo de nuevo."
+            "value": "No se pudo cargar la tienda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La boutique n’a pas pu se charger. Réessaie."
+            "value": "La boutique n’a pas pu se charger."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile caricare il negozio. Riprova."
+            "value": "Impossibile caricare il negozio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível carregar a loja. Tente novamente."
+            "value": "Não foi possível carregar a loja."
           }
         }
       }
@@ -81523,7 +81523,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible d’équiper cet élément. Réessaie."
+            "value": "Impossible d’équiper cet élément. Réessayez."
           }
         },
         "it": {
@@ -81805,7 +81805,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installe ce pack pour voir ses éléments."
+            "value": "Installez ce pack pour voir ses éléments."
           }
         },
         "it": {
@@ -81993,7 +81993,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pince ou touche deux fois pour zoomer"
+            "value": "Pincez ou touchez deux fois pour zoomer"
           }
         },
         "it": {
@@ -82486,43 +82486,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد حزم مثبّتة بعد. المتجر بانتظارك."
+            "value": "لا توجد حزم مثبّتة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Pakete installiert. Der Shop wartet auf dich."
+            "value": "Keine Pakete installiert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No packs installed yet. The shop is waiting for you."
+            "value": "No packs installed"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no tienes paquetes instalados. La tienda te espera."
+            "value": "Ningún paquete instalado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun pack installé pour l’instant. La boutique t’attend."
+            "value": "Aucun pack installé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun pacchetto installato per ora. Il negozio ti aspetta."
+            "value": "Nessun pacchetto installato"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhum pacote instalado ainda. A loja espera por você."
+            "value": "Nenhum pacote instalado"
           }
         }
       }

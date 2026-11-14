@@ -285,16 +285,11 @@ struct VoiceProfileManageView: View {
     // d'échantillons de calibration reste fonctionnel via « Ajouter ».
     private var samplesSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundStyle(theme.textSecondary)
-            }
+            Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
             Spacer()
-            // Le (+) reste dans sa carte, à côté de l'indication qu'il sert, et
+            // Le (+) reste dans sa carte, à côté du titre qu'il sert, et
             // porte le verre adaptatif des actions d'en-tête (#6481).
             Button {
                 HapticFeedback.light()

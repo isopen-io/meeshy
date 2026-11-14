@@ -141,7 +141,8 @@ final class EpureReglagesFichesTests: XCTestCase {
         "about.section.informations",
         "settings.privacy.encryption.coming_soon.a11y",
         "settings.transcription.engine",
-        "settings.transcription.engine.a11y"
+        "settings.transcription.engine.a11y",
+        "voice.profile.addSamples.hint"
     ]
 
     func test_settingsAndAbout_keysWithoutReader_areGoneFromTheCatalog() throws {
@@ -156,6 +157,13 @@ final class EpureReglagesFichesTests: XCTestCase {
         for key in Self.orphanKeys {
             XCTAssertFalse(sources.contains("\"\(key)\""), key)
         }
+    }
+
+    func test_voiceSamplesCard_hasNoSubtitleRepeatingItsTitleAndButton() throws {
+        let source = try code(Self.views + "VoiceProfileManageView.swift")
+        XCTAssertFalse(source.contains("Ajoutez des échantillons pour affiner votre voix"))
+        XCTAssertTrue(source.contains("\"voice.profile.voiceSamples\""))
+        XCTAssertTrue(source.contains("\"voice.profile.add\""))
     }
 
     func test_about_licenseSentence_isCarriedByTheSingleBodyKey() throws {

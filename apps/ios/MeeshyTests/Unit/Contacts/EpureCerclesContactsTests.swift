@@ -562,10 +562,57 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// Le parrainage est propre à Meeshy (règle 7) : l'état vide « Aucun filleul » garde, au repos, la phrase qui dit
     /// qui apparaîtra dans cette liste — le bouton « Partager le lien de parrainage » dit le geste, pas son effet.
     func test_affiliatesEmpty_saysWhoWillAppearHere_atRest_inEveryLanguage() throws {
-        XCTAssertEqual(AffiliatesListView.emptyOrientation, "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici.")
+        XCTAssertEqual(AffiliatesListView.emptyOrientation, "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici.")
         try assertTranslated(try app(), "contacts.affiliates.empty.orientation", french: AffiliatesListView.emptyOrientation)
         let source = try code("apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift")
         XCTAssertTrue(source.contains("subtitle: viewModel.isEmpty ? Self.emptyOrientation : \"\""), "la phrase se lit sous « Aucun filleul », pas sous « Aucun résultat »")
+    }
+
+    /// Les deux écrans du parrainage parlent d'une voix : même début de phrase, même vouvoiement que « Parrainage ».
+    func test_affiliatesEmpty_addressesTheReaderLikeTheReferralScreen() throws {
+        let app = try app()
+        let screen = try XCTUnwrap(app["affiliate.orientation"]?["fr"])
+        let empty = try XCTUnwrap(app["contacts.affiliates.empty.orientation"]?["fr"])
+        let opening = "Ceux qui s'inscrivent par votre lien de parrainage"
+        XCTAssertTrue(screen.hasPrefix(opening), screen)
+        XCTAssertTrue(empty.hasPrefix(opening), empty)
+        XCTAssertTrue(empty.hasSuffix("apparaissent ici."), empty)
+    }
+
+    // MARK: - « Mes packs » : un état vide d'une ligne, une erreur avec son geste, le vouvoiement des Réglages
+
+    func test_myPacks_emptyAndError_areOneLineEach_inEveryLanguage() throws {
+        let kit = try kit()
+        try assertTranslated(kit, "shop.mine.empty", french: "Aucun pack installé")
+        try assertTranslated(kit, "sticker.sheet.tab.shop", french: "Boutique")
+        XCTAssertNil(kit["shop.mine.openShop"], "« Boutique » a déjà sa clé dans le kit : un mot, une clé")
+        try assertTranslated(kit, "shop.error.load", french: "La boutique n’a pas pu se charger.")
+    }
+
+    func test_myPacks_error_offersRetry_andEmptyOpensTheShop_whenTheHostCanShowIt() throws {
+        let view = try code("packages/MeeshySDK/Sources/MeeshyUI/Packs/MyPacksView.swift")
+        XCTAssertTrue(view.contains("\"common.retry\""), "l'erreur porte son geste")
+        XCTAssertTrue(view.contains("Task { await store.load(domains: nil) }"), "« Réessayer » rejoue le chargement de la vue")
+        XCTAssertTrue(view.contains("if let onOpenShop {"), "sans chemin vers la boutique, la ligne reste seule")
+        XCTAssertTrue(view.contains("\"sticker.sheet.tab.shop\""), "le bouton reprend le mot « Boutique » du kit")
+        let host = try code("apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift")
+        XCTAssertTrue(host.contains("onOpenShop: { page = .shop }"), "l'hôte ouvre la page Boutique qu'il porte déjà")
+    }
+
+    func test_packs_frenchAddressesTheReaderFormally_likeTheSettingsRowThatLeadsThere() throws {
+        let kit = try kit()
+        let expected = [
+            "shop.error.insufficient": "Il vous manque des Meeshes pour ce pack.",
+            "shop.viewer.equip.failed": "Impossible d’équiper cet élément. Réessayez.",
+            "shop.viewer.download.body": "Installez ce pack pour voir ses éléments.",
+            "shop.viewer.zoom.hint": "Pincez ou touchez deux fois pour zoomer"
+        ]
+        for (key, french) in expected { XCTAssertEqual(kit[key]?["fr"], french, key) }
+        for key in ["shop.mine.empty", "shop.error.load"] {
+            let french = try XCTUnwrap(kit[key]?["fr"])
+            XCTAssertFalse(french.contains("t’attend"), french)
+            XCTAssertFalse(french.contains("Réessaie"), french)
+        }
     }
 
     func test_referralLinkToShare_picksTheFirstServedLink_andNilWhenThereIsNone() async throws {

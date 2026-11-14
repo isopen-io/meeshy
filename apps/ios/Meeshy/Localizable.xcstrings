@@ -11411,13 +11411,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يظهر هنا من يسجّلون عبر رابط الإحالة الخاص بك."
+            "value": "كل من يسجّل عبر رابط الإحالة الخاص بك يظهر هنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wer sich über deinen Empfehlungslink registriert, erscheint hier."
+            "value": "Wer sich über deinen Empfehlungslink anmeldet, erscheint hier."
           }
         },
         "en": {
@@ -11435,13 +11435,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici."
+            "value": "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chi si iscrive tramite il tuo link di referral compare qui."
+            "value": "Chi si iscrive con il tuo link di referral compare qui."
           }
         },
         "pt-BR": {
@@ -210846,53 +210846,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adicionar amostras"
-          }
-        }
-      }
-    },
-    "voice.profile.addSamples.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أضف عيّنات لتحسين صوتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Füge Proben hinzu, um deine Stimme zu verfeinern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add samples to refine your voice"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añade muestras para afinar tu voz"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez des échantillons pour affiner votre voix"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggiungi campioni per perfezionare la tua voce"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adicione amostras para refinar sua voz"
           }
         }
       }

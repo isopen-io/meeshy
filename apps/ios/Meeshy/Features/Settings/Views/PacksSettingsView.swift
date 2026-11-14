@@ -94,7 +94,8 @@ struct PacksSettingsView: View {
             case .shop: shop
             case .mine:
                 MyPacksView(language: PackShopScreen.language, usageText: FrameUsageCopy.text,
-                            rankName: GameCopy.rankName, designs: GameFramePackElementDesigns())
+                            rankName: GameCopy.rankName, designs: GameFramePackElementDesigns(),
+                            onOpenShop: { page = .shop })
                     .padding(.horizontal, MeeshySpacing.lg)
             }
         }
