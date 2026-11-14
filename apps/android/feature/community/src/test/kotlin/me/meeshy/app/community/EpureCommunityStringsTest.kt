@@ -37,6 +37,7 @@ class EpureCommunityStringsTest {
         "community_invite_empty_subtitle",
         "community_detail_posts_empty_action",
         "community_add_channel_conversation_fallback_name",
+        "community_add_channel_empty_hint",
     )
 
     @Test
@@ -75,8 +76,8 @@ class EpureCommunityStringsTest {
     }
 
     @Test
-    fun `the add-channel empty list says there is nothing to add, and how to have something`() {
+    fun `the add-channel empty list is one line, with no hint under it`() {
         assertThat(all("values-fr")["community_add_channel_empty_no_conversations"]).isEqualTo("Aucune conversation disponible")
-        assertThat(all("values-fr")["community_add_channel_empty_hint"]).isEqualTo("Créez d'abord une conversation pour l'ajouter ici.")
+        assertThat(all("values-fr")).doesNotContainKey("community_add_channel_empty_hint")
     }
 }

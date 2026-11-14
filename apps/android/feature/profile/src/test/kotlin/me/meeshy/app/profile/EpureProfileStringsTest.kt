@@ -70,6 +70,13 @@ class EpureProfileStringsTest {
     }
 
     @Test
+    fun `the voice card says what the sample is, in a sentence readable at rest`() {
+        assertThat(epure("values-fr")["profile_voice_what"]).isEqualTo("Sa voix clonée lit ses vocaux traduits dans votre langue.")
+        assertThat(epure("values")["profile_voice_what"]).isEqualTo("Their cloned voice reads their voice messages translated into your language.")
+        assertThat(all("values-fr")["profile_voice_title"]).isEqualTo("Voix")
+    }
+
+    @Test
     fun `every label born of the epure exists in the seven languages with the same arguments, translated`() {
         val reference = epure("values")
         assertThat(reference).isNotEmpty()
