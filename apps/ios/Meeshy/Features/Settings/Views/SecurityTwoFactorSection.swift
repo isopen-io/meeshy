@@ -60,8 +60,8 @@ struct SecurityTwoFactorSection: View {
                         .scaleEffect(0.7)
                 } else {
                     Text(viewModel.isEnabled
-                         ? String(localized: "2fa_enabled", defaultValue: "Actif")
-                         : String(localized: "2fa_disabled", defaultValue: "Désactivé"))
+                         ? String(localized: "2fa_enabled", defaultValue: "Activée")
+                         : String(localized: "2fa_disabled", defaultValue: "Désactivée"))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(viewModel.isEnabled ? MeeshyColors.success : theme.textMuted)
                 }

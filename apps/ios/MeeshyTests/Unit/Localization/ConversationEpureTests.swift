@@ -363,10 +363,12 @@ final class ConversationEpureTests: XCTestCase {
     }
 
     /// La voix clonée est propre à Meeshy (règle 7) : l'écran qui l'active dit, au repos, ce qu'elle FAIT (revue #18078).
-    func test_voiceWizard_intro_saysWhatVoiceCloningDoes_inEveryLanguage() throws {
+    /// L'accueil la NOMME (épure 1/3, #17652) ; ce qu'elle fait reste dit par le consentement et par la ligne
+    /// « Utilisé pour générer des traductions avec votre voix » (règle 2 : l'accueil ne la redit pas).
+    func test_voiceWizard_intro_namesVoiceCloning_inEveryLanguage() throws {
         let app = try Self.catalog(Self.appCatalogPath)
         let intro = try XCTUnwrap(app["voice.profile.wizard.intro"])
-        XCTAssertEqual(intro["fr"], "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.")
+        XCTAssertEqual(intro["fr"], "Enregistrez votre voix pour activer le clonage vocal.")
         for language in Self.otherLanguages {
             let value = try XCTUnwrap(intro[language], language)
             XCTAssertNotEqual(value, intro["fr"], "\(language) : copié du français")

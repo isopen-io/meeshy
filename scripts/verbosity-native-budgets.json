@@ -115,10 +115,10 @@
       "explanations": 31
     },
     "ios:Meeshy/about": {
-      "labels": 44,
-      "words": 177,
+      "labels": 43,
+      "words": 171,
       "long": 2,
-      "explanations": 13
+      "explanations": 12
     },
     "ios:Meeshy/accessibility": {
       "labels": 37,
@@ -1094,8 +1094,8 @@
     },
     "ios:Meeshy/voice": {
       "labels": 59,
-      "words": 267,
-      "long": 2,
+      "words": 266,
+      "long": 1,
       "explanations": 9
     },
     "ios:Meeshy/welcome": {

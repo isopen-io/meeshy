@@ -23,6 +23,8 @@ struct SecurityEmailSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             SecuritySectionHeader(title: String(localized: "settings.security.email", defaultValue: "E-mail", bundle: .main), icon: "envelope.fill", color: accentColor)
 
+            SettingsSentence(text: String(localized: "settings.security.email.summary", defaultValue: "Vérifié, il sert à récupérer votre compte et à publier.", bundle: .main))
+
             VStack(spacing: 0) {
                 currentEmailRow
 

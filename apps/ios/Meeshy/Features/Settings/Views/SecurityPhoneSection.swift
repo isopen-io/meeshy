@@ -12,6 +12,8 @@ struct SecurityPhoneSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             SecuritySectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Téléphone", bundle: .main), icon: "phone.fill", color: MeeshyColors.indigo400Hex)
 
+            SettingsSentence(text: String(localized: "settings.security.phone.summary", defaultValue: "Vérifié, il sert à récupérer votre compte par SMS.", bundle: .main))
+
             VStack(spacing: 0) {
                 currentPhoneRow
 

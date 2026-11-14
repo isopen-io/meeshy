@@ -2476,7 +2476,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "2FA activé avec succès !"
+            "value": "2FA activée avec succès !"
           }
         },
         "it": {
@@ -3222,25 +3222,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desactivado"
+            "value": "Desactivada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Désactivé"
+            "value": "Désactivée"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disattivato"
+            "value": "Disattivata"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desativado"
+            "value": "Desativada"
           }
         }
       }
@@ -3363,25 +3363,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activo"
+            "value": "Activada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Actif"
+            "value": "Activée"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attivo"
+            "value": "Attiva"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativo"
+            "value": "Ativada"
           }
         }
       }
@@ -50283,53 +50283,6 @@
         }
       }
     },
-    "about.description.body": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مراسلة مترجمة إلى لغتك، وصوت مستنسخ، وتشفير اختياري."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaging in deiner Sprache, geklonte Stimme, Verschlüsselung nach Wahl."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaging translated into your language, cloned voice, optional encryption."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensajería traducida a tu idioma, voz clonada, cifrado opcional."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messagerie traduite dans votre langue, voix clonée, chiffrement au choix."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaggi tradotti nella tua lingua, voce clonata, crittografia a scelta."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensagens traduzidas no seu idioma, voz clonada, criptografia opcional."
-          }
-        }
-      }
-    },
     "about.feature.cloudSync": {
       "extractionState": "manual",
       "localizations": {
@@ -79735,7 +79688,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "س"
+            "value": "ح"
           }
         },
         "de": {
@@ -79753,25 +79706,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "S"
+            "value": "D"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "S"
+            "value": "D"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "S"
+            "value": "D"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "S"
+            "value": "D"
           }
         }
       }
@@ -79923,7 +79876,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "خ"
+            "value": "ث"
           }
         },
         "de": {
@@ -79941,25 +79894,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "J"
+            "value": "M"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "J"
+            "value": "M"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "G"
+            "value": "M"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Q"
+            "value": "T"
           }
         }
       }
@@ -178157,43 +178110,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تلقي Bring"
+            "value": "Bring"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bring empfangen"
+            "value": "Bring"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receive Brings"
+            "value": "Bring"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recibir Bring"
+            "value": "Bring"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recevoir des Bring"
+            "value": "Bring"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricevere Bring"
+            "value": "Bring"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receber Bring"
+            "value": "Bring"
           }
         }
       }
@@ -178322,7 +178275,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réponses commentaires"
+            "value": "Réponses aux commentaires"
           }
         },
         "it": {
@@ -179920,7 +179873,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réactions stories"
+            "value": "Réactions aux stories"
           }
         },
         "it": {
@@ -182475,6 +182428,53 @@
         }
       }
     },
+    "settings.security.email.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بعد التحقق، تُستخدم لاستعادة حسابك والنشر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifiziert dient sie zur Kontowiederherstellung und zum Veröffentlichen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once verified, it lets you recover your account and publish."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado, sirve para recuperar tu cuenta y publicar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifié, il sert à récupérer votre compte et à publier."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificata, serve a recuperare l’account e a pubblicare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado, serve para recuperar sua conta e publicar."
+          }
+        }
+      }
+    },
     "settings.security.email.verification_sent": {
       "extractionState": "manual",
       "localizations": {
@@ -183223,6 +183223,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar o código"
+          }
+        }
+      }
+    },
+    "settings.security.phone.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بعد التحقق، يُستخدم لاستعادة حسابك عبر رسالة نصية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifiziert dient sie zur Kontowiederherstellung per SMS."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once verified, it recovers your account by SMS."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado, sirve para recuperar tu cuenta por SMS."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifié, il sert à récupérer votre compte par SMS."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificato, serve a recuperare l’account via SMS."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado, serve para recuperar sua conta por SMS."
           }
         }
       }
@@ -209570,7 +209617,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de désactiver le 2FA"
+            "value": "Impossible de désactiver la 2FA"
           }
         },
         "it": {
@@ -209582,7 +209629,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível desativar o 2FA"
+            "value": "Não foi possível desativar a 2FA"
           }
         }
       }
@@ -213723,43 +213770,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سجّل صوتك لتفعيل استنساخ الصوت المخصّص. ستحتفظ رسائلك الصوتية المترجمة بصوتك الطبيعي."
+            "value": "سجّل صوتك لتفعيل استنساخ الصوت."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nimm deine Stimme auf, um das persönliche Voice-Cloning zu aktivieren. Deine übersetzten Sprachnachrichten behalten deine natürliche Stimme."
+            "value": "Nimm deine Stimme auf, um das Voice-Cloning zu aktivieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record your voice to enable personal voice cloning. Your translated voice messages will keep your natural voice."
+            "value": "Record your voice to enable voice cloning."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Graba tu voz para activar la clonación de voz personalizada. Tus mensajes de voz traducidos conservarán tu voz natural."
+            "value": "Graba tu voz para activar la clonación de voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle."
+            "value": "Enregistrez votre voix pour activer le clonage vocal."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Registra la tua voce per attivare la clonazione vocale personalizzata. I tuoi messaggi vocali tradotti manterranno la tua voce naturale."
+            "value": "Registra la tua voce per attivare la clonazione vocale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grave sua voz para ativar a clonagem de voz personalizada. Suas mensagens de voz traduzidas manterão sua voz natural."
+            "value": "Grave sua voz para ativar a clonagem de voz."
           }
         }
       }

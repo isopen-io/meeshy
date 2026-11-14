@@ -89,7 +89,7 @@ struct NotificationSettingsView: View {
                         keyPath: \.callsEnabled)
 
             VStack(alignment: .leading, spacing: 0) {
-                notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Recevoir des Bring", bundle: .main), color: MeeshyColors.warningHex,
+                notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Bring", bundle: .main), color: MeeshyColors.warningHex,
                             keyPath: \.receivesBrings)
                 MeeshyInfoNoted(note: SettingsInfoNotes.bringOff, openNoteID: $openNoteID, tint: theme.textSecondary) {
                     SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux.", bundle: .main))
@@ -166,10 +166,10 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Repartages", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.postRepostEnabled)
 
-            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: MeeshyColors.warningHex,
+            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions aux stories", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.storyReactionEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
+            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses aux commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.commentReplyEnabled)
 
             notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "J'aime sur les commentaires", bundle: .main), color: MeeshyColors.errorHex,
@@ -315,12 +315,12 @@ struct NotificationSettingsView: View {
     private func dayLabel(_ day: DndDay) -> String {
         switch day {
         case .mon: return String(localized: "common.day.mon.short", defaultValue: "L", bundle: .main)
-        case .tue: return String(localized: "common.day.tue.short", defaultValue: "J", bundle: .main)
+        case .tue: return String(localized: "common.day.tue.short", defaultValue: "M", bundle: .main)
         case .wed: return String(localized: "common.day.wed.short", defaultValue: "M", bundle: .main)
         case .thu: return String(localized: "common.day.thu.short", defaultValue: "J", bundle: .main)
         case .fri: return String(localized: "common.day.fri.short", defaultValue: "V", bundle: .main)
         case .sat: return String(localized: "common.day.sat.short", defaultValue: "S", bundle: .main)
-        case .sun: return String(localized: "common.day.sun.short", defaultValue: "S", bundle: .main)
+        case .sun: return String(localized: "common.day.sun.short", defaultValue: "D", bundle: .main)
         }
     }
 
