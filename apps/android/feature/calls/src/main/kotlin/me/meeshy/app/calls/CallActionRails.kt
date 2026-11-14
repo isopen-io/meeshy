@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,12 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -168,7 +166,7 @@ private fun CallActionRail(
     ) {
         Column(
             modifier = Modifier
-                .callScrollEdgeFade(scroll, horizontal = false, symmetric = false)
+                .callScrollEdgeFade(horizontal = false)
                 .verticalScroll(scroll)
                 .padding(CallRailsLayout.PADDING_DP.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -193,43 +191,31 @@ private fun CallActionRail(
 }
 
 /**
- * Une rangée qui défile n'est jamais coupée net (P12.8, P14.9) : ses bords s'effacent en fondu, selon [CallScrollEdgeFade].
- * Les rangées horizontales de la pilule et le bandeau des autres s'effacent aux DEUX bords ([symmetric]) ; un rail
- * vertical n'efface que le bord derrière lequel des boutons attendent. Un masque posé sur le dessin : il ne prend aucun
- * toucher, et les bords suivent l'écran (jamais l'ordre de lecture), donc restent justes en droite-à-gauche.
+ * Une rangée n'est jamais coupée net (P2.8, P12.8, P14.9, loi 17.9) : ses deux bords s'effacent en fondu, qu'elle défile ou
+ * non, selon [CallScrollEdgeFade] — la pilule, le bandeau des autres, les rails, les ambiances, le carrousel de looks et
+ * les réactions. Le modificateur ne lit aucun état de défilement, donc aucune recomposition au geste : un calque hors écran
+ * (graphicsLayer) et un masque `DstIn` posé sur le dessin. Il ne prend aucun toucher, et les bords suivent l'écran (jamais
+ * l'ordre de lecture), donc restent justes en droite-à-gauche.
  */
-internal fun Modifier.callScrollEdgeFade(
-    state: ScrollableState,
-    horizontal: Boolean,
-    symmetric: Boolean = true,
-): Modifier = drawWithContent {
-    val edges = CallScrollEdgeFade.edges(
-        canScrollBackward = state.canScrollBackward,
-        canScrollForward = state.canScrollForward,
-        horizontal = horizontal,
-        isRtl = layoutDirection == LayoutDirection.Rtl,
-        symmetric = symmetric,
-    )
-    val length = if (horizontal) size.width else size.height
-    if (!edges.any || length <= 0f) {
+internal fun Modifier.callScrollEdgeFade(horizontal: Boolean): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
         drawContent()
-        return@drawWithContent
+        val edges = CallScrollEdgeFade.edges
+        val length = if (horizontal) size.width else size.height
+        if (!edges.any || length <= 0f) return@drawWithContent
+        val fade = (CALL_SCROLL_EDGE_FADE.toPx() / length).coerceAtMost(0.5f)
+        val stops = buildList {
+            add(0f to if (edges.first) Color.Transparent else Color.Black)
+            if (edges.first) add(fade to Color.Black)
+            if (edges.last) add(1f - fade to Color.Black)
+            add(1f to if (edges.last) Color.Transparent else Color.Black)
+        }.toTypedArray()
+        drawRect(
+            brush = if (horizontal) Brush.horizontalGradient(*stops) else Brush.verticalGradient(*stops),
+            blendMode = BlendMode.DstIn,
+        )
     }
-    val fade = (CALL_SCROLL_EDGE_FADE.toPx() / length).coerceAtMost(0.5f)
-    val stops = buildList {
-        add(0f to if (edges.first) Color.Transparent else Color.Black)
-        if (edges.first) add(fade to Color.Black)
-        if (edges.last) add(1f - fade to Color.Black)
-        add(1f to if (edges.last) Color.Transparent else Color.Black)
-    }.toTypedArray()
-    drawIntoCanvas { it.saveLayer(Rect(0f, 0f, size.width, size.height), Paint()) }
-    drawContent()
-    drawRect(
-        brush = if (horizontal) Brush.horizontalGradient(*stops) else Brush.verticalGradient(*stops),
-        blendMode = BlendMode.DstIn,
-    )
-    drawIntoCanvas { it.restore() }
-}
 
 /** La longueur du fondu d'un bord (P12.8) : la même pour les rangées de la pilule, le bandeau et les rails. */
 internal val CALL_SCROLL_EDGE_FADE = 24.dp
