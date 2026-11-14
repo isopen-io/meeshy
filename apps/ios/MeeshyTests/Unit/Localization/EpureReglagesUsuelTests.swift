@@ -128,6 +128,12 @@ final class EpureReglagesUsuelTests: XCTestCase {
         }
     }
 
+    func test_security_phoneSentence_inGerman_saysTheNumber_notAFeminineSie() throws {
+        let german = try XCTUnwrap(try app()["settings.security.phone.summary"]?["de"])
+        XCTAssertFalse(german.contains(" sie "), "« Telefon » est neutre : « sie » ne le reprend pas — « \(german) »")
+        XCTAssertTrue(german.contains("Nummer"), "« \(german) »")
+    }
+
     // MARK: - À propos
 
     func test_about_header_doesNotRepeatTheFeaturesList() throws {
