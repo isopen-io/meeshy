@@ -2,13 +2,13 @@ package me.meeshy.ui.component.chrome
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -47,7 +48,14 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
 import me.meeshy.sdk.model.chrome.FloatingButtonsLayout
 import me.meeshy.sdk.model.layout.PointDp
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.kit.MeeshyGlassDensity
+import me.meeshy.ui.component.kit.MeeshyGlassMaterial
+import me.meeshy.ui.component.kit.MeeshyGlassRecipe
+import me.meeshy.ui.component.kit.MeeshyGlassTone
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.layout.currentMeeshyWindowInfo
 import me.meeshy.ui.component.swipe.LocalSwipeRowCoordinator
 import me.meeshy.ui.theme.MeeshyMotion
@@ -172,7 +180,9 @@ public fun MeeshyFloatingButtons(
 /**
  * Un disque pose en [center] (dp, repere de l'ecran). Il suit le doigt image par image ; a la
  * levee, [onDragEnded] recoit le depart et la course et rend le centre ou se poser — le meme
- * si rien n'est ecrit (un toucher), le nouveau sinon — rejoint sur un ressort 0,4 / 0,75.
+ * si rien n'est ecrit (un toucher), le nouveau sinon — rejoint sur le ressort par defaut d'iOS.
+ * L'appui repond comme un verre du kit (K02) : l'echelle de [MeeshyGlassRecipe] en ressort rapide et un
+ * voile ; sous « Reduire les animations », le voile seul, et aucun ressort.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -195,15 +205,30 @@ private fun FloatingDisc(
     var dragStart by remember { mutableStateOf(center) }
     val currentOnDragEnded by rememberUpdatedState(onDragEnded)
 
-    // Un centre qui change hors glisser (rotation, zone sure, repoussement) : ressort 0,35 / 0,8.
+    val reduceMotion = LocalReduceMotion.current
+    val settle = meeshySpec(reduceMotion, MeeshyMotion.springDefault<Float>())
+    val quick = meeshySpec(reduceMotion, MeeshyMotion.springFast<Float>())
+    // Un centre qui change hors glisser (rotation, zone sure, repoussement) : le ressort par defaut d'iOS.
     LaunchedEffect(center) {
-        launch { x.animateTo(center.x, spring(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))) }
-        launch { y.animateTo(center.y, spring(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))) }
+        launch { x.animateTo(center.x, settle) }
+        launch { y.animateTo(center.y, settle) }
     }
-    val scale by animateFloatAsState(
-        targetValue = if (dragging) DRAG_SCALE else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f)),
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val dragScale by animateFloatAsState(
+        targetValue = MotionSpecs.pressScale(dragging, DRAG_SCALE, reduceMotion),
+        animationSpec = quick,
         label = "floating-disc-drag-scale",
+    )
+    val pressScale by animateFloatAsState(
+        targetValue = MotionSpecs.pressScale(pressed && !dragging, GLASS_PRESS_SCALE, reduceMotion),
+        animationSpec = quick,
+        label = "floating-disc-press-scale",
+    )
+    val veil by animateFloatAsState(
+        targetValue = if (pressed && !dragging) PRESS_VEIL_ALPHA else 0f,
+        animationSpec = tween(MeeshyGlassRecipe.TONE_FADE_MILLIS),
+        label = "floating-disc-press-veil",
     )
     val alpha by animateFloatAsState(
         targetValue = ScrollMotionVisibility.opacity(hidden),
@@ -211,7 +236,6 @@ private fun FloatingDisc(
         label = "floating-disc-scroll-fade",
     )
     val half = FloatingButtonGeometry.BUTTON_SIZE / 2f
-    val interactionSource = remember { MutableInteractionSource() }
     // Efface en plein glisser (la liste repart) : le geste est detache, le disque revient.
     LaunchedEffect(hidden) {
         if (hidden) {
@@ -254,9 +278,8 @@ private fun FloatingDisc(
                             dragging = false
                             val target = currentOnDragEnded(dragStart, travelled.x, travelled.y)
                             haptics.light()
-                            val release = spring<Float>(dampingRatio = 0.75f, stiffness = MeeshyMotion.stiffnessForResponse(0.4f))
-                            launch { x.animateTo(target.x, release) }
-                            launch { y.animateTo(target.y, release) }
+                            launch { x.animateTo(target.x, settle) }
+                            launch { y.animateTo(target.y, settle) }
                         }
                     },
                     onDragCancel = {
@@ -280,11 +303,15 @@ private fun FloatingDisc(
             }
             .size(FloatingButtonSize)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = dragScale * pressScale
+                scaleY = dragScale * pressScale
                 this.alpha = alpha
             }
             .shadow(elevation = 10.dp, shape = CircleShape, clip = false)
+            .drawWithContent {
+                drawContent()
+                if (veil > 0f) drawCircle(PRESS_VEIL.copy(alpha = veil))
+            }
             .border(1.5.dp, DISC_RIM, CircleShape)
             .testTag(testTag)
             .semantics {
@@ -304,6 +331,19 @@ private fun FloatingDisc(
 }
 
 private const val DRAG_SCALE = 1.15f
+private const val PRESS_VEIL_ALPHA = 0.18f
+private val PRESS_VEIL = Color.White
+
+/** L'echelle d'un verre presse du kit (K02), lue dans sa recette : le disque ne la redeclare pas. */
+private val GLASS_PRESS_SCALE: Float = MeeshyGlassRecipe.resolve(
+    tone = MeeshyGlassTone.Theme,
+    density = MeeshyGlassDensity.Regular,
+    isTinted = false,
+    isInteractive = true,
+    isPressed = true,
+    material = MeeshyGlassMaterial.Drawn,
+    reduceMotion = false,
+).scale
 
 /** Le liseré du disque : blanc dégradé du haut-gauche au bas-droite (`MeeshyOpacity.medium` -> `subtle`). */
 private val DISC_RIM = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.White.copy(alpha = 0.1f)))

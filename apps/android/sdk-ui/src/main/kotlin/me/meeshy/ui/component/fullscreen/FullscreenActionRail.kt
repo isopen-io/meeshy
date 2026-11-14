@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeMetrics
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -153,11 +154,13 @@ private fun FloatingActionCell(
     val bounce = remember { Animatable(1f) }
     var bounceArmed by remember { mutableStateOf(false) }
     val isOutlined = outlineTint != null
+    val reduceMotion = LocalReduceMotion.current
     LaunchedEffect(isActive, isOutlined) {
         if (!bounceArmed) {
             bounceArmed = true
             return@LaunchedEffect
         }
+        if (reduceMotion) return@LaunchedEffect
         bounce.animateTo(BOUNCE_PEAK, tween(durationMillis = BOUNCE_UP_MILLIS))
         bounce.animateTo(1f, MeeshyMotion.bouncySpring())
     }

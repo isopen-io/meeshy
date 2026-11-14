@@ -1,8 +1,6 @@
 package me.meeshy.ui.component.location
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -26,8 +24,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -37,6 +35,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.motionSpec
 import me.meeshy.sdk.model.SharedMapStyle
 import me.meeshy.sdk.model.location.GeoPoint
 import me.meeshy.sdk.model.location.MapPinLift
@@ -198,7 +198,7 @@ private fun Modifier.mapGestures(
 @Composable
 fun MapCenterPin(lifted: Boolean, color: Color, modifier: Modifier = Modifier) {
     val target = MapPinLift.style(lifted)
-    val spec = spring<Float>(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+    val spec = motionSpec(LocalReduceMotion.current, PIN_SPRING_RESPONSE, PIN_SPRING_DAMPING)
     val scale by animateFloatAsState(target.scale, spec, label = "pin-scale")
     val lift by animateFloatAsState(target.yOffsetDp, spec, label = "pin-lift")
     val shadowScale by animateFloatAsState(target.shadowScale, spec, label = "pin-shadow-scale")
@@ -208,8 +208,12 @@ fun MapCenterPin(lifted: Boolean, color: Color, modifier: Modifier = Modifier) {
             Modifier
                 .align(Alignment.Center)
                 .size(width = 14.dp, height = 5.dp)
-                .scale(shadowScale)
-                .background(Color.Black.copy(alpha = shadowAlpha), CircleShape),
+                .graphicsLayer {
+                    scaleX = shadowScale
+                    scaleY = shadowScale
+                    alpha = shadowAlpha
+                }
+                .background(Color.Black, CircleShape),
         )
         Icon(
             imageVector = MeeshyIcons.LocationFilled,
@@ -217,10 +221,18 @@ fun MapCenterPin(lifted: Boolean, color: Color, modifier: Modifier = Modifier) {
             tint = color,
             modifier = Modifier
                 .size(PIN_SIZE)
-                .offset(y = lift.dp - PIN_SIZE / 2)
-                .scale(scale),
+                .offset(y = -PIN_SIZE / 2)
+                .graphicsLayer {
+                    translationY = lift.dp.toPx()
+                    scaleX = scale
+                    scaleY = scale
+                },
         )
     }
 }
+
+/** Le ressort d'iOS pour le soulevé de l'épingle (réponse 0,32, amortissement 0,68) ; `snap()` sous réduction. */
+private const val PIN_SPRING_RESPONSE = 0.32f
+private const val PIN_SPRING_DAMPING = 0.68f
 
 internal val PIN_SIZE = 40.dp
