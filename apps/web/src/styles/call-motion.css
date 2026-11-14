@@ -151,7 +151,8 @@
    interruptible. Sous « Réduire les animations », aucun déplacement : le fondu court
    est joué par `useStowFade` (Web Animations, que la règle générale n'éteint pas).
    `data-call-stowed` est la même règle, posée par un élément qui vit hors de l'écran
-   d'appel (l'indicateur d'enregistrement). */
+   d'appel (l'indicateur d'enregistrement) ou qui se range par SON toucher et pas par le
+   plein écran (`data-call-chrome-keep` : la capsule et la puce de la une, U2.4). */
 [data-call-stow],
 [data-call-pill-rest] {
   transition:
@@ -160,7 +161,7 @@
     visibility 0s;
 }
 
-[data-call-chrome='hidden'] [data-call-stow],
+[data-call-chrome='hidden'] [data-call-stow]:not([data-call-chrome-keep]),
 [data-call-stow][data-call-stowed] {
   opacity: 0;
   visibility: hidden;
@@ -170,12 +171,12 @@
     visibility 0s linear 0.3s;
 }
 
-[data-call-chrome='hidden'] [data-call-stow='top'],
+[data-call-chrome='hidden'] [data-call-stow='top']:not([data-call-chrome-keep]),
 [data-call-stow='top'][data-call-stowed] {
   translate: 0 calc(-100% - env(safe-area-inset-top) - var(--stow-clearance, 0px) - 1rem);
 }
 
-[data-call-chrome='hidden'] [data-call-stow='bottom'],
+[data-call-chrome='hidden'] [data-call-stow='bottom']:not([data-call-chrome-keep]),
 [data-call-stow='bottom'][data-call-stowed] {
   translate: 0 calc(100% + env(safe-area-inset-bottom) + 1.5rem);
 }
@@ -260,7 +261,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-call-chrome='hidden'] [data-call-stow],
+  [data-call-chrome='hidden'] [data-call-stow]:not([data-call-chrome-keep]),
   [data-call-stow][data-call-stowed],
   [data-call-pill-stowed] [data-call-pill-rest] {
     translate: none;

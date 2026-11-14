@@ -1,7 +1,9 @@
 package me.meeshy.app.sync
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -48,10 +50,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import me.meeshy.app.R
+import me.meeshy.app.navigation.FeedOverlayTransition
 import me.meeshy.app.startup.AppOverlay
 import me.meeshy.sdk.model.syncpill.PendingBanners
 import me.meeshy.sdk.outbox.OfflineQueuePillProviding
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -75,6 +81,23 @@ class PendingBannersViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PendingBannersUiState())
 }
 
+/** Le mouvement du bandeau ambre (iOS `.spring(response: 0.4, dampingFraction: 0.8)`). */
+internal object PendingBannerMotion {
+    private const val RESPONSE = 0.4f
+    private const val DAMPING = 0.8f
+
+    fun <T> spring(): FiniteAnimationSpec<T> =
+        androidx.compose.animation.core.spring(dampingRatio = DAMPING, stiffness = MeeshyMotion.stiffnessForResponse(RESPONSE))
+
+    /** Glisse du haut sur le ressort d'iOS ; fondu court seul sous « Réduire les animations ». */
+    fun enter(reduce: Boolean): EnterTransition =
+        meeshyEnter(reduce, slideInVertically(spring()) { -it } + fadeIn(spring()))
+
+    /** Repart par le même chemin, sur le même ressort ; fondu court seul sous réduction. */
+    fun exit(reduce: Boolean): ExitTransition =
+        meeshyExit(reduce, slideOutVertically(spring()) { -it } + fadeOut(spring()))
+}
+
 @Composable
 internal fun PendingBannersHost(modifier: Modifier = Modifier, viewModel: PendingBannersViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,11 +117,11 @@ internal fun PendingBannersHost(modifier: Modifier = Modifier, viewModel: Pendin
 
 @Composable
 private fun PendingBanner(visible: Boolean, title: String, subtitle: String) {
-    val spec = spring<Float>(dampingRatio = 0.8f, stiffness = me.meeshy.ui.theme.MeeshyMotion.stiffnessForResponse(0.4f))
+    val reduce = FeedOverlayTransition.reduceMotion
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = me.meeshy.ui.theme.MeeshyMotion.stiffnessForResponse(0.4f))) { -it } + fadeIn(spec),
-        exit = slideOutVertically { -it } + fadeOut(),
+        enter = PendingBannerMotion.enter(reduce),
+        exit = PendingBannerMotion.exit(reduce),
     ) {
         val ink = MeeshyPalette.Indigo950
         Row(

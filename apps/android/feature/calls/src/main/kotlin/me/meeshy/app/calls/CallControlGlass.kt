@@ -1,10 +1,8 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -163,7 +161,7 @@ internal fun CallPillButton(
     onLongClick: (() -> Unit)? = null,
     customActions: List<CustomAccessibilityAction> = emptyList(),
     dimmed: Boolean = false,
-    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4), reduced motion included. */
+    /** The caption fades in or out in place, never snaps (G3.4, reduced motion included); its room is set at once and the pill's glass morphs around it (loi 17.2). */
     captionShown: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -205,8 +203,8 @@ internal fun CallPillButton(
         if (caption != null) {
             AnimatedVisibility(
                 visible = captionShown,
-                enter = fadeIn(tween(captionMillis)) + expandVertically(tween(captionMillis)),
-                exit = fadeOut(tween(captionMillis)) + shrinkVertically(tween(captionMillis)),
+                enter = fadeIn(tween(captionMillis)),
+                exit = fadeOut(tween(captionMillis)),
             ) {
                 Text(
                     text = caption,

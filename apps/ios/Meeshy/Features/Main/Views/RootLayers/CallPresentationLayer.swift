@@ -240,21 +240,27 @@ struct CallPresentationLayer: ViewModifier {
             // un 3e appelant réutilise l'identité du 2e et se fait auto-rejeter
             // 5-10 s trop tôt (Audit Vague 27).
             .overlay(alignment: .top) {
-                if let callManager, callManager.showCallWaitingBanner {
-                    CallWaitingBannerView(
-                        callerName: callManager.pendingIncomingCall?.fromUsername
-                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                        isVisible: Binding(
-                            get: { callManager.showCallWaitingBanner },
-                            set: { callManager.showCallWaitingBanner = $0 }
-                        ),
-                        onReject: { callManager.incomingRing.rejectPendingCall() },
-                        onEndAndAnswer: { callManager.incomingRing.endCurrentAndAnswerPending() }
-                    )
-                    .id(callManager.pendingIncomingCall?.callId)
-                    .padding(.top, MeeshySpacing.sm)
-                }
+                ZStack { callWaitingBanner(callManager) }
+                    .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: callManager?.showCallWaitingBanner == true)
             }
             .modifier(CallFeedbackLayer(callManager: callManager))
+    }
+
+    @ViewBuilder
+    private func callWaitingBanner(_ callManager: CallManager?) -> some View {
+        if let callManager, callManager.showCallWaitingBanner {
+            CallWaitingBannerView(
+                callerName: callManager.pendingIncomingCall?.fromUsername
+                    ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                isVisible: Binding(
+                    get: { callManager.showCallWaitingBanner },
+                    set: { callManager.showCallWaitingBanner = $0 }
+                ),
+                onReject: { callManager.incomingRing.rejectPendingCall() },
+                onEndAndAnswer: { callManager.incomingRing.endCurrentAndAnswerPending() }
+            )
+            .id(callManager.pendingIncomingCall?.callId)
+            .padding(.top, MeeshySpacing.sm)
+        }
     }
 }

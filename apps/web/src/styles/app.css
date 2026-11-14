@@ -155,6 +155,10 @@
   /* ---- LARGEURS DE COQUILLE ---- */
   --container-shell: var(--shell-width);
   --container-measure: var(--measure);
+
+  /* ---- FONDU PAR DEFAUT (#18412) : une transition sans duree prend celle de K01, K02 et K13 ---- */
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: ease;
 }
 
 @layer base {

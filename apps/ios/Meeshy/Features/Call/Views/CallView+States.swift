@@ -252,6 +252,14 @@ extension CallView {
             }
     }
 
+    /// P9b.15 — le duo d'avatars de l'appel audio, UNE vue de 120 à 56 pt : le visage, dessiné à sa
+    /// taille de repos, se réduit par une échelle ; l'anneau suit sa place (P9b.13), la pastille garde sa loi.
+    func audioAvatarPair(isCompact: Bool) -> some View {
+        let size = CallAudioStageLayout.avatarSize(isCompact: isCompact), badgeSize = max(44, size * 0.4)
+        return CallPeerSpeechRing(callManager: callManager, mesh: mesh) { _ in avatarCircle(size: CallAudioStageLayout.fullAvatarSize).scaleEffect(CallAudioStageLayout.faceScale(isCompact: isCompact)).frame(width: size, height: size) }
+            .overlay(alignment: .bottomTrailing) { localAvatarBadge(size: badgeSize).offset(x: badgeSize * 0.22, y: badgeSize * 0.12) }
+    }
+
     private func localAvatarBadge(size: CGFloat) -> some View {
         let user = AuthManager.shared.currentUser
 

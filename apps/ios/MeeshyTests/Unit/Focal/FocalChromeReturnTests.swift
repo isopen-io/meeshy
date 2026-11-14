@@ -32,6 +32,13 @@ final class FocalChromeReturnTests: XCTestCase {
         XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: false, edge: .bottom), 0)
     }
 
+    func test_edgeHiddenChrome_underReduceMotion_staysInPlace_andOnlyFades() {
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .top, reduceMotion: true), 0)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .bottom, reduceMotion: true), 0)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .top, reduceMotion: false), -FocalMetrics.HiddenChrome.edgeTravel)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .bottom, reduceMotion: false), FocalMetrics.HiddenChrome.edgeTravel)
+    }
+
     // MARK: - Structure
 
     private static var iosRoot: URL {

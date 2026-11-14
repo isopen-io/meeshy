@@ -57,13 +57,18 @@ type CameraOffStageProps = {
   readonly label: string | null;
   /** Le diamètre de l'avatar : 96 sur la scène, la moitié de la vignette dans le coin. */
   readonly size?: number;
+  /**
+   * Une vignette de GRILLE (loi 17.12) : son fond de case, et pas d'anneau sur le disque — le halo de la parole y est
+   * celui de la case entière (`SpeechRing` `shape="tile"`), posé par la grille.
+   */
+  readonly tile?: boolean;
 };
 
 /**
  * La scène noire de la caméra coupée, sur la scène du duo ET dans la vignette du coin quand elle montre l'autre (loi
  * 17.12) : l'image et l'avatar passent l'un à l'autre en fondu, jamais d'un coup.
  */
-export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, color, speech, label, size = 96 }: CameraOffStageProps) {
+export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, color, speech, label, size = 96, tile = false }: CameraOffStageProps) {
   const ms = cameraOffFadeMs(prefersReducedMotion());
   const [settledOn, settle] = useState(videoOn);
   const veil = useRef<HTMLDivElement>(null);
@@ -72,10 +77,10 @@ export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, colo
   return (
     <>
       {videoOn || settledOn ? <div className="absolute inset-0 overflow-hidden">{video}</div> : null}
-      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-media-backdrop ${veilHidden ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
+      <div ref={veil} className={`absolute inset-0 grid place-items-center ${tile ? 'bg-media-fill' : 'bg-media-backdrop'} ${veilHidden ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
         <div className="flex flex-col items-center gap-3">
           <Portrait name={name} avatar={avatar} size={size} pulse={false} presenceKey={presenceKey} tint={color}>
-            <PeerSpeechRing color={color} stream={veilHidden ? null : speech} />
+            {tile ? null : <PeerSpeechRing color={color} stream={veilHidden ? null : speech} />}
           </Portrait>
           {label === null ? null : (
             <span className="flex items-center gap-2 text-body text-on-media-3">

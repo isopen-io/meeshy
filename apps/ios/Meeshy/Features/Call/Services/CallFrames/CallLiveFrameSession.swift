@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import MeeshySDK
 import os
+import UIKit
 
 /// Une proposition reçue : le cadre que l'autre m'invite à appliquer, et le prénom qu'il partage.
 nonisolated struct CallLiveFrameProposal: Equatable, Sendable {
@@ -17,12 +18,31 @@ nonisolated struct CallLiveFrameAnswer: Equatable, Sendable {
     let from: String?
 }
 
+/// **Le cadre PARTAGÉ** (C1.10, #18183) — celui que nous montrons tous les deux, parce que l'un a
+/// accepté celui de l'autre. Mêmes vecteurs que le web (`liveFrameReleaseReachesPeer`,
+/// `liveFramePeerReleaseDropsMine`) et qu'Android (`CallLiveFrameMachine`).
+nonisolated extension CallLiveFrameRule {
+    /// Relâcher prévient l'autre quand ma proposition attend sa réponse, ou quand il montre le même
+    /// cadre que moi. Un cadre refusé, ou que l'autre ne montre pas, se relâche en silence.
+    static func releaseReachesPeer(frameId: String?, sentProposal: String?, peerFrameId: String?) -> Bool {
+        sentProposal != nil || peerReleaseDropsMine(frameId: frameId, peerFrameId: peerFrameId)
+    }
+
+    /// Le retrait de l'autre fait tomber mon cadre quand c'était celui qu'il montrait — jamais un
+    /// autre que j'ai gardé depuis.
+    static func peerReleaseDropsMine(frameId: String?, peerFrameId: String?) -> Bool {
+        frameId != nil && frameId == peerFrameId
+    }
+}
+
 /// **LE CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, #9287, doc frames 06 § 4.4).
 ///
 /// Chacun reste libre de son cadre : le mien s'applique tout de suite CHEZ MOI et part à
 /// l'autre comme une PROPOSITION, avec le prénom que je partage. Une proposition reçue ne
-/// touche jamais à mon cadre — je l'applique ou je la refuse, et l'autre l'apprend. Rien
-/// n'est persisté : un nouvel appel repart sans cadre.
+/// touche jamais à mon cadre — je l'applique ou je la refuse, et l'autre l'apprend. Un cadre
+/// PARTAGÉ que l'un relâche tombe chez les deux (#18183) : le retrait est le même
+/// `frameId: null` que celui d'une proposition retirée, donc un ancien client le lit comme
+/// avant et garde son cadre. Rien n'est persisté : un nouvel appel repart sans cadre.
 @MainActor
 final class CallLiveFrameSession: ObservableObject {
     static let clockPeriodNs: UInt64 = 60_000_000_000
@@ -41,6 +61,7 @@ final class CallLiveFrameSession: ObservableObject {
     private let textsProvider: any CallFrameTextsProviding
     private let myName: () -> String?
     private let notify: (String) -> Void
+    private let announce: (String) -> Void
     private let wait: @MainActor (UInt64) async -> Void
     private var subscription: AnyCancellable?
     private var pendingReply: Task<Void, Never>?
@@ -55,6 +76,7 @@ final class CallLiveFrameSession: ObservableObject {
         textsProvider: (any CallFrameTextsProviding)? = nil,
         myName: (() -> String?)? = nil,
         notify: ((String) -> Void)? = nil,
+        announce: ((String) -> Void)? = nil,
         wait: (@MainActor (UInt64) async -> Void)? = nil,
         events: AnyPublisher<CallLiveFrameSelectedEvent, Never>? = nil
     ) {
@@ -66,6 +88,7 @@ final class CallLiveFrameSession: ObservableObject {
             return CallCaptureIdentity.myName(displayName: user?.displayName, username: user?.username, fallback: "")
         }
         self.notify = notify ?? { FeedbackToastManager.shared.showError($0) }
+        self.announce = announce ?? { Self.announceQueued($0) }
         self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
         subscription = (events ?? resolvedSocket.callLiveFrameEvents)
             .receive(on: DispatchQueue.main)
@@ -122,17 +145,18 @@ final class CallLiveFrameSession: ObservableObject {
     // MARK: - Mon cadre
 
     /// Mon cadre s'applique tout de suite chez moi, puis se PROPOSE à l'autre — sauf s'il le
-    /// montre déjà. Retirer mon cadre retire ma proposition tant qu'elle attend sa réponse.
+    /// montre déjà. Retirer mon cadre retire ma proposition tant qu'elle attend sa réponse, et
+    /// retire chez l'autre le cadre que nous partageons (#18183) — relâcher « Cadre » comme
+    /// l'annuler par l'appui long sur (+) passent ici.
     /// Un refus de la passerelle ne m'enlève pas mon cadre : il n'est simplement pas proposé.
     func apply(_ id: String?) async {
         guard let callId else { return }
         guard id.map(CallLiveFrameRule.isFrameId) ?? true else { return }
+        let held = frameId
         frameId = id
         answer = nil
         guard let id else {
-            guard sentProposal != nil else { return }
-            sentProposal = nil
-            try? await socket.selectCallLiveFrame(callId: callId, frameId: nil, texts: nil, reply: nil)
+            await release(held, callId: callId)
             return
         }
         guard id != peerFrameId else { return }
@@ -145,6 +169,13 @@ final class CallLiveFrameSession: ObservableObject {
             sentProposal = nil
             notify(CallLiveFrameCopy.notProposed)
         }
+    }
+
+    private func release(_ held: String?, callId: String) async {
+        guard CallLiveFrameRule.releaseReachesPeer(frameId: held, sentProposal: sentProposal, peerFrameId: peerFrameId) else { return }
+        if CallLiveFrameRule.peerReleaseDropsMine(frameId: held, peerFrameId: peerFrameId) { peerFrameId = nil }
+        sentProposal = nil
+        try? await socket.selectCallLiveFrame(callId: callId, frameId: nil, texts: nil, reply: nil)
     }
 
     // MARK: - La proposition de l'autre
@@ -184,9 +215,11 @@ final class CallLiveFrameSession: ObservableObject {
             receiveReply(reply, frameId: event.frameId)
             return
         }
+        let dropsMine = event.frameId == nil && CallLiveFrameRule.peerReleaseDropsMine(frameId: frameId, peerFrameId: peerFrameId)
         peerFrameId = event.frameId
         guard let id = event.frameId else {
             proposal = nil
+            if dropsMine { dropSharedFrame() }
             return
         }
         guard id != frameId else {
@@ -202,6 +235,19 @@ final class CallLiveFrameSession: ObservableObject {
         sentProposal = nil
         if reply == .accepted { peerFrameId = answered }
         answer = CallLiveFrameAnswer(frameId: answered, reply: reply, from: remoteSharedName)
+    }
+
+    /// L'autre a relâché le cadre que nous partagions : il tombe chez moi, sans rien renvoyer,
+    /// et le lecteur d'écran dit pourquoi l'image a changé (#18367).
+    private func dropSharedFrame() {
+        frameId = nil
+        announce(CallLiveFrameCopy.peerReleased(by: remoteSharedName))
+    }
+
+    /// Une annonce polie : elle attend la fin de ce que VoiceOver dit déjà.
+    private static func announceQueued(_ text: String) {
+        let queued = NSAttributedString(string: text, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+        UIAccessibility.post(notification: .announcement, argument: queued)
     }
 
     /// L'écran a montré la réponse : elle s'efface.

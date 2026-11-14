@@ -34,12 +34,24 @@ struct RootFloatingChrome: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
 
+    /// « Réduire les animations », système OU préférence de l'app.
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
+
     /// La loi de suivi de l'échelle, pour l'état de mouvement et de batterie du moment.
     private var ladderFollow: FloatingMenuLadderFollow {
         FloatingMenuLadderFollow(
             reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
             animatesDecoration: animatesDecoration
         )
+    }
+
+    /// Ouvre ou ferme l'échelle : ressort rapide, fondu court sous réduction.
+    private func setMenu(_ isOpen: Bool) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            showMenu = isOpen
+        }
     }
 
     /// « Jeu masqué » : aucun anneau, comme aucun barreau du jeu.
@@ -68,12 +80,10 @@ struct RootFloatingChrome: View {
                 Color.clear
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-                    }
+                    .onTapGesture { setMenu(false) }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(String(localized: "common.close", bundle: .main))
-                    .accessibilityAction { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }
+                    .accessibilityAction { setMenu(false) }
                     .zIndex(99)
             }
 
@@ -102,7 +112,7 @@ struct RootFloatingChrome: View {
                 // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
                 // L'ouverture des Reels n'est PLUS déclenchée ici — elle se fait
                 // désormais via le bouton Réels du header « Meeshy Feed ».
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
                     showFeed.toggle()
                 }
             },
@@ -112,14 +122,10 @@ struct RootFloatingChrome: View {
                 // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
                 // réglages et referme le menu, comme n'importe quel autre item.
                 if showMenu {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu = false
-                    }
+                    setMenu(false)
                     onPush(.profile)
                 } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu.toggle()
-                    }
+                    setMenu(true)
                 }
             },
             onLeftLongPress: {
@@ -144,11 +150,7 @@ struct RootFloatingChrome: View {
                 // (sans passer par le menu). Les réglages restent accessibles via
                 // le dernier item du menu (roue dentée).
                 HapticFeedback.medium()
-                if showMenu {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu = false
-                    }
-                }
+                if showMenu { setMenu(false) }
                 onPush(.profile)
             },
             // L'échelle suit le disque pendant le glisser (#18201) : la course vive
@@ -287,7 +289,7 @@ struct RootFloatingChrome: View {
                 .scaleEffect(follow.scale(rung: index, dragging: anchor.dragging))
                 .position(x: menuX, y: itemY)
                 .animation(follow.animation(rung: index), value: anchor)
-                .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                .menuAnimation(showMenu: showMenu, delay: Double(index) * MeeshyAnimation.staggerDelay)
             }
         }
         .ignoresSafeArea()
@@ -304,7 +306,7 @@ struct RootFloatingChrome: View {
     }
 
     private func openMenuEntry(_ entry: RootMenuLadderEntry) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
+        setMenu(false)
         onPush(entry.route)
     }
 }
@@ -317,17 +319,61 @@ private struct LadderFollowAnchor: Equatable {
     let dragging: Bool
 }
 
+/// La pose d'un barreau d'échelle de menu, ouvert ou fermé.
+nonisolated struct MenuRungPose: Equatable {
+    let scale: CGFloat
+    let rotationDegrees: Double
+    let opacity: Double
+    let delay: Double
+}
+
+/// La loi des barreaux d'une échelle de menu : depuis le disque, en échelle et
+/// en rotation, décalés par rang à l'ouverture.
+nonisolated enum MenuRungMotion {
+    static let closedScale: CGFloat = 0.3
+    static let closedRotationDegrees: Double = -30
+
+    /// Sous « Réduire les animations », l'opacité seule : ni échelle, ni
+    /// rotation, ni décalage par rang.
+    static func pose(isOpen: Bool, reduceMotion: Bool, delay: Double) -> MenuRungPose {
+        guard !reduceMotion else {
+            return MenuRungPose(scale: 1, rotationDegrees: 0, opacity: isOpen ? 1 : 0, delay: 0)
+        }
+        return isOpen
+            ? MenuRungPose(scale: 1, rotationDegrees: 0, opacity: 1, delay: delay)
+            : MenuRungPose(scale: closedScale, rotationDegrees: closedRotationDegrees, opacity: 0, delay: 0)
+    }
+}
+
+/// Un barreau posé par `MenuRungMotion` : `springBouncy` à l'ouverture,
+/// `springFast` à la fermeture, fondu court sous réduction (les deux moitiés).
+private struct MenuRungAnimation: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    let isOpen: Bool
+    let delay: Double
+
+    func body(content: Content) -> some View {
+        let pose = MenuRungMotion.pose(
+            isOpen: isOpen,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            delay: delay
+        )
+        return content
+            .scaleEffect(pose.scale)
+            .opacity(pose.opacity)
+            .rotationEffect(.degrees(pose.rotationDegrees))
+            .meeshyAnimation(
+                (isOpen ? MeeshyAnimation.springBouncy : MeeshyAnimation.springFast).delay(pose.delay),
+                reduced: MeeshyMotion.reducedFade,
+                value: isOpen
+            )
+    }
+}
+
 // MARK: - Menu Animation Modifier
 extension View {
     func menuAnimation(showMenu: Bool, delay: Double) -> some View {
-        self
-            .scaleEffect(showMenu ? 1 : 0.3)
-            .opacity(showMenu ? 1 : 0)
-            .rotationEffect(.degrees(showMenu ? 0 : -30))
-            .animation(
-                .spring(response: showMenu ? 0.4 : 0.25, dampingFraction: 0.65)
-                    .delay(showMenu ? delay : 0),
-                value: showMenu
-            )
+        modifier(MenuRungAnimation(isOpen: showMenu, delay: delay))
     }
 }
