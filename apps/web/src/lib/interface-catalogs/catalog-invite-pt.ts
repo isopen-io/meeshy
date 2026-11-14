@@ -28,6 +28,7 @@ const pt = {
   'invite.stats.languages.one': 'idioma falado',
   'invite.stats.languages.other': 'idiomas falados',
   'invite.stats.spoken': 'Aqui se fala',
+  'invite.more': 'Mais',
   'invite.stats.share': '{language} {percent}',
   'invite.rights.title': 'Sem conta, você poderá',
   'invite.rights.messages': 'Escrever mensagens',

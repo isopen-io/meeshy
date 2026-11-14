@@ -13,6 +13,13 @@ import { shouldApplyGameState } from '@meeshy/shared/types/game-sync-order';
  */
 export const ENGAGEMENT_PROGRESS_QUERY_KEY = ['me', 'engagement'] as const;
 
+/**
+ * La clé commune des gestes du jeu : tant qu'un geste est EN VOL, la lecture en cache est l'optimiste — le guide et les
+ * propositions de photo attendent qu'il soit réglé pour célébrer (un geste refusé ne se célèbre pas). Elle vit ici, avec
+ * la clé du cache, pour que le bandeau (#18199) la porte sans emporter les gestes de Progression.
+ */
+export const GAME_MUTATION_KEY = ['game', 'gesture'] as const;
+
 const revisionOf = (value: unknown): number | undefined => {
   if (typeof value !== 'object' || value === null) return undefined;
   const revision: unknown = Reflect.get(value, 'gameRevision');

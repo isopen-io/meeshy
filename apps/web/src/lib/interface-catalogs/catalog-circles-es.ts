@@ -196,6 +196,7 @@ const es = {
   'shareLocation.offline': 'Compartir la ubicación necesita conexión.',
   'shareLocation.rateLimited': 'Demasiados envíos, inténtalo en un momento.',
   'shareLocation.failed': 'No se pudo compartir la ubicación, inténtalo de nuevo.',
+  'shareLocation.stopPending': 'Se dejará de compartir en cuanto vuelva la conexión.',
 } as const satisfies CirclesCatalog;
 
 export default es;

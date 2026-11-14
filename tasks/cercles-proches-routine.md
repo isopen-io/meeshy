@@ -1091,3 +1091,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   lot (rouge hérité de `dev` pour le premier). Swift et `sdk-core` se prouvent par la CI de `dev` après fusion
   (`CI_DEV_SEUL`, #18048).
 - Prochain lot recommandé : #18388 (le web), puis la passerelle #18205 avec #18389.
+
+## 2026-11-14 — réveil de la nuit : un « Arrêter » hors ligne part au retour du réseau, sur le web (#18388)
+
+- Reprise : aucune PR cercles ouverte ; #18390 (iOS + Android) fusionnée. Aucune branche n'écrit
+  `apps/web/src/lib/shared-locations/` : lot réservé sur `claude/cercles-18388-web-arreter-hors-ligne`.
+- Lot : le RETRAIT EN ATTENTE sur le web, même loi que iOS/Android (#18204). `shared-location-roster.ts` : la liste
+  devient `{ entries, withdrawals }` avec `withdrawing` (8 h au plus), `settled`, `isSettled`, `hasRecipients`,
+  `hasPendingWithdrawals`. Le centre : un « Arrêter » qui échoue (hors ligne, accusé perdu) rend `withdrawal-pending`,
+  coupe le suivi s'il ne reste personne et se rejoue toutes les 30 s et à la socket accrochée ; aucune mise à jour ne
+  part tant qu'un retrait attend ; un refus autre que le réseau arrête tout ; une dernière position plus vieille qu'un
+  battement est redemandée à l'appareil. Message « Le partage s'arrêtera dès le retour du réseau » en sept langues.
+- Audit adversarial avant PR : deux défauts corrigés et témoignés — (1) un démarrage en vol dans un autre onglet
+  ressuscitait la personne mise en retrait pendant l'attente : après l'accusé, les retraits gardés l'emportent et se
+  rejouent aussitôt ; (2) un onglet d'une version d'avant effaçait le retrait en réécrivant la liste : les retraits
+  vivent sous leur propre clé (`<clé>.withdrawals`), la liste garde le format d'avant. Corrigé aussi : une écriture
+  refusée par le stockage laisse la mémoire faire foi (la liste gardée en retard n'est plus relue).
+  Suivis ouverts : verrou entre onglets pour un arrêt RÉUSSI (#18431, course antérieure au lot) ; la fiche dit qu'un
+  arrêt attend le réseau, et un arrêt complet décidé en arrière-plan se dit, sur les trois clients (#18432).
+- Gates locaux : `bun test` du lot 97/97 (témoins vus rouges d'abord) ; `tsc --noEmit` vert ; build,
+  `check-utilities`, `measure-weight` verts.
+- Prochain lot recommandé : la passerelle #18205 avec #18389, puis #18431, puis #18351 une fois tranchée.

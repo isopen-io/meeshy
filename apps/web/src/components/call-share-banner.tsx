@@ -1,9 +1,13 @@
 import { GlyphSvg } from '@/components/glyph';
+import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
+import { callServicePills, servicePillBanners, servicePillSignalsOf, type ServicePills, type WebVideoNotice } from '@/lib/calls/call-service-pills';
+import type { PresentBanners } from '@/lib/calls/call-top-banners';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
-import type { CallMember } from '@/lib/calls/call-store';
+import { pipOpenStore, shellPipStore } from '@/lib/calls/call-pip';
+import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -59,5 +63,72 @@ export function CallCaptureAlerts({ members, language }: { readonly members: Rea
           </span>
         ))}
     </div>
+  );
+}
+
+/**
+ * Les alertes d'un pair (`call:quality-alert`, #8047) : son lien instable, dit poliment dans une région
+ * vivante, sous l'en-tête, sur le verre partagé du kit (loi 18.1). Elles vivent avec les bandeaux du haut (`call_top_banners`), que l'appel vivant
+ * précharge : l'écran d'appel n'en paie que l'`import()`.
+ */
+export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
+  return (
+    <div className="flex flex-col items-center gap-1 px-4" aria-live="polite">
+      {Object.values(members)
+        .filter((member) => member.weakNetwork)
+        .map((member) => (
+          <MeeshyGlass as="span" key={`network-${member.userId}`} density="dense" className="rounded-full px-3 py-1 text-mini text-on-media" data-call-alert="weak-network">
+            {translate(language, 'call.alert.weakNetwork', { name: member.name })}
+          </MeeshyGlass>
+        ))}
+    </div>
+  );
+}
+
+const VIDEO_NOTICE_KEY = { reduced: 'call.video.frozen', paused: 'call.video.suspended' } as const;
+
+/**
+ * « Vidéo réduite » (E4, #18227 ; `CallVideoNoticePill` d'Android) : ma vidéo gelée puis mise en pause
+ * par un réseau faible, dite dans une capsule du verre partagé, maillon de la pile du haut. Annoncée
+ * poliment (`role="status"`), deux lignes au plus dans ses 44 px : la phrase tient en allemand ou en
+ * arabe. Quand elle se montre, c'est la loi des pastilles de service qui le dit.
+ */
+export function CallVideoNoticePill({ notice, language }: { readonly notice: WebVideoNotice; readonly language: InterfaceLanguage }) {
+  return (
+    <MeeshyGlass role="status" density="dense" className="flex min-h-11 max-w-full items-center rounded-full px-4 py-1.5 text-center text-mini font-semibold leading-4 text-on-media" data-call-video-notice={notice}>
+      <span className="line-clamp-2">{translate(language, VIDEO_NOTICE_KEY[notice])}</span>
+    </MeeshyGlass>
+  );
+}
+
+/**
+ * La loi des pastilles de service (E3 · E4), lue ici et nulle part ailleurs. L'image dans l'image (fenêtre
+ * du navigateur ou de la coque) se lit au rendu : le relevé de qualité, qui seul allume l'avis, rend
+ * l'écran à chaque mesure.
+ */
+const pillsOf = (call: ActiveCall): ServicePills<WebVideoNotice> => callServicePills(servicePillSignalsOf(call, pipOpenStore.getState().open || shellPipStore.getState().active));
+
+/** Les maillons que les pastilles posent dans la pile : ma vignette descend sous eux (`selfTileClearance`) — rien tant que l'appel ne vit pas. */
+export const servicePresence = (call: ActiveCall, live: boolean): PresentBanners => Object.fromEntries(servicePillBanners(pillsOf(call)).map((banner) => [banner, live]));
+
+/**
+ * La capsule de capture puis « Vidéo réduite », voisines dans la pile (capture · En attente · Vidéo réduite) :
+ * chacune entre par le haut et repart vers le haut (`HeldSwap`, forme `top` ; un fondu seul sous Réduire les
+ * animations), toujours montée à son rang pour se retenir le temps de repartir. Une capture ne se cache pas
+ * (R1) ; « Vidéo réduite » se range au premier toucher avec les autres bannières et revient au second
+ * (loi 11, comme iOS #18396). « En attente » ne
+ * s'allume pas sur le web : son moteur n'expose aucun état d'attente (#18397).
+ */
+export function CallServiceBanners({ call, capturing, hidden, language }: { readonly call: ActiveCall; readonly capturing: boolean; readonly hidden: boolean; readonly language: InterfaceLanguage }) {
+  const notice = pillsOf(call).videoNotice;
+  return (
+    <>
+      <HeldSwap value={capturing ? call.members : null} shape="top" className="flex w-full justify-center" data-call-capture-slot="">
+        {(held) => <CallCaptureAlerts members={held} language={language} />}
+      </HeldSwap>
+      <HeldSwap value={notice === 'none' ? null : notice} shape="top" className="flex w-full justify-center px-3" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-video-notice-slot="">
+        {(held) => <CallVideoNoticePill notice={held} language={language} />}
+      </HeldSwap>
+    </>
   );
 }

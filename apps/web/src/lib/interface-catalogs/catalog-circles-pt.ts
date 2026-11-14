@@ -196,6 +196,7 @@ const pt = {
   'shareLocation.offline': 'A partilha de localização precisa de rede.',
   'shareLocation.rateLimited': 'Demasiados envios, tente daqui a um instante.',
   'shareLocation.failed': 'A partilha de localização não foi enviada, tente novamente.',
+  'shareLocation.stopPending': 'A partilha vai parar assim que a rede voltar.',
 } as const satisfies CirclesCatalog;
 
 export default pt;

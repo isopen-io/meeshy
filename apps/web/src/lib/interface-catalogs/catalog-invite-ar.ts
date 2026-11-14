@@ -28,6 +28,7 @@ const ar = {
   'invite.stats.languages.one': 'لغة محكية',
   'invite.stats.languages.other': 'لغات محكية',
   'invite.stats.spoken': 'اللغات المحكية هنا',
+  'invite.more': 'المزيد',
   'invite.stats.share': '{language} {percent}',
   'invite.rights.title': 'بدون حساب، يمكنك',
   'invite.rights.messages': 'كتابة الرسائل',

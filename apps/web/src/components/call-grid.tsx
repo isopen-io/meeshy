@@ -3,7 +3,6 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties,
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
-import type { ScreenZoomLayer } from '@/components/use-screen-zoom';
 import type { GroupSharedScreenProps } from '@/components/call-grid-screen';
 import { useStowFade, type HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
@@ -93,8 +92,6 @@ export type CallGridKit = {
   readonly HeldSwap: typeof HeldSwap;
   /** L'image d'une vignette cède à son avatar en fondu, et revient de même (loi 17.12) : la scène noire du duo. */
   readonly CameraOff: typeof CameraOffStage;
-  /** La loi qui sépare un glissé d'un toucher, celle de ma vignette : zoomé, l'écran partagé se déplace au doigt (U2.7). */
-  readonly isDrag: ScreenZoomLayer['isDrag'];
   /** L'écran partagé à la une, chargé à part (`call-grid-screen.tsx`) : un groupe sans partage ne le paie pas. */
   readonly SharedScreen: (props: GroupSharedScreenProps) => ReactNode;
 };
@@ -422,7 +419,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
             </div>
           ) : screen ? (
             <Suspense key={featured.userId} fallback={SCREEN_WAITING}>
-              <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} chip={(zoom, title) => <ScreenChip zoom={zoom} title={title} stowed={stowed} language={language} />} color={kit.colorOf(featured.userId)} isDrag={kit.isDrag} />
+              <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} chip={(zoom, title) => <ScreenChip zoom={zoom} title={title} stowed={stowed} language={language} />} color={kit.colorOf(featured.userId)} />
             </Suspense>
           ) : (
             <div className="grid min-h-0 min-w-0 flex-1">

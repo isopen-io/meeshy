@@ -654,6 +654,9 @@ const de = {
 
   'a11y.floating.rung.discover.requests.one': 'Entdecken, {count} Anfrage erhalten',
   'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
+  'a11y.floating.rung.game.chest-ready': 'Meine Legende, Gabe bereit',
+  'a11y.floating.rung.game.flame-at-risk': 'Meine Legende, Flamme in Gefahr',
+  'a11y.floating.rung.game.both': 'Meine Legende, Gabe bereit, Flamme in Gefahr',
 
   'links.hub.share.title': 'Teilen',
   'links.hub.share.description': 'Lade Kontakte in deine Unterhaltungen ein',

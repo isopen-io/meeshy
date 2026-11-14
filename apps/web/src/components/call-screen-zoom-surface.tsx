@@ -5,6 +5,7 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { useScreenZoom, type ScreenZoomLayer } from '@/components/use-screen-zoom';
+import { isTileDrag } from '@/lib/calls/call-self-tile-gestures';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -53,12 +54,11 @@ export type DuoSharedScreenProps = {
   readonly language: InterfaceLanguage;
   readonly immersive: boolean;
   readonly onToggleImmersive: () => void;
-  /** Ce que l'écran d'appel garde et remet (il n'est jamais importé d'ici) : le miroir de mon aperçu, le coin de ma vignette, le bouton de verre et la loi du glissé. */
+  /** Ce que l'écran d'appel garde et remet (il n'est jamais importé d'ici) : le miroir de mon aperçu, le coin de ma vignette et le bouton de verre. La loi du glissé vit avec les gestes, hors de `call_overlay` (`call-self-tile-gestures.ts`, #17930). */
   readonly mirrored: boolean;
   readonly corner: CSSProperties;
   /** Le bouton de verre de l'écran, déjà teinté (`tone`, `prominent`) : le verre reste dans l'écran qui le dessine. */
   readonly Button: (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => ReactNode;
-  readonly isDrag: ScreenZoomLayer['isDrag'];
 };
 
 /**
@@ -66,10 +66,10 @@ export type DuoSharedScreenProps = {
  * `screenZoomSurfaceView`) : un duo sans partage ne le paie pas. La surface des gestes et son calque GPU ne portent QUE
  * l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais.
  */
-export function DuoSharedScreen({ call, sharer, language, immersive, onToggleImmersive, mirrored, corner, Button, isDrag }: DuoSharedScreenProps) {
+export function DuoSharedScreen({ call, sharer, language, immersive, onToggleImmersive, mirrored, corner, Button }: DuoSharedScreenProps) {
   return (
     <div className="absolute inset-0" data-call-shared-screen="">
-      <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isDrag}>
+      <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isTileDrag}>
         <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
       </ScreenZoomSurface>
       {call.cameraOn && !immersive ? (

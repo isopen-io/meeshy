@@ -22,6 +22,7 @@ import {
   bannerShortCount,
   isLargeText,
   leaguePlace,
+  offeringRewardLabel,
   playerBannerLabel,
   playerBannerModel,
   playerBannerPieceLabels,
@@ -30,9 +31,12 @@ import {
   type PlayerBannerRank,
 } from '@/lib/view/player-banner';
 import { playerBannerVisitStore, reportPlayerBannerShown } from '@/lib/view/player-banner-visit';
+import type { BannerOffering } from '@/lib/view/banner-offering';
+import { useBannerOffering } from '@/lib/view/use-banner-offering';
 import { Link } from '@/routes/route-table';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
+import { Chest } from './game/chest';
 import { Flame } from './game/flame';
 import { SPARK_GLYPH } from './game-profile-banner';
 import { GameEffectLayer } from './game/game-effect-layer';
@@ -190,6 +194,51 @@ function Piece({ name, value, children }: { readonly name: string; readonly valu
   );
 }
 
+/** Le Rêve du jour en points (#18199) : un plein par acte réalisé, un creux par acte à faire. Le nom du lien le dit. */
+function ActDots({ done, total }: { readonly done: number; readonly total: number }) {
+  return (
+    <span className="flex items-center gap-1 px-0.5" aria-hidden="true">
+      {Array.from({ length: total }, (_, index) => (
+        <span
+          key={index}
+          data-player-banner-act={index < done ? 'done' : 'todo'}
+          className="block size-2 rounded-full"
+          style={index < done ? { backgroundColor: INK } : { boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${INK} 45%, transparent)` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * L'OFFRANDE SUR LE BANDEAU (#18199) — prête, elle se touche et s'ouvre sur place : un bouton, pas un lien, puisqu'elle ne
+ * mène nulle part. Ouverte, le gain prend sa place quelques secondes, dit au lecteur d'écran par une région d'état.
+ */
+function OfferingPiece({ ready, label, offering, language }: { readonly ready: boolean; readonly label: string | null; readonly offering: BannerOffering; readonly language: ReturnType<typeof currentInterfaceLanguage> }) {
+  if (offering.reward !== null) {
+    const spoken = offeringRewardLabel(offering.reward, language);
+    return (
+      <span role="status" aria-label={spoken} data-player-banner-offering="opened" className="flex shrink-0 items-center gap-1 px-1 text-check font-bold tabular-nums" style={{ minHeight: 24, color: GLORY }}>
+        <Chest state="open" size={20} />
+        <span aria-hidden="true">+{formatCount(offering.reward, language)}</span>
+      </span>
+    );
+  }
+  if (!ready || label === null) return null;
+  return (
+    <button
+      type="button"
+      data-player-banner-offering="ready"
+      aria-label={label}
+      onClick={offering.open}
+      className="pointer-events-auto flex shrink-0 items-center rounded-card px-1 focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ minHeight: 24 }}
+    >
+      <Chest state="closed" size={20} />
+    </button>
+  );
+}
+
 /**
  * Le nom du rang, entier, au-dessus de sa jauge de Gloire — ou « Gloire N » au sommet. Le reste à gagner a quitté
  * l'œil (règle 5 : il se tronquait) ; le nom accessible garde la phrase complète, et la Progression la montre.
@@ -217,7 +266,19 @@ function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly r
   );
 }
 
-export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly model: PlayerBannerModel; readonly motion?: Partial<BannerMotion>; /** La bannière de profil de l'utilisateur, déjà résolue en adresse ; posée en translucide sous les informations (#9536). */ readonly backdrop?: string | null }) {
+export function PlayerBanner({
+  model,
+  motion = {},
+  backdrop = null,
+  offering,
+}: {
+  readonly model: PlayerBannerModel;
+  readonly motion?: Partial<BannerMotion>;
+  /** La bannière de profil de l'utilisateur, déjà résolue en adresse ; posée en translucide sous les informations (#9536). */
+  readonly backdrop?: string | null;
+  /** Ce qui ouvre l'Offrande sur place, et son gain à annoncer (#18199) ; absent, la pièce ne paraît pas (un aperçu n'ouvre rien). */
+  readonly offering?: BannerOffering | undefined;
+}) {
   const language = currentInterfaceLanguage();
   const tint = tierTint(model.tier);
   const level = model.level;
@@ -244,6 +305,8 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
   }, [level?.level]);
 
   const names = playerBannerPieceLabels(model, language);
+  const showsOffering = offering !== undefined && (offering.reward !== null || model.attention.chestReady);
+  const hasBottomRow = model.missions !== null || showsOffering || model.treasury !== null || model.league !== null;
 
   return (
     <div className="pointer-events-none flex w-full justify-center">
@@ -295,7 +358,7 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
             </Piece>
           </PieceLink>
         )}
-        {model.flame === null && model.meeshes === null && model.missions === null && model.treasury === null && model.league === null ? null : (
+        {model.flame === null && model.meeshes === null && !hasBottomRow ? null : (
           <span data-player-banner-middle="" className="flex shrink-0 flex-col justify-center">
             {model.flame === null && model.meeshes === null ? null : (
               <span data-player-banner-row="top" className="flex items-center">
@@ -317,16 +380,16 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
                 )}
               </span>
             )}
-            {model.missions === null && model.treasury === null && model.league === null ? null : (
+            {!hasBottomRow ? null : (
               <span data-player-banner-row="bottom" className="flex items-center">
                 {model.missions === null ? null : (
                   <PieceLink concept="missions" label={names.missions} compact>
                     <Piece name="missions" value={`${model.missions.done}/${model.missions.total}`}>
-                      <span aria-hidden="true">✓</span>
-                      {formatCount(model.missions.done, language)}/{formatCount(model.missions.total, language)}
+                      <ActDots done={model.missions.done} total={model.missions.total} />
                     </Piece>
                   </PieceLink>
                 )}
+                {offering === undefined ? null : <OfferingPiece ready={model.attention.chestReady} label={names.offering} offering={offering} language={language} />}
                 {model.treasury === null ? null : (
                   <PieceLink concept="meesh" label={names.treasury} compact>
                     <Piece name="treasury" value={model.treasury}>
@@ -406,6 +469,7 @@ export default function PlayerBannerHost() {
   const game = query.data?.game;
   const model = game === undefined || prefs.hidden || !signedIn ? null : playerBannerModel(game);
   const visible = model !== null;
+  const offering = useBannerOffering();
   /** Par OUVERTURE, pas par montage : une réouverture qui trouve la bannière encore là relance ses 30 s (#9536). */
   const visit = useStore(playerBannerVisitStore, (state) => state.visit);
   useEffect(() => {
@@ -413,5 +477,5 @@ export default function PlayerBannerHost() {
   }, [visible, visit]);
   if (model === null) return null;
   const banner = profile.data?.banner ?? null;
-  return <PlayerBanner model={model} backdrop={banner === null || banner === '' ? null : attachmentSrc(banner)} />;
+  return <PlayerBanner model={model} offering={offering} backdrop={banner === null || banner === '' ? null : attachmentSrc(banner)} />;
 }
