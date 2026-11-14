@@ -289,7 +289,7 @@ public fun MeeshyField(
                         if (stepActions.isNotEmpty()) customActions = stepActions
                     },
                 decorationBox = { inner ->
-                    Box(contentAlignment = Alignment.CenterStart) {
+                    Box(contentAlignment = Alignment.CenterStart, propagateMinConstraints = true) {
                         if (prompt != null && MeeshyFieldRecipe.showsPrompt(draft, caption)) {
                             Text(text = prompt, style = textStyle.copy(color = muted), maxLines = recipe.lineRange.last)
                         }
@@ -363,6 +363,7 @@ internal fun MeeshyFieldCounterText(
             fontSize = MeeshyFontSize.small,
             fontWeight = if (isNear) FontWeight.Bold else FontWeight.Medium,
             fontFeatureSettings = TABULAR_DIGITS,
+            textDirection = TextDirection.Ltr,
         ),
         maxLines = 1,
         modifier = modifier.clearAndSetSemantics { if (!isHidden) contentDescription = spoken },
@@ -411,7 +412,7 @@ private fun MeeshyFieldEndCell(
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier
-                    .size(MeeshyIconSize.lg)
+                    .size(scaledIconSize())
                     .graphicsLayer { alpha = clearAlpha.value },
             )
         }
@@ -461,7 +462,7 @@ private fun MeeshyFieldLeadingMark(
             imageVector = leading.icon,
             contentDescription = null,
             tint = color,
-            modifier = modifier.size(MeeshyIconSize.lg),
+            modifier = modifier.size(scaledIconSize()),
         )
         is MeeshyFieldLeading.Glyph -> Text(
             text = leading.glyph,
@@ -473,6 +474,10 @@ private fun MeeshyFieldLeadingMark(
 }
 
 private const val TABULAR_DIGITS: String = "tnum"
+
+/** Une icône du champ suit la taille du texte, comme `MeeshyFont.relative` sur iOS ; jamais au-delà de sa cellule. */
+@Composable
+private fun scaledIconSize(): Dp = minOf(MeeshyIconSize.lg * LocalDensity.current.fontScale, MeeshyIconSize.hero)
 
 /** Le fondu de la croix, de la roue et du compteur : 150 ms, immédiat sous « réduire les animations ». */
 internal fun meeshyFieldFade(reduceMotion: Boolean): AnimationSpec<Float> =
