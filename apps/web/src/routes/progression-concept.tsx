@@ -10,6 +10,7 @@ import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameMissions, type MissionPhotoRef } from '@/components/game-missions';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
+import { PRESS } from '@/components/game-press';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
 import { ConceptEmblem, ConceptFacts, ConceptGauge, factAttributes, ProgressionRow, RowEmblem } from '@/components/progression-concept';
@@ -23,6 +24,7 @@ import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { FICHE_SECTION_PARAM, ficheSection } from '@/lib/game/progression-nav';
+import { rulesLink } from '@/lib/game/rules-address';
 import { useOptionalRoute, useParams } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { detailOfRef } from '@/lib/view/game-detail';
@@ -31,6 +33,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { useGameActions, type GameActions } from '@/routes/progression-game-actions';
 import { ElansHero, LastAchievementHero, LevelHero, MeeshDetail } from '@/routes/progression-heroes';
 import { ProgressionPage } from '@/routes/progression-page';
+import { Link } from '@/routes/route-table';
 
 /**
  * LA FICHE D'UN CONCEPT (#9563) — le niveau 2 de « Progression ». UN gabarit
@@ -42,20 +45,24 @@ import { ProgressionPage } from '@/routes/progression-page';
  *                         règle 3) ; OU la tête des Étincelles (ta lumière) et
  *                         de l'Héritage (le contenant, puis le cadre de la
  *                         frappe) — #11178, épopée § 5 ;
- *   2. « C'est quoi ? » — ce que c'est, puis à quoi ça sert et comment ça marche :
- *                         la MÊME phrase que sur la carte de la première page,
- *                         jamais une seconde ;
- *   3. « Où j'en suis » — ce que la tête ne dit pas déjà, et rien d'autre : un
+ *   2. « Où j'en suis » — ce que la tête ne dit pas déjà, et rien d'autre : un
  *                         fait ne paraît qu'une fois par écran (`ficheView`,
  *                         #11178) ; la section disparaît quand elle n'a rien à
  *                         ajouter ;
- *   4. « Comment en gagner » — deux gestes simples ;
- *      « Comment m'en servir » — l'usage du concept, en clair (#10540) ;
- *   5. les gestes — ouvrir le coffre, changer une mission, protéger la Flamme :
+ *   3. les gestes — ouvrir le coffre, changer une mission, protéger la Flamme :
  *                         ils vivent ICI, plus sur la première page (la frappe
  *                         est dans la pièce des Meeshes, son seul site) ;
+ *   4. « C'est quoi ? » — ce que c'est, puis à quoi ça sert et comment ça marche :
+ *                         la MÊME phrase que sur la carte de la première page,
+ *                         jamais une seconde ; son lien « Comment ça marche »
+ *                         ouvre le carnet des règles à l'entrée du concept ;
+ *   5. « Comment en gagner » — deux gestes simples ;
+ *      « Comment m'en servir » — l'usage du concept, en clair (#10540) ;
  *   6. « Aller plus loin » — la sous-page du concept, et elle seule (carte de
  *                         navigation, `lib/game/progression-nav.ts`).
+ *
+ * L'INSTANT D'ABORD (#18422, #18423) : ce qui est vrai maintenant (1 à 3) passe
+ * avant ce qui s'explique (4 et 5), et l'explication mène à sa section du carnet.
  *
  * Les pièces du jeu et les héros d'avant ne sont pas réécrits : ils sont RANGÉS
  * dans la fiche de leur concept. Les gestes gardent leur retour instantané, leur
@@ -271,6 +278,7 @@ export function ConceptFiche({
   const where = ficheView(concept, view, clock);
   const piece = pieceOf(concept, view, host, clock);
   const gestures = gesturesOf(concept, view, host);
+  const rule = rulesLink({ kind: 'concept', key: concept });
   return (
     <article ref={article} data-concept-fiche={concept} className="flex flex-col gap-4">
       {piece === null ? (
@@ -280,11 +288,6 @@ export function ConceptFiche({
           {piece}
         </div>
       )}
-      <FicheSection id="what" title={gameText('game.fiche.what')}>
-        <Explained label={gameText('game.concept.what_label')} text={shown.what} />
-        <Explained label={gameText('game.concept.why_label')} text={shown.why} />
-        <Explained label={gameText('game.concept.how_label')} text={shown.how} />
-      </FicheSection>
       {where.state === null && where.facts.length === 0 ? null : (
         <FicheSection id="where" title={gameText('game.fiche.where')}>
           {where.state === null ? null : (
@@ -295,6 +298,25 @@ export function ConceptFiche({
           <ConceptFacts facts={where.facts} open={(fact) => detailOfRef(fact.ref, concept, fact.label, fact.value, view)} />
         </FicheSection>
       )}
+      {gestures === null ? null : (
+        <div data-fiche-section="gestures" className="flex scroll-mt-20 flex-col gap-4">
+          {gestures}
+        </div>
+      )}
+      <FicheSection id="what" title={gameText('game.fiche.what')}>
+        <Explained label={gameText('game.concept.what_label')} text={shown.what} />
+        <Explained label={gameText('game.concept.why_label')} text={shown.why} />
+        <Explained label={gameText('game.concept.how_label')} text={shown.how} />
+        <Link
+          to={rule.to}
+          search={rule.search}
+          data-fiche-rule-link=""
+          className={`${PRESS} flex items-center self-start rounded-chip text-body font-semibold`}
+          style={{ minHeight: 44, color: GAME_BRAND }}
+        >
+          {gameText('game.door.rules')}
+        </Link>
+      </FicheSection>
       <FicheSection id="earn" title={gameText('game.fiche.earn')}>
         <ul className="flex list-disc flex-col gap-1 ps-5 text-body" style={{ color: GAME_INK }}>
           {shown.tips.map((tip) => (
@@ -315,11 +337,6 @@ export function ConceptFiche({
           />
         ) : null}
       </FicheSection>
-      {gestures === null ? null : (
-        <div data-fiche-section="gestures" className="flex scroll-mt-20 flex-col gap-4">
-          {gestures}
-        </div>
-      )}
       {shown.more.length === 0 ? null : (
         <nav data-fiche-section="more" aria-labelledby="fiche-more" className="flex flex-col gap-2">
           <h2 id="fiche-more" className="px-1 text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
