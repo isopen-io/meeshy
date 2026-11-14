@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { RingedAvatar } from '@/components/peer-avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
-import { GroupedSection, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { ROW_MENU_GLYPHS } from '@/components/glyphs-row-menu';
 import type { CommunityMember, CommunityMemberRole, MemberGestures } from '@/lib/api/community-members';
 import { communityAccent } from '@/lib/communities/view';
@@ -32,13 +32,6 @@ const INK_2 = SECTION_INK_2;
 const ERROR_INK = 'var(--color-error)';
 const ROW_SEPARATOR = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
-
-/** L'indigo du modérateur à l'encre LISIBLE (`SECTION_BRAND_INK`, AA dans les deux schémas) : le jeton de marque brut tombe à 4,2. */
-const ROLE_INK: Readonly<Record<CommunityMemberRole, { readonly className?: string; readonly color?: string }>> = {
-  admin: { color: ERROR_INK },
-  moderator: { className: SECTION_BRAND_INK },
-  member: { color: INK_2 },
-};
 
 const SECTION_KEY = {
   admin: 'community.members.section.admin',
@@ -125,8 +118,7 @@ export function MemberRow({
           </span>
           <span
             data-community-member-role={member.role}
-            className={`text-caption font-medium ${ROLE_INK[member.role].className ?? ''}`}
-            style={ROLE_INK[member.role].color === undefined ? undefined : { color: ROLE_INK[member.role].color }}
+            className="sr-only"
           >
             {translateMembership(language, ROLE_KEY[member.role])}
           </span>
@@ -226,7 +218,7 @@ export function MembersLoadError({ language, onRetry }: { readonly language: Int
  * `community.detail.action.members` d'iOS, offerte à tout lecteur qui voit la
  * communauté.
  */
-export function CommunityMembersLink({ language, communityId }: { readonly language: InterfaceLanguage; readonly communityId: string }) {
+export function CommunityMembersLink({ language, communityId, count }: { readonly language: InterfaceLanguage; readonly communityId: string; readonly count?: number }) {
   return (
     <Link
       to="communityMembers"
@@ -239,6 +231,11 @@ export function CommunityMembersLink({ language, communityId }: { readonly langu
         <Glyph name="users" size={18} />
       </span>
       <span className="flex-1 text-body font-semibold">{translateMembership(language, 'community.members.open')}</span>
+      {count === undefined ? null : (
+        <span data-community-members-count className="text-body tabular-nums" style={{ color: INK_2 }}>
+          {new Intl.NumberFormat(language).format(count)}
+        </span>
+      )}
       <span aria-hidden="true" style={{ color: INK_2 }}>
         <GlyphSvg glyph={ROW_MENU_GLYPHS.caretRight} size={14} className="rtl:-scale-x-100" />
       </span>

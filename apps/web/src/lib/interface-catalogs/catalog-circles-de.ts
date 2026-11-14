@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const de = {
   'circles.section.requests': 'Anfragen für eine höhere Stufe',
+  'circles.intro': 'Jeder Kreis bestimmt, was eine Person von dir sieht: je näher, desto mehr teilst du.',
   'circles.empty.title': 'Deine Verbindungen erscheinen hier',
   'circles.empty.subtitle': 'Je mehr du dich mit Menschen austauschst, desto mehr kommen sie in deine Kreise.',
   'circles.empty.action': 'Kontakte finden',
@@ -81,7 +82,9 @@ const de = {
   'circles.settings.blockBring.detail': 'Diese Person kann dein Telefon nicht mehr klingeln lassen. Sie erfährt es nicht.',
   'circles.settings.blockBring.failed': 'Die Einstellung konnte nicht gespeichert werden',
   'bring.action': 'Bring',
-  'bring.explain': 'Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt. Ausnahmen: Ein iPhone im Lautlos-Modus zeigt bei geschlossenem Meeshy nur einen dringenden Hinweis, und im Web klingelt es nur bei geöffnetem Tab.',
+  'bring.explain': 'Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt.',
+  'bring.exceptions.question': 'Wann klingelt das Bring nicht?',
+  'bring.exceptions': 'Ausnahmen: Ein iPhone im Lautlos-Modus zeigt bei geschlossenem Meeshy nur einen dringenden Hinweis, und im Web klingelt es nur bei geöffnetem Tab.',
   'bring.remaining': 'Heute noch: {count}',
   'bring.unlimited': 'Heute unbegrenzt',
   'bring.confirm.title': 'Das Telefon von {name} klingeln lassen?',

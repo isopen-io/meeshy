@@ -224,7 +224,6 @@ const esShellLabels = {
   'hashtag.loading': 'Cargando publicaciones',
   'hashtag.error': 'No se pudo cargar este hashtag',
   'hashtag.empty.title': 'Nada bajo #{tag}',
-  'hashtag.empty.body': 'Ninguna publicación visible lleva este hashtag.',
   'hashtag.loadMore': 'Cargar más',
   'hashtag.loadingMore': 'Cargando…',
 } satisfies ShellLabelsCatalogSlice;

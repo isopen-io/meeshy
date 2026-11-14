@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const es = {
   'circles.section.requests': 'Solicitudes de subida',
+  'circles.intro': 'Cada círculo define lo que una persona ve de ti: cuanto más cercano, más compartes.',
   'circles.empty.title': 'Tus vínculos aparecerán aquí',
   'circles.empty.subtitle': 'A medida que hablas con personas, se unen a tus círculos.',
   'circles.empty.action': 'Buscar contactos',
@@ -81,7 +82,9 @@ const es = {
   'circles.settings.blockBring.detail': 'Esta persona ya no podrá hacer sonar tu teléfono. No se le avisa.',
   'circles.settings.blockBring.failed': 'No se pudo guardar el ajuste',
   'bring.action': 'Bring',
-  'bring.explain': 'Para una urgencia extrema: su teléfono suena, incluso bloqueado. Excepciones: un iPhone en silencio con Meeshy cerrado solo muestra una alerta prioritaria, y la web solo suena con la pestaña abierta.',
+  'bring.explain': 'Para una urgencia extrema: su teléfono suena, incluso bloqueado.',
+  'bring.exceptions.question': '¿Cuándo no suena el Bring?',
+  'bring.exceptions': 'Excepciones: un iPhone en silencio con Meeshy cerrado solo muestra una alerta prioritaria, y la web solo suena con la pestaña abierta.',
   'bring.remaining': 'Quedan hoy: {count}',
   'bring.unlimited': 'Sin límite hoy',
   'bring.confirm.title': '¿Hacer sonar el teléfono de {name}?',
