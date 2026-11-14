@@ -163,7 +163,7 @@ describe('closeLinksOfOrphanedSalons (#18104)', () => {
     const m = monde();
     const avecInvitéCréateur: Monde = {
       ...m,
-      lignes: [...m.lignes, { conversationId: ORPHELIN, role: 'creator', isActive: true, userId: null }],
+      lignes: [...m.lignes, { conversationId: ORPHELIN, role: 'creator', isActive: true, userId: null, leftAt: null }],
     };
     await closeLinksOfOrphanedSalons(prismaDouble(avecInvitéCréateur), NOW);
     expect(fermes(avecInvitéCréateur)).toContain('l-orphelin-1');
