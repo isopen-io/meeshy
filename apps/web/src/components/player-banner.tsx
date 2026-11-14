@@ -191,8 +191,8 @@ function Piece({ name, value, children }: { readonly name: string; readonly valu
 }
 
 /**
- * Le nom du rang au-dessus de sa jauge de Gloire, et dessous la forme courte « 5 543 vers Passeur II » — ou « Gloire N »,
- * sans suite. Le chiffre est compact dès 10 000 (`bannerShortCount`) ; le nom accessible garde la phrase complète.
+ * Le nom du rang, entier, au-dessus de sa jauge de Gloire — ou « Gloire N » au sommet. Le reste à gagner a quitté
+ * l'œil (règle 5 : il se tronquait) ; le nom accessible garde la phrase complète, et la Progression la montre.
  */
 function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly roll: RollEnv | undefined }) {
   const language = currentInterfaceLanguage();
