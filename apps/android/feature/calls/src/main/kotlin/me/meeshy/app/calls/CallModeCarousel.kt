@@ -264,7 +264,7 @@ private fun <T> CarouselRow(
                 contentPadding = PaddingValues(horizontal = inset),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().callScrollEdgeFade(horizontal = true),
             ) {
                 itemsIndexed(items) { index, item ->
                     val isShown = index == shownIndex
