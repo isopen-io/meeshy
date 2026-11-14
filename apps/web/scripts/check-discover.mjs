@@ -51,6 +51,7 @@ import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -452,17 +453,19 @@ try {
     const page = await context.newPage();
     await page.goto(`${BASE}/discover`, { waitUntil: 'load' });
     await page.waitForSelector('[data-discover-tab-count]');
-    await page.waitForTimeout(300);
-    const spill = await page.$$eval('[data-discover-tab]', (tabs) =>
-      tabs.flatMap((tab) => {
+    await page.evaluate(() => document.fonts.ready);
+    const layout = await waitForValueSettled(page, () => ({
+      spill: [...document.querySelectorAll('[data-discover-tab]')].flatMap((tab) => {
         const box = tab.getBoundingClientRect();
         return [...tab.querySelectorAll('[data-discover-tab-title], [data-discover-tab-count]')]
           .map((part) => ({ part, rect: part.getBoundingClientRect() }))
           .filter(({ rect }) => rect.left < box.left - 0.5 || rect.right > box.right + 0.5)
           .map(({ part }) => part.textContent.trim());
       }),
-    );
-    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      pageWidth: document.documentElement.scrollWidth,
+    }));
+    const spill = layout?.spill ?? ['(mise en page instable)'];
+    const pageWidth = layout?.pageWidth ?? Number.POSITIVE_INFINITY;
     check(spill.length === 0, `${locale} 320×568 : chaque nom d'onglet et sa pastille tiennent dans leur onglet (${JSON.stringify(spill)})`);
     check(pageWidth <= 320, `${locale} 320×568 : aucun défilement horizontal de la page (${pageWidth})`);
     await context.close();
