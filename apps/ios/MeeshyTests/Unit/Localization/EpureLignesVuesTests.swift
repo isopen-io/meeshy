@@ -35,6 +35,8 @@ final class EpureLignesVuesTests: XCTestCase {
 
     private static let otherLanguages = ["en", "es", "pt-BR", "de", "it", "ar"]
 
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+
     private static let french: [String: String] = [
         "circles.requests.outgoing": "Niveau %@",
         "voice.profile.wizard.recording.question": "Comment dois-je parler ?",
@@ -94,10 +96,13 @@ final class EpureLignesVuesTests: XCTestCase {
 
     // MARK: - Profil vocal
 
-    func test_voiceWizard_recordingNote_isNamedByItsQuestion_andCarriesTheToneAdvice() {
+    func test_voiceWizard_recordingNote_isNamedByItsQuestion_andCarriesTheToneAdvice() throws {
+        let app = try app()
         let note = VoiceProfileWizardWording.recordingNote
-        XCTAssertEqual(note.question, "Comment dois-je parler ?")
-        XCTAssertEqual(note.text, "Parlez naturellement, sans forcer le ton.")
+        XCTAssertEqual(note.question, served("voice.profile.wizard.recording.question"))
+        XCTAssertEqual(note.text, served("voice.profile.wizard.recording.description"))
+        XCTAssertEqual(app["voice.profile.wizard.recording.question"]?["fr"], "Comment dois-je parler ?")
+        XCTAssertEqual(app["voice.profile.wizard.recording.description"]?["fr"], "Parlez naturellement, sans forcer le ton.")
     }
 
     func test_voiceWizard_recordingStep_hostsTheInfoOnTheTitle_andDropsTheReadAloudSentence() throws {
