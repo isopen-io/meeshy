@@ -10,7 +10,7 @@ import { callStore } from '@/lib/calls/call-store';
 import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
-import { playerBannerVisitStore } from '@/lib/view/player-banner-visit';
+import { playerBannerVisitStore, recallPlayerBanner } from '@/lib/view/player-banner-visit';
 import { reportCallResumeShown } from '@/lib/view/top-band';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -29,6 +29,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadGameCatalog('fr');
+  await import('@/lib/view/use-banner-recall');
   const cached = await loadEngagementProgress({ source: 'fixtures', transport: httpTransport });
   if (!cached.ok) throw new Error('progression de démonstration attendue');
   appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, cached.data);
@@ -42,7 +43,7 @@ afterEach(() => {
   reportCallResumeShown(false);
   callStore.setState({ call: null, waiting: null });
   gamePrefs.set({ hidden: false });
-  playerBannerVisitStore.setState({ phase: 'armed', visit: 1 });
+  playerBannerVisitStore.setState({ phase: 'armed', visit: 1, recall: false });
 });
 afterAll(async () => {
   appQueryClient.removeQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
@@ -205,6 +206,57 @@ const sleep = async (ms: number): Promise<void> => {
     await new Promise((resolve) => setTimeout(resolve, ms));
   });
 };
+
+/**
+ * LE RAPPEL (#17366, retouche 3) — retirée, la bannière revient QUELQUES SECONDES quand un acte est réalisé, quand
+ * l'Offrande est prête ou la Flamme à risque, ou quand on tire la liste ; puis elle repart seule.
+ */
+describe('la bannière rappelée', () => {
+  const RECALL = { holdMs: 40, exitMs: 40, recallMs: 70 } as const;
+  type Cached = { game: { missions: { unlocked: boolean; items: { completedAt: string | null }[] } } };
+
+  test('tirer la liste la rappelle : elle revient le temps du rappel, puis repart', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn timing={RECALL} />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    await sleep(160);
+    expect(host.querySelector('[data-player-slot]')).toBeNull();
+    await act(async () => recallPlayerBanner());
+    expect(await waitForBanner(host)).not.toBeNull();
+    expect(playerBannerVisitStore.getState()).toMatchObject({ phase: 'shown', recall: true });
+    await sleep(200);
+    expect(host.querySelector('[data-player-slot]')).toBeNull();
+    expect(playerBannerVisitStore.getState().phase).toBe('gone');
+  });
+
+  test('un acte réalisé, arrivé dans le cache, la rappelle sans aucune requête', async () => {
+    const before = appQueryClient.getQueryData<Cached>(ENGAGEMENT_PROGRESS_QUERY_KEY);
+    if (before === undefined) throw new Error('progression de démonstration attendue');
+    const day = (done: number): Cached => ({
+      ...before,
+      game: { ...before.game, missions: { unlocked: true, items: [0, 1, 2].map((index) => ({ completedAt: index < done ? '2026-11-14T09:00:00.000Z' : null })) } },
+    });
+    try {
+      appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, day(1));
+      const host = await mount(<TopBand routeKey="list" signedIn timing={RECALL} />);
+      expect(await waitForBanner(host)).not.toBeNull();
+      await sleep(160);
+      expect(host.querySelector('[data-player-slot]')).toBeNull();
+      await act(async () => appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, day(2)));
+      expect(await waitForBanner(host)).not.toBeNull();
+      expect(playerBannerVisitStore.getState().recall).toBe(true);
+    } finally {
+      appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, before);
+    }
+  });
+
+  test('« Jeu masqué » : ni le geste ni un acte ne la rappellent', async () => {
+    gamePrefs.set({ hidden: true });
+    const host = await mount(<TopBand routeKey="list" signedIn timing={RECALL} />);
+    await act(async () => recallPlayerBanner());
+    await settle();
+    expect(host.querySelector('[data-player-banner]')).toBeNull();
+  });
+});
 
 describe('la bannière n’est là qu’à l’ouverture de l’application', () => {
   test('peinte, elle reste pendant la présence puis sort en remontant (inerte), puis le bandeau se vide', async () => {

@@ -1,5 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+export { PLAYER_BANNER_RECALL_MS } from '@meeshy/shared/utils/game/banner-recall-timing';
+
 /**
  * LA VISITE DE LA BANNIÈRE DU JOUEUR (#9536, directive porteur 2026-10-06) —
  * « le bandeau du jeu n'apparaît qu'à l'OUVERTURE de l'application ; après 30 s
@@ -32,10 +34,17 @@ export const PLAYER_BANNER_EXIT_REDUCED_MS = 400;
 export const PLAYER_BANNER_AWAY_MS = 5 * 60_000;
 
 export type VisitPhase = 'armed' | 'shown' | 'leaving' | 'gone';
-export type VisitEvent = 'shown' | 'missed' | 'expired' | 'exited' | 'reopened';
+export type VisitEvent = 'shown' | 'missed' | 'expired' | 'exited' | 'reopened' | 'recalled';
 
+/**
+ * LE RAPPEL (#17366, retouche 3) — hors de l'ouverture, un acte réalisé, l'Offrande prête, la Flamme à risque
+ * (`bannerRecall`, `@meeshy/shared/utils/game/banner-recall`, chargée après la première peinture) ou le geste « tirer la liste » remontrent le bandeau
+ * `PLAYER_BANNER_RECALL_MS`, puis il repart seul. Pendant l'ouverture, ou avant sa première peinture, le rappel ne
+ * change rien : les trente secondes de l'ouverture couvrent déjà le moment.
+ */
 export function nextVisitPhase(phase: VisitPhase, event: VisitEvent): VisitPhase {
   if (event === 'reopened') return 'armed';
+  if (event === 'recalled') return phase === 'gone' || phase === 'leaving' ? 'shown' : phase;
   if (event === 'shown') return phase === 'armed' ? 'shown' : phase;
   if (event === 'missed') return phase === 'armed' ? 'gone' : phase;
   if (event === 'expired') return phase === 'shown' ? 'leaving' : phase;
@@ -46,6 +55,8 @@ export const isRealAbsence = (awayMs: number): boolean => Number.isFinite(awayMs
 
 export type PlayerBannerVisit = {
   readonly phase: VisitPhase;
+  /** La bannière montrée est un RAPPEL : elle tient `PLAYER_BANNER_RECALL_MS`, pas les trente secondes de l'ouverture. */
+  readonly recall: boolean;
   /** Numéro de l'ouverture : change à chaque réouverture, pour relancer l'horloge. */
   readonly visit: number;
   readonly send: (event: VisitEvent) => void;
@@ -54,12 +65,19 @@ export type PlayerBannerVisit = {
 export function createPlayerBannerVisit(): StoreApi<PlayerBannerVisit> {
   return createStore<PlayerBannerVisit>((set, get) => ({
     phase: 'armed',
+    recall: false,
     visit: 1,
     send: (event) => {
-      const { phase, visit } = get();
+      const { phase, visit, recall } = get();
+      if (event === 'recalled') {
+        const opening = phase === 'armed' || (phase === 'shown' && !recall);
+        if (opening) return;
+        set({ phase: nextVisitPhase(phase, event), recall: true, visit: visit + 1 });
+        return;
+      }
       const next = nextVisitPhase(phase, event);
       if (next === phase && event !== 'reopened') return;
-      set({ phase: next, visit: event === 'reopened' ? visit + 1 : visit });
+      set({ phase: next, visit: event === 'reopened' ? visit + 1 : visit, recall: event === 'reopened' ? false : recall });
     },
   }));
 }
@@ -68,6 +86,20 @@ export function createPlayerBannerVisit(): StoreApi<PlayerBannerVisit> {
 export const playerBannerVisitStore = createPlayerBannerVisit();
 
 export const reportPlayerBannerShown = (): void => playerBannerVisitStore.getState().send('shown');
+
+/** Le bandeau revient quelques secondes : quelque chose vient de changer, ou la liste vient d'être tirée. */
+export const recallPlayerBanner = (): void => playerBannerVisitStore.getState().send('recalled');
+
+/**
+ * « Tirer la liste rappelle le bandeau » (#17366, décision porteur du 2026-11-12) : le geste qui rafraîchit l'écran
+ * des conversations rappelle d'abord le bandeau, qui repart seul.
+ */
+export const withBannerRecall =
+  (refresh: () => Promise<void>, store: StoreApi<PlayerBannerVisit> = playerBannerVisitStore) =>
+  (): Promise<void> => {
+    store.getState().send('recalled');
+    return refresh();
+  };
 
 export type VisibilityTarget = {
   readonly visibilityState: DocumentVisibilityState;
