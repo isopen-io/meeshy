@@ -100,7 +100,7 @@ const f = {
   'admin.monitoring.health.issue.redis': 'Redis no responde: la caché y los límites de frecuencia están degradados.',
   'admin.monitoring.health.issue.translator': 'El servicio de traducción es inalcanzable.',
   'admin.monitoring.health.issue.breakersOpen': 'Cortacircuitos abiertos: {count}. Las llamadas a estos servicios se rechazan.',
-  'admin.monitoring.health.issue.breakersHalfOpen': 'Cortacircuitos a prueba: {count}. Dejan pasar algunas llamadas para comprobar que el servicio se ha recuperado.',
+  'admin.monitoring.health.issue.breakersHalfOpen': 'Cortacircuitos a prueba: {count}',
 
   'admin.monitoring.gateway.title': 'Pasarela',
   'admin.monitoring.gateway.uptime': 'Tiempo en marcha',
@@ -143,7 +143,7 @@ const f = {
 
   'admin.monitoring.breakers.title': 'Cortacircuitos',
   'admin.monitoring.breakers.intro': 'Protegen la plataforma de un servicio averiado.',
-  'admin.monitoring.breakers.detail': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera.',
+  'admin.monitoring.breakers.detail': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera. A prueba, deja pasar algunas llamadas para comprobar que el servicio se ha recuperado.',
   'admin.monitoring.breakers.failures': 'Fallos',
   'admin.monitoring.breakers.successes': 'Aciertos',
   'admin.monitoring.breakers.lastFailure': 'Último fallo',
@@ -172,6 +172,7 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Rutas vigiladas',
   'admin.monitoring.routes.watched.intro': 'Direcciones en proceso de retirada: cero llamadas observadas permite eliminarlas, siempre que leas los puntos ciegos de abajo.',
+  'admin.monitoring.routes.watched.question': '¿Cuándo se puede retirar una dirección?',
   'admin.monitoring.routes.watched.caption': 'Rutas vigiladas y su tráfico',
   'admin.monitoring.routes.watched.empty': 'Ninguna ruta vigilada coincide',
   'admin.monitoring.routes.col.method': 'Método',

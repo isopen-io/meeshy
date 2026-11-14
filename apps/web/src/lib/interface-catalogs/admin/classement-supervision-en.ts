@@ -100,7 +100,7 @@ const f = {
   'admin.monitoring.health.issue.redis': 'Redis is not responding: the cache and the rate limits are degraded.',
   'admin.monitoring.health.issue.translator': 'The translation service is unreachable.',
   'admin.monitoring.health.issue.breakersOpen': 'Open circuit breakers: {count}. Calls to these services are refused.',
-  'admin.monitoring.health.issue.breakersHalfOpen': 'Circuit breakers on trial: {count}. They let a few calls through to check that the service has recovered.',
+  'admin.monitoring.health.issue.breakersHalfOpen': 'Circuit breakers on trial: {count}',
 
   'admin.monitoring.gateway.title': 'Gateway',
   'admin.monitoring.gateway.uptime': 'Uptime',
@@ -143,7 +143,7 @@ const f = {
 
   'admin.monitoring.breakers.title': 'Circuit breakers',
   'admin.monitoring.breakers.intro': 'They protect the platform from a failing service.',
-  'admin.monitoring.breakers.detail': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers.',
+  'admin.monitoring.breakers.detail': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers. On trial, it lets a few calls through to check that the service has recovered.',
   'admin.monitoring.breakers.failures': 'Failures',
   'admin.monitoring.breakers.successes': 'Successes',
   'admin.monitoring.breakers.lastFailure': 'Last failure',
@@ -172,6 +172,7 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Watched routes',
   'admin.monitoring.routes.watched.intro': 'Addresses being retired: zero observed calls allows removal, provided you read the blind spots below.',
+  'admin.monitoring.routes.watched.question': 'When can an address be retired?',
   'admin.monitoring.routes.watched.caption': 'Watched routes and their traffic',
   'admin.monitoring.routes.watched.empty': 'No watched route matches',
   'admin.monitoring.routes.col.method': 'Method',

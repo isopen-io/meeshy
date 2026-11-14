@@ -104,7 +104,7 @@ const f = {
   'admin.monitoring.health.issue.redis': 'Redis ne répond pas : le cache et les limites de débit sont dégradés.',
   'admin.monitoring.health.issue.translator': 'Le service de traduction est injoignable.',
   'admin.monitoring.health.issue.breakersOpen': 'Coupe-circuits ouverts : {count}. Les appels vers ces services sont refusés.',
-  'admin.monitoring.health.issue.breakersHalfOpen': 'Coupe-circuits en essai : {count}. Ils laissent passer quelques appels pour vérifier que le service est rétabli.',
+  'admin.monitoring.health.issue.breakersHalfOpen': 'Coupe-circuits en essai : {count}',
 
   'admin.monitoring.gateway.title': 'Passerelle',
   'admin.monitoring.gateway.uptime': 'Temps de fonctionnement',
@@ -147,7 +147,7 @@ const f = {
 
   'admin.monitoring.breakers.title': 'Coupe-circuits',
   'admin.monitoring.breakers.intro': 'Ils protègent la plateforme d’un service en panne.',
-  'admin.monitoring.breakers.detail': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse.',
+  'admin.monitoring.breakers.detail': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse. En essai, il laisse passer quelques appels pour vérifier que le service est rétabli.',
   'admin.monitoring.breakers.failures': 'Échecs',
   'admin.monitoring.breakers.successes': 'Succès',
   'admin.monitoring.breakers.lastFailure': 'Dernier échec',
@@ -176,6 +176,7 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Routes surveillées',
   'admin.monitoring.routes.watched.intro': 'Adresses en voie de retrait : zéro appel observé autorise le retrait, à condition de lire les angles morts plus bas.',
+  'admin.monitoring.routes.watched.question': 'Quand peut-on retirer une adresse ?',
   'admin.monitoring.routes.watched.caption': 'Routes surveillées et leur trafic',
   'admin.monitoring.routes.watched.empty': 'Aucune route surveillée ne correspond',
   'admin.monitoring.routes.col.method': 'Méthode',

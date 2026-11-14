@@ -83,7 +83,9 @@ const f = {
   'admin.analytics.messages.engagement.repliesPer': 'Replies per message',
   'admin.analytics.messages.engagement.repliesPer.caption': '{count} replies in total',
 
-  'admin.analytics.calls.sampled': 'Sample capped at 5,000 calls: the figures cover the 5,000 most recent reports of the period.',
+  'admin.analytics.calls.sampled': 'Sample: the 5,000 most recent calls',
+  'admin.analytics.calls.sampled.question': 'Which period do these figures cover?',
+  'admin.analytics.calls.sampled.detail': 'The figures cover the 5,000 most recent reports of the period.',
   'admin.analytics.calls.empty.title': 'No call reports in this period',
   'admin.analytics.calls.empty.hint': 'These statistics come from the telemetry each participant sends when a call ends.',
   'admin.analytics.calls.reliability.title': 'Reliability',

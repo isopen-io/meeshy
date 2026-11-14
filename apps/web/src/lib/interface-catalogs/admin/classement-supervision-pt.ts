@@ -100,7 +100,7 @@ const f = {
   'admin.monitoring.health.issue.redis': 'O Redis não responde: o cache e os limites de taxa estão degradados.',
   'admin.monitoring.health.issue.translator': 'O serviço de tradução está inacessível.',
   'admin.monitoring.health.issue.breakersOpen': 'Disjuntores abertos: {count}. As chamadas a estes serviços são recusadas.',
-  'admin.monitoring.health.issue.breakersHalfOpen': 'Disjuntores em teste: {count}. Deixam passar algumas chamadas para verificar se o serviço recuperou.',
+  'admin.monitoring.health.issue.breakersHalfOpen': 'Disjuntores em teste: {count}',
 
   'admin.monitoring.gateway.title': 'Gateway',
   'admin.monitoring.gateway.uptime': 'Tempo de atividade',
@@ -143,7 +143,7 @@ const f = {
 
   'admin.monitoring.breakers.title': 'Disjuntores',
   'admin.monitoring.breakers.intro': 'Protegem a plataforma de um serviço com falha.',
-  'admin.monitoring.breakers.detail': 'Um disjuntor protege a plataforma de um serviço com falha: quando está aberto, recusa as chamadas enquanto o serviço se recupera.',
+  'admin.monitoring.breakers.detail': 'Um disjuntor protege a plataforma de um serviço com falha: quando está aberto, recusa as chamadas enquanto o serviço se recupera. Em teste, deixa passar algumas chamadas para verificar se o serviço recuperou.',
   'admin.monitoring.breakers.failures': 'Falhas',
   'admin.monitoring.breakers.successes': 'Sucessos',
   'admin.monitoring.breakers.lastFailure': 'Última falha',
@@ -172,6 +172,7 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Rotas monitoradas',
   'admin.monitoring.routes.watched.intro': 'Endereços em processo de retirada: zero chamadas observadas permite a remoção, desde que você leia os pontos cegos abaixo.',
+  'admin.monitoring.routes.watched.question': 'Quando é possível retirar um endereço?',
   'admin.monitoring.routes.watched.caption': 'Rotas monitoradas e o seu tráfego',
   'admin.monitoring.routes.watched.empty': 'Nenhuma rota monitorada corresponde',
   'admin.monitoring.routes.col.method': 'Método',
