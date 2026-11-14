@@ -976,3 +976,28 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : la mise à jour en arrière-plan (l'app suspendue se tait, le terme serveur borne tout), l'émission Android
   (#16985), l'émission web, et un indicateur global « tu partages ta position » hors de la fiche.
 - Prochain lot recommandé : l'émission Android depuis la fiche d'un Ami (reste de #16985).
+
+## 2026-11-14 — réveil de midi : partager ma position depuis la fiche d'un Ami, sur Android (#16985)
+
+- Reprise : aucune PR cercles ouverte ; #18134 (émission iOS) fusionnée. Aucune branche n'écrit l'émission Android :
+  lot réservé sur `claude/cercles-16985-android-emission`.
+- Lot : l'ÉMISSION Android, dernier morceau de #16985, iso #16983. `:core:model` : `SharedLocationSending.kt` (charge
+  de `location:share-start|update|stop` bornée comme le schéma serveur, lecture de l'accusé, cadence
+  `SharedLocationUpdateGate`, `SharedLocationOfferRule` dès Ami) et `SharedLocationRoster.kt` (échéance par personne,
+  durée serveur qui couvre la plus lointaine, gardée sans aucune position). `sdk-core` : `SharedLocationSocketEmitter`
+  (type à part sur `SocketAckEmitter`) et `SharedLocationSharingCenter`, un par compte, qui RÉUTILISE la source de
+  positions et la porte de permission de `LiveLocationDeviceSource` (aucune jumelle). Fiche : la ligne
+  « Partager ma position », sa feuille (1 h · 8 h ; ville par défaut, quartier, exacte), « X voit ta position (…)
+  jusqu'à HH:MM » et « Arrêter ». Dix-neuf chaînes adoptées du catalogue iOS en sept langues.
+- Écart assumé avec l'iOS : la phrase d'explication de la feuille (> 80 caractères, clé `explain`) n'est pas portée,
+  le cliquet du texte natif (`check-verbosity-native.mjs`) l'interdit sur `feature/profile`.
+- Aucun service de premier plan ni permission d'arrière-plan : le suivi vit tant que l'app est utilisée, comme sur
+  iOS ; l'émission en arrière-plan reste #18135 (attend #13942). Constat en passant : `LiveLocationForegroundService`
+  (partage en conversation) n'est déclaré dans aucun manifeste et son contrôleur n'est câblé à aucun écran.
+- Gates locaux : `jvm-check -PjvmCheckModelOnly` 17/17 verts (`SharedLocationSendingTest` 8, `SharedLocationRosterTest`
+  4, `SocketEventNamesParityTest` 5), le témoin de l'accusé vu rouge d'abord ; `xcstrings_to_android.py --check`,
+  `check-feature-edges.sh`, `check-file-budget.sh`, `check-verbosity-native.mjs` verts. `sdk-core` et `feature/profile`
+  se prouvent par `android.yml` sur `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Reste : l'émission web (#14109), l'arrière-plan (#18135), l'indicateur global « tu partages » (#18136, iOS ;
+  Android à suivre).
+- Prochain lot recommandé : l'émission web depuis la fiche d'un Ami (#14109), pour fermer le trio.
