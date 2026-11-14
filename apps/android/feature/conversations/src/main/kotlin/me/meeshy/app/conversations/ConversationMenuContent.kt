@@ -68,7 +68,7 @@ internal data class ConversationMenuPanelState(
 
 /**
  * Le menu d'une rangée, DESSINÉ depuis [ConversationMenuModel] : aucune condition de visibilité ici,
- * le composable parcourt les groupes du modèle. Racine -> Favori / Déplacer vers / Plus d'options en
+ * le composable parcourt les groupes du modèle. Racine -> Plus -> Favori / Déplacer vers / Mode de lecture en
  * panneaux, haptique jouée par entrée avant son geste, entrées destructives en rouge.
  */
 @Composable
@@ -104,20 +104,20 @@ internal fun ConversationMenuContent(
         }
         MenuPanel.FAVORITE -> FavoritePanel(
             currentReaction = panelState.currentReaction,
-            onBack = { panel = MenuPanel.ROOT },
+            onBack = { panel = MenuPanel.MORE },
             onSet = { emoji -> haptics.light(); onSetReaction(emoji) },
             modifier = modifier,
         )
         MenuPanel.READING_MODE -> ReadingModePanel(
             entries = panelState.readingModes,
             accent = accent,
-            onBack = { panel = MenuPanel.ROOT },
+            onBack = { panel = MenuPanel.MORE },
             onChoose = { choice -> haptics.light(); onSelectReadingMode(choice) },
             modifier = modifier,
         )
         MenuPanel.MOVE -> MovePanel(
             panelState = panelState,
-            onBack = { panel = MenuPanel.ROOT },
+            onBack = { panel = MenuPanel.MORE },
             onMove = { target -> haptics.light(); onMove(target) },
             onCreate = { name -> haptics.light(); onCreateCategory(name) },
             modifier = modifier,

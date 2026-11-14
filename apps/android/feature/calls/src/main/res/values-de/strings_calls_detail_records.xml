@@ -28,7 +28,7 @@
     <string name="call_network_tier_good">Gut</string>
     <string name="call_network_tier_fair">Mittel</string>
     <string name="call_network_tier_poor">Schwach</string>
-    <string name="call_transcript_disclaimer">Verschlüsselte Kopie auf diesem Gerät. Das Protokoll des Anrufs wird auch auf dem Meeshy-Server gespeichert und ist nur für seine Teilnehmer lesbar. Es enthält die Worte deines Gesprächspartners, wie sie während des Anrufs empfangen wurden.</string>
+    <string name="call_transcript_disclaimer">Verschlüsselte Kopie auf diesem Gerät. Das Protokoll des Anrufs wird auch auf dem Meeshy-Server gespeichert, nur für seine Teilnehmer lesbar.</string>
     <string name="call_transcript_delete">Dieses Transkript löschen</string>
     <string name="call_transcript_delete_confirm_title">Dieses Transkript löschen?</string>
     <string name="call_transcript_delete_confirm_message">Es wird endgültig von diesem Gerät entfernt. Das auf dem Server gespeicherte Protokoll wird nicht gelöscht.</string>

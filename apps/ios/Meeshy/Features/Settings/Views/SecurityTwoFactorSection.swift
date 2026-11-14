@@ -28,6 +28,12 @@ struct SecurityTwoFactorSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.bottom, MeeshySpacing.smPlus)
 
+                if viewModel.isEnabled {
+                    SettingsSentence(text: String(localized: "settings.security.2fa.backup_codes.summary", defaultValue: "Pour entrer sans votre téléphone ; de nouveaux codes annulent les anciens."))
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.bottom, MeeshySpacing.smPlus)
+                }
+
                 if let twoFactorError = viewModel.error {
                     Text(twoFactorError)
                         .font(.caption.weight(.medium))
@@ -54,8 +60,8 @@ struct SecurityTwoFactorSection: View {
                         .scaleEffect(0.7)
                 } else {
                     Text(viewModel.isEnabled
-                         ? String(localized: "2fa_enabled", defaultValue: "Actif")
-                         : String(localized: "2fa_disabled", defaultValue: "Désactivé"))
+                         ? String(localized: "2fa_enabled", defaultValue: "Activée")
+                         : String(localized: "2fa_disabled", defaultValue: "Désactivée"))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(viewModel.isEnabled ? MeeshyColors.success : theme.textMuted)
                 }

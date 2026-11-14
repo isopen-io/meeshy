@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -192,21 +193,18 @@ fun NearbyScreen(
                     state.isLocating -> NearbySkeleton()
                     state.awaitingAccess -> NearbyStatusCard(
                         icon = Icons.Filled.NearMe,
-                        title = stringResource(R.string.nearby_permission_title),
                         message = stringResource(R.string.nearby_permission_message),
                         actionLabel = stringResource(R.string.nearby_permission_action),
                         onRetry = ::requestLocation,
                     )
                     state.permissionDenied -> NearbyStatusCard(
                         icon = Icons.Filled.LocationOff,
-                        title = stringResource(R.string.nearby_denied_title),
                         message = stringResource(R.string.nearby_denied_detail),
                         actionLabel = stringResource(R.string.nearby_denied_action),
                         onRetry = ::onDeniedAction,
                     )
                     state.locationUnavailable -> NearbyStatusCard(
                         icon = Icons.Filled.LocationOff,
-                        title = stringResource(R.string.nearby_title),
                         message = stringResource(R.string.nearby_location_unavailable),
                         actionLabel = stringResource(R.string.nearby_retry),
                         onRetry = ::requestLocation,
@@ -271,7 +269,6 @@ fun NearbyScreen(
 @Composable
 private fun NearbyStatusCard(
     icon: ImageVector,
-    title: String,
     message: String,
     actionLabel: String,
     onRetry: () -> Unit,
@@ -289,15 +286,10 @@ private fun NearbyStatusCard(
                 modifier = Modifier.size(40.dp),
             )
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
+                style = MaterialTheme.typography.titleMedium,
+                color = MeeshyTheme.tokens.textPrimary,
+                textAlign = TextAlign.Center,
             )
             Button(onClick = onRetry) {
                 Text(actionLabel)

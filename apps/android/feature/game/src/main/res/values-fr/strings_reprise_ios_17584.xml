@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">Il te faut un ami accepté pour faire alliance.</string>
+    <string name="game2_league_locked">La joute s’ouvre au niveau %1$s · tu es au niveau %2$s</string>
+    <string name="game2_settings_hidden_card">Le jeu est masqué sur cet appareil.</string>
+    <string name="game_atlas_tiers_prestige">La renaissance s’offre au niveau %1$s : elle est facultative, ta lumière peut aussi grandir encore.</string>
+    <string name="game_concept_atlas_tip_2">Attends sa réponse : il faut un message dans chaque sens.</string>
+    <string name="game_frappe_refused_shadow">Une ombre voile ta lumière. Tes prochaines étincelles la dissiperont, et on frappera.</string>
+    <string name="game_rules_concept_showcase_body">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.</string>
+    <string name="game_rules_intro">Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.</string>
+    <string name="game_state_points_missing">Ta lumière compte %1$s, soit %2$s. La Meesh n° %3$s en figera %4$s : il manque %5$s.</string>
+    <string name="game_state_points_ready">Ta lumière compte %1$s, soit %2$s : assez pour frapper la Meesh n° %3$s, qui en figera %4$s.</string>
+    <string name="game_state_points_missing_plain">Ta lumière compte %1$s. La Meesh n° %2$s en figera %3$s : il manque %4$s.</string>
+    <string name="game_state_season_progress">Voyage %1$s, semaine %2$s sur %3$s : halte %4$s sur %5$s, et %6$s jusqu’à la suivante.</string>
+</resources>

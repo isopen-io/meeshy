@@ -7,6 +7,7 @@ struct ProfileBringRow: View {
     @StateObject private var viewModel: ProfileBringViewModel
     let displayName: String
     @State private var confirming = false
+    @State private var openNoteID: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     init(userId: String, displayName: String) {
@@ -18,10 +19,12 @@ struct ProfileBringRow: View {
         Group {
             if let availability = viewModel.availability, availability.available {
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    Text(ProfileBringWording.explain)
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    MeeshyInfoNoted(note: ProfileBringWording.explainNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                        Text(ProfileBringWording.explain)
+                            .font(.footnote)
+                            .foregroundStyle(theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     content(availability)
                 }
                 .padding(MeeshySpacing.md)

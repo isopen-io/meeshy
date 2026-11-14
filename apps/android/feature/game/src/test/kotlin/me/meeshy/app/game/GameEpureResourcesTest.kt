@@ -56,8 +56,20 @@ class GameEpureResourcesTest {
         "game_missions_offline",
         "game_mint_offline",
         "game2_door_prestige",
+        "game_atlas_treasury_line",
+        "game_atlas_flames_line",
+        "reveal_level_subtitle",
+        "game2_settings_notifications_title",
+        "game2_settings_notifications_body",
+        "game2_settings_notifications_switch",
+        "game_photo_kicker_new_lap",
+        "progression_a11y_bar_streak",
+        "progression_a11y_tier_pending",
+        "progression_a11y_tier_reached",
     ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
         .map { "game_rules_concept_${it}_body" }
+
+    private val retiredByEpure2 = listOf("game_flame_panel_freeze_full", "game2_settings_visibility_body")
 
     private val retiredLanguages = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 
@@ -73,6 +85,39 @@ class GameEpureResourcesTest {
         retiredLanguages.forEach { folder ->
             val declared = declaredNames(folder)
             assertThat(declared.intersect(retiredNames.toSet())).isEmpty()
+        }
+    }
+
+    @Test
+    fun `la jauge de Veilleuses et les quatre selecteurs ne sont plus doubles par une phrase`() {
+        retiredLanguages.forEach { folder -> assertThat(declaredNames(folder).intersect(retiredByEpure2.toSet())).isEmpty() }
+        val fields = Class.forName("me.meeshy.feature.game.R\$string").fields.map { it.name }.toSet()
+        assertThat(fields.intersect(retiredByEpure2.toSet())).isEmpty()
+    }
+
+    @Test
+    fun `les fiches Points Flamme et Renaissance disent en une phrase ce que c est`() {
+        assertThat(text(R.string.game_concept_points_what)).isEqualTo("Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.")
+        assertThat(text(R.string.game_concept_flame_what))
+            .isEqualTo("Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.")
+        assertThat(text(R.string.game_concept_prestige_what))
+            .isEqualTo("La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.")
+        listOf("game_concept_points_what", "game_concept_flame_what", "game_concept_prestige_what").forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value.count { it == '.' || it == '۔' }).isAtMost(1)
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+    }
+
+    @Test
+    fun `le plafond des cinq renaissances passe derriere le i et le caractere facultatif reste visible`() {
+        assertThat(text(R.string.game_concept_prestige_use)).contains("Cinq renaissances au plus mènent au Sixième Âge.")
+        assertThat(text(R.string.game_concept_prestige_what)).doesNotContain("cinq renaissances")
+        assertThat(text(R.string.game_concept_prestige_what)).contains("facultative")
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_concept_prestige_what")).doesNotContain("5").doesNotContain("٥")
         }
     }
 
@@ -113,9 +158,48 @@ class GameEpureResourcesTest {
     }
 
     @Test
-    fun `les reglages de visibilite gardent la phrase de principe seulement`() {
-        assertThat(text(R.string.game2_settings_visibility_body))
+    fun `les reglages de visibilite disent au repos ce qui se regle et rangent la presence derriere un i`() {
+        assertThat(text(R.string.game2_settings_visibility_question)).isEqualTo("Qui voit quand je joue ?")
+        assertThat(text(R.string.game2_settings_visibility_presence))
             .isEqualTo("Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.")
+    }
+
+    @Test
+    fun `le masquage dit en une phrase ce qu il fait et range la liste des effets derriere un i`() {
+        assertThat(text(R.string.game2_settings_hidden_body)).isEqualTo("Le jeu disparaît de cet appareil et se ferme aux autres.")
+        assertThat(text(R.string.game2_settings_hidden_question)).isEqualTo("Que ferme le masquage ?")
+        assertThat(text(R.string.game2_settings_hidden_effects))
+            .isEqualTo("Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.")
+    }
+
+    @Test
+    fun `la revelation d un palier ne dit plus la seconde phrase`() {
+        assertThat(text(R.string.reveal_badge_axis_subtitle)).isEqualTo("Un palier de plus sur cet axe.")
+    }
+
+    @Test
+    fun `les notes rangees derriere un i sont traduites dans les sept langues et jamais copiees du francais`() {
+        listOf(
+            "game2_settings_hidden_body", "game2_settings_hidden_question", "game2_settings_hidden_effects",
+            "game2_settings_visibility_question", "game2_settings_visibility_presence",
+            "game2_settings_friends_league_body", "game2_settings_friends_league_question", "game2_settings_friends_league_effects",
+            "reveal_badge_axis_subtitle",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+    }
+
+    @Test
+    fun `chaque nom de i est une question`() {
+        listOf(
+            "game2_settings_hidden_question", "game2_settings_visibility_question", "game2_settings_friends_league_question",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder -> assertThat(valueIn(folder, name)).containsMatch("[?؟]") }
+        }
     }
 
     @Test
@@ -150,10 +234,11 @@ class GameEpureResourcesTest {
 
     @Test
     fun `les reglages du jeu nomment et ne repetent pas`() {
-        assertThat(text(R.string.game2_settings_notifications_body)).isEqualTo("Une par jour au plus, sur tous tes appareils.")
-        assertThat(text(R.string.game2_settings_notifications_switch)).isEqualTo("Notifications")
         assertThat(text(R.string.game2_settings_friends_league_body))
-            .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine ; l’interrupteur retire les deux sens.")
+            .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine.")
+        assertThat(text(R.string.game2_settings_friends_league_question)).isEqualTo("Que retire « Me retirer » ?")
+        assertThat(text(R.string.game2_settings_friends_league_effects))
+            .isEqualTo("L’interrupteur te retire de leur classement et les retire du tien : les deux sens.")
     }
 
     @Test
@@ -173,12 +258,51 @@ class GameEpureResourcesTest {
     fun `la fiche de la piece et le panneau de la flamme ne gardent que la valeur`() {
         assertThat(text(R.string.game_detail_coin_what)).isEqualTo("La Meesh, c’est ta lumière figée dans une pièce numérotée.")
         assertThat(text(R.string.game_detail_fact_mint_next)).isEqualTo("Une sur cent est en or, une sur mille en prisme.")
-        assertThat(text(R.string.game_flame_panel_freeze_full)).isEqualTo("Toutes tes Veilleuses sont là.")
     }
 
     @Test
     fun `la chronique vide tient en une ligne`() {
         assertThat(text(R.string.game_notebook_empty)).isEqualTo("Chaque signe de tes aïeux peut devenir une photo ici.")
+    }
+
+    @Test
+    fun `la regle des etincelles ne redit ni les epreuves ni les phases ni les plafonds que le carnet dit ailleurs`() {
+        assertThat(text(R.string.game_rules_2_body)).isEqualTo("Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.")
+        assertThat(text(R.string.game_rules_concept_steps_body)).contains("Tant qu’elle n’est pas réussie")
+        assertThat(text(R.string.game_atlas_tiers_line)).contains("Vingt états")
+    }
+
+    @Test
+    fun `le reve dit ses actes une fois et l Offrande dit seule sa condition`() {
+        assertThat(context.getString(R.string.game_state_missions_progress, "1", "3")).isEqualTo("Le rêve de cette nuit : 1 sur 3 actes.")
+        assertThat(text(R.string.game_chest_locked)).isEqualTo("Réalise les trois actes du rêve pour la faire apparaître.")
+    }
+
+    @Test
+    fun `la serie revelee dit ses jours et plus l explication de la flamme`() {
+        assertThat(context.getString(R.string.reveal_streak_subtitle, 7)).isEqualTo("7 jours d’affilée.")
+    }
+
+    @Test
+    fun `le parcours sans saison tient en une ligne`() {
+        assertThat(text(R.string.game2_season_none)).isEqualTo("Aucun voyage en cours.")
+    }
+
+    @Test
+    fun `les textes raccourcis du lot jeu sont traduits dans les sept langues sans copier le francais`() {
+        listOf("game_rules_2_body", "game_state_missions_progress", "reveal_streak_subtitle", "game2_season_none").forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_state_missions_progress")).doesNotContain("%3\$s")
+            assertThat(valueIn(folder, "game_rules_2_body").length).isAtMost(valueIn("values", "game_rules_2_body").length + 40)
+        }
+        assertThat(valueIn("values", "game2_season_none")).isEqualTo("No journey under way.")
+        assertThat(valueIn("values", "reveal_streak_subtitle")).isEqualTo("%1\$d days in a row.")
     }
 
     @Test
@@ -286,4 +410,86 @@ class GameEpureResourcesTest {
         }
         assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s cet Âge · %2\$s en tout")
     }
+
+    @Test
+    fun `la regle des etincelles et celle de la frappe se lisent en une phrase, le calcul derriere un i`() {
+        assertThat(text(R.string.game_rules_1_body)).isEqualTo("Écrire, parler, publier, réagir, inviter : chaque vrai échange compte.")
+        assertThat(text(R.string.game_rules_1_question)).isEqualTo("Qu’est-ce qui fait jaillir plus d’étincelles ?")
+        assertThat(text(R.string.game_rules_1_more)).contains("communauté ou amis").contains("Flamme")
+        assertThat(text(R.string.game_rules_3_body)).isEqualTo("Une Meesh se frappe à la main : elle fige une part de ta lumière.")
+        assertThat(text(R.string.game_rules_3_question)).isEqualTo("Combien de lumière une frappe prend-elle ?")
+        assertThat(text(R.string.game_rules_3_more)).contains("30 %").contains("niveau 100")
+        assertThat(text(R.string.game2_league_consent_how_question)).isEqualTo("Comment suis-je placé ?")
+        assertThat(text(R.string.game_concept_league_use))
+            .isEqualTo("Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.")
+    }
+
+    @Test
+    fun `le corps de la regle des etincelles nomme les gestes sans redire son titre, dans les sept langues`() {
+        retiredLanguages.forEach { folder ->
+            val titleTail = valueIn(folder, "game_rules_1_title").trim().split(Regex("""\s+""")).last()
+            assertThat(valueIn(folder, "game_rules_1_body")).doesNotContain(titleTail)
+        }
+    }
+
+    @Test
+    fun `une note derriere un i se lit seule et ne commence pas par une conjonction`() {
+        listOf("game_rules_1_more", "game_rules_3_more").forEach { name ->
+            assertThat(valueIn("values-ar", name)).doesNotMatch("^و.*")
+        }
+    }
+
+    @Test
+    fun `les notes du carnet et de la joute sont traduites dans les sept langues, courtes, et leurs noms de i sont des questions`() {
+        listOf(
+            "game_rules_1_body", "game_rules_1_question", "game_rules_1_more",
+            "game_rules_3_body", "game_rules_3_question", "game_rules_3_more",
+            "game2_league_consent_how_question", "game_concept_league_use",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+                if (name.endsWith("_question")) assertThat(value).containsMatch("[?؟]")
+            }
+        }
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_rules_1_body").length).isAtMost(110)
+            assertThat(valueIn(folder, "game_rules_3_body").length).isAtMost(80)
+            assertThat(valueIn(folder, "game_concept_league_use").length).isAtMost(100)
+        }
+    }
+
+    @Test
+    fun `les regles huit, le vent arriere et la question du ruban sont courts et traduits dans les sept langues`() {
+        val expectedFr = mapOf(
+            "game_rules_2_body" to "Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.",
+            "game_rules_8_body" to "À chaque évolution, un signe de tes aïeux devient une photo avec Mee et Meo, gardée dans ta Chronique.",
+            "game_rules_concept_tailwind_body" to "+25\u00a0% d’étincelles tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.",
+            "game_rules_badges_ribbon_question" to "Que signifient le ruban et l’émail ?",
+        )
+        expectedFr.forEach { (name, fr) ->
+            assertThat(valueIn("values-fr", name)).isEqualTo(fr)
+            retiredLanguages.forEach { folder ->
+                assertThat(valueIn(folder, name)).isNotEmpty()
+                if (folder != "values-fr") assertThat(valueIn(folder, name)).isNotEqualTo(fr)
+                assertThat(declaredCount(folder, name)).isEqualTo(1)
+            }
+        }
+        assertThat(valueIn("values", "game_rules_8_body")).isEqualTo("At each evolution, a sign from your ancestors becomes a photo with Mee and Meo, kept in your Chronicle.")
+        assertThat(valueIn("values", "game_rules_concept_tailwind_body")).isEqualTo("+25 % sparks while your level is 7 or more below your highest light.")
+        assertThat(valueIn("values", "game_rules_badges_ribbon_question")).isEqualTo("What do the ribbon and the enamel mean?")
+        assertThat(valueIn("values", "game_rules_2_body")).isEqualTo("Your level is read from your light: a million sparks make level 100.")
+    }
+
+    @Test
+    fun `la regle huit dit quand les aieux se manifestent, le vent arriere ne redit pas son seuil`() {
+        assertThat(text(R.string.game_rules_8_body)).startsWith("À chaque évolution")
+        assertThat(text(R.string.game_rules_concept_tailwind_body)).doesNotContain("retombe")
+        assertThat(text(R.string.game_rules_2_body)).doesNotContain("un peu plus")
+    }
+
+    private fun declaredCount(folder: String, name: String): Int =
+        resDir().resolve(folder).listFiles { f -> f.extension == "xml" }.orEmpty()
+            .sumOf { Regex("""<string\s+name="$name"""").findAll(it.readText()).count() }
 }

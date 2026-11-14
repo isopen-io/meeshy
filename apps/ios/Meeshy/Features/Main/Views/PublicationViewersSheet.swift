@@ -138,10 +138,7 @@ struct PublicationViewersSheet: View {
                 } else if viewers.isEmpty && visitorsLine == nil {
                     EmptyStateView(
                         icon: "eye.slash",
-                        title: String(localized: "story.viewer.empty.title", defaultValue: "Aucune vue pour le moment", bundle: .main),
-                        subtitle: subject == .story
-                            ? String(localized: "story.viewer.empty.subtitle", defaultValue: "Les personnes qui regardent votre story apparaîtront ici.", bundle: .main)
-                            : String(localized: "viewer.engagement.empty.subtitle", defaultValue: "Les personnes qui verront cette publication apparaîtront ici.", bundle: .main)
+                        title: String(localized: "story.viewer.empty.title", defaultValue: "Aucune vue pour le moment", bundle: .main)
                     )
                 } else {
                     List {

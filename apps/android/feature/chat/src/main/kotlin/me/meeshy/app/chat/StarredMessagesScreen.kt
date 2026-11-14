@@ -278,11 +278,6 @@ private fun StarredEmptyState() {
                 style = MaterialTheme.typography.titleMedium,
                 color = MeeshyTheme.tokens.textPrimary,
             )
-            Text(
-                text = stringResource(R.string.starred_empty_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
         }
     }
 }

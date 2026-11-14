@@ -2,9 +2,5 @@
 <resources>
     <string name="reels_bookmark">Guardar</string>
     <string name="reels_unbookmark">Quitar de guardados</string>
-    <string name="reels_comments_loading">Cargando comentarios…</string>
-    <string name="reels_comments_error">No se pudieron cargar los comentarios</string>
-    <string name="reels_comments_input_hint">Añade un comentario…</string>
-    <string name="reels_comments_failed">Error: toca para reintentar</string>
     <string name="reels_comments_view_post">Ver publicación</string>
 </resources>

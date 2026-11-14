@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">Adicionado aos favoritos</string>
+    <string name="feed_notice_bookmark_failed">Erro ao salvar o favorito</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d repostagem</item>
+        <item quantity="many">%1$d repostagens</item>
+        <item quantity="other">%1$d repostagens</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">Toque no bloco novamente para ver tudo</string>
+</resources>

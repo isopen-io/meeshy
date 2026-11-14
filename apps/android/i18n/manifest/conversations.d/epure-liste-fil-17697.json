@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "shareLink_detail_nameField",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_name_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_name_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_messageField",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_message_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_message_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "context_more_options",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_permission_messages",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_permission_images",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_permission_files",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_permission_history",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_section_permissions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_section_access",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_access_account",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_access_nickname",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_access_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_access_birthday",
+          "status": "android-only"
+        },
+        {
+          "androidName": "invite_access_account",
+          "status": "android-only"
+        },
+        {
+          "androidName": "invite_access_nickname",
+          "status": "android-only"
+        },
+        {
+          "androidName": "invite_access_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "invite_section_permissions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "invite_section_access",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_requireAccount",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_requireBirthday",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_requireEmail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_requireNickname",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_historyRight",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_field_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_field_slug",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_share_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_tracking_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_affiliate_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_community_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

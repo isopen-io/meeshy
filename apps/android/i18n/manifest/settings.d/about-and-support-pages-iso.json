@@ -10,7 +10,7 @@
         { "catalog": "app", "iosKey": "about.info.mediaTier.mid", "androidName": "about_media_tier_mid", "status": "adopted" },
         { "catalog": "app", "iosKey": "about.info.mediaTier.high", "androidName": "about_media_tier_high", "status": "adopted" },
         { "catalog": "app", "iosKey": "about.info.mediaTier.pro", "androidName": "about_media_tier_pro", "status": "adopted" },
-        { "catalog": "app", "iosKey": "about.link.about", "androidName": "about_link_about", "status": "adopted" },
+        { "androidName": "about_link_about", "status": "android-only" },
         { "catalog": "app", "iosKey": "about.link.contact", "androidName": "about_link_contact", "status": "adopted" },
         { "catalog": "app", "iosKey": "about.link.partners", "androidName": "about_link_partners", "status": "adopted" },
         { "catalog": "app", "iosKey": "support.help.rate", "androidName": "support_help_rate", "status": "adopted" },

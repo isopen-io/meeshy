@@ -129,8 +129,7 @@ private struct GameLeagueMineView: View {
         switch league.access {
         case .locked:
             GameCard(title: GameText.leagueTitle) {
-                GameNote(text: GameText.leagueLocked(
-                    level: GameCopy.formatCount(GameLeague.minLevel), current: GameCopy.formatCount(game.level.shown.record)))
+                GameNote(text: GameText.leagueLockedWhat)
                 GameFactChipRow(
                     concept: .league,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.record, required: GameLeague.minLevel), record: true),
@@ -254,6 +253,7 @@ private struct GameLeaguePlacedCard: View {
 /// le DIT (conformité A-6). Aucune ligne ne montre d'avatar, de drapeau ni de langue.
 private struct GameLeagueStandingsCard: View {
     @ObservedObject var model: GameWave2Model
+    @State private var openNoteID: String?
 
     var body: some View {
         GameCard(title: GameText.leagueTabMine) {
@@ -269,7 +269,7 @@ private struct GameLeagueStandingsCard: View {
             } else if week.failedWithoutValue {
                 GameRetryBlock(message: week.errorMessage ?? "") { Task { await model.loadWeek() } }
             }
-            GameNote(text: GameText.leagueSnapshot)
+            GameNoteInfo(text: GameText.leagueSnapshot, note: GameText.leagueSnapshotNote, openNoteID: $openNoteID)
         }
         .accessibilityIdentifier("game.league.standings")
     }

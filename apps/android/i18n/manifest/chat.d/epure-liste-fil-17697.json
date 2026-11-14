@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "encryption_fact_encrypted_on_server_server_reads",
+          "status": "android-only"
+        },
+        {
+          "androidName": "action_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_devices_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_switching_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_content_refused_source",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_capture_warning",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_hybrid_is_server_today",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_hybrid_second_layer",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_second_layer_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_detail_served_gap",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_e2ee_direct_only_here",
+          "status": "android-only"
+        },
+        {
+          "androidName": "participant_profile_info_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "starred_more_options",
+          "status": "android-only"
+        },
+        {
+          "androidName": "riviere_bubble_actions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_appearance_shop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "export_card_gallery_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_fact_end_to_end_never_turned_off_direct",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_note_permanence_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_safety_number_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_safety_number_subtitle",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

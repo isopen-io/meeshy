@@ -71,6 +71,7 @@ struct AffiliateView: View {
 
     private var affiliateContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
+            SettingsSentence(text: String(localized: "affiliate.orientation", defaultValue: "Ceux qui s'inscrivent par votre lien de parrainage vous sont rattachés.", bundle: .main))
             statsOverview
             tokensSection
             Spacer().frame(height: 40)
@@ -189,9 +190,17 @@ struct AffiliateView: View {
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundStyle(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showCreateSheet = true
+            } label: {
+                Text(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                    .foregroundStyle(Color(hex: accentColor))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)
@@ -212,6 +221,13 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
+
+                if let created = AffiliateTokenRowDates.line(for: token) {
+                    Text(created)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundStyle(theme.textMuted)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: MeeshySpacing.sm) {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
@@ -285,6 +301,19 @@ struct AffiliateView: View {
         Image(systemName: "square.and.arrow.up")
             .font(MeeshyFont.relative(MeeshyIconSize.md))
             .foregroundStyle(Color(hex: accentColor))
+    }
+}
+
+/// La date de création d'un lien de parrainage, pour le reconnaître dans la liste (règle 7 de l'épure). Le serveur ne
+/// sert aucune date de dernier usage : rien n'est inventé, une date illisible ne produit pas de ligne.
+enum AffiliateTokenRowDates {
+    static func line(for token: AffiliateToken, locale: Locale = .current) -> String? {
+        WireDate.date(from: token.createdAt).map { date in
+            String(
+                format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
+                date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+            )
+        }
     }
 }
 

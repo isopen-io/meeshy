@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="talkie_info_a11y">Wann das Walkie-Talkie nutzen?</string>
+    <string name="talkie_send_e2ee">In einer verschlüsselten Unterhaltung nicht verfügbar.</string>
+    <string name="voiceProfile_age_birthDate">Geburtsdatum</string>
+    <string name="voiceProfile_age_description">Stimmklonen ist Personen ab 18 Jahren vorbehalten.</string>
+    <string name="voiceProfile_age_title">Altersverifizierung</string>
+    <string name="voiceProfile_age_tooYoungError">Sie müssen mindestens 18 Jahre alt sein.</string>
+    <string name="voiceProfile_age_verify">Bestätigen</string>
+    <string name="voiceProfile_complete_description">Ihre Audioübersetzungen verwenden jetzt Ihre geklonte Stimme.</string>
+    <string name="voiceProfile_complete_finish">Fertig</string>
+    <string name="voiceProfile_complete_title">Stimmprofil erstellt!</string>
+    <string name="voiceProfile_consent_continue">Weiter</string>
+    <string name="voiceProfile_consent_description">Meeshy kann Ihre Stimme klonen, um Ihre Audionachrichten in anderen Sprachen mit Ihrer Stimme zu übersetzen.</string>
+    <string name="voiceProfile_consent_point1">Nehmen Sie einige Stimmproben auf</string>
+    <string name="voiceProfile_consent_point2">Ein einzigartiges Stimmmodell wird aus Ihren Proben erstellt</string>
+    <string name="voiceProfile_consent_point3">Ihre Audioübersetzungen verwenden Ihre geklonte Stimme</string>
+    <string name="voiceProfile_consent_point4">Sie können Ihre Stimmdaten jederzeit löschen (DSGVO)</string>
+    <string name="voiceProfile_consent_point5">Ihre Proben sind verschlüsselt und werden nie geteilt</string>
+    <string name="voiceProfile_consent_title">Stimmklonen</string>
+    <string name="voiceProfile_consent_toggle">Ich stimme zu, dass meine Stimmproben zur Erstellung eines Stimmprofils verwendet werden</string>
+    <string name="voiceProfile_processing_title">Stimmprofil wird erstellt...</string>
+    <string name="voiceProfile_recording_title">Stimme aufnehmen</string>
+    <string name="voiceProfile_wizard_close">Schließen</string>
+    <string name="voiceProfile_wizard_errorTitle">Fehler</string>
+    <string name="voiceProfile_wizard_ok">OK</string>
+    <string name="voiceProfile_wizard_title">Stimmprofil</string>
+    <string name="talkie_send_explain">Gedrückt halten und sprechen: Deine Stimme ist bei %1$s sofort zu hören, ohne Abheben.</string>
+</resources>

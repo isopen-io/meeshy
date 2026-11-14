@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -58,6 +56,7 @@ import me.meeshy.feature.profile.R
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -141,7 +140,7 @@ private fun ShareButton(name: String, isBusy: Boolean, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MeeshyPalette.Indigo500)
+        Icon(MeeshyIcons.LocationFilled, contentDescription = null, tint = MeeshyPalette.Indigo500)
         Text(
             text = stringResource(R.string.shared_location_share_action),
             style = MaterialTheme.typography.labelLarge,

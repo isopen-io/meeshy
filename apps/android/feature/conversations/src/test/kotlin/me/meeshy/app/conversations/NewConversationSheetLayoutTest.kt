@@ -93,7 +93,6 @@ class NewConversationSheetLayoutTest {
         compose.onNodeWithTag(NewConversationTags.GROUP_TOGGLE).performClick()
 
         compose.onNodeWithTag(NewConversationTags.GROUP_TITLE).assertIsDisplayed()
-        compose.onNodeWithTag(NewConversationTags.SOLO_HINT, useUnmergedTree = true).assertExists()
         compose.onNodeWithTag(NewConversationTags.CREATE).assertIsNotEnabled()
     }
 

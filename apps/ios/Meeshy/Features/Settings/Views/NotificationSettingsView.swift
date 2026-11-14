@@ -7,6 +7,8 @@ struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs: UserPreferencesManager
+    /// Le (i) ouvert : sa note se déplie sous la phrase, une seule à la fois.
+    @State private var openNoteID: String?
     @StateObject private var circleNotify: CircleNotifySettingsViewModel
     init(prefs: UserPreferencesManager = .shared) {
         self.prefs = prefs
@@ -62,7 +64,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.pushEnabled)
 
-            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: MeeshyColors.infoHex,
+            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "E-mail", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.emailEnabled)
 
             notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: MeeshyColors.brandPrimaryHex,
@@ -87,9 +89,11 @@ struct NotificationSettingsView: View {
                         keyPath: \.callsEnabled)
 
             VStack(alignment: .leading, spacing: 0) {
-                notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Recevoir des Bring", bundle: .main), color: MeeshyColors.warningHex,
+                notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Bring", bundle: .main), color: MeeshyColors.warningHex,
                             keyPath: \.receivesBrings)
-                SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux. Coupé, personne ne peut plus faire sonner votre téléphone.", bundle: .main))
+                MeeshyInfoNoted(note: SettingsInfoNotes.bringOff, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                    SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux.", bundle: .main))
+                }
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.bottom, MeeshySpacing.sm + 2)
             }
@@ -162,10 +166,10 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Repartages", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.postRepostEnabled)
 
-            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: MeeshyColors.warningHex,
+            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions aux stories", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.storyReactionEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
+            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses aux commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.commentReplyEnabled)
 
             notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "J'aime sur les commentaires", bundle: .main), color: MeeshyColors.errorHex,
@@ -174,7 +178,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "person.2.fill", title: String(localized: "settings.notifications.friend_content", defaultValue: "Contenus des amis", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.friendContentEnabled)
 
-            notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, ligue, saison", bundle: .main), color: MeeshyColors.warningHex,
+            notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, joute, voyage", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.gameEnabled)
         }
     }
@@ -311,12 +315,12 @@ struct NotificationSettingsView: View {
     private func dayLabel(_ day: DndDay) -> String {
         switch day {
         case .mon: return String(localized: "common.day.mon.short", defaultValue: "L", bundle: .main)
-        case .tue: return String(localized: "common.day.tue.short", defaultValue: "J", bundle: .main)
+        case .tue: return String(localized: "common.day.tue.short", defaultValue: "M", bundle: .main)
         case .wed: return String(localized: "common.day.wed.short", defaultValue: "M", bundle: .main)
         case .thu: return String(localized: "common.day.thu.short", defaultValue: "J", bundle: .main)
         case .fri: return String(localized: "common.day.fri.short", defaultValue: "V", bundle: .main)
         case .sat: return String(localized: "common.day.sat.short", defaultValue: "S", bundle: .main)
-        case .sun: return String(localized: "common.day.sun.short", defaultValue: "S", bundle: .main)
+        case .sun: return String(localized: "common.day.sun.short", defaultValue: "D", bundle: .main)
         }
     }
 

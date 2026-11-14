@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="share_sheet_sign_in_body_reshare">Rien n’a été copié. Connectez-vous à Meeshy, puis partagez à nouveau depuis l’autre app.</string>
+    <string name="share_sheet_sign_in_body_reshare">Rien n’a été copié : connectez-vous, puis repartagez.</string>
 </resources>

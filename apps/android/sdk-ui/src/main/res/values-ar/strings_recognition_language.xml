@@ -2,6 +2,7 @@
 <resources>
     <string name="recognition_language_title">لغة الصوت</string>
     <string name="recognition_language_show_all">عرض كل اللغات</string>
+    <string name="recognition_language_question">لماذا هذا العدد القليل من اللغات؟</string>
     <string name="recognition_language_hint">افتراضيًا، تُعرض فقط اللغات المتاحة على هذا الجهاز.</string>
     <string name="recognition_language_search">ابحث عن لغة</string>
     <string name="recognition_language_selected">محددة</string>
