@@ -5,7 +5,6 @@ import type fr from './liens-fr';
    traduction du lot « liens ». Les clés sont celles du fragment français, ni plus ni moins. */
 const f = {
   // ── Contact requests ───────────────────────────────────────────────────────
-  'admin.invitation.subtitle': 'Las solicitudes de amistad que se envían los miembros: quién pidió a quién y en qué punto está cada solicitud.',
   'admin.invitation.list.caption': 'Solicitudes de contacto',
   'admin.invitation.list.count': '{count} solicitudes',
   'admin.invitation.list.empty': 'Ninguna solicitud de contacto',
@@ -59,7 +58,7 @@ const f = {
   'admin.invitation.explain.accepted': 'Los dos miembros son amigos.',
   'admin.invitation.gesture.cancel': 'Cancelar la solicitud',
   'admin.invitation.confirm.cancel.title': '¿Cancelar esta solicitud?',
-  'admin.invitation.confirm.cancel.body': 'La solicitud pasará a «Rechazada»: {receiver} dejará de verla como pendiente. No se crea ninguna amistad. El gesto queda registrado en el registro de auditoría.',
+  'admin.invitation.confirm.cancel.body': 'La solicitud pasará a «Rechazada»: {receiver} dejará de verla como pendiente. No se crea ninguna amistad.',
   'admin.invitation.done.cancelled': 'Solicitud cancelada',
 
   // ── Share links ────────────────────────────────────────────────────────────
@@ -96,6 +95,7 @@ const f = {
   'admin.shareLink.strip.sessions': 'Sesiones únicas',
   'admin.shareLink.section.conversation': 'Conversación',
   'admin.shareLink.section.permissions': 'Lo que pueden hacer los invitados',
+  'admin.shareLink.section.permissions.intro': 'Lo que un invitado puede hacer en la conversación, fijado a su llegada.',
   'admin.shareLink.section.requirements': 'Lo que exige el enlace',
   'admin.shareLink.section.restrictions': 'Restricciones de acceso',
   'admin.shareLink.section.guests': 'Invitados recientes',
@@ -134,11 +134,12 @@ const f = {
   'admin.shareLink.gesture.reopen': 'Reabrir el enlace',
   'admin.shareLink.gesture.reveal': 'Revelar el secreto',
   'admin.shareLink.confirm.close.title': '¿Cerrar este enlace?',
-  'admin.shareLink.confirm.close.body': 'Los invitados que entraron por este enlace pierden enseguida el acceso a la conversación, y nadie más puede entrar por él. El enlace no se elimina: puedes reabrirlo, pero los invitados expulsados no vuelven por sí solos. El gesto queda registrado en el registro de auditoría.',
+  'admin.shareLink.confirm.close.body': 'Los invitados que entraron por este enlace pierden enseguida el acceso a la conversación, y nadie más puede entrar por él. El enlace no se elimina: puedes reabrirlo, pero los invitados expulsados no vuelven por sí solos.',
   'admin.shareLink.confirm.reopen.title': '¿Reabrir este enlace?',
-  'admin.shareLink.confirm.reopen.body': 'El enlace vuelve a ser accesible con su dirección actual: pueden entrar nuevos invitados. Los invitados expulsados al cerrarlo no se restauran. El gesto queda registrado en el registro de auditoría.',
+  'admin.shareLink.confirm.reopen.body': 'El enlace vuelve a ser accesible con su dirección actual: pueden entrar nuevos invitados. Los invitados expulsados al cerrarlo no se restauran.',
   'admin.shareLink.confirm.reveal.title': '¿Revelar el secreto de este enlace?',
-  'admin.shareLink.confirm.reveal.body': 'Las claves que se van a mostrar abren la conversación: quien las tenga puede entrar. Se muestran una sola vez y no se conservan en ningún sitio de la administración. Este gesto está reservado al creador de la plataforma; exige un motivo escrito y queda registrado en el registro de auditoría.',
+  'admin.shareLink.confirm.reveal.body': 'Estas claves abren la conversación y se muestran una sola vez.',
+  'admin.shareLink.confirm.reveal.detail': 'Quien las tenga puede entrar en la conversación; no se conservan en ningún sitio de la administración. Este gesto está reservado al creador de la plataforma y exige un motivo escrito.',
   'admin.shareLink.confirm.reveal.motive': 'Motivo (queda registrado en el registro de auditoría)',
   'admin.shareLink.done.closed': 'Enlace cerrado',
   'admin.shareLink.done.reopened': 'Enlace reabierto',
@@ -240,9 +241,9 @@ const f = {
   'admin.tracking.gesture.deactivate': 'Desactivar el enlace',
   'admin.tracking.gesture.reactivate': 'Reactivar el enlace',
   'admin.tracking.confirm.deactivate.title': '¿Desactivar este enlace de seguimiento?',
-  'admin.tracking.confirm.deactivate.body': 'Los visitantes que abran este enlace dejarán de ser redirigidos al destino. Las estadísticas ya recogidas se conservan y puedes reactivarlo. El gesto queda registrado en el registro de auditoría.',
+  'admin.tracking.confirm.deactivate.body': 'Los visitantes que abran este enlace dejarán de ser redirigidos al destino. Las estadísticas ya recogidas se conservan y puedes reactivarlo.',
   'admin.tracking.confirm.reactivate.title': '¿Reactivar este enlace de seguimiento?',
-  'admin.tracking.confirm.reactivate.body': 'El enlace vuelve a redirigir a los visitantes a su destino y vuelve a contar los clics. El gesto queda registrado en el registro de auditoría.',
+  'admin.tracking.confirm.reactivate.body': 'El enlace vuelve a redirigir a los visitantes a su destino y vuelve a contar los clics.',
   'admin.tracking.confirm.motive': 'Motivo (opcional, queda registrado en el registro de auditoría)',
   'admin.tracking.done.deactivated': 'Enlace de seguimiento desactivado',
   'admin.tracking.done.reactivated': 'Enlace de seguimiento reactivado',

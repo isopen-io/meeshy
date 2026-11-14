@@ -80,7 +80,7 @@ const f = {
   'admin.gameSeasons.refusal.unknown': 'Recusado pelo servidor ({error}).',
   'admin.gameSeasons.refusal.network': 'O servidor não respondeu.',
   'admin.gameSeasons.ai.title': 'Propor com a IA',
-  'admin.gameSeasons.ai.hint': 'A IA propõe uma data, um tema, pontos e textos. A proposta fica PENDENTE: nada é aplicado antes da sua validação.',
+  'admin.gameSeasons.ai.hint': 'A IA propõe uma data, um tema, pontos e textos; a proposta fica pendente da sua validação.',
   'admin.gameSeasons.ai.brief': 'Instrução (opcional)',
   'admin.gameSeasons.ai.briefNote': '{count} / 500',
   'admin.gameSeasons.ai.ask': 'Propor com a IA',

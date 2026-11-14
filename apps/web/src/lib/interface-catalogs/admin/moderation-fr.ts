@@ -7,7 +7,6 @@
  * de leur interprétation.
  */
 const f = {
-  'admin.moderation.subtitle': 'Les contenus et les membres que la communauté a signalés : prenez en charge, décidez, consignez.',
   'admin.moderation.list.caption': 'Liste des signalements',
   'admin.moderation.list.count': '{count} signalement(s)',
   'admin.moderation.list.empty': 'Aucun signalement',
@@ -93,8 +92,7 @@ const f = {
   'admin.moderation.handling.action': 'Action consignée',
   'admin.moderation.handling.actionNone': 'Aucune action consignée',
   'admin.moderation.handling.actionChoice': 'Action à consigner avec la décision',
-  'admin.moderation.handling.actionHint':
-    'Consignée dans le dossier : ce choix ne déclenche rien par lui-même. Bannir, retirer ou suspendre se fait depuis les fiches liées plus bas.',
+  'admin.moderation.handling.actionHint': 'Ce choix est consigné ; il ne bannit ni ne retire rien.',
 
   'admin.moderation.timeline.received': 'Reçu',
   'admin.moderation.timeline.taken': 'Pris en charge par {moderator}',
@@ -105,7 +103,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'Voir les {count} signalements',
   'admin.moderation.siblings.error': 'Les autres signalements n’ont pas pu être chargés.',
 
-  'admin.moderation.actions.hint': 'Ces liens ouvrent la fiche concernée : le signalement ne bannit ni ne retire rien lui-même.',
   'admin.moderation.actions.memberSecurity': 'Bannir ou suspendre ce membre',
   'admin.moderation.actions.authorSecurity': 'Examiner l’auteur : {name}',
   'admin.moderation.actions.post': 'Ouvrir la publication pour la retirer',

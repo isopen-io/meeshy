@@ -181,7 +181,7 @@ const f = {
   'admin.scale.abuse.unverifiedMaxPoints': 'Max points per action, unverified account',
   /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
   'admin.scale.confirm.title': 'Save the points scale?',
-  'admin.scale.confirm.body': 'The new points apply to the next actions of all members. The change is recorded in the audit log, with what changed.',
+  'admin.scale.confirm.body': 'The new points apply to the next actions of all members.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

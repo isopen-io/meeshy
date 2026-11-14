@@ -1,6 +1,7 @@
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminBadge, AdminRoleBadge } from '@/components/admin/badges';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminMetaRow } from '@/components/admin/meta';
 import { BRAND, INK, INK2, INK3, TONE_COLOR } from '@/components/admin/tone';
 import { interpretRole } from '@/lib/admin/interpret/enums';
@@ -53,15 +54,18 @@ export function AccessBlock({ language, reach }: { readonly language: AdminLangu
               style={{ borderColor: 'var(--color-edge)' }}
             >
               <span className="flex flex-wrap items-center gap-2">
-                <span className="font-medium" style={{ color: INK }}>
-                  {translateAdmin(language, `admin.settings.cap.${row.key}.label`)}
-                </span>
+                <AdminNoted
+                  inline
+                  question={translateAdmin(language, 'admin.kit.info.capability')}
+                  text={translateAdmin(language, `admin.settings.cap.${row.key}.explain`)}
+                >
+                  <span className="font-medium" style={{ color: INK }}>
+                    {translateAdmin(language, `admin.settings.cap.${row.key}.label`)}
+                  </span>
+                </AdminNoted>
                 <AdminBadge tone={row.granted ? 'success' : 'neutral'} glyph={row.granted ? 'checkCircle' : 'prohibit'}>
                   {translateAdmin(language, row.granted ? 'admin.settings.access.granted' : 'admin.settings.access.denied')}
                 </AdminBadge>
-              </span>
-              <span className="text-caption" style={{ color: INK2 }}>
-                {translateAdmin(language, `admin.settings.cap.${row.key}.explain`)}
               </span>
               <span data-admin-capability-opens className="text-caption" style={{ color: INK3 }}>
                 {capabilityOpensText(row, language)}

@@ -7,7 +7,6 @@ import type fr from './contenus-fr';
 
 const f = {
   /* ─── Posts: the list ─── */
-  'admin.posts.subtitle': 'Publicaciones, stories, reels y estados de toda la plataforma: detecte, entienda y retire lo que deba retirarse.',
   'admin.posts.caption': 'Publicaciones de la plataforma',
   'admin.posts.tabs.label': 'Tipo de publicación',
   'admin.posts.tab.all': 'Todas',
@@ -134,7 +133,6 @@ const f = {
   'admin.posts.remove.already': 'Esta publicación ya había sido retirada.',
 
   /* ─── Communities: the list ─── */
-  'admin.community.subtitle': 'Las comunidades de la plataforma: quién las dirige, cuántas personas siguen dentro y qué contienen.',
   'admin.community.caption': 'Comunidades de la plataforma',
   'admin.community.search': 'Buscar (nombre, identificador, descripción)',
   'admin.community.count': 'Resultados: {count}',

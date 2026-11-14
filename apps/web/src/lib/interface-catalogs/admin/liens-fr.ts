@@ -6,7 +6,6 @@
  */
 const f = {
   // ── Demandes de contact ────────────────────────────────────────────────────
-  'admin.invitation.subtitle': 'Les demandes d’ami que les membres s’envoient : qui a demandé à qui, et où en est chaque demande.',
   'admin.invitation.list.caption': 'Demandes de contact',
   'admin.invitation.list.count': '{count} demandes',
   'admin.invitation.list.empty': 'Aucune demande de contact',
@@ -61,7 +60,7 @@ const f = {
   'admin.invitation.gesture.cancel': 'Annuler la demande',
   'admin.invitation.confirm.cancel.title': 'Annuler cette demande ?',
   'admin.invitation.confirm.cancel.body':
-    'La demande passera à « Refusée » : {receiver} ne la verra plus en attente. Aucune amitié n’est créée. Le geste est consigné au journal d’audit.',
+    'La demande passera à « Refusée » : {receiver} ne la verra plus en attente. Aucune amitié n’est créée.',
   'admin.invitation.done.cancelled': 'Demande annulée',
 
   // ── Liens de partage ───────────────────────────────────────────────────────
@@ -98,6 +97,7 @@ const f = {
   'admin.shareLink.strip.sessions': 'Sessions uniques',
   'admin.shareLink.section.conversation': 'Conversation',
   'admin.shareLink.section.permissions': 'Ce que les invités peuvent faire',
+  'admin.shareLink.section.permissions.intro': 'Ce qu’un invité peut faire dans la conversation, figé à son arrivée.',
   'admin.shareLink.section.requirements': 'Ce que le lien exige',
   'admin.shareLink.section.restrictions': 'Restrictions d’accès',
   'admin.shareLink.section.guests': 'Invités récents',
@@ -137,13 +137,13 @@ const f = {
   'admin.shareLink.gesture.reveal': 'Révéler le secret',
   'admin.shareLink.confirm.close.title': 'Fermer ce lien ?',
   'admin.shareLink.confirm.close.body':
-    'Les invités arrivés par ce lien perdent l’accès à la conversation tout de suite, et plus personne n’entre par lui. Le lien n’est pas supprimé : vous pouvez le rouvrir, mais les invités retirés ne reviennent pas d’eux-mêmes. Le geste est consigné au journal d’audit.',
+    'Les invités arrivés par ce lien perdent l’accès à la conversation tout de suite, et plus personne n’entre par lui. Le lien n’est pas supprimé : vous pouvez le rouvrir, mais les invités retirés ne reviennent pas d’eux-mêmes.',
   'admin.shareLink.confirm.reopen.title': 'Rouvrir ce lien ?',
   'admin.shareLink.confirm.reopen.body':
-    'Le lien redevient joignable avec son adresse actuelle : de nouveaux arrivants peuvent entrer. Les invités retirés à la fermeture ne sont pas rétablis. Le geste est consigné au journal d’audit.',
+    'Le lien redevient joignable avec son adresse actuelle : de nouveaux arrivants peuvent entrer. Les invités retirés à la fermeture ne sont pas rétablis.',
   'admin.shareLink.confirm.reveal.title': 'Révéler le secret de ce lien ?',
-  'admin.shareLink.confirm.reveal.body':
-    'Les clés qui vont s’afficher ouvrent la conversation : quiconque les détient y entre. Elles ne s’affichent qu’une fois et ne sont conservées nulle part dans l’administration. Ce geste est réservé au créateur de la plateforme ; il exige un motif écrit et il est consigné au journal d’audit.',
+  'admin.shareLink.confirm.reveal.body': 'Ces clés ouvrent la conversation et ne s’affichent qu’une fois.',
+  'admin.shareLink.confirm.reveal.detail': 'Quiconque les détient entre dans la conversation ; elles ne sont conservées nulle part dans l’administration. Ce geste est réservé au créateur de la plateforme et exige un motif écrit.',
   'admin.shareLink.confirm.reveal.motive': 'Motif (consigné au journal d’audit)',
   'admin.shareLink.done.closed': 'Lien fermé',
   'admin.shareLink.done.reopened': 'Lien rouvert',
@@ -246,10 +246,10 @@ const f = {
   'admin.tracking.gesture.reactivate': 'Réactiver le lien',
   'admin.tracking.confirm.deactivate.title': 'Désactiver ce lien de suivi ?',
   'admin.tracking.confirm.deactivate.body':
-    'Les visiteurs qui ouvrent ce lien ne sont plus redirigés vers la destination. Les statistiques déjà collectées sont conservées, et vous pouvez le réactiver. Le geste est consigné au journal d’audit.',
+    'Les visiteurs qui ouvrent ce lien ne sont plus redirigés vers la destination. Les statistiques déjà collectées sont conservées, et vous pouvez le réactiver.',
   'admin.tracking.confirm.reactivate.title': 'Réactiver ce lien de suivi ?',
   'admin.tracking.confirm.reactivate.body':
-    'Le lien redirige de nouveau les visiteurs vers sa destination et recommence à compter les clics. Le geste est consigné au journal d’audit.',
+    'Le lien redirige de nouveau les visiteurs vers sa destination et recommence à compter les clics.',
   'admin.tracking.confirm.motive': 'Motif (facultatif, consigné au journal d’audit)',
   'admin.tracking.done.deactivated': 'Lien de suivi désactivé',
   'admin.tracking.done.reactivated': 'Lien de suivi réactivé',

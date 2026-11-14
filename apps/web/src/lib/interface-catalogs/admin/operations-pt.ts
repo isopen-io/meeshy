@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './operations-fr';
 
 const f = {
-  'admin.ops.subtitle': 'A máquina ao vivo — processador, carga, memória, disco — e os gestos que cuidam dela: backup, limpeza de imagens.',
   'admin.ops.shared': 'Servidor compartilhado: staging e produção rodam nesta máquina. O que os gráficos mostram vale para os dois.',
   'admin.ops.environment': 'Ambiente: {name} · servidor {host}',
   'admin.ops.live': 'Ao vivo',
@@ -43,7 +42,8 @@ const f = {
   'admin.ops.action.backup': 'Iniciar o backup',
   'admin.ops.action.image-prune': 'Limpar o Docker',
   'admin.ops.action.backup.body': 'Um backup completo do banco e dos volumes deste ambiente começa agora. No máximo um a cada 6 horas.',
-  'admin.ops.action.image-prune.body': 'As imagens Docker sem uso com mais de uma semana e o cache de build são removidos para liberar o disco; os contêineres em execução e os volumes não são tocados. A limpeza abrange a máquina inteira: num servidor compartilhado, também atinge as imagens da produção. A imagem anterior de cada serviço de produção é conservada para um retorno à versão anterior; as mais antigas são baixadas de novo a partir do registro. No máximo uma limpeza por hora.',
+  'admin.ops.action.image-prune.body': 'As imagens sem uso com mais de uma semana são removidas da máquina inteira, incluindo o staging e a produção.',
+  'admin.ops.action.image-prune.detail': 'O cache de build também é removido; os contêineres em execução e os volumes não são tocados. A imagem anterior de cada serviço de produção é conservada para um retorno à versão anterior; as mais antigas são baixadas de novo a partir do registro. No máximo uma limpeza por hora.',
   'admin.ops.action.confirmType': 'Digite «{name}» para confirmar',
   'admin.ops.action.reason': 'Motivo (opcional)',
   'admin.ops.action.cancel': 'Cancelar',

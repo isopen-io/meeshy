@@ -222,7 +222,7 @@ export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly lan
         </StatsBlock>
       </StatsSection>
 
-      <StatsSection id="language-accuracy" title={translateAdmin(language, 'admin.lang.accuracy.title')} note={translateAdmin(language, 'admin.lang.accuracy.hint')}>
+      <StatsSection id="language-accuracy" title={translateAdmin(language, 'admin.lang.accuracy.title')} note={translateAdmin(language, 'admin.lang.accuracy.hint')} noteQuestion={translateAdmin(language, 'admin.kit.info.table')}>
         <StatsBlock language={language} query={accuracy} groupError>
           {(block) =>
             block.state === 'ready' && (block.data?.length ?? 0) === 0 ? (

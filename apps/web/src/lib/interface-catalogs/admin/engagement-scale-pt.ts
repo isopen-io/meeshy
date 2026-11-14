@@ -181,7 +181,7 @@ const f = {
   'admin.scale.abuse.unverifiedMaxPoints': 'Pontos no máximo por ação, conta não verificada',
   /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
   'admin.scale.confirm.title': 'Salvar a tabela de pontos?',
-  'admin.scale.confirm.body': 'Os novos pontos valem para as próximas ações de todos os membros. O ajuste fica registrado no registro de auditoria, com o que mudou.',
+  'admin.scale.confirm.body': 'Os novos pontos valem para as próximas ações de todos os membros.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

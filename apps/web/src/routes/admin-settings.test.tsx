@@ -404,7 +404,7 @@ describe('qui entre dans les réglages — canAccessAdmin', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Réglages');
-    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Votre accès');
+    expect(host.querySelector('[data-admin-page-header] p')).toBeNull();
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Système');
     expect(host.querySelector('[data-admin-page-header] nav')?.textContent).not.toContain('Opérations');
   });
@@ -435,7 +435,7 @@ describe('épure (#18486) — la capacité se nomme, son explication est derriè
   test('« Menu latéral replié » : la bascule se lit seule, la précision est derrière un (i)', async () => {
     const { deps } = scripted();
     const host = await open(deps);
-    const block = host.querySelector('#settings-space') as Element;
+    const block = host.querySelector('[data-admin-fiche-section="settings-space"]') as Element;
 
     expect(visibleText(block)).not.toContain('propre à ce navigateur');
     const button = block.querySelector<HTMLButtonElement>('button[aria-label="Que change ce réglage ?"]');

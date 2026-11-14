@@ -7,7 +7,6 @@ import type fr from './moderation-fr';
  * languages start from this text until their translation pass.
  */
 const f = {
-  'admin.moderation.subtitle': 'Los contenidos y miembros que la comunidad ha denunciado: asume el caso, decide, deja constancia.',
   'admin.moderation.list.caption': 'Lista de denuncias',
   'admin.moderation.list.count': '{count} denuncia(s)',
   'admin.moderation.list.empty': 'Ninguna denuncia',
@@ -93,7 +92,7 @@ const f = {
   'admin.moderation.handling.action': 'Acción registrada',
   'admin.moderation.handling.actionNone': 'Ninguna acción registrada',
   'admin.moderation.handling.actionChoice': 'Acción que se registrará con la decisión',
-  'admin.moderation.handling.actionHint': 'Queda registrada en el expediente: esta elección no desencadena nada por sí sola. Bloquear, retirar o suspender se hace desde las fichas enlazadas más abajo.',
+  'admin.moderation.handling.actionHint': 'Esta elección queda registrada; no bloquea ni retira nada.',
 
   'admin.moderation.timeline.received': 'Recibida',
   'admin.moderation.timeline.taken': 'Asumida por {moderator}',
@@ -104,7 +103,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'Ver las {count} denuncias',
   'admin.moderation.siblings.error': 'No se pudieron cargar las otras denuncias.',
 
-  'admin.moderation.actions.hint': 'Estos enlaces abren la ficha correspondiente: la denuncia por sí sola no bloquea ni retira nada.',
   'admin.moderation.actions.memberSecurity': 'Bloquear o suspender a este miembro',
   'admin.moderation.actions.authorSecurity': 'Revisar al autor: {name}',
   'admin.moderation.actions.post': 'Abrir la publicación para retirarla',

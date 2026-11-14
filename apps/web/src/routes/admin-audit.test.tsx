@@ -407,7 +407,9 @@ describe('la feuille de détail — tout ce qu’il faut pour comprendre un gest
     const host = await open(deps);
     const sheet = await openDetail(host, OBJECT_ID(1));
 
-    expect(sheet.querySelector('[data-admin-audit-explain]')?.textContent).toBe('Le rôle d’un membre, donc ses droits d’administration, a changé.');
+    const explain = sheet.querySelector<HTMLButtonElement>('[data-admin-info="audit-explain"] button');
+    expect(explain?.getAttribute('aria-label')).toBe('Que s’est-il passé ?');
+    expect(sheet.querySelector(`[id="${explain?.getAttribute('aria-controls') ?? ''}"]`)?.textContent).toBe('Le rôle d’un membre, donc ses droits d’administration, a changé.');
     expect(sheet.querySelector('[data-admin-meta="reason"]')?.textContent).toContain('Promotion validée par le comité');
     expect(sheet.querySelector('[data-admin-meta="admin"]')?.textContent).toContain('Awa Diop');
     expect(sheet.querySelector('[data-admin-meta="when"]')?.textContent).toContain('il y a 20 minutes');

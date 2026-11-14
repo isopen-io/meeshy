@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './classement-supervision-fr';
 
 const f = {
-  'admin.ranking.subtitle': 'O mais ativo da plataforma: membros, conversas, mensagens e links, durante o período escolhido.',
 
   'admin.ranking.entity.label': 'O que classificar',
   'admin.ranking.entity.users': 'Membros',
@@ -87,7 +86,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Nada foi contado ainda para este critério.',
   'admin.ranking.widen': 'Ver desde sempre',
 
-  'admin.monitoring.subtitle': 'A saúde da plataforma num relance e o uso real dos endereços da API.',
   'admin.monitoring.tabs.label': 'Seções de supervisão',
   'admin.monitoring.tab.health': 'Saúde',
   'admin.monitoring.tab.routes': 'Uso das rotas',
@@ -143,7 +141,8 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'Há quanto tempo estas estatísticas são contadas.',
 
   'admin.monitoring.breakers.title': 'Disjuntores',
-  'admin.monitoring.breakers.intro': 'Um disjuntor protege a plataforma de um serviço com falha: quando está aberto, recusa as chamadas enquanto o serviço se recupera.',
+  'admin.monitoring.breakers.intro': 'Protegem a plataforma de um serviço com falha.',
+  'admin.monitoring.breakers.detail': 'Um disjuntor protege a plataforma de um serviço com falha: quando está aberto, recusa as chamadas enquanto o serviço se recupera.',
   'admin.monitoring.breakers.failures': 'Falhas',
   'admin.monitoring.breakers.successes': 'Sucessos',
   'admin.monitoring.breakers.lastFailure': 'Última falha',
@@ -224,7 +223,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Outro limite assinalado',
 
   'admin.monitoring.backups.title': 'Cópias de segurança',
-  'admin.monitoring.backups.hint': 'Um backup completo — base verificada, mídias, configuração — é feito todas as noites; «Próximo backup» diz quando. Uma verificação às 5 h, horário de Paris, avisa os administradores quando algo dá errado.',
+  'admin.monitoring.backups.hint': 'Backup completo toda noite.',
+  'admin.monitoring.backups.detail': 'Um backup completo — base verificada, mídias, configuração — é feito todas as noites; «Próximo backup» diz quando. Uma verificação às 5 h, horário de Paris, avisa os administradores quando algo dá errado.',
   'admin.monitoring.backups.state.ok': 'Bem-sucedido',
   'admin.monitoring.backups.state.failed': 'Com falha',
   'admin.monitoring.backups.state.stale': 'Antigo demais',

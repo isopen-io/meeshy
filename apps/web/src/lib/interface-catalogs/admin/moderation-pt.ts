@@ -7,7 +7,6 @@ import type fr from './moderation-fr';
  * languages start from this text until their translation pass.
  */
 const f = {
-  'admin.moderation.subtitle': 'Os conteúdos e membros que a comunidade denunciou: assuma, decida, registre.',
   'admin.moderation.list.caption': 'Lista de denúncias',
   'admin.moderation.list.count': '{count} denúncia(s)',
   'admin.moderation.list.empty': 'Nenhuma denúncia',
@@ -93,7 +92,7 @@ const f = {
   'admin.moderation.handling.action': 'Ação registrada',
   'admin.moderation.handling.actionNone': 'Nenhuma ação registrada',
   'admin.moderation.handling.actionChoice': 'Ação a registrar com a decisão',
-  'admin.moderation.handling.actionHint': 'Registrada no dossiê: esta escolha não faz nada por si só. O banimento, a remoção ou a suspensão são feitos nas fichas vinculadas abaixo.',
+  'admin.moderation.handling.actionHint': 'Esta escolha fica registrada; ela não bane nem remove nada.',
 
   'admin.moderation.timeline.received': 'Recebida',
   'admin.moderation.timeline.taken': 'Assumida por {moderator}',
@@ -104,7 +103,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'Ver as {count} denúncias',
   'admin.moderation.siblings.error': 'As outras denúncias não puderam ser carregadas.',
 
-  'admin.moderation.actions.hint': 'Estes links abrem a ficha relevante: a denúncia em si não bane nem remove nada.',
   'admin.moderation.actions.memberSecurity': 'Banir ou suspender este membro',
   'admin.moderation.actions.authorSecurity': 'Examinar o autor: {name}',
   'admin.moderation.actions.post': 'Abrir a publicação para removê-la',

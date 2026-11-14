@@ -241,8 +241,8 @@ describe('les états', () => {
     const host = await open(deps);
 
     const empty = host.querySelector('[data-admin-empty]');
-    expect(empty?.textContent).toContain('Aucune diffusion pour l’instant');
-    expect(empty?.textContent).toContain('brouillon');
+    expect(empty?.querySelector('p')?.textContent).toBe('Aucune diffusion.');
+    expect(empty?.querySelector('[data-admin-action="new-empty"]')?.textContent).toContain('Écrire une diffusion');
   });
 
   test('aucun résultat pour un filtre : l’état vide filtré et « Réinitialiser »', async () => {

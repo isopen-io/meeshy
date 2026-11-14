@@ -1,6 +1,7 @@
 import { useQuery, type QueryKey, type UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
+import { AdminNoted } from '@/components/admin/info-note';
 import { AdminStatCard } from '@/components/admin/stat-card';
 import { AdminDeniedInline, AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { INK, INK2 } from '@/components/admin/tone';
@@ -127,20 +128,25 @@ export function StatsSection({
   id,
   title,
   note,
+  noteQuestion,
   children,
 }: {
   readonly id: string;
   readonly title: string;
   readonly note?: string;
+  /** La QUESTION à laquelle `note` répond : avec elle, la note passe derrière un (i). */
+  readonly noteQuestion?: string;
   readonly children: ReactNode;
 }) {
   return (
     <section aria-labelledby={`${id}-title`} data-admin-stats-section={id} className="grid gap-3">
       <div className="grid gap-1">
-        <h2 id={`${id}-title`} className="text-title font-semibold" style={{ color: INK }}>
-          {title}
-        </h2>
-        {note === undefined ? null : (
+        <AdminNoted question={noteQuestion ?? ''} text={noteQuestion === undefined ? undefined : note}>
+          <h2 id={`${id}-title`} className="text-title font-semibold" style={{ color: INK }}>
+            {title}
+          </h2>
+        </AdminNoted>
+        {note === undefined || noteQuestion !== undefined ? null : (
           <p className="text-caption" style={{ color: INK2 }}>
             {note}
           </p>

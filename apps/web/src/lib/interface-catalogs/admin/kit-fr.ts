@@ -6,6 +6,18 @@
  */
 const f = {
   'admin.group.overview': 'Vue d’ensemble',
+  'admin.kit.info.setting': 'Que change ce réglage ?',
+  'admin.kit.info.capability': 'Que permet cette capacité ?',
+  'admin.kit.info.blindSpot': 'Pourquoi cet angle mort ?',
+  'admin.kit.info.action': 'Que s’est-il passé ?',
+  'admin.kit.info.table': 'Comment lire ce tableau ?',
+  'admin.kit.info.edit': 'Comment modifier ?',
+  'admin.kit.info.secret': 'Pourquoi ces clés sont-elles sensibles ?',
+  'admin.kit.info.purge': 'Que supprime ce nettoyage ?',
+  'admin.kit.info.backup': 'Comment fonctionne la sauvegarde ?',
+  'admin.kit.info.breaker': 'Qu’est-ce qu’un coupe-circuit ?',
+  'admin.kit.info.field': 'À quoi sert ce réglage ?',
+  'admin.kit.confirm.audited': 'Ce geste est consigné au journal d’audit.',
   'admin.group.people': 'Personnes',
   'admin.group.exchanges': 'Échanges',
   'admin.group.content': 'Contenus',
@@ -152,7 +164,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Créateur seulement',
 
   'admin.enum.encryption.e2ee': 'Chiffrée de bout en bout',
-  'admin.enum.encryption.e2ee.explain': 'Le serveur ne lit pas les messages : pas de traduction automatique.',
+  'admin.enum.encryption.e2ee.explain': 'De bout en bout : le serveur ne lit pas les messages ni ne les traduit.',
   'admin.enum.encryption.server': 'Chiffrée sur le serveur',
   'admin.enum.encryption.hybrid': 'Hybride',
   'admin.enum.encryption.none': 'Non chiffrée',

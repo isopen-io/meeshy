@@ -1,3 +1,4 @@
+import { AdminNoted } from '@/components/admin/info-note';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
@@ -268,12 +269,11 @@ export function MonitoringRoutes({ language, deps, now = defaultNow }: Monitorin
               const spot = blindSpotOf(served, language);
               return (
                 <li key={served} data-admin-blind-spot={spot.id} className="grid gap-1 rounded-card p-4" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
-                  <span className="text-body font-semibold" style={{ color: INK }}>
-                    {spot.title}
-                  </span>
-                  <span className="text-caption" style={{ color: INK2 }}>
-                    {spot.explain}
-                  </span>
+                  <AdminNoted inline question={translateAdmin(language, 'admin.kit.info.blindSpot')} text={spot.explain}>
+                    <span className="text-body font-semibold" style={{ color: INK }}>
+                      {spot.title}
+                    </span>
+                  </AdminNoted>
                 </li>
               );
             })}

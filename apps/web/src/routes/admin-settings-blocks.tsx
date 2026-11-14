@@ -117,6 +117,7 @@ export function SpaceBlock({ language, announce }: { readonly language: AdminLan
         id={switchId}
         label={translateAdmin(language, 'admin.settings.space.folded')}
         hint={translateAdmin(language, 'admin.settings.space.foldedHint')}
+        hintQuestion={translateAdmin(language, 'admin.kit.info.setting')}
         checked={folded}
         onToggle={toggle}
         data={{ 'data-admin-action': 'toggle-folded-sidebar' }}

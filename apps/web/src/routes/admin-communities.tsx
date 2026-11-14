@@ -121,7 +121,6 @@ export function AdminCommunitiesPanel({
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.communities')}
-        subtitle={translateAdmin(language, 'admin.community.subtitle')}
         place={{ section: 'communities' }}
       />
       <AdminEntityList

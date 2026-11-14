@@ -6,7 +6,6 @@
  * conversations de groupe, jamais des communautés.
  */
 const f = {
-  'admin.ranking.subtitle': 'Les plus actifs de la plateforme : membres, conversations, messages et liens, sur la période choisie.',
 
   'admin.ranking.entity.label': 'Ce qu’on classe',
   'admin.ranking.entity.users': 'Membres',
@@ -91,7 +90,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Rien n’a encore été compté pour ce critère.',
   'admin.ranking.widen': 'Voir toute la période',
 
-  'admin.monitoring.subtitle': 'La santé de la plateforme en un coup d’œil, et l’usage réel des adresses de l’API.',
   'admin.monitoring.tabs.label': 'Sections de la supervision',
   'admin.monitoring.tab.health': 'Santé',
   'admin.monitoring.tab.routes': 'Usage des routes',
@@ -147,7 +145,8 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'Depuis quand ces statistiques sont comptées.',
 
   'admin.monitoring.breakers.title': 'Coupe-circuits',
-  'admin.monitoring.breakers.intro': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse.',
+  'admin.monitoring.breakers.intro': 'Ils protègent la plateforme d’un service en panne.',
+  'admin.monitoring.breakers.detail': 'Un coupe-circuit protège la plateforme d’un service en panne : ouvert, il refuse les appels le temps que le service se rétablisse.',
   'admin.monitoring.breakers.failures': 'Échecs',
   'admin.monitoring.breakers.successes': 'Succès',
   'admin.monitoring.breakers.lastFailure': 'Dernier échec',
@@ -228,7 +227,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Autre limite signalée',
 
   'admin.monitoring.backups.title': 'Sauvegardes',
-  'admin.monitoring.backups.hint': 'Une sauvegarde complète — base vérifiée, médias, configuration — part chaque nuit ; « Prochaine sauvegarde » dit quand. Un contrôle à 5 h, heure de Paris, prévient les administrateurs en cas de problème.',
+  'admin.monitoring.backups.hint': 'Sauvegarde complète chaque nuit.',
+  'admin.monitoring.backups.detail': 'Une sauvegarde complète — base vérifiée, médias, configuration — part chaque nuit ; « Prochaine sauvegarde » dit quand. Un contrôle à 5 h, heure de Paris, prévient les administrateurs en cas de problème.',
   'admin.monitoring.backups.state.ok': 'Réussie',
   'admin.monitoring.backups.state.failed': 'En échec',
   'admin.monitoring.backups.state.stale': 'Trop ancienne',

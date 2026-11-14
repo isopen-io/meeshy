@@ -144,7 +144,6 @@ export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.reports')}
-        subtitle={translateAdmin(language, 'admin.moderation.subtitle')}
         place={{ section: 'reports' }}
       />
       <AdminOfflineNotice language={language} />

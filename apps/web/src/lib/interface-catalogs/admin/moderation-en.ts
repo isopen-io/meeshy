@@ -7,7 +7,6 @@ import type fr from './moderation-fr';
  * languages start from this text until their translation pass.
  */
 const f = {
-  'admin.moderation.subtitle': 'The content and members the community has reported: take charge, decide, record.',
   'admin.moderation.list.caption': 'List of reports',
   'admin.moderation.list.count': '{count} report(s)',
   'admin.moderation.list.empty': 'No reports',
@@ -93,8 +92,7 @@ const f = {
   'admin.moderation.handling.action': 'Recorded action',
   'admin.moderation.handling.actionNone': 'No action recorded',
   'admin.moderation.handling.actionChoice': 'Action to record with the decision',
-  'admin.moderation.handling.actionHint':
-    'Recorded in the file: this choice triggers nothing by itself. Banning, removing or suspending is done from the linked sheets below.',
+  'admin.moderation.handling.actionHint': 'This choice is recorded; it does not ban or remove anything.',
 
   'admin.moderation.timeline.received': 'Received',
   'admin.moderation.timeline.taken': 'Taken in charge by {moderator}',
@@ -105,7 +103,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'See all {count} reports',
   'admin.moderation.siblings.error': 'The other reports could not be loaded.',
 
-  'admin.moderation.actions.hint': 'These links open the relevant sheet: the report itself neither bans nor removes anything.',
   'admin.moderation.actions.memberSecurity': 'Ban or suspend this member',
   'admin.moderation.actions.authorSecurity': 'Review the author: {name}',
   'admin.moderation.actions.post': 'Open the post to remove it',

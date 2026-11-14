@@ -48,7 +48,7 @@ describe('le kit : un champ range son explication derrière un (i)', () => {
   test('AdminSwitch : le (i) ouvre la note, qui se lit alors', async () => {
     const host = await mount(<AdminSwitch id="s" label="Menu replié" hint="Le menu démarre réduit." hintQuestion="Que change ce réglage ?" checked={false} onToggle={() => undefined} />);
 
-    await mounter.act(() => infoButton(host, 'Que change ce réglage ?')?.click());
+    await mounter.click(infoButton(host, 'Que change ce réglage ?'));
 
     expect(visibleText(host)).toContain('Le menu démarre réduit.');
   });
@@ -114,7 +114,7 @@ describe('les sous-titres qui répètent le titre sont supprimés', () => {
 describe('les phrases qui ne servent plus à rien ne sont pas déplacées : elles sont fusionnées', () => {
   test('Signalements : UNE phrase dit que le choix ne bannit ni ne retire rien', () => {
     expect(entry('fr', 'admin.moderation.actions.hint')).toBeUndefined();
-    expect(entry('fr', 'admin.moderation.decision.note')).toBe('Ce choix est consigné ; il ne bannit ni ne retire rien.');
+    expect(entry('fr', 'admin.moderation.handling.actionHint')).toBe('Ce choix est consigné ; il ne bannit ni ne retire rien.');
   });
 
   test('Saisons du Jeu : « rien n’est appliqué » se dit une seule fois', () => {
@@ -153,7 +153,7 @@ describe('une longue explication d’acte, de capacité ou de sauvegarde est rac
 
   test('la révélation d’un lien de partage tient en une phrase', () => {
     expect(entry('fr', 'admin.shareLink.confirm.reveal.body')).toBe('Ces clés ouvrent la conversation et ne s’affichent qu’une fois.');
-    expect(entry('fr', 'admin.shareLink.confirm.reveal.detail')).toContain('quiconque les détient');
+    expect(entry('fr', 'admin.shareLink.confirm.reveal.detail')).toContain('Quiconque les détient');
   });
 });
 

@@ -5,7 +5,6 @@ import type fr from './liens-fr';
    traduction du lot « liens ». Les clés sont celles du fragment français, ni plus ni moins. */
 const f = {
   // ── Contact requests ───────────────────────────────────────────────────────
-  'admin.invitation.subtitle': 'Os pedidos de amizade que os membros enviam uns aos outros: quem pediu a quem e em que ponto está cada pedido.',
   'admin.invitation.list.caption': 'Pedidos de contato',
   'admin.invitation.list.count': '{count} pedidos',
   'admin.invitation.list.empty': 'Nenhum pedido de contato',
@@ -59,7 +58,7 @@ const f = {
   'admin.invitation.explain.accepted': 'Os dois membros são amigos.',
   'admin.invitation.gesture.cancel': 'Cancelar o pedido',
   'admin.invitation.confirm.cancel.title': 'Cancelar este pedido?',
-  'admin.invitation.confirm.cancel.body': 'O pedido passará a «Recusado»: {receiver} deixará de o ver como pendente. Nenhuma amizade é criada. O gesto fica registrado no registro de auditoria.',
+  'admin.invitation.confirm.cancel.body': 'O pedido passará a «Recusado»: {receiver} deixará de o ver como pendente. Nenhuma amizade é criada.',
   'admin.invitation.done.cancelled': 'Pedido cancelado',
 
   // ── Share links ────────────────────────────────────────────────────────────
@@ -96,6 +95,7 @@ const f = {
   'admin.shareLink.strip.sessions': 'Sessões únicas',
   'admin.shareLink.section.conversation': 'Conversa',
   'admin.shareLink.section.permissions': 'O que os convidados podem fazer',
+  'admin.shareLink.section.permissions.intro': 'O que um convidado pode fazer na conversa, definido na chegada.',
   'admin.shareLink.section.requirements': 'O que o link exige',
   'admin.shareLink.section.restrictions': 'Restrições de acesso',
   'admin.shareLink.section.guests': 'Convidados recentes',
@@ -134,11 +134,12 @@ const f = {
   'admin.shareLink.gesture.reopen': 'Reabrir o link',
   'admin.shareLink.gesture.reveal': 'Revelar o segredo',
   'admin.shareLink.confirm.close.title': 'Fechar este link?',
-  'admin.shareLink.confirm.close.body': 'Os convidados que entraram por este link perdem de imediato o acesso à conversa, e mais ninguém pode entrar por ele. O link não é excluído: pode reabri-lo, mas os convidados removidos não voltam sozinhos. O gesto fica registrado no registro de auditoria.',
+  'admin.shareLink.confirm.close.body': 'Os convidados que entraram por este link perdem de imediato o acesso à conversa, e mais ninguém pode entrar por ele. O link não é excluído: pode reabri-lo, mas os convidados removidos não voltam sozinhos.',
   'admin.shareLink.confirm.reopen.title': 'Reabrir este link?',
-  'admin.shareLink.confirm.reopen.body': 'O link volta a ficar acessível com o seu endereço atual: podem entrar novos convidados. Os convidados removidos ao fechá-lo não são restaurados. O gesto fica registrado no registro de auditoria.',
+  'admin.shareLink.confirm.reopen.body': 'O link volta a ficar acessível com o seu endereço atual: podem entrar novos convidados. Os convidados removidos ao fechá-lo não são restaurados.',
   'admin.shareLink.confirm.reveal.title': 'Revelar o segredo deste link?',
-  'admin.shareLink.confirm.reveal.body': 'As chaves que vão ser mostradas abrem a conversa: quem as tiver pode entrar. São mostradas uma única vez e não ficam salvas em nenhum lugar da administração. Este gesto está reservado ao criador da plataforma; exige um motivo escrito e fica registrado no registro de auditoria.',
+  'admin.shareLink.confirm.reveal.body': 'Essas chaves abrem a conversa e são mostradas uma única vez.',
+  'admin.shareLink.confirm.reveal.detail': 'Quem as tiver pode entrar na conversa; elas não ficam salvas em nenhum lugar da administração. Este gesto está reservado ao criador da plataforma e exige um motivo escrito.',
   'admin.shareLink.confirm.reveal.motive': 'Motivo (registrado no registro de auditoria)',
   'admin.shareLink.done.closed': 'Link fechado',
   'admin.shareLink.done.reopened': 'Link reaberto',
@@ -240,9 +241,9 @@ const f = {
   'admin.tracking.gesture.deactivate': 'Desativar o link',
   'admin.tracking.gesture.reactivate': 'Reativar o link',
   'admin.tracking.confirm.deactivate.title': 'Desativar este link de rastreamento?',
-  'admin.tracking.confirm.deactivate.body': 'Os visitantes que abrirem este link deixam de ser redirecionados para o destino. As estatísticas já coletadas são mantidas e você pode reativá-lo. O gesto fica registrado no registro de auditoria.',
+  'admin.tracking.confirm.deactivate.body': 'Os visitantes que abrirem este link deixam de ser redirecionados para o destino. As estatísticas já coletadas são mantidas e você pode reativá-lo.',
   'admin.tracking.confirm.reactivate.title': 'Reativar este link de rastreamento?',
-  'admin.tracking.confirm.reactivate.body': 'O link volta a redirecionar os visitantes para o seu destino e volta a contar os cliques. O gesto fica registrado no registro de auditoria.',
+  'admin.tracking.confirm.reactivate.body': 'O link volta a redirecionar os visitantes para o seu destino e volta a contar os cliques.',
   'admin.tracking.confirm.motive': 'Motivo (opcional, registrado no registro de auditoria)',
   'admin.tracking.done.deactivated': 'Link de rastreamento desativado',
   'admin.tracking.done.reactivated': 'Link de rastreamento reativado',

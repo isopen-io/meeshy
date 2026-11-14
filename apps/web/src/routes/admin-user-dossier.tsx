@@ -85,11 +85,18 @@ import { AdminUserSessionsList } from './admin-user-sessions';
 const INK2 = 'var(--color-ios-ink-2)';
 const SOUVERAIN = { gcTime: 0, retry: false } as const;
 
-function Titre({ children }: { readonly children: ReactNode }) {
+function Titre({ children, intro }: { readonly children: ReactNode; readonly intro?: string }) {
   return (
-    <h2 className="pb-2 text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-      {children}
-    </h2>
+    <div className="grid gap-0.5 pb-2">
+      <h2 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+        {children}
+      </h2>
+      {intro === undefined ? null : (
+        <p data-admin-block-intro className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {intro}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -367,11 +374,11 @@ export function AdminUserSecurityTab({
   return (
     <div className="grid gap-6" data-admin-security>
       <section>
-        <Titre>{translateAdmin(language, 'admin.security.sessions')}</Titre>
+        <Titre intro={translateAdmin(language, 'admin.security.sessions.intro')}>{translateAdmin(language, 'admin.security.sessions')}</Titre>
         <AdminUserSessionsList userId={userId} language={language} deps={deps} now={instant} onAnnounce={onAnnounce} />
       </section>
       <section>
-        <Titre>{translateAdmin(language, 'admin.security.events')}</Titre>
+        <Titre intro={translateAdmin(language, 'admin.security.events.intro')}>{translateAdmin(language, 'admin.security.events')}</Titre>
         <DossierList
           language={language}
           query={evenements}

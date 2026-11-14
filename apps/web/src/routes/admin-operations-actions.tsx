@@ -1,3 +1,4 @@
+import { AdminInfoAlone } from '@/components/admin/info-note';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
@@ -84,6 +85,9 @@ function ConfirmOperation({
         <p className="text-body" style={{ color: INK }}>
           {translateAdmin(language, `admin.ops.action.${operation}.body`)}
         </p>
+        {operation === 'image-prune' ? (
+          <AdminInfoAlone question={translateAdmin(language, 'admin.kit.info.purge')} text={translateAdmin(language, 'admin.ops.action.image-prune.detail')} anchor="ops-detail" />
+        ) : null}
         <label htmlFor={typedId} className="grid gap-2 text-body" style={{ color: INK }}>
           {translateAdmin(language, 'admin.ops.action.confirmType', { name: operation })}
           <input

@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './classement-supervision-fr';
 
 const f = {
-  'admin.ranking.subtitle': 'Lo más activo de la plataforma: miembros, conversaciones, mensajes y enlaces, durante el período elegido.',
 
   'admin.ranking.entity.label': 'Qué clasificar',
   'admin.ranking.entity.users': 'Miembros',
@@ -87,7 +86,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Todavía no se ha contado nada para este criterio.',
   'admin.ranking.widen': 'Ver desde siempre',
 
-  'admin.monitoring.subtitle': 'La salud de la plataforma de un vistazo y el uso real de las direcciones de la API.',
   'admin.monitoring.tabs.label': 'Secciones de supervisión',
   'admin.monitoring.tab.health': 'Salud',
   'admin.monitoring.tab.routes': 'Uso de las rutas',
@@ -143,7 +141,8 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'Desde hace cuánto se cuentan estas estadísticas.',
 
   'admin.monitoring.breakers.title': 'Cortacircuitos',
-  'admin.monitoring.breakers.intro': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera.',
+  'admin.monitoring.breakers.intro': 'Protegen la plataforma de un servicio averiado.',
+  'admin.monitoring.breakers.detail': 'Un cortacircuitos protege la plataforma de un servicio averiado: cuando está abierto, rechaza las llamadas mientras el servicio se recupera.',
   'admin.monitoring.breakers.failures': 'Fallos',
   'admin.monitoring.breakers.successes': 'Aciertos',
   'admin.monitoring.breakers.lastFailure': 'Último fallo',
@@ -224,7 +223,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Otro límite señalado',
 
   'admin.monitoring.backups.title': 'Copias de seguridad',
-  'admin.monitoring.backups.hint': 'Cada noche se hace una copia completa — base verificada, medios, configuración —; «Próxima copia» indica cuándo. Un control a las 5 h, hora de París, avisa a los administradores si algo falla.',
+  'admin.monitoring.backups.hint': 'Copia completa cada noche.',
+  'admin.monitoring.backups.detail': 'Cada noche se hace una copia completa — base verificada, medios, configuración —; «Próxima copia» indica cuándo. Un control a las 5 h, hora de París, avisa a los administradores si algo falla.',
   'admin.monitoring.backups.state.ok': 'Correcta',
   'admin.monitoring.backups.state.failed': 'Fallida',
   'admin.monitoring.backups.state.stale': 'Demasiado antigua',

@@ -190,7 +190,7 @@ const f = {
   'admin.scale.abuse.unverifiedMaxPoints': 'Points au plus par acte, compte non vérifié',
   /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
   'admin.scale.confirm.title': 'Enregistrer le barème ?',
-  'admin.scale.confirm.body': 'Les nouveaux points s’appliquent aux prochaines actions de tous les membres. Le réglage est consigné au journal, avec ce qui a changé.',
+  'admin.scale.confirm.body': 'Les nouveaux points s’appliquent aux prochaines actions de tous les membres.',
 } as const;
 
 export default f;

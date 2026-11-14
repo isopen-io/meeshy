@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './classement-supervision-fr';
 
 const f = {
-  'admin.ranking.subtitle': 'The most active on the platform: members, conversations, messages and links, over the chosen period.',
 
   'admin.ranking.entity.label': 'What to rank',
   'admin.ranking.entity.users': 'Members',
@@ -87,7 +86,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Nothing has been counted yet for this criterion.',
   'admin.ranking.widen': 'See all time',
 
-  'admin.monitoring.subtitle': 'The health of the platform at a glance, and the real usage of the API addresses.',
   'admin.monitoring.tabs.label': 'Monitoring sections',
   'admin.monitoring.tab.health': 'Health',
   'admin.monitoring.tab.routes': 'Route usage',
@@ -143,7 +141,8 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'How long these statistics have been counted.',
 
   'admin.monitoring.breakers.title': 'Circuit breakers',
-  'admin.monitoring.breakers.intro': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers.',
+  'admin.monitoring.breakers.intro': 'They protect the platform from a failing service.',
+  'admin.monitoring.breakers.detail': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers.',
   'admin.monitoring.breakers.failures': 'Failures',
   'admin.monitoring.breakers.successes': 'Successes',
   'admin.monitoring.breakers.lastFailure': 'Last failure',
@@ -224,7 +223,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Other limit reported',
 
   'admin.monitoring.backups.title': 'Backups',
-  'admin.monitoring.backups.hint': 'A full backup — verified database, media, configuration — runs every night; “Next backup” says when. A check at 5 a.m., Paris time, alerts the administrators when something is wrong.',
+  'admin.monitoring.backups.hint': 'A full backup every night.',
+  'admin.monitoring.backups.detail': 'A full backup — verified database, media, configuration — runs every night; “Next backup” says when. A check at 5 a.m., Paris time, alerts the administrators when something is wrong.',
   'admin.monitoring.backups.state.ok': 'Succeeded',
   'admin.monitoring.backups.state.failed': 'Failed',
   'admin.monitoring.backups.state.stale': 'Too old',

@@ -4,7 +4,7 @@
  */
 const f = {
   'admin.quickEdit.title': 'Édition rapide',
-  'admin.quickEdit.subtitle': 'Touchez une information pour la modifier : elle s’enregistre dès que vous la quittez.',
+  'admin.quickEdit.note': 'Touchez une information pour la modifier : elle s’enregistre dès que vous la quittez.',
   'admin.quickEdit.fold': 'Replier l’édition rapide',
   'admin.quickEdit.unfold': 'Déplier l’édition rapide',
   'admin.quickEdit.birthDate': 'Date de naissance',

@@ -3,7 +3,6 @@ import type fr from './contenus-fr';
 
 const f = {
   /* ─── Posts: the list ─── */
-  'admin.posts.subtitle': 'Posts, stories, reels and statuses from the whole platform: spot, understand and remove what has to go.',
   'admin.posts.caption': 'Platform posts',
   'admin.posts.tabs.label': 'Post type',
   'admin.posts.tab.all': 'All',
@@ -130,7 +129,6 @@ const f = {
   'admin.posts.remove.already': 'This post had already been removed.',
 
   /* ─── Communities: the list ─── */
-  'admin.community.subtitle': 'The platform’s communities: who runs them, how many people are still in, and what they contain.',
   'admin.community.caption': 'Platform communities',
   'admin.community.search': 'Search (name, identifier, description)',
   'admin.community.count': 'Results: {count}',

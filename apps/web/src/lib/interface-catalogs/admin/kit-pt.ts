@@ -3,6 +3,18 @@ import type fr from './kit-fr';
 
 const f = {
   'admin.group.overview': 'Visão geral',
+  'admin.kit.info.setting': 'O que esta configuração muda?',
+  'admin.kit.info.capability': 'O que esta capacidade permite?',
+  'admin.kit.info.blindSpot': 'Por que este ponto cego?',
+  'admin.kit.info.action': 'O que aconteceu?',
+  'admin.kit.info.table': 'Como ler esta tabela?',
+  'admin.kit.info.edit': 'Como editar?',
+  'admin.kit.info.secret': 'Por que essas chaves são sensíveis?',
+  'admin.kit.info.purge': 'O que esta limpeza remove?',
+  'admin.kit.info.backup': 'Como funciona o backup?',
+  'admin.kit.info.breaker': 'O que é um disjuntor?',
+  'admin.kit.info.field': 'Para que serve esta configuração?',
+  'admin.kit.confirm.audited': 'Esta ação fica registrada no registro de auditoria.',
   'admin.group.people': 'Pessoas',
   'admin.group.exchanges': 'Trocas',
   'admin.group.content': 'Conteúdos',
@@ -149,7 +161,7 @@ const f = {
   'admin.enum.writeRole.creator': 'Somente o criador',
 
   'admin.enum.encryption.e2ee': 'Criptografada de ponta a ponta',
-  'admin.enum.encryption.e2ee.explain': 'O servidor não lê as mensagens: sem tradução automática.',
+  'admin.enum.encryption.e2ee.explain': 'Ponta a ponta: o servidor não lê nem traduz as mensagens.',
   'admin.enum.encryption.server': 'Criptografada no servidor',
   'admin.enum.encryption.hybrid': 'Híbrida',
   'admin.enum.encryption.none': 'Sem criptografia',

@@ -12,7 +12,6 @@
  */
 const f = {
   /* ─── Publications : la liste ─── */
-  'admin.posts.subtitle': 'Publications, stories, reels et statuts de toute la plateforme : repérez, comprenez et retirez ce qui doit l’être.',
   'admin.posts.caption': 'Publications de la plateforme',
   'admin.posts.tabs.label': 'Type de publication',
   'admin.posts.tab.all': 'Toutes',
@@ -139,7 +138,6 @@ const f = {
   'admin.posts.remove.already': 'Cette publication était déjà retirée.',
 
   /* ─── Communautés : la liste ─── */
-  'admin.community.subtitle': 'Les communautés de la plateforme : qui les dirige, combien de personnes y sont encore, et ce qu’elles contiennent.',
   'admin.community.caption': 'Communautés de la plateforme',
   'admin.community.search': 'Rechercher (nom, identifiant, description)',
   'admin.community.count': 'Résultats : {count}',

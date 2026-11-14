@@ -231,7 +231,7 @@ describe('les métadonnées, interprétées', () => {
     const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'encryption')?.textContent).toContain('Chiffrée de bout en bout');
-    expect(meta(host, 'encryption')?.textContent).toContain('Le serveur ne lit pas les messages');
+    expect(meta(host, 'encryption')?.textContent).toContain('le serveur ne lit pas les messages ni ne les traduit');
     expect(meta(host, 'autoTranslate')?.textContent).toContain('Inactive : le serveur ne peut pas lire');
   });
 

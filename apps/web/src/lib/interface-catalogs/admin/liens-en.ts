@@ -3,7 +3,6 @@ import type fr from './liens-fr';
 
 const f = {
   // ── Contact requests ───────────────────────────────────────────────────────
-  'admin.invitation.subtitle': 'The friend requests members send each other: who asked whom, and where each request stands.',
   'admin.invitation.list.caption': 'Contact requests',
   'admin.invitation.list.count': '{count} requests',
   'admin.invitation.list.empty': 'No contact requests',
@@ -58,7 +57,7 @@ const f = {
   'admin.invitation.gesture.cancel': 'Cancel the request',
   'admin.invitation.confirm.cancel.title': 'Cancel this request?',
   'admin.invitation.confirm.cancel.body':
-    'The request will become “Declined”: {receiver} will no longer see it as pending. No friendship is created. The gesture is recorded in the audit log.',
+    'The request will become “Declined”: {receiver} will no longer see it as pending. No friendship is created.',
   'admin.invitation.done.cancelled': 'Request cancelled',
 
   // ── Share links ────────────────────────────────────────────────────────────
@@ -95,6 +94,7 @@ const f = {
   'admin.shareLink.strip.sessions': 'Unique sessions',
   'admin.shareLink.section.conversation': 'Conversation',
   'admin.shareLink.section.permissions': 'What guests can do',
+  'admin.shareLink.section.permissions.intro': 'What a guest can do in the conversation, fixed on arrival.',
   'admin.shareLink.section.requirements': 'What the link requires',
   'admin.shareLink.section.restrictions': 'Access restrictions',
   'admin.shareLink.section.guests': 'Recent guests',
@@ -134,13 +134,13 @@ const f = {
   'admin.shareLink.gesture.reveal': 'Reveal the secret',
   'admin.shareLink.confirm.close.title': 'Close this link?',
   'admin.shareLink.confirm.close.body':
-    'Guests who came in through this link lose access to the conversation right away, and nobody else can come in through it. The link is not deleted: you can reopen it, but removed guests do not come back on their own. The gesture is recorded in the audit log.',
+    'Guests who came in through this link lose access to the conversation right away, and nobody else can come in through it. The link is not deleted: you can reopen it, but removed guests do not come back on their own.',
   'admin.shareLink.confirm.reopen.title': 'Reopen this link?',
   'admin.shareLink.confirm.reopen.body':
-    'The link becomes reachable again with its current address: new arrivals can come in. Guests removed when it was closed are not restored. The gesture is recorded in the audit log.',
+    'The link becomes reachable again with its current address: new arrivals can come in. Guests removed when it was closed are not restored.',
   'admin.shareLink.confirm.reveal.title': 'Reveal this link’s secret?',
-  'admin.shareLink.confirm.reveal.body':
-    'The keys about to be shown open the conversation: anyone who holds them can come in. They are shown once and kept nowhere in the administration. This gesture is reserved for the platform creator; it requires a written reason and is recorded in the audit log.',
+  'admin.shareLink.confirm.reveal.body': 'These keys open the conversation and are shown only once.',
+  'admin.shareLink.confirm.reveal.detail': 'Anyone who holds them can enter the conversation; they are kept nowhere in the administration. This gesture is reserved for the platform creator and requires a written reason.',
   'admin.shareLink.confirm.reveal.motive': 'Reason (recorded in the audit log)',
   'admin.shareLink.done.closed': 'Link closed',
   'admin.shareLink.done.reopened': 'Link reopened',
@@ -243,10 +243,10 @@ const f = {
   'admin.tracking.gesture.reactivate': 'Reactivate the link',
   'admin.tracking.confirm.deactivate.title': 'Deactivate this tracking link?',
   'admin.tracking.confirm.deactivate.body':
-    'Visitors who open this link are no longer redirected to the destination. Statistics already collected are kept, and you can reactivate it. The gesture is recorded in the audit log.',
+    'Visitors who open this link are no longer redirected to the destination. Statistics already collected are kept, and you can reactivate it.',
   'admin.tracking.confirm.reactivate.title': 'Reactivate this tracking link?',
   'admin.tracking.confirm.reactivate.body':
-    'The link redirects visitors to its destination again and starts counting clicks once more. The gesture is recorded in the audit log.',
+    'The link redirects visitors to its destination again and starts counting clicks once more.',
   'admin.tracking.confirm.motive': 'Reason (optional, recorded in the audit log)',
   'admin.tracking.done.deactivated': 'Tracking link deactivated',
   'admin.tracking.done.reactivated': 'Tracking link reactivated',

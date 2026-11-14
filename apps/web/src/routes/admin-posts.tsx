@@ -189,7 +189,6 @@ export function AdminPostsPanel({
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.posts')}
-        subtitle={translateAdmin(language, 'admin.posts.subtitle')}
         place={{ section: 'posts' }}
       />
       <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} now={now} />
