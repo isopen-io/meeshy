@@ -75,6 +75,7 @@ export function ReactionAddCapsule({
   const [box, setBox] = useState<BarBox | null>(null);
   const roving = useRovingMenu({
     itemCount: RAIL_ITEM_COUNT,
+    layer: false,
     onScroll: () => roving.setOpen(false),
     onResize: () => roving.setOpen(false),
   });
@@ -134,6 +135,7 @@ export function MessageReactionQuickBar({
   const [box] = useState(() => barBoxOf(anchor, x));
   const roving = useRovingMenu({
     itemCount: RAIL_ITEM_COUNT,
+    layer: false,
     initialOpen: true,
     anchor: () => anchor,
     returnFocusTo: () => anchor,
