@@ -663,4 +663,42 @@ final class EpureCerclesContactsTests: XCTestCase {
     func test_starredEmptyQuestion_isTranslatedInEveryLanguage_neverCopiedFromFrench() throws {
         try assertTranslated(try app(), "starred.messages.empty.question", french: "Comment ajouter un message aux favoris ?")
     }
+
+    // MARK: - Lot 1/3, passe de relecture : un nom court, une ligne exacte, une promesse tenue (#18088)
+
+    func test_profileProgressionEntry_namesTheThreeThingsWithTheGameWords_inEveryLanguage() throws {
+        try assertTranslated(try app(), "profile.progression.subtitle", french: "Médailles, niveau et Flamme")
+        let source = try code("apps/ios/Meeshy/Features/Profile/Views/ProfileProgressionEntry.swift")
+        XCTAssertTrue(source.contains("defaultValue: \"Médailles, niveau et Flamme\""))
+        XCTAssertFalse(source.contains("Badges, niveau et série"), "le mot des réglages et du jeu, pas celui d'avant")
+    }
+
+    func test_notificationsReactionsEmpty_isSpelledWithItsAccent_defaultAndCatalog() throws {
+        XCTAssertEqual(try kit()["notifications.empty.reactions"]?["fr"], "Aucune réaction")
+        let source = try code("packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListScreen.swift")
+        XCTAssertTrue(source.contains("defaultValue: \"Aucune réaction\""))
+        XCTAssertFalse(source.contains("Aucune reaction"))
+    }
+
+    /// Règle 7 : la phrase du consentement est visible au repos, et elle ne promet pas ce que le serveur ne fait pas
+    /// encore (la route de retrait #14401 est ouverte) : on refuse ICI, retirer après coup n'est pas encore possible.
+    func test_ritualWithdrawal_saysWhereToRefuse_andThatWithdrawingLaterIsNotYetPossible_inEveryLanguage() throws {
+        let expected = "Chaque partage se refuse ici ; le retirer après coup n'est pas encore possible."
+        XCTAssertEqual(BloodRitualConsentCopy.withdrawal, expected)
+        try assertTranslated(try app(), "circles.ritual.consent.withdrawal", french: expected)
+        XCTAssertFalse(BloodRitualConsentCopy.withdrawal.contains("Bientôt"), "plus de promesse datée")
+        let view = try code("apps/ios/Meeshy/Features/Contacts/BloodRitualView.swift")
+        XCTAssertTrue(view.contains("Text(BloodRitualConsentCopy.withdrawal)"), "la phrase reste visible au repos, sans (i)")
+    }
+
+    func test_ritualConsentIntro_doesNotPromiseAReturnThatIsNotAvailable_inEveryLanguage() throws {
+        let expected = "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable."
+        try assertTranslated(try app(), "circles.ritual.consent.intro", french: expected)
+        let view = try code("apps/ios/Meeshy/Features/Contacts/BloodRitualView.swift")
+        XCTAssertTrue(view.contains("defaultValue: \"\(expected)\""))
+        XCTAssertFalse(view.contains("tu pourras y revenir"))
+        for language in ["fr"] + Self.otherLanguages {
+            XCTAssertEqual(specifiers(in: try XCTUnwrap(try app()["circles.ritual.consent.intro"]?[language])), ["%@"], language)
+        }
+    }
 }
