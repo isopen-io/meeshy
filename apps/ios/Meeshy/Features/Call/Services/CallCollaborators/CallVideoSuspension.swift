@@ -293,6 +293,8 @@ final class CallVideoSuspension: CallVideoSuspensionProviding {
 
     nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
         Task { @MainActor [weak self] in
+            // #18227 — l'écran relit la pastille « Vidéo réduite » (`CallServicePills.live`) dès que la chaleur change.
+            self?.call?.objectWillChange.send()
             guard let self, let call = self.call, call.callState == .connected else { return }
             // PiP : framerate thermal-aware (la vignette est petite → throttle
             // agressif possible). Restauré à 15 fps dès le retour en nominal/fair.
