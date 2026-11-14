@@ -190,7 +190,7 @@
       "labels": 94,
       "words": 461,
       "long": 1,
-      "explanations": 8
+      "explanations": 7
     },
     "ios:Meeshy/block": {
       "labels": 2,
@@ -446,13 +446,13 @@
     },
     "ios:Meeshy/emailProof": {
       "labels": 2,
-      "words": 34,
-      "long": 2,
+      "words": 29,
+      "long": 1,
       "explanations": 0
     },
     "ios:Meeshy/emailVerification": {
-      "labels": 23,
-      "words": 130,
+      "labels": 22,
+      "words": 127,
       "long": 0,
       "explanations": 4
     },
@@ -1148,7 +1148,7 @@
     },
     "ios:MeeshyUI/auth": {
       "labels": 81,
-      "words": 281,
+      "words": 279,
       "long": 0,
       "explanations": 4
     },
