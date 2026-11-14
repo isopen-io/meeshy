@@ -42,6 +42,8 @@ final class ConversationEpureTests: XCTestCase {
 
     private static let otherLanguages = ["en", "es", "pt-BR", "de", "it", "ar"]
 
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+
     private func code(_ relativePath: String) throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
     }
@@ -89,7 +91,7 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.info.block.message": "Plus aucun message de %@ ; débloquable dans les réglages.",
         "conversation.info.leave.message": "Vous ne recevrez plus de messages ; votre historique reste lisible.",
         "conversation.list.master_pin_required.message": "Définissez-le dans les réglages.",
-        "conversation.lock.subtitle.enterMasterPin": "Saisissez votre master PIN",
+        "conversation.lock.subtitle.enterMasterPin": "Saisissez votre code PIN principal",
         "conversation.new.group.solo-hint": "Vous pouvez le créer seul et inviter plus tard.",
         "conversation.obsolete.refused_pending_request": "Seul le destinataire de la demande peut la rendre obsolète.",
         "conversation.prefs.delete.message": "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.",
@@ -140,7 +142,7 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.settings.leave.confirm.message": "Vous ne recevrez plus de messages ; votre historique reste lisible.",
         "conversation.settings.more": "Plus",
         "conversation.settings.permissions.autoTranslate.subtitle": "Chacun lit les messages dans sa langue.",
-        "conversation.settings.permissions.announcement.note": "Seuls les admins peuvent écrire : « Qui peut écrire » est alors verrouillé.",
+        "conversation.settings.permissions.announcement.note": "« Qui peut écrire » est alors verrouillé.",
         "conversation.settings.permissions.announcement.question": "Que change le mode annonce ?",
         "conversation.settings.permissions.slowMode.note": "Un délai entre deux messages d’un même membre.",
         "conversation.settings.permissions.slowMode.question": "Que fait le mode lent ?",
@@ -323,7 +325,7 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("share.link.create.access.birthday_required.note"))
         XCTAssertTrue(view.contains("MeeshyInfoNoted(note: note, openNoteID: $openNoteID"))
         XCTAssertFalse(view.contains("Toggle(isOn: isOn) {"), "un (i) posé DANS le libellé d'un Toggle se fond dans l'élément VoiceOver de l'interrupteur et n'est plus atteignable")
-        XCTAssertTrue(view.contains("Toggle(title, isOn: isOn)"), "l'interrupteur garde son nom accessible")
+        XCTAssertTrue(view.contains("MeeshyToggleRowContent(title: title, accessory: .toggle(isOn: isOn.wrappedValue))"), "l'interrupteur garde son nom accessible")
         let app = try Self.catalog(Self.appCatalogPath)
         for language in ["fr"] + Self.otherLanguages {
             let question = try XCTUnwrap(app["share.link.create.access.birthday_required.question"]?[language], language)
@@ -429,7 +431,7 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(devices?.facts, [.oneKeyPerDevice])
     }
 
-    func test_encryptionSwitching_whoMayToggleAndTheThreadNoticeSitBehindOneInfo_theHistoryRuleStaysVisible() {
+    func test_encryptionSwitching_whoMayToggleAndTheThreadNoticeSitBehindOneInfo_theHistoryRuleStaysVisible() throws {
         for mode in [nil, "server", "hybrid"] {
             let sections = ConversationEncryptionExplanation(mode: mode, isDirect: true).sections
             let switching = sections.first { $0.topic == .switching }
@@ -438,7 +440,9 @@ final class ConversationEpureTests: XCTestCase {
         let note = ConversationEncryptionExplanation.Fact.switchKeepsHistory.note
         XCTAssertTrue(note?.text.contains(ConversationEncryptionExplanation.Fact.whoMayToggle.text) == true)
         XCTAssertTrue(note?.text.contains(ConversationEncryptionExplanation.Fact.switchIsShownInThread.text) == true)
-        XCTAssertEqual(note?.question, "Qui peut changer de mode, et qui le voit ?", "la question annonce les DEUX réponses que la note porte")
+        XCTAssertEqual(note?.question, served("conversation.encryption.note.whoMayToggle.question"))
+        let question = try Self.catalog(Self.appCatalogPath)["conversation.encryption.note.whoMayToggle.question"]?["fr"]
+        XCTAssertEqual(question, "Qui peut changer de mode, et qui le voit ?", "la question annonce les DEUX réponses que la note porte")
     }
 
     func test_encryptionIrreversibility_staysWhole_inTheFooter_theCreationScreen_andTheConfirmation() throws {
@@ -660,8 +664,10 @@ final class ConversationEpureTests: XCTestCase {
         let view = try uiCode("Conversation/ConversationSettingsView.swift")
         XCTAssertTrue(view.contains("conversation.settings.permissions.announcement.rule"), "la phrase est lue au repos, sans ouvrir le (i)")
         let note = ConversationSettingsNotes.announcement
-        XCTAssertFalse(note.text.contains("Seuls les admins"), "le (i) ne répète pas la règle visible")
-        XCTAssertTrue(note.text.contains("Qui peut écrire"), "le (i) garde le verrouillage du sélecteur")
+        let detail = try XCTUnwrap(ui["conversation.settings.permissions.announcement.note"]?["fr"])
+        XCTAssertFalse(note.text.isEmpty)
+        XCTAssertFalse(detail.contains("Seuls les admins"), "le (i) ne répète pas la règle visible")
+        XCTAssertTrue(detail.contains("Qui peut écrire"), "le (i) garde le verrouillage du sélecteur")
         XCTAssertTrue(Self.endsAsQuestion(note.question))
     }
 
@@ -707,7 +713,7 @@ final class ConversationEpureTests: XCTestCase {
     func test_encryptionSheet_activeState_saysTheModeOnceInItsHeader_notAgainInTheDetails() throws {
         let sheet = try code("Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
         let start = try XCTUnwrap(sheet.range(of: "private func activeStateSections"))
-        let end = try XCTUnwrap(sheet.range(of: "// MARK:", range: start.upperBound..<sheet.endIndex))
+        let end = try XCTUnwrap(sheet.range(of: "private func ", range: start.upperBound..<sheet.endIndex))
         let active = String(sheet[start.lowerBound..<end.lowerBound])
         XCTAssertEqual(active.components(separatedBy: "modeLabel(mode)").count - 1, 1, "le mode n'est dit qu'une fois : sous « Chiffrement actif »")
         XCTAssertFalse(active.contains("conversation.encryption.detail.modeLabel"), "la rangée « Mode » doublonnait l'en-tête")
@@ -739,10 +745,14 @@ final class ConversationEpureTests: XCTestCase {
     }
 
     func test_talkieInfo_keepsOnlyTheSecondaryDetail_behindItsQuestion() throws {
-        XCTAssertEqual(TalkieInfoWording.a11y, "Et si Meeshy est en arrière-plan ?")
-        XCTAssertEqual(TalkieInfoWording.text, "Votre voix sort quand même chez votre proche.", "la note répond à la question qu'elle porte")
-        XCTAssertFalse(TalkieInfoWording.text.contains("urgence"))
-        XCTAssertLessThan(TalkieInfoWording.text.count, 50)
+        XCTAssertEqual(TalkieInfoWording.a11y, served("talkie.info.a11y"))
+        XCTAssertEqual(TalkieInfoWording.text, served("talkie.info.text"))
+        let app = try Self.catalog(Self.appCatalogPath)
+        let text = try XCTUnwrap(app["talkie.info.text"]?["fr"])
+        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Et si Meeshy est en arrière-plan ?")
+        XCTAssertEqual(text, "Votre voix sort quand même chez votre proche.", "la note répond à la question qu'elle porte")
+        XCTAssertFalse(text.contains("urgence"))
+        XCTAssertLessThan(text.count, 50)
         let source = try code("Meeshy/Features/Talkie/TalkieInfoButton.swift")
         XCTAssertTrue(source.contains(".accessibilityHint(TalkieInfoWording.text)"), "la note reste lue par le lecteur d'écran")
     }
@@ -755,7 +765,7 @@ final class ConversationEpureTests: XCTestCase {
             "en": "Your messages are encrypted on our servers, which can read them.",
             "es": "Tus mensajes se cifran en nuestros servidores, que pueden leerlos.",
             "pt-BR": "Suas mensagens são criptografadas em nossos servidores, que podem lê-las.",
-            "de": "Deine Nachrichten werden auf unseren Servern verschlüsselt, die sie lesen können.",
+            "de": "Deine Nachrichten sind auf unseren Servern verschlüsselt und dort lesbar.",
             "it": "I tuoi messaggi sono crittografati sui nostri server, che possono leggerli.",
             "ar": "تُشفَّر رسائلك على خوادمنا، ويمكنها قراءتها."
         ],
@@ -886,12 +896,13 @@ final class ConversationEpureTests: XCTestCase {
     }
 
     func test_servedWithoutEndToEndRefusal_neverSaysTheConversationIsUnencrypted_inEveryLanguage() throws {
-        let message = EndToEndSendRefusal.servedWithoutEndToEnd.userMessage
+        let app = try Self.catalog(Self.appCatalogPath)
+        let served = try XCTUnwrap(app["conversation.send.e2ee.servedWithoutEndToEnd"])
+        XCTAssertEqual(EndToEndSendRefusal.servedWithoutEndToEnd.userMessage, self.served("conversation.send.e2ee.servedWithoutEndToEnd"))
+        let message = try XCTUnwrap(served["fr"])
         XCTAssertTrue(message.contains("bout en bout"), "le refus nomme ce qui manque : le bout en bout, pas le chiffrement")
         XCTAssertFalse(message.contains("non chiffrée"), "la conversation reste chiffrée sur nos serveurs : « non chiffrée » est un contresens")
         XCTAssertLessThanOrEqual(message.count, 80)
-        let app = try Self.catalog(Self.appCatalogPath)
-        let served = try XCTUnwrap(app["conversation.send.e2ee.servedWithoutEndToEnd"])
         let endToEnd = ["en": "end-to-end", "es": "extremo a extremo", "pt-BR": "ponta a ponta", "de": "Ende-zu-Ende", "it": "end-to-end", "ar": "بين الطرفين"]
         for (language, words) in endToEnd {
             let value = try XCTUnwrap(served[language], language)

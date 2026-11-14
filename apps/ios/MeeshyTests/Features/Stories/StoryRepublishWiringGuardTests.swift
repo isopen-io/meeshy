@@ -80,8 +80,8 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         }
         let tail = String(sidebar[range.lowerBound...].prefix(120))
         XCTAssertTrue(
-            tail.contains("defaultValue: \"Republier\""),
-            "Le repli du libellé doit dire « Republier », pas « Partager » — l'action " +
+            tail.contains("defaultValue: \"Repartager\""),
+            "Le repli du libellé doit dire « Repartager », pas « Partager » — l'action " +
             "republie, elle ne transmet pas. Trouvé : \(tail)"
         )
     }
