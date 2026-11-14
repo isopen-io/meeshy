@@ -28,8 +28,18 @@ data class CallLiveFrameState(
     val peerFrameId: String? = null,
 )
 
-/** Un pas de la session : le nouvel état, et ce qu'il faut émettre. */
-data class CallLiveFrameStep(val state: CallLiveFrameState, val send: List<CallLiveFrameOutgoing> = emptyList())
+/** L'autre a relâché le cadre que nous partagions : il est tombé chez moi, et [by] (son prénom partagé) l'a retiré (#18367). */
+data class CallLiveFramePeerRelease(val by: String?)
+
+/**
+ * Un pas de la session : le nouvel état, ce qu'il faut émettre, et — quand le retrait de l'autre vient de faire tomber le cadre
+ * partagé — de quoi dire au lecteur d'écran pourquoi l'image a changé ([peerRelease]).
+ */
+data class CallLiveFrameStep(
+    val state: CallLiveFrameState,
+    val send: List<CallLiveFrameOutgoing> = emptyList(),
+    val peerRelease: CallLiveFramePeerRelease? = null,
+)
 
 /**
  * **LE CADRE EN DIRECT D'UN APPEL À DEUX** (miroir de iOS `CallLiveFrameSession`, #9214, #9287) — la
@@ -84,7 +94,7 @@ object CallLiveFrameMachine {
         val named = if (shared != null) state.copy(remoteSharedName = shared) else state
         event.reply?.let { return CallLiveFrameStep(answered(named, it, id)) }
         val peer = named.copy(peerFrameId = id)
-        if (id == null) return CallLiveFrameStep(peer.copy(proposal = null, frameId = named.frameId.takeUnless { sharesFrame(named) }))
+        if (id == null) return peerReleased(named, peer)
         if (id == peer.frameId) {
             return CallLiveFrameStep(peer.copy(proposal = null), listOf(reply(id, CallLiveFrameReply.ACCEPTED, myName)))
         }
@@ -96,6 +106,15 @@ object CallLiveFrameMachine {
 
     /** Nous montrons le même cadre : l'un a accepté celui de l'autre (ou l'a proposé alors que l'autre le montrait déjà). */
     private fun sharesFrame(state: CallLiveFrameState): Boolean = state.frameId != null && state.frameId == state.peerFrameId
+
+    /** Le retrait de l'autre : sa proposition disparaît, et le cadre que nous partagions tombe chez moi — qui l'a retiré se dit. */
+    private fun peerReleased(state: CallLiveFrameState, peer: CallLiveFrameState): CallLiveFrameStep {
+        val dropsMine = sharesFrame(state)
+        return CallLiveFrameStep(
+            peer.copy(proposal = null, frameId = state.frameId.takeUnless { dropsMine }),
+            peerRelease = if (dropsMine) CallLiveFramePeerRelease(state.remoteSharedName) else null,
+        )
+    }
 
     /** Relâcher : le retrait part si une proposition attend sa réponse OU si le cadre est partagé — l'autre le voit alors tomber. */
     private fun released(state: CallLiveFrameState, next: CallLiveFrameState): CallLiveFrameStep {

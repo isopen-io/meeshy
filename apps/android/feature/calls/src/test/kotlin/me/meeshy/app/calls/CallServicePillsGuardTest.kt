@@ -81,18 +81,22 @@ class CallServicePillsGuardTest {
      */
     @Test
     fun `#18398 - En attente et Video reduite se rangent au premier toucher avec les bannieres`() {
+        val hold = code("CallHoldOverlay.kt")
+        val fade = block(hold, "internal fun CallServicePillFade(", "\n}")
+        assertThat(fade).contains("CallChromeFade(")
+        assertThat(fade).contains("isVisible = context.chrome.isVisible(CallChromeElement.ServicePill)")
+        assertThat(fade).contains("onRevive = context.onChromeRevive")
+        assertThat(fade).contains("stowsToward = CallVerticalEdge.Top")
+        assertThat(fade).contains("edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp")
+
         val overlays = mapOf(
-            "CallHoldBadge(" to block(code("CallHoldOverlay.kt"), "class CallHoldOverlay", "@Module"),
+            "CallHoldBadge(" to block(hold, "class CallHoldOverlay", "\n}"),
             "CallVideoNoticePill(" to block(code("CallVideoNoticePill.kt"), "class CallVideoNoticeOverlay", "@Module"),
         )
         overlays.forEach { (pill, overlay) ->
-            assertWithMessage(pill).that(overlay).contains("CallChromeFade(")
-            assertWithMessage(pill).that(overlay).contains("isVisible = context.chrome.isVisible(CallChromeElement.ServicePill)")
-            assertWithMessage(pill).that(overlay).contains("onRevive = context.onChromeRevive")
-            assertWithMessage(pill).that(overlay).contains("stowsToward = CallVerticalEdge.Top")
-            assertWithMessage(pill).that(overlay).contains("edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp")
-            assertWithMessage(pill).that(overlay.indexOf("CallBannerPresence(")).isLessThan(overlay.indexOf("CallChromeFade("))
-            assertWithMessage(pill).that(overlay.indexOf("CallChromeFade(")).isLessThan(overlay.indexOf(pill))
+            assertWithMessage(pill).that(overlay).contains("CallServicePillFade(context) {")
+            assertWithMessage(pill).that(overlay.indexOf("CallBannerPresence(")).isLessThan(overlay.indexOf("CallServicePillFade("))
+            assertWithMessage(pill).that(overlay.indexOf("CallServicePillFade(")).isLessThan(overlay.indexOf(pill))
         }
     }
 
