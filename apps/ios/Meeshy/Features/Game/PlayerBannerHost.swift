@@ -322,7 +322,10 @@ struct PlayerBannerSlot: View {
     private func present(_ target: GamePlayerBanner?) {
         guard target != presented else { return }
         let reachedANewLevel = presented.map { previous in (target?.level ?? 0) > previous.level } ?? false
-        withAnimation(PlayerBannerMotion.animation(leaving: target == nil, opening: store.lingering, reduceMotion: reduceMotion)) {
+        let leaving = target == nil
+        meeshyWithAnimation(PlayerBannerMotion.animation(leaving: leaving, opening: store.lingering, reduceMotion: false),
+                            reduced: PlayerBannerMotion.animation(leaving: leaving, opening: store.lingering, reduceMotion: true),
+                            reduceMotion: reduceMotion) {
             presented = target
             onSurfaceChange(target.map { surface(of: $0) })
         }

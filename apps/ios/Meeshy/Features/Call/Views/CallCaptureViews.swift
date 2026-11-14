@@ -84,14 +84,17 @@ struct CallJournalComposer {
     }
 }
 
-/// La capsule R1 : rouge, centrée sous l'en-tête, un petit anneau blanc puis
-/// la phrase. Une capture ponctuelle passe au bout de quelques secondes ; un
-/// enregistrement d'écran reste tant qu'il dure. Paramètres primitifs.
+/// La puce R1 : le verre teinté rouge du kit (celui du bandeau de partage),
+/// centrée sous l'en-tête, un petit anneau blanc puis la phrase. Une capture
+/// ponctuelle passe au terme du kit, `CALL_SCREENSHOT_ALERT_TTL_MS`
+/// (`packages/shared/types/call-capture.ts`) ; un enregistrement d'écran reste
+/// tant qu'il dure. Elle se range avec les bannières (`CallChromeElement.captureAlert`).
+/// Paramètres primitifs.
 struct CallCaptureAlertCapsule: View, Equatable {
     let alert: CallCaptureAlert?
     let onDismiss: (String) -> Void
 
-    static let transientSeconds: Double = 4
+    nonisolated static let transientSeconds: Double = 5
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.alert == rhs.alert
@@ -125,7 +128,7 @@ struct CallCaptureAlertCapsule: View, Equatable {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .frame(minHeight: 44)
-        .background(MeeshyColors.error.opacity(0.9), in: Capsule())
+        .meeshyGlass(in: Capsule(), tone: .theme, tint: MeeshyColors.error.opacity(MeeshyOpacity.medium))
         .modifier(CallTopBannerHeightReporter(banner: .capture))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)

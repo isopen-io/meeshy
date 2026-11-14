@@ -102,7 +102,7 @@ struct GameElementSheet: View {
         .presentationDragIndicator(.visible)
         .adaptiveSheetGlassBackground()
         .onAppear {
-            withAnimation(reduceMotion ? GameMotion.reduced : GameMotion.release) { entered = true }
+            meeshyWithAnimation(GameMotion.release, reduced: GameMotion.reduced, reduceMotion: reduceMotion) { entered = true }
         }
         // Une fois la feuille posée : un focus donné pendant sa montée se perd.
         .task { @MainActor in

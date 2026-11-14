@@ -127,8 +127,8 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
 
   test('avant le niveau 5, les missions disent où elles s’ouvrent et où tu en es', () => {
     const early = withFacts({ score: 400, levelRecord: 2 });
-    expect(state('missions', early)).toContain('Au niveau 5, tes aïeux t’envoient chaque nuit un rêve');
-    expect(state('missions', early)).toContain('Tu es au niveau 2');
+    expect(state('missions', early)).toContain('Le rêve s’ouvre au niveau 5');
+    expect(state('missions', early)).toContain('tu es au niveau 2');
   });
 
   test('la ligue dit la place, les points de la semaine et la zone', () => {
@@ -140,13 +140,11 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     expect(line).toMatch(/zone de montée/);
   });
 
-  test('la saison dit la semaine, l’étape, et ce qu’il manque pour la suivante', () => {
+  test('la saison dit le voyage et la halte où l’on est', () => {
     const season = playing.game?.season;
     if (season === null || season === undefined) throw new Error('la fixture sert une saison');
     const line = state('season', playing);
-    expect(line).toContain(`Voyage ${season.number}, semaine ${season.week} sur 8`);
-    expect(line).toContain(`halte ${season.steps} sur ${season.stepsTotal}`);
-    expect(line).toMatch(/\d+ pas jusqu’à la suivante/);
+    expect(line).toBe(`Voyage ${season.number} · halte ${season.steps} sur ${season.stepsTotal}`);
   });
 
   test('le Prestige dit où il s’ouvre et où tu en es', () => {

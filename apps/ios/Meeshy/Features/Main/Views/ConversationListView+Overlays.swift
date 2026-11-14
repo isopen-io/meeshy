@@ -198,7 +198,7 @@ extension ConversationListView {
         // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
         // menu redescend et se dissout — miroir du zoom d'ouverture.
         let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
-        withAnimation(ConversationPreviewEntranceMotion.exit(reduceMotion: reduceMotion)) {
+        ConversationPreviewEntranceMotion.animateExit(reduceMotion: reduceMotion) {
             previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
             if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
                 // Fermeture normale : la carte revient en place en fondant.
@@ -246,7 +246,7 @@ extension ConversationListView {
                 previewEmergeOffset = start.offset
             }
             DispatchQueue.main.async {
-                withAnimation(ConversationPreviewEntranceMotion.entrance(reduceMotion: reduceMotion)) {
+                ConversationPreviewEntranceMotion.animateEntrance(reduceMotion: reduceMotion) {
                     contextMenuAppeared = true
                     previewScale = 1.0
                     previewEmergeOffset = 0
@@ -519,6 +519,18 @@ enum ConversationPreviewEntranceMotion {
 
     static func exit(reduceMotion: Bool) -> Animation {
         reduceMotion ? .easeOut(duration: fadeDuration) : .spring(response: 0.32, dampingFraction: 0.78)
+    }
+
+    /// L'entrée et la sortie passent la variante réduite à la racine du
+    /// mouvement, qui couperait sinon le fondu voulu (#18354).
+    static func animateEntrance(reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(entrance(reduceMotion: false), reduced: entrance(reduceMotion: true),
+                            reduceMotion: reduceMotion, body)
+    }
+
+    static func animateExit(reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(exit(reduceMotion: false), reduced: exit(reduceMotion: true),
+                            reduceMotion: reduceMotion, body)
     }
 
     /// Le flou suit l'échelle de la carte — net à 1.0, jusqu'à 3 repliée ;

@@ -124,7 +124,7 @@ class SheetReturnTest {
         val before = nav.currentBackStackEntry!!
         before.savedStateHandle["scroll"] = 12
 
-        nav.navigateKeepingSheet("detail")
+        nav.navigateKeepingSheet(before, "detail")
         assertThat(nav.currentDestination?.route).isEqualTo("detail")
         nav.popBackStack()
 
@@ -143,7 +143,7 @@ class SheetReturnTest {
         val search = nav.currentBackStackEntry!!
         search.savedStateHandle["query"] = "recette"
 
-        nav.navigateKeepingSheet("detail")
+        nav.navigateKeepingSheet(search, "detail")
         nav.popBackStack()
 
         val back = nav.currentBackStackEntry!!
@@ -158,12 +158,43 @@ class SheetReturnTest {
         val nav = navigation()
         val job = nav.followSheetReturns()
         nav.navigate(Routes.GLOBAL_SEARCH)
+        val search = nav.currentBackStackEntry!!
 
-        nav.navigateClosingSheet("detail")
+        nav.navigateClosingSheet(search, "detail")
         assertThat(nav.currentDestination?.route).isEqualTo("detail")
         nav.popBackStack()
 
         assertThat(nav.currentDestination?.route).isEqualTo("root")
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - a result touched twice from the global search opens one screen`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.GLOBAL_SEARCH)
+        val search = nav.currentBackStackEntry!!
+
+        nav.navigateClosingSheet(search, "detail")
+        nav.navigateClosingSheet(search, "detail")
+        nav.popBackStack()
+
+        assertThat(nav.currentDestination?.route).isEqualTo("root")
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - a screen kept over a sheet is pushed once for a double touch`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.DASHBOARD)
+        val dashboard = nav.currentBackStackEntry!!
+
+        nav.navigateKeepingSheet(dashboard, "detail")
+        nav.navigateKeepingSheet(dashboard, "detail")
+        nav.popBackStack()
+
+        assertThat(nav.currentDestination?.route).isEqualTo(Routes.DASHBOARD)
         job.cancel()
     }
 
