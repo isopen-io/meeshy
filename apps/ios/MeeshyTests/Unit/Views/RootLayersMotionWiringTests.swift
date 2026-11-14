@@ -57,11 +57,21 @@ final class RootLayersMotionWiringTests: XCTestCase {
                       file: file, line: line)
     }
 
-    func test_rootView_floatingChrome_entersByATransition_andItsOverlayAnimatesTheDepth() throws {
+    func test_rootView_floatingChrome_entersByATransition() throws {
         let root = try code("Meeshy/Features/Main/Views/RootView.swift")
         XCTAssertTrue(root.contains(") .meeshyTransition(.opacity)"), "le chrome flottant entre et sort en fondu")
-        XCTAssertTrue(animationValues(in: root).contains { $0.contains("router.isDeepRoute") },
-                      "l'overlay du chrome flottant anime la profondeur de la pile")
+    }
+
+    /// Le chrome ne se cache pas que sous une pile profonde : un réel qui
+    /// s'ouvre et l'onboarding le retirent aussi. Une animation liée à la
+    /// seule profondeur le laissait disparaître d'un coup quand le réel
+    /// s'ouvre, depuis que l'ouverture ne passe plus par un `withAnimation`.
+    func test_rootView_floatingChrome_animatesOnEveryReasonItHides() throws {
+        let root = try code("Meeshy/Features/Main/Views/RootView.swift")
+        XCTAssertTrue(root.contains("if floatingChromeIsShown {"),
+                      "le chrome flottant se monte sur un seul prédicat de présence")
+        XCTAssertTrue(animationValues(in: root).contains { $0.hasPrefix(" floatingChromeIsShown)") },
+                      "l'overlay du chrome flottant anime ce prédicat, pas la seule profondeur")
     }
 
     func test_callFeedbackCard_isAnimatedOnItsPrompt() throws {
