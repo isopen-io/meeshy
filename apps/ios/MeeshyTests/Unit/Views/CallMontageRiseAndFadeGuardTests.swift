@@ -96,7 +96,7 @@ final class CallMontageRiseAndFadeGuardTests: XCTestCase {
         let applied = try XCTUnwrap(bar.range(of: "struct CallEffectsAppliedPanel"))
         let body = String(bar[panel.lowerBound ..< applied.lowerBound])
         XCTAssertTrue(body.contains(".accessibilityLabel(label)"), "Le groupe porte le nom qu'on lui donne")
-        XCTAssertTrue(body.contains("var label: String? = nil") || body.contains("let label: String?"), "Un nom optionnel : la liste n'a pas celui des réglages")
+        XCTAssertTrue(body.contains("var label = \"\""), "Un nom facultatif : la liste n'a pas celui des réglages")
         let controls = try code("Meeshy/Features/Call/Views/CallModeControls.swift")
         XCTAssertEqual(controls.components(separatedBy: "CallEffectsPanel(label: CallModeCopy.settingsPanel)").count - 1, 2, "Réglages d'Effets et de Montage portent le même nom")
         XCTAssertTrue(controls.contains("smoothingRow"), "La rangée « Force du lissage » est gardée")
