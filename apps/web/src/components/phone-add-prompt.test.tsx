@@ -51,15 +51,16 @@ describe('la proposition d’ajouter son numéro (#8843)', () => {
     const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => undefined} />);
     const prompt = host.querySelector('[data-phone-add-prompt]');
     expect(prompt?.textContent).toContain('Ajoutez votre numéro');
-    expect(prompt?.textContent).toContain('vous retrouveront');
-    expect(buttonNamed(host, 'Ajouter mon numéro')).not.toBeNull();
+    expect(prompt?.textContent).toContain('vous retrouveront sur Meeshy');
+    expect(prompt?.textContent).toContain('vous connecter');
+    expect(buttonNamed(host, 'Ajouter')).not.toBeNull();
   });
 
   test('« Ajouter mon numéro » ⇒ numéro ⇒ code SMS ⇒ vérifié, par le parcours existant', async () => {
     const { calls, deps } = recorder();
     const verified: string[] = [];
     const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => verified.push('ok')} />);
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '+33 6 12 34 56 78');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     mounter.type(host, '#activation-phone-code', '654321');
