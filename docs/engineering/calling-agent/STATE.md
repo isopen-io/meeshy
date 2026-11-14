@@ -1020,3 +1020,30 @@ socket jusqu'au client.
 1. #18436, puis #17133 et #18535.
 2. #18371, #18154 et #18497.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 30 — 2026-11-14
+
+- **Base** : `origin/dev` @ `c0308760`. Le lot du cycle 29 (#17132, PR #18536) y est fusionné.
+- **Branche** : `claude/determined-volta-tzamrs`.
+- **Objectif** : #18436. La boucle de réception du traducteur ne journalise plus que le type d'une exception, la branche JSON morte du handler de traduction disparaît, et les tests de routage n'émettent plus « never awaited ».
+- **Livré** (seul le traducteur change ; ni le protocole ZMQ ni la passerelle) :
+  - **`zmq_server_core.start()`** : le `except Exception` journalise `[TRANSLATOR] Requête non traitée par la boucle de réception: <Type>`. Il n'imprime plus de traceback, et la boucle continue comme avant.
+  - **Le rappel de fin de `_create_tracked_task`**, que l'issue ne citait pas, avait le même défaut un cran plus loin : il journalisait `{exc}` pour toute tâche de requête qui lève. Il ne garde plus que le type.
+  - **`_handle_translation_request`** : la branche `except json.JSONDecodeError` est retirée. Elle était morte : depuis #17205, le frame est décodé par `parse_request_frame` avant le handler. Le `except Exception` restant a le même corps.
+  - **R3** : le faux `_create_tracked_task` ferme désormais la coroutine qu'il reçoit, dans `test_zmq_non_utf8_frame.py` et dans `test_zmq_story_text_object_routing.py`. Le même défaut existait dans ce second fichier, et le ramasse-miettes l'attribuait au premier.
+- **Tests** : `tests/test_zmq_receive_loop_exception_logging.py` (2). Le premier pilote la vraie boucle `start()` avec une exception qui porte un secret, puis vérifie qu'elle continue. Le second vise une tâche suivie qui lève.
+  - **Rouge** : `2 failed`. La QA l'a reproduit sur la base.
+  - **Vert** : relancé par moi, `21 passed` sur les 3 fichiers touchés, sans aucun avertissement sous `-W always::RuntimeWarning`.
+  - **Suites `test_*zmq*` et `test_*handler*`** : `368 passed, 6 skipped, 1 warning, 5 errors` avant, `370 passed, 6 skipped, 5 errors` après. La liste des échecs est identique : les 5 erreurs connues de `TestRealTranslatorIntegration`.
+  - **Mutations QA** : 10 sur 10 font rougir les témoins.
+- **QA** : favorable avec réserves.
+  - R1 → #18571 : les handlers audio, transcription et voix journalisent encore `{e}` et `print_exc`, et le handler voix renvoie `str(e)` à la passerelle.
+  - R2, une nuance du témoin : un vrai échec du handler `ping` est absorbé par le `try` du handler. La boucle n'est atteinte que par une erreur levée avant ce `try`, dans le routeur (`binaryFrames` mal formé, `_inject_binary_frames`). Le témoin fixe le contrat de la boucle, quelle que soit la source de l'exception.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18571 : les handlers audio, transcription et voix. Le champ `error` du handler voix doit changer de façon rétrocompatible.
+2. #17133 et #18535.
+3. #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

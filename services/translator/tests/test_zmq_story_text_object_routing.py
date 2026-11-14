@@ -38,7 +38,7 @@ def core():
     instance.audio_handler = MagicMock()
     instance.transcription_handler = MagicMock()
     instance.voice_handler = None
-    instance._create_tracked_task = MagicMock()
+    instance._create_tracked_task = MagicMock(side_effect=lambda coro, _task_type: coro.close())
     instance._inject_binary_frames = MagicMock()
     return instance
 

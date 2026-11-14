@@ -2,6 +2,7 @@ package me.meeshy.app.onboarding
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -126,12 +128,27 @@ internal fun OnboardingOverlay(
                         targetState = state.cardKey,
                         transitionSpec = { cardTransition(reduceMotion, direction) },
                         label = "onboarding-card",
-                    ) { key -> card(key) }
+                    ) { key ->
+                        val settled = transition.currentState == EnterExitState.Visible &&
+                            transition.targetState == EnterExitState.Visible
+                        Box(Modifier.fillMaxSize().ignoringTouchesUnless(settled)) { card(key) }
+                    }
                 }
             }
         }
     }
 }
+
+/**
+ * Une carte qui entre ou qui sort ne prend aucun toucher : sans cela, le second toucher d'un double toucher tombe sur
+ * la carte suivante pendant le ressort et la fait sauter sans qu'on l'ait vue (et « Plus tard » l'enregistre passée).
+ */
+private fun Modifier.ignoringTouchesUnless(settled: Boolean): Modifier =
+    if (settled) this else pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
 
 private fun cardTransition(reduceMotion: Boolean, direction: LayoutDirection): ContentTransform =
     when (OnboardingMotionPolicy.cardTransition(reduceMotion)) {

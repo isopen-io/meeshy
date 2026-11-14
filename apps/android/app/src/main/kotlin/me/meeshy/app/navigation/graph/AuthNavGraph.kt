@@ -105,6 +105,8 @@ internal fun NavGraphBuilder.authNavGraph(
     sheetComposable(Routes.REGISTRATION, navController, style = SheetStyle.COVER) { entry, dismiss ->
         SignupScreen(
             onClose = dismiss,
+            // La connexion reste composée sous la feuille : son adoption d'arrivée ne rejoue pas, elle adopte ici.
+            onSignIn = { authViewModel.adoptPendingHandoffs(); dismiss() },
             onRegistered = {
                 authViewModel.onExternalSessionOpened()
                 navController.navigateSingleTop(Routes.CONVERSATIONS) {
