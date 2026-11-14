@@ -213,7 +213,7 @@ class EpureListeLiensStringsTest {
     @Test
     fun `the master PIN required dialog is two short lines`() {
         val fr = all("values-fr")
-        assertThat(fr["dialogs_master_pin_title"]).isEqualTo("Master PIN requis")
+        assertThat(fr["dialogs_master_pin_title"]).isEqualTo("Code PIN principal requis")
         assertThat(fr["dialogs_master_pin_message"]).isEqualTo("Définissez-le dans les réglages pour verrouiller une conversation.")
         folders.forEach { folder ->
             assertWithMessage(folder).that(all(folder).getValue("dialogs_master_pin_message").length).isAtMost(70)
