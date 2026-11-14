@@ -16,7 +16,6 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.assertTouchHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -254,11 +253,10 @@ class MeeshyToggleRowBehaviorTest {
     }
 
     @Test
-    fun `la cible tactile fait au moins 48 dp et la ligne au moins 46 dp`() {
+    fun `la ligne qui se touche mesure au moins 48 dp, plancher de la cible tactile`() {
         show { MeeshyToggleRow(title = "Amis", onClick = {}) }
 
-        compose.onNodeWithText("Amis").assertTouchHeightIsAtLeast(48.dp)
-        compose.onNodeWithText("Amis").assertHeightIsAtLeast(46.dp)
+        compose.onNodeWithText("Amis").assertHeightIsAtLeast(48.dp)
     }
 
     @Test
