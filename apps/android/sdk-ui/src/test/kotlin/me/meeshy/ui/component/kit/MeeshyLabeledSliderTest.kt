@@ -33,7 +33,11 @@ class MeeshyLabeledSliderTest {
             val name = row.string("nom")
             val rule = MeeshyLabeledSliderRule(range = range(row), step = row.floatOrNull("step"))
             val rtl = row.booleanOrNull("rtl") ?: false
-            val expected = row.float("attendu")
+            val expected = when {
+                row.has("attendu") -> row.float("attendu")
+                row.has("tic") -> row.bool("tic").asOne()
+                else -> row.bool("emet").asOne()
+            }
             val actual: Float = when {
                 row.has("entree") && name.startsWith("fraction") -> rule.fraction(of = row.float("entree"), isRtl = rtl)
                 row.has("entree") -> rule.snap(row.float("entree"))
@@ -73,7 +77,7 @@ class MeeshyLabeledSliderTest {
         rows.forEach { row ->
             val interaction = interaction(row)
             val rtl = row.booleanOrNull("rtl") ?: false
-            val current = row.float("de")
+            val current = row.optionalFloat("de") ?: 0f
             val effects = when (row.string("geste")) {
                 "drag" -> interaction.drag(
                     current = current,
@@ -197,6 +201,8 @@ class MeeshyLabeledSliderTest {
     private fun JsonObject.bool(key: String): Boolean = getValue(key).jsonPrimitive.booleanOrNull!!
     private fun JsonObject.optionalBool(key: String): Boolean? = this[key]?.jsonPrimitive?.booleanOrNull
     private fun JsonObject.float(key: String): Float = getValue(key).jsonPrimitive.float
+    private fun JsonObject.optionalFloat(key: String): Float? = this[key]?.jsonPrimitive?.floatOrNull
+    private fun Boolean.asOne(): Float = if (this) 1f else 0f
     private fun JsonObject.floatOrNull(key: String): Float? = this[key]?.jsonPrimitive?.floatOrNull
 
     private fun vectors(): JsonObject = Json.parseToJsonElement(File(repositoryRoot(), VECTORS).readText()).jsonObject
