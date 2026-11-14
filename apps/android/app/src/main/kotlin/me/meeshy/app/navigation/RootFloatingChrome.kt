@@ -1,6 +1,9 @@
 package me.meeshy.app.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -37,6 +40,8 @@ import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
 import me.meeshy.ui.component.chrome.MeeshyMenuLadder
 import me.meeshy.ui.component.chrome.MeeshyMenuVeil
 import me.meeshy.ui.component.chrome.RadialMenuItem
+import me.meeshy.ui.component.kit.MeeshyGlassRecipe
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyIconSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
@@ -139,6 +144,10 @@ internal fun MeeshyFloatingChrome(
 /** Le degrade du disque Flux : erreur -> indigo300, du haut-gauche au bas-droite. */
 internal fun feedButtonGradientColors(): List<Color> = listOf(MeeshyPalette.Error, MeeshyPalette.Indigo300)
 
+/** Le fondu enchaîné du visage Flux (K13 : 200 ms) ; sous « Réduire les animations », le changement est immédiat. */
+internal fun feedButtonFaceSpec(reduce: Boolean): FiniteAnimationSpec<Float> =
+    meeshySpec(reduce, tween(MeeshyGlassRecipe.TONE_FADE_MILLIS))
+
 /** Le disque Flux : cercle plein degrade, pile blanche — le logo anime quand le Flux est ouvert. */
 @Composable
 private fun FeedButtonFace(feedOpen: Boolean) {
@@ -148,20 +157,26 @@ private fun FeedButtonFace(feedOpen: Boolean) {
             .background(Brush.linearGradient(feedButtonGradientColors()), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        if (feedOpen) {
-            AnimatedBrandLogo(
-                modifier = Modifier.size(MeeshyIconSize.xxxl),
-                color = MeeshyPalette.White,
-                lineWidth = 3.dp,
-                continuous = true,
-            )
-        } else {
-            Icon(
-                imageVector = FeedButtonIcon,
-                contentDescription = null,
-                tint = MeeshyPalette.White,
-                modifier = Modifier.size(MeeshyIconSize.xxl),
-            )
+        Crossfade(
+            targetState = feedOpen,
+            animationSpec = feedButtonFaceSpec(FeedOverlayTransition.reduceMotion),
+            label = "feedButtonFace",
+        ) { open ->
+            if (open) {
+                AnimatedBrandLogo(
+                    modifier = Modifier.size(MeeshyIconSize.xxxl),
+                    color = MeeshyPalette.White,
+                    lineWidth = 3.dp,
+                    continuous = true,
+                )
+            } else {
+                Icon(
+                    imageVector = FeedButtonIcon,
+                    contentDescription = null,
+                    tint = MeeshyPalette.White,
+                    modifier = Modifier.size(MeeshyIconSize.xxl),
+                )
+            }
         }
     }
 }
