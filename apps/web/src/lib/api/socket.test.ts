@@ -410,11 +410,23 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     });
   }
 
-  test('une RE-authentification invalide aussi les demandes d’amitié — une demande reçue pendant la coupure se recompte', () => {
+  /**
+   * **LES DEUX AUTHENTIFICATIONS, pas la seconde seule** (#18573). Ce témoin
+   * affirmait que la PREMIÈRE ne touchait pas les demandes d'amitié — un
+   * contrôle qui gelait la lacune : la fenêtre de la première connexion prend
+   * la famille exactement comme une coupure (`CATCH_UP_PERSONAL_FAMILIES`).
+   * Les deux branches la couvrent donc, et la fraîcheur est rétablie entre les
+   * deux firings pour que la seconde ait quelque chose à périmer.
+   */
+  test('les DEUX authentifications invalident les demandes d’amitié — une demande reçue pendant l’intervalle se recompte', () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+
+    queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
     expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(false);
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
