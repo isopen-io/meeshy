@@ -218,6 +218,20 @@ describe('le liseré de la bulle (P18.4)', () => {
   });
 });
 
+describe('la bulle est en verre du kit (loi 18.1)', () => {
+  test('le verre partagé du kit, jamais une teinte opaque posée à la main', () => {
+    const bubble = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble="');
+    expect(bubble).toMatch(/class="[^"]*\bglass-tone\b/);
+    expect(bubble).toContain('data-glass-tone="deep"');
+    expect(bubble).not.toContain('color-mix');
+    expect(bubble).not.toMatch(/\bshadow-lg\b/);
+  });
+
+  test('l’étiquette garde son propre verre : la bulle ne la rend pas transparente', () => {
+    expect(tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble-caption')).not.toContain('data-glass-nested');
+  });
+});
+
 describe('l’étiquette « nom · durée » de la bulle (P18.5)', () => {
   test('sur le verre du kit (l’atome adaptatif, jamais un verre posé à la main), avec le nom d’affichage et la durée', () => {
     appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
@@ -278,10 +292,11 @@ describe('pendant MON partage, la capsule dit le nom donné et ne se replie pas 
     }
   });
 
-  test('hors partage, la capsule garde le titre de l’appel puis la durée', async () => {
+  /* Témoin qui ÉVOLUE (#18223, P18.3) : il figeait « le titre puis la durée » sur deux étiquettes ; la planche et
+     iOS (#18464) / Android (#18449) posent UNE étiquette « nom · durée », hors partage comme pendant. */
+  test('hors partage, la capsule dit aussi « nom · durée » en une seule étiquette', async () => {
     const { CallPillBar } = await import('./call-floating-pill');
     const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />);
-    expect(html).toContain('Amina Diallo');
-    expect(html).not.toContain('Amina Diallo ·');
+    expect(html).toMatch(/data-call-pill-label[^>]*>Amina Diallo · \d+:\d{2}</);
   });
 });
