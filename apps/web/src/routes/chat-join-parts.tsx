@@ -293,7 +293,7 @@ function LinkRow({
         aria-expanded={opened}
         aria-controls={rowId}
         onClick={() => setOpened((v) => !v)}
-        className={`${INVITE_OUTLINE_BUTTON} justify-self-start`}
+        className={`${INVITE_OUTLINE_BUTTON} btn-press justify-self-start`}
         style={{ ...INVITE_OUTLINE_STYLE, minHeight: 44 }}
       >
         <MoreLabel language={language} context={translateInvite(language, 'invite.link.label')} />
@@ -374,7 +374,7 @@ export function InvitationFigures({ language, invitation }: { readonly language:
             aria-expanded={opened}
             aria-controls={sharesId}
             onClick={() => setOpened((v) => !v)}
-            className="min-h-11 shrink-0 rounded-chip px-3 text-title font-semibold"
+            className="btn-press min-h-11 shrink-0 rounded-chip px-3 text-title font-semibold"
             style={{ color: 'var(--color-ios-brand)' }}
           >
             <MoreLabel language={language} context={translateInvite(language, 'invite.stats.spoken')} />
