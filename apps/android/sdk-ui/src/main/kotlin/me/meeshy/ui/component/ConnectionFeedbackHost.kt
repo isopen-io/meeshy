@@ -4,7 +4,6 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -27,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.model.friend.ConnectionFeedback
 import me.meeshy.sdk.model.friend.ConnectionHaptic
 import me.meeshy.ui.R
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 
 private const val TOAST_VISIBLE_MILLIS = 2_200L
@@ -82,19 +83,17 @@ public fun ConnectionFeedbackHost(
         current = null
     }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        val shown = current
-        AnimatedVisibility(
-            visible = shown != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-        ) {
-            if (shown != null) {
-                MeeshyFeedbackToast(
-                    message = stringResource(shown.messageRes()),
-                    kind = if (shown.isError) FeedbackKind.Error else FeedbackKind.Success,
-                    modifier = Modifier.padding(MeeshySpacing.lg),
-                )
-            }
+        MeeshyAnimatedVisibility(
+            value = current,
+            enter = fadeIn(MeeshyMotion.springDefault()) + slideInVertically(MeeshyMotion.springDefault()) { it },
+            exit = fadeOut(MeeshyMotion.springDefault()) + slideOutVertically(MeeshyMotion.springDefault()) { it },
+            label = "connection-feedback-toast",
+        ) { shown ->
+            MeeshyFeedbackToast(
+                message = stringResource(shown.messageRes()),
+                kind = if (shown.isError) FeedbackKind.Error else FeedbackKind.Success,
+                modifier = Modifier.padding(MeeshySpacing.lg),
+            )
         }
     }
 }

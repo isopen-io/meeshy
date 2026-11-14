@@ -26,15 +26,19 @@ public class HeldPresence<T : Any> internal constructor(
 ) {
     /** Vrai tant que la valeur a disparu mais que sa sortie n'est pas finie. */
     public val isLeaving: Boolean get() = !visibleState.targetState && visibleState.currentState
+
+    /** Vrai quand la valeur a disparu ET que sa sortie est finie : il n'y a plus rien à peindre. */
+    public val isGone: Boolean get() = !visibleState.targetState && !visibleState.currentState && visibleState.isIdle
 }
 
 /**
  * Tient la dernière valeur non nulle de [value] pour qu'une sortie animée la peigne au lieu d'un contenu vide. Une
- * valeur présente dès la première composition s'affiche sans entrée, comme `AnimatedVisibility(visible = true)`.
+ * valeur présente dès la première composition s'affiche sans entrée, comme `AnimatedVisibility(visible = true)`, sauf
+ * si [animateFirstAppearance] demande l'entrée (une fenêtre qui s'ouvre avec sa valeur).
  */
 @Composable
-public fun <T : Any> rememberHeldPresence(value: T?): HeldPresence<T> {
-    val state = remember { MutableTransitionState(value != null) }
+public fun <T : Any> rememberHeldPresence(value: T?, animateFirstAppearance: Boolean = false): HeldPresence<T> {
+    val state = remember { MutableTransitionState(value != null && !animateFirstAppearance) }
     val last = remember { HeldValue<T>(value) }
     SideEffect { if (value != null) last.value = value }
     state.targetState = value != null
