@@ -9,7 +9,7 @@ import type { Message } from '@/lib/api/types';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 import { afterReadSeenUpTo, isAfterReadMessage } from './after-read';
-import { destructionPhaseOf } from './ephemeral-destruction';
+import { DESTRUCTION_MS, destructionPhaseOf } from './ephemeral-destruction';
 import { resetEphemeralReception, resolveEphemeralDeadline } from './ephemeral-reception';
 
 /**
@@ -105,7 +105,7 @@ describe('une réponse meurt, pour son lecteur, avec le message éphémère qu�
     const message = messageOf({ id: 'reply', expiresAt: new Date(NOW + 60_000) });
     const deadline = resolveEphemeralDeadline({ message, isMine: false, now: NOW });
     expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('visible');
-    expect(destructionPhaseOf({ deadline, now: NOW + 60_000 + 1_000, destroying: false, expired: false })).toBe('gone');
+    expect(destructionPhaseOf({ deadline, now: NOW + 60_000 + DESTRUCTION_MS, destroying: false, expired: false })).toBe('gone');
   });
 });
 
