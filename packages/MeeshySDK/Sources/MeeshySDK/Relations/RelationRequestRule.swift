@@ -58,7 +58,7 @@ public enum RelationRequestRule {
         return .allowed
     }
 
-    /// Ami se demande DIRECTEMENT tant qu'on est sous Ami (décision porteur du 2026-11-13,
+    /// Ami se demande DIRECTEMENT tant qu'on est sous Ami (décision porteur,
     /// #18101) ; tout autre cran est le suivant, ou rien. Miroir de `reachable` côté serveur.
     private static func reachable(_ target: RelationLevel, from current: RelationLevel) -> Bool {
         guard target == .friend else { return rung(after: current) == target }
