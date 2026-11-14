@@ -66,11 +66,12 @@ class CallRailsGuardTest {
     }
 
     @Test
-    fun `un rail qui defile s'efface en fondu a ses deux bords`() {
+    fun `un rail s'efface en fondu a ses deux bords, qu'il defile ou non (#18213)`() {
         val rails = code("CallActionRails.kt")
 
-        assertThat(rails).contains("canScrollBackward")
-        assertThat(rails).contains("canScrollForward")
+        assertThat(rails).contains(".callScrollEdgeFade(horizontal = false)")
+        assertThat(rails).doesNotContain("canScrollBackward")
+        assertThat(rails).doesNotContain("canScrollForward")
         assertThat(rails).contains("BlendMode.DstIn")
     }
 
