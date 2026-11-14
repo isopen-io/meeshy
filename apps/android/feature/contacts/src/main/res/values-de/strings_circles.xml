@@ -53,6 +53,6 @@
     <string name="circles_sheet_close">Schließen</string>
     <string name="circles_sheet_settings_none">Auf dieser Stufe gibt es nichts einzustellen.</string>
     <string name="circles_sheet_settings_title">Einstellungen für diese Person</string>
-    <string name="circles_sheet_settings_unavailable">Bald verfügbar</string>
+    <string name="circles_sheet_settings_unavailable">Demnächst verfügbar</string>
     <string name="contacts_tab_circles">Kreise</string>
 </resources>

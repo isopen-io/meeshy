@@ -53,6 +53,6 @@
     <string name="circles_sheet_close">Cerrar</string>
     <string name="circles_sheet_settings_none">Nada que ajustar en este nivel.</string>
     <string name="circles_sheet_settings_title">Ajustes para esta persona</string>
-    <string name="circles_sheet_settings_unavailable">Pronto disponible</string>
+    <string name="circles_sheet_settings_unavailable">Próximamente</string>
     <string name="contacts_tab_circles">Círculos</string>
 </resources>

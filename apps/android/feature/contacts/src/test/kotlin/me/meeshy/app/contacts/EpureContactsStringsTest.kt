@@ -77,6 +77,12 @@ class EpureContactsStringsTest {
     }
 
     @Test
+    fun `Soon reads with the same words as the other features announced as coming`() {
+        assertThat(all("values-es")["circles_sheet_settings_unavailable"]).isEqualTo("Próximamente")
+        assertThat(all("values-de")["circles_sheet_settings_unavailable"]).isEqualTo("Demnächst verfügbar")
+    }
+
+    @Test
     fun `the empty circles keep their action, Find contacts`() {
         assertThat(all("values-fr")["circles_empty_action"]).isEqualTo("Trouver des contacts")
     }
