@@ -227,8 +227,10 @@ private fun EffectsControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        CallModeCaptions(state)
-        EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        EffectsAbove {
+            CallModeCaptions(state)
+            EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        }
         EffectsModeBar(mode, row, reduceMotion, onChange, onFinish, onOpenFrames)
     }
 }

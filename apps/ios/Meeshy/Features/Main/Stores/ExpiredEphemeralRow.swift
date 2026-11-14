@@ -36,6 +36,27 @@ enum ExpiredEphemeralRow {
         }
     }
 
+    /// **L'instant de la mort d'une ligne échue** (#17938) — la plus ANCIENNE
+    /// des échéances connues : destruction gravée au registre, échéance servie,
+    /// réception locale plus durée. `nil` tant que la ligne vit. C'est elle qui
+    /// dit si une mort est « en cours » (elle brûle) ou ancienne (elle part
+    /// sans rejouer sa combustion) : la plus ancienne, pour qu'un retrait à
+    /// `EphemeralBurn.fullDuration` après l'allumage la trouve toujours
+    /// passée, quelle que soit la source qui a allumé.
+    static func deathInstant(_ record: MessageRecord,
+                             ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+                             now: Date = Date()) -> Date? {
+        guard isGone(record, ledger: ledger, now: now) else { return nil }
+        let id = record.serverId ?? record.localId
+        let local: Date? = {
+            guard let duration = record.ephemeralDuration, duration > 0,
+                  let received = ledger.firstReception(of: id) else { return nil }
+            return received.addingTimeInterval(TimeInterval(duration))
+        }()
+        let candidates = [ledger.destruction(of: id), record.expiresAt, local].compactMap { $0 }.filter { $0 <= now }
+        return candidates.min() ?? now
+    }
+
     static func isGone(id: String, flags: MessageEffectFlags, expiresAt: Date?, ephemeralDuration: Int?,
                        ledger: EphemeralReceiptRecording, now: Date) -> Bool {
         guard flags.contains(.ephemeral) || expiresAt != nil || (ephemeralDuration ?? 0) > 0 else { return false }

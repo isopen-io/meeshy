@@ -29,7 +29,10 @@ struct CallEffectsModeControls: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
-            panelOrCarousel
+            if barMode != .base {
+                CallAboveBarOverflow { panelOrCarousel }
+                    .transition(settingsPanelTransition)
+            }
             CallEffectsBar(
                 mode: barMode,
                 layers: layers,
@@ -367,7 +370,10 @@ struct CallMontageModeControls: View {
     var body: some View {
         let people = subjects.count
         VStack(spacing: MeeshySpacing.mdPlus) {
-            panelOrCarousel(people: people)
+            if showsAboveBar(people: people) {
+                CallAboveBarOverflow { panelOrCarousel(people: people) }
+                    .transition(panelTransition)
+            }
             CallEffectsBar(
                 mode: barMode,
                 layers: layers,
@@ -496,6 +502,11 @@ struct CallMontageModeControls: View {
     private func chosenFrameId(people: Int) -> String? {
         guard case .frame(let id) = CallMontageFrameRule.reconcile(capture.choice, people: people) else { return nil }
         return id
+    }
+
+    /// Le menu de base ne pose rien au-dessus de la barre, sauf la puce qui garde le cadre choisi.
+    private func showsAboveBar(people: Int) -> Bool {
+        barMode != .base || holdChip(for: CallMontageFrameRule.reconcile(capture.choice, people: people)) != nil
     }
 
     @ViewBuilder

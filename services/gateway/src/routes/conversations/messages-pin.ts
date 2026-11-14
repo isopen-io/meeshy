@@ -53,7 +53,6 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { announceConversationActivity } from '../../services/conversations/conversationActivity';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
-import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import {
   admitMessagePin,
   isMessagePinRefused,
@@ -774,12 +773,12 @@ export function registerMessagePinRoutes(
       const heirsApplied = formattedMessages.map((served) => withInheritedExpiry(served, pinnedReaderPage.inherited));
 
       // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
-      // #18242 B2 — et le nom des participants d'un résumé d'appel épinglé, lu à la lecture.
-      const servedMessages = await withCallSummaryParticipantNames(prisma, await signMessagesAttachmentsForReader(prisma, {
+      // #18453 — une épingle ne sert pas `metadata` : un résumé d'appel épinglé n'a pas de participants à nommer.
+      const servedMessages = await signMessagesAttachmentsForReader(prisma, {
         messages: heirsApplied,
         readerParticipantId: pinnedReaderParticipantId,
         signer: readerFileUrlSignerFromEnv(new Date()),
-      }), { conversationId });
+      });
 
       // #16578 — `total` est un `count()` : il ne peut pas appliquer une
       // échéance PAR LECTEUR, qui vit dans `MessageStatusEntry`. Il compte donc

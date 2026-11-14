@@ -239,6 +239,22 @@ function compareBy(orderBy: readonly MongoDocument[]) {
 }
 
 /**
+ * `findUnique` sur une collection en mémoire : le premier document qui apparie
+ * le `where`, PROJETÉ par son `select` comme Prisma le projette — un champ que
+ * le `select` ne demande pas n'existe pas dans la ligne rendue. Rend `null`
+ * quand rien n'apparie. Tout autre argument jette.
+ */
+export function findUniqueIn<T extends MongoDocument>(rows: readonly T[]) {
+  return (args: { readonly where?: MongoDocument; readonly select?: MongoDocument }): Promise<MongoDocument | null> => {
+    const unknown = Object.keys(args).filter((arg) => arg !== 'where' && arg !== 'select');
+    if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    const found = rows.find((row) => matchesMongoWhere(row, args.where));
+    if (!found) return Promise.resolve(null);
+    return Promise.resolve(args.select ? project(found, args.select) : { ...found });
+  };
+}
+
+/**
  * `findMany` sur une collection en mémoire : `where` évalué contre les
  * documents (sémantique ci-dessus), `select` projeté comme Prisma le projette,
  * `orderBy` et `take` honorés. Tout autre argument jette.

@@ -9,6 +9,12 @@
  * | page `GET /conversations/:id/messages` | corps sérialisé par le vrai schéma de réponse |
  * | rattrapage `/sync` (`syncMessages`) | lignes `added` |
  * | aperçu de liste `GET /conversations` | `lastMessage.metadata` de la ligne |
+ * | recherche `GET /conversations/:id/messages/search` (#18453) | corps sérialisé par le vrai schéma |
+ * | lien de partage `GET /links/:id/messages` (#18453) | `messages` lus par l'invité du lien |
+ * | détail `GET /messages/:messageId` (#18453) | `data` du détail |
+ * | tableau de bord (`resolveDashboardPreviews`, #18453) | l'aperçu servi de la conversation |
+ * | épingles `GET /conversations/:id/pinned-messages` (#18453) | n'en sert AUCUNE : une épingle ne porte pas `metadata` |
+ * | fil `GET /conversations/:id/threads/:messageId` (#18453) | la racine du fil |
  *
  * Chacun tombe si l'hydratation est remplacée par l'identité : la forme
  * stockée `{ userId }` n'a pas de `displayName`. La citation (`replyTo`
@@ -58,6 +64,17 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
     acceptedFriendIds: async () => new Set<string>(),
   }),
 }));
+const linkRows: { rows: unknown[] } = { rows: [] };
+jest.mock('../../../routes/links/utils/prisma-queries', () => ({
+  getConversationMessagesWithDetails: async () => linkRows.rows,
+  countConversationMessages: async () => linkRows.rows.length,
+}));
+jest.mock('../../../routes/links/utils/link-helpers', () => ({
+  createLegacyHybridRequest: () => ({
+    isAuthenticated: false, isAnonymous: true, user: null,
+    anonymousParticipant: { id: '507f1f77bcf86cd7994390e1', shareLinkId: '507f1f77bcf86cd7994390f1' },
+  }),
+}));
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: class {
     getUnreadCountsForUser() { return Promise.resolve(new Map()); }
@@ -68,6 +85,12 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
 import { registerMessagesRoutes } from '../../../routes/conversations/messages';
 import { registerConversationListRoute } from '../../../routes/conversations/core-list';
 import { syncMessages } from '../../../routes/sync/messages';
+import { registerMessagesRetrievalRoutes } from '../../../routes/links/messages-retrieval';
+import { registerMessagesReadRoutes } from '../../../routes/messages-reads';
+import { resolveDashboardPreviews } from '../../../routes/users/dashboardRecentPreview';
+import { registerMessagePinRoutes } from '../../../routes/conversations/messages-pin';
+import { registerThreadsRoutes } from '../../../routes/conversations/threads';
+import { findManyIn, type MongoDocument } from '../../helpers/mongo-where';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const READER = '507f1f77bcf86cd799439022';
@@ -238,5 +261,155 @@ describe('aperçu de liste — GET /conversations', () => {
     expect(reply.statusCode).toBe(200);
     const [row] = (reply.body as { data: Array<{ lastMessage: Served }> }).data;
     expect(participantsOf(row?.lastMessage)).toEqual(SERVED_PARTICIPANTS);
+  });
+});
+
+const readerAuth = async (request: { authContext?: unknown }) => {
+  request.authContext = { type: 'registered', isAuthenticated: true, isAnonymous: false, userId: READER, registeredUser: { id: READER, role: 'USER' } };
+};
+
+const READER_ROW = {
+  id: '507f1f77bcf86cd7994390d1', userId: READER, conversationId: CONV_ID, role: 'member', isActive: true, joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+  shareLinkId: null, historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' },
+};
+
+/** Les colonnes que la loi de sortie de la recherche lit (`SEARCH_EXIT_LAW_SELECT`) : sans elles, elle ferme. */
+const ORDINARY_EXIT = { isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null };
+
+describe('recherche — GET /conversations/:id/messages/search (#18453)', () => {
+  it('sert le nom de chaque participant du résumé trouvé', async () => {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('socketIOHandler', { getManager: () => null } as never);
+    app.decorate('notificationService', null);
+    const prisma = {
+      participant: { findFirst: async () => null, findMany: namesOr(() => []) },
+      message: { count: async () => 1, findFirst: async () => null, findMany: async () => [callSummary(ORDINARY_EXIT)] },
+      user: { findFirst: async () => null },
+    };
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    registerMessagesRoutes(app, prisma as never, {} as never, readerAuth as never, readerAuth as never);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/messages/search?q=appel` });
+
+    expect(res.statusCode).toBe(200);
+    expect(participantsOf(res.json<{ data: Served[] }>().data[0])).toEqual(SERVED_PARTICIPANTS);
+    await app.close();
+  });
+});
+
+describe('lien de partage — GET /links/:identifier/messages (#18453)', () => {
+  it('sert le nom de chaque participant à l\'invité du lien', async () => {
+    linkRows.rows = [{ ...callSummary(), reactions: [], replyTo: null, _count: { reactions: 0, replies: 0 } }];
+    const prisma = {
+      conversationShareLink: {
+        findUnique: async () => ({ id: '507f1f77bcf86cd7994390f1', conversationId: CONV_ID, allowViewHistory: true, conversation: { id: CONV_ID, title: 'Équipe', type: 'group' } }),
+        findMany: async () => [],
+      },
+      participant: { findFirst: async () => null, findUnique: async () => null, findMany: namesOr(() => []) },
+      message: { findMany: async () => [] },
+      messageViewOnceView: { findMany: async () => [] },
+    };
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as never);
+    await registerMessagesRetrievalRoutes(app as never);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/links/507f1f77bcf86cd7994390f1/messages' });
+
+    expect(res.statusCode).toBe(200);
+    expect(participantsOf(res.json<{ data: { messages: Served[] } }>().data.messages[0])).toEqual(SERVED_PARTICIPANTS);
+    await app.close();
+  });
+});
+
+describe('détail — GET /messages/:messageId (#18453)', () => {
+  it('sert le nom de chaque participant du résumé ouvert', async () => {
+    const prisma = {
+      message: { findFirst: async () => ({ ...callSummary(), conversation: { participants: [READER_ROW] } }) },
+      participant: { findFirst: async () => READER_ROW, findMany: namesOr(() => []) },
+      messageViewOnceView: { findMany: async () => [] },
+    };
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    registerMessagesReadRoutes(app, {
+      prisma: prisma as never,
+      requiredAuth: readerAuth as never,
+      attachmentService: {} as never,
+      translationService: {} as never,
+      socketIOHandler: {} as never,
+      trackingLinkService: {} as never,
+    });
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/messages/${SUMMARY_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(participantsOf(res.json<{ data: Served }>().data)).toEqual(SERVED_PARTICIPANTS);
+    await app.close();
+  });
+});
+
+describe('tableau de bord — resolveDashboardPreviews (#18453)', () => {
+  it('sert le nom de chaque participant dans l\'aperçu de la conversation', async () => {
+    const members: MongoDocument[] = [{ ...READER_ROW, bannedAt: null, nickname: null, displayName: 'Moi', user: MEMBERS[1].user }, { ...MEMBERS[0], id: 'p-awa', isActive: true }];
+    const prisma = {
+      participant: { findMany: findManyIn(members).findMany },
+      conversationShareLink: { findMany: async () => [] },
+      userMessageDeletion: { findMany: async () => [] },
+      userConversationPreferences: { findMany: async () => [] },
+      message: { findMany: async () => [], findFirst: async () => null },
+    };
+
+    const previews = await resolveDashboardPreviews(prisma as never, { userId: READER, conversations: [{ id: CONV_ID, messages: [callSummary()] }] });
+
+    expect(participantsOf(previews.get(CONV_ID) as Served)).toEqual(SERVED_PARTICIPANTS);
+  });
+});
+
+describe('épingles — GET /conversations/:id/pinned-messages (#18453)', () => {
+  it('ne sert PAS la metadata du résumé épinglé : la forme stockée `{ userId }` ne sort pas, il n\'y a pas de nom à composer', async () => {
+    const prisma = {
+      participant: { findFirst: async () => READER_ROW, findMany: namesOr(() => []) },
+      userConversationPreferences: { findFirst: async () => null },
+      userMessageDeletion: { findMany: async () => [] },
+      messageAttachment: { findMany: async () => [] },
+      message: { findMany: async () => [{ ...callSummary(), pinnedAt: AT, pinnedBy: READER, reactions: [], replyTo: null }], count: async () => 1 },
+    };
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    registerMessagePinRoutes(app as never, prisma as never, readerAuth as never, { getManager: () => null } as never);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/pinned-messages` });
+
+    expect(res.statusCode).toBe(200);
+    const [pin] = res.json<{ data: Array<Record<string, unknown>> }>().data;
+    expect(pin?.id).toBe(SUMMARY_ID);
+    expect('metadata' in (pin ?? {})).toBe(false);
+    expect(res.body).not.toContain('participants');
+    await app.close();
+  });
+});
+
+describe('fil — GET /conversations/:id/threads/:messageId (#18453)', () => {
+  it('sert le nom de chaque participant quand le résumé est la racine du fil', async () => {
+    const prisma = {
+      message: { findFirst: async () => ({ ...callSummary(), replyTo: null, _count: { reactions: 0, statusEntries: 0 } }), findMany: async () => [] },
+      participant: { findFirst: async () => READER_ROW, findMany: namesOr(() => []) },
+      conversationShareLink: { findUnique: async () => null },
+    };
+    const app = Fastify({ logger: false });
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    registerThreadsRoutes(app, prisma as never, readerAuth as never);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${SUMMARY_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(participantsOf(res.json<{ data: { parent: Served } }>().data.parent)).toEqual(SERVED_PARTICIPANTS);
+    await app.close();
   });
 });

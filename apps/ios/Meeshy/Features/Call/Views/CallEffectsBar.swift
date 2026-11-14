@@ -95,6 +95,21 @@ struct CallEffectsGenreChips: View {
     }
 }
 
+/// #17927 — ce qui se pose au-dessus de la barre (carrousel, ambiances, option « Cadre », panneaux,
+/// sous-titres) : tel quel quand la hauteur le permet, et sinon dans un défilement vertical. À
+/// hauteur compacte (paysage téléphone), c'est ce contenu qui se resserre ou défile, jamais la barre,
+/// que l'hôte pose à côté, hors de ce conteneur.
+struct CallAboveBarOverflow<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content()
+            ScrollView(.vertical, showsIndicators: false) { content() }
+        }
+    }
+}
+
 /// P8 · P8b · C1 — la barre d'Effets, LA barre de la famille d'outils (Effets, filtres, cadres :
 /// Effets et Montage la partagent, #16979) : UN verre d'une pièce (l'atome partagé de la pilule),
 /// qui parle la langue du composer. En haut, la rangée de genres et son filet ; en bas, la rangée de
