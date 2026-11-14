@@ -16,7 +16,6 @@ const en = {
   'viewerEngagement.openProfile': 'View profile',
   'viewerEngagement.back': 'Back to views',
   'viewerEngagement.openDetail': 'See what {name} did',
-  'viewerEngagement.empty.subtitle': 'People who see this post will appear here.',
   'viewerEngagement.forbidden': 'You don’t have access to the list of who viewed this post.',
   'viewerEngagement.unavailable': 'Activity details are temporarily unavailable.',
   'viewerEngagement.visitors.one': 'and {count} visitor without an account',

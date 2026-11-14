@@ -142,6 +142,60 @@ export function NotificationsHeader({
  * illisible. Ici le texte reste à l'encre (`--color-ios-ink`), la teinte porte
  * le fond et le filet : le code couleur survit, le contraste aussi.
  */
+/** Au repos, trois pastilles : le reste vit derrière « Plus » (règle 6). */
+const RAIL_PRIMARY: readonly NotificationCategory[] = ['all', 'unread', 'messages'];
+const RAIL_SECONDARY: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES.filter((category) => !RAIL_PRIMARY.includes(category));
+
+function CategoryPill({
+  label,
+  category,
+  pressed,
+  dataAttributes,
+  ariaLabel,
+  expanded,
+  withGlyph = true,
+  onPress,
+}: {
+  readonly label: string;
+  readonly category: NotificationCategory;
+  readonly pressed: boolean;
+  readonly dataAttributes: Readonly<Record<string, string | true>>;
+  readonly ariaLabel?: string;
+  readonly expanded?: boolean;
+  readonly withGlyph?: boolean;
+  readonly onPress: () => void;
+}) {
+  const hue = categoryHue(category);
+  return (
+    <button
+      type="button"
+      {...dataAttributes}
+      {...(expanded === undefined ? { 'aria-pressed': pressed } : { 'aria-expanded': expanded })}
+      {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+      onClick={onPress}
+      className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+      style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+    >
+      <span
+        className="flex items-center gap-1.5 rounded-chip px-2.5 text-caption font-semibold"
+        style={{
+          height: 30,
+          color: 'var(--color-ios-ink)',
+          backgroundColor: `color-mix(in srgb, ${hue} ${pressed ? 24 : 10}%, transparent)`,
+          boxShadow: pressed ? `inset 0 0 0 1.5px ${hue}` : 'none',
+        }}
+      >
+        {withGlyph ? (
+          <span className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
+            <CategoryGlyphView category={category} size={12} />
+          </span>
+        ) : null}
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export function NotificationCategoryRail({
   language,
   selected,
@@ -151,43 +205,41 @@ export function NotificationCategoryRail({
   readonly selected: NotificationCategory;
   readonly onSelect: (category: NotificationCategory) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const hiddenSelected = RAIL_SECONDARY.includes(selected);
+  const moreLabel = translate(language, 'action.more');
+  const pill = (category: NotificationCategory) => (
+    <CategoryPill
+      key={category}
+      category={category}
+      label={categoryLabel(language, category)}
+      pressed={category === selected}
+      dataAttributes={{ 'data-category': category }}
+      onPress={() => {
+        onSelect(category);
+        setOpen(false);
+      }}
+    />
+  );
   return (
     <div
       role="group"
       aria-label={translate(language, 'notifications.categories')}
-      className="scrollbar-none flex shrink-0 items-center gap-2 overflow-x-auto px-4"
+      className="scrollbar-none flex shrink-0 items-center gap-1 overflow-x-auto px-3"
       style={{ height: NOTIFICATIONS_RAIL_HEIGHT }}
     >
-      {NOTIFICATION_CATEGORIES.map((category) => {
-        const pressed = category === selected;
-        const hue = categoryHue(category);
-        return (
-          <button
-            key={category}
-            type="button"
-            data-category={category}
-            aria-pressed={pressed}
-            onClick={() => onSelect(category)}
-            className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
-            style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
-          >
-            <span
-              className="flex items-center gap-1.5 rounded-chip px-3 text-caption font-semibold"
-              style={{
-                height: 30,
-                color: 'var(--color-ios-ink)',
-                backgroundColor: `color-mix(in srgb, ${hue} ${pressed ? 24 : 10}%, transparent)`,
-                boxShadow: pressed ? `inset 0 0 0 1.5px ${hue}` : 'none',
-              }}
-            >
-              <span className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
-                <CategoryGlyphView category={category} size={12} />
-              </span>
-              {categoryLabel(language, category)}
-            </span>
-          </button>
-        );
-      })}
+      {RAIL_PRIMARY.map(pill)}
+      <CategoryPill
+        category={hiddenSelected ? selected : 'all'}
+        label={hiddenSelected && !open ? categoryLabel(language, selected) : moreLabel}
+        pressed={hiddenSelected && !open}
+        expanded={open}
+        withGlyph={hiddenSelected && !open}
+        dataAttributes={{ 'data-category-more': true }}
+        {...(hiddenSelected && !open ? { ariaLabel: translate(language, 'notifications.categories.moreActive', { category: categoryLabel(language, selected) }) } : {})}
+        onPress={() => setOpen(!open)}
+      />
+      {open ? RAIL_SECONDARY.map(pill) : null}
     </div>
   );
 }
@@ -206,9 +258,6 @@ export function NotificationsEmpty({ language, category }: { readonly language: 
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {emptyTitle(language, category)}
-      </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'notifications.empty.subtitle')}
       </p>
     </li>
   );

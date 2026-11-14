@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const en = {
   'circles.section.requests': 'Level-up requests',
+  'circles.intro': 'Each circle sets what a person sees of you: the closer it is, the more you share.',
   'circles.empty.title': 'Your links will appear here',
   'circles.empty.subtitle': 'As you talk with people, they join your circles.',
   'circles.empty.action': 'Find contacts',
@@ -81,7 +82,9 @@ const en = {
   'circles.settings.blockBring.detail': 'This person can no longer ring your phone. They aren’t told.',
   'circles.settings.blockBring.failed': 'Couldn’t save this setting',
   'bring.action': 'Bring',
-  'bring.explain': 'For an extreme emergency: their phone rings, even when locked. Exceptions: an iPhone on silent with Meeshy closed only shows a priority alert, and the web only rings while the tab is open.',
+  'bring.explain': 'For an extreme emergency: their phone rings, even when locked.',
+  'bring.exceptions.question': 'When does Bring not ring?',
+  'bring.exceptions': 'Exceptions: an iPhone on silent with Meeshy closed only shows a priority alert, and the web only rings while the tab is open.',
   'bring.remaining': 'Left today: {count}',
   'bring.unlimited': 'No limit today',
   'bring.confirm.title': 'Ring {name}’s phone?',

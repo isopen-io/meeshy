@@ -420,7 +420,6 @@ export default function DiscoverScreen() {
                 data="received"
                 glyph={<DiscoverGlyph name="userCheck" size={44} />}
                 title={translate(language, 'discover.requests.empty.received.title')}
-                subtitle={translate(language, 'discover.requests.empty.received.subtitle')}
               />,
               <ul data-request-list="received" className="flex flex-col">
                 {receivedRows.map((request) => (
@@ -436,7 +435,6 @@ export default function DiscoverScreen() {
                 data="sent"
                 glyph={<DiscoverGlyph name="paperPlaneTilt" size={44} />}
                 title={translate(language, 'discover.requests.empty.sent.title')}
-                subtitle={translate(language, 'discover.requests.empty.sent.subtitle')}
               />,
               <ul data-request-list="sent" className="flex flex-col">
                 {sentRows.map((request) => (
@@ -472,7 +470,6 @@ export default function DiscoverScreen() {
             data="blocked"
             glyph={<DiscoverGlyph name="handPalm" size={44} />}
             title={translate(language, 'discover.blocked.empty.title')}
-            subtitle={translate(language, 'discover.blocked.empty.subtitle')}
           />,
           <ul data-blocked-list className="flex flex-col">
             {blockedRows.map((person) => (

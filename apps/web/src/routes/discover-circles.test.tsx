@@ -205,6 +205,16 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(found).toEqual(['find']);
   });
 
+  test('la phrase d’orientation est lisible au repos, une ligne au-dessus de la liste, sans clic (épure #17584, règle 7)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
+    const host = await mount(panel([]));
+    const intro = host.querySelector('[data-circles-intro]');
+    expect(intro?.textContent).toBe('Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.');
+    expect(intro?.className).not.toContain('sr-only');
+    const list = host.querySelector('[data-circle-list]');
+    expect(intro !== null && list !== null && intro.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   test('« Positions partagées » mène à la carte de ce que mes liens me partagent (#16984)', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
     const host = await mount(panel([]));

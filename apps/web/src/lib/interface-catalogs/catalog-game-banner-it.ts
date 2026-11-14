@@ -63,8 +63,6 @@ const it = {
   'game.banner.link.meesh': '{count} Meesh nella tua eredità',
   'game.banner.glory': 'gloria {glory}',
   'game.banner.glory_missing': '{glory} di gloria fino a {rank}',
-  'game.banner.level_short': '{n} fino al {level}',
-  'game.banner.glory_short': '{n} fino a {rank}',
   'game.banner.glory_top': 'gloria {n}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quarzo',
