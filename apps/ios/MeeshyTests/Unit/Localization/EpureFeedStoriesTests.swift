@@ -200,7 +200,8 @@ final class EpureFeedStoriesTests: XCTestCase {
     }
 
     func test_contentFetchFailureViews_renderTheMessageOnlyWhenThereIsOne() throws {
-        for path in [Self.views + "PostDetailView+AbsenceStates.swift", Self.views + "ReelOpenFailureView.swift"] {
+        for path in [Self.views + "PostDetailView+AbsenceStates.swift", Self.views + "ReelOpenFailureView.swift",
+                     "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift"] {
             let source = try code(path)
             XCTAssertTrue(source.contains("ContentFetchFailureMessage("), "\(path) : pas de texte vide quand la cause n'explique rien")
         }
