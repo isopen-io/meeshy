@@ -4,8 +4,6 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'OrphanedSalonLinks' });
 
-const CREATOR_ROLES = ['creator', 'CREATOR'];
-
 /**
  * Ferme et MARQUE (`guestRevocationPendingAt`) tous les liens de partage des
  * salons nommés : la garde commune (`guestAccessEnd`) refuse chaque invité dès
@@ -36,7 +34,17 @@ export async function closeOrphanedSalonLinks(
   return closed;
 }
 
-type CreatorRow = { readonly conversationId: string; readonly role: string; readonly isActive: boolean; readonly userId: string | null };
+/**
+ * La reprise ne regarde que les sorties postérieures à la règle qu'elle
+ * rattrape (#16712, fusionnée le 2026-11-13) : un salon laissé sans créateur
+ * AVANT elle (données héritées, anciens chemins de départ) n'a jamais promis
+ * la fermeture de ses liens, et une révocation ne se défait pas.
+ */
+export const ORPHANED_SALON_SWEEP_SINCE = new Date('2026-11-13T00:00:00.000Z');
+
+const CREATOR_ROLES = ['creator', 'CREATOR', 'Creator'];
+
+type CreatorRow = { readonly conversationId: string; readonly role: string; readonly isActive: boolean; readonly userId: string | null; readonly leftAt?: Date | null };
 
 /**
  * La REPRISE durable de #16712 (#18104). La sortie d'un créateur sans héritier
@@ -44,17 +52,17 @@ type CreatorRow = { readonly conversationId: string; readonly role: string; read
  * lève, rien n'est marqué et le balayage des révocations différées ne voit rien.
  * Cette passe retrouve donc, à chaque balayage horaire, les salons :
  *
+ * - dont un créateur est SORTI depuis `ORPHANED_SALON_SWEEP_SINCE` (une ligne
+ *   `creator` inactive) et qu'aucun créateur INSCRIT actif ne gouverne ;
  * - VIVANTS, d'une communauté qui GARDE ses salons (privée, ou désactivée —
  *   `communityGuardsItsSalons`) ;
- * - qui ont encore un lien ACTIF ;
- * - dont un créateur est SORTI (une ligne `creator` inactive) et qu'aucun
- *   créateur INSCRIT actif ne gouverne.
+ * - qui ont encore un lien ACTIF créé AVANT cette sortie — un lien créé après
+ *   n'est pas celui que la sortie devait fermer, et la passe ne rejoue pas la
+ *   règle à chaque nouveau lien.
  *
- * La preuve de sortie est exigée à dessein : un salon qui n'a JAMAIS eu de ligne
- * `creator` (données héritées) n'est pas « resté sans créateur » au sens de
- * #16712, et une révocation ne se défait pas. Il reste à mesurer en staging.
- *
- * Ne rejette jamais : une lecture qui lève rend `[]`, et la passe suivante reprend.
+ * La lecture part des sorties récentes (peu nombreuses), jamais de l'ensemble
+ * des communautés. Ne rejette jamais : une lecture qui lève rend `[]`, et la
+ * passe suivante reprend.
  */
 export async function closeLinksOfOrphanedSalons(prisma: PrismaClient, now: Date): Promise<readonly string[]> {
   try {
@@ -69,31 +77,46 @@ export async function closeLinksOfOrphanedSalons(prisma: PrismaClient, now: Date
 }
 
 async function findOrphanedSalons(prisma: PrismaClient): Promise<readonly string[]> {
-  const communities = await prisma.community.findMany({
-    where: { OR: [{ isPrivate: true }, { isActive: false }] },
-    select: { id: true },
+  const departures: CreatorRow[] = await prisma.participant.findMany({
+    where: { role: { in: CREATOR_ROLES }, isActive: false, leftAt: { gte: ORPHANED_SALON_SWEEP_SINCE } },
+    select: { conversationId: true, role: true, isActive: true, userId: true, leftAt: true },
   });
-  if (communities.length === 0) return [];
+  const departedAt = new Map<string, Date>();
+  departures
+    .filter((row) => isMemberCreator(row.role) && row.leftAt)
+    .forEach((row) => {
+      const known = departedAt.get(row.conversationId);
+      if (!known || row.leftAt! > known) departedAt.set(row.conversationId, row.leftAt!);
+    });
+  if (departedAt.size === 0) return [];
 
   const salons = await prisma.conversation.findMany({
-    where: { communityId: { in: communities.map((community) => community.id) }, isActive: true },
+    where: { id: { in: [...departedAt.keys()] }, isActive: true, communityId: { not: null } },
+    select: { id: true, communityId: true },
+  });
+  const communityIds = [...new Set(salons.map((salon) => salon.communityId).filter((id): id is string => !!id))];
+  if (communityIds.length === 0) return [];
+
+  const guarding = await prisma.community.findMany({
+    where: { id: { in: communityIds }, OR: [{ isPrivate: true }, { isActive: false }] },
     select: { id: true },
   });
-  if (salons.length === 0) return [];
+  const guardingIds = new Set(guarding.map((community) => community.id));
+  const guardedSalons = salons.filter((salon) => salon.communityId && guardingIds.has(salon.communityId)).map((salon) => salon.id);
+  if (guardedSalons.length === 0) return [];
 
-  const linked = await prisma.conversationShareLink.findMany({
-    where: { conversationId: { in: salons.map((salon) => salon.id) }, isActive: true },
-    select: { conversationId: true },
-  });
-  const candidates = [...new Set(linked.map((link) => link.conversationId))];
-  if (candidates.length === 0) return [];
-
-  const creators: CreatorRow[] = await prisma.participant.findMany({
-    where: { conversationId: { in: candidates }, role: { in: CREATOR_ROLES } },
+  const governors: CreatorRow[] = await prisma.participant.findMany({
+    where: { conversationId: { in: guardedSalons }, role: { in: CREATOR_ROLES }, isActive: true },
     select: { conversationId: true, role: true, isActive: true, userId: true },
   });
-  const rows = creators.filter((row) => isMemberCreator(row.role));
-  const governed = new Set(rows.filter((row) => row.isActive && row.userId).map((row) => row.conversationId));
-  const departed = new Set(rows.filter((row) => !row.isActive).map((row) => row.conversationId));
-  return candidates.filter((id) => departed.has(id) && !governed.has(id));
+  const governed = new Set(governors.filter((row) => isMemberCreator(row.role) && row.userId).map((row) => row.conversationId));
+  const ungoverned = guardedSalons.filter((id) => !governed.has(id));
+  if (ungoverned.length === 0) return [];
+
+  const links = await prisma.conversationShareLink.findMany({
+    where: { conversationId: { in: ungoverned }, isActive: true },
+    select: { conversationId: true, createdAt: true },
+  });
+  const stale = links.filter((link) => link.createdAt <= departedAt.get(link.conversationId)!);
+  return [...new Set(stale.map((link) => link.conversationId))];
 }

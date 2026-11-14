@@ -23,19 +23,19 @@ const COMMUNITY = '507f1f77bcf86cd799439044';
 const SALON = '507f1f77bcf86cd7994390a1';
 const LINK = '507f1f77bcf86cd7994390c1';
 
-type Link = { id: string; conversationId: string; isActive: boolean; guestRevocationPendingAt: Date | null };
+type Link = { id: string; conversationId: string; isActive: boolean; createdAt: Date; guestRevocationPendingAt: Date | null };
 
 function buildService(creatorStillThere: boolean) {
-  const links: Link[] = [{ id: LINK, conversationId: SALON, isActive: true, guestRevocationPendingAt: null }];
+  const links: Link[] = [{ id: LINK, conversationId: SALON, isActive: true, createdAt: new Date('2026-11-12T00:00:00Z'), guestRevocationPendingAt: null }];
   const creators = [
-    { conversationId: SALON, role: 'creator', isActive: false, userId: 'u-parti' },
+    { conversationId: SALON, role: 'creator', isActive: false, userId: 'u-parti', leftAt: new Date('2026-11-13T20:00:00Z') },
     ...(creatorStillThere ? [{ conversationId: SALON, role: 'creator', isActive: true, userId: 'u-heritier' }] : []),
   ];
   const prisma = {
     community: { findMany: jest.fn(async () => [{ id: COMMUNITY }]) },
-    conversation: { findMany: jest.fn(async () => [{ id: SALON }]) },
+    conversation: { findMany: jest.fn(async () => [{ id: SALON, communityId: COMMUNITY }]) },
     participant: {
-      findMany: jest.fn(async () => creators),
+      findMany: jest.fn(async (args: { where: { isActive?: boolean } }) => creators.filter((c) => c.isActive === args.where.isActive)),
       groupBy: jest.fn(async () => []),
     },
     conversationShareLink: {
@@ -44,7 +44,7 @@ function buildService(creatorStillThere: boolean) {
           return links.filter((l) => l.guestRevocationPendingAt).map((l) => ({ id: l.id, guestRevocationPendingAt: l.guestRevocationPendingAt }));
         }
         if ('expiresAt' in args.where) return [];
-        return links.filter((l) => l.isActive || !('isActive' in args.where)).map((l) => ({ id: l.id, conversationId: l.conversationId }));
+        return links.filter((l) => l.isActive || !('isActive' in args.where)).map((l) => ({ id: l.id, conversationId: l.conversationId, createdAt: l.createdAt }));
       }),
       updateMany: jest.fn(async (args: { data: { isActive: boolean; guestRevocationPendingAt: Date } }) => {
         links.forEach((l) => { l.isActive = args.data.isActive; l.guestRevocationPendingAt = args.data.guestRevocationPendingAt; });
