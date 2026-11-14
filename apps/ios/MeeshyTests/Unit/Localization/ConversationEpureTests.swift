@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 

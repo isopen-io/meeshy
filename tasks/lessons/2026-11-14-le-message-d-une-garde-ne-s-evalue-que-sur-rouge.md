@@ -1,9 +1,9 @@
-# Le message d'une garde ne s'évalue que sur ROUGE
+## Le message d'une garde ne s'évalue que sur ROUGE
 
 *2026-11-14, cycle 158. Issues : #18240 (le message qui plantait), #18121
 (l'extension Swift qui l'a révélé), #18120 (le défaut que la garde doit nommer).*
 
-## La règle
+### La règle
 
 Une garde a deux moitiés : **elle BLOQUE**, et **elle NOMME**. La seconde ne
 s'exécute jamais sur le chemin vert — elle vit dans le `.map()` d'une liste
@@ -28,7 +28,7 @@ celui qui la subit à la relecture manuelle qu'elle existe pour supprimer.
 > son sujet. **Ce qui n'est pas exécuté n'est pas vérifié**, et le rapport d'une
 > garde verte n'est jamais exécuté.
 
-## Ce qu'il faut faire à la place
+### Ce qu'il faut faire à la place
 
 **Sortir la composition du rapport du fichier de test, et lui donner un témoin
 sur le chemin VERT.** Une fonction pure, une fixture, un `expect` sur le texte
@@ -40,7 +40,7 @@ entre miroirs — `MissingFieldException` côté Kotlin, `keyNotFound` côté Sw
 mais la divergence est la même. La garde Swift (#18121) a donc réemployé le
 rapport de sa jumelle au lieu d'en écrire un second, qui aurait dérivé.
 
-## Comment l'attraper ailleurs
+### Comment l'attraper ailleurs
 
 La question à poser à toute garde qu'on écrit ou qu'on relit :
 
