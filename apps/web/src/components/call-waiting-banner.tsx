@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
 
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-
 import { PeerAvatar } from '@/components/peer-avatar';
 import { callActions } from '@/lib/calls/call-actions';
+import { personTint } from '@/lib/calls/call-speaker-color';
 import { callStore, type WaitingCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -28,7 +27,7 @@ export function CallWaitingBanner({ waiting }: { readonly waiting: WaitingCall }
       style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-waiting=""
     >
-      <PeerAvatar presenceKey={waiting.callerKey ?? undefined} initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
+      <PeerAvatar presenceKey={waiting.callerKey ?? undefined} initials={initialsOf(waiting.callerName)} color={personTint(waiting.callerKey, waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-body font-semibold">{waiting.title}</p>
         <p className="truncate text-mini" style={{ color: 'var(--color-on-media-3)' }}>
