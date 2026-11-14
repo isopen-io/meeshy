@@ -417,7 +417,6 @@ const en = {
   'profile.section.languages': 'LANGUAGES',
   'profile.language.intro': 'Content is translated into the first of these languages that is available.',
   'profile.section.stats': 'STATISTICS',
-  'profile.section.requests': 'REQUESTS',
   'profile.section.member_since': 'MEMBER SINCE',
   'profile.first_name': 'First name',
   'profile.last_name': 'Last name',

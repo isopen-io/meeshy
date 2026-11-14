@@ -416,7 +416,6 @@ const ar = {
   'profile.section.languages': 'اللغات',
   'profile.language.intro': 'تُترجم المحتويات إلى أول لغة متاحة من هذه اللغات.',
   'profile.section.stats': 'الإحصائيات',
-  'profile.section.requests': 'الطلبات',
   'profile.section.member_since': 'عضو منذ',
   'profile.first_name': 'الاسم الأول',
   'profile.last_name': 'اسم العائلة',

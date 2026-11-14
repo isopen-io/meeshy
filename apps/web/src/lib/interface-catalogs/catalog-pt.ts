@@ -421,7 +421,6 @@ const pt = {
   'profile.section.languages': 'IDIOMAS',
   'profile.language.intro': 'O conteúdo é traduzido para o primeiro destes idiomas que estiver disponível.',
   'profile.section.stats': 'ESTATÍSTICAS',
-  'profile.section.requests': 'SOLICITAÇÕES',
   'profile.section.member_since': 'MEMBRO DESDE',
   'profile.first_name': 'Nome',
   'profile.last_name': 'Sobrenome',

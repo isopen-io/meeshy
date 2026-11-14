@@ -409,7 +409,6 @@ const fr = {
   'profile.section.languages': 'LANGUES',
   'profile.language.intro': 'Le contenu est traduit dans la première de ces langues qui est disponible.',
   'profile.section.stats': 'STATISTIQUES',
-  'profile.section.requests': 'DEMANDES',
   'profile.section.member_since': 'MEMBRE DEPUIS',
   'profile.first_name': 'Prénom',
   'profile.last_name': 'Nom',
