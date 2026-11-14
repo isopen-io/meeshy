@@ -104,6 +104,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     private let store: SharedLocationRosterStoring
     private let now: () -> Date
     private let wakes: SharedLocationWakeScheduling
+    private let owner: String
+    private let currentAccount: () -> String?
     private let gate = SharedLocationSerialGate()
     private var abandoned = false
     private var lastSent: SharedLocationUpdateGate.Sent?
@@ -121,6 +123,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         fixes: SharedLocationFixProviding,
         store: SharedLocationRosterStoring,
         now: @escaping () -> Date = Date.init,
+        owner: String = "",
+        currentAccount: @escaping () -> String? = { nil },
         wakes: SharedLocationWakeScheduling = TaskSharedLocationWakeScheduler(),
         socketReady: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
     ) {
@@ -129,6 +133,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         self.store = store
         self.now = now
         self.wakes = wakes
+        self.owner = owner
+        self.currentAccount = currentAccount
         let restored = store.load() ?? .empty
         roster = restored
         let lane = OrderedEventLane()
@@ -161,7 +167,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             case .denied: return .locationDenied
             case .unavailable: return .locationUnavailable
             }
-            guard !self.abandoned else { return .refused(.failed) }
+            guard self.isLive else { return .refused(.failed) }
             let previous = self.roster
             let next = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
             return await self.publish(next, fix: fix, previous: previous)
@@ -180,7 +186,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             let pruned = self.roster.pruned(now: self.now())
             guard pruned != self.roster else { return nil }
             let problem = await self.republish(pruned)
-            if problem != nil, !self.abandoned { self.arm(after: Self.retryDelay) }
+            if problem != nil, self.isLive { self.arm(after: Self.retryDelay) }
             return problem
         }
     }
@@ -189,10 +195,10 @@ final class SharedLocationSharingCenter: ObservableObject {
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
         defer { gate.leave() }
-        guard !abandoned, !roster.isEmpty, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        guard isLive, !roster.isEmpty, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
-        if !abandoned, case .refused(.notSharing) = verdict { wipe() }
+        if isLive, case .refused(.notSharing) = verdict { wipe() }
     }
 
     /// Le compte change : cet appareil cesse de suivre la position pour lui, toute réponse encore en vol est écartée, le
@@ -205,10 +211,16 @@ final class SharedLocationSharingCenter: ObservableObject {
         fixes.stopFollowing()
     }
 
+    /// Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte
+    /// courant, et une émission au nom d'un autre partagerait SA position (#18166, iso du ticket Android).
+    private var isLive: Bool {
+        !abandoned && !owner.isEmpty && currentAccount() == owner
+    }
+
     private func locked(_ operation: @MainActor () async -> SharedLocationShareProblem?) async -> SharedLocationShareProblem? {
         await gate.enter()
         defer { gate.leave() }
-        guard !abandoned else { return .refused(.failed) }
+        guard isLive else { return .refused(.failed) }
         isBusy = true
         defer { isBusy = false }
         return await operation()
@@ -221,7 +233,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard !next.isEmpty else { return await stopAll() }
         if let last = lastSent?.fix { return await publish(next, fix: last, previous: roster) }
         guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
-        guard !abandoned else { return .refused(.failed) }
+        guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
     }
 
@@ -229,8 +241,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard let request = SharedLocationStartRequest(recipients: next.recipients, duration: next.serverDuration(now: now()), fix: fix) else {
             return .refused(.invalid)
         }
+        guard isLive else { return .refused(.failed) }
         let verdict = await emitter.start(request)
-        guard !abandoned else { return .refused(.failed) }
+        guard isLive else { return .refused(.failed) }
         switch verdict {
         case .started:
             engage(next, fix: fix)
@@ -244,9 +257,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     private func stopAll() async -> SharedLocationShareProblem? {
-        guard !abandoned else { return .refused(.failed) }
+        guard isLive else { return .refused(.failed) }
         let stopped = await emitter.stop()
-        guard !abandoned else { return .refused(.failed) }
+        guard isLive else { return .refused(.failed) }
         guard stopped else { return .refused(.offline) }
         wipe()
         return nil
@@ -343,6 +356,8 @@ enum SharedLocationSharingHolder {
             emitter: SharedLocationSocketEmitter.shared,
             fixes: SharedLocationFixSource(),
             store: UserDefaultsSharedLocationRosterStore(userId: userId),
+            owner: userId,
+            currentAccount: { AuthManager.shared.currentUser?.id },
             socketReady: MessageSocketManager.shared.$connectionState
                 .map { $0 == .connected }
                 .removeDuplicates()

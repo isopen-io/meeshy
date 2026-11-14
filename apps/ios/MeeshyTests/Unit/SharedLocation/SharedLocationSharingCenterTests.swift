@@ -13,6 +13,13 @@ final class SharedLocationSharingCenterTests: XCTestCase {
     private let bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
     private let t0 = Date(timeIntervalSince1970: 1_000_000)
 
+    private let me = "cccccccccccccccccccccccc"
+    private let account = Account()
+
+    private final class Account {
+        var current: String? = "cccccccccccccccccccccccc"
+    }
+
     private final class Clock {
         var now: Date
         init(_ now: Date) { self.now = now }
@@ -32,6 +39,8 @@ final class SharedLocationSharingCenterTests: XCTestCase {
             fixes: fixes,
             store: store,
             now: { clock.now },
+            owner: me,
+            currentAccount: { [account] in account.current },
             wakes: wakes,
             socketReady: sockets.eraseToAnyPublisher()
         )
@@ -40,7 +49,7 @@ final class SharedLocationSharingCenterTests: XCTestCase {
 
     /// Laisse tourner les tâches en vol jusqu'à ce que la condition tienne.
     private func settle(until condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() { await Task.yield() }
+        for _ in 0..<2_000 where !condition() { await Task.yield() }
     }
 
     // MARK: - La liste
@@ -368,6 +377,28 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertFalse(fixes.isFollowing)
     }
 
+    func test_anotherAccountOnTheSocket_neverReceivesThisShare() async {
+        let store = FakeSharedLocationRosterStore()
+        let (sut, emitter, _, clock) = makeSUT(store: store)
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .oneHour)
+        let sent = emitter.starts.count
+
+        account.current = "dddddddddddddddddddddddd"
+        clock.now = t0.addingTimeInterval(3601)
+        sockets.send(())
+        await wakes.fireLast()
+        await sut.didMove(to: SharedLocationFix(latitude: 49.0, longitude: 2.5)!)
+        await settle { false }
+        let stopped = await sut.stopSharing(with: alice)
+
+        XCTAssertEqual(emitter.starts.count, sent)
+        XCTAssertTrue(emitter.updates.isEmpty)
+        XCTAssertEqual(emitter.stops, 0)
+        XCTAssertEqual(stopped, .refused(.failed))
+        XCTAssertNotNil(store.kept?.entry(for: alice))
+    }
+
     func test_theRowStays_whileAShareRuns_evenBelowFriend() async {
         let (sut, _, _, _) = makeSUT()
 
@@ -388,10 +419,13 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
     /// Un accusé qui tarde : l'envoi reste en vol jusqu'à `releaseStarts()` / `releaseUpdates()`.
     var holdsStarts = false
     var holdsUpdates = false
-    private(set) var starts: [SharedLocationStartRequest] = []
-    private(set) var updates: [SharedLocationFix] = []
-    private(set) var stops = 0
     private let lock = NSLock()
+    private var recordedStarts: [SharedLocationStartRequest] = []
+    private var recordedUpdates: [SharedLocationFix] = []
+    private var recordedStops = 0
+    var starts: [SharedLocationStartRequest] { lock.withLock { recordedStarts } }
+    var updates: [SharedLocationFix] { lock.withLock { recordedUpdates } }
+    var stops: Int { lock.withLock { recordedStops } }
     private var startGate: [CheckedContinuation<Void, Never>] = []
     private var updateGate: [CheckedContinuation<Void, Never>] = []
 
@@ -399,19 +433,19 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
     var heldUpdates: Int { lock.withLock { updateGate.count } }
 
     func start(_ request: SharedLocationStartRequest) async -> SharedLocationStartVerdict {
-        starts.append(request)
+        lock.withLock { recordedStarts.append(request) }
         if holdsStarts { await withCheckedContinuation { c in lock.withLock { startGate.append(c) } } }
         return startVerdict
     }
 
     func update(_ fix: SharedLocationFix) async -> SharedLocationStartVerdict {
-        updates.append(fix)
+        lock.withLock { recordedUpdates.append(fix) }
         if holdsUpdates { await withCheckedContinuation { c in lock.withLock { updateGate.append(c) } } }
         return updateVerdict
     }
 
     func stop() async -> Bool {
-        stops += 1
+        lock.withLock { recordedStops += 1 }
         return stopResult
     }
 
