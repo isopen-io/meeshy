@@ -112,7 +112,7 @@ export function QuickActions({ moreLabel, actions, conversationCount }: QuickAct
             onClick={() => setOpened((v) => !v)}
             aria-expanded={opened}
             aria-controls={moreId}
-            className="min-h-11 rounded-chip px-4 text-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press min-h-11 rounded-chip px-4 text-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {moreLabel}

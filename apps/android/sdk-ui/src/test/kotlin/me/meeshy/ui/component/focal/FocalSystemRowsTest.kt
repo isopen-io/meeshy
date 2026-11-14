@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.CallSummaryMetadata
+import me.meeshy.sdk.model.reading.focal.FocalCallParticipants
 import me.meeshy.sdk.model.reading.focal.FocalSpecialRow
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -30,10 +31,11 @@ class FocalSystemRowsTest {
         deleted: Boolean = false,
         system: Boolean = false,
         call: CallSummaryMetadata? = null,
+        participants: FocalCallParticipants.Roster? = null,
     ) = BubbleContent(
         messageId = "m1", text = text, isOutgoing = false, isTranslated = false, originalText = null,
         senderName = null, showSenderName = false, isEdited = false, isDeleted = deleted, createdAtIso = null,
-        isSystem = system, callSummary = call, callIsOutgoing = false,
+        isSystem = system, callSummary = call, callIsOutgoing = false, callParticipants = participants,
     )
 
     private fun call(outcome: CallSummaryMetadata.Outcome = CallSummaryMetadata.Outcome.MISSED) = CallSummaryMetadata(
@@ -76,4 +78,26 @@ class FocalSystemRowsTest {
         compose.onNodeWithText("Missed voice call").performTouchInput { longClick() }
         assertThat(longPressed).isEqualTo(1)
     }
+
+    @Test fun `la carte nomme ses participants sous son titre, moi en dernier`() {
+        val roster = FocalCallParticipants.Roster(others = listOf("Awa", "Karim", "Lina"), viewerTookPart = true)
+        show(content(system = true, call = call(CallSummaryMetadata.Outcome.COMPLETED), participants = roster))
+        compose.onNodeWithText("Awa, Karim, Lina, and you").assertExists()
+    }
+
+    @Test fun `la ligne des participants est lue avec la carte`() {
+        val roster = FocalCallParticipants.Roster(others = listOf("Awa"), viewerTookPart = true)
+        show(content(system = true, call = call(CallSummaryMetadata.Outcome.COMPLETED), participants = roster))
+        compose.onNode(hasContentDescriptionContaining("Awa and you")).assertExists()
+    }
+
+    @Test fun `sans participants servis la carte ne dessine aucune ligne`() {
+        show(content(system = true, call = call(CallSummaryMetadata.Outcome.COMPLETED)))
+        compose.onNodeWithText("you", substring = true).assertDoesNotExist()
+    }
+
+    private fun hasContentDescriptionContaining(part: String) =
+        androidx.compose.ui.test.SemanticsMatcher("description contains $part") { node ->
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.any { it.contains(part) } == true
+        }
 }

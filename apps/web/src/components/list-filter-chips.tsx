@@ -39,7 +39,7 @@ export function ListFilterChips({
         const active = selection.includes(filter);
         return (
           <li key={filter}>
-            <button type="button" data-list-filter={filter} onClick={() => onToggle(filter)} aria-pressed={active} className={chipClass} style={chipStyle(active)}>
+            <button type="button" data-list-filter={filter} onClick={() => onToggle(filter)} aria-pressed={active} className={`${chipClass} btn-press`} style={chipStyle(active)}>
               {filterLabel(filter, language)}
             </button>
           </li>
@@ -51,7 +51,7 @@ export function ListFilterChips({
           data-list-filters-more
           onClick={() => setOpened(!opened)}
           aria-expanded={opened}
-          className={chipClass}
+          className={`${chipClass} btn-press`}
           style={chipStyle(false)}
         >
           {rowMenuText(language, 'listFilter.more')}

@@ -29,21 +29,13 @@ struct ShareLinkEditForm: View {
                 .accessibilityAddTraits(.isHeader)
 
             group {
-                labeledField(ShareLinkDetailCopy.nameField) {
-                    TextField("", text: $draft.name)
-                        .textInputAutocapitalization(.sentences)
-                        .accessibilityLabel(ShareLinkDetailCopy.nameField)
-                }
-                labeledField(ShareLinkDetailCopy.messageField) {
-                    TextField("", text: $draft.description, axis: .vertical)
-                        .lineLimit(2...6)
-                        .accessibilityLabel(ShareLinkDetailCopy.messageField)
-                }
+                LinksFormField(label: ShareLinkDetailCopy.nameField, prompt: nil, text: $draft.name)
+                LinksFormField(label: ShareLinkDetailCopy.messageField, prompt: nil, text: $draft.description, input: .paragraph)
             }
 
             sectionTitle(ShareLinkDetailCopy.limits)
             group {
-                Toggle(ShareLinkDetailCopy.expiration, isOn: hasExpiry)
+                toggleRow(ShareLinkDetailCopy.expiration, isOn: hasExpiry)
                 if let expiresAt = draft.expiresAt {
                     DatePicker(
                         ShareLinkDetailCopy.expires,
@@ -63,15 +55,15 @@ struct ShareLinkEditForm: View {
 
             sectionTitle(ShareLinkDetailCopy.entryConditions)
             group {
-                Toggle(ShareLinkDetailCopy.requireAccount, isOn: $draft.requireAccount)
-                Toggle(ShareLinkDetailCopy.requireNickname, isOn: $draft.requireNickname)
-                Toggle(ShareLinkDetailCopy.requireEmail, isOn: $draft.requireEmail)
-                Toggle(ShareLinkDetailCopy.requireBirthday, isOn: $draft.requireBirthday)
+                toggleRow(ShareLinkDetailCopy.requireAccount, isOn: $draft.requireAccount)
+                toggleRow(ShareLinkDetailCopy.requireNickname, isOn: $draft.requireNickname)
+                toggleRow(ShareLinkDetailCopy.requireEmail, isOn: $draft.requireEmail)
+                toggleRow(ShareLinkDetailCopy.requireBirthday, isOn: $draft.requireBirthday)
             }
 
             sectionTitle(ShareLinkDetailCopy.allowedLanguages)
             group {
-                Toggle(ShareLinkDetailCopy.allLanguages, isOn: allLanguages)
+                toggleRow(ShareLinkDetailCopy.allLanguages, isOn: allLanguages)
                 if !draft.allowedLanguages.isEmpty {
                     languageChips
                 }
@@ -79,10 +71,10 @@ struct ShareLinkEditForm: View {
 
             sectionTitle(ShareLinkDetailCopy.guestRights)
             group {
-                Toggle(InviteLandingCopy.rightMessages, isOn: $draft.guestRights.messages)
-                Toggle(ShareLinkDetailCopy.historyRight, isOn: $draft.guestRights.history)
-                Toggle(InviteLandingCopy.rightImages, isOn: $draft.guestRights.images)
-                Toggle(InviteLandingCopy.rightFiles, isOn: $draft.guestRights.files)
+                toggleRow(InviteLandingCopy.rightMessages, isOn: $draft.guestRights.messages)
+                toggleRow(ShareLinkDetailCopy.historyRight, isOn: $draft.guestRights.history)
+                toggleRow(InviteLandingCopy.rightImages, isOn: $draft.guestRights.images)
+                toggleRow(InviteLandingCopy.rightFiles, isOn: $draft.guestRights.files)
             }
 
             actions
@@ -116,24 +108,15 @@ struct ShareLinkEditForm: View {
     }
 
     private var languageChips: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: MeeshySpacing.sm)], alignment: .leading, spacing: MeeshySpacing.sm) {
-            ForEach(languageCodes, id: \.self) { code in
-                let selected = draft.allowedLanguages.contains(code)
-                Button {
-                    toggleLanguage(code)
-                } label: {
-                    Text(verbatim: LanguageData.autonym(for: code))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .foregroundColor(selected ? .white : (isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900))
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(Capsule().fill(selected ? MeeshyColors.indigo500 : (isDark ? MeeshyColors.indigo900.opacity(0.6) : MeeshyColors.indigo50)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-        }
+        MeeshyChipRow(
+            languageCodes.map { MeeshyChip(id: $0, title: LanguageData.autonym(for: $0)) },
+            selection: Set(draft.allowedLanguages),
+            label: ShareLinkDetailCopy.allowedLanguages,
+            mode: .multiple,
+            layout: .wrap,
+            surface: .theme,
+            onChange: { _, code in toggleLanguage(code) }
+        )
     }
 
     /// La dernière langue ne se retire pas : une liste vide voudrait dire
@@ -168,60 +151,37 @@ struct ShareLinkEditForm: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    private func labeledField<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
-                .accessibilityHidden(true)
-            field()
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.smPlus)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .fill(isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50)
-                )
+    /// Une bascule du formulaire : la ligne du kit, qui se touche tout entière.
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        MeeshyToggleRow(title, accessory: .toggle(isOn: isOn.wrappedValue)) {
+            isOn.wrappedValue.toggle()
         }
+        .padding(.horizontal, -MeeshySpacing.lg)
     }
 
     /// Un champ numérique où VIDE veut dire « illimité » — la valeur que la
     /// passerelle reçoit alors en `null` explicite.
     private func limitField(_ label: String, value: Binding<Int?>) -> some View {
-        HStack {
-            Text(label)
-            Spacer(minLength: MeeshySpacing.md)
-            TextField(
-                ShareLinkDetailCopy.unlimited,
-                text: Binding(
-                    get: { value.wrappedValue.map(String.init) ?? "" },
-                    set: { value.wrappedValue = Int($0.filter(\.isNumber)) }
-                )
-            )
-            .keyboardType(.numberPad)
-            .multilineTextAlignment(.trailing)
-            .frame(maxWidth: 120)
-            .accessibilityLabel(label)
-        }
+        LinksFormField(
+            label: label,
+            prompt: ShareLinkDetailCopy.unlimited,
+            text: Binding(
+                get: { value.wrappedValue.map(String.init) ?? "" },
+                set: { value.wrappedValue = Int($0.filter(\.isNumber)) }
+            ),
+            input: .numeric
+        )
     }
 
     private var actions: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
-            Button(action: onSave) {
-                ZStack {
-                    Text(ShareLinkDetailCopy.save).opacity(isSaving ? 0 : 1)
-                    if isSaving { ProgressView().tint(.white) }
-                }
-                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy))
-                .foregroundStyle(Color.white)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(
-                    LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.purple600], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
-                .opacity(canSave || isSaving ? 1 : 0.45)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSave)
+            MeeshySplitActionButton(
+                ShareLinkDetailCopy.save,
+                phase: isSaving ? .busy(progress: nil, title: ShareLinkDetailCopy.save) : .ready,
+                width: .fill,
+                isEnabled: canSave,
+                action: onSave
+            )
             .accessibilityIdentifier("share-link-save")
 
             HStack(spacing: MeeshySpacing.smPlus) {

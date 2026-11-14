@@ -147,6 +147,7 @@
     <string name="bubble_story_citation_open_hint">Öffnet die zitierte Story</string>
     <string name="bubble_story_citation_unavailable">Story nicht verfügbar</string>
     <string name="bubble_translated">Übersetzt</string>
+    <string name="call_card_participants_you">du</string>
     <string name="capture_microphone_denied">Mikrofon verweigert — das Video bleibt stumm. Zum Öffnen der Einstellungen tippen</string>
     <string name="code_viewer_load_error">Datei konnte nicht geladen werden</string>
     <string name="code_viewer_loading">Laden...</string>

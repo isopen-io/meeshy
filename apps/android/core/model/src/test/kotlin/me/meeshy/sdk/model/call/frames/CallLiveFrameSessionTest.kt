@@ -94,6 +94,34 @@ class CallLiveFrameSessionTest {
         assertThat(step.send).isEmpty()
     }
 
+    /**
+     * #18367 — le retrait reçu d'un cadre PARTAGÉ le fait tomber chez moi, et le pas dit qui l'a relâché, pour que le lecteur
+     * d'écran annonce pourquoi l'image a changé (« Awa a retiré le cadre », iOS #18415). Sans prénom partagé, l'annonce est
+     * anonyme. Mêmes vecteurs que iOS `peerReleaseDropsMine`.
+     */
+    @Test
+    fun `#18367 - le retrait recu du cadre partage dit qui l'a relache`() {
+        val shared = CallLiveFrameState(frameId = frame, peerFrameId = frame, remoteSharedName = "Awa")
+        assertThat(CallLiveFrameMachine.receive(shared, event(null), call, "Ana").peerRelease).isEqualTo(CallLiveFramePeerRelease("Awa"))
+
+        val anonymous = CallLiveFrameState(frameId = frame, peerFrameId = frame)
+        assertThat(CallLiveFrameMachine.receive(anonymous, event(null), call, "Ana").peerRelease).isEqualTo(CallLiveFramePeerRelease(null))
+    }
+
+    @Test
+    fun `#18367 - rien ne s'annonce quand c'est moi qui relache, ni quand rien de partage ne tombe`() {
+        val shared = CallLiveFrameState(frameId = frame, peerFrameId = frame, remoteSharedName = "Awa")
+        assertThat(CallLiveFrameMachine.apply(shared, null, "Ana").peerRelease).isNull()
+
+        val mine = CallLiveFrameState(frameId = other, peerFrameId = frame, remoteSharedName = "Awa")
+        assertThat(CallLiveFrameMachine.receive(mine, event(null), call, "Ana").peerRelease).isNull()
+
+        val pending = CallLiveFrameMachine.receive(CallLiveFrameState(), event(other, name = "Awa"), call, "Ana")
+        assertThat(pending.peerRelease).isNull()
+        assertThat(CallLiveFrameMachine.receive(pending.state, event(null), call, "Ana").peerRelease).isNull()
+        assertThat(CallLiveFrameMachine.receive(shared, event(other), call, "Ana").peerRelease).isNull()
+    }
+
     @Test
     fun `l'autre relache son cadre alors que j'en montre un autre - je garde le mien`() {
         val mine = CallLiveFrameState(frameId = other, peerFrameId = frame)
@@ -115,6 +143,8 @@ class CallLiveFrameSessionTest {
         assertThat(awaAfter.state.frameId).isNull()
         assertThat(awaAfter.state.proposal).isNull()
         assertThat(awaAfter.send).isEmpty()
+        assertThat(awaAfter.peerRelease).isEqualTo(CallLiveFramePeerRelease("Ana"))
+        assertThat(anaReleases.peerRelease).isNull()
     }
 
     private fun wire(outgoing: CallLiveFrameOutgoing) =
