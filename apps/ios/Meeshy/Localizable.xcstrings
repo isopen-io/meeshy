@@ -338106,43 +338106,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@ %% من الشرارات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@ %% Funken"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@%% sparks"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@ %% de chispas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@ %% d’étincelles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %%"
+            "value": "+%@ %% di scintille"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@%%"
+            "value": "+%@%% de faíscas"
           }
         }
       }

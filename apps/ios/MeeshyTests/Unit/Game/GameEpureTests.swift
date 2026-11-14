@@ -754,7 +754,11 @@ final class GameEpureTests: XCTestCase {
         XCTAssertEqual(catalog["game.concept.flame.use"]?["fr"], "Éteinte, elle se rallume avec des Meeshes pendant 48 h.")
         XCTAssertEqual(catalog["game.guide.step.flame.means"]?["fr"], "Une Veilleuse la garde allumée un jour d’absence.")
         XCTAssertEqual(catalog["game.flame_panel.bonus.question"]?["fr"], "Que rapporte ma Flamme ?")
-        XCTAssertEqual(catalog["game.flame_panel.bonus_chip"]?["fr"], "+%@ %%")
+        XCTAssertEqual(catalog["game.flame_panel.bonus_chip"]?["fr"], "+%@ %% d’étincelles", "un pourcentage seul ne dit pas ce qu'il augmente, ni à l'œil ni au lecteur d'écran")
+        for language in Self.otherLanguages {
+            let chip = try XCTUnwrap(catalog["game.flame_panel.bonus_chip"]?[language], language)
+            XCTAssertGreaterThan(chip.replacingOccurrences(of: "%@", with: "").filter(\.isLetter).count, 2, "\(language) : la pastille nomme ce qu'elle augmente")
+        }
         let panel = try code("Meeshy/Features/Game/GameFlamePanelView.swift")
         XCTAssertTrue(panel.contains("MeeshyInfoNoted(note: bonusNote"))
         XCTAssertTrue(panel.contains("game.flame_panel.bonus_chip"))

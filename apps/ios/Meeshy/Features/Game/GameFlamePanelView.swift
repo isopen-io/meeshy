@@ -36,7 +36,7 @@ struct GameFlamePanelView: View {
         GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: missing), identifier: identifier)
     }
 
-    /// La valeur est au repos (« +10 % »), la règle qui la produit derrière un (i) : « Que rapporte ma Flamme ? ».
+    /// La valeur est au repos, nommée par ce qu'elle augmente (« +10 % d'étincelles »), la règle qui la produit derrière un (i) : « Que rapporte ma Flamme ? ».
     private var bonusNote: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "game.flame_panel.bonus.question", defaultValue: "Que rapporte ma Flamme ?", bundle: .main),
@@ -53,7 +53,7 @@ struct GameFlamePanelView: View {
             MeeshyInfoNoted(note: bonusNote, openNoteID: $openNoteID, tint: ThemeManager.shared.textMuted) {
                 Text(String(
                     localized: "game.flame_panel.bonus_chip",
-                    defaultValue: "+\(GameCopy.formatCount(min(100, max(0, flame.bonusPercent)))) %",
+                    defaultValue: "+\(GameCopy.formatCount(min(100, max(0, flame.bonusPercent)))) % d’étincelles",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
