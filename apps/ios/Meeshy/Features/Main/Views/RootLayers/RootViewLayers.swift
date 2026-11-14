@@ -259,8 +259,8 @@ struct RootChromeLayer: ViewModifier {
                     peekIsOpen: peekPresence.isOpen),
                 onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
-            .animation(.spring(), value: showMenu)
+            .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: showFeed)
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: showMenu)
             // L'onboarding post-inscription (#7729), DERNIER calque du chrome :
             // un `.overlay` ne recouvre que ce qui est chaîné avant lui. Posé
             // plus tôt, la pastille de synchronisation — « Synchronisation »,
@@ -293,6 +293,16 @@ struct RootSheetsLayer: ViewModifier {
     /// La porte de citation, posée par la couche la plus EXTERNE (#15911) :
     /// les feuilles de profil ci-dessous et toutes les pages en héritent.
     let quoteHost: QuoteComposerHost
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    /// Montre ou cache le fil : ressort rapide, fondu court sous réduction.
+    private func setFeed(_ isShown: Bool) {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduce) {
+            showFeed = isShown
+        }
+    }
 
     func body(content: Content) -> some View {
         content
@@ -361,23 +371,17 @@ struct RootSheetsLayer: ViewModifier {
             .adaptiveOnChange(of: router.path) { _, newPath in
                 if !newPath.isEmpty && showFeed {
                     feedWasVisibleBeforeNav = true
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showFeed = false
-                    }
+                    setFeed(false)
                 } else if newPath.isEmpty && feedWasVisibleBeforeNav {
                     feedWasVisibleBeforeNav = false
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showFeed = true
-                    }
+                    setFeed(true)
                 }
             }
             // Accès rapide « Publier un post » (liste de conversations): le flux se montre, et `ThemedFeedOverlay`
             // consomme le drapeau en ouvrant son composeur.
             .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
                 guard pending, !showFeed else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showFeed = true
-                }
+                setFeed(true)
             }
             // `initial: true` covers the cold-launch race where a Universal
             // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
