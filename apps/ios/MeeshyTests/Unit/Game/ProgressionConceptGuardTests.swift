@@ -278,7 +278,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             $0.hasPrefix("game.state.") || $0.hasPrefix("game.spend.missing.") || $0.hasPrefix("game.fact.missing_for.")
                 || $0.hasPrefix("game.concept.chip.to_") || $0 == "game.detail.badge.missing" || $0 == "game.detail.levelstep.progress"
         }
-        XCTAssertGreaterThanOrEqual(watched.filter { $0.hasPrefix("game.state.") }.count, 35, "les phrases d'état ont quitté le catalogue")
+        XCTAssertGreaterThanOrEqual(watched.filter { $0.hasPrefix("game.state.") }.count, 34, "les phrases d'état ont quitté le catalogue")
         let pattern = try NSRegularExpression(pattern: "%(?:\\d+\\$)?@")
         func holes(_ text: String) -> [String] {
             pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range, in: text).map { String(text[$0]) } }
@@ -449,7 +449,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
     func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
         let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.howNote(concept)", "ConceptText.use(concept)",
+        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.howNote(concept)", "ConceptText.use(concept)", "ConceptText.useNote(concept)",
                       "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
         }

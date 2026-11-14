@@ -160,7 +160,7 @@ final class GameEpureTests: XCTestCase {
     /// Ni `level.what` ni les règles ne le disent ; retirer la phrase la rendait introuvable.
     func test_levelConcept_saysTheJoustAndAllianceStayOpen_whenTheLevelDrops_inEveryLanguage() throws {
         let catalog = try Self.catalog()
-        let use = try XCTUnwrap(catalog["game.concept.level.use"])
+        let use = try XCTUnwrap(catalog["game.concept.level.use_cases"])
         let stayOpen: [String: String] = ["fr": "le restent", "en": "stay open", "es": "siguen abiertas", "pt-BR": "continuam abertos",
                                           "de": "bleiben Turnier und Bündnis offen", "it": "restano aperti", "ar": "مفتوحين"]
         for (language, fragment) in stayOpen {
@@ -250,11 +250,13 @@ final class GameEpureTests: XCTestCase {
         "level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige", "elans", "badges", "defis", "succes",
         "showcase", "atlas",
     ]
+    /// Quatre concepts dont le carnet lit la phrase de la fiche (`ConceptText.what`) : leur propre clé n'existe plus.
+    private static let glossaryReadsTheSheet: Set<String> = ["points", "meesh", "league", "showcase"]
     private static let conceptsWithoutASheet = ["chest", "treasury", "steps", "tailwind", "duo"]
 
     func test_glossary_aConceptWithASheet_isOneSentence_inEveryLanguage() throws {
         let catalog = try Self.catalog()
-        for concept in Self.conceptsWithASheet {
+        for concept in Self.conceptsWithASheet where !Self.glossaryReadsTheSheet.contains(concept) {
             let key = "game.rules.concept.\(concept).body"
             for language in ["fr"] + Self.otherLanguages {
                 let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
@@ -326,7 +328,7 @@ final class GameEpureTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("Flamme de 7 jours"), "les exemples ne sont plus au repos")
         XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.when.note"]?["fr"]).contains("Flamme de 7 jours"), "…mais ils ne sont pas perdus")
         XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.when"]?["fr"]).hasSuffix("?"), "le nom du (i) est une question")
-        XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("Mee et Meo"), "le repère propre à Meeshy reste visible")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.when.note"]?["fr"]).contains("une photo avec Mee et Meo"), "la précision rejoint le (i)")
     }
 
     func test_rulesNotebook_stepCard_keepsWhatAndNext_andPutsMeansBehindAnInfoButton() throws {
@@ -603,16 +605,16 @@ final class GameEpureTests: XCTestCase {
     // MARK: - Épure 3/3 : une règle n'est dite qu'une fois par page, le prix et le solde restent aux valeurs (#17687)
 
     private static let frenchThirdPass: [String: String] = [
-        "game.notebook.empty": "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
+        "game.notebook.empty": "Ta Chronique attend sa première page.",
         "game2.duo.none": "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.",
         "game.flame_panel.relight_missing_window": "Rallumage possible dans les 48 h qui suivent l’extinction.",
-                "game.concept.flame.use": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.",
+        "game.concept.flame.use": "Éteinte, elle se rallume avec des Meeshes pendant 48 h.",
         "game.concept.points.tip.1": "Reviens chaque jour : une Flamme allumée nourrit tes étincelles.",
         "game.concept.showcase.use": "Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul.",
         "game.concept.defis.use": "Ouvre la liste : chaque palier dit sa rareté.",
         "game.concept.succes.use": "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire.",
-        "game.concept.missions.use": "Ouvre un acte pour voir où tu en es. L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.",
-        "game.concept.season.use": "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.",
+        "game.concept.missions.use": "Ouvre un acte pour voir où tu en es.",
+        "game.concept.season.use": "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage.",
         "game.concept.atlas.use": "Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit.",
     ]
 
@@ -640,7 +642,6 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         XCTAssertFalse(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("appareil"), "le pied de page le dit")
         XCTAssertEqual(catalog["game.notebook.device_only"]?["fr"], "Tes photos vivent sur cet appareil.")
-        XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("Mee et Meo"), "le repère reste visible")
         XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.when.note"]?["fr"]).contains("Flamme de 7 jours"), "les exemples restent derrière le (i)")
     }
 
@@ -680,9 +681,146 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.atlas.use"]?["fr"]).contains("privé par défaut"))
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.showcase.use"]?["fr"]).contains("ne rapporte rien"))
-        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.season.use"]?["fr"]).contains("Sceau du voyage"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.season.use_cases"]?["fr"]).contains("Sceau du voyage"), "le cas particulier est derrière son (i)")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.duo.none"]?["fr"]).contains("la récompense double"))
         let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
         XCTAssertTrue(page.contains("sentence(ConceptText.how(concept))"))
+    }
+
+    // MARK: - Épure 2/3 : la phrase d'usage au repos, les cas particuliers derrière un (i), une règle une fois (#17687)
+
+    private static let conceptsWithUseCases = ["level", "glory", "missions", "league", "season", "badges"]
+
+    func test_useCases_everyOneIsBehindTheSameQuestion_andTheUseSentenceNoLongerCarriesIt() throws {
+        for raw in Self.conceptsWithUseCases {
+            let concept = try XCTUnwrap(ProgressionConcept(rawValue: raw))
+            let note = try XCTUnwrap(ConceptText.useNote(concept), raw)
+            XCTAssertEqual(note.question, ConceptText.ficheUseCases, "le nom du (i) est la question")
+            XCTAssertTrue(note.question.hasSuffix("?") || note.question.hasSuffix("؟"), "une question, jamais « Plus d'infos »")
+            XCTAssertFalse(note.text.isEmpty, "la note reste lue : \(raw)")
+            XCTAssertFalse(ConceptText.use(concept).contains(note.text), "\(raw) : le cas particulier a quitté le repos")
+        }
+        for concept in ProgressionConcept.allCases where !Self.conceptsWithUseCases.contains(concept.rawValue) {
+            XCTAssertNil(ConceptText.useNote(concept), "\(concept.rawValue) n'a pas de cas particulier : pas de (i) vide")
+        }
+    }
+
+    func test_useCases_theNotesCarryWhatLeftTheScreen_inEveryLanguage_neverCopiedFromFrench() throws {
+        let catalog = try Self.catalog()
+        let marks = ["level": "le restent", "league": "lundi", "season": "Sceau du voyage", "badges": "frappe", "glory": "Oracle", "missions": "Offrande"]
+        for (concept, fragment) in marks {
+            let key = "game.concept.\(concept).use_cases"
+            let french = try XCTUnwrap(catalog[key]?["fr"], key)
+            XCTAssertTrue(french.contains(fragment), "\(key) : « \(french) »")
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+            }
+        }
+        let question = "game.fiche.use.cases_question"
+        for language in ["fr"] + Self.otherLanguages { XCTAssertFalse((catalog[question]?[language] ?? "").isEmpty, "\(question) [\(language)]") }
+    }
+
+    func test_useSentences_keepTheirLandmarkAtRest_andLeaveTheEdgeCasesBehind() throws {
+        let catalog = try Self.catalog()
+        func fr(_ key: String) throws -> String { try XCTUnwrap(catalog[key]?["fr"], key) }
+        XCTAssertTrue(try fr("game.concept.level.use").contains("la joute au 10"), "les seuils restent au repos")
+        XCTAssertFalse(try fr("game.concept.level.use").contains("même quand ton niveau baisse"))
+        XCTAssertTrue(try fr("game.concept.league.use").contains("Joute des amis reste toujours ouverte"), "le consentement de la joute publique reste visible")
+        XCTAssertFalse(try fr("game.concept.league.use").contains("chaque lundi"))
+        XCTAssertFalse(try fr("game.concept.badges.use").contains("Une frappe n’en éteint aucune"))
+        XCTAssertEqual(try fr("game.concept.elans.use"), "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.")
+        let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(page.contains("MeeshyInfoNoted(note: ConceptText.useNote(concept)"), "la fiche pose le (i) des cas particuliers")
+    }
+
+    func test_glossary_fourEntriesReadTheSheetSentence_theirOwnKeyIsGoneFromEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        for concept in ["showcase", "points", "meesh", "league"] {
+            XCTAssertNil(catalog["game.rules.concept.\(concept).body"], "\(concept) : une seconde formulation de la fiche")
+            XCTAssertFalse((catalog["game.concept.\(concept).what"]?["fr"] ?? "").isEmpty, "la fiche garde sa phrase")
+            let key = try XCTUnwrap(ProgressionConcept(rawValue: concept))
+            XCTAssertEqual(GameRulesGlossary.body(.concept(key)), ConceptText.what(key), "le carnet lit la même source que la fiche")
+        }
+        XCTAssertEqual(catalog["game.concept.showcase.what"]?["fr"], "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.")
+    }
+
+    func test_flameBonusRule_isSaidOnce_behindTheQuestionOfThePanel_andTheChipShowsTheValue() throws {
+        let catalog = try Self.catalog()
+        let rules = ["game.flame_panel.bonus", "game.concept.flame.use", "game.guide.step.flame.means"]
+        for language in ["fr"] + Self.otherLanguages {
+            let saying = rules.filter { (catalog[$0]?[language] ?? "").contains("%") }
+            XCTAssertEqual(saying, ["game.flame_panel.bonus"], "\(language) : la règle « par jour, jusqu'à un plafond » n'est dite qu'une fois, dans la note du (i)")
+        }
+        XCTAssertEqual(catalog["game.concept.flame.use"]?["fr"], "Éteinte, elle se rallume avec des Meeshes pendant 48 h.")
+        XCTAssertEqual(catalog["game.guide.step.flame.means"]?["fr"], "Une Veilleuse la garde allumée un jour d’absence.")
+        XCTAssertEqual(catalog["game.flame_panel.bonus.question"]?["fr"], "Que rapporte ma Flamme ?")
+        XCTAssertEqual(catalog["game.flame_panel.bonus_chip"]?["fr"], "+%@ %%")
+        let panel = try code("Meeshy/Features/Game/GameFlamePanelView.swift")
+        XCTAssertTrue(panel.contains("MeeshyInfoNoted(note: bonusNote"))
+        XCTAssertTrue(panel.contains("game.flame_panel.bonus_chip"))
+        XCTAssertFalse(panel.contains("GameNote(text: String(\n                localized: \"game.flame_panel.bonus\""), "la règle n'est plus au repos")
+    }
+
+    func test_shadowRefusal_isOneSentence_readByOneKey() throws {
+        let catalog = try Self.catalog()
+        XCTAssertNil(catalog["game.frappe.refused.shadow"], "supprimée de toutes les langues")
+        XCTAssertEqual(catalog["game.mint.blocked.debt_plain"]?["fr"], "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont.")
+        XCTAssertFalse(try code("Meeshy/Features/Game/Choreography/MintCeremonyLayers.swift").contains("game.frappe.refused.shadow"))
+        XCTAssertNotNil(catalog["game.mint.blocked.debt"]?["fr"], "le message qui garde le nombre d'étincelles reste")
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(catalog["game.mint.blocked.debt_plain"]?[language], language)
+            XCTAssertEqual(value.components(separatedBy: ". ").count, 1, "\(language) : une phrase")
+        }
+    }
+
+    func test_chronicleEmpty_isOneLine_andThePhotoWithMeeAndMeoMovesBehindTheInfoButton() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(catalog["game.notebook.empty"]?["fr"], "Ta Chronique attend sa première page.")
+        let note = try XCTUnwrap(catalog["game.notebook.when.note"]?["fr"])
+        XCTAssertTrue(note.contains("une photo avec Mee et Meo"))
+        XCTAssertTrue(note.contains("signe de tes aïeux"))
+        for language in Self.otherLanguages {
+            XCTAssertNotEqual(catalog["game.notebook.empty"]?[language], catalog["game.notebook.empty"]?["fr"], language)
+        }
+    }
+
+    func test_lockedDoors_sayTheThresholdAndWhereYouAre_inOneLine_theWhyIsInTheSheet() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(catalog["game2.league.locked"]?["fr"], "La joute s’ouvre au niveau %1$@ · tu es au niveau %2$@")
+        XCTAssertEqual(catalog["game.missions.locked"]?["fr"], "Le rêve s’ouvre au niveau 5 · tu es au niveau %@.")
+        for key in ["game2.league.locked", "game.missions.locked"] {
+            let french = try XCTUnwrap(catalog[key]?["fr"])
+            XCTAssertLessThanOrEqual(french.count, 60, key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+                XCTAssertEqual(specifiers(in: value), specifiers(in: french), "\(key) [\(language)] : mêmes marqueurs")
+            }
+        }
+        XCTAssertFalse((catalog["game.concept.league.why"]?["fr"] ?? "").isEmpty, "le « à quoi ça sert » reste à la fiche")
+    }
+
+    private static let frenchStateLines: [String: String] = [
+        "game.state.points.ready_plain": "Ta lumière compte %1$@ : de quoi frapper la Meesh n° %2$@.",
+        "game.state.points.missing_plain": "Ta lumière compte %1$@ : il manque %2$@ pour la Meesh n° %3$@.",
+        "game.state.season.progress": "Voyage %1$@ · halte %2$@ sur %3$@",
+        "game.state.missions.progress": "Le rêve de cette nuit : %1$@ sur %2$@ actes, %3$@ à réaliser.",
+        "game.state.missions.claimed": "Le rêve de cette nuit : %1$@ sur %2$@ actes. L’Offrande est ouverte.",
+    ]
+
+    func test_stateLines_keepOnlyTheValuesTheHeadDoesNotShow_theRestIsInTheTappableFacts() throws {
+        let catalog = try Self.catalog()
+        for (key, expected) in Self.frenchStateLines {
+            XCTAssertEqual(catalog[key]?["fr"], expected, key)
+            XCTAssertLessThanOrEqual(expected.count, 80, "\(key) : au plus 80 caractères")
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, expected, "\(key) [\(language)] : copié du français")
+                XCTAssertEqual(specifiers(in: value), specifiers(in: expected), "\(key) [\(language)] : mêmes marqueurs que le français")
+            }
+        }
+        XCTAssertNil(catalog["game.state.points.ready"], "fusionnée avec sa jumelle sans conversion")
+        XCTAssertNil(catalog["game.state.points.missing"], "fusionnée avec sa jumelle sans conversion")
     }
 }
