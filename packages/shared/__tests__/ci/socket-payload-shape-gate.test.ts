@@ -37,7 +37,8 @@
 // ─── Ce que la garde vérifie ───────────────────────────────────────────────
 //
 // Pour chaque événement serveur→client qu'Android décode : tout champ du
-// miroir Kotlin NON-NULLABLE et SANS DÉFAUT (après `@SerialName`) doit exister
+// miroir Kotlin NON-NULLABLE et SANS DÉFAUT — ou marqué `@Required`, que
+// kotlinx exige MALGRÉ son défaut — (après `@SerialName`) doit exister
 // comme clé du type de charge déclaré par `ServerToClientEvents`, et y être
 // NON-OPTIONNEL. Un champ requis absent ⇒ rouge ; un champ requis en face d'un
 // `?:` du contrat ⇒ rouge aussi (le contrat déclare alors que la clé peut
@@ -128,6 +129,8 @@ type KotlinField = {
   readonly type: string;
   readonly nullable: boolean;
   readonly hasDefault: boolean;
+  /** `@Required` : kotlinx exige la clé MÊME quand le champ porte un défaut. */
+  readonly annotatedRequired: boolean;
 };
 
 type KotlinClass = {
@@ -206,7 +209,14 @@ const parseField = (declaration: string): KotlinField | null => {
   /* Un `=` d'affectation, jamais celui de `==`, `!=`, `<=` ou `>=`. */
   const hasDefault = /(^|[^=!<>])=(?!=)/.test(rest);
   const type = (hasDefault ? rest.split(/(^|[^=!<>])=(?!=)/)[0] : rest).trim();
-  return { name: serialName ?? kotlinName, kotlinName, type, nullable: /\?\s*$/.test(type), hasDefault };
+  return {
+    name: serialName ?? kotlinName,
+    kotlinName,
+    type,
+    nullable: /\?\s*$/.test(type),
+    hasDefault,
+    annotatedRequired: /@Required\b/.test(declaration),
+  };
 };
 
 const readKotlin = () => {
@@ -362,6 +372,15 @@ const readContract = (): Map<string, readonly ContractField[]> => {
   return contract;
 };
 
+/**
+ * « Requis au décodage » au sens de kotlinx : pas de défaut et pas de `?`, OU `@Required`, qui
+ * exige la clé malgré un défaut. L'annotation n'est utilisée nulle part aujourd'hui — et c'est
+ * précisément pourquoi elle est traitée ici : un piège qu'on n'a pas encore déclenché reste un
+ * piège, et celui-ci rendrait la garde VERTE à tort.
+ */
+const isRequired = (field: KotlinField): boolean =>
+  field.annotatedRequired || (!field.nullable && !field.hasDefault);
+
 const kotlin = readKotlin();
 const contract = readContract();
 
@@ -402,7 +421,7 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
       if (!mirror || !declared || mirror.customSerializer) continue;
 
       const byName = new Map(declared.map((field) => [field.name, field] as const));
-      for (const required of mirror.fields.filter((field) => !field.nullable && !field.hasDefault)) {
+      for (const required of mirror.fields.filter(isRequired)) {
         const counterpart = byName.get(required.name);
         if (counterpart && !counterpart.optional) continue;
         divergences.set(
