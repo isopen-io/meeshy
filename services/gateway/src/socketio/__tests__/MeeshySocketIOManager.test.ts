@@ -37,7 +37,18 @@ jest.mock('socket.io', () => {
     adapter: { rooms: new Map<string, Set<string>>() },
   };
 
-  const state = { on, emit, to, toEmit, toChain, except, close, sockets, connectionHandler: null as any };
+  // `io.in(room).fetchSockets()` — la porte ADAPTATEUR, celle qui traverse les
+  // nœuds. Le double l'expose parce que la production la prend en PREMIER :
+  // sans elle, un `in is not a function` tombait dans le `catch` et tout témoin
+  // de déconnexion attestait le seul REPLI node-local (#18381 suite).
+  const remoteSockets = new Map<string, unknown[]>();
+  const fetchSockets = jest.fn();
+  const inRoom = jest.fn();
+
+  const state = { on, emit, to, toEmit, toChain, except, close, sockets, inRoom, fetchSockets, remoteSockets, connectionHandler: null as any };
+  inRoom.mockImplementation(((room: string) => ({
+    fetchSockets: async () => remoteSockets.get(room) ?? [],
+  })) as never);
   on.mockImplementation((event: string, handler: unknown) => {
     if (event === 'connection') state.connectionHandler = handler as any;
   });
@@ -47,6 +58,7 @@ jest.mock('socket.io', () => {
       on: (...a: unknown[]) => (state.on as any)(...a),
       emit: (...a: unknown[]) => (state.emit as any)(...a),
       to: (...a: unknown[]) => (state.to as any)(...a),
+      in: (...a: unknown[]) => (state.inRoom as any)(...a),
       close: (...a: unknown[]) => (state.close as any)(...a),
       get sockets() { return state.sockets; },
     })),
@@ -841,96 +853,71 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('Socket operations', () => {
-    it('isUserInConversationRoom returns false when user has no tracked sockets', () => {
-      expect(manager.isUserInConversationRoom('ghost', 'conv-1')).toBe(false);
+    it('disconnectUser rend false pour un compte sans aucune socket', async () => {
+      await expect(manager.disconnectUser('ghost')).resolves.toBe(false);
     });
 
-    it('isUserInConversationRoom returns false when socket not found', () => {
+    it('disconnectUser rend false quand la socket suivie a disparu de la carte', async () => {
       (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
-      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(false);
     });
 
-    it('isUserInConversationRoom returns true when socket is in room', () => {
-      const rooms = new Set(['conversation:conv-1']);
-      const fakeSocket = { rooms };
+    it('disconnectUser ferme la socket locale et rend true', async () => {
+      const fakeSocket = { id: 'sock-1', disconnect: jest.fn() };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
       (manager as any).userSockets.set('user-1', new Set(['sock-1']));
-      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
-    });
-
-    it('isUserInConversationRoom returns false when socket lacks the room', () => {
-      const rooms = new Set(['conversation:other']);
-      const fakeSocket = { rooms };
-      ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
-      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
-    });
-
-    it('isUserInConversationRoom returns true when ANY device is in the room (multi-device)', () => {
-      // The latest-promoted socket (sock-web) is NOT in the room, but the phone is.
-      ioState.sockets.sockets.set('sock-phone', { rooms: new Set(['conversation:conv-1']) });
-      ioState.sockets.sockets.set('sock-web', { rooms: new Set(['conversation:other']) });
-      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
-    });
-
-    it('disconnectUser returns false for unknown user', () => {
-      expect(manager.disconnectUser('ghost')).toBe(false);
-    });
-
-    it('disconnectUser returns false when socket not found', () => {
-      (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
-      expect(manager.disconnectUser('user-1')).toBe(false);
-    });
-
-    it('disconnectUser calls socket.disconnect and returns true', () => {
-      const fakeSocket = { disconnect: jest.fn() };
-      ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
-      expect(manager.disconnectUser('user-1')).toBe(true);
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(true);
       expect(fakeSocket.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('disconnectUser closes EVERY device of a multi-device user (force-logout)', () => {
-      const phone = { disconnect: jest.fn() };
-      const web = { disconnect: jest.fn() };
+    it('disconnectUser ferme CHAQUE appareil du compte (force-logout)', async () => {
+      const phone = { id: 'sock-phone', disconnect: jest.fn() };
+      const web = { id: 'sock-web', disconnect: jest.fn() };
       ioState.sockets.sockets.set('sock-phone', phone);
       ioState.sockets.sockets.set('sock-web', web);
       (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
       (manager as any).connectedUsers.set('user-1', {
         id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
       });
-      expect(manager.disconnectUser('user-1')).toBe(true);
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(true);
       expect(phone.disconnect).toHaveBeenCalledWith(true);
       expect(web.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('sendToUser returns false for unknown user', () => {
-      expect(manager.sendToUser('ghost', SERVER_EVENTS.MESSAGE_NEW as any, {} as any)).toBe(false);
+    // #18381 suite — le défaut : la carte `userSockets` et `io.sockets.sockets`
+    // ne voient QUE ce nœud. Une session vivant sur un autre nœud n'était pas
+    // coupée, et la route d'administration répondait « non connecté » pour un
+    // compte qui l'est. La room personnelle traverse l'adaptateur ; la carte
+    // locale non.
+    it('disconnectUser coupe une session qui ne vit PAS sur ce nœud', async () => {
+      const distante = { id: 'sock-autre-noeud', disconnect: jest.fn() };
+      ioState.remoteSockets.set('user:user-1', [distante]);
+
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(true);
+      expect(distante.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('sendToUser emits event to socket and returns true', () => {
-      const fakeSocket = { emit: jest.fn() };
-      ioState.sockets.sockets.set('sock-1', fakeSocket);
+    it('disconnectUser ne ferme pas DEUX FOIS une socket que les deux sources nomment', async () => {
+      const locale = { id: 'sock-1', disconnect: jest.fn() };
+      ioState.sockets.sockets.set('sock-1', locale);
       (manager as any).userSockets.set('user-1', new Set(['sock-1']));
-      const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
-      expect(result).toBe(true);
-      expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+      ioState.remoteSockets.set('user:user-1', [locale]);
+
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(true);
+      expect(locale.disconnect).toHaveBeenCalledTimes(1);
     });
 
-    it('sendToUser emits to EVERY device of a multi-device user', () => {
-      const phone = { emit: jest.fn() };
-      const web = { emit: jest.fn() };
-      ioState.sockets.sockets.set('sock-phone', phone);
-      ioState.sockets.sockets.set('sock-web', web);
-      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
-      const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
-      expect(result).toBe(true);
-      expect(phone.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
-      expect(web.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+    // Un geste de SÉCURITÉ coupe tout ce qu'il peut nommer : une room
+    // personnelle jamais rejointe (son échec n'est que journalisé) laisse la
+    // carte locale seule à connaître la socket.
+    it('disconnectUser ferme quand même les sockets locales si l adaptateur LÈVE', async () => {
+      const locale = { id: 'sock-1', disconnect: jest.fn() };
+      ioState.sockets.sockets.set('sock-1', locale);
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
+      ioState.inRoom.mockImplementationOnce((() => ({ fetchSockets: async () => { throw new Error('adapter down'); } })) as never);
+
+      await expect(manager.disconnectUser('user-1')).resolves.toBe(true);
+      expect(locale.disconnect).toHaveBeenCalledWith(true);
     });
 
     it('broadcast emits to all connected sockets', () => {
@@ -5732,20 +5719,6 @@ describe('MeeshySocketIOManager', () => {
   // l'horodatage, aurait été effacée avec elle. Son successeur nomme les DEUX
   // sous-ensembles, donc il tombe dans les deux sens.
   // -------------------------------------------------------------------------
-
-  // -------------------------------------------------------------------------
-  // 42. sendToUser - returns false when socket missing from sockets map
-  // -------------------------------------------------------------------------
-
-  describe('sendToUser - edge cases', () => {
-    it('returns false when a socket is tracked but missing from the sockets map', () => {
-      (manager as any).userSockets.set('user-no-socket', new Set(['missing-sock']));
-      (manager as any).connectedUsers.set('user-no-socket', {
-        id: 'user-no-socket', socketId: 'missing-sock', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      expect(manager.sendToUser('user-no-socket', SERVER_EVENTS.MESSAGE_NEW as any, {} as any)).toBe(false);
-    });
-  });
 
   // -------------------------------------------------------------------------
   // 43. _broadcastTranslationEvent - error increments stats.errors

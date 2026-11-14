@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.reading.focal.FocalCallParticipants
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
@@ -293,6 +294,8 @@ public object BubbleContentBuilder {
                 null
             },
             callIsOutgoing = message.callSummary?.isOutgoing(currentUserId.orEmpty()) == true,
+            callParticipants = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted }
+                ?.let { FocalCallParticipants.of(it, currentUserId.orEmpty()) },
         )
     }
 

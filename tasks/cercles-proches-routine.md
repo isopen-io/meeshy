@@ -1112,3 +1112,26 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates locaux : `bun test` du lot 97/97 (témoins vus rouges d'abord) ; `tsc --noEmit` vert ; build,
   `check-utilities`, `measure-weight` verts.
 - Prochain lot recommandé : la passerelle #18205 avec #18389, puis #18431, puis #18351 une fois tranchée.
+
+## 2026-11-14 — réveil de l'après-midi : la passerelle tient l'échéance de chaque personne (#18205, serveur + web)
+
+- Reprise : aucune PR cercles ouverte ; #18433 (web) fusionnée. Aucune branche n'écrit `services/sharedLocation/` :
+  lot réservé sur `claude/cercles-18205-echeance-par-personne`.
+- Lot : `location:share-start` accepte `recipients[].expiresInSeconds` (optionnel, entier, au plus 8 h, ramené au
+  terme). La passerelle range l'échéance de chaque destinataire dans l'état scellé (`secret-at-rest`, inchangé) ;
+  `accessOf` ne garde que les destinataires non échus (`liveRecipients`), donc aucun chemin (direct, rattrapage,
+  remontée de cercle, réconciliation) ne sert plus un lecteur échu, sans que l'appareil de l'émetteur tourne ; chaque
+  lecteur reçoit SA propre échéance en `expiresAt`, plus le terme du partage (qui trahissait qu'un autre voyait plus
+  longtemps). Sans la clé (ancien client), le terme vaut pour tous. Le web envoie l'échéance de chaque personne qui
+  tombe avant le terme (`rosterOps.deadlinedRecipients`) et renvoie la liste sans échéances si une passerelle d'avant
+  la refuse (`startTolerant`).
+- Audit adversarial avant PR : aucun bloquant. Corrigés et témoignés : une personne échue pendant l'attente d'un relevé
+  ne part plus (même pour une seconde) ; une échéance rangée illisible ferme l'état au lieu de retomber sur le terme.
+  Assumés et écrits dans la PR : une passerelle d'avant le lot qui réécrit un état (retour arrière, deux versions en
+  déploiement) efface les échéances des sessions touchées ; le code `INVALID` sert aussi au refus « appelant non
+  inscrit », d'où un repli sans échéances possible dans une fenêtre de quelques millisecondes (retombe au
+  comportement d'avant). Suivi ouvert : iOS et Android (#18467).
+- Gates locaux : gateway `jest` `sharedLocation` + handler + admin 11 suites, 197 verts (témoins vus rouges d'abord,
+  mutations prouvées) ; `tsc` gateway et shared verts ; contrat partagé `vitest` 6/6 ; web `bun test` du lot 97/97,
+  `tsc --noEmit`, build, `check-utilities`, `measure-weight` verts.
+- Prochain lot recommandé : #18467 (iOS + Android), puis #18389 (multi-appareils), puis #18431.

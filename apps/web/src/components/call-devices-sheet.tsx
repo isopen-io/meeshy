@@ -72,9 +72,13 @@ function useCallDevices(language: Language): CallDeviceGroups {
   return groups;
 }
 
-/** Les routes natives de la coque, `null` sur le web ou sur une coque qui ne les déclare pas. */
+/** Les routes natives de la coque, `null` sur le web ou sur une coque qui ne les déclare pas. La route en cours est posée sur le magasin de la sortie : « Sortie » s'allume d'après elle (P1.6). */
 function useShellRoutes(): readonly [ShellAudioRoutes | null, (route: ShellAudioRoute) => void] {
-  const [routes, setRoutes] = useState<ShellAudioRoutes | null>(null);
+  const [routes, setShown] = useState<ShellAudioRoutes | null>(null);
+  const setRoutes = (next: ShellAudioRoutes | null) => {
+    setShown(next);
+    callOutputStore.setState({ route: next?.route ?? null });
+  };
   useEffect(() => {
     if (!__SHELL__) return undefined;
     let alive = true;

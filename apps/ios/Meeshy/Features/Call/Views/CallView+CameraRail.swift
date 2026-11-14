@@ -55,7 +55,7 @@ extension CallView {
     func tapCameraMenu(_ tap: CallCameraFoldedTap) {
         let next = CallCameraRail.foldedMenu(isOpen: isCameraMenuUnfolded, after: tap)
         guard next != isCameraMenuUnfolded else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
+        meeshyWithAnimation(.spring(response: 0.3, dampingFraction: 0.85), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
             isCameraMenuUnfolded = next
         }
         if tap == .button { HapticFeedback.light() }

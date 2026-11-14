@@ -47,7 +47,7 @@ import { eventsNamedByClients } from './socket-payload-shape/client-event-reader
 const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['authenticated', 'ÉMIS — `AuthHandler` le pousse à CHAQUE authentification de socket (deux sites). Aucun client ne le cite ; ils lisent l\'accusé de la poignée de main.'],
   ['agent:admin-event', 'ÉMIS — `AgentAdminRelay` vers la room des agents admin. Aucune surface cliente ne le lit.'],
-  ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prête « son unique auditeur (le web) » : le web ne cite ni ce nom ni sa constante."],
+  ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prêtait « son unique auditeur (le web) » ; la prémisse est CORRIGÉE depuis le cycle 161 — aucun client ne cite ce nom ni sa constante, et le raisonnement du cycle 114 tient pour une raison plus forte."],
   ['location:blood-proximity', 'ÉMIS — `bloodProximity.ts`, DEUX `emit` par alerte. Le client du mode Sang n\'est peut-être pas encore écrit (#13928).'],
   ['call:transcription-result', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-enabled', 'ni émis ni lu — dette de contrat.'],

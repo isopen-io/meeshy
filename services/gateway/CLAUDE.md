@@ -2337,9 +2337,22 @@ INCONDITIONNELLEMENT avant de regarder ce qu'elle contient. **Il ne pouvait pas
 rendre `[]`.** Le refus du message dérivé, ancien et gardé par ses propres
 témoins, retirait donc la seule émission qui compte et laissait la liste à 1.
 
-Ce que l'enveloppe seule livre : rien — son unique auditeur (le web) lit
-`data.message` ; iOS et Android n'écoutent que le `message:new` dérivé, celui
-qu'on vient de refuser. Ce que la liste non vide AFFIRME, en revanche, coûte
+Ce que l'enveloppe seule livre : rien — et pour une raison PLUS FORTE que celle
+écrite ici jusqu'au cycle 161. Ce paragraphe lui prêtait « son unique auditeur
+(le web) lit `data.message` » : mesuré, **aucun client ne cite `link:message:new`
+ni sa constante** — ni le web, ni iOS, ni Android (#18342, et le cliquet
+`socket-event-orphan-gate` le tient désormais). L'enveloppe ne livre donc rien à
+PERSONNE ; iOS et Android n'écoutent que le `message:new` dérivé, celui qu'on
+vient de refuser, et le web non plus.
+
+> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation**, au même
+> titre qu'un tri (cycle 86 bis), un compte (cycle 93) ou une contrainte de
+> schéma (cycle 94) — et celle-ci a survécu à la disparition de ce qu'elle
+> décrivait. La conclusion du cycle 114 ne bouge pas (l'enveloppe seule ne
+> livre rien) ; sa PRÉMISSE était fausse, et c'est elle qu'on aurait relue pour
+> décider si l'enveloppe mérite encore d'être émise.
+
+Ce que la liste non vide AFFIRME, en revanche, coûte
 trois signaux (cycle 114) : `count` comptait la remise, `conversationIds` ne
 nommait PAS la conversation (donc rien n'envoyait le client rechercher un
 message qui est pourtant toujours en base), et — `announcesMessageArrival('link-message')`

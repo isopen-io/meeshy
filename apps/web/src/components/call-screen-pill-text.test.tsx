@@ -552,6 +552,60 @@ describe('un toucher range la pilule : UN SEUL verre se resserre autour des sous
   });
 });
 
+/**
+ * #18357 (G1, #17964 point 4) — pilule rangée d'un toucher, « Journal » touché dans le verre des
+ * sous-titres REND les contrôles, et avec eux le journal : ouvert, il le reste (il se range avec la
+ * pilule et revient avec elle) ; fermé, il s'ouvre. Jamais le menu. Mêmes vecteurs qu'iOS (#18237,
+ * `togglePanel` : `opening(.journal)` puis `showControls = true`) et Android (#18250).
+ */
+describe('« Journal » touché pilule rangée rend les contrôles avec le journal (G1, #18357)', () => {
+  test('journal ouvert puis rangé : toucher « Journal » rend les contrôles AVEC le journal, jamais le menu', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    expect(inPill(view, '[data-call-journal-panel]')?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  test('journal fermé, pilule rangée : toucher « Journal » l’ouvre ET rend les contrôles', async () => {
+    const view = mount();
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    view.done();
+  });
+
+  test('en groupe, le même geste rend les contrôles avec le journal', async () => {
+    const view = mount(group);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    view.done();
+  });
+});
+
 describe('au clavier', () => {
   test('Échap ferme le journal, rien d’autre : l’appel n’est pas réduit', async () => {
     const view = mount();

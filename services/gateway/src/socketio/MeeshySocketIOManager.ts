@@ -213,6 +213,7 @@ function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
  * re-export de type s'efface à l'exécution.
  */
 import type { SocketUser } from './utils/socket-helpers.js';
+import { admitUserToConversationRoom } from './midSessionRoomAdmission.js';
 export type { SocketUser };
 
 export interface TranslationNotification {
@@ -3384,79 +3385,58 @@ export class MeeshySocketIOManager {
   }
 
 
-  /**
-   * Vérifie si un utilisateur est dans une salle de conversation.
-   *
-   * Multi-device : un utilisateur peut avoir plusieurs sockets (téléphone + web).
-   * On considère qu'il est dans la salle si N'IMPORTE LAQUELLE de ses sessions
-   * y est — `connectedUsers[...].socketId` ne pointe que sur la dernière session
-   * promue et donnerait un faux négatif quand la conversation est ouverte sur un
-   * autre appareil (ex. suppression de push mal déclenchée). `userSockets` est la
-   * source de vérité multi-device.
-   */
-  isUserInConversationRoom(userId: string, conversationId: string): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds) return false;
-    const room = `conversation:${conversationId}`;
-    for (const socketId of socketIds) {
-      if (this.io.sockets.sockets.get(socketId)?.rooms.has(room)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
 
   /**
-   * Déconnecte un utilisateur spécifique.
+   * Déconnecte un utilisateur spécifique — le geste d'ADMINISTRATION, celui
+   * d'un force-logout ou d'une exclusion.
    *
    * Multi-device : ferme TOUTES les sessions de l'utilisateur (téléphone + web).
    * L'ancienne implémentation ne fermait que `connectedUsers[...].socketId` (la
    * dernière session promue) ; la déconnexion de ce socket promouvait alors une
    * autre session dans `connectedUsers`, laissant l'utilisateur en ligne — un
    * force-logout / bannissement était contournable pour toute session multiple.
-   * On itère sur un snapshot car `disconnect(true)` déclenche `handleDisconnection`
-   * qui mute `userSockets` pendant l'itération.
+   *
+   * **Multi-NŒUD (#18381 suite)** : `userSockets` et `io.sockets.sockets` ne
+   * voient que le nœud courant. Sous l'adaptateur Redis — posé dès que
+   * `REDIS_URL` l'est, ce qui est le cas en production — une session vivant sur
+   * un autre nœud n'était pas coupée, et la route d'administration répondait
+   * `404 « non trouvé ou non connecté »` : un faux négatif qui dit à l'admin
+   * que le compte n'a pas de session alors qu'il en a une, vivante.
+   * `fetchSockets()` traverse l'adaptateur (le même idiome que
+   * `disconnectSession` et `endConversationMembership`).
+   *
+   * Les deux sources sont UNIES, et ce n'est pas une ceinture-bretelles : la
+   * room personnelle peut n'avoir jamais été rejointe (son échec n'est que
+   * journalisé, `_authenticateJWTUser`), auquel cas seule la carte locale
+   * connaît la socket. Un geste de sécurité coupe tout ce qu'il peut nommer.
+   *
+   * On itère sur des snapshots car `disconnect(true)` déclenche
+   * `handleDisconnection`, qui mute `userSockets` pendant l'itération.
    */
-  disconnectUser(userId: string): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return false;
-    let disconnected = false;
-    for (const socketId of [...socketIds]) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
+  async disconnectUser(userId: string): Promise<boolean> {
+    const closed = new Set<string>();
+
+    try {
+      const remote = await this.io.in(ROOMS.user(userId)).fetchSockets();
+      for (const socket of remote) {
         socket.disconnect(true);
-        disconnected = true;
+        closed.add(socket.id);
       }
+    } catch (error) {
+      logger.error(`❌ Déconnexion par adaptateur échouée pour ${userId}: ${error}`);
     }
-    return disconnected;
+
+    for (const socketId of [...(this.userSockets.get(userId) ?? [])]) {
+      if (closed.has(socketId)) continue;
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (!socket) continue;
+      socket.disconnect(true);
+      closed.add(socketId);
+    }
+
+    return closed.size > 0;
   }
 
-  /**
-   * Envoie une notification à un utilisateur spécifique.
-   *
-   * Multi-device : émet sur TOUTES les sessions de l'utilisateur. L'ancienne
-   * implémentation n'émettait que sur `connectedUsers[...].socketId`, perdant
-   * silencieusement l'événement sur les autres appareils. Retourne `true` dès
-   * qu'au moins un socket a reçu l'événement.
-   */
-  sendToUser<K extends keyof ServerToClientEvents>(
-    userId: string,
-    event: K,
-    ...args: Parameters<ServerToClientEvents[K]>
-  ): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return false;
-    let sent = false;
-    for (const socketId of socketIds) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit(event, ...args);
-        sent = true;
-      }
-    }
-    return sent;
-  }
 
   /**
    * Broadcast un message à tous les utilisateurs connectés
@@ -3493,17 +3473,22 @@ export class MeeshySocketIOManager {
    * Called when a user is added to a conversation while already connected
    * (e.g. group invite mid-session) so they immediately receive message:new
    * events without requiring a reconnect.
+   *
+   * La loi vit dans `midSessionRoomAdmission.ts` (#18381) : réessais, marqueur
+   * d'injoignabilité et jonction par adaptateur. Ce site n'est plus qu'un
+   * cablâge de dépendances — tout ce qu'il ferait ici serait hors de portée de
+   * la jumelle d'authentification, qui porte les trois depuis #16687.
    */
   async joinUserToConversationRoom(userId: string, conversationId: string): Promise<void> {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return;
-    const room = ROOMS.conversation(conversationId);
-    await Promise.all(
-      Array.from(socketIds).map(async (socketId) => {
-        const socket = this.io.sockets.sockets.get(socketId);
-        if (!socket) return;
-        await socket.join(room);
-      })
+    await admitUserToConversationRoom(
+      {
+        io: this.io,
+        userSockets: this.userSockets,
+        socketById: (socketId: string) => this.io.sockets.sockets.get(socketId),
+        connectedUsers: this.connectedUsers,
+      },
+      userId,
+      conversationId,
     );
   }
 

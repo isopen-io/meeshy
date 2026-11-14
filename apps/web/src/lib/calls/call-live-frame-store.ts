@@ -11,6 +11,9 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 /** Une proposition reçue : le cadre que l'autre m'invite à appliquer, et le prénom qu'il partage. */
 export type LiveFrameProposal = { readonly frameId: string; readonly from: string | null };
 
+/** L'autre a relâché le cadre que nous partagions (#18367) : ce que le lecteur d'écran dit, avec le prénom qu'il partage. */
+export type LiveFramePeerRelease = { readonly from: string | null };
+
 /** Ce que l'autre a répondu à MA proposition. */
 export type LiveFrameAnswer = { readonly frameId: string; readonly reply: CallLiveFrameReply; readonly from: string | null };
 
@@ -30,11 +33,13 @@ export type CallLiveFrameState = {
   readonly peerFrameId: string | null;
   /** Mon cadre est appliqué chez moi mais la passerelle a refusé de le proposer. */
   readonly notice: 'not-proposed' | null;
+  /** Le cadre partagé est tombé parce que l'autre l'a relâché ; effacé au geste suivant, pour qu'un second retrait se redise. */
+  readonly peerReleased: LiveFramePeerRelease | null;
 };
 
 export type CallLiveFrameStoreApi = StoreApi<CallLiveFrameState>;
 
-export const NO_LIVE_FRAME: CallLiveFrameState = { callId: null, frameId: null, proposal: null, withheld: null, sentProposal: null, answer: null, remoteSharedName: null, peerFrameId: null, notice: null };
+export const NO_LIVE_FRAME: CallLiveFrameState = { callId: null, frameId: null, proposal: null, withheld: null, sentProposal: null, answer: null, remoteSharedName: null, peerFrameId: null, notice: null, peerReleased: null };
 
 export function createCallLiveFrameStore(): CallLiveFrameStoreApi {
   return createStore<CallLiveFrameState>(() => NO_LIVE_FRAME);

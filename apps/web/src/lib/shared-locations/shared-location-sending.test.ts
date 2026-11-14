@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   readSharedLocationAck,
+  sharedLocationPayloadWithoutDeadlines,
   sharedLocationFixOf,
   sharedLocationStartPayloadOf,
   shouldSendSharedLocation,
@@ -33,6 +34,32 @@ describe('un relevé ne part que s’il est sur le globe', () => {
   test('une précision absurde est bornée, une précision invalide est retirée', () => {
     expect(sharedLocationFixOf({ latitude: 1, longitude: 1, accuracy: 10_000_000 })?.accuracy).toBe(100_000);
     expect(sharedLocationFixOf({ latitude: 1, longitude: 1, accuracy: -3 })).toEqual({ latitude: 1, longitude: 1 });
+  });
+});
+
+describe('l’échéance de chaque personne (#18205)', () => {
+  test('elle voyage avec la personne, et se retire d’un seul geste pour une passerelle d’avant', () => {
+    const payload = sharedLocationStartPayloadOf({
+      recipients: [
+        { userId: AMI, precision: 'exact', expiresInSeconds: 600 },
+        { userId: AUTRE, precision: 'city' },
+      ],
+      durationMinutes: 480,
+      fix: PARIS,
+    });
+    expect(payload?.recipients).toEqual([
+      { userId: AMI, precision: 'exact', expiresInSeconds: 600 },
+      { userId: AUTRE, precision: 'city' },
+    ]);
+    expect(payload && sharedLocationPayloadWithoutDeadlines(payload)?.recipients).toEqual([
+      { userId: AMI, precision: 'exact' },
+      { userId: AUTRE, precision: 'city' },
+    ]);
+  });
+
+  test('sans échéance dans la charge, rien à retirer', () => {
+    const payload = sharedLocationStartPayloadOf({ recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60, fix: PARIS });
+    expect(payload && sharedLocationPayloadWithoutDeadlines(payload)).toBeNull();
   });
 });
 

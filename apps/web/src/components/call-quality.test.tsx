@@ -264,14 +264,36 @@ describe('les alertes d’un pair (#8047)', () => {
     }
   });
 
-  test('#16665 — R1 : la capsule se pose sous l’en-tête, hors du fondu du chrome', () => {
+  /* R1.6 (#17963, tranchée le 2026-11-13) : le témoin « hors du fondu du chrome » évolue — la puce se range désormais au premier toucher avec les bannières, comme iOS #18364 et Android #18376. */
+  test('#16665 — R1 : la capsule se pose sous l’en-tête, et se range au premier toucher avec les bannières (R1.6)', () => {
     const html = renderToStaticMarkup(<CallScreen call={call({ media: 'audio', members: { 'u-peer': member({ capturing: true }) } })} canShare={false} />);
     const slot = html.indexOf('data-call-capture-slot');
     expect(slot).toBeGreaterThan(-1);
     expect(html.indexOf('data-call-plane')).toBeLessThan(slot);
-    const opening = html.lastIndexOf('<div', slot);
-    expect(html.slice(opening, slot)).not.toContain('invisible');
-    expect(html.slice(opening, slot)).not.toContain('aria-hidden');
+    const tag = /<[^>]*data-call-capture-slot[^>]*>/.exec(html)?.[0] ?? '';
+    expect(tag).toContain('data-call-stow="top"');
+    expect(tag).not.toContain('aria-hidden');
+  });
+
+  test('R1.2 (#17963) : la puce est en verre teinté rouge du kit, celui du bandeau de partage, jamais un aplat', () => {
+    const html = renderToStaticMarkup(<CallCaptureAlerts members={{ b: member({ userId: 'u-b', name: 'Karim', capturing: true }) }} language="fr" />);
+    const chip = /<span[^>]*data-call-alert="capturing"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(chip.split('class="')[1]?.split('"')[0]?.split(' ')).toContain('glass-call-danger');
+    expect(chip).not.toContain('color-mix');
+    expect(chip).not.toContain('style=');
+  });
+
+  test('R1.2 : deux personnes capturent, UNE puce — celle de la capture la plus récente (comme iOS et Android)', () => {
+    const members = { a: member({ userId: 'u-a', name: 'Awa', capturing: true }), b: member({ userId: 'u-b', name: 'Karim', capturing: true }) };
+    const notes = [
+      { id: 'n1', kind: 'screenshot' as const, userId: 'u-b', name: 'Karim', at: 10 },
+      { id: 'n2', kind: 'recording' as const, userId: 'u-a', name: 'Awa', at: 20 },
+    ];
+    const html = renderToStaticMarkup(<CallCaptureAlerts members={members} notes={notes} language="fr" />);
+    expect(html.split('data-call-alert="capturing"')).toHaveLength(2);
+    expect(html).toContain('Awa capture l’écran de l’appel');
+    const screen = renderToStaticMarkup(<CallScreen call={call({ media: 'audio', members: { 'u-a': members.a, 'u-b': members.b }, journalNotes: notes })} canShare={false} />);
+    expect(screen.split('data-call-alert="capturing"')).toHaveLength(2);
   });
 
   test('l’écran d’appel les montre', () => {

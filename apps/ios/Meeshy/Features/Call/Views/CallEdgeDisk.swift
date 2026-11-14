@@ -43,7 +43,7 @@ struct CallEdgeDisk: View {
     var body: some View {
         ZStack {
             rings
-            CallParticipantVisual(diameter: diameter, ringsInPeerColor: true, callManager: callManager)
+            CallParticipantVisual(diameter: diameter, callManager: callManager)
                 .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
         }
         .frame(width: diameter, height: diameter)

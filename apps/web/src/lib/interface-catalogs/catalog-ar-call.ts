@@ -61,6 +61,7 @@ const arCall = {
   'call.a11y.screen': 'مكالمة مع {name}',
   'call.bubble.callBack': 'معاودة الاتصال',
   'call.bubble.join': 'انضمام',
+  'call.card.participants.you': 'أنت',
   'call.callBack.named': 'معاودة الاتصال بـ {name}',
   'call.you': 'أنت',
   'call.ended.removed': 'تمت إزالتك من المكالمة',

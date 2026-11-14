@@ -381,7 +381,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
       {members.map((member) => {
         const moderated = moderation !== null && moderation.canModerate(member.userId);
         const menu = moderated ? (
-          <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="">
+          <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="" data-call-tile-menu="">
             <kit.ModerationSlot member={member} language={language} moderation={moderation} />
           </div>
         ) : null;

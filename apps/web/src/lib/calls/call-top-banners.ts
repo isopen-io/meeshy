@@ -51,3 +51,64 @@ export const recordingSlotHeight = (card: number): number => Math.max(RECORDING_
 function recordingClearance(card: number): number {
   return recordingSlotHeight(card) + TOP_BANNER_CLEARANCE.recording - RECORDING_SLOT_MIN;
 }
+
+/** La marge que chaque bandeau garde de chaque bord (`px-3`), et l'écart entre la pile et ma vignette. */
+export const TOP_BANNER_MARGIN = 12;
+
+const TOP_BANNER_GAP = 8;
+
+/** #17965 · #17935 — la borne de toute pilule sur fenêtre large, que la pile prend en paysage. */
+export const TOP_BANNER_LANDSCAPE_MAX = 560;
+
+/** Le plus étroit où « Vous partagez votre écran · Arrêter » tient encore sur une ligne. */
+export const TOP_BANNER_LANDSCAPE_MIN = 300;
+
+/** Ma vignette vue de la pile : sa largeur et sa distance au bord, rail compris quand elle lui cède le coin (L2.8). */
+export type TopBannerNeighbor = { readonly width: number; readonly edgeDistance: number };
+
+/** `bannerMaxWidth` : `null` debout (toute la largeur, ma vignette dessous) ; couchée, la borne, et ma vignette gardée à côté ou non. */
+export type TopBannerSpan = { readonly bannerMaxWidth: number | null; readonly keepsSelfTileBeside: boolean };
+
+type SpanInput = {
+  readonly window: { readonly width: number; readonly height: number };
+  readonly safeHorizontal: number;
+  readonly selfTile: TopBannerNeighbor | null;
+  /** Ce qui doit tenir à côté de ma vignette — la carte d'accord, qui flotte hors de la pile sur le web, y est plus large qu'un bandeau. */
+  readonly minimumWidth?: number;
+};
+
+/**
+ * **L1.8 (#17965 point 2, L6) — EN PAYSAGE, LA PILE SE BORNE À 560 ET SE CENTRE** ; elle se resserre pour laisser ma
+ * vignette dans son coin, à côté d'elle, tant qu'elle reste lisible. Trop étroite, ma vignette descend sous elle, comme
+ * debout. La forme de la fenêtre décide. Miroir d'iOS (`CallTopBannerStack.span`, #18247), mêmes vecteurs.
+ */
+export function topBannerSpan({ window, safeHorizontal, selfTile, minimumWidth = TOP_BANNER_LANDSCAPE_MIN }: SpanInput): TopBannerSpan {
+  if (window.width <= window.height) return { bannerMaxWidth: null, keepsSelfTileBeside: false };
+  const alone = Math.max(0, Math.min(TOP_BANNER_LANDSCAPE_MAX, window.width - 2 * (safeHorizontal + TOP_BANNER_MARGIN)));
+  if (selfTile === null) return { bannerMaxWidth: alone, keepsSelfTileBeside: false };
+  const beside = Math.min(alone, window.width - 2 * (selfTile.edgeDistance + selfTile.width + TOP_BANNER_GAP));
+  return beside >= Math.max(TOP_BANNER_LANDSCAPE_MIN, minimumWidth) ? { bannerMaxWidth: beside, keepsSelfTileBeside: true } : { bannerMaxWidth: alone, keepsSelfTileBeside: false };
+}
+
+/** La largeur que prend chaque maillon de la pile, ses marges comprises — `null` : toute la largeur. */
+export const topBannerStackMaxWidth = (span: TopBannerSpan): number | null => (span.bannerMaxWidth === null ? null : span.bannerMaxWidth + 2 * TOP_BANNER_MARGIN);
+
+/**
+ * **P11.1 — EN GROUPE, L'EN-TÊTE FLOTTE SUR LA GRILLE** (planche P11 ; `headerFloatsOverGroupStage` d'iOS #18395,
+ * d'Android #18414). Pas en hauteur compacte (L4, #17885 : la rangée de quatre reste entre l'en-tête et la pilule), ni
+ * sur la une (P14 : sa capsule et la puce d'écran se posent au haut de sa vignette, sous l'en-tête).
+ */
+export const headerFloatsOverGroupStage = ({ isGrid, isCompactHeight }: { readonly isGrid: boolean; readonly isCompactHeight: boolean }): boolean => isGrid && !isCompactHeight;
+
+/** D'où part la scène de groupe : de la zone sûre (l'en-tête flotte, ou plein écran), ou sous l'en-tête et la pile — un bandeau présent garde la grille sous lui (L4.11). Miroir de `groupStageTopBase` d'iOS. */
+export type GroupStageTop = 'safe-area' | 'under-header';
+
+export const groupStageTop = ({ headerFloats, hasBanners, isStageFullScreen }: { readonly headerFloats: boolean; readonly hasBanners: boolean; readonly isStageFullScreen: boolean }): GroupStageTop =>
+  isStageFullScreen || (headerFloats && !hasBanners) ? 'safe-area' : 'under-header';
+
+/** La carte d'accord flotte hors de la pile sur le web (`call-recording-layer.tsx`, `max-w-md`) : ce qu'elle doit trouver à côté de ma vignette pour que celle-ci garde son coin. */
+export const RECORDING_CARD_MAX_WIDTH = 448;
+
+/** Ma vignette telle que la pile la voit : dans un coin du HAUT seulement, sa largeur et sa distance au bord physique de son coin. */
+export const topBannerNeighborOf = (tile: { readonly corner: string; readonly x: number; readonly width: number } | null, windowWidth: number): TopBannerNeighbor | null =>
+  tile === null || !tile.corner.startsWith('top') ? null : { width: tile.width, edgeDistance: tile.corner.endsWith('right') ? windowWidth - tile.x - tile.width : tile.x };

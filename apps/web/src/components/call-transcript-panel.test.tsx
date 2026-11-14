@@ -190,3 +190,41 @@ describe('les mots du journal, dans les sept langues (#17878 A1.3, A1.13)', () =
     }
   });
 });
+
+/**
+ * A1.19 (#18225) — le lecteur d'écran lit chaque phrase d'un trait, dans l'ordre où l'œil la lit : « nom, heure : ligne
+ * en tête. Original : … » (« Traduit : … » une fois la bascule posée), comme iOS (`.accessibilityElement(children:
+ * .combine)` + `spokenLabel`) et Android (`CallTranscriptRowAccessibility`). Les morceaux visibles se taisent : le
+ * lecteur ne les lit plus un à un.
+ */
+describe('une phrase du journal se lit d’un trait (A1.19)', () => {
+  const entryOf = (html: string, marker = 'data-call-transcript-line="peer"'): string => html.split('<li').find((chunk) => chunk.includes(marker)) ?? '';
+  const spokenOf = (entry: string): readonly string[] => [...entry.matchAll(/<span class="sr-only" data-call-transcript-spoken="">(.*?)<\/span>/g)].map((match) => match[1] ?? '');
+
+  test('par défaut : « Awa, 00:04 : Tu m’entends ?. Original : Can you hear me? », en UNE phrase', () => {
+    expect(spokenOf(entryOf(render([line()])))).toEqual(['Awa, 00:04 : Tu m’entends ?. Original : Can you hear me?']);
+  });
+
+  test('« Voir l’original » posé : l’original en tête, puis « Traduit : … »', () => {
+    expect(spokenOf(entryOf(render([line()], true)))).toEqual(['Awa, 00:04 : Can you hear me?. Traduit : Tu m’entends ?']);
+  });
+
+  test('ma phrase, jamais traduite, se lit seule sous « Vous »', () => {
+    const html = render([line({ id: 's-2', speakerId: 'u-moi', speakerName: 'Moi', mine: true, text: 'Oui', original: 'Oui', translated: false })]);
+    expect(spokenOf(entryOf(html, 'data-call-transcript-line="mine"'))).toEqual(['Vous, 00:04 : Oui']);
+  });
+
+  test('les morceaux visibles — le nom et l’heure, la ligne en tête, la ligne dessous — sont tus au lecteur d’écran', () => {
+    const entry = entryOf(render([line()]));
+    expect(entry).toMatch(/<span class="flex justify-between[^"]*"[^>]*aria-hidden="true"/);
+    expect(entry).toMatch(/data-call-transcript-text="translated"[^>]*aria-hidden="true"/);
+    expect(entry).toMatch(/data-call-transcript-original-line=""[^>]*aria-hidden="true"/);
+  });
+
+  test('les mots de la ligne dessous suivent la langue de l’interface', async () => {
+    await loadCallControlsCatalog('en');
+    await loadInterfaceCatalog('en');
+    const html = renderToStaticMarkup(<CallTranscriptLines lines={[line()]} language="en" original />);
+    expect(spokenOf(entryOf(html))).toEqual(['Awa, 00:04 : Can you hear me?. Translated : Tu m’entends ?']);
+  });
+});

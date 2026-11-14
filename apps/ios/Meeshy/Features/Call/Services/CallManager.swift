@@ -233,22 +233,22 @@ final class CallManager: ObservableObject, Sendable {
     /// Persisted to UserDefaults at call teardown for post-call diagnostics.
     var lastKnownStats: CallStats?
     @Published var displayMode: CallDisplayMode = .fullScreen
-    /// Indice one-shot posé par la bannière PiP juste avant de repasser en
-    /// `.fullScreen` : CallView le consomme à son apparition pour jouer
-    /// l'animation d'AGRANDISSEMENT depuis la bannière (le fullScreenCover
-    /// est présenté sans animation système — le morph interne est LA
-    /// transition). Pas `@Published` : lu une fois, jamais rendu.
-    private var pendingPipExpansion = false
+    /// Indice one-shot posé par l'appel réduit (bannière ou bulle) juste avant de
+    /// repasser en `.fullScreen` : CallView le consomme à son apparition pour jouer
+    /// l'animation d'AGRANDISSEMENT depuis l'endroit où il flottait (P18.4 ; l'appel
+    /// est présenté sans animation système — le morph interne est LA transition).
+    /// Pas `@Published` : lu une fois, jamais rendu.
+    private var pendingPipExpansion: CallWindowMotion?
 
-    /// Pose l'indice d'expansion — appelé par `FloatingCallPillView` avant de
+    /// Pose l'indice d'expansion — appelé par `CallPipMorph.expand` avant de
     /// basculer `displayMode` vers `.fullScreen`.
-    func requestPipExpansionMorph() {
-        pendingPipExpansion = true
+    func requestPipExpansionMorph(from origin: CallWindowMotion) {
+        pendingPipExpansion = origin
     }
 
     /// Consomme l'indice d'expansion (one-shot) — appelé par `CallView.onAppear`.
-    func consumePendingPipExpansion() -> Bool {
-        defer { pendingPipExpansion = false }
+    func consumePendingPipExpansion() -> CallWindowMotion? {
+        defer { pendingPipExpansion = nil }
         return pendingPipExpansion
     }
 

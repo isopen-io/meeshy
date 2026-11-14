@@ -1,6 +1,9 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.util.Locale
 
 /**
@@ -25,6 +28,12 @@ data class CallSummaryMetadata(
     val isLive: Boolean = false,
     /** `true` seulement sur un appel manqué, jamais décroché, terminé par son initiateur. */
     val endedByInitiator: Boolean? = null,
+    /**
+     * Les personnes de l'appel, chacune avec son identifiant, quand la passerelle les sert. Le message est le même
+     * pour tous ses lecteurs : c'est le lecteur qui s'en retire ([me.meeshy.sdk.model.reading.focal.FocalCallParticipants]).
+     * `null` sur tout résumé qui n'en porte pas (clé absente ou malformée) : la carte n'invente alors aucune ligne.
+     */
+    val participants: List<CallSummaryParticipant>? = null,
 ) {
     enum class MediaType(val wireName: String) { AUDIO("audio"), VIDEO("video") }
 
@@ -85,7 +94,20 @@ data class CallSummaryMetadata(
                 networkQuality = NetworkQuality.entries.firstOrNull { it.wireName == metadata.text("networkQuality") },
                 isLive = live,
                 endedByInitiator = metadata.flag("endedByInitiator"),
+                participants = participants(metadata),
             )
+        }
+
+        /** Décodage TOLÉRANT (iOS `try?`) : une clé malformée vaut absence, jamais un échec de décodage de la carte. */
+        private fun participants(metadata: JsonObject?): List<CallSummaryParticipant>? {
+            val served = metadata?.get("participants") as? JsonArray ?: return null
+            val people = served.map { element ->
+                val entry = element as? JsonObject ?: return null
+                val userId = (entry["userId"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: return null
+                val displayName = (entry["displayName"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: return null
+                CallSummaryParticipant(userId, displayName)
+            }
+            return people
         }
 
         /** « MM:SS » (ou « H:MM:SS » au-delà d'une heure) — miroir de `formatCallDuration`. */
@@ -117,3 +139,6 @@ data class CallSummaryMetadata(
         }
     }
 }
+
+/** Une personne qui a pris part à l'appel, telle que la passerelle la sert sur le résumé (iOS `CallSummaryParticipant`). */
+data class CallSummaryParticipant(val userId: String, val displayName: String)

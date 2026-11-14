@@ -101,13 +101,6 @@ type Divergence = {
  */
 const DIVERGENCES_CONNUES: readonly (Divergence & { readonly issue: string; readonly note: string })[] = [
   {
-    className: 'AttachmentReactionUpdateEvent',
-    field: 'userId',
-    events: ['attachment:reaction-added', 'attachment:reaction-removed'],
-    issue: '#18124',
-    note: "PANNE VIVANTE — lu par `MessageDeltaApplier.kt:90` : `mine` est toujours faux, la pastille de MA réaction à une pièce jointe ne s'allume jamais. L'émetteur pose `participantId` ; corriger demande de trancher QUELLE identité comparer.",
-  },
-  {
     className: 'AttachmentUpdatedEvent',
     field: 'url',
     events: ['message:attachment-updated'],

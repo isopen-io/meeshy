@@ -61,6 +61,7 @@ const deCall = {
   'call.a11y.screen': 'Anruf mit {name}',
   'call.bubble.callBack': 'Zurückrufen',
   'call.bubble.join': 'Beitreten',
+  'call.card.participants.you': 'du',
   'call.callBack.named': '{name} zurückrufen',
   'call.you': 'Du',
   'call.ended.removed': 'Sie wurden aus dem Anruf entfernt',

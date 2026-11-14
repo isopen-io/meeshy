@@ -248,35 +248,83 @@ struct CallEdgeStow: ViewModifier {
     }
 }
 
+extension CallChromeStow {
+    /// Loi 17.2 · 17.10 — l'animation d'une TRANSFORMATION du chrome (l'échelle de ma vignette) :
+    /// le ressort du rangement, ou, sous « Réduire les animations », aucune — la transformation se
+    /// pose d'un coup et c'est un fondu court (`CallMotionFade`) qui porte le changement.
+    static func transform(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? Animation?.none : animation(reduceMotion: false)
+    }
+}
+
 /// G1.11 — ma vignette se range par une transformation, ancrée à son coin : son cadre ne
-/// change pas. Réduire les animations : elle change de taille sans mouvement.
+/// change pas. Réduire les animations (loi 17.10) : elle prend sa taille d'un coup, en fondu court.
 struct CallSelfTileStow: ViewModifier {
     let factor: CGFloat
     let anchor: UnitPoint
     let isChromeVisible: Bool
     let reduceMotion: Bool
 
+    @State private var fade = CallMotionFade()
+
     func body(content: Content) -> some View {
-        content
-            .scaleEffect(factor, anchor: anchor)
-            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)
+        TimelineView(CallGlassMotionTimer.schedule(running: fade.isRunning)) { context in
+            content.opacity(fade.opacity(at: context.date))
+        }
+        .scaleEffect(factor, anchor: anchor)
+        .animation(CallChromeStow.transform(reduceMotion: reduceMotion), value: isChromeVisible)
+        .adaptiveOnChange(of: isChromeVisible) { _, _ in
+            guard reduceMotion else { return }
+            fade = fade.started(at: Date())
+        }
+        .task(id: fade.startedAt) {
+            guard fade.isRunning else { return }
+            guard await cancellableSleep(for: CallGlassMotionTimer.settle(after: CallPillMotion.reducedDuration)), !Task.isCancelled else { return }
+            fade = fade.settled(at: Date())
+        }
     }
 }
 
 /// P16.8 · R1.6 · R3.10 — ma vignette descend sous la pile des bandeaux (partage, enregistrement,
 /// capture) quand elle grandit et remonte quand elle rétrécit, dans le même mouvement qu'elle.
-/// L1.5 — quand la fenêtre change de forme, elle se couche ou se relève dans le même mouvement que sa place.
-/// Réduire les animations : elle se pose sans mouvement. Seule la pile anime la place : un glisser ou un coin choisi garde son ressort.
+/// L1.5 — quand la fenêtre change de forme, elle rejoint sa nouvelle place dans le même mouvement.
+/// Loi 17.2 — sa place de mise en page se pose d'un coup ; elle en repart de là où on la voyait par
+/// une translation (`CallGlassFollowClock`). Réduire les animations : elle y paraît en fondu court.
+/// Seule la pile et la forme de la fenêtre se suivent ainsi : un glisser ou un coin choisi garde son ressort.
 struct CallSelfTilePlacement: ViewModifier {
     let position: CGPoint
     let isLandscape: Bool
     let clearance: CGFloat
     let reduceMotion: Bool
 
+    @State private var clock = CallGlassFollowClock()
+
     func body(content: Content) -> some View {
-        content
-            .position(position)
-            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: clearance)
-            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)
+        TimelineView(CallGlassMotionTimer.schedule(running: clock.isRunning)) { context in
+            let shift = clock.shift(at: context.date)
+            content
+                .offset(x: shift.width, y: shift.height)
+                .opacity(clock.opacity(at: context.date))
+        }
+        .position(position)
+        .animation(nil, value: clearance)
+        .animation(nil, value: isLandscape)
+        .adaptiveOnChange(of: CallSelfTilePlace(position: position, isLandscape: isLandscape, clearance: clearance)) { old, new in
+            guard old.isLandscape != new.isLandscape || old.clearance != new.clearance else { return }
+            clock = clock.following(from: old.position, to: new.position, at: Date(), reduceMotion: reduceMotion)
+        }
+        .task(id: clock.startedAt) {
+            guard clock.isRunning else { return }
+            guard await cancellableSleep(for: CallGlassMotionTimer.settle(after: clock.duration)), !Task.isCancelled else { return }
+            clock = clock.settled(at: Date())
+        }
     }
+}
+
+/// Ce qui décide si ma vignette SUIT sa place (la pile, la forme de la fenêtre) ou la rejoint par
+/// le mouvement de son appelant (glisser, coin choisi).
+private struct CallSelfTilePlace: Equatable {
+    let position: CGPoint
+    let isLandscape: Bool
+    let clearance: CGFloat
 }

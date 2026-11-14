@@ -61,6 +61,7 @@ const esCall = {
   'call.a11y.screen': 'Llamada con {name}',
   'call.bubble.callBack': 'Devolver llamada',
   'call.bubble.join': 'Unirse',
+  'call.card.participants.you': 'tú',
   'call.callBack.named': 'Devolver la llamada a {name}',
   'call.you': 'Tú',
   'call.ended.removed': 'Te han retirado de la llamada',

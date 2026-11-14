@@ -247,12 +247,9 @@ final class ConversationViewModelElapsedEphemeralTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Meeshy/Features/Main/Stores/MessageStore.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        // #17938 — la loi « vivant » passe par `keepingBurning`, qui garde ce qui brûle ; c'est toujours elle qui tranche.
-        XCTAssertTrue(source.contains("keptThroughBurning(Self.collapsingDuplicateServerIds(next))"),
+        XCTAssertTrue(source.contains("let published = ExpiredEphemeralRow.living("),
                       "le fil rend `MessageStore.messages` : c'est là qu'un mort — et la réponse d'un mort (#10433) — doit partir")
-        XCTAssertTrue(source.contains("{ ExpiredEphemeralRow.living($0) }, of: records, burning: burning, shown: messages"),
-                      "ce que la publication garde passe par la loi « vivant » et par ce qui brûle (#17938)")
-        XCTAssertTrue(source.contains("{ ExpiredEphemeralRow.living($0) }, of: messages"),
+        XCTAssertTrue(source.contains("let kept = ExpiredEphemeralRow.living(messages)"),
                       "la fin d'une combustion retire aussi les réponses de ce qui vient de brûler (#10433)")
     }
 

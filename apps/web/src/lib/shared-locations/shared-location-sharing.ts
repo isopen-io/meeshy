@@ -11,6 +11,7 @@ import {
   EMPTY_ROSTER, rosterOps, type SharedLocationRoster, type SharedLocationRosterEntry } from './shared-location-roster';
 import {
   SHARED_LOCATION_UPDATE_GATE,
+  sharedLocationPayloadWithoutDeadlines,
   sharedLocationStartPayloadOf,
   shouldSendSharedLocation,
   type SharedLocationFix,
@@ -256,15 +257,22 @@ export function createSharedLocationSharingCenter({
     else arm(0);
   };
 
+  /* Une passerelle d'avant #18205 refuse l'échéance par personne : la même liste repart sans, et l'onglet retire chacun à son échéance, comme avant. */
+  const startTolerant = async (payload: SharedLocationStartPayload): Promise<SharedLocationVerdict> => {
+    const verdict = await emitter.start(payload);
+    const legacy = verdict.kind === 'refused' && verdict.outcome === 'invalid' ? sharedLocationPayloadWithoutDeadlines(payload) : null;
+    return legacy === null || !isLive() ? verdict : emitter.start(legacy);
+  };
+
   /* La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */
   const publish = async (wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
     const next = rosterOps.settled(wanted);
-    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.recipients(next), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
+    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
     if (payload === null) return 'invalid';
     if (!isLive()) return 'failed';
     /* Avant l'accusé, la liste gardée couvre les deux : un onglet fermé pendant l'attente garde « Arrêter » pour chacun. */
     persist(rosterOps.union(previous, next));
-    const verdict = await emitter.start(payload);
+    const verdict = await startTolerant(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
       engage(next, fix);

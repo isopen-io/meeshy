@@ -139,7 +139,8 @@ final class CallSelfTileTests: XCTestCase {
             "la vignette vivante ET la tuile « vidéo en pause » suivent la forme de la fenêtre"
         )
         let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
-        XCTAssertTrue(glass.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)"))
+        XCTAssertTrue(glass.contains(".animation(nil, value: isLandscape)"), "loi 17.2 (#18207) : la place se pose d'un coup, la vignette la rejoint par une translation")
+        XCTAssertTrue(glass.contains("guard old.isLandscape != new.isLandscape || old.clearance != new.clearance else { return }"))
     }
 
     // MARK: - Mémoire de l'appel

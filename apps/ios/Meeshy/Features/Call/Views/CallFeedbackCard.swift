@@ -29,11 +29,17 @@ struct CallFeedbackCard: View {
         .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 16, y: 8)
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: viewModel.pendingRating)
+        .animation(Self.layoutAnimation(reduceMotion: reduceMotion), value: viewModel.pendingRating)
         .task(id: prompt.callId) {
             guard await cancellableSleep(for: CallFeedbackViewModel.idleTimeout), !Task.isCancelled else { return }
             viewModel.expire()
         }
+    }
+
+    /// Loi 17.10 — la carte s'agrandit par un ressort ; sous « Réduire les animations », elle prend
+    /// sa taille d'un coup et ses motifs entrent par un fondu court (leur transition), sans mouvement.
+    private static func layoutAnimation(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? Animation?.none : .spring(response: 0.3, dampingFraction: 0.85)
     }
 
     private var header: some View {
@@ -111,7 +117,7 @@ struct CallFeedbackCard: View {
                 .background(MeeshyColors.brandPrimary, in: Capsule())
             }
         }
-        .transition(.opacity)
+        .transition(AnyTransition.opacity.animation(.easeInOut(duration: CallPillMotion.reducedDuration)))
     }
 
     private func issueChip(_ issue: CallFeedbackIssue) -> some View {
