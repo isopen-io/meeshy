@@ -191,6 +191,13 @@ final class EpureReglagesLiensTests: XCTestCase {
         XCTAssertNil(app["settings.tools.affiliate.hint"], "la phrase vit sous une seule clé, celle de l'écran des liens")
     }
 
+    /// Les réglages tutoient en allemand (« dein ») : la phrase de « Ma Légende » ne vouvoie pas seule.
+    func test_progressionHint_inGerman_saysDu_likeTheRestOfTheSettings() throws {
+        let german = try XCTUnwrap(app()["settings.tools.progression.hint"]?["de"])
+        XCTAssertFalse(german.contains("Ihr"), "« \(german) »")
+        XCTAssertTrue(german.lowercased().contains("dein"), "« \(german) »")
+    }
+
     // MARK: - Sessions : le titre de section suffit, la rangée garde ses dates
 
     func test_sessions_currentDevice_isNamedOnceByItsSectionTitle_notAgainByABadge() throws {
