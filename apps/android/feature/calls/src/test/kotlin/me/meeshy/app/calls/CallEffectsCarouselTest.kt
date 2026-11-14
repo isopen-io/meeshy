@@ -159,7 +159,7 @@ class CallEffectsCarouselTest {
             assertThat(mode.face).isEqualTo(CallFaceEffect.None)
             assertThat(mode.bar).isEqualTo(CallEffectsBarMode.Looks)
         }
-        carousel("Face").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Skin smoothing"))
+        carousel("Face").assert(SemanticsMatcher("announces the browsed look then its rank") { it.config.getOrNull(SemanticsProperties.StateDescription)?.matches(Regex("Skin smoothing, \\d+ of \\d+")) == true })
 
         rule.runOnIdle { carousel("Face").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!() }
         rule.runOnIdle {

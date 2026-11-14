@@ -59,7 +59,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -89,7 +88,6 @@ import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallFrameScope
-import me.meeshy.sdk.model.call.frames.CallFrameStyleRule
 import me.meeshy.sdk.model.call.frames.CallFrameTexts
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
@@ -305,12 +303,6 @@ private fun MontageFramesCarousel(
         capture.select(item)
         onChosen()
     }
-    fun stepDeclination(offset: Int): Boolean {
-        val current = CallMontagePickRule.choice(pick, count) as? CallMontageChoice.Frame ?: return false
-        val next = CallFrameStyleRule.neighbour(current.id, offset) ?: return false
-        choose(CallMontageChoice.Frame(next.id))
-        return true
-    }
     key(chip, scope) {
         CallModeCarousel(
             items = CallMontagePickRule.items(pick, count),
@@ -327,14 +319,14 @@ private fun MontageFramesCarousel(
             hint = stringResource(R.string.call_mode_gesture_hint)
                 .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) },
             shots = CallModeShots(captureState.isRecording, shooter.shoot, shooter.film),
-            extraActions = if (CallMontageFrameRule.declinations(selection).size > 1) {
-                listOf(
-                    CustomAccessibilityAction(nextDeclination) { stepDeclination(1) },
-                    CustomAccessibilityAction(previousDeclination) { stepDeclination(-1) },
-                )
-            } else {
-                emptyList()
-            },
+            onConfirm = onChosen,
+            variants = CallModeVariants(
+                of = { choice -> CallMontageFrameRule.declinations(choice).map { CallMontageChoice.Frame(it) } },
+                current = { choice -> CallMontagePickRule.declined(pick, choice, count) },
+                next = nextDeclination,
+                previous = previousDeclination,
+                pose = ::choose,
+            ),
         ) { item, isShown ->
             MontageCell(
                 item = item,

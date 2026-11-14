@@ -6,9 +6,11 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallChromeStow
+import me.meeshy.sdk.model.call.CallTileSize
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
@@ -46,15 +49,24 @@ import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
  * P16.4 — la pile des bandeaux du haut (partage, enregistrement, capture, cadre) : UNE colonne ancrée SOUS la rangée
  * d'en-tête, dans l'ordre de [CallTopBannerStack], au lieu de la rangée de l'en-tête elle-même. [modifier] place la pile
  * (l'écran choisit le bord) ; chaque bandeau porte sa propre marge et son écart du dessus.
+ *
+ * L1.8 (#17965 point 2) — en portrait elle tient presque toute la largeur ; dans une fenêtre couchée elle est bornée à 560,
+ * la borne de la pilule, centrée, et se resserre pour longer ma vignette en haut ([CallSelfTileNeighbours.bannerReserveDp]),
+ * qui garde ainsi son coin à côté d'elle ([CallTopBannerStack.span]).
  */
 @Composable
 internal fun CallTopBannerStackHost(registry: CallOverlayRegistry, context: CallOverlayContext, modifier: Modifier = Modifier) {
-    CallOverlaySlotHost(
-        registry,
-        CallOverlaySlot.TopBanner,
-        context,
-        modifier.systemBarsPadding().fillMaxWidth().padding(top = CallTopBannerStack.HEADER_ROW_DP.dp),
-    )
+    val reserve = LocalCallSelfTileNeighbours.current?.bannerReserveDp ?: 0f
+    BoxWithConstraints(modifier) {
+        val span = CallTopBannerStack.span(CallTileSize(maxWidth.value, maxHeight.value), reserve)
+        val bounded = span.hostMaxWidthDp?.let { Modifier.widthIn(max = it.dp) } ?: Modifier
+        CallOverlaySlotHost(
+            registry,
+            CallOverlaySlot.TopBanner,
+            context,
+            Modifier.systemBarsPadding().then(bounded).fillMaxWidth().padding(top = CallTopBannerStack.HEADER_ROW_DP.dp),
+        )
+    }
 }
 
 private class HeldFace<T : Any>(var value: T? = null)

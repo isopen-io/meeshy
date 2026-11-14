@@ -195,6 +195,22 @@ enum CallRailsLayout {
         return between >= pillWidth ? 0 : pillHeight + pillGap
     }
 
+    /// #17965 (L2.8) — l'écart entre le rail et ma vignette qui lui cède le coin.
+    static let selfTileGap: CGFloat = 8
+
+    /// #17965 (L2.8) — en paysage, (…) ouvert, ma vignette cède le coin au rail de son bord : les
+    /// rails y prennent toute la hauteur et la recouvriraient. En portrait, ils se centrent sous elle.
+    static func selfTileYieldsToRails(isLandscape: Bool, railsShown: Bool) -> Bool {
+        isLandscape && railsShown
+    }
+
+    /// La distance de ma vignette au bord physique : sa marge, ou, quand elle cède le coin, le rail
+    /// et son écart — jamais plus près que sa marge.
+    static func selfTileEdgeDistance(ownInset: CGFloat, safeHorizontal: CGFloat, yieldsToRails: Bool) -> CGFloat {
+        guard yieldsToRails else { return ownInset }
+        return max(ownInset, safeHorizontal + edgeInset + railWidth + selfTileGap)
+    }
+
     /// La translation d'un rail HORS de l'écran : vers son bord, le sien
     /// (« mon image » ouvre la marche, « l'appel » la ferme), retourné en
     /// écriture de droite à gauche.
