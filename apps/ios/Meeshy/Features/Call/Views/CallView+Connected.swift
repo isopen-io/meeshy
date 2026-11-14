@@ -34,7 +34,7 @@ extension CallView {
 
                 // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
                 CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, remoteName: callManager.remoteUsername ?? "", participantName: callManager.participantName(for:), chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
-                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset), safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor) { liveFrameStatus }
+                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset), safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor, servicePills: servicePills) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)
@@ -225,7 +225,7 @@ extension CallView {
             CallGroupStageTopReserve(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, hasLiveFrameStatus: hasLiveFrameStatus,
                                      heights: topBannerHeights, safeAreaTop: DeviceLayout.safeAreaTop, chromeTopInset: Self.chromeTopInset,
                                      headerFloats: CallTopBannerStack.headerFloatsOverGroupStage(isGrid: groupStageFocus == .grid, isCompactHeight: isStageCompactHeight),
-                                     isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion)
+                                     isStageFullScreen: isStageFullScreen, reduceMotion: reduceMotion, service: servicePills.banners)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, chrome: chromeVisibility, isCompactHeight: isStageCompactHeight, onStageTap: toggleControls, onFocusChange: { groupStageFocus = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
                 // La pilule qui grandit rétrécit ses rangées (qui

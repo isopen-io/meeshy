@@ -534,6 +534,17 @@ final class CallGroupHeaderFloatTests: XCTestCase {
         )
     }
 
+    /// #18227 — une pastille de service (« En attente », « Vidéo réduite ») est un bandeau de la pile :
+    /// l'en-tête ne flotte plus et la grille lui cède sa place.
+    func test_aServicePill_countsAsABanner_theHeaderStopsFloating() {
+        let present = CallTopBannerStack.present(isScreenShareShown: false, isRecordingShown: false, isCaptureAlertShown: false, isLiveFrameShown: false, service: [.hold])
+        XCTAssertFalse(present.isEmpty)
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: !present.isEmpty, isStageFullScreen: false),
+            CallTopBannerStack.topInset(chromeTopInset: 67)
+        )
+    }
+
     func test_fullScreenStage_startsAtTheSafeArea_floatingOrNot() {
         for floats in [true, false] {
             XCTAssertEqual(
@@ -554,6 +565,8 @@ final class CallGroupHeaderFloatTests: XCTestCase {
         XCTAssertTrue(layout.contains("safeAreaTop: DeviceLayout.safeAreaTop, chromeTopInset: Self.chromeTopInset"))
         let reserve = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
         XCTAssertTrue(reserve.contains("CallTopBannerStack.groupStageTopBase("))
+        XCTAssertTrue(reserve.contains("hasBanners: !present.isEmpty"), "les pastilles de service comptent : la présence vient de la pile")
+        XCTAssertTrue(reserve.contains("service: service"))
         XCTAssertTrue(
             reserve.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: base)"),
             "grille ↔ une : la scène glisse sous l'en-tête, jamais d'un coup ; Réduire les animations : un fondu court"

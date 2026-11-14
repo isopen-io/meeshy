@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Message } from '@/lib/api/types';
 
-import { quotedPreviewOf } from './quoted-preview';
+import { quotedPreviewOf, type QuotedMediaKind } from './quoted-preview';
 import { useViewer } from './use-viewer';
 
 /**
@@ -18,6 +18,20 @@ export type ReplyToPreview = {
   readonly language?: string;
   /** Les AUTRES pièces du message cité en entier (#9911) — la bande les dit « +N ». */
   readonly more?: number;
+  /**
+   * LE MÉDIA CITÉ (#18392, miroir `composerReplyAttachmentPreview` iOS) — son
+   * genre (le glyphe devant le nom) et sa vignette (la case sous le libellé).
+   * OMIS pour un message protégé : son placeholder porte déjà son icône, et
+   * aucune vignette ne sort du site unique pour lui.
+   */
+  readonly media?: ReplyBandMedia;
+};
+
+export type ReplyBandMedia = {
+  readonly kind: QuotedMediaKind;
+  readonly thumbnailSrc: string | null;
+  readonly placeholderSrc: string | null;
+  readonly timebased: boolean;
 };
 
 /**
@@ -64,6 +78,16 @@ export function useReplyToPreview(params: {
          (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
       ...(preview.language === '' ? {} : { language: preview.language }),
       ...(preview.media !== null && preview.media.more > 0 ? { more: preview.media.more } : {}),
+      ...(preview.media === null || preview.isProtected
+        ? {}
+        : {
+            media: {
+              kind: preview.media.kind,
+              thumbnailSrc: preview.media.thumbnailSrc,
+              placeholderSrc: preview.media.placeholderSrc,
+              timebased: preview.media.timebased,
+            },
+          }),
     };
   }, [message, readerLanguages, interfaceLanguage, viewerId]);
 }
