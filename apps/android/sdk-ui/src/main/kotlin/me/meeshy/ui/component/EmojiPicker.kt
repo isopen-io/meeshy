@@ -51,6 +51,9 @@ import me.meeshy.sdk.model.ReactionBarLaw
 import me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore
 import me.meeshy.ui.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -126,9 +129,10 @@ fun EmojiQuickStrip(
         if (onExpand != null) {
             val expandLabel = stringResource(R.string.emoji_picker_expand)
             val plusIndex = emojis.size
+            val reduceMotion = LocalReduceMotion.current
             val plusScale by animateFloatAsState(
-                targetValue = if (highlightedIndex == plusIndex) ReactionBarLaw.HOVER_SCALE else 1f,
-                animationSpec = MeeshyMotion.bouncySpring(),
+                targetValue = MotionSpecs.pressScale(highlightedIndex == plusIndex, ReactionBarLaw.HOVER_SCALE, reduceMotion),
+                animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
                 label = "emojiPlusScale",
             )
             Box(
@@ -173,9 +177,10 @@ private fun EmojiTile(
     onBounds: ((Rect) -> Unit)?,
 ) {
     val reactLabel = stringResource(R.string.emoji_react_with, emoji)
+    val reduceMotion = LocalReduceMotion.current
     val hoverScale by animateFloatAsState(
-        targetValue = if (isHighlighted) ReactionBarLaw.HOVER_SCALE else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(isHighlighted, ReactionBarLaw.HOVER_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "emojiTileScale",
     )
     Box(

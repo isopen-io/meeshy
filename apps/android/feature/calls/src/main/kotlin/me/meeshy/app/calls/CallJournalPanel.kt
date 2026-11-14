@@ -87,6 +87,8 @@ internal fun CallJournalPanel(
     peerName: String = "",
     /** W2.6 — who is who in the call, by speaker id (`CallUiState.participantNames`): each sentence carries its author's name. */
     participantNames: Map<String, String> = emptyMap(),
+    /** #18488 — the height of the list when the stage is compact (a duo audio call, [CallDuoAudioFit]); `null` = the share of the window. */
+    listHeightDp: Float? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val view by viewModel.journalView.collectAsStateWithLifecycle()
@@ -105,7 +107,7 @@ internal fun CallJournalPanel(
         CallJournalList(
             lines = lines,
             onToggleOriginal = toggle,
-            modifier = Modifier.height(CallJournalSizing.heightDp(windowHeight).dp),
+            modifier = Modifier.height((listHeightDp ?: CallJournalSizing.heightDp(windowHeight)).dp),
             captures = captures,
             peerName = peerName,
         )

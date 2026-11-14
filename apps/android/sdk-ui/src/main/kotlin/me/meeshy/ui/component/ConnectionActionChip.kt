@@ -1,6 +1,6 @@
 package me.meeshy.ui.component
 
-import android.provider.Settings
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -33,11 +33,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -81,8 +79,7 @@ public fun ConnectionActionChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val context = LocalContext.current
-    val reduceMotion = remember(context) { animationsDisabled(context.contentResolver) }
+    val reduceMotion = LocalReduceMotion.current
     val fade: FiniteAnimationSpec<Float> = if (reduceMotion) snap() else connectionSpring()
     AnimatedContent(
         targetState = render,
@@ -114,13 +111,12 @@ public fun ConnectionActionChip(
     }
 }
 
-private fun connectionSpring(): androidx.compose.animation.core.SpringSpec<Float> =
-    spring(dampingRatio = 0.85f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))
+/** Le ressort d'iOS pour la permutation de l'action de relation (réponse 0,35, amortissement 0,85). */
+private const val CONNECTION_SPRING_RESPONSE = 0.35f
+private const val CONNECTION_SPRING_DAMPING = 0.85f
 
-private fun animationsDisabled(resolver: android.content.ContentResolver): Boolean =
-    runCatching {
-        Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }.getOrDefault(false)
+private fun connectionSpring(): androidx.compose.animation.core.SpringSpec<Float> =
+    spring(dampingRatio = CONNECTION_SPRING_DAMPING, stiffness = MeeshyMotion.stiffnessForResponse(CONNECTION_SPRING_RESPONSE))
 
 @Composable
 private fun Badge(text: String, color: Color, icon: androidx.compose.ui.graphics.vector.ImageVector?) {
