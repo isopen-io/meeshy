@@ -30,7 +30,7 @@ struct MeeshyTimelineFriseRulerCanvas: View, Equatable {
             )
             context.fill(Path(mark), with: .color(recipe.tickColor(isMajor: tick.isMajor, isDark: isDark)))
             guard index < labels.count, let label = labels[index], !label.isEmpty else { continue }
-            var text = context.resolve(Text(label).font(.system(size: labelSize, weight: .semibold).monospacedDigit()))
+            var text = context.resolve(Text(label).font(MeeshyFont.relative(labelSize, weight: .semibold).monospacedDigit()))
             text.shading = .color(recipe.labelColor(isDark: isDark))
             let measure = text.measure(in: size)
             let centre = min(max(measure.width / 2, x), size.width - measure.width / 2)
