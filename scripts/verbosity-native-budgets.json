@@ -160,7 +160,7 @@
       "labels": 22,
       "words": 66,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/ageGate": {
       "labels": 1,
@@ -586,7 +586,7 @@
       "labels": 14,
       "words": 64,
       "long": 0,
-      "explanations": 5
+      "explanations": 4
     },
     "ios:Meeshy/listening": {
       "labels": 5,
@@ -1024,7 +1024,7 @@
       "labels": 50,
       "words": 129,
       "long": 0,
-      "explanations": 23
+      "explanations": 22
     },
     "ios:Meeshy/translation": {
       "labels": 2,
