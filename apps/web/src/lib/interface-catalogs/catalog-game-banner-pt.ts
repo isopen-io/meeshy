@@ -62,8 +62,6 @@ const pt = {
   'game.banner.link.meesh': '{count} Meeshes na sua herança',
   'game.banner.glory': 'glória {glory}',
   'game.banner.glory_missing': '{glory} de glória até {rank}',
-  'game.banner.level_short': '{n} até o {level}',
-  'game.banner.glory_short': '{n} até {rank}',
   'game.banner.glory_top': 'glória {n}',
   'game.banner.missing': '{points} até o nível {level}',
   'game.banner.separator': ', ',

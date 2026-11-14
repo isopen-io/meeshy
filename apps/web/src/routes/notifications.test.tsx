@@ -70,14 +70,15 @@ describe('l’en-tête', () => {
 });
 
 describe('le rail des catégories', () => {
-  test('onze puces, une seule pressée, chacune une cible de 44', () => {
-    const html = renderToStaticMarkup(<NotificationCategoryRail language="fr" selected="mentions" onSelect={noop} />);
+  test('au repos : trois pastilles et « Plus », une seule pressée, chacune une cible de 44 (règle 6 : le rare est rangé, jamais retiré)', () => {
+    const html = renderToStaticMarkup(<NotificationCategoryRail language="fr" selected="all" onSelect={noop} />);
     expect(html).toContain('aria-label="Catégories de notifications"');
-    expect(html.match(/<button/g)?.length).toBe(NOTIFICATION_CATEGORIES.length);
+    expect(html.match(/<button/g)?.length).toBe(4);
     expect(html.match(/aria-pressed="true"/g)?.length).toBe(1);
-    expect(html).toContain('data-category="mentions" aria-pressed="true"');
-    expect(html.match(/min-height:44px/g)?.length).toBe(NOTIFICATION_CATEGORIES.length);
-    for (const label of ['Toutes', 'Non lues', 'Réactions', 'Système']) expect(html).toContain(label);
+    expect(html).toContain('data-category="all" aria-pressed="true"');
+    expect(html.match(/min-height:44px/g)?.length).toBe(4);
+    for (const label of ['Toutes', 'Non lues', 'Messages', 'Plus']) expect(html).toContain(label);
+    expect(NOTIFICATION_CATEGORIES.length).toBe(12);
   });
 
   /** Les libellés restent aux JETONS d'encre : la teinte catégorielle d'iOS
@@ -97,7 +98,7 @@ describe('les états', () => {
     /* Espaces INSÉCABLES dans les guillemets : à 320 px, le « » » fermant
        tombait seul sur sa ligne (capture de recette). */
     expect(calls).toContain('Aucune notification dans « Appels »');
-    expect(calls).toContain('Vos notifications apparaîtront ici');
+    expect(calls).not.toContain('apparaîtront ici');
   });
 
   test('erreur en ligne : le motif, et « Réessayer » à 44', () => {

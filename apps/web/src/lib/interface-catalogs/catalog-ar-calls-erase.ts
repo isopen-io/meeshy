@@ -12,6 +12,7 @@ const arCallsErase = {
   'calls.clearAll.cancel': 'إلغاء',
   'calls.erase.failed': 'تعذّر المسح. حاول مرة أخرى.',
   'calls.search': 'ابحث عن اسم',
+  'calls.search.placeholder': 'بحث',
   'calls.search.clear': 'مسح البحث',
   'calls.search.empty': 'لا توجد مكالمة تطابق «{query}»',
   'calls.participants.more': '{names} +{count}',

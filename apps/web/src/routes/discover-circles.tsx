@@ -163,6 +163,9 @@ export function CirclesPanel(props: CirclesPanelProps) {
   return (
     <section data-circles className="flex flex-col pb-8">
       {query.isError ? <CirclesErrorBanner language={language} onRetry={() => void query.refetch()} /> : online ? null : <DiscoverOfflineNotice language={language} cold={false} />}
+      <p data-circles-intro className="px-5 pt-3 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translateCircles(language, 'circles.intro')}
+      </p>
       <Link
         to="sharedLocations"
         data-circles-positions
