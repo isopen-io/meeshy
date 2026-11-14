@@ -142,8 +142,21 @@
  */
 .floating-rung {
   transform: translate(-50%, -50%);
-  animation: floating-rung-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
-  animation-delay: calc(var(--rung) * 40ms);
+  animation: floating-rung-in var(--floating-rung-ms) cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+  animation-delay: calc(var(--rung) * var(--floating-rung-stagger));
+}
+
+/**
+ * LE RETOUR (#18460) — `menuAnimation` d'iOS joue aussi la fermeture : chaque
+ * barreau rejoue son entrée à l'envers, le dernier rang parti le premier.
+ * L'échelle reste montée le temps de la cascade (`floatingLadderExitMs`) ; sous
+ * « Réduire les animations », elle se démonte tout de suite.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .floating-rung[data-leaving] {
+    animation: floating-rung-in var(--floating-rung-ms) cubic-bezier(0.2, 0.9, 0.3, 1.2) reverse forwards;
+    animation-delay: calc((var(--rung-count) - 1 - var(--rung)) * var(--floating-rung-stagger));
+  }
 }
 
 /**

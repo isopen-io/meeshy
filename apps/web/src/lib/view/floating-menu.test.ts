@@ -12,6 +12,9 @@ import {
   PROFILE_DESTINATION,
   allFloatingDestinations,
   feedDiscDestination,
+  FLOATING_RUNG_MS,
+  FLOATING_RUNG_STAGGER_MS,
+  floatingLadderExitMs,
   menuLadderFor,
 } from './floating-menu';
 import { showsFloatingMenus } from './floating-gate';
@@ -232,5 +235,28 @@ describe('le barreau du jeu (#17769)', () => {
     expect(keys).not.toContain('game');
     expect(keys).toEqual(MENU_LADDER.filter((e) => e !== GAME_DESTINATION).map((e) => e.key));
     expect(menuLadderFor({ canAccessAdmin: false }).map((e) => e.key)[0]).toBe('game');
+  });
+});
+
+/**
+ * LA SORTIE DE L'ÉCHELLE (#18460) — `menuAnimation` d'iOS joue l'aller ET le
+ * retour. La sortie rejoue l'entrée à l'envers, cascade inversée : l'échelle
+ * reste montée le temps du dernier barreau, retard compris.
+ */
+describe('floatingLadderExitMs', () => {
+  test('un barreau : la durée d’un barreau', () => {
+    expect(floatingLadderExitMs(1)).toBe(FLOATING_RUNG_MS);
+  });
+
+  test('chaque barreau de plus ajoute un pas de cascade', () => {
+    expect(floatingLadderExitMs(MENU_LADDER.length)).toBe(FLOATING_RUNG_MS + (MENU_LADDER.length - 1) * FLOATING_RUNG_STAGGER_MS);
+  });
+
+  test('les valeurs d’iOS : 0,32 s par barreau, 0,04 s par rang', () => {
+    expect({ rung: FLOATING_RUNG_MS, stagger: FLOATING_RUNG_STAGGER_MS }).toEqual({ rung: 320, stagger: 40 });
+  });
+
+  test('aucun barreau : rien à attendre', () => {
+    expect(floatingLadderExitMs(0)).toBe(0);
   });
 });
