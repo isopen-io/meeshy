@@ -10,11 +10,15 @@ import type { Attachment, Message } from './types';
 /**
  * `attachment:reaction-added` / `attachment:reaction-removed` (#7894) — la
  * passerelle diffuse à la room de la conversation le résumé ABSOLU de la pièce
- * (`AttachmentReactionHandler.ts`, `AttachmentReactionUpdateEventData`). Miroir
- * iOS : `ConversationViewModel.applyAttachmentReactionDelta` REMPLACE
- * `reactionSummary`, sans toucher à `currentUserReactions` (une diffusion n'a
- * pas de lecteur).
+ * (`AttachmentReactionHandler.ts`, `AttachmentReactionUpdateEventData`) et
+ * l'ACTEUR (`userId`, depuis #18124).
+ *
+ * Les témoins de cette suite servent un acteur TIERS (`p-other` / `u-other`)
+ * sauf là où ils nomment le lecteur : c'est voulu, et c'est ce qui fait que
+ * les témoins de « ma réaction » plus bas peuvent tomber. Un harnais dont
+ * l'acteur serait le lecteur rendrait le même verdict avant et après le lot.
  */
+const VIEWER = 'u-viewer';
 
 const piece = (partial: Partial<Attachment>): Attachment =>
   ({ id: 'a-1', messageId: 'm-1', mimeType: 'image/png', fileUrl: 'https://cdn.example/p.png', ...partial }) as Attachment;
@@ -31,6 +35,7 @@ const event = (partial: Record<string, unknown>): Record<string, unknown> => ({
   messageId: 'm-1',
   conversationId: 'c-a',
   participantId: 'p-other',
+  userId: 'u-other',
   emoji: '🔥',
   action: 'add',
   reactionSummary: { '🔥': 1 },
@@ -61,7 +66,7 @@ describe('applyAttachmentReactionUpdate — le résumé ABSOLU remplace celui de
     const payload = event({ reactionSummary: { '😍': 1, '🔥': 2 } });
     if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
 
-    applyAttachmentReactionUpdate(client, payload);
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
 
     const [reacted, quiet] = piecesOf(client);
     expect(reacted?.reactionSummary).toEqual({ '😍': 1, '🔥': 2 });
@@ -73,7 +78,7 @@ describe('applyAttachmentReactionUpdate — le résumé ABSOLU remplace celui de
     const payload = event({ reactionSummary: { '🔥': 2 } });
     if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
 
-    applyAttachmentReactionUpdate(client, payload);
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
 
     expect(piecesOf(client)[0]?.currentUserReactions).toEqual(['🔥']);
   });
@@ -83,7 +88,7 @@ describe('applyAttachmentReactionUpdate — le résumé ABSOLU remplace celui de
     const payload = event({ action: 'remove', reactionSummary: {} });
     if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
 
-    applyAttachmentReactionUpdate(client, payload);
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
 
     expect(piecesOf(client)[0]?.reactionSummary).toEqual({});
   });
@@ -94,8 +99,62 @@ describe('applyAttachmentReactionUpdate — le résumé ABSOLU remplace celui de
     for (const partial of [{ attachmentId: 'a-x' }, { messageId: 'm-x' }, { conversationId: 'c-x' }]) {
       const payload = event(partial);
       if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
-      applyAttachmentReactionUpdate(client, payload);
+      applyAttachmentReactionUpdate(client, payload, VIEWER);
     }
     expect(piecesOf(client)).toBe(before);
+  });
+});
+
+describe('#18124 — « ma réaction » ne bascule que pour le geste du LECTEUR', () => {
+  test("l'écho de MON geste depuis un autre appareil allume la pastille", () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: [] })]);
+
+    applyAttachmentReactionUpdate(client, event({ userId: VIEWER }) as never, VIEWER);
+
+    expect(piecesOf(client)[0]?.currentUserReactions).toEqual(['🔥']);
+  });
+
+  test('MON retrait depuis un autre appareil l’éteint', () => {
+    const client = seeded([piece({ reactionSummary: { '🔥': 1 }, currentUserReactions: ['🔥', '😍'] })]);
+
+    applyAttachmentReactionUpdate(
+      client,
+      event({ userId: VIEWER, action: 'remove', reactionSummary: {} }) as never,
+      VIEWER,
+    );
+
+    expect(piecesOf(client)[0]?.currentUserReactions).toEqual(['😍']);
+  });
+
+  test("le geste d'un TIERS met le résumé à jour et ne touche pas ma pastille", () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: ['😍'] })]);
+
+    applyAttachmentReactionUpdate(client, event({}) as never, VIEWER);
+
+    expect(piecesOf(client)[0]?.reactionSummary).toEqual({ '🔥': 1 });
+    expect(piecesOf(client)[0]?.currentUserReactions).toEqual(['😍']);
+  });
+
+  test("un invité de lien (`userId: null`) ne fait basculer la pastille de personne", () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: [] })]);
+
+    applyAttachmentReactionUpdate(client, event({ userId: null }) as never, VIEWER);
+
+    expect(piecesOf(client)[0]?.currentUserReactions).toEqual([]);
+  });
+
+  test('une double livraison du MÊME geste est idempotente', () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: [] })]);
+
+    applyAttachmentReactionUpdate(client, event({ userId: VIEWER }) as never, VIEWER);
+    applyAttachmentReactionUpdate(client, event({ userId: VIEWER }) as never, VIEWER);
+
+    expect(piecesOf(client)[0]?.currentUserReactions).toEqual(['🔥']);
+  });
+
+  test('une charge dont le `userId` n’est ni une chaîne ni nul est refusée à la porte', () => {
+    expect(isAttachmentReactionUpdate(event({ userId: 42 }))).toBe(false);
+    expect(isAttachmentReactionUpdate(event({ userId: null }))).toBe(true);
+    expect(isAttachmentReactionUpdate(event({ userId: undefined }))).toBe(true);
   });
 });
