@@ -336548,190 +336548,49 @@
         }
       }
     },
-    "circleNotify.explain.BLOOD": {
+    "circleNotify.notified": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عائلة قلبك فقط."
+            "value": "المُبلَّغون: %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur deine Herzensfamilie."
+            "value": "Benachrichtigt: %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only your family of the heart."
+            "value": "Notified: %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo tu familia del corazón."
+            "value": "Avisados: %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre famille de cœur seulement."
+            "value": "Prévenus : %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo la tua famiglia del cuore."
+            "value": "Avvisati: %@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só a sua família do coração."
-          }
-        }
-      }
-    },
-    "circleNotify.explain.CLOSE": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الدم والمقرّب."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blut und Vertrauter."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blood and Close."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangre y Cercano."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sang et Proche."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangue e Intimo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangue e Próximo."
-          }
-        }
-      }
-    },
-    "circleNotify.explain.FRIEND": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الدم والمقرّب والصديق."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blut, Vertrauter und Freund."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blood, Close and Friend."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangre, Cercano y Amigo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sang, Proche et Ami."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangue, Intimo e Amico."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sangue, Próximo e Amigo."
-          }
-        }
-      }
-    },
-    "circleNotify.explain.ACQUAINTANCE": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "من الدم إلى المعارف."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Von Blut bis Bekannter."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "From Blood to Acquaintance."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "De Sangre a Conocido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du Sang à la Connaissance."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Da Sangue a Conoscente."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "De Sangue a Conhecido."
+            "value": "Avisados: %@"
           }
         }
       }

@@ -144,13 +144,21 @@ struct CircleNotifySettingsContent: View {
 
     static func explanation(of choice: RelationAudienceChoice) -> String? {
         switch choice {
-        case .blood: return String(localized: "circleNotify.explain.BLOOD", defaultValue: "Votre famille de cœur seulement.", bundle: .main)
-        case .close: return String(localized: "circleNotify.explain.CLOSE", defaultValue: "Sang et Proche.", bundle: .main)
-        case .friend: return String(localized: "circleNotify.explain.FRIEND", defaultValue: "Sang, Proche et Ami.", bundle: .main)
-        case .acquaintance: return String(localized: "circleNotify.explain.ACQUAINTANCE", defaultValue: "Du Sang à la Connaissance.", bundle: .main)
+        case .blood, .close, .friend, .acquaintance: return notified(upTo: choice)
         case .nobody: return String(localized: "circleNotify.explain.NOBODY", defaultValue: "Personne de votre entourage n’est prévenu.", bundle: .main)
         case .community: return String(localized: "circleNotify.explain.COMMUNITY", defaultValue: "Vos liens, de Sang à Connaissance, et les communautés que vous partagez.", bundle: .main)
         case .public: return String(localized: "circleNotify.explain.PUBLIC", defaultValue: "Comme Communauté : sans abonnés, aucun inconnu n’est prévenu.", bundle: .main)
         }
+    }
+
+    /// Un cercle prévient aussi chaque cercle plus proche (loi d'inclusion) : la phrase les nomme dans l'ordre, avec
+    /// les mots du sélecteur.
+    private static func notified(upTo choice: RelationAudienceChoice) -> String {
+        let inclusive: [RelationAudienceChoice] = [.blood, .close, .friend, .acquaintance]
+        let circles = inclusive.prefix(through: inclusive.firstIndex(of: choice) ?? 0).map(label(of:))
+        return String(
+            format: String(localized: "circleNotify.notified", defaultValue: "Prévenus : %@", bundle: .main),
+            ListFormatter.localizedString(byJoining: circles)
+        )
     }
 }

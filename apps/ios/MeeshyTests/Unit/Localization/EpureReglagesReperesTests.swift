@@ -53,10 +53,7 @@ final class EpureReglagesReperesTests: XCTestCase {
         "settings.privacy.last_seen.summary": "Vos proches voient quand vous étiez actif, vos amis si vous êtes en ligne.",
         "settings.privacy.hide_from_contact_search.summary": "Votre profil ne ressort plus d'une recherche par numéro ou e-mail.",
         "settings.privacy.hide_from_contact_search.info": "Activé, vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy.",
-        "circleNotify.explain.BLOOD": "Votre famille de cœur seulement.",
-        "circleNotify.explain.CLOSE": "Sang et Proche.",
-        "circleNotify.explain.FRIEND": "Sang, Proche et Ami.",
-        "circleNotify.explain.ACQUAINTANCE": "Du Sang à la Connaissance.",
+        "circleNotify.notified": "Prévenus : %@",
     ]
 
     func test_catalog_newAndShortenedLabels_sayTheirFrench() throws {
@@ -72,9 +69,7 @@ final class EpureReglagesReperesTests: XCTestCase {
             for language in Self.otherLanguages {
                 let value = try XCTUnwrap(values[language], "\(key) [\(language)]")
                 XCTAssertFalse(value.isEmpty, "\(key) [\(language)]")
-                if !["circleNotify.explain.CLOSE", "circleNotify.explain.FRIEND"].contains(key) {
-                    XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
-                }
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
             }
         }
     }
@@ -132,14 +127,30 @@ final class EpureReglagesReperesTests: XCTestCase {
         XCTAssertEqual(SettingsInfoNotes.onlineStatus.question, "Qui voit que je suis en ligne ?")
     }
 
-    func test_circleNotify_everyChoiceSaysWhoIsNotified_followingTheInclusionLaw() {
+    /// Choisir un cercle prévient aussi les cercles plus proches : la phrase nomme, dans l'ordre, chaque cercle prévenu,
+    /// avec les MÊMES mots que le sélecteur — la loi d'inclusion se calcule, elle ne se recopie pas en quatre phrases.
+    func test_circleNotify_everyChoiceSaysWhoIsNotified_followingTheInclusionLaw() throws {
         for choice in RelationAudienceChoice.allCases {
             XCTAssertNotNil(CircleNotifySettingsContent.explanation(of: choice), "\(choice) : aucune phrase")
         }
-        XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .friend), "Sang, Proche et Ami.")
-        XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .close), "Sang et Proche.")
-        XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .blood), "Votre famille de cœur seulement.")
-        XCTAssertEqual(CircleNotifySettingsContent.explanation(of: .acquaintance), "Du Sang à la Connaissance.")
+        let inclusive: [RelationAudienceChoice] = [.blood, .close, .friend, .acquaintance]
+        for (rank, choice) in inclusive.enumerated() {
+            let sentence = try XCTUnwrap(CircleNotifySettingsContent.explanation(of: choice))
+            for notified in inclusive[...rank] {
+                XCTAssertTrue(sentence.contains(CircleNotifySettingsContent.label(of: notified)), "\(choice) : « \(sentence) » doit nommer \(notified)")
+            }
+            for spared in inclusive[(rank + 1)...] {
+                XCTAssertFalse(sentence.contains(CircleNotifySettingsContent.label(of: spared)), "\(choice) : « \(sentence) » ne prévient pas \(spared)")
+            }
+        }
+    }
+
+    func test_circleNotify_inclusionSentence_isComputed_notFourCopiedExplanations() throws {
+        let app = try app()
+        for level in ["BLOOD", "CLOSE", "FRIEND", "ACQUAINTANCE"] {
+            XCTAssertNil(app["circleNotify.explain.\(level)"], "circleNotify.explain.\(level) quitte les sept langues : la phrase se calcule")
+        }
+        XCTAssertEqual(app["circleNotify.notified"]?["fr"], "Prévenus : %@")
     }
 
     // MARK: - Règle 7 : le carnet d'adresses dit ce qu'il fait, au repos
