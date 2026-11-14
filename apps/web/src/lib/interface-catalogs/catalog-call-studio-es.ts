@@ -4,6 +4,7 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 const es = {
   'callStudio.effects.color': 'Color',
   'callStudio.effects.settings': 'Ajustes',
+  'callStudio.effects.panel': 'Ajustes de mi imagen',
   'callStudio.face.none': 'Ninguno',
   'callStudio.face.smoothing': 'Suavizado de piel',
   'callStudio.face.toad': 'Sapo',
