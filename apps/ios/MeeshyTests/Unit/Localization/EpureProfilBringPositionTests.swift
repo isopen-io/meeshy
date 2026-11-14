@@ -37,7 +37,7 @@ final class EpureProfilBringPositionTests: XCTestCase {
         "bring.explain": "Pour une urgence extrême : son téléphone sonne, même verrouillé.",
         "bring.silent.question": "Et si son iPhone est en silencieux ?",
         "bring.silent.note": "Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.",
-        "sharedLocation.share.explain": "%@ voit ta position jusqu'à l'échéance ; tu peux arrêter à tout moment.",
+        "sharedLocation.share.explain": "%@ voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.",
         "sharedLocation.share.refresh.question": "Quand ma position se met-elle à jour ?",
         "sharedLocation.share.refresh.note": "Elle se met à jour quand Meeshy est ouvert.",
     ]
@@ -92,7 +92,8 @@ final class EpureProfilBringPositionTests: XCTestCase {
 
     func test_shareLocation_explain_saysUntilWhenAndHowToStop_butNotTheRefreshDetail() {
         let sentence = ShareLocationWording.explain(name: "Bob")
-        XCTAssertEqual(sentence, "Bob voit ta position jusqu'à l'échéance ; tu peux arrêter à tout moment.")
+        XCTAssertEqual(sentence, "Bob voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.")
+        XCTAssertTrue(sentence.contains("depuis sa fiche"), "la phrase dit où arrêter le partage")
         XCTAssertFalse(sentence.contains("Meeshy est ouvert"))
     }
 

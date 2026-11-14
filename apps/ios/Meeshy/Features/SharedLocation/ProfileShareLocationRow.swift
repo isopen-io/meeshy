@@ -178,7 +178,7 @@ enum ShareLocationWording {
     }
 
     static func explain(name: String) -> String {
-        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance ; tu peux arrêter à tout moment.", bundle: .main), name)
+        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.", bundle: .main), name)
     }
 
     /// Le détail technique (#18088) : l'échéance et l'arrêt restent au repos, la mise à jour passe derrière un (i).

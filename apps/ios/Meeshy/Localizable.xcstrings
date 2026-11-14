@@ -337307,43 +337307,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يرى %@ موقعك حتى انتهاء المدة؛ يمكنك الإيقاف في أي وقت."
+            "value": "يرى %@ موقعك حتى انتهاء المدة؛ يمكنك الإيقاف من ملفه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ sieht deinen Standort bis zum Ende; du kannst jederzeit beenden."
+            "value": "%@ sieht deinen Standort bis zum Ende; du kannst über das Profil beenden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ sees your location until it ends; you can stop any time."
+            "value": "%@ sees your location until it ends; you can stop it from their profile."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ve tu ubicación hasta que termine; puedes detenerlo cuando quieras."
+            "value": "%@ ve tu ubicación hasta que termine; puedes detenerlo desde su perfil."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ voit ta position jusqu'à l'échéance ; tu peux arrêter à tout moment."
+            "value": "%@ voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vede la tua posizione fino alla scadenza; puoi interrompere in qualsiasi momento."
+            "value": "%@ vede la tua posizione fino alla scadenza; puoi interromperla dal profilo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vê sua localização até o fim do prazo; você pode parar a qualquer momento."
+            "value": "%@ vê sua localização até o fim do prazo; você pode parar pelo perfil."
           }
         }
       }
