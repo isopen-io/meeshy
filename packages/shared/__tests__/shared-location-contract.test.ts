@@ -45,6 +45,13 @@ describe('le contrat du partage temporaire de position (#16980)', () => {
     expect(sharedLocationStartPayloadSchema.safeParse(start({ conversationId: READER })).success).toBe(false);
   });
 
+  it('porte, en option, l\'échéance de chaque personne en secondes entières, au plus 8 h (#18205)', () => {
+    expect(sharedLocationStartPayloadSchema.safeParse(start({ recipients: [{ userId: READER, expiresInSeconds: 600 }] })).success).toBe(true);
+    for (const expiresInSeconds of [0, -1, 1.5, 8 * 3600 + 1, '600', null]) {
+      expect(sharedLocationStartPayloadSchema.safeParse(start({ recipients: [{ userId: READER, expiresInSeconds }] })).success).toBe(false);
+    }
+  });
+
   it('refuse des coordonnées hors bornes', () => {
     expect(sharedLocationUpdatePayloadSchema.safeParse({ latitude: 91, longitude: 0 }).success).toBe(false);
     expect(sharedLocationUpdatePayloadSchema.safeParse({ latitude: 0, longitude: -181 }).success).toBe(false);

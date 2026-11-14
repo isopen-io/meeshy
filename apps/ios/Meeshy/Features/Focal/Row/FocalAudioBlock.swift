@@ -138,6 +138,11 @@ struct FocalAudioBlock: View, Equatable {
     let isDark: Bool
     /// Contrat §3.6 : `FocalRowInput.allAudioItems`.
     let allAudioItems: [ConversationViewModel.AudioItem]
+    /// #10690 — le message de la rangée, quand il porte un vocal : le repli
+    /// quand `allAudioItems` ne le connaît pas encore, ou plus (bascule
+    /// d'identifiant à l'accusé serveur). Les enrichissements (transcription,
+    /// pistes traduites) restent ceux des items quand ils existent.
+    var hostMessage: Message? = nil
     let translatedAudios: [MessageTranslatedAudio]
     let mentionDisplayNames: [String: String]
     let conversationName: String
@@ -171,6 +176,7 @@ struct FocalAudioBlock: View, Equatable {
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
+            && lhs.hostMessage?.id == rhs.hostMessage?.id
             && lhs.ownedAudioEnrichment == rhs.ownedAudioEnrichment
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
@@ -216,6 +222,20 @@ struct FocalAudioBlock: View, Equatable {
         allAudioItems.first { $0.id == attachmentId }
     }
 
+    /// Le message qui héberge une piste : celui de la projection, sinon celui
+    /// de la rangée. Une rangée qui porte un vocal ne rend jamais le vide (#10690).
+    nonisolated static func hostingMessage(
+        for attachmentId: String,
+        in items: [ConversationViewModel.AudioItem],
+        fallback: Message?
+    ) -> Message? {
+        items.first { $0.id == attachmentId }?.message ?? fallback
+    }
+
+    private func hostingMessage(for attachmentId: String) -> Message? {
+        Self.hostingMessage(for: attachmentId, in: allAudioItems, fallback: hostMessage)
+    }
+
     var body: some View {
         Group {
             switch mode {
@@ -234,7 +254,7 @@ struct FocalAudioBlock: View, Equatable {
     private var stackBody: some View {
         // `message` DÉRIVÉ de `allAudioItems` (voir doc de tête) — toutes
         // les pistes d'`audios` appartiennent au MÊME message.
-        if let message = audioItem(for: audios.first?.id ?? "")?.message {
+        if let message = hostingMessage(for: audios.first?.id ?? "") {
             let perPageTranscriptions = Dictionary(
                 audios.compactMap { att in
                     audioItem(for: att.id)?.transcription.map { (att.id, $0) }
@@ -284,7 +304,7 @@ struct FocalAudioBlock: View, Equatable {
     @ViewBuilder
     private var standaloneBody: some View {
         ForEach(audios) { attachment in
-            if let message = audioItem(for: attachment.id)?.message {
+            if let message = hostingMessage(for: attachment.id) {
                 AudioMediaView(
                     attachment: attachment,
                     message: message,

@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.focal
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.doubleClick
@@ -88,16 +89,11 @@ class FocalSystemRowsTest {
     @Test fun `la ligne des participants est lue avec la carte`() {
         val roster = FocalCallParticipants.Roster(others = listOf("Awa"), viewerTookPart = true)
         show(content(system = true, call = call(CallSummaryMetadata.Outcome.COMPLETED), participants = roster))
-        compose.onNode(hasContentDescriptionContaining("Awa and you")).assertExists()
+        compose.onNode(hasContentDescription("Awa and you", substring = true)).assertExists()
     }
 
     @Test fun `sans participants servis la carte ne dessine aucune ligne`() {
         show(content(system = true, call = call(CallSummaryMetadata.Outcome.COMPLETED)))
         compose.onNodeWithText("you", substring = true).assertDoesNotExist()
     }
-
-    private fun hasContentDescriptionContaining(part: String) =
-        androidx.compose.ui.test.SemanticsMatcher("description contains $part") { node ->
-            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.any { it.contains(part) } == true
-        }
 }

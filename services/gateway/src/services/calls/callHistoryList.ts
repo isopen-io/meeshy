@@ -19,7 +19,7 @@ import { journalConversationsMatching, normalizedJournalQuery } from './callHist
 
 export type CallHistoryType = 'all' | 'audio' | 'video';
 
-type ReaderCallLine = CallRosterLine & { readonly callSessionId: string; readonly participant: { readonly userId: string | null } | null };
+type ReaderCallLine = CallRosterLine & { readonly callSessionId: string };
 
 /** Call journal sliding window: 3 months. */
 export const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -263,10 +263,12 @@ export async function listCallHistory(
   // (clients early-join to receive the offer), so a member who rang and
   // declined has a row and must still read "missed", never "incoming" — in a
   // GROUP call that tracks answers. A duo and an untracked call keep the
-  // former rule (B-1). See `deriveCallDirection`.
+  // former rule (B-1), and the LAW says so (`duo`): a duo is tracked like any
+  // other call (#18453). The law filters line by line, so only the reader's
+  // own lines are loaded (#18453, as before #18242). See `deriveCallDirection`.
   const nonOutgoingCalls = page.filter((r) => r.initiatorId !== userId);
   const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
-  const needsTracking = [...nonOutgoingCalls, ...groupCalls].filter((r) => r.answeredAt !== null && !duoCallIds.has(r.id));
+  const needsTracking = [...nonOutgoingCalls, ...groupCalls].filter((r) => r.answeredAt !== null);
   const tracked = await callsTrackingAnswers(prisma, needsTracking.map((r) => r.id));
   const rosterCall = (row: { id: string; answeredAt: Date | null }): RosterCall => ({
     id: row.id,
@@ -277,13 +279,13 @@ export async function listCallHistory(
 
   const participatedCallIds = new Set<string>();
   if (nonOutgoingCalls.length > 0) {
-    const lines: ReadonlyArray<ReaderCallLine> = await prisma.callParticipant.findMany({
-      where: { callSessionId: { in: nonOutgoingCalls.map((r) => r.id) } },
-      select: { callSessionId: true, role: true, answeredAt: true, participant: { select: { userId: true } } }
+    const readerLines: ReadonlyArray<ReaderCallLine> = await prisma.callParticipant.findMany({
+      where: { callSessionId: { in: nonOutgoingCalls.map((r) => r.id) }, participant: { userId } },
+      select: { callSessionId: true, role: true, answeredAt: true }
     });
     for (const call of nonOutgoingCalls) {
-      const tookPart = answeredCallRoster(lines.filter((line) => line.callSessionId === call.id), rosterCall(call));
-      if (tookPart.some((line) => line.participant?.userId === userId)) participatedCallIds.add(call.id);
+      const tookPart = answeredCallRoster(readerLines.filter((line) => line.callSessionId === call.id), rosterCall(call));
+      if (tookPart.length > 0) participatedCallIds.add(call.id);
     }
   }
 

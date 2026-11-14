@@ -48,6 +48,7 @@ export * from './conversation-notice.js';
 export * from './conversation-join-error.js';
 export * from './last-message-protection.js';
 export * from './ephemeral-countdown.js';
+export * from './ephemeral-burn.js';
 export { getSenderUserId, isAnonymousSender } from './sender-identity.js';
 export {
   type AttachmentMessageType,
