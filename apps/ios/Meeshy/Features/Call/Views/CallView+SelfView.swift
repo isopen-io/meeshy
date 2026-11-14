@@ -11,9 +11,7 @@ extension CallView {
     // MARK: - Picture-in-Picture (§7.2)
 
     /// The four anchor corners a PiP can snap to.
-    enum PiPCorner: CaseIterable {
-        case topLeading, topTrailing, bottomLeading, bottomTrailing
-    }
+    typealias PiPCorner = CallSelfTileCorner
 
     private static let pipMargin: CGFloat = 16
 
@@ -22,25 +20,25 @@ extension CallView {
     /// clearances for the minimize chevron/badge (top) and control bar (bottom).
     /// #17327 — ma vignette ne porte aucune commande autour d'elle : rien à lui réserver.
     func pipCenter(_ corner: PiPCorner, in container: CGSize, size: CGSize = CallSelfTileScale.standard.size, safeArea: EdgeInsets = .init()) -> CGPoint {
-        let halfW = size.width / 2
-        let halfH = size.height / 2
-        let margin = Self.pipMargin
-        let topInset = safeArea.top + QualityThresholds.pipTopClearance + selfTileTopBannerClearance
-        let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
-        let leadingX = safeArea.leading + margin + halfW
-        let trailingX = container.width - safeArea.trailing - margin - halfW
-        let topY = topInset + halfH
-        let bottomY = container.height - bottomInset - halfH
-        switch corner {
-        case .topLeading: return CGPoint(x: leadingX, y: topY)
-        case .topTrailing: return CGPoint(x: trailingX, y: topY)
-        case .bottomLeading: return CGPoint(x: leadingX, y: bottomY)
-        case .bottomTrailing: return CGPoint(x: trailingX, y: bottomY)
-        }
+        let yields = selfTileYieldsToRails(in: container)
+        let edge = { (inset: CGFloat) in CallRailsLayout.selfTileEdgeDistance(ownInset: inset + Self.pipMargin, safeHorizontal: Self.railsSafeHorizontal, yieldsToRails: yields) }
+        return corner.center(of: size, in: container, insets: EdgeInsets(top: safeArea.top + QualityThresholds.pipTopClearance + selfTileTopBannerClearance, leading: edge(safeArea.leading), bottom: safeArea.bottom + QualityThresholds.pipBottomClearance, trailing: edge(safeArea.trailing)))
+    }
+
+    /// #17965 — (…) ouvert en paysage, ma vignette cède le coin au rail (L2.8) ; la pile des bannières la laisse à côté (L1.8).
+    var selfTileRailsShown: Bool { isChromeVisible && !controlsDisposition.railRows(currentActionSet, layer: layer).isEmpty }
+
+    func selfTileYieldsToRails(in container: CGSize) -> Bool {
+        CallRailsLayout.selfTileYieldsToRails(isLandscape: CallSelfTileScale.isLandscape(container), railsShown: selfTileRailsShown)
+    }
+
+    var selfTileBannerNeighbor: CallTopBannerTileNeighbor? {
+        CallTopBannerTileNeighbor.duoTile(isShown: !isGroupStage && !isLiveFrameShown && callManager.isVideoEnabled && chromeVisibility.isVisible(.selfView), isAtTop: pipCorner.isTop, width: selfTileScale.width(isLandscape: true) * selfTileStowFactor, ownInset: Self.pipMargin, safeHorizontal: Self.railsSafeHorizontal, railsShown: selfTileRailsShown)
     }
 
     /// #17791 — la place de la pile de bannières sous l'en-tête (partage local, enregistrement, capture), à sa hauteur mesurée.
     var selfTileTopBannerClearance: CGFloat {
+        guard !CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside else { return 0 }
         let counted = CallTopBannerStack.countedForSelfTile(
             isLocalScreenShareShown: callManager.screenShare.isSharing,
             isRecordingShown: callManager.recording.phase != .idle || callManager.recording.notice != nil,
@@ -66,11 +64,7 @@ extension CallView {
     /// Nearest corner to a point — used to snap on drag end.
     private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
         let size = pipTileSize(in: container, safeArea: safeArea)
-        return PiPCorner.allCases.min(by: { a, b in
-            let ca = pipCenter(a, in: container, size: size, safeArea: safeArea)
-            let cb = pipCenter(b, in: container, size: size, safeArea: safeArea)
-            return hypot(point.x - ca.x, point.y - ca.y) < hypot(point.x - cb.x, point.y - cb.y)
-        }) ?? .topTrailing
+        return PiPCorner.nearest(to: point) { pipCenter($0, in: container, size: size, safeArea: safeArea) }
     }
 
     var pipView: some View {
@@ -84,6 +78,7 @@ extension CallView {
                     .frame(width: size.width, height: size.height)
                     .modifier(CallSelfTileOutline(color: CallSelfTileStroke.color(forKey: CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams, myId: AuthManager.shared.currentUser?.id, peerId: callManager.remoteUserId)), lineWidth: CallSelfTileStroke.lineWidth, stowFactor: selfTileStowFactor))
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
+                    .overlay(alignment: .bottom) { CallSelfTileNameplate(title: selfTilePlateTitle, tileWidth: size.width, stowFactor: selfTileStowFactor, reservesBadge: showsPeerMutedBadge && effectiveSwapStreams) }
                     .overlay(alignment: .bottomLeading) {
                         if showsPeerMutedBadge && effectiveSwapStreams {
                             CallPeerMutedBadge(compact: true).padding(MeeshySpacing.xs).scaleEffect(CallSelfTileScale.counterScaled(1, by: selfTileStowFactor), anchor: .bottomLeading)
@@ -92,6 +87,7 @@ extension CallView {
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
                     .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
+                    .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: selfTileYieldsToRails(in: geo.size))
                     .gesture(
                         DragGesture()
                             .onChanged { pipDragOffset = $0.translation }
@@ -99,7 +95,7 @@ extension CallView {
                                 let dropped = CGPoint(x: base.x + value.translation.width,
                                                       y: base.y + value.translation.height)
                                 let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
+                                withAnimation(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.75, reduceMotion: reduceMotion)) {
                                     pipCorner = corner
                                     pipDragOffset = .zero
                                 }
@@ -112,7 +108,7 @@ extension CallView {
                     .accessibilityAction { swapPictureInPicture() }
                     .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
                     .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
-                    .accessibilityValue(CallSelfTileCopy.sizeName(selfTileScale))
+                    .accessibilityValue(CallSelfTilePlate.accessibilityValue(name: selfTilePlateTitle, size: CallSelfTileCopy.sizeName(selfTileScale)))
                     .accessibilityAdjustableAction { direction in
                         switch direction {
                         case .increment: settleSelfTile(on: selfTileScale.larger)
@@ -123,6 +119,10 @@ extension CallView {
             }
         }
         .onAppear { selfTileScale = selfTileMemory.scale(for: callManager.currentCallId) }
+    }
+
+    private var selfTilePlateTitle: String {
+        CallSelfTilePlate.title(showsLocal: !effectiveSwapStreams, you: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main), peer: peerDisplayName)
     }
 
     /// #8577 — pincer la vignette la fait changer de palier x1 · x2 · x3 : elle
@@ -137,7 +137,7 @@ extension CallView {
 
     private func settleSelfTile(on scale: CallSelfTileScale) {
         let changed = scale != selfTileScale
-        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
+        withAnimation(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.8, reduceMotion: reduceMotion)) {
             selfTileScale = scale
             selfTilePinch = 1
         }
@@ -152,7 +152,7 @@ extension CallView {
     }
 
     private func swapPictureInPicture() {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) { swapStreams.toggle() }
+        withAnimation(CallSelfTileMotion.spring(response: 0.4, dampingFraction: 0.8, reduceMotion: reduceMotion)) { swapStreams.toggle() }
         HapticFeedback.light()
     }
 
