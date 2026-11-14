@@ -145,6 +145,6 @@ class CallMontageModeSemanticsTest {
 
     @Test
     fun `C1_4 - la rangee des ambiances s'estompe a ses bords comme les autres rangees qui defilent`() {
-        assertThat(code("CallFrameMoodChips.kt")).contains("callScrollEdgeFade(list, horizontal = true)")
+        assertThat(code("CallFrameMoodChips.kt")).contains("callScrollEdgeFade(horizontal = true)")
     }
 }
