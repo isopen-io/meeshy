@@ -83,7 +83,7 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.encryption.note.revertDirect.text": "Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.",
         "conversation.encryption.note.serverSays.question": "Et si le serveur dit le contraire ?",
         "conversation.encryption.note.serverSays.text": "Même si le serveur la présentait ensuite autrement, votre compte n’y écrit plus sans chiffrement de bout en bout depuis cet appareil.",
-        "conversation.encryption.note.whoMayToggle.question": "Qui peut changer de mode ?",
+        "conversation.encryption.note.whoMayToggle.question": "Qui peut changer de mode, et qui le voit ?",
         "conversation.encryption.summary.none": "Non chiffrée",
         "conversation.info.block.message": "Plus aucun message de %@ ; débloquable dans les réglages.",
         "conversation.info.leave.message": "Vous ne recevrez plus de messages ; votre historique reste lisible.",
@@ -437,6 +437,7 @@ final class ConversationEpureTests: XCTestCase {
         let note = ConversationEncryptionExplanation.Fact.switchKeepsHistory.note
         XCTAssertTrue(note?.text.contains(ConversationEncryptionExplanation.Fact.whoMayToggle.text) == true)
         XCTAssertTrue(note?.text.contains(ConversationEncryptionExplanation.Fact.switchIsShownInThread.text) == true)
+        XCTAssertEqual(note?.question, "Qui peut changer de mode, et qui le voit ?", "la question annonce les DEUX réponses que la note porte")
     }
 
     func test_encryptionIrreversibility_staysWhole_inTheFooter_theCreationScreen_andTheConfirmation() throws {

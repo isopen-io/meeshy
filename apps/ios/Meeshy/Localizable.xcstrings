@@ -335051,43 +335051,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "من يستطيع تغيير الوضع؟"
+            "value": "من يستطيع تغيير الوضع، ومن يرى ذلك؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wer kann den Modus ändern?"
+            "value": "Wer kann den Modus ändern, und wer sieht es?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Who can change the mode?"
+            "value": "Who can change the mode, and who sees it?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Quién puede cambiar el modo?"
+            "value": "¿Quién puede cambiar el modo y quién lo ve?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Qui peut changer de mode ?"
+            "value": "Qui peut changer de mode, et qui le voit ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chi può cambiare modalità?"
+            "value": "Chi può cambiare modalità, e chi lo vede?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quem pode mudar o modo?"
+            "value": "Quem pode mudar o modo, e quem vê?"
           }
         }
       }

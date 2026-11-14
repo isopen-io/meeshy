@@ -161,7 +161,7 @@ extension ConversationEncryptionExplanation.Fact {
             )
         case .switchKeepsHistory:
             MeeshyInfoNote(
-                question: String(localized: "conversation.encryption.note.whoMayToggle.question", defaultValue: "Qui peut changer de mode ?", bundle: .main),
+                question: String(localized: "conversation.encryption.note.whoMayToggle.question", defaultValue: "Qui peut changer de mode, et qui le voit ?", bundle: .main),
                 text: joinedNoteText()
             )
         default:
