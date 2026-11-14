@@ -968,3 +968,10 @@ socket jusqu'au client.
 1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 28 — 2026-11-14
+
+- **Base** : `origin/dev` @ `a978a2c2`. Le lot du cycle 27 (#17205) y est fusionné.
+- **Branche** : `claude/determined-volta-6f599d`.
+- **Objectif** : #17189. Le refus transitoire du traducteur (« translation pool full ») devient un contrat déclaré : un `errorCode` additif `TRANSLATION_POOL_FULL`, lu par la passerelle à côté du libellé historique, et un test de contrat qui tombe si l'un des deux côtés change.
+- *(en cours)*
