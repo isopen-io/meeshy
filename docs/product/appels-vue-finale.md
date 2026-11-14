@@ -101,6 +101,8 @@
     - Je quitte Meeshy pour montrer autre chose, et l'appel me suit en capsule : icône d'écran, nom · durée, « Arrêter ».
     - Toucher la capsule rouvre l'appel ; le bandeau « Vous partagez votre écran · Arrêter » y reste sous l'en-tête.
     - Mon partage ne passe jamais à la une chez moi.
+    - **Dans la conversation de l'appel, la zone « appel en cours » se tait** (décision porteur du 2026-11-14, #18457) : l'en-tête y porte déjà la puce « revenir à l'appel » avec sa durée, le bandeau du haut et la bulle n'y ajoutent rien. En appel vidéo, la vignette flottante (P18) prend leur place dans cette conversation — jamais le cercle, qui ne montrerait pas l'image. Ailleurs, le bandeau et la bulle restent ce qu'ils sont ; le PiP système et le plein écran gardent la main (iOS `CallReducedPresence`).
+    - **L'appel réduit en bulle devient un disque rogné, aimanté au bord** (décision porteur du 2026-11-14, #18458) : le disque de l'avatar se colle au bord gauche ou droit et y est rogné ; la ligne se dit par des cercles concentriques autour du disque (anneaux du kit), qui respirent à la parole et se taisent sous « Réduire les animations » ; l'indicateur réseau ne s'y pose que si la connexion se dégrade (loi 1) ; la durée continue sur la partie visible du disque. Toucher rouvre l'appel, glisser change de bord. P18 et S1 se relisent avec ce disque pour le palier cercle.
 13. **Une capture ou un enregistrement d'écran se voit et se garde** (#16665).
     - Une puce « X capture l'écran de l'appel » apparaît chez les autres, en audio comme en vidéo (décision porteur du 2026-11-13, #17963 ; R1) :
       - elle est en verre teinté rouge, celui du kit et du bandeau de partage ;
