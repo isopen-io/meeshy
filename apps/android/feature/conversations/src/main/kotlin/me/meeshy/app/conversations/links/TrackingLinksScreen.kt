@@ -145,8 +145,8 @@ private fun TrackingRow(link: TrackingLink, accent: Color, onOpen: () -> Unit, o
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
-            trackingRowDateText(link)?.let { date ->
-                Text(date, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
+            trackingRowFactsText(link)?.let { facts ->
+                Text(facts, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 2)
             }
         }
         IconButton(onClick = onCopy) {

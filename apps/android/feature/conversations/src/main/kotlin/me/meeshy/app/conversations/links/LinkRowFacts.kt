@@ -9,15 +9,13 @@ import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.sdk.model.TrackingLink
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
-/** Ce qui permet de reconnaître un lien de suivi dans la liste : son dernier clic, à défaut sa création. */
-internal enum class TrackingRowDateKind { LAST_CLICK, CREATED }
+/** Ce qui permet de reconnaître un lien de suivi dans la liste : sa création ET son dernier clic, s'il y en a eu un. */
+internal data class TrackingRowFacts(val createdMillis: Long?, val lastClickMillis: Long?)
 
-internal data class TrackingRowDate(val kind: TrackingRowDateKind, val epochMillis: Long)
-
-internal fun trackingRowDate(link: TrackingLink): TrackingRowDate? {
-    isoToEpochMillisOrNull(link.lastClickedAt)?.takeIf { it > 0 }?.let { return TrackingRowDate(TrackingRowDateKind.LAST_CLICK, it) }
-    return isoToEpochMillisOrNull(link.createdAt)?.takeIf { it > 0 }?.let { TrackingRowDate(TrackingRowDateKind.CREATED, it) }
-}
+internal fun trackingRowFacts(link: TrackingLink): TrackingRowFacts = TrackingRowFacts(
+    createdMillis = isoToEpochMillisOrNull(link.createdAt)?.takeIf { it > 0 },
+    lastClickMillis = isoToEpochMillisOrNull(link.lastClickedAt)?.takeIf { it > 0 },
+)
 
 /** Ce qui permet de reconnaître un lien de parrainage : sa création, et « utilisés sur plafond » quand il en a un. */
 internal data class AffiliateRowFacts(val createdMillis: Long?, val used: Int?, val max: Int?)
@@ -36,11 +34,11 @@ internal fun communityRowCreatedText(link: CommunityLink): String? =
     communityRowCreatedMillis(link)?.let { stringResource(R.string.links_common_created, ShareLinkDateFormat.day(it)) }
 
 @Composable
-internal fun trackingRowDateText(link: TrackingLink): String? = trackingRowDate(link)?.let { date ->
-    when (date.kind) {
-        TrackingRowDateKind.LAST_CLICK -> stringResource(R.string.links_tracking_detail_last_click, ShareLinkDateFormat.dayAndTime(date.epochMillis))
-        TrackingRowDateKind.CREATED -> stringResource(R.string.links_common_created, ShareLinkDateFormat.day(date.epochMillis))
-    }
+internal fun trackingRowFactsText(link: TrackingLink): String? {
+    val facts = trackingRowFacts(link)
+    val created = facts.createdMillis?.let { stringResource(R.string.links_common_created, ShareLinkDateFormat.day(it)) }
+    val lastClick = facts.lastClickMillis?.let { stringResource(R.string.links_tracking_detail_last_click, ShareLinkDateFormat.dayAndTime(it)) }
+    return listOfNotNull(created, lastClick).takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
 @Composable

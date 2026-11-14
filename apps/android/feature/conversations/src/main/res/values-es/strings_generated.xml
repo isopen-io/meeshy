@@ -206,7 +206,6 @@
     <string name="links_community_detail_informations">INFORMACIÓN</string>
     <string name="links_community_detail_members">Miembros</string>
     <string name="links_community_detail_status">Estado</string>
-    <string name="links_community_empty_subtitle">Las comunidades que administras aparecerán aquí con su enlace para compartir</string>
     <string name="links_community_empty_title">Ninguna comunidad administrada</string>
     <string name="links_community_identify">Identificar</string>
     <plurals name="links_community_row_subtitle">

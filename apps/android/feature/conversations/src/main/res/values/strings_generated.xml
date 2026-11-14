@@ -203,7 +203,6 @@
     <string name="links_community_detail_informations">INFORMATION</string>
     <string name="links_community_detail_members">Members</string>
     <string name="links_community_detail_status">Status</string>
-    <string name="links_community_empty_subtitle">Communities you manage will appear here with their share link</string>
     <string name="links_community_empty_title">No communities managed</string>
     <string name="links_community_identify">Identify</string>
     <plurals name="links_community_row_subtitle">

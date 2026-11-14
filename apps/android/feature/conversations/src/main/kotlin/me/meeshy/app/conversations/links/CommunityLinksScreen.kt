@@ -82,8 +82,7 @@ fun CommunityLinksScreen(
                 LinkEmptyState(
                     MeeshyIcons.Groups,
                     stringResource(R.string.links_community_empty_title),
-                    stringResource(R.string.links_community_empty_subtitle),
-                    accent,
+                    accent = accent,
                 )
             }
             else -> items(state.links, key = { it.id }, contentType = { "community" }) { link ->
