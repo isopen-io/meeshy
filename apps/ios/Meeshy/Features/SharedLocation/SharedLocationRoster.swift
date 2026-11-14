@@ -134,12 +134,16 @@ struct SharedLocationRoster: Equatable, Codable {
     /// La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
     /// la passerelle la tient, même app tuée (#18205), iso `rosterOps.deadlinedRecipients` du web. Arrondie à la seconde
     /// au-dessus, jamais nulle ; une personne échue pendant l'attente d'un relevé ne part plus du tout.
+    /// « Avant le terme » se juge À LA SECONDE, l'unité dans laquelle l'échéance voyage (#18539) : l'attente du relevé
+    /// sépare toujours l'ajout de la publication de quelques millisecondes, et les comparer faisait partir, pour un
+    /// partage d'une heure avec une seule personne, une échéance égale au terme.
     func deadlinedRecipients(now: Date) -> [SharedLocationRecipient] {
         let live = pruned(now: now)
-        let term = now.addingTimeInterval(live.serverDuration(now: now).interval)
+        let termSeconds = Int(live.serverDuration(now: now).interval)
         return live.recipients.map { recipient in
-            guard let until = live.entries[recipient.userId]?.until, until < term else { return recipient }
+            guard let until = live.entries[recipient.userId]?.until else { return recipient }
             let seconds = max(1, Int(until.timeIntervalSince(now).rounded(.up)))
+            guard seconds < termSeconds else { return recipient }
             return SharedLocationRecipient(userId: recipient.userId, precision: recipient.precision, expiresInSeconds: seconds)
         }
     }

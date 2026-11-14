@@ -119,6 +119,17 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertEqual(roster.deadlinedRecipients(now: t0), [SharedLocationRecipient(userId: alice, precision: .exact)])
     }
 
+    func test_roster_deadlinedRecipients_aLonePersonPublishedMillisecondsLater_comparesAtTheSecond() {
+        let roster = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .oneHour, now: t0)
+
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0.addingTimeInterval(0.005)), [SharedLocationRecipient(userId: alice, precision: .exact)])
+        XCTAssertEqual(roster.deadlinedRecipients(now: t0.addingTimeInterval(0.999)), [SharedLocationRecipient(userId: alice, precision: .exact)])
+        XCTAssertEqual(
+            roster.deadlinedRecipients(now: t0.addingTimeInterval(1.001)),
+            [SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 3599)]
+        )
+    }
+
     func test_roster_deadlinedRecipients_neverZero_andAPassedPersonNeverLeaves() {
         let roster = SharedLocationRoster.empty
             .adding(userId: alice, precision: .exact, duration: .oneHour, now: t0)

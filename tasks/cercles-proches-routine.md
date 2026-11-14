@@ -1155,3 +1155,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `dev` (hérité). iOS (SDK + app) et le centre Android ne compilent qu'en CI : preuve par la CI de `dev` après fusion.
 - Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée. #18205 se ferme avec ce
   lot (serveur, web, iOS, Android).
+
+## 2026-11-14 — réveil de la nuit (21 h) : mener #18520 à la fusion (#18467)
+
+- Reprise : la PR #18520 du réveil précédent est ouverte, non fusionnée : ce réveil la mène à la fusion, sans en ouvrir
+  d'autre. `origin/dev` fusionné dans la branche sans conflit.
+- Trouvé en chemin : le correctif web #18539 (fusionné entre-temps) montre que l'échéance « avant le terme » doit se
+  juger À LA SECONDE ; iOS et Android comparaient en millisecondes et envoyaient, pour un partage d'une heure avec une
+  seule personne publiée quelques millisecondes après l'ajout, une échéance égale au terme. Corrigé dans la PR sur les
+  deux, témoins vus rouges d'abord (Kotlin `jvm-check`, Swift `SharedLocationSharingCenterTests`).
+- CI de la branche : les rouges sont hérités de `dev` (8 témoins `:feature:calls`, mêmes noms sur le run `Android
+  natif` de `dev` b80e872fe ; instantanés K18 `MeeshyObjectMenu` du kit dans le SDK). Les témoins du lot (`:core:model`,
+  `:sdk-core`) passent.
+- Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée.

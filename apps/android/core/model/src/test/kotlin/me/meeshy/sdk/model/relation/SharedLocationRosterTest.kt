@@ -147,4 +147,16 @@ class SharedLocationRosterTest {
         assertThat(roster.deadlinedRecipients(nowMillis = hour - 200L).first().expiresInSeconds).isEqualTo(1)
         assertThat(roster.deadlinedRecipients(nowMillis = hour).map { it.userId }).containsExactly(bob)
     }
+    @Test
+    fun `une personne seule publiee quelques millisecondes apres son ajout n'en porte toujours pas, l'echeance se compare a la seconde`() {
+        val roster = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+
+        assertThat(roster.deadlinedRecipients(nowMillis = 5L))
+            .containsExactly(SharedLocationRecipient(alice, SharedLocationPrecision.EXACT))
+        assertThat(roster.deadlinedRecipients(nowMillis = 999L))
+            .containsExactly(SharedLocationRecipient(alice, SharedLocationPrecision.EXACT))
+        assertThat(roster.deadlinedRecipients(nowMillis = 1_001L))
+            .containsExactly(SharedLocationRecipient(alice, SharedLocationPrecision.EXACT, expiresInSeconds = 3_599))
+    }
 }
