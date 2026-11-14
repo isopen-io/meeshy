@@ -37,6 +37,26 @@ struct CallTileNameplate: View {
     }
 }
 
+/// #17982 (P1.4, G1.2, L1.5, P16.8, S2.5, W1.18) — la plaque de ma vignette de duo : celle du groupe,
+/// au pied de la vignette, hors du liseré et du badge micro coupé. Rangée par une échelle, la vignette la
+/// garde à sa taille lisible (loi 11). Muette : la vignette dit déjà au lecteur d'écran qui elle montre.
+struct CallSelfTileNameplate: View {
+    let title: String
+    let tileWidth: CGFloat
+    let stowFactor: CGFloat
+    let reservesBadge: Bool
+
+    var body: some View {
+        CallTileNameplate(title: title)
+            .frame(maxWidth: CallSelfTilePlate.maxWidth(tileWidth: tileWidth, stowFactor: stowFactor, reservesBadge: reservesBadge))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, MeeshySpacing.xsPlus)
+            .scaleEffect(CallSelfTileScale.counterScaled(1, by: stowFactor), anchor: .bottom)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// U2.5 — la puce de verre de l'écran partagé mis à la une, en haut à gauche de la scène :
 /// « Écran de X », puis le facteur de zoom (« · 2× »). Décorative : la vignette porte déjà
 /// « Écran de X » à VoiceOver ; elle ne prend aucun toucher, le pincement la traverse.

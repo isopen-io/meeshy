@@ -92,6 +92,7 @@ const en = {
   'callControls.liveFrame.answer.declined.anonymous': 'The other person keeps their own view',
   'callControls.liveFrame.notProposed': 'The frame is applied on your side but couldn\'t be offered',
   'callControls.liveFrame.surface': '{frame} frame around both videos',
+  'callControls.mode.closeSettings': 'Close settings',
   'callControls.mode.frames': 'Frames',
   'callControls.layers.title': 'Applied effects',
   'callControls.layers.undo': 'Undo {name}',

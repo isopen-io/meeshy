@@ -1,0 +1,47 @@
+{
+  "lot": "K24",
+  "nom": "MeeshyContextLines",
+  "ecrit_par": "lot iOS",
+  "lues_par": ["iOS (MeeshyContextLinesRuleTests)", "Android (a venir)", "web (a venir)"],
+  "recette": {
+    "barCount": 18,
+    "waveFloor": 0.16666666666666666,
+    "pressedOpacity": 0.7,
+    "hoverOpacity": 0.85,
+    "longPressDelay": 0.5,
+    "fadeWidth": 44,
+    "maxTextScale": 1.5,
+    "chipHeight": 36,
+    "minimumTarget": 44
+  },
+  "loi13": {
+    "soundLineHasContent": [
+      { "title": "", "levels": null, "detail": null, "attendu": false },
+      { "title": "Afro Sunset", "levels": null, "detail": null, "attendu": true },
+      { "title": "", "levels": null, "detail": "", "attendu": false },
+      { "title": "", "levels": [], "detail": null, "attendu": true }
+    ],
+    "visibleReferences": [
+      { "entree": ["", "  ", "#dakar"], "attendu": ["#dakar"] }
+    ],
+    "separatorCount": [
+      { "visible": 0, "attendu": 0 },
+      { "visible": 1, "attendu": 0 },
+      { "visible": 2, "attendu": 1 }
+    ],
+    "showsChevron": [
+      { "hasAction": false, "requested": true, "attendu": false },
+      { "hasAction": true, "requested": null, "attendu": true },
+      { "hasAction": true, "requested": false, "attendu": false }
+    ],
+    "firesHaptic": [
+      { "hasAction": false, "haptic": "light", "attendu": false },
+      { "hasAction": true, "haptic": "none", "attendu": false },
+      { "hasAction": true, "haptic": "light", "attendu": true }
+    ],
+    "showsChip": [
+      { "title": "", "glyph": null, "attendu": false },
+      { "title": "", "glyph": "globe", "attendu": true }
+    ]
+  }
+}

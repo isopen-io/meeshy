@@ -92,6 +92,7 @@ const es = {
   'callControls.liveFrame.answer.declined.anonymous': 'La otra persona mantiene su vista',
   'callControls.liveFrame.notProposed': 'El marco se aplica en tu pantalla, pero no se pudo proponer',
   'callControls.liveFrame.surface': 'Marco {frame} alrededor de los dos vídeos',
+  'callControls.mode.closeSettings': 'Cerrar los ajustes',
   'callControls.mode.frames': 'Marcos',
   'callControls.layers.title': 'Efectos aplicados',
   'callControls.layers.undo': 'Deshacer {name}',

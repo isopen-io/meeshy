@@ -35,6 +35,12 @@ public object CallModeCarouselRule {
         return items[(index + by).coerceIn(0, items.lastIndex)]
     }
 
+    /** Le rang (de 1) d'un élément et le nombre d'éléments, que la voix annonce (« 3 sur 12 ») ; rien hors de la liste. */
+    public fun <T> ordinal(item: T, items: List<T>): CallModeCarouselOrdinal? {
+        val index = items.indexOf(item)
+        return if (index < 0) null else CallModeCarouselOrdinal(rank = index + 1, count = items.size)
+    }
+
     /** Le CHOIX (l'effet envoyé à l'autre) ne part qu'au repos. */
     public fun commits(isInteracting: Boolean): Boolean = !isInteracting
 

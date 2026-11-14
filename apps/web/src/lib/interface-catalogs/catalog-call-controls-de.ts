@@ -92,6 +92,7 @@ const de = {
   'callControls.liveFrame.answer.declined.anonymous': 'Dein Gegenüber behält die eigene Ansicht',
   'callControls.liveFrame.notProposed': 'Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden',
   'callControls.liveFrame.surface': 'Rahmen {frame} um beide Videos',
+  'callControls.mode.closeSettings': 'Einstellungen schließen',
   'callControls.mode.frames': 'Rahmen',
   'callControls.layers.title': 'Angewendete Effekte',
   'callControls.layers.undo': '{name} rückgängig machen',

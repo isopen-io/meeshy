@@ -13,7 +13,7 @@ import SwiftUI
 /// Un seul (i) ouvert par écran : l'hôte tient l'identifiant de la note ouverte
 /// (`openNoteID`) et `MeeshyInfoNote.toggled` décide. Building block agnostique :
 /// une question, une note, une teinte — ni singleton ni règle produit.
-public struct MeeshyInfoNote: Equatable, Sendable, Identifiable {
+nonisolated public struct MeeshyInfoNote: Equatable, Sendable, Identifiable {
     public let question: String
     public let text: String
 

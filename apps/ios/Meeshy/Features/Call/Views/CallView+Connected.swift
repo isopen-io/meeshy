@@ -36,7 +36,7 @@ extension CallView {
 
                 // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
                 CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, remoteName: callManager.remoteUsername ?? "", participantName: callManager.participantName(for:), chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
-                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { liveFrameStatus }
+                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset), safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)
