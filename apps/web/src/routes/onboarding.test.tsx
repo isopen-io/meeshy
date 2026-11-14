@@ -163,7 +163,7 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     const host = await mount(<OnboardingJourney deps={deps} search={atGlobal()} clearSearch={() => undefined} />);
     const field = host.querySelector<HTMLTextAreaElement>('[data-onb-greeting]');
     expect(field?.value).toContain('Maya');
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('0');
 
     await click(action(host, 'global.send'));
 
@@ -173,9 +173,19 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
     expect(host.querySelector('[data-onb-flight]')?.textContent).toBe('+14');
     expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu fais jaillir 14 étincelles.');
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('0');
     await landed();
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('14');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('14');
+  });
+
+  test('la carte qui porte sa jauge n’a pas aussi le chiffre en haut : la jauge dit ce qu’il mesure (épure #17584, règle 2)', async () => {
+    signIn();
+    const { deps } = harness();
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('step=languages')} clearSearch={() => undefined} />);
+    await landed();
+    expect(host.querySelector('[data-onb-gauge]')).not.toBeNull();
+    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('aria-label')).toBe('Tu fais jaillir 0 étincelles.');
   });
 
   test('le texte modifié est celui qui part', async () => {
@@ -193,7 +203,7 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     const host = await mount(<OnboardingJourney deps={deps} search={atGlobal()} clearSearch={() => undefined} />);
     await click(action(host, 'global.send'));
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Ton salut n’est pas parti. Réessaie.');
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('0');
   });
 
   test('Continuer après l’envoi enregistre l’étape faite et ouvre la story', async () => {
@@ -254,7 +264,7 @@ describe('ce qui s’est confirmé ne se rejoue pas — ni second salut, ni seco
     await landed();
     expect(patches).toEqual([]);
     expect(card(host)).toBe('languages');
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('0');
     expect(cleared).toBe(1);
   });
 
@@ -290,7 +300,7 @@ describe('carte 3 — la première story, visibilité servie', () => {
     expect(card(host)).toBe('story');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
     await landed();
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('10');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('10');
     expect(cleared).toBe(1);
   });
 });

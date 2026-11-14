@@ -125,12 +125,14 @@ struct StatusBubbleOverlay: View {
 
     // MARK: - Thought Circle
 
+    private var avatarTint: Color { Color(hex: status.avatarColor) }
+
     private func thoughtCircle(size: CGFloat) -> some View {
         Circle()
             .fill(.ultraThinMaterial)
             .frame(width: size, height: size)
             .overlay(
-                Circle().stroke(Color(hex: status.avatarColor).opacity(0.3), lineWidth: MeeshyBorder.hairline)
+                Circle().stroke(avatarTint.opacity(0.3), lineWidth: MeeshyBorder.hairline)
             )
             .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
     }
@@ -202,7 +204,7 @@ struct StatusBubbleOverlay: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        colors: [avatarTint.opacity(0.3), Color.white.opacity(0.1)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -224,13 +226,13 @@ struct StatusBubbleOverlay: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(Color(hex: status.avatarColor)))
+                    .background(Circle().fill(avatarTint))
             }
             .accessibilityLabel(audioToggleLabel)
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
-                .tint(Color(hex: status.avatarColor))
+                .tint(avatarTint)
                 .frame(maxWidth: .infinity)
                 .scaleEffect(y: 0.6, anchor: .center)
         }
@@ -304,7 +306,7 @@ struct StatusBubbleOverlay: View {
         if let reactionHandler {
             MoodQuickReactionRow(
                 placed: reactions.placed,
-                tint: Color(hex: status.avatarColor),
+                tint: avatarTint,
                 onReact: react(with:)
             )
             .padding(.horizontal, -MeeshySpacing.xs)

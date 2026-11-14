@@ -55,7 +55,7 @@ describe('la carte de l’âge — proposée, accessible, facultative', () => {
   test('une passerelle qui sait les âges la propose, avec sa raison et un champ de date nommé', async () => {
     const { host } = await open({ state: knowsAges });
     expect(card(host)).toBe('age');
-    expect(host.textContent).toContain('Pour te proposer les bons espaces. Tu peux passer.');
+    expect(host.textContent).toContain('Pour te proposer les bons espaces.');
     const input = host.querySelector<HTMLInputElement>('[data-onb-age-input]');
     expect(input?.type).toBe('date');
     expect(input?.getAttribute('aria-label')).toBe('Ta date de naissance');

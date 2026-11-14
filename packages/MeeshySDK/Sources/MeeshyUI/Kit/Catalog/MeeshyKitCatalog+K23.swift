@@ -138,7 +138,7 @@ private struct MeeshySelectionFeedbackSampleObjects: View {
 
     private var text: some View {
         Text("Mee")
-            .font(.system(size: 28, weight: .heavy, design: .rounded))
+            .font(.system(.title, design: .rounded).weight(.heavy))
             .foregroundStyle(isLight ? MeeshyColors.mediaBackdrop : MeeshyColors.onMedia)
             .meeshySelectionHalo(setting.chosen == .text)
     }

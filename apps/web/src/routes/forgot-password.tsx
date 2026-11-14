@@ -144,6 +144,9 @@ export default function ForgotPasswordScreen({
             </span>
 
             <div className="grid justify-items-center gap-1 text-center">
+              <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+                {translate(language, 'login.forgotPassword.label')}
+              </h2>
               <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
                 {translateRecovery(language, 'recovery.forgot.lead')}
               </p>
