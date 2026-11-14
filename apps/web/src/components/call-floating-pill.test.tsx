@@ -185,11 +185,11 @@ describe('la capsule se refait en mouvement (S1.7)', () => {
     motion.restore();
   });
 
-  test('qui repart est marqué sortant : ni focus ni clic, caché au lecteur d’écran', async () => {
+  test('qui repart est marqué sortant et caché au lecteur d’écran, touchable jusqu’au bout (loi 17.11)', async () => {
     const view = await mountBar(call());
     await view.render(call(), { leaving: true, arrives: false, gone: () => undefined });
     expect(view.bar()?.hasAttribute('data-leaving')).toBe(true);
-    expect(view.bar()?.hasAttribute('inert')).toBe(true);
+    expect(view.bar()?.hasAttribute('inert')).toBe(false);
     expect(view.bar()?.getAttribute('aria-hidden')).toBe('true');
     await view.done();
   });

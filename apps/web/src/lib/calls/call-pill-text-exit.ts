@@ -5,12 +5,12 @@ import type { ExitTiming } from './use-rail-presence';
  * **RIEN NE DISPARAÎT D'UN COUP** (#17406, #17479) — les sous-titres que `(…)`
  * range, et les sous-titres seuls quand la pilule revient, restent à leur place
  * le temps d'un fondu vers la rangée de base, l'inverse de leur arrivée
- * (`glass.css`, `call-pill-text-out`), inertes ; sous « Réduire les animations »,
- * le reste du texte de la pilule part tout de suite, les sous-titres en fondu court
- * (`CAPTIONS_EXIT`). Son module à lui : seul le chunk des sous-titres
- * l'importe (`budgets.json` › `call_overlay.dynamic_only`).
+ * (`call-motion.css`, `call-pill-text-out`), touchables (loi 17.11) ; sous « Réduire
+ * les animations », le temps de leur fondu court (`--reduced-fade`, loi 17.10).
+ * Son module à lui : seul le chunk des sous-titres l'importe
+ * (`budgets.json` › `call_overlay.dynamic_only`).
  */
-export const PILL_TEXT_EXIT: ExitTiming = { exitMs: 180, reducedExitMs: 0 };
+export const PILL_TEXT_EXIT: ExitTiming = { exitMs: 180, reducedExitMs: STOW_REDUCED_MS };
 
 /**
  * Les SOUS-TITRES eux-mêmes ne partent jamais d'un coup, même sous « Réduire les

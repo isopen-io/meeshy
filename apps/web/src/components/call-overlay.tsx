@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
+import { callActions } from '@/lib/calls/call-actions';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
 import { type CallView, useViewHold } from '@/lib/calls/use-pill-motion';
 
@@ -34,12 +35,15 @@ const viewOf = (call: ActiveCall): CallView | null => {
   return reduced && call.display === 'bubble' ? null : 'screen';
 };
 
+/* Un toucher sur l'écran qui se contracte le rend au plein écran (P18.8, loi 17.11). */
+const revive = (): void => callActions.expand();
+
 /**
  * L'écran plein ou la pastille. Passer de l'un à l'autre se joue (S1.7, S2.1, `useViewHold`) : celui qui repart
- * reste monté le temps de son mouvement pendant que l'autre arrive.
+ * reste monté le temps de son mouvement pendant que l'autre arrive ; l'écran rendu par la bulle s'en redéploie (P18.4).
  */
 export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
-  const { screen, pill } = useViewHold(viewOf(call));
+  const { screen, pill } = useViewHold(viewOf(call), revive);
   /* Ce que l'écran charge à part pour son premier rendu (la réponse d'un appel entrant, #17650) le retient ENTIER : jamais un portrait sans ses boutons. Le son des pairs, monté à côté, n'attend rien. */
   return (
     <>

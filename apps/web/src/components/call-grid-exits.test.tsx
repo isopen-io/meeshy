@@ -94,7 +94,7 @@ const mount = (overrides: Partial<CallGridProps>) => {
 };
 
 describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)', () => {
-  test('« Revenir à la grille » : la capsule reste le temps de son fondu, sans prendre le doigt, puis se démonte', async () => {
+  test('« Revenir à la grille » : la capsule reste le temps de son fondu, touchable (loi 17.11), puis se démonte', async () => {
     const motion = recordAnimations();
     const view = mount({});
     expect(view.host.querySelector('[data-call-spotlight-capsule]')).not.toBeNull();
@@ -104,7 +104,7 @@ describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)
     expect(view.host.querySelector('[data-call-spotlight]')).toBeNull();
     expect(leaving).not.toBeNull();
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.getAttribute('aria-hidden')).toBe('true');
     const fade = motion.played.find((move) => move.element === leaving);
     expect(fade?.frames).toEqual([{ opacity: 1 }, { opacity: 0 }]);
@@ -145,7 +145,7 @@ describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)
 });
 
 describe('CallGrid — le bandeau des autres sort par son bord et revient par lui (U2.10)', () => {
-  test('plein écran total (U2b, #17961) : le bandeau quitte la mise en page à l’instant et repart vers le bas, tuiles comprises, sans prendre le doigt', async () => {
+  test('plein écran total (U2b, #17961) : le bandeau quitte la mise en page à l’instant et repart vers le bas, tuiles comprises, touchable (loi 17.11)', async () => {
     const motion = recordAnimations();
     const live = sharingLive();
     const view = mount(live);
@@ -156,7 +156,7 @@ describe('CallGrid — le bandeau des autres sort par son bord et revient par lu
     view.render({ ...live, fullScreen: 'total' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.hasAttribute('data-leaving')).toBe(true);
-    expect(strip?.hasAttribute('inert')).toBe(true);
+    expect(strip?.hasAttribute('inert')).toBe(false);
     const out = motion.played.find((move) => move.element === strip);
     expect(out?.frames).toEqual([
       { opacity: 1, transform: 'translateY(0)' },

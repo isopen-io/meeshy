@@ -83,16 +83,16 @@ export function useRailFade<E extends HTMLElement>(shown: boolean): RefObject<E 
   return ref;
 }
 
+type ModePart = readonly [RefObject<HTMLElement | null>, SwapShape];
+
 /**
- * **LE MONTAGE MONTE DU BAS ET Y REDESCEND** (C1.12, #17813 ; `CallModeChromeMotion.risesFromBottom` d'iOS,
- * Effets excepté) — sa barre et son carrousel (`controls`) arrivent par le bord du bas et repartent par lui,
- * son fond (`backdrop`, l'aperçu plein écran) se fond ; sous « Réduire les animations », un fondu court sans
- * montée. Joué par le moteur, que la règle générale n'éteint pas, et interruptible : revenir pendant le départ
- * repart de l'opacité affichée. Le mode qui repart reste monté jusqu'à la fin de son mouvement, puis appelle
- * `gone`. Retourne ce que porte l'élément qui repart (ni focus ni clic). Le moteur est chargé AVEC le mode
- * (`loadMontageModeText`) : l'arrivée est jouée dès le premier rendu ; sans moteur, le mode se pose et repart d'un coup.
+ * Le mouvement d'un mode qui arrive et repart, partie par partie (`parts` : un élément et sa forme), joué par le
+ * moteur que la règle générale de « Réduire les animations » n'éteint pas (fondu court seul, sans déplacement), et
+ * interruptible : revenir pendant le départ repart de l'opacité affichée. Le mode qui repart reste monté jusqu'à la
+ * fin de son mouvement, puis appelle `gone`. Retourne ce que porte l'élément qui repart (sortant, caché au lecteur
+ * d'écran, touchable : loi 17.11). Sans moteur, le mode se pose et repart d'un coup.
  */
-export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: RefObject<HTMLElement | null>, leaving: boolean, gone: () => void): typeof LEAVING | Record<string, never> {
+function useModeMotion(parts: readonly ModePart[], leaving: boolean, gone: () => void): typeof LEAVING | Record<string, never> {
   const engine = useEngine();
   const running = useRef<ReadonlyArray<Animation | null>>([]);
   const phase = useRef<boolean | null>(null);
@@ -106,11 +106,7 @@ export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: R
       done.current();
       return;
     }
-    const parts: ReadonlyArray<readonly [HTMLElement | null, SwapShape]> = [
-      [controls.current, 'bottom'],
-      [backdrop.current, 'fade'],
-    ];
-    const played = parts.map(([element, shape], index) => (element === null || engine === null ? null : engine.playSwap(element, !leaving, running.current[index] ?? null, shape)));
+    const played = parts.map(([part, shape], index) => (part.current === null || engine === null ? null : engine.playSwap(part.current, !leaving, running.current[index] ?? null, shape)));
     running.current = played;
     if (!leaving) return;
     const moving = played.filter((animation): animation is Animation => animation !== null);
@@ -118,4 +114,38 @@ export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: R
     else void Promise.all(moving.map((animation) => animation.finished)).then(() => done.current(), () => undefined);
   }, [leaving, engine]);
   return leaving ? LEAVING : {};
+}
+
+/**
+ * **LE MONTAGE MONTE DU BAS ET Y REDESCEND** (C1.12, #17813 ; `CallModeChromeMotion.risesFromBottom` d'iOS,
+ * Effets excepté) — sa barre et son carrousel (`controls`) arrivent par le bord du bas et repartent par lui,
+ * son fond (`backdrop`, l'aperçu plein écran) se fond ; sous « Réduire les animations », un fondu court sans
+ * montée. Le moteur est chargé AVEC le mode (`loadMontageModeText`) : l'arrivée est jouée dès le premier rendu.
+ */
+export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: RefObject<HTMLElement | null>, leaving: boolean, gone: () => void): typeof LEAVING | Record<string, never> {
+  return useModeMotion(
+    [
+      [controls, 'bottom'],
+      [backdrop, 'fade'],
+    ],
+    leaving,
+    gone,
+  );
+}
+
+/**
+ * **LA COUCHE EFFETS ARRIVE ET REPART EN FONDU** (P8.14, #17831 ; `.transition(.opacity)` d'iOS, `CallModeLayer`
+ * d'Android #18451) — la loi 17 excepte Effets de la montée du bas, pas du fondu : la couche entière (`layer`,
+ * sa barre et son aperçu) se fond à l'entrée et à la sortie, 200 ms, 150 ms sous « Réduire les animations », par
+ * l'opacité SEULE : l'aperçu plein écran est `fixed`, une transformation animée sur la couche le déplacerait.
+ * Le moteur est chargé AVEC le mode (`loadEffectsModeText`). Rouverte pendant son départ, elle n'est pas remontée :
+ * `reopened` la rend à son menu d'entrée, comme une entrée neuve (Android `CallEffectsController.reopen`, #18451).
+ */
+export function useModeFade(layer: RefObject<HTMLElement | null>, leaving: boolean, gone: () => void, reopened: () => void): typeof LEAVING | Record<string, never> {
+  const was = useRef(leaving);
+  useLayoutEffect(() => {
+    if (was.current && !leaving) reopened();
+    was.current = leaving;
+  }, [leaving]);
+  return useModeMotion([[layer, 'opacity']], leaving, gone);
 }

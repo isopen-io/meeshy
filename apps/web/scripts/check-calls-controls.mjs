@@ -409,8 +409,8 @@ try {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.evaluate(() => window.__meeshyFixtureCallPeer?.react('👏'));
       await appears(page, '[data-call-reaction="👏"]');
-      const animation = await page.$eval('[data-call-reaction="👏"]', (element) => getComputedStyle(element).animationName);
-      check(animation === 'call-reaction-fade', `${label} : sous prefers-reduced-motion, elle s'efface sur place (${animation})`);
+      const animation = await page.$eval('[data-call-reaction="👏"]', (element) => `${getComputedStyle(element).animationName} ${getComputedStyle(element).animationDuration}`);
+      check(animation === 'call-reaction-fade 2.5s', `${label} : sous prefers-reduced-motion, elle s'efface sur place, le temps de sa vie — la règle générale ne la ramène plus à 0,01 ms (loi 17.10, ${animation})`);
       await page.emulateMedia({ reducedMotion: 'no-preference' });
       check(await gone(page, '[data-call-reaction="🎉"]', 4000), `${label} : elle s'efface en 2,5 s`);
       await page.click('[data-panel-back]');

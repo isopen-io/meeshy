@@ -682,14 +682,14 @@ describe('loi 17 — ma vignette et le micro coupé du pair entrent et sortent e
     else Object.defineProperty(HTMLElement.prototype, 'animate', saved.animate);
   });
 
-  test('loi-17.1 — ma caméra coupée : ma vignette repart en fondu, sortante et intouchable le temps du mouvement ; rallumée, elle revient', async () => {
+  test('loi-17.1 — ma caméra coupée : ma vignette repart en fondu, sortante et touchable le temps du mouvement (loi 17.11) ; rallumée, elle revient', async () => {
     fresh();
     const view = mount();
     const slot = () => view.find('[data-call-corner-slot]');
     expect(slot()?.hasAttribute('data-leaving')).toBe(false);
     view.render(true, 0, 0, call({ cameraOn: false }));
     expect(slot()?.hasAttribute('data-leaving')).toBe(true);
-    expect(slot()?.hasAttribute('inert')).toBe(true);
+    expect(slot()?.hasAttribute('inert')).toBe(false);
     expect(slot()?.querySelector('[data-call-tile-plate]')?.textContent).toBe('Vous');
     await act(async () => finishers.forEach((done) => done()));
     expect(slot()).toBeNull();

@@ -38,19 +38,14 @@
   transform-origin: 0% 50%;
 }
 
-[data-call-capsule][data-leaving] {
-  pointer-events: none;
-}
-
 /* ET IL REPART COMME IL EST VENU (#17406) — le texte qui quitte la pilule reste à
-   sa place le temps de ce fondu (`PILL_TEXT_EXIT`, `call-pill-text-exit.ts`), redescend
-   vers la rangée de base et ne prend plus le doigt : un bouton touché pendant la
-   sortie répond. Sous « Réduire les animations », la règle générale ramène ce fondu à
-   un instant : les sous-titres, eux, y partent en fondu court joué par le moteur
-   (`CAPTIONS_EXIT`, `useRailFade`, #17700). */
+   sa place le temps de ce fondu (`PILL_TEXT_EXIT`, `call-pill-text-exit.ts`) et redescend
+   vers la rangée de base, touchable jusqu'au bout : une phrase ou un bouton touché
+   pendant la sortie répond (loi 17.11). Sous « Réduire les animations », un fondu court
+   (`--reduced-fade`, plus bas) ; les sous-titres y partent par le moteur (`CAPTIONS_EXIT`,
+   `useRailFade`, #17700). */
 [data-call-pill-text][data-leaving] {
   animation: call-pill-text-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
-  pointer-events: none;
 }
 
 /* La pilule ne se resserre pas sous les sous-titres qui repartent : ils gardent la
@@ -68,18 +63,14 @@
 }
 
 /* LA FEUILLE MONTE DU BAS ET Y REDESCEND (G3.5, #17406) — le voile en fondu, la
-   feuille par sa seule transformation ; elle repart pendant `data-leaving` sans
-   prendre le doigt. */
+   feuille par sa seule transformation ; elle repart pendant `data-leaving`, touchable
+   jusqu'au bout (loi 17.11). */
 [data-call-sheet-panel] {
   animation: call-sheet-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
 }
 
 [data-call-sheet-scrim] {
   animation: call-sheet-fade-in 240ms ease-out backwards;
-}
-
-[data-call-sheet][data-leaving] {
-  pointer-events: none;
 }
 
 [data-call-sheet][data-leaving] [data-call-sheet-panel] {
@@ -114,7 +105,19 @@
   }
 }
 
+/* SOUS « RÉDUIRE LES ANIMATIONS », UN FONDU COURT, JAMAIS UN INSTANT (loi 17.10) — la règle générale
+   (`app.css`, règle 32) ramène toute animation CSS à `--reduced-fade` ; ce qui ne garde ici qu'un fondu
+   y pose le fondu court du moteur (`STOW_REDUCED_MS`), opacité seule (les images clés ci-dessous). */
 @media (prefers-reduced-motion: reduce) {
+  [data-call-pill-text],
+  [data-call-pip],
+  [data-call-deck-content='rows'],
+  [data-call-signal],
+  [data-call-sheet-panel],
+  [data-call-sheet-scrim] {
+    --reduced-fade: 150ms;
+  }
+
   @keyframes call-sheet-in {
     from {
       opacity: 0;
@@ -311,18 +314,15 @@
    l'autre et s'en redéploie par une échelle et un fondu courts, jouée par le moteur
    (`playViewSwap`, Web Animations, que la règle générale de « Réduire les animations » n'éteint
    pas) ; la feuille n'y met que l'ancre : l'écran se déploie depuis le haut, là où la capsule se
-   tient, la capsule depuis son centre. Qui repart ne prend plus le doigt. */
+   tient, la capsule depuis son centre ; le moteur repose l'ancre de l'écran quand il vient de la
+   bulle (P18.4, `call-window-motion.ts`). Qui repart reste touchable : un toucher sur l'écran qui se
+   contracte le rend au plein écran (P18.8, loi 17.11). */
 [data-call-screen] {
   transform-origin: 50% 0;
 }
 
 [data-call-pill-bar] {
   transform-origin: 50% 0;
-}
-
-[data-call-screen][data-leaving],
-[data-call-pill-bar][data-leaving] {
-  pointer-events: none;
 }
 
 /* LA PILE DES BANDEAUX SE REFERME SANS ATTENDRE (S2.6, #17774) — le bandeau de partage et la capsule de
@@ -342,12 +342,12 @@
 /* LE MONTAGE MONTE DU BAS ET Y REDESCEND (C1.12, #17813) — sa barre et son carrousel arrivent par le bord du bas
    et repartent par lui (`useModeRise`, Web Animations : fondu court sous « Réduire les animations »). Qui repart
    quitte la mise en page à l'instant, posé au bas du plan des commandes (`pb-6`), pour que la pilule qui revient
-   reprenne sa place sans attendre ; il ne prend plus le doigt. */
+   reprenne sa place sans attendre ; il reste touchable jusqu'au bout (loi 17.11). La couche Effets
+   y repart de même, en fondu (P8.14, `useModeFade`). */
 [data-call-mode][data-leaving] {
   position: absolute;
   inset-inline: 0;
   bottom: 1.5rem;
-  pointer-events: none;
 }
 
 /* L'EN-TÊTE ET LA PILULE QUE LE MODE RELÈVE PARTENT PAR LEUR BORD (C1.12) — l'en-tête par le haut, la pilule par le

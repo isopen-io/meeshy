@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import { callActions } from '@/lib/calls/call-actions';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -10,10 +11,12 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { ActiveCallView } from './call-overlay';
 
 /**
- * **L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT EN MOUVEMENT** (S1.7, S2.1, #17774 ; iOS #17765, Android #17772) —
- * lancer le partage contracte l'écran vers la capsule, la toucher le redéploie : l'un repart (180 ms) pendant que
- * l'autre arrive (220 ms), par le fondu et l'échelle de 0,92 ; « Réduire les animations » les ramène à un fondu
- * de 120 ms. Le départ garde l'écran monté, sans focus ni clic, le temps de son mouvement.
+ * **L'ÉCRAN D'APPEL ET L'APPEL RÉDUIT S'ÉCHANGENT EN MOUVEMENT** (S1.7, S2.1, P18.4, P18.8, #17774 ; iOS #18464,
+ * Android #18449) — réduire contracte l'écran VERS la capsule (au dixième, ancré en haut au centre), la toucher le
+ * redéploie depuis elle ; toucher la bulle le redéploie depuis l'endroit où elle flotte. L'un repart (180 ms) pendant
+ * que l'autre arrive (220 ms), la capsule par son échelle courte de 0,92 ; « Réduire les animations » les ramène à
+ * un fondu de 120 ms. Le départ garde l'écran monté le temps de son mouvement, caché au lecteur d'écran mais
+ * touchable (loi 17.11) : un toucher pendant la contraction la reprend et rend le plein écran.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -118,12 +121,13 @@ describe('l’écran d’appel se contracte vers la capsule (S1.7)', () => {
     const screen = view.screen();
     expect(screen).not.toBeNull();
     expect(screen?.hasAttribute('data-leaving')).toBe(true);
-    expect(screen?.hasAttribute('inert')).toBe(true);
+    expect(screen?.hasAttribute('inert')).toBe(false);
     expect(screen?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen?.style.transformOrigin).toBe('50% 0%');
     const exit = motion.played.find((move) => move.element === screen);
     expect(exit?.frames).toEqual([
       { opacity: 1, transform: 'none' },
-      { opacity: 0, transform: 'scale(0.92)' },
+      { opacity: 0, transform: 'scale(0.1)' },
     ]);
     expect(exit?.options.duration).toBe(180);
     const entry = motion.played.find((move) => move.element === view.bar());
@@ -149,7 +153,7 @@ describe('l’écran d’appel se contracte vers la capsule (S1.7)', () => {
     const exit = motion.played.find((move) => move.element === view.screen());
     expect(exit?.frames).toEqual([
       { opacity: 1, transform: 'translateY(480px)' },
-      { opacity: 0, transform: 'translateY(480px) scale(0.92)' },
+      { opacity: 0, transform: 'translateY(480px) scale(0.1)' },
     ]);
     await view.done();
     motion.restore();
@@ -201,11 +205,12 @@ describe('la capsule se redéploie en écran d’appel (S2.1)', () => {
     const bar = view.bar();
     expect(bar).not.toBeNull();
     expect(bar?.hasAttribute('data-leaving')).toBe(true);
-    expect(bar?.hasAttribute('inert')).toBe(true);
+    expect(bar?.hasAttribute('inert')).toBe(false);
     const exit = motion.played.find((move) => move.element === bar);
     expect(exit?.options.duration).toBe(180);
     const entry = motion.played.find((move) => move.element === view.screen());
-    expect(entry?.frames[0]).toEqual({ opacity: 0, transform: 'scale(0.92)' });
+    expect(entry?.frames[0]).toEqual({ opacity: 0, transform: 'scale(0.1)' });
+    expect(view.screen()?.style.transformOrigin).toBe('50% 0%');
     expect(entry?.options.duration).toBe(220);
     await act(async () => exit?.finish());
     await settle();
@@ -229,5 +234,103 @@ describe('la capsule se redéploie en écran d’appel (S2.1)', () => {
     expect(view.bar()).toBeNull();
     expect(view.screen()).toBeNull();
     await view.done();
+  });
+});
+
+const placeBubble = (rect: { readonly left: number; readonly top: number; readonly width: number; readonly height: number }) => {
+  const bubble = document.createElement('div');
+  bubble.setAttribute('data-call-bubble', 'trailing');
+  bubble.getBoundingClientRect = () => ({ ...rect, x: rect.left, y: rect.top, right: rect.left + rect.width, bottom: rect.top + rect.height, toJSON: () => rect }) as DOMRect;
+  document.body.append(bubble);
+  return () => bubble.remove();
+};
+
+describe('la bulle redéploie l’écran depuis l’endroit où elle flotte (P18.4, P18.8)', () => {
+  test('toucher la bulle : l’écran grandit du dixième à la pleine taille, ancré au centre mesuré de la bulle', async () => {
+    const motion = recordAnimations();
+    const view = await mount(call({ display: 'bubble' }));
+    const remove = placeBubble({ left: 728, top: 334, width: 80, height: 100 });
+    await view.render(call({ display: 'full' }));
+    remove();
+    const screen = view.screen();
+    expect(screen).not.toBeNull();
+    expect(screen?.hasAttribute('data-leaving')).toBe(false);
+    expect(screen?.style.transformOrigin).toBe('75% 50%');
+    const entry = motion.played.find((move) => move.element === screen);
+    expect(entry?.frames).toEqual([
+      { opacity: 0, transform: 'scale(0.1)' },
+      { opacity: 1, transform: 'none' },
+    ]);
+    expect(entry?.options.duration).toBe(220);
+    await view.done();
+    motion.restore();
+  });
+
+  test('sans bulle mesurée, l’écran part de la capsule : en haut au centre', async () => {
+    const motion = recordAnimations();
+    const view = await mount(call({ display: 'bubble' }));
+    await view.render(call({ display: 'full' }));
+    expect(view.screen()?.style.transformOrigin).toBe('50% 0%');
+    expect(motion.played.find((move) => move.element === view.screen())?.frames[0]).toEqual({ opacity: 0, transform: 'scale(0.1)' });
+    await view.done();
+    motion.restore();
+  });
+
+  test('sous « Réduire les animations » : un fondu de 120 ms, aucune échelle', async () => {
+    const motion = recordAnimations();
+    const restore = reduceMotion(true);
+    const view = await mount(call({ display: 'bubble' }));
+    const remove = placeBubble({ left: 728, top: 334, width: 80, height: 100 });
+    await view.render(call({ display: 'full' }));
+    remove();
+    const entry = motion.played.find((move) => move.element === view.screen());
+    expect(entry?.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(entry?.options.duration).toBe(120);
+    await view.done();
+    restore();
+    motion.restore();
+  });
+});
+
+describe('la contraction est interruptible (P18.8, loi 17.11)', () => {
+  test('un toucher sur l’écran qui se contracte le rend au plein écran, sans déclencher le bouton touché', async () => {
+    const calls: string[] = [];
+    const real = { expand: callActions.expand, hangup: callActions.hangup };
+    callActions.expand = () => void calls.push('expand');
+    callActions.hangup = () => void calls.push('hangup');
+    try {
+      const motion = recordAnimations();
+      const view = await mount(call());
+      await view.render(call({ display: 'pill' }));
+      const hangup = view.screen()?.querySelector<HTMLElement>('button[aria-label="Raccrocher"]');
+      expect(hangup).not.toBeNull();
+      expect(hangup?.closest('[inert]')).toBeNull();
+      act(() => {
+        hangup?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        hangup?.click();
+      });
+      expect(calls).toEqual(['expand']);
+      await view.done();
+      motion.restore();
+    } finally {
+      callActions.expand = real.expand;
+      callActions.hangup = real.hangup;
+    }
+  });
+
+  test('l’écran rendu, ses boutons répondent de nouveau', async () => {
+    const calls: string[] = [];
+    const real = { expand: callActions.expand, hangup: callActions.hangup };
+    callActions.expand = () => void calls.push('expand');
+    callActions.hangup = () => void calls.push('hangup');
+    try {
+      const view = await mount(call());
+      act(() => view.screen()?.querySelector<HTMLElement>('button[aria-label="Raccrocher"]')?.click());
+      expect(calls).toEqual(['hangup']);
+      await view.done();
+    } finally {
+      callActions.expand = real.expand;
+      callActions.hangup = real.hangup;
+    }
   });
 });

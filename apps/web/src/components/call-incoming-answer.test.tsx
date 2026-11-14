@@ -242,7 +242,7 @@ describe('ma vignette pendant la sonnerie', () => {
     view.done();
   });
 
-  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, sans prendre le doigt', async () => {
+  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, touchable (loi 17.11)', async () => {
     const view = answer(ringing(), granted());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const slot = () => view.find('[data-call-incoming-self-slot]');
@@ -250,7 +250,7 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(slot()?.hasAttribute('data-leaving')).toBe(false);
     view.press('[data-call-incoming-camera]');
     expect(slot()?.hasAttribute('data-leaving')).toBe(true);
-    expect(slot()?.hasAttribute('inert')).toBe(true);
+    expect(slot()?.hasAttribute('inert')).toBe(false);
     view.done();
   });
 
