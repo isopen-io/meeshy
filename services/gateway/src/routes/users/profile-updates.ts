@@ -450,13 +450,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         data: {
           avatar: body.avatar,
           ...(current && {
-            profileCompletionRate: calculateProfileCompletionRate({
-              displayName: current.displayName,
-              bio: current.bio,
-              phoneNumber: current.phoneNumber,
-              email: current.email,
-              avatar: body.avatar,
-            }),
+            profileCompletionRate: calculateProfileCompletionRate({ ...current, avatar: body.avatar }),
           }),
         },
       });

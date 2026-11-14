@@ -350,3 +350,6 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Rétrocompatible : la valeur DÉJÀ posée passe sans lecture (une valeur stockée avant la garde n'est jamais refusée à son propriétaire) ; les trois clients posent le `fileUrl` que leur propre téléversement vient de rendre. Un hôte tiers reste l'affaire de #16809.
 - Témoins : `profile-image-ownership.test.ts` (14), cinq de plus dans `settings.test.ts`, un dans `core.test.ts`, quatre pour `profileImageStorageKey` ; 17 rouges sans le correctif des routes.
 - Pas de revue adversariale : resserrement d'une validation d'entrée sur une règle existante, ni permission ni migration.
+- Gates locaux (CI des branches coupée, #18048) : passerelle `unit/routes` + `routes/__tests__` + `security` 930/930 suites (14 155 tests), `tsc --noEmit` vert, cliquet `tsc-never-loaded-tests-ratchet` vert ; shared vitest ciblé 95/95. Un rouge corrigé en route : `search-tokens-write-guard` lit toute clé `displayName` dans le `data` d'un `user.update` comme une écriture de nom — la composition explicite du taux de complétion l'y faisait entrer, revenue à l'étalement.
+- PR #18355.
+- Prochain lot recommandé : #16809 (hôtes Meeshy, même loi), #18026 et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
