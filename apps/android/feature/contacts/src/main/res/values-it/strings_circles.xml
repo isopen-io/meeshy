@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">Potrai ritirare ogni condivisione in qualsiasi momento, dalla scheda di questa persona. Presto disponibile.</string>
     <string name="circles_ritual_hold">Tieni premuto per sigillare</string>
     <string name="circles_ritual_hold_hint">Dovete entrambi tenere premuto lo schermo nello stesso momento.</string>
-    <string name="circles_ritual_lapsed">L\'altra persona ha lasciato. Non è cambiato nulla.</string>
+    <string name="circles_ritual_lapsed">L\'altra persona ha mollato la presa. Non è stato registrato nulla, non è cambiato nulla.</string>
     <string name="circles_ritual_open_failed">Impossibile aprire il rituale</string>
     <string name="circles_ritual_other_waiting">%1$s ti aspetta</string>
     <string name="circles_ritual_retry">Ricomincia</string>

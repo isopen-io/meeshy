@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">Podrás retirar cada uso compartido en cualquier momento, desde la ficha de esta persona. Muy pronto.</string>
     <string name="circles_ritual_hold">Mantén para sellar</string>
     <string name="circles_ritual_hold_hint">Ambos deben mantener la pantalla al mismo tiempo.</string>
-    <string name="circles_ritual_lapsed">La otra persona soltó. Nada cambió.</string>
+    <string name="circles_ritual_lapsed">La otra persona soltó. No se guardó nada, nada cambió.</string>
     <string name="circles_ritual_open_failed">No se pudo abrir el ritual</string>
     <string name="circles_ritual_other_waiting">%1$s te está esperando</string>
     <string name="circles_ritual_retry">Empezar de nuevo</string>

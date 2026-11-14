@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">ستتمكن من سحب كل مشاركة في أي وقت من بطاقة هذا الشخص. قريبًا.</string>
     <string name="circles_ritual_hold">اضغط مطوّلًا للختم</string>
     <string name="circles_ritual_hold_hint">يجب أن يضغط كلاكما على الشاشة في الوقت نفسه.</string>
-    <string name="circles_ritual_lapsed">الطرف الآخر تخلّى. لم يتغيّر شيء.</string>
+    <string name="circles_ritual_lapsed">الطرف الآخر تخلّى. لم يُسجَّل شيء ولم يتغيّر شيء.</string>
     <string name="circles_ritual_open_failed">تعذّر فتح الطقس</string>
     <string name="circles_ritual_other_waiting">%1$s ينتظرك</string>
     <string name="circles_ritual_retry">ابدأ من جديد</string>

@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">You will be able to withdraw each share at any time, from this person\'s card. Coming soon.</string>
     <string name="circles_ritual_hold">Hold to seal</string>
     <string name="circles_ritual_hold_hint">You both need to hold the screen at the same time.</string>
-    <string name="circles_ritual_lapsed">The other let go. Nothing changed.</string>
+    <string name="circles_ritual_lapsed">The other let go. Nothing was recorded, nothing changed.</string>
     <string name="circles_ritual_open_failed">Couldn\'t open the ritual</string>
     <string name="circles_ritual_other_waiting">%1$s is waiting for you</string>
     <string name="circles_ritual_retry">Start again</string>

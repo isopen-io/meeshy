@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible.</string>
     <string name="circles_ritual_hold">Maintiens pour sceller</string>
     <string name="circles_ritual_hold_hint">Vous devez tous les deux maintenir l\'écran en même temps.</string>
-    <string name="circles_ritual_lapsed">L\'autre a lâché. Rien n\'a changé.</string>
+    <string name="circles_ritual_lapsed">L\'autre a lâché. Rien n\'est enregistré, rien n\'a changé.</string>
     <string name="circles_ritual_open_failed">Impossible d\'ouvrir le rituel</string>
     <string name="circles_ritual_other_waiting">%1$s t\'attend</string>
     <string name="circles_ritual_retry">Recommencer</string>

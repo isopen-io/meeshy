@@ -98,10 +98,10 @@ class EpureContactsStringsTest {
     }
 
     @Test
-    fun `the blood ritual says once that the other let go`() {
+    fun `when the other lets go of the blood ritual, the sheet still says nothing was recorded`() {
         val expected = mapOf(
-            "values-fr" to "L'autre a lâché. Rien n'a changé.",
-            "values" to "The other let go. Nothing changed.",
+            "values-fr" to "L'autre a lâché. Rien n'est enregistré, rien n'a changé.",
+            "values" to "The other let go. Nothing was recorded, nothing changed.",
         )
         expected.forEach { (folder, text) -> assertThat(all(folder)["circles_ritual_lapsed"]).isEqualTo(text) }
         val fr = all("values-fr")["circles_ritual_lapsed"].orEmpty()

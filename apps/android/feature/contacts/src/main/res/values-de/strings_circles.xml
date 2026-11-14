@@ -36,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">Du kannst jede Freigabe jederzeit über die Karte dieser Person zurückziehen. Bald verfügbar.</string>
     <string name="circles_ritual_hold">Zum Besiegeln halten</string>
     <string name="circles_ritual_hold_hint">Ihr müsst beide gleichzeitig den Bildschirm halten.</string>
-    <string name="circles_ritual_lapsed">Die andere Person hat losgelassen. Nichts hat sich geändert.</string>
+    <string name="circles_ritual_lapsed">Die andere Person hat losgelassen. Nichts wurde gespeichert, nichts hat sich geändert.</string>
     <string name="circles_ritual_open_failed">Das Ritual konnte nicht geöffnet werden</string>
     <string name="circles_ritual_other_waiting">%1$s wartet auf dich</string>
     <string name="circles_ritual_retry">Neu beginnen</string>
