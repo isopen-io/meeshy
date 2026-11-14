@@ -90,6 +90,7 @@ public struct MeeshyTrimTrack<Content: View>: View {
                 .overlay(alignment: .top) { preciseCapsule(recipe) }
             readout(recipe)
         }
+        .meeshyAnimation(.easeOut(duration: MeeshyTrimTrackRecipe.loupeFade), value: recipe.isPrecise)
         .environment(\.layoutDirection, .leftToRight)
         .opacity(recipe.contentOpacity)
         .accessibilityElement(children: .contain)
@@ -110,7 +111,7 @@ public struct MeeshyTrimTrack<Content: View>: View {
     private var currentRecipe: MeeshyTrimTrackRecipe {
         MeeshyTrimTrackRecipe.resolve(
             tone: tone, selection: selection, isEnabled: isEnabled,
-            held: forcedHeld ?? gesturePart ?? preciseHeld,
+            held: forcedHeld ?? (ignoresDrag ? nil : gesturePart) ?? preciseHeld,
             isPrecise: preciseHeld != nil || forcesPrecise
         )
     }

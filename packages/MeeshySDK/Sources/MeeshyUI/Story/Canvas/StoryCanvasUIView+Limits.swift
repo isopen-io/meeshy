@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 
 // **Les LIMITES et les lignes MAGNÉTIQUES, pendant une manipulation** (#8370).
 //
@@ -8,6 +9,10 @@ import UIKit
 // contour de la scène — là où le contenu se coupe — et les lignes sur lesquelles
 // il s'accroche. La ligne ENGAGÉE garde son trait rose (`updateSnapGuides`) ;
 // celles-ci disent où sont les autres. Au repos, rien ne se peint sur la scène.
+//
+// Les mesures (trait, opacité, pointillé, retrait) sont celles de la recette du
+// kit (`MeeshySelectionFeedbackRecipe.guides()`, K23) : une seule source, que le
+// calque `MeeshySnapGuides` lit aussi. Rien ne change à l'écran.
 //
 // Extension à part, sans propriété stockée : le calque se retrouve par son NOM
 // dans `editOverlayLayer`, ce qui évite d'ajouter à `StoryCanvasUIView.swift`,
@@ -25,7 +30,7 @@ extension StoryCanvasUIView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         hideManipulationLimits()
-
+        let style = MeeshySelectionFeedbackRecipe.guides()
         let conteneur = CALayer()
         conteneur.name = Self.limitsLayerName
         conteneur.frame = bounds
@@ -41,16 +46,16 @@ extension StoryCanvasUIView {
         }
         let magnetiques = CAShapeLayer()
         magnetiques.path = lignes.cgPath
-        magnetiques.strokeColor = UIColor.white.withAlphaComponent(0.3).cgColor
-        magnetiques.lineWidth = 0.5
-        magnetiques.lineDashPattern = [2, 6]
+        magnetiques.strokeColor = UIColor(MeeshyColors.onMedia).withAlphaComponent(CGFloat(style.candidateOpacity)).cgColor
+        magnetiques.lineWidth = style.candidateWidth
+        magnetiques.lineDashPattern = style.candidateDash.map { NSNumber(value: Double($0)) }
         magnetiques.fillColor = UIColor.clear.cgColor
 
         let contour = CAShapeLayer()
-        contour.path = UIBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1),
-                                    cornerRadius: max(0, canvasCornerRadius - 1)).cgPath
-        contour.strokeColor = UIColor.white.withAlphaComponent(0.9).cgColor
-        contour.lineWidth = 2
+        contour.path = UIBezierPath(roundedRect: bounds.insetBy(dx: style.boundsInset, dy: style.boundsInset),
+                                    cornerRadius: max(0, canvasCornerRadius - style.boundsInset)).cgPath
+        contour.strokeColor = UIColor(MeeshyColors.onMedia).withAlphaComponent(CGFloat(style.boundsOpacity)).cgColor
+        contour.lineWidth = style.boundsWidth
         contour.fillColor = UIColor.clear.cgColor
 
         conteneur.addSublayer(magnetiques)

@@ -11,10 +11,13 @@ struct StatusBubbleOverlay: View {
     var onRepublish: ((StatusEntry) -> Void)? = nil
     /// Touché du CONTENU du mood (pas la zone extérieure) → amorce la réponse.
     var onReplyTapped: (() -> Void)? = nil
+    /// Réagir à l'humeur (#18110) — `nil` sur sa propre humeur.
+    var reactionHandler: MoodReactionHandler? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
+    @State private var reactions = MoodReactionSelection()
 
     /// Décisions de layout pures — extraites pour être directement testables
     /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
@@ -122,12 +125,14 @@ struct StatusBubbleOverlay: View {
 
     // MARK: - Thought Circle
 
+    private var avatarTint: Color { Color(hex: status.avatarColor) }
+
     private func thoughtCircle(size: CGFloat) -> some View {
         Circle()
             .fill(.ultraThinMaterial)
             .frame(width: size, height: size)
             .overlay(
-                Circle().stroke(Color(hex: status.avatarColor).opacity(0.3), lineWidth: MeeshyBorder.hairline)
+                Circle().stroke(avatarTint.opacity(0.3), lineWidth: MeeshyBorder.hairline)
             )
             .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
     }
@@ -152,6 +157,8 @@ struct StatusBubbleOverlay: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(theme.textMuted)
             }
+
+            reactionRow
 
             if onRepublish != nil {
                 Divider().opacity(0.3)
@@ -197,7 +204,7 @@ struct StatusBubbleOverlay: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        colors: [avatarTint.opacity(0.3), Color.white.opacity(0.1)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -219,13 +226,13 @@ struct StatusBubbleOverlay: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(Color(hex: status.avatarColor)))
+                    .background(Circle().fill(avatarTint))
             }
             .accessibilityLabel(audioToggleLabel)
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
-                .tint(Color(hex: status.avatarColor))
+                .tint(avatarTint)
                 .frame(maxWidth: .infinity)
                 .scaleEffect(y: 0.6, anchor: .center)
         }
@@ -277,11 +284,42 @@ struct StatusBubbleOverlay: View {
                 audioPlayer.togglePlayPause()
             }
         }
+        if reactionHandler != nil {
+            ForEach(MoodReactionSelection.emojis.filter { !reactions.placed.contains($0) }, id: \.self) { emoji in
+                Button(MoodQuickReactionRow.accessibilityLabel(for: emoji)) {
+                    HapticFeedback.light()
+                    react(with: emoji)
+                }
+            }
+        }
         if onRepublish != nil {
             Button(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main)) {
                 dismiss()
                 onRepublish?(status)
             }
+        }
+    }
+
+    // MARK: - React
+
+    @ViewBuilder private var reactionRow: some View {
+        if let reactionHandler {
+            MoodQuickReactionRow(
+                placed: reactions.placed,
+                tint: avatarTint,
+                onReact: react(with:)
+            )
+            .padding(.horizontal, -MeeshySpacing.xs)
+            .onAppear { reactions = reactions.merging(reactionHandler.placed(status.id)) }
+        }
+    }
+
+    private func react(with emoji: String) {
+        guard let reactionHandler, reactions.begin(emoji) else { return }
+        let statusId = status.id
+        Task {
+            let outcome = await reactionHandler.react(statusId, emoji)
+            reactions.settle(emoji, outcome: outcome)
         }
     }
 

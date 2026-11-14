@@ -363,6 +363,7 @@ struct iPadRootView: View {
         StatusBubbleController.shared.onRepublish = { entry in
             republishStatusEntry = entry
         }
+        StatusBubbleController.shared.reactionHandler = statusViewModel.reactionHandler
 
         // Exécuteur de la file de publication des stories. `setExecutor`
         // enregistre AUSSI le `publishHandler` de la file, dans le même

@@ -50,7 +50,6 @@ const frUserProfile = {
   'userProfile.blocked.title': 'Vous avez bloqué cette personne',
   'userProfile.blocked.body': 'Ses publications et ses statistiques restent masquées tant que le blocage dure.',
   'userProfile.signin.title': 'Connectez-vous pour entrer en contact',
-  'userProfile.signin.body': 'Les demandes de connexion et les messages demandent un compte.',
   'userProfile.signin.cta': 'Se connecter',
   'userProfile.announce.blocked': 'Personne bloquée',
   'userProfile.announce.blockFailed': 'Impossible de bloquer',

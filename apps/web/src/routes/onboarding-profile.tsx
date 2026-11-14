@@ -161,17 +161,6 @@ export function ProfileCard({
         </>
       }
     >
-      <ul className="onb-profile-perks">
-        <li>
-          <Glyph name="eye" size={18} />
-          <span>{translateOnboardingProfile(lang, 'onboarding.profile.visibility')}</span>
-        </li>
-        <li>
-          <Glyph name="users" size={18} />
-          <span>{translateOnboardingProfile(lang, 'onboarding.profile.contacts')}</span>
-        </li>
-      </ul>
-
       <div className="onb-profile-preview">
         <button
           type="button"
