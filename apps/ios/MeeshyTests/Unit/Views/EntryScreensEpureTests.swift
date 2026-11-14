@@ -109,7 +109,7 @@ final class EntryScreensEpureTests: XCTestCase {
         "auth.login.two_factor.title": "Authentification à deux facteurs",
         "auth.login.two_factor.placeholder": "Code de vérification",
         "auth.login.two_factor.label": "Code de vérification",
-        "emailProof.secondFactorRequired": "Authentification à deux facteurs : saisissez votre mot de passe et votre code.",
+        "emailProof.secondFactorRequired": "Compte protégé par l'authentification à deux facteurs : connectez-vous avec votre mot de passe et votre code.",
         "auth.username.placeholder": "Pseudo",
         "activation.gate.title": "Confirmez votre adresse e-mail",
         "onboarding.email.title": "Confirme ton adresse e-mail",

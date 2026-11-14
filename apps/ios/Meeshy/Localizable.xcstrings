@@ -309136,43 +309136,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المصادقة الثنائية: أدخل كلمة المرور والرمز."
+            "value": "هذا الحساب محمي بالمصادقة الثنائية: سجّل الدخول بكلمة المرور والرمز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwei-Faktor-Authentifizierung: Gib dein Passwort und deinen Code ein."
+            "value": "Dieses Konto ist durch Zwei-Faktor-Authentifizierung geschützt: Melde dich mit deinem Passwort und deinem Code an."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Two-factor authentication: enter your password and your code."
+            "value": "This account is protected by two-factor authentication: sign in with your password and your code."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autenticación de dos factores: introduce tu contraseña y tu código."
+            "value": "Esta cuenta está protegida con autenticación de dos factores: inicia sesión con tu contraseña y tu código."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Authentification à deux facteurs : saisissez votre mot de passe et votre code."
+            "value": "Compte protégé par l'authentification à deux facteurs : connectez-vous avec votre mot de passe et votre code."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autenticazione a due fattori: inserisci la password e il codice."
+            "value": "Questo account è protetto dall'autenticazione a due fattori: accedi con la password e il codice."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autenticação em dois fatores: informe sua senha e seu código."
+            "value": "Esta conta é protegida pela autenticação de dois fatores: entre com sua senha e seu código."
           }
         }
       }

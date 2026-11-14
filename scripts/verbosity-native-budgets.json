@@ -446,8 +446,8 @@
     },
     "ios:Meeshy/emailProof": {
       "labels": 2,
-      "words": 29,
-      "long": 1,
+      "words": 33,
+      "long": 2,
       "explanations": 0
     },
     "ios:Meeshy/emailVerification": {
