@@ -818,7 +818,10 @@ final class CallViewGlassGuardTests: XCTestCase {
         let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
         XCTAssertEqual(controls.components(separatedBy: "onConfirm: closeAfterChoice").count - 1, 3, "Les trois carrousels (Visage, Couleur, Montage) rendent le menu de base à l'activation")
         let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
-        XCTAssertTrue(montage.contains("variants: CallModeCarouselVariants("), "Les déclinaisons se parcourent dans le carrousel")
+        XCTAssertTrue(montage.contains("variants: declinationVariants(people: people)"), "Les déclinaisons se parcourent dans le carrousel")
+        let variants = try block("private func declinationVariants(people: Int) -> CallModeCarouselVariants<CallMontageChoice> {", until: "\n    }\n", in: montage)
+        XCTAssertTrue(variants.contains("current: { declined($0, people: people) }"), "Le pas part de la déclinaison posée")
+        XCTAssertFalse(variants.contains("chooseDeclination("), "Parcourir une déclinaison ne l'applique pas")
         XCTAssertFalse(montage.contains(".accessibilityAction(named: CallFrameCopy.nextDeclination)"), "Plus de pas de déclinaison qui applique et referme")
     }
 
