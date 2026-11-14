@@ -38,6 +38,7 @@ class CallEffectsGenreRowTest {
 
     private class Outcome {
         var frames = 0
+        var finished = 0
         var mode by mutableStateOf(CallEffectsModeState.opening(VideoFilterConfig()))
     }
 
@@ -50,7 +51,7 @@ class CallEffectsGenreRowTest {
                     row = row,
                     reduceMotion = true,
                     onChange = { outcome.mode = it },
-                    onFinish = {},
+                    onFinish = { outcome.finished++ },
                     onOpenFrames = { outcome.frames++ },
                 )
             }
@@ -88,7 +89,7 @@ class CallEffectsGenreRowTest {
     }
 
     @Test
-    fun `(+) ouvre d'abord l'autre genre d'Effets et rend le menu de base`() {
+    fun `(+) ouvre d'abord l'autre genre d'Effets, sur son carrousel`() {
         val outcome = Outcome().apply { mode = mode.selecting(CallFaceEffect.Toad).togglingSettings() }
         show(outcome)
 
@@ -96,7 +97,7 @@ class CallEffectsGenreRowTest {
         rule.waitForIdle()
 
         assertThat(outcome.mode.category).isEqualTo(CallEffectsCategory.Color)
-        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Looks)
         assertThat(outcome.frames).isEqualTo(0)
     }
 
@@ -121,5 +122,50 @@ class CallEffectsGenreRowTest {
 
         assertThat(outcome.frames).isEqualTo(0)
         assertThat(outcome.mode.category).isEqualTo(CallEffectsCategory.Color)
+    }
+
+    /** C1 généralisée (#18185) : un look choisi a refermé le carrousel ; sur le menu de base, aucune puce n'est pressée. */
+    @Test
+    fun `sur le menu de base aucune puce n'est pressee, en toucher une rouvre son carrousel`() {
+        val outcome = Outcome().apply { mode = mode.selecting(CallFaceEffect.Toad) }
+        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Base)
+        show(outcome)
+
+        rule.onNodeWithText("Face").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
+        rule.onNodeWithText("Colour").performClick()
+        rule.waitForIdle()
+
+        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Looks)
+        rule.onNodeWithText("Colour").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
+    }
+
+    @Test
+    fun `Retour referme le carrousel ouvert, un second Retour rend l'appel`() {
+        val outcome = Outcome()
+        show(outcome)
+
+        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.waitForIdle()
+        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(outcome.finished).isEqualTo(0)
+
+        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.waitForIdle()
+        assertThat(outcome.finished).isEqualTo(1)
+    }
+
+    /** #17947 (2026-11-14) : ‹ referme le panneau Luminosité · Flou du fond et rend `‹ · Réglages · (+)` ; il ne quitte plus le mode. */
+    @Test
+    fun `Retour referme le panneau Reglages sans quitter le mode (#17947)`() {
+        val outcome = Outcome().apply { mode = mode.togglingSettings().withBrightness(0.2f) }
+        show(outcome)
+
+        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.waitForIdle()
+
+        assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(outcome.mode.current.brightness).isEqualTo(0.2f)
+        assertThat(outcome.finished).isEqualTo(0)
+        rule.onNodeWithText("Face").assertExists()
     }
 }

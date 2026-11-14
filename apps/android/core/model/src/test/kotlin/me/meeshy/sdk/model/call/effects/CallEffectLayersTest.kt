@@ -282,28 +282,57 @@ class CallEffectLayersTest {
 
     // endregion
 
-    // region La barre revient au menu de base
+    // region La barre revient au menu de base (C1 généralisée, décision porteur du 2026-11-14, #18185)
+
+    @Test
+    fun `un mode s'ouvre sur son carrousel, comme la vue C1`() {
+        assertThat(CallEffectsBarRule.opening).isEqualTo(CallEffectsBarMode.Looks)
+    }
 
     @Test
     fun `Reglages bascule entre le menu de base et le panneau`() {
         assertThat(CallEffectsBarRule.afterSettings(CallEffectsBarMode.Base)).isEqualTo(CallEffectsBarMode.Settings)
+        assertThat(CallEffectsBarRule.afterSettings(CallEffectsBarMode.Looks)).isEqualTo(CallEffectsBarMode.Settings)
         assertThat(CallEffectsBarRule.afterSettings(CallEffectsBarMode.Settings)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterSettings(CallEffectsBarMode.Applied)).isEqualTo(CallEffectsBarMode.Settings)
     }
 
     @Test
-    fun `tout choix ramene la barre au menu de base`() {
-        assertThat(CallEffectsBarRule.afterAddingLook(CallEffectsBarMode.Settings)).isEqualTo(CallEffectsBarMode.Base)
-        assertThat(CallEffectsBarRule.afterAddingLook(CallEffectsBarMode.Applied)).isEqualTo(CallEffectsBarMode.Base)
-        assertThat(CallEffectsBarRule.afterRemoval).isEqualTo(CallEffectsBarMode.Base)
+    fun `(+) et une puce de genre ouvrent le carrousel de ce genre, d'ou que l'on parte`() {
+        CallEffectsBarMode.entries.forEach { from ->
+            assertThat(CallEffectsBarRule.afterAddingLook(from)).isEqualTo(CallEffectsBarMode.Looks)
+            assertThat(CallEffectsBarRule.afterGenre(from)).isEqualTo(CallEffectsBarMode.Looks)
+        }
+    }
+
+    @Test
+    fun `un look, un cadre ou une deformation choisis referment le carrousel et rendent le menu de base`() {
+        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Looks, changed = true)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterRemoval).isEqualTo(CallEffectsBarMode.Base)
+    }
+
+    @Test
+    fun `re-choisir l'element deja choisi, ou un choix refuse, ne referme rien`() {
+        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Looks, changed = false)).isEqualTo(CallEffectsBarMode.Looks)
+        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Settings, changed = false)).isEqualTo(CallEffectsBarMode.Settings)
+    }
+
+    @Test
+    fun `retour referme ce qui est ouvert et rend le menu de base, depuis le menu de base il quitte le mode (#17947)`() {
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Settings)).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Looks)).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Applied)).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Base)).isNull()
     }
 
     @Test
     fun `l'appui long sur (+) ouvre la liste seulement s'il y a quelque chose a lister`() {
         assertThat(CallEffectsBarRule.afterShowingApplied(CallEffectsBarMode.Base, hasLayers = true)).isEqualTo(CallEffectsBarMode.Applied)
+        assertThat(CallEffectsBarRule.afterShowingApplied(CallEffectsBarMode.Looks, hasLayers = true)).isEqualTo(CallEffectsBarMode.Applied)
         assertThat(CallEffectsBarRule.afterShowingApplied(CallEffectsBarMode.Settings, hasLayers = true)).isEqualTo(CallEffectsBarMode.Applied)
         assertThat(CallEffectsBarRule.afterShowingApplied(CallEffectsBarMode.Base, hasLayers = false)).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterShowingApplied(CallEffectsBarMode.Looks, hasLayers = false)).isEqualTo(CallEffectsBarMode.Looks)
     }
 
     @Test
@@ -311,13 +340,16 @@ class CallEffectLayersTest {
         assertThat(CallEffectsBarRule.reconciled(CallEffectsBarMode.Applied, hasLayers = false)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.reconciled(CallEffectsBarMode.Applied, hasLayers = true)).isEqualTo(CallEffectsBarMode.Applied)
         assertThat(CallEffectsBarRule.reconciled(CallEffectsBarMode.Settings, hasLayers = false)).isEqualTo(CallEffectsBarMode.Settings)
+        assertThat(CallEffectsBarRule.reconciled(CallEffectsBarMode.Looks, hasLayers = false)).isEqualTo(CallEffectsBarMode.Looks)
     }
 
     @Test
-    fun `les looks ne se montrent que sur le menu de base`() {
+    fun `la rangee de genres vit sur le menu de base et sous le carrousel, le carrousel seulement quand il est ouvert`() {
         assertThat(CallEffectsBarRule.showsLooks(CallEffectsBarMode.Base)).isTrue()
+        assertThat(CallEffectsBarRule.showsLooks(CallEffectsBarMode.Looks)).isTrue()
         assertThat(CallEffectsBarRule.showsLooks(CallEffectsBarMode.Settings)).isFalse()
         assertThat(CallEffectsBarRule.showsLooks(CallEffectsBarMode.Applied)).isFalse()
+        assertThat(CallEffectsBarMode.entries.filter(CallEffectsBarRule::showsCarousel)).containsExactly(CallEffectsBarMode.Looks)
     }
 
     // endregion
@@ -355,13 +387,13 @@ class CallEffectLayersTest {
     }
 
     @Test
-    fun `(+) en Effets montre le genre ouvert et rend le menu de base, un genre du Montage ne change rien ici`() {
+    fun `(+) en Effets ouvre le carrousel du genre ajoute, un genre du Montage ne change rien ici`() {
         val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad).togglingSettings()
         val row = listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame)
         assertThat(open.addedGenre(row)).isEqualTo(CallEffectKind.Color)
         val shown = open.showingAdded(CallEffectKind.Color)
         assertThat(shown.category).isEqualTo(CallEffectsCategory.Color)
-        assertThat(shown.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(shown.bar).isEqualTo(CallEffectsBarMode.Looks)
         assertThat(open.showingAdded(CallEffectKind.Frame)).isEqualTo(open)
     }
 
