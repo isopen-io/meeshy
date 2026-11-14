@@ -163,13 +163,21 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `a genre chip reopens the carousel from the base menu, and back closes it`() {
+    fun `a genre chip reopens the carousel from the base menu, and the chip of the open carousel closes it`() {
         val base = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad)
         val reopened = base.showing(CallEffectsCategory.Color)
         assertThat(reopened.bar).isEqualTo(CallEffectsBarMode.Looks)
         assertThat(reopened.category).isEqualTo(CallEffectsCategory.Color)
-        assertThat(reopened.back()?.bar).isEqualTo(CallEffectsBarMode.Base)
-        assertThat(reopened.back()?.current).isEqualTo(base.current)
+        assertThat(reopened.showing(CallEffectsCategory.Face).bar).isEqualTo(CallEffectsBarMode.Looks)
+        val closed = reopened.showing(CallEffectsCategory.Color)
+        assertThat(closed.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(closed.current).isEqualTo(base.current)
+    }
+
+    @Test
+    fun `back from the open carousel leaves the mode, the look kept (iOS #18184)`() {
+        assertThat(CallEffectsModeState.opening(VideoFilterConfig()).back()).isNull()
+        assertThat(CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad).back()).isNull()
     }
 
     @Test

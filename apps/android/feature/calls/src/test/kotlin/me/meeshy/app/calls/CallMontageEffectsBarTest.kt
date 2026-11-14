@@ -151,7 +151,7 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `sous la barre les puces de tri, Cadres est pressee ; Retour referme le carrousel, un second Retour rend l'appel`() {
+    fun `le Montage s'ouvre sur son carrousel, Cadres pressee, et toucher Retour rend l'appel`() {
         val outcome = Outcome()
         show(outcome)
 
@@ -159,19 +159,35 @@ class CallMontageEffectsBarTest {
         rule.onNodeWithText("Colour").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
         rule.onNodeWithContentDescription("Call montage").assertExists()
         rule.onNodeWithContentDescription("Back to the call").performClick()
-        rule.waitForIdle()
-        assertThat(outcome.closed).isEqualTo(0)
-        rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
-        rule.onNodeWithText("Frames").assertExists()
-
-        rule.onNodeWithContentDescription("Back to the call").performClick()
         assertThat(outcome.closed).isEqualTo(1)
+    }
+
+    private fun carouselAction(label: String): () -> Boolean =
+        rule.onNodeWithContentDescription("Call montage").fetchSemanticsNode().config[SemanticsActions.CustomActions].first { it.label == label }.action
+
+    private fun activateCarousel() {
+        val activate = rule.onNodeWithContentDescription("Call montage").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        rule.runOnUiThread { activate() }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun `un pas du lecteur d'ecran parcourt sans appliquer ni refermer`() {
+        val capture = capture()
+        show(Outcome(), capture = capture)
+        val before = CallMontagePickRule.choice(capture.pick.value, 2)
+
+        rule.runOnUiThread { carouselAction("Next montage")() }
+        rule.waitForIdle()
+
+        assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isEqualTo(before)
+        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Cover"))
     }
 
     /**
      * C1 généralisée (décision porteur du 2026-11-14, #18185, remplace #17962 point 2) : je touche un cadre, il s'applique
-     * aussitôt et la barre REVIENT à `‹ · Réglages · (+)` — le carrousel ne reste pas ouvert. Le choix passe ici par l'action
-     * « suivant » du lecteur d'écran, le même `onSelect` que le carrousel aimanté au repos.
+     * aussitôt et la barre REVIENT à `‹ · Réglages · (+)` — le carrousel ne reste pas ouvert. Le choix passe ici par le
+     * lecteur d'écran (un pas, puis l'activer), le même `onSelect` que le carrousel aimanté au repos.
      */
     @Test
     fun `choisir un cadre l'applique et referme le carrousel, la barre revient au menu de base`() {
@@ -179,10 +195,8 @@ class CallMontageEffectsBarTest {
         show(Outcome(), capture = capture)
         val before = CallMontagePickRule.choice(capture.pick.value, 2)
 
-        val carousel = rule.onNodeWithContentDescription("Call montage").fetchSemanticsNode()
-        val next = carousel.config[SemanticsActions.CustomActions].first { it.label == "Next montage" }
-        rule.runOnUiThread { next.action() }
-        rule.waitForIdle()
+        rule.runOnUiThread { carouselAction("Next montage")() }
+        activateCarousel()
 
         assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isNotEqualTo(before)
         rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
@@ -194,12 +208,13 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `toucher Cadres sur le menu de base rouvre le carrousel, sans ouvrir Effets`() {
+    fun `retoucher Cadres referme le carrousel, la toucher encore le rouvre, sans ouvrir Effets`() {
         val outcome = Outcome()
         show(outcome)
-        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.onNodeWithText("Frames").performClick()
         rule.waitForIdle()
         rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
 
         rule.onNodeWithText("Frames").performClick()
         rule.waitForIdle()
@@ -220,16 +235,19 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `le carrousel referme, l'option Cadre du cadre choisi reste sur le menu de base`() {
+    fun `toucher l'option Cadre est un choix, le carrousel se referme et l'option reste sur le menu de base`() {
+        val controller = live()
         val capture = capture().also { it.show(signature, 2) }
-        show(Outcome(), capture = capture)
+        show(Outcome(), controller, capture)
         rule.onNodeWithContentDescription("Live frame").assertExists()
 
-        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.onNodeWithContentDescription("Live frame").performClick()
         rule.waitForIdle()
 
+        assertThat(controller.state.value.frameId).isEqualTo(CallFrameLayer.chosen(capture.pick.value, 2))
         rule.onNodeWithContentDescription("Call montage").assertDoesNotExist()
         rule.onNodeWithContentDescription("Live frame").assertExists()
+        rule.onNodeWithContentDescription("Back to the call").assertExists()
     }
 
     @Test
@@ -268,7 +286,7 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
-    fun `une puce d'un autre genre ouvre Effets sur ce genre, celle de Cadres ne fait rien`() {
+    fun `une puce d'un autre genre ouvre Effets sur ce genre, celle de Cadres n'ouvre pas Effets`() {
         val outcome = Outcome()
         show(outcome)
 

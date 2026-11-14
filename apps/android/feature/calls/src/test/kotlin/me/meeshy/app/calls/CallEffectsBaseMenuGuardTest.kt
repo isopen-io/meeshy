@@ -21,7 +21,7 @@ class CallEffectsBaseMenuGuardTest {
         File(calls(), name).readLines().filterNot { commentLine.containsMatchIn(it) }.joinToString("\n")
 
     @Test
-    fun `Effects draws its carousel on Looks only, and back and the system back close before they leave`() {
+    fun `Effects draws its carousel on Looks only, and back and the system back close the settings before they leave`() {
         val effects = code("CallEffectsMode.kt")
         val band = effects.substringAfter("private fun EffectsLooksOrPanel(").substringBefore("internal fun EffectsCarousel(")
         assertThat(band).contains("CallEffectsBarMode.Looks -> EffectsCarousel(")
@@ -35,10 +35,14 @@ class CallEffectsBaseMenuGuardTest {
     @Test
     fun `the Montage draws its frames on Looks only, keeps the Frame option on the base menu, and a pick closes it`() {
         val picker = code("CallMontagePicker.kt")
-        assertThat(picker).contains("mutableStateOf(CallEffectsBarRule.opening)")
+        assertThat(picker).contains("mutableStateOf(CallEffectsBarRule.entering)")
         assertThat(picker).contains("CallEffectsBarMode.Looks -> MontageLooksBand(")
-        assertThat(picker).contains("CallEffectsBarMode.Base -> MontageHoldOption(")
-        assertThat(picker).contains("onChosen = { bar = CallEffectsBarRule.afterChoice }")
+        assertThat(picker).contains("CallEffectsBarMode.Base -> Unit")
+        assertThat(picker).contains("visible = hold != null && CallEffectsBarRule.showsLooks(shownBar)")
+        assertThat(picker.substringAfter("private fun MontageLooksBand(").substringBefore("private fun MontageFramesCarousel(")).doesNotContain("FrameHoldChip(")
+        assertThat(picker).contains("val chosen: () -> Unit = { bar = CallEffectsBarRule.afterChoice }")
+        assertThat(picker).contains("onChosen = chosen")
+        assertThat(picker).contains("onToggled = chosen")
         val carousel = picker.substringAfter("private fun MontageFramesCarousel(")
         assertThat(carousel).contains("onChosen()")
         assertThat(picker).contains("BackHandler(enabled = CallEffectsBarRule.afterBack(shownBar) != null)")
@@ -49,8 +53,19 @@ class CallEffectsBaseMenuGuardTest {
     @Test
     fun `the genre chips are pressed only while their carousel is open`() {
         val effects = code("CallEffectsMode.kt").substringAfter("internal fun EffectsModeBar(").substringBefore("private fun EffectsLooksOrPanel(")
-        assertThat(effects).contains("selected = mode.category.kind.takeIf { CallEffectsBarRule.showsCarousel(mode.bar) }")
+        assertThat(effects).contains("selected = CallEffectsBarRule.pressed(mode.category.kind, mode.bar)")
         val picker = code("CallMontagePicker.kt")
-        assertThat(picker).contains("selected = CallEffectKind.Frame.takeIf { CallEffectsBarRule.showsCarousel(shownBar) }")
+        assertThat(picker).contains("selected = CallEffectsBarRule.pressed(CallEffectKind.Frame, shownBar)")
+        assertThat(picker).contains("isOpen = CallEffectsBarRule.pressed(kind, shownBar) == kind")
+    }
+
+    /** TalkBack : un pas « suivant / précédent » parcourt sans appliquer ; seul l'activer choisit (#18185). */
+    @Test
+    fun `a screen reader step browses, only activating picks`() {
+        val carousel = code("CallModeCarousel.kt")
+        val step = carousel.substringAfter("fun step(by: Int): Boolean {").substringBefore("\n    }")
+        assertThat(step).contains("browsed = next")
+        assertThat(step).doesNotContain("onSelect(")
+        assertThat(carousel).contains("if (browsed != selection) onSelect(browsed)")
     }
 }

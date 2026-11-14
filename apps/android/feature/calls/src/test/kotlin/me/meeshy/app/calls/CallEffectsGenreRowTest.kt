@@ -140,11 +140,11 @@ class CallEffectsGenreRowTest {
     }
 
     @Test
-    fun `Retour referme le carrousel ouvert, un second Retour rend l'appel`() {
+    fun `retoucher le genre ouvert referme son carrousel, Retour rend alors l'appel`() {
         val outcome = Outcome()
         show(outcome)
 
-        rule.onNodeWithContentDescription("Back to the call").performClick()
+        rule.onNodeWithText("Face").performClick()
         rule.waitForIdle()
         assertThat(outcome.mode.bar).isEqualTo(CallEffectsBarMode.Base)
         assertThat(outcome.finished).isEqualTo(0)

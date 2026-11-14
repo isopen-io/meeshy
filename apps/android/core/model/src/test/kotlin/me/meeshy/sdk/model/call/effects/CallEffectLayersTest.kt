@@ -286,7 +286,7 @@ class CallEffectLayersTest {
 
     @Test
     fun `un mode s'ouvre sur son carrousel, comme la vue C1`() {
-        assertThat(CallEffectsBarRule.opening).isEqualTo(CallEffectsBarMode.Looks)
+        assertThat(CallEffectsBarRule.entering).isEqualTo(CallEffectsBarMode.Looks)
     }
 
     @Test
@@ -301,28 +301,36 @@ class CallEffectLayersTest {
     fun `(+) et une puce de genre ouvrent le carrousel de ce genre, d'ou que l'on parte`() {
         CallEffectsBarMode.entries.forEach { from ->
             assertThat(CallEffectsBarRule.afterAddingLook(from)).isEqualTo(CallEffectsBarMode.Looks)
-            assertThat(CallEffectsBarRule.afterGenre(from)).isEqualTo(CallEffectsBarMode.Looks)
+            assertThat(CallEffectsBarRule.afterGenre(from, isOpen = false)).isEqualTo(CallEffectsBarMode.Looks)
         }
+        assertThat(CallEffectsBarRule.afterGenre(CallEffectsBarMode.Base, isOpen = true)).isEqualTo(CallEffectsBarMode.Looks)
+        assertThat(CallEffectsBarRule.afterGenre(CallEffectsBarMode.Settings, isOpen = true)).isEqualTo(CallEffectsBarMode.Looks)
+    }
+
+    @Test
+    fun `retoucher le genre dont le carrousel est ouvert le referme`() {
+        assertThat(CallEffectsBarRule.afterGenre(CallEffectsBarMode.Looks, isOpen = true)).isEqualTo(CallEffectsBarMode.Base)
+    }
+
+    @Test
+    fun `seul le genre dont le carrousel est ouvert est presse, au menu de base aucun`() {
+        assertThat(CallEffectsBarRule.pressed(CallEffectKind.Frame, CallEffectsBarMode.Looks)).isEqualTo(CallEffectKind.Frame)
+        assertThat(CallEffectsBarRule.pressed(CallEffectKind.Face, CallEffectsBarMode.Base)).isNull()
+        assertThat(CallEffectsBarRule.pressed(CallEffectKind.Face, CallEffectsBarMode.Settings)).isNull()
+        assertThat(CallEffectsBarRule.pressed(CallEffectKind.Color, CallEffectsBarMode.Applied)).isNull()
     }
 
     @Test
     fun `un look, un cadre ou une deformation choisis referment le carrousel et rendent le menu de base`() {
-        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Looks, changed = true)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterRemoval).isEqualTo(CallEffectsBarMode.Base)
     }
 
     @Test
-    fun `re-choisir l'element deja choisi, ou un choix refuse, ne referme rien`() {
-        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Looks, changed = false)).isEqualTo(CallEffectsBarMode.Looks)
-        assertThat(CallEffectsBarRule.afterPick(CallEffectsBarMode.Settings, changed = false)).isEqualTo(CallEffectsBarMode.Settings)
-    }
-
-    @Test
-    fun `retour referme ce qui est ouvert et rend le menu de base, depuis le menu de base il quitte le mode (#17947)`() {
+    fun `retour referme le panneau Reglages et rend le menu de base, ailleurs il quitte le mode (#17947)`() {
         assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Settings)).isEqualTo(CallEffectsBarMode.Base)
-        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Looks)).isEqualTo(CallEffectsBarMode.Base)
-        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Applied)).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Looks)).isNull()
+        assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Applied)).isNull()
         assertThat(CallEffectsBarRule.afterBack(CallEffectsBarMode.Base)).isNull()
     }
 
