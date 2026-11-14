@@ -458,7 +458,7 @@ final class GameEpureTests: XCTestCase {
 
     // MARK: - La fiche : what et why au repos, how derrière « Comment ça marche ? » ou supprimé quand il ne dit rien de plus
 
-    private static let conceptsWithNoHow: Set<ProgressionConcept> = [.meesh, .flame, .elans, .succes]
+    private static let conceptsWithNoHow: Set<ProgressionConcept> = [.meesh, .flame, .elans, .succes, .missions]
 
     func test_conceptHow_isBehindAnInfoButtonNamedByItsQuestion_exceptWhenWhatAlreadySaysIt() {
         for concept in ProgressionConcept.allCases {
@@ -489,8 +489,8 @@ final class GameEpureTests: XCTestCase {
 
     func test_flamePanel_fullVigilsLine_isAShortVisibleNote() throws {
         let flame = try code("Meeshy/Features/Game/GameFlamePanelView.swift")
-        XCTAssertTrue(flame.contains("game.flame_panel.freeze_full"))
-        XCTAssertFalse(flame.contains("MeeshyInfoNote"))
+        XCTAssertTrue(flame.contains("GameNote(text: String(\n                localized: \"game.flame_panel.freeze_full\""), "« Veilleuses au complet » se lit au repos, sans (i)")
+        XCTAssertEqual(try Self.catalog()["game.flame_panel.freeze_full"]?["fr"], "Tes Veilleuses sont au complet.")
     }
 
     // MARK: - Épure 2/3 : le glossaire ne redit plus l'atlas, la confirmation ni la règle voisine (#17687)
@@ -685,7 +685,8 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.season.use_cases"]?["fr"]).contains("Sceau du voyage"), "le cas particulier est derrière son (i)")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.duo.none"]?["fr"]).contains("la récompense double"))
         let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        XCTAssertTrue(page.contains("sentence(ConceptText.how(concept))"))
+        XCTAssertTrue(page.contains("sentence(ConceptText.what(concept))"), "la définition, repère de la fiche, se lit au repos")
+        XCTAssertTrue(page.contains("sentence(ConceptText.why(concept), strong: true)"), "le pourquoi se lit au repos ; seul `how` est derrière son (i)")
     }
 
     // MARK: - Épure 2/3 : la phrase d'usage au repos, les cas particuliers derrière un (i), une règle une fois (#17687)
@@ -1067,7 +1068,7 @@ final class GameEpureTests: XCTestCase {
         XCTAssertEqual(specifiers(in: try XCTUnwrap(catalog["game2.duo.locked"]?["fr"])), ["%@"])
         XCTAssertTrue(try XCTUnwrap(catalog["game2.duo.locked"]?["fr"]).contains("pour vous deux"), "le repère de l'alliance reste")
         let duo = try code("Meeshy/Features/Game/Wave2/GameDuoViews.swift")
-        XCTAssertFalse(duo.contains("current:"))
+        XCTAssertTrue(duo.contains("GameText.duoLocked(level: GameCopy.formatCount(GameDuo.minLevel)))"), "la porte dit le seuil ; le niveau actuel est la valeur de sa pastille")
         XCTAssertTrue(duo.contains("game.duo.requirement"))
     }
 
