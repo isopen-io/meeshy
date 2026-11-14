@@ -6,10 +6,10 @@ import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallPeerAlerts, CallQualityChip } from './call-quality';
+import { CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen, loadColdCallViews } from './call-screen';
-import { CallCaptureAlerts } from './call-share-banner';
+import { CallCaptureAlerts, CallPeerAlerts } from './call-share-banner';
 
 /**
  * **LA QUALITÉ SE VOIT** (#8047) — l'indicateur de l'en-tête (quatre barres,

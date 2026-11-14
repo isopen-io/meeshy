@@ -8,7 +8,7 @@ import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveF
 import { PeerSpeechRing } from '@/components/call-camera-off';
 import { Portrait } from '@/components/call-portrait';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
-import { CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
+import { someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, callGridView, duoCornerView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
@@ -117,7 +117,7 @@ const endedControls = preloadedView(() => import('./call-ring-and-end').then((mo
 const CallEndedControls = endedControls.View;
 
 /** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, ma vignette du duo, la capture déjà en cours, la fin. */
-export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), duoCornerView.load(), captureAlerts.load(), endedControls.load()]);
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), duoCornerView.load(), serviceBanners.load(), peerAlerts.load(), endedControls.load()]);
 
 /** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
 const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -138,9 +138,12 @@ const CallActionRail = lazy(() => loadActions().then((module) => ({ default: mod
 const loadPreview = once(() => import('./call-preview'));
 const loadShareBanner = once(() => import('./call-share-banner'));
 const CallScreenShareBanner = lazy(loadShareBanner);
-/* La capsule de capture (R1) vit avec le bandeau de partage (`call_top_banners`) : elle ne paraît qu'avec une capture, préchargée quand l'appel vit, et se rend dans le même rendu une fois là. */
-const captureAlerts = preloadedView(() => loadShareBanner().then((module) => module.CallCaptureAlerts));
-const CallCaptureAlerts = captureAlerts.View;
+/* La capsule de capture (R1) et les pastilles de service (E3 · E4, #18227), voisines dans la pile, vivent avec le bandeau de partage (`call_top_banners`), LA LOI DES PASTILLES COMPRISE : l'écran n'en paie que l'`import()`. Préchargées quand l'appel vit, elles se rendent dans le même rendu une fois là ; avant, aucune ne se montre (ma vidéo ne gèle qu'après six secondes de réseau faible). */
+const service: { of: ((call: ActiveCall, live: boolean) => PresentBanners) | null } = { of: null };
+const serviceBanners = preloadedView(() => loadShareBanner().then((module) => ((service.of = module.servicePresence), module.CallServiceBanners)));
+const CallServiceBanners = serviceBanners.View;
+const peerAlerts = preloadedView(() => loadShareBanner().then((module) => module.CallPeerAlerts));
+const CallPeerAlerts = peerAlerts.View;
 const CallPreview = lazy(() => loadPreview().then((module) => ({ default: module.CallPreview })));
 const CallPreviewSound = lazy(() => loadPreview().then((module) => ({ default: module.CallPreviewSound })));
 
@@ -208,7 +211,8 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   () => import('./call-quality-detail'),
   () => import('./call-waiting-banner'),
   loadFloatingPill,
-  captureAlerts.load,
+  serviceBanners.load,
+  peerAlerts.load,
   callGridView.load,
   endedControls.load,
   screenZoomSurfaceView.load,
@@ -346,14 +350,14 @@ type CallScreenProps = {
   readonly wide?: boolean;
 };
 
-/** Ce que la pile des bandeaux porte (P16.7) : MON partage, l'indicateur d'enregistrement, la capture, l'avis du cadre en direct — rien tant que l'appel ne vit pas. */
+/** Ce que la pile des bandeaux porte (P16.7) : MON partage, l'indicateur d'enregistrement, la capture, les pastilles de service (E3 · E4, `call-service-pills.ts`), l'avis du cadre en direct — rien tant que l'appel ne vit pas. */
 function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveFrameState): PresentBanners {
   const recording = useStore(callRecordingStore, recordingBannerPresent);
-  return { 'screen-share': live && call.screenSharing, recording: live && recording, capture: live && someoneCaptures(call.members), 'live-frame': live && liveFrameStatusPresent(liveFrame) };
+  return { ...service.of?.(call, live), 'screen-share': live && call.screenSharing, recording: live && recording, capture: live && someoneCaptures(call.members), 'live-frame': live && liveFrameStatusPresent(liveFrame) };
 }
 
 /**
- * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1). La colonne du journal ouverte, la pile se pose dans la place de la scène (`reserveEnd`, W1.4, W1.21) et la rejoint en glissant (W1.20).
+ * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, pastilles de service (E3 · E4), cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1). La colonne du journal ouverte, la pile se pose dans la place de la scène (`reserveEnd`, W1.4, W1.21) et la rejoint en glissant (W1.20).
  */
 export function CallTopBannerStack({ call, present, language, hidden, liveFrame, reserveEnd, reserve }: { readonly reserveEnd?: { readonly paddingInlineEnd?: number }; readonly reserve?: Readonly<Record<`data-${string}`, string>>; readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
   const sharedOnce = useRef(false);
@@ -363,19 +367,14 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame,
   const card = useStore(callChromeStore, (chrome) => chrome.recordingCard);
   useBannersClose(stack, `${orderedTopBanners(present).join()}:${card}`);
   useFollowInline(stack, reserveEnd?.paddingInlineEnd ?? 0);
-  const capturing = present.capture === true;
-  const item: Readonly<Record<TopBanner, ReactNode>> = {
+  const item: Readonly<Partial<Record<TopBanner, ReactNode>>> = {
     'screen-share': null,
     recording: <div key="recording" aria-hidden style={{ height: recordingSlotHeight(card) }} data-call-banner-slot="recording" />,
-    /* La capsule de capture entre par le haut et repart vers le haut, comme le bandeau de partage (R1.6) : toujours montée à sa place d'ordre, elle se retient le temps de repartir. */
+    /* La capsule de capture, puis les pastilles de service : toujours montées à leur place d'ordre, elles entrent par le haut et y repartent comme le bandeau de partage (R1.6), et se retiennent le temps de repartir. Voisines dans l'ordre, un seul maillon du chunk les pose ; « En attente » ne s'allume pas sur le web (aucun état d'attente). */
     capture: (
-      <HeldSwap key="capture" value={capturing ? call.members : null} shape="top" className="flex w-full justify-center" data-call-capture-slot="">
-        {(held) => (
-          <Suspense fallback={null}>
-            <CallCaptureAlerts members={held} language={language} />
-          </Suspense>
-        )}
-      </HeldSwap>
+      <Suspense key="capture" fallback={null}>
+        <CallServiceBanners call={call} capturing={present.capture === true} language={language} />
+      </Suspense>
     ),
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
   };
@@ -588,7 +587,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
           ))}
         </div>
       ) : null}
-      <CallPeerAlerts members={call.members} language={language} />
+      <Suspense fallback={null}>
+        <CallPeerAlerts members={call.members} language={language} />
+      </Suspense>
     </>
   ) : null;
 
