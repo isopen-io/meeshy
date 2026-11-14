@@ -52,7 +52,7 @@ class FeedScreenStatesTest {
     fun `le fil vide est un etat illustre d'une seule ligne (epure 18090)`() {
         show { FeedEmptyState() }
 
-        compose.onNodeWithText("No posts yet").assertIsDisplayed()
+        compose.onNodeWithText("No posts from your contacts").assertIsDisplayed()
         compose.onAllNodesWithText("Posts from your contacts will appear here").assertCountEquals(0)
     }
 

@@ -199,7 +199,7 @@ class StickerSheetPagesRobolectricTest {
     fun `une intention de Mee dit quand l'employer, comme iOS`() {
         show()
         tab("Mee")
-        compose.onNodeWithText("To greet, thank, say yes, apologize or say good night").assertIsDisplayed()
+        compose.onNodeWithText("To greet, thank, apologize").assertIsDisplayed()
     }
 
     @Test
