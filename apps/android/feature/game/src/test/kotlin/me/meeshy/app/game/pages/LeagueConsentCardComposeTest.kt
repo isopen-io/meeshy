@@ -1,6 +1,7 @@
 package me.meeshy.app.game.pages
 
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -48,5 +49,16 @@ class LeagueConsentCardComposeTest {
             .isEqualTo(context.getString(R.string.game2_league_consent_how))
         info.performClick()
         compose.onNodeWithText(context.getString(R.string.game2_league_consent_how)).assertExists()
+    }
+
+    @Test
+    fun `le i de placement se pose sur la phrase qui dit avec qui l on joute, pas sur ce que les autres voient`() {
+        show()
+        val info = compose.onNodeWithContentDescription(context.getString(R.string.game2_league_consent_how_question)).getUnclippedBoundsInRoot()
+        val who = compose.onNodeWithText(context.getString(R.string.game2_league_consent_who)).getUnclippedBoundsInRoot()
+        val shown = compose.onNodeWithText(context.getString(R.string.game2_league_consent_shown)).getUnclippedBoundsInRoot()
+        assertThat(info.top.value).isLessThan(who.bottom.value)
+        assertThat(info.bottom.value).isGreaterThan(who.top.value)
+        assertThat(info.top.value).isAtLeast(shown.bottom.value)
     }
 }
