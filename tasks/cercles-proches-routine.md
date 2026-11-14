@@ -1091,3 +1091,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   lot (rouge hérité de `dev` pour le premier). Swift et `sdk-core` se prouvent par la CI de `dev` après fusion
   (`CI_DEV_SEUL`, #18048).
 - Prochain lot recommandé : #18388 (le web), puis la passerelle #18205 avec #18389.
+
+## 2026-11-14 — réveil de la nuit : un « Arrêter » hors ligne part au retour du réseau, sur le web (#18388)
+
+- Reprise : aucune PR cercles ouverte ; #18390 (iOS + Android) fusionnée. Aucune branche n'écrit
+  `apps/web/src/lib/shared-locations/` : lot réservé sur `claude/cercles-18388-web-arreter-hors-ligne`.
