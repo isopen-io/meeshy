@@ -231,14 +231,14 @@
     "ios:Meeshy/call": {
       "labels": 444,
       "words": 1664,
-      "long": 10,
+      "long": 11,
       "explanations": 87
     },
     "ios:Meeshy/calls": {
-      "labels": 49,
-      "words": 123,
+      "labels": 48,
+      "words": 119,
       "long": 0,
-      "explanations": 11
+      "explanations": 10
     },
     "ios:Meeshy/camera": {
       "labels": 13,
@@ -337,10 +337,10 @@
       "explanations": 3
     },
     "ios:Meeshy/contacts": {
-      "labels": 91,
-      "words": 320,
+      "labels": 90,
+      "words": 300,
       "long": 1,
-      "explanations": 2
+      "explanations": 0
     },
     "ios:Meeshy/content": {
       "labels": 8,
@@ -760,7 +760,7 @@
       "labels": 73,
       "words": 200,
       "long": 0,
-      "explanations": 8
+      "explanations": 7
     },
     "ios:Meeshy/progression": {
       "labels": 118,
@@ -859,10 +859,10 @@
       "explanations": 0
     },
     "ios:Meeshy/search": {
-      "labels": 14,
-      "words": 29,
+      "labels": 13,
+      "words": 26,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/security": {
       "labels": 9,
@@ -1172,7 +1172,7 @@
     },
     "ios:MeeshyUI/community": {
       "labels": 104,
-      "words": 300,
+      "words": 296,
       "long": 2,
       "explanations": 31
     },

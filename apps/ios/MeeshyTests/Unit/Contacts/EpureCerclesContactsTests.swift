@@ -384,17 +384,6 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertTrue(text.contains("médaille"), "l'avis lu à l'écran oriente vers le premier geste : « \(text) »")
     }
 
-    func test_filteredPostsEmptyState_keepsTheOnlyHintOfHowToClearTheFilter_inEveryLanguage() throws {
-        let app = try app()
-        let french = try XCTUnwrap(app["profile.posts.empty.filter.subtitle"]?["fr"])
-        XCTAssertTrue(french.contains("tuile"), "le seul indice du geste qui retire le filtre reste lisible")
-        for language in Self.otherLanguages {
-            let value = try XCTUnwrap(app["profile.posts.empty.filter.subtitle"]?[language], language)
-            XCTAssertNotEqual(value, french, "\(language) : copié du français")
-        }
-        XCTAssertTrue(try code("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift").contains("profile.posts.empty.filter.subtitle"))
-    }
-
     func test_emptyStateSites_passNoSubtitle() throws {
         let sites: [(String, [String])] = [
             ("apps/ios/Meeshy/Features/Contacts/KeypadTab.swift", ["keypad.prompt.subtitle", "keypad.no-match.subtitle"]),
@@ -425,16 +414,6 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
-    func test_callsSearchEmpty_saysTheLogCoversThreeMonths_theOnlyPlaceThatLimitIsTold() throws {
-        let app = try app()
-        let french = try XCTUnwrap(app["calls.search.empty.hint"]?["fr"])
-        XCTAssertTrue(french.contains("trois derniers mois"))
-        for language in Self.otherLanguages {
-            XCTAssertNotEqual(try XCTUnwrap(app["calls.search.empty.hint"]?[language], language), french, "\(language) : copié du français")
-        }
-        XCTAssertTrue(try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift").contains("calls.search.empty.hint"))
-    }
-
     func test_addChannelEmpty_saysToCreateAConversationFirst_theOnlyWayOut_inEveryLanguage() throws {
         let kit = try kit()
         let french = try XCTUnwrap(kit["community.addChannel.empty.hint"]?["fr"])
@@ -444,5 +423,148 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
         XCTAssertTrue(try XCTUnwrap(kit["community.addChannel.empty.hint"]?["de"]).contains("hier"), "l'allemand dit où la conversation s'ajoutera")
         XCTAssertTrue(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
+    }
+
+    // MARK: - Épure 1/3 (#18088, constats 1 à 12)
+
+    private func assertTranslated(_ catalog: Catalog, _ key: String, french: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        let values = try XCTUnwrap(catalog[key], key, file: file, line: line)
+        XCTAssertEqual(values["fr"], french, key, file: file, line: line)
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(values[language], "\(key) [\(language)]", file: file, line: line)
+            XCTAssertFalse(value.isEmpty, "\(key) [\(language)]", file: file, line: line)
+            XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français", file: file, line: line)
+        }
+    }
+
+    func test_callTranscriptRetention_saysWhereItIsKeptAtRest_andTheDetailBehindAQuestion() throws {
+        let server = try XCTUnwrap(CallTranscriptRetentionNotice.serverKeepsFinalSentences.text)
+        let device = try XCTUnwrap(CallTranscriptRetentionNotice.deviceOnly.text)
+        XCTAssertEqual(server, "Transcription gardée sur cet appareil et, pour les phrases finales, sur le serveur Meeshy.")
+        XCTAssertEqual(device, "Transcription gardée sur cet appareil seulement : rien ne quitte une conversation chiffrée de bout en bout.")
+        XCTAssertFalse(server.contains("iCloud"), "la sauvegarde est le détail secondaire : derrière le (i)")
+        XCTAssertFalse(device.contains("interlocuteur"))
+        for notice in [CallTranscriptRetentionNotice.serverKeepsFinalSentences, .deviceOnly] {
+            let note = try XCTUnwrap(notice.infoNote, "le (i) accompagne chaque phrase de conservation")
+            XCTAssertEqual(note.question, "Où se retrouve cette transcription ?")
+            XCTAssertTrue(note.question.hasSuffix("?"))
+            XCTAssertTrue(note.text.contains("iCloud") && note.text.contains("interlocuteur"), "aucun texte perdu : « \(note.text) »")
+        }
+        XCTAssertNil(CallTranscriptRetentionNotice.hidden.text)
+        XCTAssertNil(CallTranscriptRetentionNotice.hidden.infoNote, "régime inconnu : la mention n'affirme rien, le (i) non plus")
+    }
+
+    func test_callTranscriptSection_rendersTheRetentionSentenceThroughTheInfoNote() throws {
+        let section = try code("apps/ios/Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("MeeshyInfoNoted(note: retentionNotice.infoNote"))
+        XCTAssertFalse(section.contains("Image(systemName: \"info.circle\")"), "le (i) du kit remplace l'icône décorative")
+    }
+
+    func test_callTranscriptCatalog_hasTheShortSentencesAndTheNewNote_inEveryLanguage() throws {
+        let app = try app()
+        try assertTranslated(app, "call.transcript.disclaimer.server", french: "Transcription gardée sur cet appareil et, pour les phrases finales, sur le serveur Meeshy.")
+        try assertTranslated(app, "call.transcript.disclaimer.endToEnd", french: "Transcription gardée sur cet appareil seulement : rien ne quitte une conversation chiffrée de bout en bout.")
+        try assertTranslated(app, "call.transcript.disclaimer.question", french: "Où se retrouve cette transcription ?")
+        try assertTranslated(app, "call.transcript.disclaimer.note", french: "Elle peut figurer dans une sauvegarde iCloud ou Finder de cet appareil. Elle inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.")
+    }
+
+    func test_emptyStatesWithAnAction_areOneLinePlusTheAction() throws {
+        let phonebook = try code("apps/ios/Meeshy/Features/Contacts/PhonebookListView.swift")
+        XCTAssertFalse(phonebook.contains("contacts.phonebook.empty-hint"))
+        XCTAssertTrue(phonebook.contains("contacts.phonebook.empty.action"))
+        XCTAssertTrue(phonebook.contains("onAction: viewModel.isEmpty ? { offerPhoneThenSearch() } : nil"), "« Synchroniser » passe par l'offre du numéro, comme le bouton d'en-tête")
+        let affiliates = try code("apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift")
+        XCTAssertFalse(affiliates.contains("contacts.affiliates.empty-hint"))
+        XCTAssertTrue(affiliates.contains("\"affiliate.action.share\""))
+        let posts = try code("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift")
+        XCTAssertFalse(posts.contains("profile.posts.empty.filter.subtitle"))
+        XCTAssertTrue(posts.contains("onAction: { viewModel.filter = .all }"), "« Tout voir » réinitialise le filtre")
+        let search = try code("apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift")
+        XCTAssertFalse(search.contains("search.global.subtitle"))
+        let calls = try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift")
+        XCTAssertFalse(calls.contains("calls.search.empty.hint"))
+    }
+
+    func test_emptyStateKeys_areGoneFromEveryLanguage_andNoSourceReadsThem() throws {
+        let app = try app(), sources = try shippedSources()
+        for key in ["contacts.phonebook.empty-hint", "contacts.affiliates.empty-hint", "calls.search.empty.hint",
+                    "profile.posts.empty.filter.subtitle", "search.global.subtitle"] {
+            XCTAssertNil(app[key], "\(key) : encore au catalogue")
+            XCTAssertFalse(sources.contains("\"\(key)\""), "\(key) : une source la lit encore")
+        }
+    }
+
+    func test_emptyStateActionsAndLines_sayTheirNewFrench_inEveryLanguage() throws {
+        let app = try app()
+        try assertTranslated(app, "contacts.phonebook.empty.action", french: "Synchroniser")
+        try assertTranslated(app, "profile.posts.empty.filter.action", french: "Tout voir")
+        try assertTranslated(app, "calls.search.empty", french: "Aucun appel sur les trois derniers mois pour « %@ »")
+        XCTAssertEqual(app["contacts.affiliates.empty"]?["fr"], "Aucun filleul")
+        for language in Self.otherLanguages {
+            XCTAssertEqual(specifiers(in: try XCTUnwrap(app["calls.search.empty"]?[language])), ["%@"], language)
+        }
+    }
+
+    func test_callsSearchEmpty_staysOneLine_theThreeMonthLimitInsideTheSentence() throws {
+        let calls = try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift")
+        XCTAssertTrue(calls.contains("calls.search.empty\""))
+    }
+
+    func test_referralWord_isFilleul_asTheLexiconSaysParrainage_inEveryLanguage() throws {
+        let app = try app()
+        XCTAssertEqual(app["contacts.list.filter.affiliates"]?["fr"], "Filleuls")
+        XCTAssertEqual(app["contacts.affiliates.search-placeholder"]?["fr"], "Rechercher un filleul")
+        XCTAssertEqual(app["contacts.affiliates.load-error"]?["fr"], "Impossible de charger les filleuls")
+        XCTAssertEqual(app["conversations.quick.my_affiliates"]?["fr"], "Voir mes filleuls")
+        XCTAssertEqual(app["route.title.affiliate"]?["fr"], app["affiliate.title"]?["fr"], "le titre de route redit le mot du lexique")
+        XCTAssertEqual(app["route.title.affiliate"]?["fr"], "Parrainage")
+        for key in ["contacts.affiliates.search-placeholder", "conversations.quick.my_affiliates", "route.title.affiliate"] {
+            let french = try XCTUnwrap(app[key]?["fr"])
+            for language in Self.otherLanguages {
+                XCTAssertNotEqual(try XCTUnwrap(app[key]?[language], "\(key) [\(language)]"), french, "\(key) [\(language)] : copié du français")
+            }
+        }
+        XCTAssertFalse(try XCTUnwrap(app["conversations.quick.my_affiliates"]?["en"]).localizedCaseInsensitiveContains("affiliat"))
+        XCTAssertFalse(try XCTUnwrap(app["contacts.affiliates.search-placeholder"]?["es"]).localizedCaseInsensitiveContains("afiliado"))
+    }
+
+    func test_referralLinkToShare_picksTheFirstServedLink_andNilWhenThereIsNone() async throws {
+        let service = MockAffiliateService()
+        let sut = AffiliatesViewModel(affiliateService: service, currentUserId: "me")
+        let none = await sut.referralLinkToShare()
+        XCTAssertNil(none, "aucun lien : l'écran « Parrainage » prend le relais")
+        service.listTokensResult = .success([
+            AffiliateToken(id: "t0", token: "a", name: "sans lien", affiliateLink: nil, maxUses: nil, currentUses: 0, isActive: true, expiresAt: nil, createdAt: "2026-11-01T00:00:00Z", _count: nil, clickCount: 0),
+            AffiliateToken(id: "t1", token: "b", name: "avec lien", affiliateLink: "https://meeshy.me/join/b", maxUses: nil, currentUses: 0, isActive: true, expiresAt: nil, createdAt: "2026-11-01T00:00:00Z", _count: nil, clickCount: 0),
+        ])
+        let link = await sut.referralLinkToShare()
+        XCTAssertEqual(link?.absoluteString, "https://meeshy.me/join/b")
+    }
+
+    func test_communityConversationWord_replacesChannelAndCanal_withTheWordOfTheTabs() throws {
+        let kit = try kit()
+        try assertTranslated(kit, "community.addChannel.title", french: "Ajouter une conversation")
+        try assertTranslated(kit, "community.detail.channels.empty.action", french: "Créer une conversation")
+        try assertTranslated(kit, "community.detail.leave.confirm.message", french: "Vous n'aurez plus accès aux conversations de cette communauté.")
+        try assertTranslated(kit, "community.settings.leave.confirm.message", french: "Vous n'aurez plus accès aux conversations de cette communauté.")
+        try assertTranslated(kit, "community.settings.delete.confirm.message", french: "Cette action est irréversible. Tous les membres et conversations seront supprimés définitivement.")
+        XCTAssertEqual(kit["community.detail.channels.empty.title"]?["fr"], "Aucune conversation pour l’instant")
+        XCTAssertEqual(kit["community.detail.channels.empty.title"]?["en"], "No conversations yet", "le catalogue anglais disait encore « channels »")
+        for key in ["community.detail.leave.confirm.message", "community.settings.leave.confirm.message", "community.settings.delete.confirm.message"] {
+            XCTAssertFalse(try XCTUnwrap(kit[key]?["fr"]).contains("canaux"), key)
+            XCTAssertFalse(try XCTUnwrap(kit[key]?["fr"]).contains("channels"), key)
+        }
+        XCTAssertTrue(try XCTUnwrap(kit["community.settings.delete.confirm.message"]?["fr"]).contains("irréversible"), "la conséquence irréversible reste")
+    }
+
+    func test_communitySources_defaultValuesAgreeWithTheCatalog() throws {
+        let add = try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift")
+        XCTAssertTrue(add.contains("defaultValue: \"Ajouter une conversation\""))
+        let detail = try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityDetailScreen.swift")
+        XCTAssertFalse(detail.contains("No Channels Yet"))
+        XCTAssertTrue(detail.contains("defaultValue: \"Créer une conversation\""))
+        XCTAssertFalse(detail.contains("channels de cette communauté"))
+        let settings = try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
+        XCTAssertFalse(settings.contains("canaux"))
     }
 }
