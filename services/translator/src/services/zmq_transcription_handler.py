@@ -278,7 +278,7 @@ class TranscriptionHandler:
                         temp_path.unlink()
                         logger.debug(f"   🧹 Fichier temporaire supprimé: {temp_file_path}")
                 except Exception as cleanup_error:
-                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {cleanup_error}")
+                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {type(cleanup_error).__name__}")
 
     async def _publish_transcription_result(
         self,

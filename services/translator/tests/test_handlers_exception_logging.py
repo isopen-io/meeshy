@@ -17,6 +17,8 @@ message brut.
 import base64
 import json
 import logging
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -108,6 +110,7 @@ def _assert_no_secret_logged(caplog, capsys):
     assert SECRET not in captured.out
     assert SECRET not in captured.err
     assert "Traceback" not in captured.err
+    assert not any(record.exc_info for record in caplog.records)
     assert "SecretError" in logged
 
 
@@ -269,6 +272,27 @@ async def test_transcription_base64_decode_failure_never_carries_the_message(
 
     _assert_no_secret_logged(caplog, capsys)
     _assert_error_payload(socket.sent[0], "transcription_error")
+
+
+async def test_transcription_temp_file_cleanup_failure_logs_only_the_type(
+    transcription_service_raising, monkeypatch, caplog, capsys
+):
+    caplog.set_level(logging.DEBUG)
+    task_id = "t-cleanup-18571"
+    temp_file = Path(tempfile.gettempdir()) / "transcription_temp" / f"trans_{task_id}.wav"
+    monkeypatch.setattr(Path, "unlink", _boom)
+
+    try:
+        await _transcription_handler(CapturingSocket())._handle_transcription_only_request(
+            {"taskId": task_id, "messageId": "m1", "attachmentId": "a1", "_audioBinary": b"RIFF"}
+        )
+    finally:
+        monkeypatch.undo()
+        temp_file.unlink(missing_ok=True)
+
+    cleanup_logs = [r.getMessage() for r in caplog.records if "supprimer le fichier temp" in r.getMessage()]
+    assert cleanup_logs and all("SecretError" in message for message in cleanup_logs)
+    _assert_no_secret_logged(caplog, capsys)
 
 
 @pytest.mark.parametrize(
