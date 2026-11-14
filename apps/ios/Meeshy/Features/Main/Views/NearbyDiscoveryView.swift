@@ -636,23 +636,9 @@ struct NearbyEmptyStateCard: View {
     /// Une phrase, ou rien : l'état vide de la carte tient dans son titre.
     static func detail(for reason: NearbyEmptyReason, radiusKm: Double) -> String? {
         switch reason {
-        case .locationDenied:
-            return String(localized: "feed.nearby.empty.denied.detail", defaultValue: "Meeshy n'a pas accès à votre position.", bundle: .main)
         case .awaitingLocation:
             return String(localized: "feed.nearby.empty.awaiting.detail", defaultValue: "Déplacez la carte pour choisir un point de départ.", bundle: .main)
-        case .offline:
-            return String(localized: "feed.nearby.empty.offline.detail", defaultValue: "Reconnectez-vous pour explorer autour de vous.", bundle: .main)
-        case .signInRequired:
-            return String(localized: "feed.nearby.empty.signin.detail", defaultValue: "La recherche à proximité demande un compte Meeshy.", bundle: .main)
-        case .serviceUnavailable:
-            return String(localized: "feed.nearby.empty.unavailable.detail", defaultValue: "Le serveur n'a pas répondu.", bundle: .main)
-        case .noneInRadius:
-            return String(
-                localized: "feed.nearby.empty.none.detail",
-                defaultValue: "Aucune publication à découvrir dans un rayon de \(Int(radiusKm)) km.",
-                bundle: .main
-            )
-        case .nothingOnTheMap:
+        case .locationDenied, .offline, .signInRequired, .serviceUnavailable, .noneInRadius, .nothingOnTheMap:
             return nil
         }
     }

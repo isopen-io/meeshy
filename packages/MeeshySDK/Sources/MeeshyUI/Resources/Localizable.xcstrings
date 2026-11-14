@@ -60774,52 +60774,6 @@
         }
       }
     },
-    "story.repost.reprojected": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُعيد وضع %d عنصر ليناسب التنسيق الجديد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d Element(e) für das neue Format neu positioniert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d item(s) repositioned for the new aspect ratio"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento(s) reposicionado(s) para el nuevo formato"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d élément(s) repositionné(s) pour le nouveau format"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento/i riposizionato/i per il nuovo formato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento(s) reposicionado(s) para o novo formato"
-          }
-        }
-      }
-    },
     "story.slide.addSlide": {
       "extractionState": "stale",
       "localizations": {

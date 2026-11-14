@@ -205,10 +205,10 @@
       "explanations": 0
     },
     "ios:Meeshy/bookmarks": {
-      "labels": 7,
-      "words": 20,
+      "labels": 6,
+      "words": 10,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/brand": {
       "labels": 2,
@@ -475,10 +475,10 @@
       "explanations": 5
     },
     "ios:Meeshy/feed": {
-      "labels": 233,
-      "words": 822,
+      "labels": 224,
+      "words": 775,
       "long": 3,
-      "explanations": 42
+      "explanations": 37
     },
     "ios:Meeshy/focal": {
       "labels": 23,
@@ -764,7 +764,7 @@
     },
     "ios:Meeshy/progression": {
       "labels": 118,
-      "words": 576,
+      "words": 571,
       "long": 2,
       "explanations": 4
     },
@@ -955,10 +955,10 @@
       "explanations": 0
     },
     "ios:Meeshy/story": {
-      "labels": 187,
-      "words": 733,
+      "labels": 186,
+      "words": 725,
       "long": 7,
-      "explanations": 17
+      "explanations": 16
     },
     "ios:Meeshy/streak": {
       "labels": 3,
@@ -1351,8 +1351,8 @@
       "explanations": 41
     },
     "ios:MeeshyUI/story": {
-      "labels": 576,
-      "words": 1672,
+      "labels": 575,
+      "words": 1665,
       "long": 13,
       "explanations": 42
     },

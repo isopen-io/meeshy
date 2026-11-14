@@ -258,12 +258,6 @@ struct StoryViewerContainer: View {
                     .foregroundColor(MeeshyColors.mediaChromeForeground)
                     .font(.headline)
 
-                Text(String(localized: "story.viewer.notFound.description", defaultValue: "Impossible de charger cette story. Réessayez ou fermez.", bundle: .main))
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
-                    .font(.footnote)
-                    .padding(.horizontal, MeeshySpacing.xxxl)
-
                 HStack(spacing: MeeshySpacing.md) {
                     Button {
                         Task { await retryFetch(uid: uid) }
