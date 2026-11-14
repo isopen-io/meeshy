@@ -53,6 +53,9 @@ class EpureComposantsPartagesStringsTest {
         "bubble_failed_attachment_right",
         "bring_explain",
         "talkie_send_voice_copy",
+        "talkie_send_e2ee",
+        "talkie_send_voice",
+        "talkie_header_announce_recorded",
         "voiceProfile_processing_description",
         "voiceProfile_recording_description",
         "audio_consent_notice_message",
@@ -96,12 +99,33 @@ class EpureComposantsPartagesStringsTest {
     @Test
     fun `les libelles du talkie, du profil vocal et du consentement sont raccourcis`() {
         assertThat(text("fr", "talkie_send_voice_copy"))
-            .isEqualTo("Accès d’urgence indisponible : un message vocal part dans votre dernière conversation avec cette personne.")
+            .isEqualTo("Envoyé en message vocal à la place.")
+        assertThat(text("fr", "talkie_send_e2ee")).isEqualTo("Indisponible dans une conversation chiffrée.")
         assertThat(text("fr", "voiceProfile_processing_description")).isEqualTo("Traitement en cours, quelques minutes.")
         assertThat(text("fr", "voiceProfile_recording_description"))
             .isEqualTo("Lisez le texte à voix haute : 3 échantillons de 10 secondes au moins.")
         assertThat(text("fr", "audio_consent_notice_message"))
             .isEqualTo("Activez le consentement vocal pour transcrire et traduire vos audios.")
+    }
+
+    @Test
+    fun `le talkie qui ne passe pas dit une seule formule, au toast comme a l annonce, sans le mot talkie des anciennes phrases`() {
+        folders.keys.forEach { language ->
+            assertWithMessage("$language : toast et annonce disent la meme chose")
+                .that(text(language, "talkie_send_voice")).isEqualTo(text(language, "talkie_header_announce_recorded"))
+        }
+        assertThat(text("en", "talkie_send_voice")).isEqualTo("Can’t get through: sent as a voice message.")
+        assertThat(text("fr", "talkie_send_voice")).isEqualTo("Ne passe pas : envoyé en message vocal.")
+    }
+
+    @Test
+    fun `la raison technique du talkie ferme en conversation chiffree passe derriere le i, dans chaque langue`() {
+        assertThat(text("fr", "talkie_info_note")).contains("chiffr")
+        assertThat(text("fr", "talkie_info_note")).contains("dernière conversation")
+        folders.keys.forEach { language ->
+            assertWithMessage("$language : la note du (i) garde le repère de départ")
+                .that(text(language, "talkie_info_note").length).isGreaterThan(text(language, "talkie_send_e2ee").length)
+        }
     }
 
     @Test
