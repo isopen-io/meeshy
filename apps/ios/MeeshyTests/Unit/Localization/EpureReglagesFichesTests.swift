@@ -83,8 +83,8 @@ final class EpureReglagesFichesTests: XCTestCase {
 
     func test_about_features_eachCarryAVisibleSentence_reusingTheSettingsOnes() throws {
         let view = try code(Self.views + "AboutView.swift")
-        XCTAssertTrue(view.contains("settings.privacy.encryption.summary"))
-        XCTAssertTrue(view.contains("settings.voice.orientation"))
+        XCTAssertTrue(view.contains("summary: SettingsOrientation.encryption"))
+        XCTAssertTrue(view.contains("summary: SettingsOrientation.voice"))
         XCTAssertTrue(view.contains("about.feature.translation.summary"))
         XCTAssertFalse(view.contains("MeeshyInfoNote"), "la phrase est l'unique explication de la feature : pas un (i)")
     }

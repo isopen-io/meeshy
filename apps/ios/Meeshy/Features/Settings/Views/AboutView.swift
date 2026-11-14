@@ -156,9 +156,9 @@ struct AboutView: View {
             sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalités", bundle: .main), icon: "star.fill", color: MeeshyColors.tileSaffronHex)
 
             VStack(spacing: 0) {
-                featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement bout en bout", bundle: .main), icon: "lock.shield.fill")
-                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction en temps réel", bundle: .main), icon: "globe")
-                featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), icon: "waveform")
+                featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement de bout en bout", bundle: .main), summary: SettingsOrientation.encryption, icon: "lock.shield.fill")
+                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction en temps réel", bundle: .main), summary: String(localized: "about.feature.translation.summary", defaultValue: "Chaque message se lit dans votre langue.", bundle: .main), icon: "globe")
+                featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), summary: SettingsOrientation.voice, icon: "waveform")
             }
             .background(SettingsSectionBackground(tint: MeeshyColors.tileSaffronHex))
         }
@@ -180,7 +180,6 @@ struct AboutView: View {
                 // « /contact », pas « /contacts » : seule la première a une page
                 // (`apps/web/app/contact/page.tsx`) ; `/contacts` n'a aucun
                 // `page.tsx` et donnerait un lien mort.
-                linkRow(icon: "info.circle", title: String(localized: "about.link.about", defaultValue: "À propos de Meeshy", bundle: .main), url: "https://meeshy.me/about", color: MeeshyColors.infoHex)
                 linkRow(icon: "doc.text", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), url: "https://meeshy.me/terms", color: MeeshyColors.infoHex)
                 linkRow(icon: "hand.raised", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main), url: "https://meeshy.me/privacy", color: MeeshyColors.infoHex)
                 linkRow(icon: "envelope", title: String(localized: "about.link.contact", defaultValue: "Nous contacter", bundle: .main), url: "https://meeshy.me/contact", color: MeeshyColors.infoHex)
@@ -259,22 +258,26 @@ struct AboutView: View {
         .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
     }
 
-    private func featureRow(title: String, icon: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            fieldIcon(icon, color: MeeshyColors.tileSaffronHex)
+    private func featureRow(title: String, summary: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon(icon, color: MeeshyColors.tileSaffronHex)
 
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
+                Text(title)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
 
-            Spacer()
+                Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(MeeshyFont.relative(MeeshyIconSize.md))
-                .foregroundStyle(MeeshyColors.success)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.md))
+                    .foregroundStyle(MeeshyColors.success)
+            }
+            .padding(.horizontal, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.sm + 2)
+
+            SettingsRowSentence(text: summary)
         }
-        .padding(.horizontal, MeeshySpacing.md + 2)
-        .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
     }
 

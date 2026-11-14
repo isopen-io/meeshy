@@ -50360,7 +50360,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrement bout en bout"
+            "value": "Chiffrement de bout en bout"
           }
         },
         "it": {
@@ -50467,6 +50467,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tradução em tempo real"
+          }
+        }
+      }
+    },
+    "about.feature.translation.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُقرأ كل رسالة بلغتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Nachricht liest du in deiner Sprache."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every message reads in your language."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensaje se lee en tu idioma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque message se lit dans votre langue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni messaggio si legge nella tua lingua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensagem é lida no seu idioma."
           }
         }
       }
@@ -51407,53 +51454,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Licenças"
-          }
-        }
-      }
-    },
-    "about.link.about": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عن ميشي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Über Meeshy"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "About Meeshy"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acerca de Meeshy"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À propos de Meeshy"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Informazioni su Meeshy"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sobre o Meeshy"
           }
         }
       }
@@ -175008,43 +175008,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المحتوى"
+            "value": "تضمين"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "INHALT"
+            "value": "Einschließen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "CONTENT"
+            "value": "Include"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "CONTENIDO"
+            "value": "Incluir"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "CONTENU"
+            "value": "Inclure"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "CONTENUTO"
+            "value": "Includi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "CONTEÚDO"
+            "value": "Incluir"
           }
         }
       }
@@ -180168,53 +180168,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loja"
-          }
-        }
-      }
-    },
-    "settings.packs.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الحزم والتنزيلات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pakete und Downloads"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Packs and downloads"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paquetes y descargas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Packs et téléchargements"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pacchetti e download"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pacotes e downloads"
           }
         }
       }
@@ -201945,7 +201898,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بريد الدعم"
+            "value": "البريد الإلكتروني للدعم"
           }
         },
         "de": {
@@ -201969,13 +201922,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email du support"
+            "value": "E-mail du support"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email del supporto"
+            "value": "E-mail del supporto"
           }
         },
         "pt-BR": {

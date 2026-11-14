@@ -32,7 +32,7 @@ final class PackShopLauncher: ObservableObject {
     }
 }
 
-// MARK: - Réglages › Packs et téléchargements (#10150)
+// MARK: - Réglages › Boutique (#10150)
 
 /// Les deux pages de la vitrine : ce qui s'acquiert, ce que j'ai (#16433).
 enum PacksPage: Hashable, CaseIterable {
@@ -66,7 +66,7 @@ struct PacksSettingsView: View {
             theme.backgroundGradient.ignoresSafeArea()
 
             CollapsibleHeaderPage(
-                title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main),
+                title: String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main),
                 onBack: { dismiss() },
                 titleColor: theme.textPrimary,
                 backArrowColor: Color(hex: MeeshyColors.brandPrimaryHex),
