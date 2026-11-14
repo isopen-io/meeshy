@@ -32,7 +32,7 @@ const logger = enhancedLogger.child({ module: 'CommunityUpdatedBroadcast' });
 
 export type CommunityUpdatedDeps = {
   readonly prisma: Pick<PrismaClient, 'community' | 'communityMember'>;
-  readonly emit: (userId: string, payload: CommunityUpdatedEventData) => void;
+  readonly deliver: (userId: string, payload: CommunityUpdatedEventData) => void;
 };
 
 export type CommunityUpdatedRequest = { readonly communityId: string };
@@ -77,7 +77,7 @@ export async function broadcastCommunityUpdated(
   const audience = [...new Set([...members.map((m) => m.userId), community.createdBy])];
   const delivered = audience.map((userId) => {
     try {
-      deps.emit(userId, payload);
+      deps.deliver(userId, payload);
       return 1;
     } catch (error) {
       logger.warn('community:updated emit failed', { communityId: request.communityId, error });
@@ -106,7 +106,7 @@ export function scheduleCommunityUpdatedBroadcastFrom(fastify: FastifyInstance, 
   scheduleCommunityUpdatedBroadcast(
     {
       prisma: fastify.prisma,
-      emit: (userId, payload) => {
+      deliver: (userId, payload) => {
         broadcastToUser(fastify, userId, SERVER_EVENTS.COMMUNITY_UPDATED, payload);
       },
     },
