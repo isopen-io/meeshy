@@ -658,6 +658,9 @@ const en = {
 
   'a11y.floating.rung.discover.requests.one': 'Discover, {count} request received',
   'a11y.floating.rung.discover.requests.other': 'Discover, {count} requests received',
+  'a11y.floating.rung.game.chest-ready': 'My Legend, Offering ready',
+  'a11y.floating.rung.game.flame-at-risk': 'My Legend, Flame in danger',
+  'a11y.floating.rung.game.both': 'My Legend, Offering ready, Flame in danger',
 
   'links.hub.share.title': 'Sharing',
   'links.hub.share.description': 'Invite contacts to join your conversations',

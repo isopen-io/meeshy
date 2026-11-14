@@ -656,6 +656,9 @@ const ar = {
 
   'a11y.floating.rung.discover.requests.one': 'اكتشاف، {count} طلب وارد',
   'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
+  'a11y.floating.rung.game.chest-ready': 'أسطورتي، العطيّة جاهزة',
+  'a11y.floating.rung.game.flame-at-risk': 'أسطورتي، اللهب في خطر',
+  'a11y.floating.rung.game.both': 'أسطورتي، العطيّة جاهزة، اللهب في خطر',
 
   'links.hub.share.title': 'مشاركة',
   'links.hub.share.description': 'ادعُ جهات اتصالك للانضمام إلى محادثاتك',

@@ -662,6 +662,9 @@ const pt = {
 
   'a11y.floating.rung.discover.requests.one': 'Descobrir, {count} pedido recebido',
   'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
+  'a11y.floating.rung.game.chest-ready': 'Minha Lenda, Oferenda pronta',
+  'a11y.floating.rung.game.flame-at-risk': 'Minha Lenda, Chama em perigo',
+  'a11y.floating.rung.game.both': 'Minha Lenda, Oferenda pronta, Chama em perigo',
 
   'links.hub.share.title': 'Compartilhamento',
   'links.hub.share.description': 'Convide contatos para entrar nas suas conversas',

@@ -658,6 +658,9 @@ const es = {
 
   'a11y.floating.rung.discover.requests.one': 'Descubrir, {count} solicitud recibida',
   'a11y.floating.rung.discover.requests.other': 'Descubrir, {count} solicitudes recibidas',
+  'a11y.floating.rung.game.chest-ready': 'Mi Leyenda, Ofrenda lista',
+  'a11y.floating.rung.game.flame-at-risk': 'Mi Leyenda, Llama en peligro',
+  'a11y.floating.rung.game.both': 'Mi Leyenda, Ofrenda lista, Llama en peligro',
 
   'links.hub.share.title': 'Compartir',
   'links.hub.share.description': 'Invita a tus contactos a unirse a tus conversaciones',
