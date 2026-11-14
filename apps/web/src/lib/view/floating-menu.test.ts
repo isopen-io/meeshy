@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
@@ -258,5 +260,35 @@ describe('floatingLadderExitMs', () => {
 
   test('aucun barreau : rien à attendre', () => {
     expect(floatingLadderExitMs(0)).toBe(0);
+  });
+});
+
+/**
+ * **LA SORTIE JOUE VRAIMENT** (#18460, revue). CSS ne relance pas une animation
+ * dont le NOM ne change pas : passer `floating-rung-in` en `reverse` une fois
+ * l'entrée finie met l'animation dans sa phase « après », et la tenue `forwards`
+ * d'un sens inversé est sa PREMIÈRE image. Mesuré dans Chromium : l'opacité tombe
+ * à 0 dans l'image même, aucune cascade ne se voit, et l'échelle reste montée,
+ * invisible, le temps de `floatingLadderExitMs`. La sortie nomme donc ses propres
+ * images, identiques à celles de l'entrée, pour que le sens inverse en soit
+ * l'exact miroir.
+ */
+describe('la sortie de l’échelle démarre une animation neuve', () => {
+  const css = readFileSync(new URL('../../styles/floating-menus.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const nomAnime = (selecteur: string): string | undefined => {
+    const regle = css.match(new RegExp(`${selecteur.replace(/[.[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    return regle.match(/\banimation:\s*([\w-]+)/)?.[1];
+  };
+  const images = (nom: string | undefined): string | undefined =>
+    nom === undefined ? undefined : css.match(new RegExp(`@keyframes\\s+${nom}\\s*\\{([\\s\\S]*?\\})\\s*\\}`))?.[1]?.replace(/\s+/g, ' ').trim();
+
+  test('le barreau en sortie anime un autre nom que le barreau qui entre, aux mêmes images', () => {
+    const entree = nomAnime('.floating-rung');
+    const sortie = nomAnime('.floating-rung[data-leaving]');
+    expect({ entree, sortieDistincte: sortie !== undefined && sortie !== entree, memesImages: images(sortie) === images(entree) && images(entree) !== undefined }).toEqual({
+      entree: 'floating-rung-in',
+      sortieDistincte: true,
+      memesImages: true,
+    });
   });
 });

@@ -1,5 +1,7 @@
 import XCTest
 import UIKit
+import SwiftUI
+import MeeshySDK
 @testable import Meeshy
 
 /// #10839 — le geste de retour par le bord ne doit JAMAIS démarrer sur la
@@ -66,6 +68,117 @@ final class InteractivePopEnablerTests: XCTestCase {
     func test_applyEdgeSwipePolicy_whenEdgeSwipeIsRefused_disablesTheGesture() {
         let (window, navigation) = makeStack()
         _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
+        window.isHidden = true
+    }
+
+    // MARK: - #18491 : tout écran poussé réaffirme le geste, quel que soit le chemin
+
+    private func appSourcesRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+    }
+
+    func test_rootRouteDestinationBody_appliesTheRouteEdgeSwipePolicy() throws {
+        let url = appSourcesRoot()
+            .appendingPathComponent("Features/Main/Views/RootLayers/RootRouteDestination.swift")
+        let masked = DeclarationBodyScanner.mask(try String(contentsOf: url, encoding: .utf8))
+        let body = try XCTUnwrap(
+            DeclarationBodyScanner.body(containing: "var body: some View", in: masked),
+            "RootRouteDestination doit déclarer un body"
+        )
+
+        XCTAssertTrue(
+            body.contains(".restoresEdgeSwipe(for: route)"),
+            "Le body de RootRouteDestination doit appliquer .restoresEdgeSwipe(for: route) : sans lui, le geste de bord d'un écran poussé dépend du chemin parcouru"
+        )
+    }
+
+    private func makeConversation() -> Conversation {
+        Conversation(id: "c1", identifier: "c1", type: .direct, title: "Rivière", lastMessageAt: Date(), createdAt: Date(), updatedAt: Date())
+    }
+
+    private func pushScreen(for route: Route, on navigation: UINavigationController) {
+        switch RouteEdgeSwipe.policy(for: route) {
+        case .restored:
+            _ = pushScreen(on: navigation)
+        case .ownedByScreen:
+            navigation.pushViewController(UIViewController(), animated: false)
+        }
+    }
+
+    func test_policy_conversation_isOwnedByTheScreen() {
+        XCTAssertEqual(RouteEdgeSwipe.policy(for: .conversation(makeConversation())), .ownedByScreen)
+    }
+
+    func test_policy_everyOtherRouteFamily_restoresTheEdgeSwipe() {
+        let routes: [Route] = [
+            .contacts(), .peopleDiscovery(), .nearbyDiscovery(), .profile, .settings,
+            .links, .trackingLinks, .shareLinks, .communityLinks, .userStats,
+            .progression, .gamePage(.league), .communityDetail("c1"), .notifications,
+            .moodSpotlight(statusId: "s1"), .postDetail("p1"), .bookmarks
+        ]
+        for route in routes {
+            XCTAssertEqual(RouteEdgeSwipe.policy(for: route), .restored, "\(route)")
+        }
+    }
+
+    func test_restoresEdgeSwipe_afterARiverConversation_reEnablesTheGesture() {
+        let (window, navigation) = makeStack()
+        _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
+
+        pushScreen(for: .contacts(), on: navigation)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, true)
+        XCTAssertEqual(shouldBegin(navigation), true)
+        window.isHidden = true
+    }
+
+    func test_restoresEdgeSwipe_firstPushedScreenOnAFreshStack_hasTheGesture() {
+        let (window, navigation) = makeStack()
+        navigation.interactivePopGestureRecognizer?.isEnabled = false
+        navigation.interactivePopGestureRecognizer?.delegate = nil
+
+        pushScreen(for: .profile, on: navigation)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, true)
+        XCTAssertEqual(shouldBegin(navigation), true)
+        window.isHidden = true
+    }
+
+    // MARK: - #18491 : le modificateur SwiftUI monte réellement l'activateur
+
+    private func pushSwiftUIScreen(for route: Route, on navigation: UINavigationController, in window: UIWindow) {
+        let host = UIHostingController(rootView: Color.clear.restoresEdgeSwipe(for: route))
+        navigation.pushViewController(host, animated: false)
+        window.layoutIfNeeded()
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+    }
+
+    func test_restoresEdgeSwipeModifier_restoredRouteAfterARiver_reEnablesTheGesture() {
+        let (window, navigation) = makeStack()
+        _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
+
+        pushSwiftUIScreen(for: .links, on: navigation, in: window)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, true)
+        XCTAssertEqual(shouldBegin(navigation), true)
+        window.isHidden = true
+    }
+
+    func test_restoresEdgeSwipeModifier_conversationRoute_leavesTheRiverPolicyToTheScreen() {
+        let (window, navigation) = makeStack()
+        _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+
+        pushSwiftUIScreen(for: .conversation(makeConversation()), on: navigation, in: window)
 
         XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
         window.isHidden = true
