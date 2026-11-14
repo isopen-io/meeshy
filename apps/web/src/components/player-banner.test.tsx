@@ -474,12 +474,12 @@ describe('le Rêve en trois points, l’Offrande prête s’ouvre d’un toucher
     expect(host.querySelector('[data-player-banner-offering]')).toBeNull();
   });
 
-  test('l’Offrande prête paraît à côté du Rêve : un bouton nommé, de 44 px de haut au moins', async () => {
+  test('l’Offrande prête paraît à côté du Rêve : un bouton nommé, à la hauteur des pièces du milieu (24 px)', async () => {
     const host = await mount(<PlayerBanner model={ready()} offering={{ open: () => undefined, reward: null }} />);
     const button = host.querySelector('[data-player-banner-row="bottom"] button[data-player-banner-offering="ready"]');
     expect(button).not.toBeNull();
     expect(button?.getAttribute('aria-label')).toBe('Offrande prête : l’ouvrir');
-    expect(button?.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
+    expect(button?.getAttribute('style') ?? '').toMatch(/min-height:\s*24px/);
     const order = Array.from(host.querySelectorAll('[data-player-banner-row="bottom"] > *')).map((piece) => piece.getAttribute('data-player-banner-link') ?? piece.getAttribute('data-player-banner-offering'));
     expect(order.slice(0, 2)).toEqual(['missions', 'ready']);
   });
@@ -503,6 +503,6 @@ describe('le Rêve en trois points, l’Offrande prête s’ouvre d’un toucher
     const reward = host.querySelector('[data-player-banner-offering="opened"]');
     expect(reward?.getAttribute('role')).toBe('status');
     expect(reward?.textContent).toContain('+40');
-    expect(reward?.getAttribute('aria-label')).toBe('Offrande ouverte : +40 étincelles');
+    expect(reward?.getAttribute('aria-label')).toBe('Offrande ouverte :\u00a0+40 étincelles');
   });
 });

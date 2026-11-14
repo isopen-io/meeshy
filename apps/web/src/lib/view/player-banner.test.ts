@@ -377,8 +377,8 @@ describe('l’Offrande prête se dit sur le bandeau (#18199)', () => {
   });
 
   test('le gain d’une Offrande ouverte se dit en étincelles, au singulier comme au pluriel', () => {
-    expect(offeringRewardLabel(1, 'fr')).toBe('Offrande ouverte : +1 étincelle');
-    expect(offeringRewardLabel(40, 'fr')).toBe('Offrande ouverte : +40 étincelles');
+    expect(offeringRewardLabel(1, 'fr')).toBe('Offrande ouverte :\u00a0+1 étincelle');
+    expect(offeringRewardLabel(40, 'fr')).toBe('Offrande ouverte :\u00a0+40 étincelles');
   });
 
   test('les sept langues disent l’Offrande, prête et ouverte', () => {

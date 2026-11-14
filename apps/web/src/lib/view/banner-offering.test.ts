@@ -52,8 +52,7 @@ describe('ouvrir l’Offrande depuis le bandeau', () => {
     client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, readyView());
     const opener = createOfferingOpener({ client, newId: () => 'id', claim: () => new Promise((resolve) => (release = resolve)) });
     const pending = opener.open();
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(client.getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.chest.status).toBe('claimed');
     release({ ok: true, data: claimed(40) });
     expect(await pending).toEqual({ kind: 'opened', points: 40 });
