@@ -172,7 +172,7 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
-        val problem = republish(ticket, _roster.value.pruned(clock()).removing(userId))
+        val problem = withdrawingRepublish(ticket, _roster.value.pruned(clock()).removing(userId))
         if (problem == null || !isCurrent(ticket) || _roster.value.entry(userId) == null) return@locked problem
         adopt(ticket, _roster.value.withdrawing(userId, clock()))
         scheduleDeadline()
@@ -184,7 +184,13 @@ class SharedLocationSharingCenter internal constructor(
     suspend fun reconcile() {
         locked { ticket ->
             if (_roster.value.isSettled(clock())) return@locked null
-            republish(ticket, _roster.value.pruned(clock())).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
+            val pruned = _roster.value.pruned(clock())
+            if (pruned.isEmpty && !_roster.value.hasRecipients) {
+                adopt(ticket, SharedLocationRoster.EMPTY)
+                cancelDeadline()
+                return@locked null
+            }
+            withdrawingRepublish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
         }
     }
 
@@ -262,8 +268,27 @@ class SharedLocationSharingCenter internal constructor(
     private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
         val next = wanted.settled()
         if (!next.hasRecipients) return stopAll(ticket)
-        val fix = lastSent?.fix ?: deviceFix() ?: return stopAll(ticket)
+        val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
+    }
+
+    /**
+     * La dernière position envoyée, tant qu'elle a l'âge d'un battement : au-delà, la republier la ferait passer pour
+     * fraîche (le serveur la date de sa réception), on redemande l'appareil.
+     */
+    private fun freshLastFix(): SharedLocationFix? =
+        lastSent?.takeIf { clock() - it.atMillis <= SharedLocationUpdateGate.HEARTBEAT_MS }?.fix
+
+    /**
+     * Un retrait refusé pour une autre raison que le réseau (débit, liste invalide, partage indisponible) ne se rejoue
+     * pas des heures en laissant la personne servie : on ARRÊTE tout, et `stop` n'est pas limité en débit (#18204).
+     */
+    private suspend fun withdrawingRepublish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
+        val problem = republish(ticket, wanted)
+        if (problem == null || !isCurrent(ticket)) return problem
+        val outcome = (problem as? SharedLocationShareProblem.Refused)?.outcome
+        if (outcome == SharedLocationSendOutcome.OFFLINE || outcome == SharedLocationSendOutcome.UNCONFIRMED) return problem
+        return stopAll(ticket)
     }
 
     /** La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */

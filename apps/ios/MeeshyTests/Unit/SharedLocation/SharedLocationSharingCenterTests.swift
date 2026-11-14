@@ -521,6 +521,67 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertTrue(store.kept?.isWithdrawalPending(for: alice) ?? false)
     }
 
+    func test_aWithdrawalRefusedForAnotherReasonThanTheNetwork_stopsTheWholeShare() async {
+        let emitter = FakeSharedLocationEmitter()
+        let store = FakeSharedLocationRosterStore()
+        let (sut, _, _, _) = makeSUT(emitter: emitter, store: store)
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
+        emitter.startVerdict = .refused(.rateLimited)
+
+        let problem = await sut.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(emitter.stops, 1)
+        XCTAssertTrue(sut.roster.isEmpty)
+        XCTAssertNil(store.kept)
+    }
+
+    func test_anOldLastFix_isNeverRepublishedAsFresh() async {
+        let emitter = FakeSharedLocationEmitter()
+        let fixes = FakeSharedLocationFixSource()
+        let (sut, _, _, clock) = makeSUT(emitter: emitter, fixes: fixes)
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
+        fixes.result = .fix(SharedLocationFix(latitude: 49.1, longitude: 2.5, accuracy: 10)!)
+
+        clock.now = t0.addingTimeInterval(SharedLocationUpdateGate.heartbeat + 1)
+        await sut.stopSharing(with: bob)
+
+        XCTAssertEqual(emitter.starts.last?.fix.latitude, 49.1)
+        XCTAssertEqual(emitter.starts.last?.recipients.map(\.userId), [alice])
+    }
+
+    func test_aWithdrawalPastItsBound_isForgottenWithoutAnyEmission() async {
+        let store = FakeSharedLocationRosterStore()
+        store.kept = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .eightHours, now: t0.addingTimeInterval(-9 * 3600))
+            .withdrawing(userId: alice, now: t0.addingTimeInterval(-9 * 3600))
+        let (sut, emitter, _, _) = makeSUT(store: store)
+
+        await sut.reconcile()
+
+        XCTAssertEqual(emitter.stops, 0)
+        XCTAssertTrue(emitter.starts.isEmpty)
+        XCTAssertNil(store.kept)
+        XCTAssertTrue(sut.roster.isEmpty)
+    }
+
+    func test_theCenterIsWarmedOncePerSignedInAccount_withoutOpeningAProfile() {
+        let accounts = PassthroughSubject<String?, Never>()
+        var warmed = 0
+        let watch = SharedLocationSharingHolder.warmOnEachAccount(accounts.eraseToAnyPublisher()) { warmed += 1 }
+
+        accounts.send(nil)
+        accounts.send("")
+        accounts.send(me)
+        accounts.send(me)
+        accounts.send(alice)
+
+        XCTAssertEqual(warmed, 2)
+        watch.cancel()
+    }
+
     func test_theRowStays_whileAShareRuns_evenBelowFriend() async {
         let (sut, _, _, _) = makeSUT()
 

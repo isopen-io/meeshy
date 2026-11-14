@@ -418,4 +418,49 @@ class SharedLocationSharingCenterTest {
         assertThat(rig.stops).isEqualTo(1)
         assertThat(rig.saved["me"]).isNull()
     }
+
+    @Test
+    fun `un retrait refuse pour une autre raison que le reseau arrete tout le partage`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.RATE_LIMITED)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+        assertThat(rig.saved["me"]).isNull()
+    }
+
+    @Test
+    fun `une derniere position trop ancienne n'est jamais republiee comme fraiche`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.deviceFix = LiveLocationFix(49.1, 2.5, accuracy = 10.0)
+
+        advanceTimeBy(121_000L)
+        rig.center.stopSharing(bob)
+
+        assertThat(rig.starts.last().fix.latitude).isEqualTo(49.1)
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        rig.center.clear()
+    }
+
+    @Test
+    fun `un retrait passe sa borne est oublie sans rien emettre`() = runTest {
+        val rig = Rig(this)
+        rig.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = -9 * hour)
+            .withdrawing(alice, nowMillis = -9 * hour)
+            .stored()
+
+        rig.center.reconcile()
+
+        assertThat(rig.stops).isEqualTo(0)
+        assertThat(rig.starts).isEmpty()
+        assertThat(rig.saved["me"]).isNull()
+    }
 }

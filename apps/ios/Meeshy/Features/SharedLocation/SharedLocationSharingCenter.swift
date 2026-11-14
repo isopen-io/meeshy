@@ -182,7 +182,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     @discardableResult
     func stopSharing(with userId: String) async -> SharedLocationShareProblem? {
         await locked {
-            let problem = await self.republish(self.roster.pruned(now: self.now()).removing(userId: userId))
+            let problem = await self.withdrawingRepublish(self.roster.pruned(now: self.now()).removing(userId: userId))
             guard problem != nil, self.isLive, self.roster.entry(for: userId) != nil else { return problem }
             self.adopt(self.roster.withdrawing(userId: userId, now: self.now()))
             self.scheduleDeadline()
@@ -195,7 +195,13 @@ final class SharedLocationSharingCenter: ObservableObject {
     func reconcile() async {
         _ = await locked {
             guard !self.roster.isSettled(now: self.now()) else { return nil }
-            let problem = await self.republish(self.roster.pruned(now: self.now()))
+            let pruned = self.roster.pruned(now: self.now())
+            guard !pruned.isEmpty || self.roster.hasRecipients else {
+                self.adopt(.empty)
+                self.deadline = nil
+                return nil
+            }
+            let problem = await self.withdrawingRepublish(pruned)
             if problem != nil, self.isLive { self.arm(after: Self.retryDelay) }
             return problem
         }
@@ -243,13 +249,31 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         guard next.hasRecipients else { return await stopAll() }
-        if let last = lastSent?.fix { return await publish(next, fix: last, previous: roster) }
+        if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
         guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
     }
 
     /// La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
+    /// La dernière position envoyée, tant qu'elle a l'âge d'un battement : au-delà, la republier la ferait passer pour
+    /// fraîche (le serveur la date de sa réception), on redemande l'appareil.
+    private var freshLastFix: SharedLocationFix? {
+        guard let lastSent, now().timeIntervalSince(lastSent.at) <= SharedLocationUpdateGate.heartbeat else { return nil }
+        return lastSent.fix
+    }
+
+    /// Un retrait refusé pour une autre raison que le réseau (débit, liste invalide, partage indisponible) ne se rejoue
+    /// pas des heures en laissant la personne servie : on ARRÊTE tout, et `stop` n'est pas limité en débit (#18204).
+    private func withdrawingRepublish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
+        let problem = await republish(wanted)
+        guard isLive else { return problem }
+        switch problem {
+        case .refused(.offline), .refused(.unconfirmed), nil: return problem
+        default: return await stopAll()
+        }
+    }
+
     private func publish(_ wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         guard let request = SharedLocationStartRequest(recipients: next.recipients, duration: next.serverDuration(now: now()), fix: fix) else {
@@ -368,6 +392,21 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
 /// Le centre du compte connecté : un autre compte sur le même appareil repart d'une liste vide.
 enum SharedLocationSharingHolder {
     private static var current: (userId: String, center: SharedLocationSharingCenter)?
+    private static var accountWatch: AnyCancellable?
+
+    /// Le centre naît avec la session du compte, pas avec la première fiche ouverte : un retrait ou une échéance gardés
+    /// d'un lancement précédent partent à la première socket accrochée, même si l'on n'ouvre aucun profil (#18204).
+    static func followAccounts() {
+        accountWatch = warmOnEachAccount(AuthManager.shared.$currentUser.map { $0?.id }.eraseToAnyPublisher()) { _ = center() }
+    }
+
+    /// Réveille `warm` une fois par compte connecté, jamais pour une session sans compte.
+    static func warmOnEachAccount(_ accounts: AnyPublisher<String?, Never>, warm: @escaping () -> Void) -> AnyCancellable {
+        accounts
+            .compactMap { $0.flatMap { $0.isEmpty ? nil : $0 } }
+            .removeDuplicates()
+            .sink { _ in warm() }
+    }
 
     static func center() -> SharedLocationSharingCenter {
         let userId = AuthManager.shared.currentUser?.id ?? ""

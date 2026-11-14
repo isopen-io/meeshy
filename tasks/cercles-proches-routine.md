@@ -1060,3 +1060,34 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   catalogues du jeu web/iOS ×2, `act-leak-guard`, et deux témoins de présence `focal-row`/`lens-row` qui passent seuls).
 - Prochain lot recommandé : #18204 (« Arrêter » hors ligne rejoué, iOS + Android), puis la passerelle #18205, puis
   #18351 une fois tranchée.
+
+## 2026-11-14 — réveil du soir : un « Arrêter » hors ligne part au retour du réseau, iOS et Android (#18204)
+
+- Reprise : aucune PR cercles ouverte ; #18352 (émission web) fusionnée. Aucune branche n'écrit les centres de partage :
+  lot réservé sur `claude/cercles-18204-arreter-hors-ligne`.
+- Lot : le RETRAIT EN ATTENTE, iOS et Android ensemble (même loi). La liste (`SharedLocationRoster`, Swift et Kotlin)
+  gagne `withdrawing` (la personne sort, son identifiant est gardé au plus 8 h, le plus long terme serveur possible),
+  `settled` (la liste envoyée solde tous les retraits), `isSettled`, `hasRecipients`, `hasPendingWithdrawals` ; le
+  format gardé ajoute `withdrawals` (identifiants et bornes, jamais une position), une liste d'avant se relit sans
+  retrait. Le centre : un « Arrêter » qui échoue (hors ligne, accusé perdu) rend `withdrawalPending`, arme le rejeu de
+  30 s, coupe le suivi s'il ne reste personne ; `reconcile()` rejoue dès que la liste n'est pas soldée (minuteur,
+  socket accrochée, lancement) ; aucune mise à jour de position ne part tant qu'un retrait attend. Message neuf
+  « Le partage s'arrêtera dès le retour du réseau » (sept langues, iOS, adopté par Android), en toast d'information.
+- Le témoin « un accusé perdu en arrêtant une personne garde Arrêter pour tous » change de sens : l'intention est
+  désormais gardée par le centre et rejouée, la personne n'attend plus un second toucher.
+- Suivi ouvert : la même loi sur le web (#18388).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné — sur iOS, le centre ne naissait qu'à l'ouverture d'une
+  fiche : un retrait gardé n'aurait pas pu partir après un relancement. Il naît désormais avec la session du compte
+  (`SharedLocationSharingHolder.followAccounts()`, appelé par la séquence de lancement, réveillé une fois par compte
+  connecté). Android l'avait déjà (le centre est un `PerAccountCache` tiré au lancement par `LaunchPurgeHook`).
+  Corrigés aussi, sur les deux : un retrait refusé pour autre chose que le réseau (débit, liste invalide) ARRÊTE tout
+  au lieu de se rejouer des heures ; une dernière position plus vieille qu'un battement (120 s) n'est plus republiée
+  comme fraîche, l'appareil est redemandé ; un retrait passé sa borne s'oublie sans rien émettre (plus de boucle).
+  Noté : revenir à une version antérieure de l'app perd un retrait en attente (le format ancien ignore la clé).
+  Suivis : la même loi sur le web (#18388) ; un second appareil du même compte (#18389).
+- Gates locaux : `jvm-check -PjvmCheckModelOnly` `SharedLocationRosterTest` 8/8 verts ; `xcstrings_to_android.py
+  --check`, `check-verbosity-native.mjs`, `check-file-budget.sh` verts ; iOS `check_localization.py`,
+  `check_test_registration.sh` verts, `check_house_rules.sh` et `check_cohesion_budget.sh` identiques avec et sans le
+  lot (rouge hérité de `dev` pour le premier). Swift et `sdk-core` se prouvent par la CI de `dev` après fusion
+  (`CI_DEV_SEUL`, #18048).
+- Prochain lot recommandé : #18388 (le web), puis la passerelle #18205 avec #18389.
