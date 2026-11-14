@@ -38,7 +38,7 @@ public fun TalkieInfoButton(
     )
 }
 
-/** La note dépliée : qui, quand. Ce que fait le geste (la voix joue chez l'autre) est déjà dit, visible, par la fiche. */
+/** La note dépliée : qui, quand, que la voix sort même Meeshy en arrière-plan (seul site qui le dit), et ce qui part s'il ne passe pas. */
 @Composable
 public fun TalkieInfoNote(modifier: Modifier = Modifier) {
     Text(

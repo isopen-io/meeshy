@@ -28,8 +28,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Le (i) du talkie (#18099, épure #17584) : son nom accessible est la QUESTION à laquelle la note répond, la note se
- * déplie SOUS la rangée comme les autres (i) et reste lue par TalkBack, et elle ne répète pas la phrase déjà visible
- * au repos sur la fiche (« Maintenez et parlez : votre voix joue directement chez … »).
+ * déplie SOUS la rangée comme les autres (i) et reste lue par TalkBack. Elle garde ce que la fiche ne dit pas au repos :
+ * la voix sort même quand Meeshy est en arrière-plan (règle 7, aucun texte n'est perdu).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -79,6 +79,14 @@ class TalkieInfoButtonTest {
         compose.onNodeWithText(note).assertIsDisplayed()
         compose.onNodeWithTag(TALKIE_INFO_TAG).performClick()
         compose.onNodeWithText(note).assertDoesNotExist()
+    }
+
+    @Test
+    fun `la note dit a qui, quand, que la voix sort meme en arriere-plan, et ce qui part s'il ne passe pas`() {
+        assertThat(note).startsWith("Only for your very closest people, in an extreme emergency")
+        assertThat(note).contains("even when Meeshy is in the background")
+        assertThat(note).contains("end-to-end encrypted")
+        assertThat(note).contains("voice message")
     }
 
     @Test

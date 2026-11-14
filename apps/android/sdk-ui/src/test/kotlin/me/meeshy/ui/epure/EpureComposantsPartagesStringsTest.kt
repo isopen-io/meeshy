@@ -129,6 +129,7 @@ class EpureComposantsPartagesStringsTest {
     fun `la raison technique du talkie ferme en conversation chiffree passe derriere le i, dans chaque langue`() {
         assertThat(text("fr", "talkie_info_note")).contains("chiffr")
         assertThat(text("fr", "talkie_info_note")).contains("dernière conversation")
+        assertThat(text("fr", "talkie_info_note")).contains("même si Meeshy est en arrière-plan")
         folders.keys.forEach { language ->
             assertWithMessage("$language : la note du (i) garde le repère de départ")
                 .that(text(language, "talkie_info_note").length).isGreaterThan(text(language, "talkie_send_e2ee").length)
