@@ -33,6 +33,16 @@ export function toggledHold(current: string | null, tapped: string): string | nu
   return current === tapped ? null : tapped;
 }
 
+export type LiveFrameRelease = Pick<CallLiveFrameState, 'frameId' | 'sentProposal' | 'peerFrameId'>;
+
+export function liveFrameReleaseReachesPeer({ sentProposal }: LiveFrameRelease): boolean {
+  return sentProposal !== null;
+}
+
+export function liveFramePeerReleaseDropsMine(_: Pick<CallLiveFrameState, 'frameId' | 'peerFrameId'>): boolean {
+  return false;
+}
+
 const joined = (call: ActiveCall): boolean => call.phase.kind === 'connected' || call.phase.kind === 'reconnecting';
 
 /** L'appel est à deux, moi compris : la session y vit. */
