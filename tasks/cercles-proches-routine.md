@@ -1176,4 +1176,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 
 ## 2026-11-14 — réveil de fin de soirée : un retrait fait sur un appareil vaut pour tous les appareils du compte (#18389)
 
-- Reprise : aucune PR cercles ouverte ; #18520 fusionnée. Lot réservé (en cours).
+- Reprise : aucune PR cercles ouverte ; #18520 fusionnée. Aucune branche n'écrit `services/sharedLocation/` ni
+  `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture.
+- Constat : un retrait fait sur un appareil hors ligne ne PEUT pas atteindre la passerelle tant qu'aucun appareil qui le
+  connaît n'est en ligne ; ce qui se répare, c'est qu'un autre appareil ne le défasse pas (il republiait sa liste
+  périmée au prochain ajout) et qu'il l'apprenne dès que la passerelle le reçoit.
+- Lot : la passerelle fait foi. Après chaque démarrage ou arrêt accepté, `location:share-own-changed` (sans charge) part
+  vers tous les appareils du compte ; `GET /relations/locations/mine` rend la liste CHOISIE (personnes, précisions,
+  échéances ; ni position, ni verdict de cercle ou de blocage, `private, no-store`). Le web relit à chaque socket
+  accrochée (avant de rejouer ses retraits) et à chaque annonce, et adopte la liste servie (`rosterOps.withServed`) :
+  ses retraits en attente gagnent, l'échéance servie l'emporte. Une liste REÇUE d'un autre appareil ne fait jamais
+  partir la position d'ici (marque `<clé>.received` : ni suivi, ni rechargement, échéances soldées sans envoi).
+- Audit adversarial avant PR : un bloquant corrigé (l'appareil qui recevait la liste publiait sa propre position à la
+  première échéance ou au rechargement), une prolongation faite ailleurs n'est plus défaite, un ajout non confirmé que
+  le serveur ne sert pas sort de la liste (témoin). Assumés : un arrêt de compte côté serveur (suppression) ne s'annonce
+  pas ; un « Arrêter » fait sur un appareil qui n'a pas démarré envoie SA position une fois (#18580).
+- Suivis ouverts : iOS et Android (#18578), un seul appareil publie (#18580). #18389 reste ouverte jusqu'à #18578.
