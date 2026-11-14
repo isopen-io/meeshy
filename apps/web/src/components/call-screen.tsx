@@ -790,7 +790,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div ref={controlsPlane} className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
+          <div ref={controlsPlane} className={`relative z-20 flex flex-col gap-3 pb-6 ${mode === null ? '' : 'min-h-0 [@media(max-height:480px)]:pb-2'}`} style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions() : null}
             <HeldSwap value={chrome.mode === null ? true : null} shape="bottom" className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
               {() => (

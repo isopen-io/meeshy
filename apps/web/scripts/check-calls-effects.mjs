@@ -54,6 +54,9 @@
  *     vignettes et l'aperçu se peignent, deux tapes photographient le cadre
  *     (JPEG 1080 × 1920) ; une troisième personne arrive (caméra coupée) et
  *     plus AUCUNE ambiance n'offre de cadre de duo ;
+ *  8 ter. HAUTEUR COMPACTE (#17927) : fenêtre couchée (568 × 320, 640 × 260 ; 568 × 200 en Effets), un cadre
+ *     choisi ou deux couches posées, la barre ‹ · Réglages · (+) reste entière, à 44 au moins, atteinte par le doigt ;
+ *     ce qui est au-dessus défile et se range contre elle ; l'appui long sur (+) ouvre une liste qui ne sort pas de l'écran ;
  *  9. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
