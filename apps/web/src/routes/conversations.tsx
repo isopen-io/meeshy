@@ -9,7 +9,6 @@ import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { useRowActionNotice } from '@/lib/view/row-action-notice';
-import { withBannerRecall } from '@/lib/view/player-banner-recall';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT, type RowPlace } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -128,7 +127,12 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
-const pullTheList = withBannerRecall(refreshListAction);
+/** Tirer la liste rappelle aussi le bandeau du joueur (#17366), chargé à la demande : la coquille n'en porte rien. */
+const recallTheBanner = (): void => void import('@/lib/view/player-banner-recall').then((m) => m.recallPlayerBanner());
+const pullTheList = (): Promise<void> => {
+  recallTheBanner();
+  return refreshListAction();
+};
 
 /* Renommer et confirmer un blocage (#10593) : chargés au geste. */
 const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));

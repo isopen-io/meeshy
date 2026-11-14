@@ -39,14 +39,3 @@ export function recallPlayerBanner(
 /** Le bandeau montré est-il un rappel (et non l'ouverture) ? */
 export const isRecallingPlayerBanner = (store: StoreApi<PlayerBannerVisit> = playerBannerVisitStore): boolean =>
   recalls.get(store)?.visit === store.getState().visit;
-
-/**
- * « Tirer la liste rappelle le bandeau » (décision porteur du 2026-11-12) : le geste qui rafraîchit l'écran des
- * conversations rappelle d'abord le bandeau, qui repart seul.
- */
-export const withBannerRecall =
-  (refresh: () => Promise<void>, store: StoreApi<PlayerBannerVisit> = playerBannerVisitStore) =>
-  (): Promise<void> => {
-    recallPlayerBanner({ store });
-    return refresh();
-  };

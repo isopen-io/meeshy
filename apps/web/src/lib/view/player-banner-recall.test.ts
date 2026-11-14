@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { PLAYER_BANNER_RECALL_MS } from '@meeshy/shared/utils/game/banner-recall-timing';
 
-import { isRecallingPlayerBanner, recallPlayerBanner, withBannerRecall } from './player-banner-recall';
+import { isRecallingPlayerBanner, recallPlayerBanner } from './player-banner-recall';
 import { createPlayerBannerVisit } from './player-banner-visit';
 
 /**
@@ -78,18 +78,5 @@ describe('le bandeau rappelé', () => {
     await sleep(40);
     expect(store.getState().phase).toBe('shown');
     expect(isRecallingPlayerBanner(store)).toBe(false);
-  });
-});
-
-describe('tirer la liste rappelle le bandeau', () => {
-  test('le geste rappelle le bandeau PUIS rafraîchit la liste, et rend la même promesse', async () => {
-    const store = retired();
-    const calls: string[] = [];
-    const pull = withBannerRecall(async () => {
-      calls.push(`refresh:${store.getState().phase}`);
-    }, store);
-    await pull();
-    expect(calls).toEqual(['refresh:shown']);
-    expect(isRecallingPlayerBanner(store)).toBe(true);
   });
 });
