@@ -363,6 +363,38 @@ le faire taire supprimerait le seul signal de la divergence.
 
 ---
 
+## Lot J — la question que les trois gardes de NOMS ne posent pas (#18342)
+
+Les gardes de noms vérifient qu'aucun client n'écoute **hors** contrat.
+Personne ne vérifie l'inverse : qu'un événement du contrat ait au moins un
+lecteur. En confrontant les 176 événements aux routes des trois clients (126
+Android après #18123, 160 Swift, 129 noms cités côté web), **six** n'ont aucun
+lecteur — et **trois d'entre eux sont ÉMIS** :
+
+| événement | émis ? | déclaré par un client ? |
+|---|---|---|
+| `location:blood-proximity` | oui — deux `emit` par alerte | non |
+| `link:message:new` | oui | non |
+| `agent:admin-event` | oui | non |
+| `call:transcription-result`, `call:translation-enabled`, `call:translation-requested` | non | non |
+
+Et la mesure contredit une affirmation du dépôt : `services/gateway/CLAUDE.md`
+écrit que l'enveloppe de `link:message:new` a « son unique auditeur (le web) ».
+Le web ne cite ni ce nom, ni sa constante, ni rien d'approchant.
+
+> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation**, au même titre
+> qu'un tri (cycle 86 bis), un compte (cycle 93) ou une contrainte de schéma
+> (cycle 94). Celui-ci a survécu à la disparition de ce qu'il décrit — et tout
+> le raisonnement du cycle 114 sur ce qu'une émission d'enveloppe « livre »
+> s'appuie dessus.
+
+Rien n'est retiré : trois de ces noms sont probablement des features à venir, et
+`location:blood-proximity` sert une directive récente dont le client n'est
+peut-être pas écrit. Chacun demande un verdict, pas un retrait automatique —
+c'est #18342.
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
