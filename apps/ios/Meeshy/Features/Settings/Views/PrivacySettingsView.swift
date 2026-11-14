@@ -42,7 +42,7 @@ struct PrivacySettingsView: View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             visibilitySection
             locationSection
-            mediaSection
+            dataSection
             callsSection
             encryptionSection
 
@@ -125,10 +125,10 @@ struct PrivacySettingsView: View {
         LocationSharingSettingsSection(accentColor: accentColor)
     }
 
-    private var mediaSection: some View {
+    private var dataSection: some View {
         section(
-            title: String(localized: "settings.privacy.media_data", defaultValue: "Média & Données", bundle: .main),
-            icon: "photo.fill",
+            title: String(localized: "settings.privacy.data", defaultValue: "Données", bundle: .main),
+            icon: "chart.pie.fill",
             color: MeeshyColors.tileSaffronHex,
             specs: [
                 ToggleSpec(

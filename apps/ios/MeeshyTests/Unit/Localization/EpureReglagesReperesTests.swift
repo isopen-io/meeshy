@@ -87,7 +87,20 @@ final class EpureReglagesReperesTests: XCTestCase {
         XCTAssertFalse(try shippedSources().contains("\"settings.privacy.save_media\""))
         let view = try code(Self.views + "PrivacySettingsView.swift")
         XCTAssertFalse(view.contains("saveMediaToGallery"), "le réglage vit chez Téléchargement auto")
-        XCTAssertTrue(view.contains("\\.allowAnalytics"), "la section Média & Données garde Analytique")
+        XCTAssertTrue(view.contains("\\.allowAnalytics"), "la section Données garde Analytique")
+    }
+
+    /// Sans « Sauvegarder média », la section ne porte plus aucun média : son titre ne l'annonce plus.
+    func test_privacy_dataSection_isTitledByWhatItHolds_noMediaLeft() throws {
+        let app = try app()
+        XCTAssertNil(app["settings.privacy.media_data"], "« Média & Données » quitte les sept langues")
+        XCTAssertEqual(app["settings.privacy.data"]?["fr"], "Données")
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(app["settings.privacy.data"]?[language], language)
+            XCTAssertNotEqual(value, "Données", "\(language) : copié du français")
+        }
+        let view = try code(Self.views + "PrivacySettingsView.swift")
+        XCTAssertTrue(view.contains("\"settings.privacy.data\""))
     }
 
     func test_saveMedia_stillLivesWhereItsNoteIs_inTheAutoDownloadGallery() throws {
