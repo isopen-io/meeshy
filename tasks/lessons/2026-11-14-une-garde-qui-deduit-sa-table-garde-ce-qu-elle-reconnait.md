@@ -1,8 +1,8 @@
-# Une garde qui DÉDUIT sa table garde ce qu'elle RECONNAÎT, jamais ce qui existe
+## Une garde qui DÉDUIT sa table garde ce qu'elle RECONNAÎT, jamais ce qui existe
 
 *2026-11-14, cycle 156. Trouvé par l'audit adversarial, sur la garde que ce cycle venait d'écrire.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le cycle 155 avait laissé une leçon : *un gate indexé sur une RELATION déclarée
 ne balaie pas les sites qui n'ont pas de relation déclarée.* La garde de forme
@@ -21,7 +21,7 @@ toute la famille `call:*` (~35 événements), les quatre `viewing:*` et
 > plus bas.** Supprimer une table ne supprime pas la liste tenue à la main : elle
 > remonte d'un niveau d'abstraction, où elle ressemble beaucoup moins à une liste.
 
-## Pourquoi les invariants ne pouvaient pas le voir
+### Pourquoi les invariants ne pouvaient pas le voir
 
 La garde portait QUATRE invariants, posés exprès contre le mode de panne
 silencieux d'une table déduite — minimum de routes balayées, résolution de chaque
@@ -36,7 +36,7 @@ Un `MINIMUM_ROUTES` compte les routes RECONNUES. Un idiome ignoré ne fait pas
 baisser ce compte — il n'y est jamais entré. **Un invariant de qualité ne
 substitue jamais un invariant de couverture.**
 
-## Le remède, et pourquoi la prose n'en est pas un
+### Le remède, et pourquoi la prose n'en est pas un
 
 Le réflexe est d'écrire la limite dans le doc-comment. Le dépôt sait déjà que ça
 ne suffit pas (« une règle en prose ne couvre que ce que son outil exprime ») —
@@ -55,7 +55,7 @@ const SWEPT_EVENTS_AT_LAST_MEASURE = 110;
 
 C'est le seul endroit du fichier où le manque est **mesuré** plutôt que raconté.
 
-## La règle
+### La règle
 
 **Toute garde qui déduit son périmètre doit mesurer ce périmètre, et le chiffre
 doit être un `expect`.** Les deux questions sont disjointes et il en faut une
@@ -68,7 +68,7 @@ Et la seconde se répond en confrontant le périmètre balayé à une **énumér
 indépendante** — ici les propriétés de `ServerToClientEvents`, que l'extracteur
 Kotlin ne produit pas.
 
-## Le fait le plus inconfortable
+### Le fait le plus inconfortable
 
 Une garde qui réclame plus qu'elle ne tient est **exactement le défaut que ce
 cycle corrigeait ailleurs** — un miroir qui exige ce que le contrat ne garantit
