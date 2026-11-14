@@ -75,6 +75,7 @@
     <string name="privacy_save_media">Enregistrer dans Photos</string>
     <string name="settings_notif_type_contact_activity">Retour d\'un contact</string>
     <string name="settings_notif_type_contact_activity_subtitle">Un contact revient sur Meeshy, au plus toutes les 3 heures.</string>
+    <string name="settings_packs_orientation">Les Meeshes achètent des packs : fonds, contours d\'avatar, bannières.</string>
     <string name="settings_packs_title">Boutique</string>
     <string name="settings_privacy_analytics_info">Mesure d\'usage anonyme : écrans ouverts, fonctionnalités utilisées, plantages. Jamais le contenu de vos messages, ni vos contacts.</string>
     <string name="settings_privacy_analytics_question">Que mesure l\'analytique ?</string>

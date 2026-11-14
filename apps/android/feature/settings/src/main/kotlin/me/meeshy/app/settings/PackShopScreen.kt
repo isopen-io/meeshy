@@ -132,6 +132,7 @@ fun PackShopScreen(
                         .padding(horizontal = MeeshySpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
+                    SettingsOrientation(stringResource(R.string.settings_packs_orientation))
                     ui.balance?.let { Balance(it) }
                     failureText?.let { FailureLine(it) }
                     Shelf(

@@ -75,6 +75,7 @@
     <string name="privacy_save_media">الحفظ في الصور</string>
     <string name="settings_notif_type_contact_activity">عودة جهة اتصال</string>
     <string name="settings_notif_type_contact_activity_subtitle">يعود أحد جهات الاتصال إلى Meeshy، مرة كل 3 ساعات على الأكثر.</string>
+    <string name="settings_packs_orientation">تشتري بالـ Meeshes حزمًا: خلفيات المحادثات وإطارات الصور الرمزية واللافتات.</string>
     <string name="settings_packs_title">المتجر</string>
     <string name="settings_privacy_analytics_info">قياسات استخدام مجهولة: الشاشات المفتوحة والميزات المستخدمة والأعطال. لا محتوى رسائلك ولا جهات اتصالك أبدًا.</string>
     <string name="settings_privacy_analytics_question">ماذا تقيس التحليلات؟</string>

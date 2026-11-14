@@ -75,6 +75,7 @@
     <string name="privacy_save_media">In Fotos sichern</string>
     <string name="settings_notif_type_contact_activity">Rückkehr eines Kontakts</string>
     <string name="settings_notif_type_contact_activity_subtitle">Ein Kontakt ist wieder auf Meeshy, höchstens alle 3 Stunden.</string>
+    <string name="settings_packs_orientation">Mit Meeshes kaufst du Pakete: Konversationshintergründe, Avatar-Ringe, Banner.</string>
     <string name="settings_packs_title">Shop</string>
     <string name="settings_privacy_analytics_info">Anonyme Nutzungsdaten: geöffnete Bildschirme, genutzte Funktionen, Abstürze. Niemals Nachrichteninhalte oder Kontakte.</string>
     <string name="settings_privacy_analytics_question">Was misst die Analyse?</string>

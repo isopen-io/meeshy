@@ -18,7 +18,7 @@ class EpureReglagesBoutiqueStringsTest {
     @Test
     fun `the shop orientation names what Meeshes buy`() {
         val text = Tree.entriesOf("fr").getValue("settings_packs_orientation").text.replace("\\'", "'")
-        assertThat(text).isEqualTo("Les Meeshes achètent des packs : fonds de conversation, contours d'avatar, bannières.")
+        assertThat(text).isEqualTo("Les Meeshes achètent des packs : fonds, contours d'avatar, bannières.")
     }
 
     @Test
