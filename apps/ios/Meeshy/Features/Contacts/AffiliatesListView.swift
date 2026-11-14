@@ -40,6 +40,7 @@ struct AffiliatesListView: View {
                 title: viewModel.isEmpty
                     ? String(localized: "contacts.affiliates.empty", defaultValue: "Aucun filleul", bundle: .main)
                     : String(localized: "contacts.affiliates.no-results", defaultValue: "Aucun résultat", bundle: .main),
+                subtitle: viewModel.isEmpty ? Self.emptyOrientation : "",
                 actionLabel: viewModel.isEmpty
                     ? String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
                     : nil,
@@ -67,6 +68,11 @@ struct AffiliatesListView: View {
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }
         }
+    }
+
+    /// Le parrainage est propre à Meeshy : son état vide dit, au repos, qui apparaîtra ici (règle 7, revue #18088).
+    static var emptyOrientation: String {
+        String(localized: "contacts.affiliates.empty.orientation", defaultValue: "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici.", bundle: .main)
     }
 
     private func shareReferralLink() {

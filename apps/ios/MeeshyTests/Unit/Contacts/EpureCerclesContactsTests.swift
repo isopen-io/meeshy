@@ -550,6 +550,15 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(app["contacts.affiliates.search-placeholder"]?["es"]).localizedCaseInsensitiveContains("afiliado"))
     }
 
+    /// Le parrainage est propre à Meeshy (règle 7) : l'état vide « Aucun filleul » garde, au repos, la phrase qui dit
+    /// qui apparaîtra dans cette liste — le bouton « Partager le lien de parrainage » dit le geste, pas son effet.
+    func test_affiliatesEmpty_saysWhoWillAppearHere_atRest_inEveryLanguage() throws {
+        XCTAssertEqual(AffiliatesListView.emptyOrientation, "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici.")
+        try assertTranslated(try app(), "contacts.affiliates.empty.orientation", french: AffiliatesListView.emptyOrientation)
+        let source = try code("apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift")
+        XCTAssertTrue(source.contains("subtitle: viewModel.isEmpty ? Self.emptyOrientation : \"\""), "la phrase se lit sous « Aucun filleul », pas sous « Aucun résultat »")
+    }
+
     func test_referralLinkToShare_picksTheFirstServedLink_andNilWhenThereIsNone() async throws {
         let service = MockAffiliateService()
         let sut = AffiliatesViewModel(affiliateService: service, currentUserId: "me")

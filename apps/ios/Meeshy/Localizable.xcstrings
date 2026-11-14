@@ -11358,6 +11358,53 @@
         }
       }
     },
+    "contacts.affiliates.empty.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يظهر هنا من يسجّلون عبر رابط الإحالة الخاص بك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer sich über deinen Empfehlungslink registriert, erscheint hier."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "People who sign up through your referral link appear here."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quienes se registran con tu enlace de recomendación aparecen aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ceux qui s'inscrivent par ton lien de parrainage apparaissent ici."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi si iscrive tramite il tuo link di referral compare qui."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem se cadastra pelo seu link de indicação aparece aqui."
+          }
+        }
+      }
+    },
     "contacts.tab.circles": {
       "extractionState": "manual",
       "localizations": {
