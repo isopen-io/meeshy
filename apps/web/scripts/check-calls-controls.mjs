@@ -769,6 +769,8 @@ try {
         belowHeader: portrait !== undefined && header !== undefined && portrait.top >= header.bottom - 1,
       };
     }, TAP_FLOOR);
+  /* L'avatar glisse vers sa nouvelle place (morphisme, loi 17) : on le mesure posé. Une pulsation sans fin ne se termine jamais, elle n'est pas attendue. */
+  const stageSettled = (page) => until(page, () => document.querySelector('[data-call-audio-stage]') !== null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, 3000);
   const fits = (fit) => fit.pillInside && fit.buttons.length === 4 && fit.buttons.every((button) => button.inside && button.touchable && button.size >= TAP_FLOOR);
   for (const [width, height, avatar] of [
     [568, 320, 64],
@@ -786,7 +788,7 @@ try {
     try {
       check(await startConnectedCall(page), `${label} : l'appel se connecte`);
       await until(page, () => window.__meeshyFixtureCallPeer?.callId() != null);
-      await until(page, () => document.querySelector('[data-call-audio-stage]') !== null && document.querySelector('[data-call-audio-stage]').getAnimations({ subtree: true }).every((animation) => animation instanceof CSSTransition || animation.playState !== 'running'), undefined, 3000);
+      await stageSettled(page);
       const rest = await pillFit(page);
       check(fits(rest), `${label} : la pilule ENTIÈRE est dans l'écran, ses quatre boutons d'au moins ${TAP_FLOOR} touchables (${JSON.stringify([rest.pill, rest.buttons])})`);
       check(rest.stage === 'compact', `${label} : la scène audio prend la forme compacte de P9b (${rest.stage})`);
@@ -810,11 +812,25 @@ try {
         await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control="journal"]')));
         check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre le journal DANS la pilule`);
         await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'compact');
+        await stageSettled(page);
         const journal = await pillFit(page);
         check(fits(journal), `${label} : journal ouvert, la pilule ENTIÈRE reste dans l'écran, (…) compris (${JSON.stringify([journal.pill, journal.buttons])})`);
         const list = await page.$eval('[data-call-journal]', (element) => Math.round(element.getBoundingClientRect().height));
-        check(list >= 56, `${label} : le journal garde un plancher lisible, ${list} px`);
+        check(list >= 44, `${label} : le journal garde un plancher lisible, une phrase au moins, ${list} px`);
         check(journal.avatar !== null && journal.avatar <= 64 && journal.besideAvatar && journal.clearOfPill, `${label} : l'avatar reste compact au-dessus du journal, sans le toucher (${JSON.stringify([journal.avatar, journal.besideAvatar, journal.clearOfPill])})`);
+        /* Sans place pour une phrase, la tête se replie dans le pied : la bascule Traduit · Original et « Journal » (disque blanc, qui le referme) y restent, dans l'écran et touchables. */
+        const foot = await page.evaluate((floor) => {
+          const reach = (selector) => {
+            const element = document.querySelector(selector);
+            const box = element?.getBoundingClientRect();
+            const hit = box === undefined ? null : document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return { size: box === undefined ? 0 : Math.round(Math.min(box.width, box.height)), inside: box !== undefined && box.top >= 0 && box.bottom <= window.innerHeight, touchable: hit !== null && element !== null && element.contains(hit) };
+          };
+          const toggle = reach('[data-call-journal-foot] [data-call-journal-toggle]');
+          const views = reach('[data-call-journal-foot] [data-call-journal-view] button');
+          return { toggle, views, floor, head: document.querySelector('[data-call-journal-panel] h2')?.className ?? null };
+        }, TAP_FLOOR);
+        check([foot.toggle, foot.views].every((control) => control.inside && control.touchable && control.size >= TAP_FLOOR) && foot.head === 'sr-only', `${label} : la tête se replie dans le pied — bascule et « Journal » dans l'écran, touchables, titre gardé pour le lecteur d'écran (${JSON.stringify(foot)})`);
         await capture(page, `controles-vocal-journal-${width}x${height}`);
         await page.click('[data-call-control-pill] [data-call-journal-toggle]');
         await gone(page, '[data-call-journal-panel]');
@@ -822,6 +838,7 @@ try {
 
       await page.setViewportSize({ width: 390, height: 844 });
       check(await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'full'), `${label} : la fenêtre redevenue haute, la scène reprend sa forme pleine`);
+      await stageSettled(page);
       const tall = await pillFit(page);
       check(fits(tall) && tall.avatar > 100, `${label} : et l'avatar retrouve sa taille (${tall.avatar})`);
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');

@@ -60,7 +60,8 @@ export type PillPanelHead = {
 export type ColumnPanelHead = { readonly fill: true };
 
 /** Le journal DANS la pilule a la tête de la colonne, celle d'iOS (`CallJournalPanel`) : « titre à gauche, bascule à droite », sans ‹ ni ✕ (P6.3, P9b.4, #17928) — « Journal », à son pied, le referme (#17964). */
-export type PlainPillPanelHead = { readonly fill?: false; readonly plain: true };
+/** `folded` : la fenêtre est trop basse pour une tête (#18488) — le titre reste pour le lecteur d'écran, la bascule passe au pied. */
+export type PlainPillPanelHead = { readonly fill?: false; readonly plain: true; readonly folded?: boolean };
 
 type FrameProps = {
   readonly id: string;
@@ -99,7 +100,8 @@ function PillHead({ head, titleId, title, trailing, onClose }: { readonly head: 
 }
 
 /** « Titre à gauche, bascule à droite » : la tête sans ‹ ni ✕, en colonne comme dans la pilule. */
-function PlainHead({ titleId, title, trailing }: { readonly titleId: string; readonly title: string; readonly trailing: ReactNode }) {
+function PlainHead({ titleId, title, trailing, folded }: { readonly titleId: string; readonly title: string; readonly trailing: ReactNode; readonly folded: boolean }) {
+  if (folded) return <h2 id={titleId} className="sr-only">{title}</h2>;
   return (
     <div className="flex items-center gap-2 ps-3">
       <h2 id={titleId} className="min-w-0 flex-1 truncate text-start text-body font-semibold">
@@ -135,7 +137,7 @@ export function CallPanelFrame(props: FrameProps) {
       style={props.fill === true ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      {'Button' in props ? <PillHead head={props} titleId={titleId} title={title} trailing={trailing} onClose={onClose} /> : <PlainHead titleId={titleId} title={title} trailing={trailing} />}
+      {'Button' in props ? <PillHead head={props} titleId={titleId} title={title} trailing={trailing} onClose={onClose} /> : <PlainHead titleId={titleId} title={title} trailing={trailing} folded={'folded' in props && props.folded === true} />}
       {children}
     </div>
   );

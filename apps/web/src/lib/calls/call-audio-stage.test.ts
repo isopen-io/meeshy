@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callJournalHeight, callJournalHeightAround, journalAround, JOURNAL_COMPACT_FLOOR } from './call-journal-height';
+import { callJournalHeight, journalAround, journalPlan, JOURNAL_COMPACT_FLOOR, JOURNAL_HEAD } from './call-journal-height';
 import { audioAvatarSize, audioStageCompact, AUDIO_AVATAR_COMPACT, AUDIO_AVATAR_TIGHT, COMPACT_HEIGHT, TIGHT_HEIGHT } from './call-view';
 
 /**
@@ -50,22 +50,34 @@ describe('la taille de l’avatar de la scène audio', () => {
 });
 
 describe('le journal du duo audio ne prend que ce qu’il reste autour de l’avatar compact et de la pilule', () => {
-  test('ce qui l’entoure : l’en-tête, l’avatar compact, son écart, le cadre du panneau et la rangée de base', () => {
-    expect(journalAround(56)).toBeGreaterThan(journalAround(40));
-    expect(journalAround(40)).toBeGreaterThan(200);
+  test('ce qui l’entoure : l’en-tête, l’avatar compact avec son anneau, la pilule sans sa liste et les écarts', () => {
+    expect(journalAround({ avatar: 40, tight: true })).toBe(44 + 64 + 193 + 24);
+    expect(journalAround({ avatar: 56, tight: true })).toBe(journalAround({ avatar: 40, tight: true }) + 16);
   });
 
-  test('à 320 de haut, la liste tient dans ce qui reste, sans passer sous son plancher lisible', () => {
-    const list = callJournalHeightAround(320, journalAround(40));
-    expect(list).toBe(Math.max(JOURNAL_COMPACT_FLOOR, 320 - journalAround(40)));
-    expect(list).toBeLessThan(callJournalHeight(320));
+  test('les écarts se resserrent avec la hauteur compacte', () => {
+    expect(journalAround({ avatar: 56, tight: false })).toBeGreaterThan(journalAround({ avatar: 56, tight: true }));
   });
 
-  test('sur une fenêtre haute, rien ne change : la part de la fenêtre', () => {
-    expect(callJournalHeightAround(844, journalAround(56))).toBe(callJournalHeight(844));
+  test('sur une fenêtre haute, rien ne change : la part de la fenêtre, la tête gardée', () => {
+    expect(journalPlan(844, { avatar: 56, tight: false })).toEqual({ folded: false, list: callJournalHeight(844) });
+  });
+
+  test('à 400 de haut, la liste tient dans ce qui reste, la tête gardée', () => {
+    const plan = journalPlan(400, { avatar: 56, tight: true });
+    expect(plan.folded).toBe(false);
+    expect(plan.list).toBe(400 - journalAround({ avatar: 56, tight: true }));
+    expect(plan.list).toBeGreaterThanOrEqual(JOURNAL_COMPACT_FLOOR);
+  });
+
+  test('à 320 de haut, la tête se replie dans le pied et la liste prend la place libérée', () => {
+    const plan = journalPlan(320, { avatar: 40, tight: true });
+    expect(plan.folded).toBe(true);
+    expect(plan.list).toBe(320 - journalAround({ avatar: 40, tight: true }) + JOURNAL_HEAD);
+    expect(plan.list).toBeGreaterThanOrEqual(JOURNAL_COMPACT_FLOOR);
   });
 
   test('jamais sous le plancher lisible, même sur une fenêtre très basse', () => {
-    expect(callJournalHeightAround(200, journalAround(40))).toBe(JOURNAL_COMPACT_FLOOR);
+    expect(journalPlan(200, { avatar: 40, tight: true })).toEqual({ folded: true, list: JOURNAL_COMPACT_FLOOR });
   });
 });

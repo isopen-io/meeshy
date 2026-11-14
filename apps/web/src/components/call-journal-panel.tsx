@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalToggle } from '@/components/call-journal-toggle';
@@ -10,7 +10,7 @@ import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_F
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { journalEntries, type CallJournalEntry, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { journalClock } from '@/lib/calls/call-journal-clock';
-import { callJournalHeight } from '@/lib/calls/call-journal-height';
+import { callJournalHeight, journalPlan, type JournalStage } from '@/lib/calls/call-journal-height';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -56,6 +56,8 @@ const COLUMN_HEAD: ColumnPanelHead = { fill: true };
 
 const PILL_HEAD: PlainPillPanelHead = { plain: true };
 
+const FOLDED_HEAD: PlainPillPanelHead = { plain: true, folded: true };
+
 type JournalBase = {
   readonly id: string;
   /** L'appel dont c'est le journal : ses phrases dépliées lui survivent fermé, et rien n'en passe à un autre appel (L3.9). */
@@ -73,7 +75,8 @@ type JournalBase = {
 };
 
 /** Dans la pilule : la hauteur de la fenêtre, dont la liste prend une part (`callJournalHeight`, #17343). Ni ‹ ni ✕ : « Journal », au pied, le referme (#17964). */
-type JournalInPill = { readonly fill?: false; readonly windowHeight?: number };
+/** `stage` : l'avatar compact du duo audio au-dessus de la pilule, et si les écarts sont resserrés (#18488) — le journal ne prend que ce qu'il reste autour d'eux. */
+type JournalInPill = { readonly fill?: false; readonly windowHeight?: number; readonly stage?: JournalStage | undefined };
 
 /** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur, et la tête n'a ni ‹ ni ✕ (#17932). */
 type JournalProps = JournalBase & (JournalInPill | ColumnPanelHead);
@@ -151,17 +154,19 @@ function footLabel(entries: readonly CallJournalEntry[], view: JournalView, reve
 }
 
 /** Le pied du journal dans la pilule (P6, P9b) : à gauche ce que disent les dernières phrases, à droite « Journal » actif, qui le referme. */
-function JournalFoot({ label, language, onClose }: { readonly label: string | null; readonly language: InterfaceLanguage; readonly onClose: () => void }) {
+function JournalFoot({ label, language, onClose, views }: { readonly label: string | null; readonly language: InterfaceLanguage; readonly onClose: () => void; readonly views: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-x-3 px-3 text-mini" style={{ color: INK_2 }} data-call-journal-foot="">
       <span className="min-w-0 truncate">{label}</span>
+      {views}
       <CallJournalToggle language={language} on onPress={onClose} marker="data-call-journal-toggle" />
     </div>
   );
 }
 
 /** La liste du journal dans la pilule : une part de la fenêtre (`callJournalHeight`), et jamais plus que ce que la fenêtre laisse sous l'en-tête et au-dessus de son pied (« Journal », 3rem) et de la rangée de base. */
-const listSize = (windowHeight: number | undefined): CSSProperties => (windowHeight === undefined ? { maxHeight: 'min(28rem, calc(100dvh - 23rem))' } : { height: `${callJournalHeight(windowHeight)}px`, maxHeight: 'max(8rem, calc(100dvh - 20rem))' });
+const listSize = (windowHeight: number | undefined, plan: { readonly list: number } | null): CSSProperties =>
+  windowHeight === undefined ? { maxHeight: 'min(28rem, calc(100dvh - 23rem))' } : plan !== null ? { height: `${plan.list}px` } : { height: `${callJournalHeight(windowHeight)}px`, maxHeight: 'max(8rem, calc(100dvh - 20rem))' };
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
@@ -176,6 +181,9 @@ export function CallJournalPanel(props: JournalProps) {
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
   const entries = journalEntries(captions, notes);
+  /* #18488 : dans le duo audio d'une fenêtre basse, la liste ne prend que ce qu'il reste autour de l'avatar compact et de la pilule ; sans place pour une phrase, la tête se replie dans le pied. */
+  const plan = fill || props.windowHeight === undefined || props.stage === undefined ? null : journalPlan(props.windowHeight, props.stage);
+  const views = <CallJournalViewSwitch language={language} view={view} onChange={setView} />;
 
   useLayoutEffect(() => {
     const element = list.current;
@@ -203,8 +211,8 @@ export function CallJournalPanel(props: JournalProps) {
       id={id}
       title={t(language, 'callControls.journal')}
       onClose={onClose}
-      {...(fill ? COLUMN_HEAD : PILL_HEAD)}
-      trailing={<CallJournalViewSwitch language={language} view={view} onChange={setView} />}
+      {...(fill ? COLUMN_HEAD : plan?.folded === true ? FOLDED_HEAD : PILL_HEAD)}
+      trailing={plan?.folded === true ? null : views}
       data={{ 'data-call-journal-panel': '' }}
     >
       {entries.length === 0 ? (
@@ -226,7 +234,7 @@ export function CallJournalPanel(props: JournalProps) {
             onScroll={onScroll}
             tabIndex={0}
             className={`flex flex-col gap-3 overflow-y-auto overscroll-contain px-3 pb-2 ${fill ? 'min-h-0 flex-1' : ''}`}
-            style={props.fill === true ? undefined : listSize(props.windowHeight)}
+            style={props.fill === true ? undefined : listSize(props.windowHeight, plan)}
             data-call-journal=""
             data-panel-first=""
           >
@@ -250,7 +258,7 @@ export function CallJournalPanel(props: JournalProps) {
           ) : null}
         </div>
       )}
-      {fill ? null : <JournalFoot label={footLabel(entries, view, revealed, language)} language={language} onClose={onClose} />}
+      {fill ? null : <JournalFoot label={footLabel(entries, view, revealed, language)} language={language} onClose={onClose} views={plan?.folded === true ? views : null} />}
     </CallPanelFrame>
   );
 }

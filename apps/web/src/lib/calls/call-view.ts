@@ -176,3 +176,14 @@ export const GRID_MIN_HEIGHT = 140;
 export const COMPACT_HEIGHT = 500;
 
 export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;
+
+/** La scène audio du duo (#18488, P9b ; `CallDuoAudioFit` d'Android, `CallAudioStageLayout.form` d'iOS) : avatar de 56 en forme compacte, de 40 sous 340 px de haut. */
+export const AUDIO_AVATAR_COMPACT = 56;
+export const AUDIO_AVATAR_TIGHT = 40;
+export const TIGHT_HEIGHT = 340;
+
+/** Compacte sous le journal ouvert dans la pilule (#17529) ET quand la HAUTEUR manque : la pilule entière, (…) compris, doit tenir dans la fenêtre. */
+export const audioStageCompact = ({ journalOpen, height }: { readonly journalOpen: boolean; readonly height: number }): boolean => journalOpen || isCompactHeight(height);
+
+export const audioAvatarSize = ({ compact, height, joined }: { readonly compact: boolean; readonly height: number; readonly joined: boolean }): number =>
+  compact ? (height > 0 && height < TIGHT_HEIGHT ? AUDIO_AVATAR_TIGHT : AUDIO_AVATAR_COMPACT) : joined ? 120 : 112;

@@ -33,7 +33,7 @@ import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_CARD_MAX_WIDTH, recordingBannerPresent, recordingSlotHeight, selfTileClearance, TOP_BANNER_LANDSCAPE_MIN, topBannerNeighborOf, topBannerSpan, topBannerStackMaxWidth, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
-import { callLayout, callStatusKey, selfCameraShown, type PlainCallKey, canShareScreen, hasVideo, isCompactHeight, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
+import { audioAvatarSize, audioStageCompact, callLayout, callStatusKey, selfCameraShown, type PlainCallKey, canShareScreen, hasVideo, isCompactHeight, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useStageFlip } from '@/lib/calls/use-stage-flip';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
@@ -511,7 +511,10 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
      verre à eux. */
   const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
   /* P9b (#17529) : le journal ouvert dans la pilule réduit l'avatar du duo audio en en-tête compact, nom et durée à côté ; rangé d'un toucher sur le fond (#17945), il lui rend ses 120 (P9). */
-  const compactStage = pillCompactsAudioStage(text);
+  /* #18488 : la HAUTEUR qui manque la compacte aussi — la pilule entière, (…) compris, doit tenir dans la fenêtre (`CallDuoAudioFit`, Android ; `CallAudioStageLayout.form`, iOS). La sonnerie, sans pilule, garde sa forme pleine. */
+  const compactStage = audioStageCompact({ journalOpen: pillCompactsAudioStage(text), height: live ? viewport.height : 0 });
+  const stageAvatar = audioAvatarSize({ compact: compactStage, height: viewport.height, joined });
+  const lowAudio = live && layout === 'portrait' && isCompactHeight(viewport.height);
   const clock = statusKey === null ? <CallClock call={call} active={joined} /> : endedClock;
   /* P17.2, P17.13 : un appel VIDÉO qui sonne se lit dans l'ordre de la planche — la puce de verre « Appel vidéo entrant » (caméra), le nom, puis la puce « Activer le son » quand l'appelant s'écoute. */
   const videoRinging = phase === 'incoming' && call.media === 'video';
@@ -531,7 +534,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
       {phase === 'incoming' && hasVideo(call.preview) ? null : (
         <span data-call-incoming-portrait="">
-          <Portrait name={call.title} avatar={call.avatar} size={compactStage ? 56 : joined ? 120 : 112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} tint={peerTint}>
+          <Portrait name={call.title} avatar={call.avatar} size={stageAvatar} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} tint={peerTint}>
             {peerTint === undefined ? null : <PeerSpeechRing color={peerTint} stream={joined ? (call.remoteStreams[call.peerKey ?? ''] ?? null) : null} />}
           </Portrait>
         </span>
@@ -686,7 +689,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       case 'record':
         return <CallRecordChoice {...base} />;
       case 'journal':
-        return <CallJournalPanel {...base} callId={call.callId ?? ''} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} windowHeight={viewport.height} />;
+        return <CallJournalPanel {...base} callId={call.callId ?? ''} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} windowHeight={viewport.height} stage={layout === 'portrait' ? { avatar: stageAvatar, tight: lowAudio } : undefined} />;
       case 'people':
         /* Une feuille se referme sur le menu qu'elle recouvrait (G3.5, `backToMenu` d'iOS), pas sur la pilule de base. */
         return <CallPeopleSheet {...base} onClose={base.back.onPress} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
@@ -757,7 +760,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       ) : null}
       <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} bleed={bleedEnd} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
-      <div className="relative flex min-h-0 flex-1 flex-col gap-4">
+      <div className={`relative flex min-h-0 flex-1 flex-col ${lowAudio ? 'gap-2' : 'gap-4'}`}>
         <HeldSwap value={chrome.header ? true : null} shape="top" className={headerFloats ? 'pointer-events-none absolute inset-x-0 top-2 z-20 [&_button]:pointer-events-auto' : 'relative z-20'} data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="" data-call-header-slot="" {...(headerFloats ? { 'data-call-header-floats': '' } : {})}>
           {() => <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />}
         </HeldSwap>
@@ -785,14 +788,14 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
             {pillRow}
           </div>
         ) : (
-          <div ref={audioStage} className={`flex flex-1 flex-col items-center gap-5 ${compactStage ? 'justify-start' : videoRinging ? 'justify-start pt-12' : 'justify-center'}`} data-call-audio-stage={compactStage ? 'compact' : 'full'}>
+          <div ref={audioStage} className={`flex min-h-0 flex-1 flex-col items-center gap-5 ${compactStage ? 'justify-start' : videoRinging ? 'justify-start pt-12' : 'justify-center'}`} data-call-audio-stage={compactStage ? 'compact' : 'full'}>
             {identity}
             {pillRow}
           </div>
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div ref={controlsPlane} className={`relative z-20 flex flex-col gap-3 pb-6 ${mode === null ? '' : 'min-h-0 [@media(max-height:480px)]:pb-2'}`} style={reserveEnd} data-call-plane="" {...reserve}>
+          <div ref={controlsPlane} className={`relative z-20 flex flex-col gap-3 ${lowAudio ? 'pb-2' : 'pb-6'} ${mode === null ? '' : 'min-h-0 [@media(max-height:480px)]:pb-2'}`} style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions() : null}
             <HeldSwap value={chrome.mode === null ? true : null} shape="bottom" className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
               {() => (
