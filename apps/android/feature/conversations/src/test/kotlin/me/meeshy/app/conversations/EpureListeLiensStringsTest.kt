@@ -167,7 +167,11 @@ class EpureListeLiensStringsTest {
         assertThat(fr["links_affiliate_row_uses"]).isEqualTo("%1\$d sur %2\$d")
         assertThat(fr["links_tracking_detail_last_click"]).isEqualTo("Dernier clic : %1\$s")
         assertThat(source("links/AffiliateScreen.kt")).contains("affiliateRowFactsText(token)")
-        assertThat(source("links/TrackingLinksScreen.kt")).contains("trackingRowDateText(link)")
+        assertThat(source("links/TrackingLinksScreen.kt")).contains("trackingRowFactsText(link)")
+        val facts = source("links/LinkRowFacts.kt").substringAfter("internal fun trackingRowFactsText").substringBefore("internal fun affiliateRowFactsText")
+        assertThat(facts).contains("R.string.links_common_created")
+        assertThat(facts).contains("R.string.links_tracking_detail_last_click")
+        assertThat(facts).doesNotContain("when (")
     }
 
     @Test

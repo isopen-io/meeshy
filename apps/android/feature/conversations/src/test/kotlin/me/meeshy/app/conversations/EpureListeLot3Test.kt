@@ -55,6 +55,7 @@ class EpureListeLot3Test {
 
     private val removed = listOf(
         "my_share_links_empty_subtitle", "links_tracking_empty_subtitle", "links_affiliate_empty_subtitle",
+        "links_community_empty_subtitle",
         "conversations_lock_subtitle_verify_master",
         "conversations_lock_subtitle_change_verify",
     )
@@ -80,6 +81,14 @@ class EpureListeLot3Test {
         assertThat(fr["my_share_links_empty_title"]).isEqualTo("Aucun lien de partage")
         assertThat(fr["links_tracking_empty_title"]).isEqualTo("Aucun lien de suivi")
         assertThat(fr["links_affiliate_empty_title"]).isEqualTo("Aucun lien de parrainage")
+    }
+
+    @Test
+    fun `the empty state of the community links keeps its title alone, under the orientation sentence`() {
+        val community = source("links/CommunityLinksScreen.kt")
+        assertThat(community).doesNotContain("empty_subtitle")
+        assertThat(community).contains("R.string.links_community_empty_title")
+        assertThat(all("values-fr")["links_community_empty_title"]).isEqualTo("Aucune communauté administrée")
     }
 
     @Test

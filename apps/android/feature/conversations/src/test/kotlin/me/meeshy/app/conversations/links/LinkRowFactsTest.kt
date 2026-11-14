@@ -15,22 +15,22 @@ class LinkRowFactsTest {
         AffiliateToken(id = "a1", token = "abc", name = "Amis", createdAt = createdAt, maxUses = maxUses, currentUses = currentUses)
 
     @Test
-    fun `a tracking row shows the last click when there is one`() {
-        val date = trackingRowDate(tracking(lastClickedAt = "2026-11-10T12:00:00.000Z", createdAt = "2026-10-01T08:00:00.000Z"))
-        assertThat(date?.kind).isEqualTo(TrackingRowDateKind.LAST_CLICK)
-        assertThat(date?.epochMillis).isEqualTo(1_794_312_000_000L)
+    fun `a tracking row names both its creation and its last click`() {
+        val facts = trackingRowFacts(tracking(lastClickedAt = "2026-11-10T12:00:00.000Z", createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(facts).isEqualTo(TrackingRowFacts(createdMillis = 1_790_841_600_000L, lastClickMillis = 1_794_312_000_000L))
     }
 
     @Test
-    fun `a tracking row falls back to its creation date when nobody clicked yet`() {
-        val date = trackingRowDate(tracking(createdAt = "2026-10-01T08:00:00.000Z"))
-        assertThat(date?.kind).isEqualTo(TrackingRowDateKind.CREATED)
+    fun `a tracking row nobody clicked yet names its creation alone`() {
+        val facts = trackingRowFacts(tracking(createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(facts).isEqualTo(TrackingRowFacts(createdMillis = 1_790_841_600_000L, lastClickMillis = null))
     }
 
     @Test
-    fun `a tracking row with no date at all shows none`() {
-        assertThat(trackingRowDate(tracking())).isNull()
-        assertThat(trackingRowDate(tracking(lastClickedAt = "n'importe quoi"))).isNull()
+    fun `a tracking row with no readable date names none`() {
+        assertThat(trackingRowFacts(tracking())).isEqualTo(TrackingRowFacts(createdMillis = null, lastClickMillis = null))
+        assertThat(trackingRowFacts(tracking(lastClickedAt = "n'importe quoi", createdAt = "n'importe quoi")))
+            .isEqualTo(TrackingRowFacts(createdMillis = null, lastClickMillis = null))
     }
 
     @Test
