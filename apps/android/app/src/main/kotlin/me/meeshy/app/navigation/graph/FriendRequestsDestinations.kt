@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -20,9 +21,9 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
  */
 class FriendRequestsDestinations @Inject constructor() : NavGraphContributor {
     override fun contribute(builder: NavGraphBuilder, navController: NavHostController) {
-        builder.composable(ROUTE) {
+        builder.composable(ROUTE) { entry ->
             ContactsScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popFrom(entry) },
                 initialTab = ContactsTab.Requests,
                 onOpenProfile = rememberProfileOpenerOverSheet(navController),
             )

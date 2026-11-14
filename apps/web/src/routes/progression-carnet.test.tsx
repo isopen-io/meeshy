@@ -94,12 +94,12 @@ function bench(entries: readonly NotebookEntry[] | 'broken', link: string | null
  * erreur qui ferait croire à une perte.
  */
 describe('un carnet vide', () => {
-  test('on dit comment le remplir', async () => {
+  test('on dit qu’il attend sa première page, et ce qu’il garde', async () => {
     const { env } = bench([]);
     const host = await mount(<CarnetBody env={env} />);
     await settle();
     expect(host.textContent).toContain('Ta Chronique attend sa première page');
-    expect(host.textContent).toContain('Mee et Meo');
+    expect(host.textContent).toContain('les moments où tes aïeux se manifestent');
   });
 
   test('un stockage qui refuse se lit vide, sans alerte', async () => {

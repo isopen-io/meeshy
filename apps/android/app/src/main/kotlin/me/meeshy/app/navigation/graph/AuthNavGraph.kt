@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.navigateSingleTop
+import me.meeshy.app.navigation.pushFrom
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -29,17 +31,17 @@ internal fun NavGraphBuilder.authNavGraph(
     navController: NavHostController,
     authViewModel: AuthViewModel,
 ) {
-    composable(Routes.LOGIN) {
+    composable(Routes.LOGIN) { entry ->
         LoginScreen(
             viewModel = authViewModel,
             onAuthenticated = {
-                navController.navigate(Routes.CONVERSATIONS) {
+                navController.navigateSingleTop(Routes.CONVERSATIONS) {
                     popUpTo(Routes.LOGIN) { inclusive = true }
                 }
             },
-            onSignUp = { navController.navigate(Routes.REGISTRATION) },
-            onForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
-            onMagicLink = { navController.navigate(Routes.MAGIC_LINK) },
+            onSignUp = { navController.pushFrom(entry, Routes.REGISTRATION) },
+            onForgotPassword = { navController.pushFrom(entry, Routes.FORGOT_PASSWORD) },
+            onMagicLink = { navController.pushFrom(entry, Routes.MAGIC_LINK) },
         )
     }
     sheetComposable(Routes.FORGOT_PASSWORD, navController) { _, dismiss ->
@@ -51,7 +53,7 @@ internal fun NavGraphBuilder.authNavGraph(
             // Le code saisi ouvre la session feuille refermée : la racine bascule comme pour le lien reçu.
             onSessionOpened = {
                 authViewModel.onExternalSessionOpened()
-                navController.navigate(Routes.CONVERSATIONS) { popUpTo(0) { inclusive = true } }
+                navController.navigateSingleTop(Routes.CONVERSATIONS) { popUpTo(0) { inclusive = true } }
             },
             onSecondFactor = authViewModel::completeEmailProof,
         )
@@ -85,12 +87,12 @@ internal fun NavGraphBuilder.authNavGraph(
                 defaultValue = null
             },
         ),
-    ) { _, dismiss ->
+    ) { entry, dismiss ->
         NewPasswordScreen(
             onClose = dismiss,
             onSignIn = dismiss,
             onRequestNewLink = {
-                navController.navigate(Routes.FORGOT_PASSWORD) {
+                navController.pushFrom(entry, Routes.FORGOT_PASSWORD) {
                     popUpTo(Routes.RESET_PASSWORD) { inclusive = true }
                 }
             },
@@ -100,24 +102,24 @@ internal fun NavGraphBuilder.authNavGraph(
     // conserve son chemin — le lien depuis la connexion, les tests et
     // l'historique de navigation le nomment — mais rend `SignupScreen`.
     // iOS présente l'inscription en `.fullScreenCover` (LoginView) : pas de glissé qui la fermerait pendant l'envoi.
-    sheetComposable(Routes.REGISTRATION, navController, style = SheetStyle.COVER) { _, dismiss ->
+    sheetComposable(Routes.REGISTRATION, navController, style = SheetStyle.COVER) { entry, dismiss ->
         SignupScreen(
             onClose = dismiss,
             onRegistered = {
                 authViewModel.onExternalSessionOpened()
-                navController.navigate(Routes.CONVERSATIONS) {
+                navController.navigateSingleTop(Routes.CONVERSATIONS) {
                     popUpTo(Routes.LOGIN) { inclusive = true }
                 }
             },
             onOpenTerms = {
-                navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
+                navController.pushFrom(entry, Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
             },
             onOpenPrivacy = {
-                navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
+                navController.pushFrom(entry, Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
             },
             // « Est-ce vous ? » : le code et le lien sont partis, la connexion par e-mail s'ouvre sur son attente.
-            onOpenSignInLink = { navController.navigate(Routes.MAGIC_LINK) },
-            onOpenForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
+            onOpenSignInLink = { navController.pushFrom(entry, Routes.MAGIC_LINK) },
+            onOpenForgotPassword = { navController.pushFrom(entry, Routes.FORGOT_PASSWORD) },
         )
     }
     sheetComposable(
@@ -130,22 +132,23 @@ internal fun NavGraphBuilder.authNavGraph(
             navDeepLink { uriPattern = Routes.GUEST_JOIN_WEB_DEEP_LINK },
             navDeepLink { uriPattern = Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK },
         ),
-    ) { _, dismiss ->
+    ) { entry, dismiss ->
         ShareLinkEntryScreen(
             onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId)) {
+                navController.pushFrom(entry, Routes.chat(conversationId)) {
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
                 }
             },
             onJoined = {
-                navController.navigate(Routes.CONVERSATIONS) {
+                navController.navigateSingleTop(Routes.CONVERSATIONS) {
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
                 }
             },
             onBack = dismiss,
             onSignIn = {
-                navController.navigate(Routes.LOGIN) {
+                navController.pushFrom(entry, Routes.LOGIN) {
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
+                    launchSingleTop = true
                 }
             },
         )
@@ -158,16 +161,16 @@ internal fun NavGraphBuilder.authNavGraph(
             navDeepLink { uriPattern = Routes.WORLD_ENTRY_DEEP_LINK },
             navDeepLink { uriPattern = Routes.WORLD_ENTRY_WEB_DEEP_LINK },
         ),
-    ) { _, dismiss ->
+    ) { entry, dismiss ->
         WorldGuestEntryScreen(
             onEntered = { conversationId ->
-                navController.navigate(Routes.chat(conversationId)) {
+                navController.navigateSingleTop(Routes.chat(conversationId)) {
                     popUpTo(Routes.WORLD_ENTRY) { inclusive = true }
                 }
             },
             // Un compte ouvert n'entre jamais en invité : la porte des comptes choisit l'identité.
             onJoinWithAccount = { linkKey ->
-                navController.navigate(Routes.guestJoin(linkKey)) {
+                navController.pushFrom(entry, Routes.guestJoin(linkKey)) {
                     popUpTo(Routes.WORLD_ENTRY) { inclusive = true }
                 }
             },
@@ -187,19 +190,19 @@ private fun EmailLinkValidation(navController: NavHostController, authViewModel:
     MagicLinkValidateScreen(
         onAuthenticated = {
             authViewModel.onExternalSessionOpened()
-            navController.navigate(Routes.CONVERSATIONS) {
+            navController.navigateSingleTop(Routes.CONVERSATIONS) {
                 popUpTo(0) { inclusive = true }
             }
         },
         onBackToLogin = {
-            navController.navigate(Routes.LOGIN) {
+            navController.navigateSingleTop(Routes.LOGIN) {
                 popUpTo(0) { inclusive = true }
             }
         },
         // Refuser un lien qu'on n'a pas demande ne deconnecte personne : un compte ouvert reste ouvert.
         onDeclined = {
             val destination = if (authViewModel.state.value.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN
-            navController.navigate(destination) {
+            navController.navigateSingleTop(destination) {
                 popUpTo(0) { inclusive = true }
             }
         },

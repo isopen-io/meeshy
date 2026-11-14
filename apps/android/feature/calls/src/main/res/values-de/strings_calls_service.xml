@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_service_channel_name">Laufende Anrufe</string>
+    <string name="call_service_on_hold">Gehalten</string>
+    <string name="call_service_reconnecting">Verbindung wird wiederhergestellt…</string>
+    <string name="call_service_unmute">Mikrofon aktivieren</string>
+</resources>
