@@ -1,4 +1,3 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
@@ -12,6 +11,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { callActions } from '@/lib/calls/call-actions';
+import { personTint } from '@/lib/calls/call-speaker-color';
 import type { DecodedPerson } from '@/lib/calls/call-decode';
 import { invitableFriends, personOf } from '@/lib/calls/call-people';
 import type { CallMember } from '@/lib/calls/call-store';
@@ -56,14 +56,14 @@ type SheetProps = {
  * `<img>` écrite ici : il résout la clé de stockage, rend les initiales si la
  * photo échoue, et ne monte pas deux visages pour une même personne.
  */
-function Face({ id, name, avatar, ringing = false }: { readonly id: string | undefined; readonly name: string; readonly avatar: string | null; readonly ringing?: boolean }) {
+function Face({ id, tintOf = id, name, avatar, ringing = false }: { readonly id: string | undefined; readonly tintOf?: string | null | undefined; readonly name: string; readonly avatar: string | null; readonly ringing?: boolean }) {
   return (
     <span aria-hidden className={`shrink-0 ${ringing ? 'animate-pulse motion-reduce:animate-none' : ''}`}>
       <PeerAvatar
         presenceKey={id}
         ringRef={null}
         initials={initialsOf(name)}
-        color={colorForName(name)}
+        color={personTint(tintOf, name)}
         size={40}
         {...(avatar === null || avatar === '' ? {} : { src: avatar })}
       />
@@ -101,7 +101,7 @@ function PeopleList({ id, closeGlyph, language, members, onClose, Button, render
           </h3>
           <ul className="flex flex-col" data-call-people-in="">
             <li className={ROW}>
-              <Face id={undefined} name={me.displayName} avatar={me.avatar ?? null} />
+              <Face id={undefined} tintOf={me.id} name={me.displayName} avatar={me.avatar ?? null} />
               <span className="text-body font-semibold">{t(language, 'callControls.people.you')}</span>
             </li>
             {members.map((member) => {

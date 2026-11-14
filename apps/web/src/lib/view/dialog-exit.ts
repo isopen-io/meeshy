@@ -63,10 +63,13 @@ const silenceMedia = (root: HTMLElement): void => {
   }
 };
 
+/* Un `name` cloné rejoindrait le groupe radio du dialogue : un bouton coché du fantôme, inséré dans le
+   document, décocherait celui de la feuille. */
 const stripIdentity = (root: HTMLElement): void => {
-  for (const node of root.querySelectorAll('[id], [autofocus]')) {
+  for (const node of root.querySelectorAll('[id], [autofocus], [name]')) {
     node.removeAttribute('id');
     node.removeAttribute('autofocus');
+    node.removeAttribute('name');
   }
 };
 
@@ -92,13 +95,24 @@ const removeAfterExit = (ghost: HTMLElement): void => {
  */
 export function leaveDialogAsGhost(dialog: HTMLDialogElement, kind: DialogGhostKind): HTMLElement | null {
   if (!mayLeave(dialog)) return null;
+  /* Le fantôme est un décor : s'il ne peut pas se montrer, il s'en va, et la fermeture n'en dépend jamais. */
+  const ghost = document.createElement('div');
+  try {
+    playGhost(dialog, ghost, kind);
+    return ghost;
+  } catch {
+    ghost.remove();
+    return null;
+  }
+}
+
+const playGhost = (dialog: HTMLDialogElement, ghost: HTMLElement, kind: DialogGhostKind): void => {
   const rect = dialog.getBoundingClientRect();
   /* Ce qu'une règle en `[open]` donnait au dialogue (`.send-sheet[open]` : une colonne flexible), et que
      le fantôme, sans `open`, perdrait. */
   const { display, flexDirection } = getComputedStyle(dialog);
   const offsets = scrolledOffsets(dialog);
 
-  const ghost = document.createElement('div');
   ghost.className = dialog.className;
   ghost.style.cssText = dialog.style.cssText;
   for (const child of dialog.childNodes) ghost.appendChild(child.cloneNode(true));
@@ -112,6 +126,7 @@ export function leaveDialogAsGhost(dialog: HTMLDialogElement, kind: DialogGhostK
   ghost.setAttribute('aria-hidden', 'true');
   ghost.setAttribute('popover', 'manual');
   Object.assign(ghost.style, {
+    pointerEvents: 'none',
     position: 'fixed',
     inset: 'auto',
     left: `${rect.left}px`,
@@ -137,8 +152,7 @@ export function leaveDialogAsGhost(dialog: HTMLDialogElement, kind: DialogGhostK
     clone.scrollLeft = left;
   }
   removeAfterExit(ghost);
-  return ghost;
-}
+};
 
 /**
  * La sortie d'un `<dialog>` que son composant ouvre lui-même par `showModal()` : `leave()` pour les

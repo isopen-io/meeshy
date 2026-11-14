@@ -6,10 +6,15 @@ import CoreGraphics
 /// était posée à un décalage fixe (60, 110, 160 pt depuis le bord) : sur un
 /// iPhone à Dynamic Island, la première passait sous le chevron « Réduire »,
 /// et deux bannières de hauteur variable se chevauchaient.
+/// #18227 — les pastilles de service (« En attente », « Vidéo réduite ») viennent après la
+/// capture et AVANT le cadre en direct, comme sur Android : ma vignette descend sous elles et
+/// ignore le cadre, qui ne doit donc jamais se poser au-dessus d'elles.
 nonisolated enum CallTopBanner: Int, CaseIterable, Sendable {
     case screenShare
     case recording
     case capture
+    case hold
+    case videoNotice
     case liveFrame
 }
 
@@ -27,10 +32,14 @@ nonisolated enum CallTopBannerStack {
     static let bannerMinimumHeight: CGFloat = 44
     static let bannerGap: CGFloat = 8
 
-    /// #17791 (R1.6, R3.10) — les bandeaux dont la place revient à ma vignette. Un partage REÇU n'y
+    /// Les maillons des pastilles de service (#18227) : seuls ceux-là passent par le paramètre `service`.
+    static let serviceBanners: Set<CallTopBanner> = [.hold, .videoNotice]
+
+    /// #17791 (R1.6, R3.10) — les bandeaux dont la place revient à ma vignette, pastilles de service
+    /// montrées comprises (`CallServicePills.banners`, E3 · E4 : jamais couverte). Un partage REÇU n'y
     /// est pas : sa place est en décision porteur (#17730).
-    static func countedForSelfTile(isLocalScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool) -> Set<CallTopBanner> {
-        var counted: Set<CallTopBanner> = []
+    static func countedForSelfTile(isLocalScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, service: Set<CallTopBanner> = []) -> Set<CallTopBanner> {
+        var counted = service.intersection(serviceBanners)
         if isLocalScreenShareShown { counted.insert(.screenShare) }
         if isRecordingShown { counted.insert(.recording) }
         if isCaptureAlertShown { counted.insert(.capture) }
@@ -45,9 +54,10 @@ nonisolated enum CallTopBannerStack {
     }
 
     /// #17833 — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la
-    /// capture, le cadre en direct. Le site UNIQUE de la présence, que la pile et la grille lisent.
-    static func present(isScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, isLiveFrameShown: Bool) -> Set<CallTopBanner> {
-        var present = countedForSelfTile(isLocalScreenShareShown: isScreenShareShown, isRecordingShown: isRecordingShown, isCaptureAlertShown: isCaptureAlertShown)
+    /// capture, les pastilles de service, le cadre en direct. Le site UNIQUE de la présence, que la
+    /// pile et la grille lisent.
+    static func present(isScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, isLiveFrameShown: Bool, service: Set<CallTopBanner> = []) -> Set<CallTopBanner> {
+        var present = countedForSelfTile(isLocalScreenShareShown: isScreenShareShown, isRecordingShown: isRecordingShown, isCaptureAlertShown: isCaptureAlertShown, service: service)
         if isLiveFrameShown { present.insert(.liveFrame) }
         return present
     }
@@ -67,7 +77,7 @@ nonisolated enum CallTopBannerStack {
     }
 
     /// Ordre fixe, quel que soit l'ordre d'arrivée : partage → enregistrement
-    /// → capture (R1, #16665) → cadre. Une bannière absente ne laisse pas de trou.
+    /// → capture (R1, #16665) → En attente → Vidéo réduite (#18227) → cadre. Une bannière absente ne laisse pas de trou.
     static func ordered(_ present: Set<CallTopBanner>) -> [CallTopBanner] {
         CallTopBanner.allCases.filter(present.contains)
     }

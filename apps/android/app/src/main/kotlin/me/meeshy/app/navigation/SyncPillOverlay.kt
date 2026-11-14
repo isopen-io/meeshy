@@ -1,5 +1,8 @@
 package me.meeshy.app.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -33,6 +37,9 @@ import me.meeshy.app.sync.SyncPillVisibility
 import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.model.syncpill.SyncPillPlacement
 import me.meeshy.ui.component.chrome.LocalSyncPillDock
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.theme.MeeshyMotion
 
 /**
  * La pastille globale de synchronisation, au-dessus du `NavHost` : hors ligne, reconnexion, envois en cours et qui
@@ -51,20 +58,35 @@ class SyncPillOverlay @Inject constructor(
     override fun Content(navController: NavHostController) {
         val entry by navController.currentBackStackEntryAsState()
         val banner = hiltViewModel<NotificationBannerViewModel>().banner.collectAsState().value
-        if (!SyncPillVisibility.isVisible(entry?.destination?.route, inAppBannerPresenting = banner != null)) return
+        val visible = SyncPillVisibility.isVisible(entry?.destination?.route, inAppBannerPresenting = banner != null)
         val density = LocalDensity.current
         val safeBottom = with(density) { WindowInsets.navigationBars.getBottom(density).toDp().value }
         val keyboard = with(density) { WindowInsets.ime.getBottom(density).toDp().value }
         val docked by dock.registry.observeHeight().collectAsState(initial = 0f)
         val bottom = SyncPillPlacement.bottomFromScreenEdge(safeBottom, keyboard, docked)
         Box(Modifier.fillMaxSize().padding(bottom = bottom.dp), contentAlignment = Alignment.BottomCenter) {
-            SyncPillHost(
-                toasts = toasts,
-                onOpen = { source ->
-                    SyncPillNavigation.route(source)?.let { route -> navController.navigate(route) { launchSingleTop = true } }
-                },
-            )
+            SyncPillLayer(visible = visible, reduce = FeedOverlayTransition.reduceMotion) {
+                SyncPillHost(
+                    toasts = toasts,
+                    onOpen = { source ->
+                        SyncPillNavigation.route(source)?.let { route -> navController.navigate(route) { launchSingleTop = true } }
+                    },
+                )
+            }
         }
+    }
+}
+
+/** La pastille cède la place sans disparaître d'un coup : son hôte reste composé pendant la sortie. */
+@Composable
+internal fun SyncPillLayer(visible: Boolean, reduce: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = meeshyEnter(reduce, fadeIn(MeeshyMotion.springDefault())),
+        exit = meeshyExit(reduce, fadeOut(MeeshyMotion.springDefault())),
+        modifier = if (visible) Modifier else Modifier.clearAndSetSemantics {},
+    ) {
+        content()
     }
 }
 

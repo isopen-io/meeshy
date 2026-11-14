@@ -108,12 +108,14 @@ function reachable(entry: string): readonly string[] {
 }
 
 /**
- * CE QUI NE VIT QU'APRÈS UN GESTE OU DANS UN ÉTAT RARE, HORS DE `call_overlay` (#17930) — la grille d'un groupe, la
- * sonnerie et la fin, la vignette du coin et ses gestes (pincer, glisser, les flèches), l'écran qu'un pair partage en
- * duo et son zoom, les bandeaux du haut : chacun dans son chunk, que l'écran précharge.
+ * CE QUI NE VIT QU'APRÈS UN GESTE OU DANS UN ÉTAT RARE, HORS DE `call_overlay` (#17930) — la grille d'un groupe et
+ * l'écran partagé à sa une, la sonnerie et la fin, la vignette du coin et ses gestes (pincer, glisser, les flèches, la
+ * loi du glissé), l'écran qu'un pair partage en duo et son zoom, les bandeaux du haut : chacun dans son chunk, que
+ * l'écran précharge.
  */
 const COLD_VIEWS = [
   'components/call-grid.tsx',
+  'components/call-grid-screen.tsx',
   'components/call-ring-and-end.ts',
   'components/call-duo-corner.tsx',
   'components/use-tile-pinch.ts',

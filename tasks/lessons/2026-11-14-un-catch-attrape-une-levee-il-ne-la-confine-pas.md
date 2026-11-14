@@ -1,8 +1,8 @@
-# Un `catch` ATTRAPE une levée ; il ne la CONFINE pas
+## Un `catch` ATTRAPE une levée ; il ne la CONFINE pas (cycle 159)
 
 *2026-11-14, cycle 159. Mesuré sur #18380 — le fan-out de `conversation:updated`.*
 
-## Le fait
+### Le fait
 
 Quatre émetteurs de `conversation:updated` composaient une charge PAR
 destinataire et la poussaient dans une boucle. Les quatre boucles étaient
@@ -25,7 +25,7 @@ le producteur WS — le transport PRIMAIRE de `message:send` — la boucle vivai
 dans le `try` de fin de méthode, donc la levée coûtait aussi l'accusé de remise
 automatique : l'expéditeur restait bloqué sur un seul ✓.
 
-## Pourquoi ça ne se voit pas
+### Pourquoi ça ne se voit pas
 
 Parce qu'on relit l'ÉTIQUETTE, jamais le BLOC. « Non-bloquant » était vrai des
 deux premières instructions du `try` et faux de la troisième. Le dépôt avait
@@ -41,7 +41,7 @@ hors ligne enfile quand même. Ils prouvent que la PLACE de l'enfilage le
 protège — il est premier. Ils ne pouvaient rien dire de ce qui vient APRÈS la
 levée, et c'est là que tout se perdait.
 
-## La question à poser
+### La question à poser
 
 Devant tout `try` qui enveloppe plus d'une instruction :
 
@@ -54,7 +54,7 @@ Ici c'est le LECTEUR : un lecteur dont la charge ne s'encode pas est un
 lecteur, pas un éventail. Une garde par lecteur fait que l'échec d'un lecteur
 coûte un lecteur.
 
-## Les deux corollaires de lot
+### Les deux corollaires de lot
 
 **La composition va DANS la portée gardée.** `compose(participant)` lit la ligne
 de CE participant, donc elle lève pour les mêmes raisons que l'émission. La
@@ -67,7 +67,7 @@ compilerait parfaitement. Une porte se ferme, une porte se CONTOURNE — seule l
 seconde a besoin d'un balayage (`conversation-updated-door-sweep.test.ts`,
 inventaire VIDE, même forme que `server-emit-door-sweep`).
 
-## Détail de méthode
+### Détail de méthode
 
 L'audit qui a trouvé ce défaut l'avait attribué au seul producteur WS, sur la
 foi que son jumeau REST « garde ce bloc séparément ». C'était exact et
@@ -78,7 +78,7 @@ cite les bons numéros de ligne** — le relevé disait vrai sur la présence du
 
 ---
 
-## Le jumeau du même cycle : un doc-comment qui énonce un ORDRE
+### Le jumeau du même cycle : un doc-comment qui énonce un ORDRE
 
 Même cycle, autre lot (#18384). Trois portes d'admission postaient le message
 système d'arrivée **avant** d'admettre la socket de l'arrivant dans la room où
@@ -106,3 +106,28 @@ dans une autre unité que celle où la phrase est écrite.
 Corollaire mesuré : **lancer un geste d'ordre sans l'attendre ne rétrécit la
 fenêtre que de façon non déterministe**, ce qui est pire qu'une fenêtre
 franche — le défaut devient intermittent, donc attribué au réseau.
+
+---
+
+### Et le troisième, trouvé en allant chercher un verdict
+
+Le lot D du même cycle (#18399) n'a pas été cherché : il s'est présenté en
+allant lire le résultat de CI du lot C. `dev` était rouge depuis vingt minutes,
+pour un gate web sans rapport avec le temps réel.
+
+La cause est de la même famille, vue d'un troisième angle : **le PÉRIMÈTRE
+d'un balayage est une affirmation, et personne ne le relit.**
+`check-utilities.mjs` annonce « toute classe employée a une règle dans la
+feuille qui la sert » et lisait les TÉMOINS — 2 440 fichiers sur 5 995. Une
+classe inventée par un test pour servir de marqueur à une assertion ne peint
+rien et ne peut avoir aucune règle : la question n'a pas de réponse juste.
+
+> Avant de croire ce qu'un balayage AFFIRME, demander **ce qu'il LIT**. Un
+> inventaire vide ne prouve rien si le périmètre est trop large (faux rouges
+> qui bloquent tout le monde) ni si le périmètre est trop étroit (faux verts
+> que personne ne voit). Un témoin de balayage vérifie donc les DEUX bornes.
+
+Et la leçon de METTRE LE REMÈDE AU BON ENDROIT, déjà écrite par le lot qui a
+corrigé la même famille deux mois plus tôt (#5960) : devant un faux positif,
+retirer le BRUIT du périmètre, jamais exempter la VALEUR qui rougit. Une
+exemption par valeur gèle le symptôme et laisse la suivante rougir.

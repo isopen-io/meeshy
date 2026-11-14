@@ -8,7 +8,7 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { DOUBLE_TAP_MS } from '@/lib/view/tap-gate';
 
-import { CallStage, duoScreenView } from './call-stage';
+import { CallStage, screenZoomSurfaceView } from './call-stage';
 
 /**
  * L'ÉCRAN REÇU EN DUO SE ZOOME (P15.11) — jusqu'à 4× au pincement, à Ctrl + molette, se déplace une fois
@@ -59,7 +59,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
-  await duoScreenView.load();
+  await screenZoomSurfaceView.load();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -76,7 +76,7 @@ const mount = () => {
   const taps: Event[] = [];
   host.addEventListener('click', (event) => taps.push(event), { capture: true });
   const root = createRoot(host);
-  act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
+  act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const layer = () => find('[data-call-screen-layer]') as HTMLElement;
   const screen = () => find('[data-call-screen-surface]') as HTMLElement;
