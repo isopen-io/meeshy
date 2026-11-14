@@ -288,11 +288,11 @@ describe('mes options (#7836)', () => {
  * les rangées sont des noms, le Prisme se dit en une phrase visible, la consigne du surnom est derrière un (i).
  */
 describe('la fiche du groupe, épurée (#18361)', () => {
-  test('le titre de la section porte le verbe, la rangée du rôle est un nom', async () => {
+  test('la section garde le mot d’iOS (« Permissions ») et le choix du rôle se comprend hors de son titre', async () => {
     await mount(conversation());
     const headings = [...document.querySelectorAll('[data-conversation-settings] h5')].map((node) => node.textContent);
-    expect(headings).toEqual(['Autoriser']);
-    expect($('[data-conversation-write-role] legend')?.textContent).toBe('Écrire');
+    expect(headings).toEqual(['Permissions']);
+    expect($('[data-conversation-write-role] legend')?.textContent).toBe('Qui peut écrire');
   });
 
   test('le Prisme se dit en une phrase visible : « Chacun lit dans sa langue. »', async () => {
