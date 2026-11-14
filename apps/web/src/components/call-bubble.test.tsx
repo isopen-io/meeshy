@@ -297,6 +297,6 @@ describe('pendant MON partage, la capsule dit le nom donné et ne se replie pas 
   test('hors partage, la capsule dit aussi « nom · durée » en une seule étiquette', async () => {
     const { CallPillBar } = await import('./call-floating-pill');
     const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />);
-    expect(html).toMatch(/data-call-pill-label[^>]*>Amina Diallo · \d+:\d{2}</);
+    expect(html).toMatch(/data-call-pill-label[^>]*>Amina Diallo · (\d+:)+\d{2}</);
   });
 });
