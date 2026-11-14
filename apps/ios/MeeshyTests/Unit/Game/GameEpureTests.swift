@@ -1077,7 +1077,17 @@ final class GameEpureTests: XCTestCase {
         let card = try code("Meeshy/Features/Game/GameGuideCardView.swift")
         XCTAssertTrue(card.contains("\"game.guide.more\", defaultValue: \"Pourquoi cette carte ?\""))
         XCTAssertTrue(card.contains(".accessibilityIdentifier(\"game.guide.more\")"))
-        XCTAssertTrue(try code("Meeshy/Features/Game/GameHeroView.swift").contains("\"game.guide.more\", defaultValue: \"Pourquoi cette carte ?\""))
+    }
+
+    /// La ligne de Mee, en tête, ne montre aucune carte : son indice dit ce que le toucher ouvre, pas une question sur
+    /// une carte que le lecteur d'écran n'a pas encore rencontrée.
+    func test_heroGuideLine_hintSaysWhatTheTouchOpens_notAQuestionAboutAnUnseenCard() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(catalog["game.hero.guide.opens"]?["fr"], "Voir l’explication complète")
+        XCTAssertEqual(catalog["game.hero.guide.opens"]?.count, 7, "l'indice est traduit dans les sept langues")
+        let hero = try code("Meeshy/Features/Game/GameHeroView.swift")
+        XCTAssertTrue(hero.contains(".accessibilityHint(String(localized: \"game.hero.guide.opens\""))
+        XCTAssertFalse(hero.contains("\"game.guide.more\""), "« Pourquoi cette carte ? » nomme le bouton « ? » de la carte, jamais la ligne de tête")
     }
 
     func test_cameraRefused_isOneLineWithItsTwoExits() throws {

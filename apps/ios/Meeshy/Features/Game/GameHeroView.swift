@@ -133,7 +133,7 @@ struct GameHeroView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(line)
-        .accessibilityHint(String(localized: "game.guide.more", defaultValue: "Pourquoi cette carte ?", bundle: .main))
+        .accessibilityHint(String(localized: "game.hero.guide.opens", defaultValue: "Voir l’explication complète", bundle: .main))
         .accessibilityIdentifier("game.hero.guide")
     }
 
