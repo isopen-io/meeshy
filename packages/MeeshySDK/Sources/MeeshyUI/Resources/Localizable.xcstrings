@@ -80529,7 +80529,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus cercanos y los más cercanos aún la ven"
+            "value": "Tus cercanos y quienes están aún más cerca la ven"
           }
         },
         "fr": {
@@ -80547,7 +80547,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus próximos e mais próximos ainda podem vê-la"
+            "value": "Seus próximos e quem está ainda mais perto podem vê-la"
           }
         }
       }
@@ -80605,7 +80605,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يراها الدم وحده"
+            "value": "لا يراها إلا دمك"
           }
         },
         "de": {
