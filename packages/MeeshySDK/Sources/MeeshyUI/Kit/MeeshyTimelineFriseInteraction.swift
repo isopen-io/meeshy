@@ -114,8 +114,8 @@ public nonisolated struct MeeshyTimelineFriseInteraction: Sendable, Equatable {
         preview: ClosedRange<Double>?
     ) -> [MeeshyTimelineFriseEffect] {
         guard isAdjustable(track), part != .playhead else { return [] }
-        let commit: [MeeshyTimelineFriseEffect] = preview.map { $0 == track.range ? [] : [.commit(track.id, $0, part)] } ?? []
-        return commit + [.editing(part, false)]
+        guard let preview, preview != track.range else { return [.editing(part, false)] }
+        return [.commit(track.id, preview, part), .editing(part, false)]
     }
 
     /// Le système annule le geste, ou la frise disparaît doigt posé : rien n'est écrit.

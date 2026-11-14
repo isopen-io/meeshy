@@ -102,7 +102,7 @@ struct MeeshyTimelineFriseRow<Content: View>: View {
                 .simultaneousGesture(SpatialTapGesture(coordinateSpace: .local).onEnded { touch in
                     calls.tap(track, time(start + touch.location.x, width), pointsPerSecond(width))
                 })
-            if model.isSelected { keyframes(width: width, barStart: start) }
+            if model.isSelected { keyframes(width: width) }
             if model.isSelected && model.isAdjustable { handles(width: width, start: start, barWidth: barWidth) }
         }
         .frame(width: width, height: MeeshyTimelineFriseRecipe.rowHeight, alignment: .topLeading)
@@ -138,7 +138,7 @@ struct MeeshyTimelineFriseRow<Content: View>: View {
     }
 
     @ViewBuilder
-    private func keyframes(width: CGFloat, barStart: CGFloat) -> some View {
+    private func keyframes(width: CGFloat) -> some View {
         let shift = model.shown.lowerBound - track.range.lowerBound
         ForEach(track.keyframes) { key in
             let place = model.viewport.fraction(key.time + shift)

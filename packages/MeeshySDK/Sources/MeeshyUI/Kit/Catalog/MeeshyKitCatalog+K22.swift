@@ -112,7 +112,7 @@ private struct MeeshyTimelineFriseSample: View {
             .frame(width: Self.width)
             .meeshyGlassTone(stateID == "theme" ? .theme : .deep)
             .environment(\.meeshyTimelineFriseForcedHeld, MeeshyTimelineFriseSampleScene.held(for: stateID, isPressed: isPressed))
-            .environment(\.meeshyTimelineFriseForcedViewport, stateID == "zoomee" ? .init(start: 3, span: 6) : nil)
+            .environment(\.meeshyTimelineFriseForcedViewport, stateID == "zoomee" ? MeeshyTimelineFriseViewport(start: 3, span: 6) : nil)
             .disabled(stateID == "desactivee")
     }
 
@@ -145,7 +145,7 @@ private struct MeeshyTimelineFriseSample: View {
             return MeeshyTimelineFriseTrack(
                 id: track.id, name: track.name, systemImage: track.systemImage, range: range, height: track.height,
                 isLocked: track.isLocked,
-                keyframes: part == .move ? track.keyframes.map { .init(id: $0.id, time: $0.time + shift) } : track.keyframes,
+                keyframes: part == .move ? track.keyframes.map { MeeshyTimelineFriseKey(id: $0.id, time: $0.time + shift) } : track.keyframes,
                 detail: track.detail
             )
         }

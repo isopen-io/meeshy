@@ -63,7 +63,8 @@ struct MeeshyTimelineFriseTests {
             let tracks = try Self.tracks(row)
             let times = rule.candidates(tracks: tracks, excluding: try kitRequired(row["exclue"] as? String), playhead: row["tete"] as? Double)
                 .map { Double($0.time) }
-            #expect(Set(times) == Set(try kitRequired(row["attendu"] as? [Double])), "\(row["nom"] ?? "")")
+            let expected = try kitRequired(row["attendu"] as? [Double])
+            #expect(Set(times) == Set(expected), "\(row["nom"] ?? "")")
         }
     }
 
@@ -71,7 +72,8 @@ struct MeeshyTimelineFriseTests {
     func rule_tolerance_followsTheVectors() throws {
         for row in try Self.rows("tolerance") {
             let tolerance = MeeshyTimelineFriseRule.tolerance(span: try Self.double(row, "portee"), width: CGFloat(try Self.double(row, "largeur")))
-            #expect(abs(tolerance - (try Self.double(row, "attendu"))) < 1e-4, "\(row["nom"] ?? "")")
+            let expected = try Self.double(row, "attendu")
+            #expect(abs(tolerance - expected) < 1e-4, "\(row["nom"] ?? "")")
         }
     }
 
@@ -93,7 +95,8 @@ struct MeeshyTimelineFriseTests {
             case "show": try Self.expectViewport(view.showing(try Self.double(row, "temps"), duration: duration), row["attendu"], name)
             default:
                 let time = view.time(atFraction: try Self.double(row, "fraction"))
-                #expect(abs(time - (try Self.double(row, "attendu"))) < 1e-6, "\(name)")
+                let expected = try Self.double(row, "attendu")
+                #expect(abs(time - expected) < 1e-6, "\(name)")
             }
         }
     }
@@ -151,8 +154,10 @@ struct MeeshyTimelineFriseTests {
     func zones_followTheVectors() throws {
         for row in try Self.rows("zones") {
             let zone = MeeshyTimelineFriseRule.handleZone(barWidth: CGFloat(try Self.double(row, "barre")))
-            #expect(zone.inside == CGFloat(try Self.double(row, "dedans")))
-            #expect(zone.outside == CGFloat(try Self.double(row, "dehors")))
+            let inside = CGFloat(try Self.double(row, "dedans"))
+            let outside = CGFloat(try Self.double(row, "dehors"))
+            #expect(zone.inside == inside)
+            #expect(zone.outside == outside)
         }
         for row in try Self.rows("cles") {
             let keys = try kitRequired(row["cles"] as? [[Any]]).map { pair in
