@@ -363,6 +363,15 @@
         "source": "Mesure du 2026-11-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 0,41 Ko -- la surface qui zoome l ecran recu en duo (`components/call-screen-zoom-surface.tsx`, P15.11) : le calque GPU de l image, l indice du lecteur d ecran, et la surface qui garde le doigt une fois zoomee. Chargee par `call-stage.tsx` (`screenZoomSurfaceView`), prechargee par l ecran d appel (`PREFETCH`) ; tant qu elle n est pas la, l ecran recu se montre entier. Sortie de `call_overlay` avec le crochet du zoom (20,94 -> 20,13 Ko), pour laisser la place au bandeau « Vous partagez » (#17746). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
+    "call_grid_screen": {
+      "pattern": "^assets/call-grid-screen-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #17961, NON ARBITREE",
+        "source": "Mesure du 2026-11-14 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,07 Ko -- l ecran partage a la une d un groupe (`components/call-grid-screen.tsx`, U2) : le calque GPU qui zoome et deplace l ecran (U2.7, #17754), le medaillon a la couleur de qui partage (loi 18.2) et la puce « Ecran de X · 2× » rangee au toucher (U2.5). Sorti de la grille pour la garder sous son plafond (3,81 Ko) ; charge AVEC elle (`call-stage.tsx` › `callGridView`), donc deja la quand un partage monte. Arrondi au Ko superieur (2), meme discipline que les autres chunks d appel."
+      }
+    },
     "call_screen_zoom": {
       "pattern": "^assets/use-screen-zoom-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {

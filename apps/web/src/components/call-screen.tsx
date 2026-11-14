@@ -27,7 +27,7 @@ import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerExpanded, layer
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
-import { autoSharer, fullScreenLevelFor, resolveSpotlight, type FullScreenLevel } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type FullScreenLevel } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { orderedTopBanners, recordingBannerPresent, recordingSlotHeight, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
@@ -420,8 +420,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const [choice, setChoice] = useSpotlightChoice(autoSharer(arrived, call.remoteStreams)?.userId ?? null);
   const spotlight = layout === 'grid' ? resolveSpotlight({ members: arrived, choice, remoteStreams: call.remoteStreams }) : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
-  const [wantedLevel, moveFullScreen] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
-  const fullScreen = fullScreenLevelFor(wantedLevel, layout === 'screen' || spotlight?.screen === true);
+  const [fullScreen, moveFullScreen] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
   const immersive = fullScreen !== 'off';
   const videoScene = live && isVideoScene(call);
   /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. Le portrait n'est monté que dans la disposition `portrait` : la mesure ne court que là. */

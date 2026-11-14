@@ -1,24 +1,22 @@
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
-import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
-import { useScreenZoom, type ScreenZoomLayer } from '@/components/use-screen-zoom';
-import type { HeldSwap, useStowFade } from '@/lib/calls/use-pill-motion';
+import type { ScreenZoomLayer } from '@/components/use-screen-zoom';
+import type { GroupSharedScreenProps } from '@/components/call-grid-screen';
+import { useStowFade, type HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
-import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, FullScreenLevel, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, spotlightCapsuleButtons, type SpotlightButton } from '@/lib/calls/call-spotlight-gestures';
+import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, fullScreenLevelFor, spotlightCapsuleButtons, type SpotlightButton } from '@/lib/calls/call-spotlight-gestures';
 import { edgeFadeMask } from '@/lib/calls/call-row-keys';
 import type { CallMember } from '@/lib/calls/call-store';
-import { zoomLabel } from '@/lib/calls/camera-zoom';
 import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
 import type { useStageFlip } from '@/lib/calls/use-stage-flip';
@@ -27,7 +25,6 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { LocalZoom } from '@/lib/calls/self-zoom';
-import { initialsOf } from '@/lib/view/conversation';
 
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -92,12 +89,12 @@ export type CallGridKit = {
   readonly Arrives: typeof Arrives;
   /** Le bandeau des autres sort par son bord au plein écran total, et revient par lui (U2.10). */
   readonly HeldSwap: typeof HeldSwap;
-  /** La capsule et la puce rangées par le toucher (U2.4, U2.5) : leur fondu court sous « Réduire les animations ». */
-  readonly useStowFade: typeof useStowFade;
   /** L'image d'une vignette cède à son avatar en fondu, et revient de même (loi 17.12) : la scène noire du duo. */
   readonly CameraOff: typeof CameraOffStage;
   /** La loi qui sépare un glissé d'un toucher, celle de ma vignette : zoomé, l'écran partagé se déplace au doigt (U2.7). */
   readonly isDrag: ScreenZoomLayer['isDrag'];
+  /** L'écran partagé à la une, chargé à part (`call-grid-screen.tsx`) : un groupe sans partage ne le paie pas. */
+  readonly SharedScreen: (props: GroupSharedScreenProps) => ReactNode;
 };
 
 export type CallGridProps = {
@@ -244,41 +241,6 @@ function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode 
   );
 }
 
-type SharedScreenProps = { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage; readonly stowed: boolean };
-
-/**
- * L'ÉCRAN PARTAGÉ À LA UNE (U2) — entier (`contain`), zoomé par UN calque GPU (`translate3d + scale`, écrit une fois par
- * image pendant le geste, U2.7) et, zoomé, déplacé au doigt, borné à son cadre ; deux tapes le rendent entier et le
- * recentrent. Le médaillon de qui partage porte SA couleur (loi 18.2). La puce « Écran de X · 2× » se range et revient
- * avec la capsule, vers le haut (U2.5).
- */
-function SharedScreen({ kit, member, stream, language, stowed }: SharedScreenProps) {
-  const title = translate(language, 'call.screen.of', { name: member.name });
-  const layer = useRef<HTMLDivElement>(null);
-  const chip = useRef<HTMLSpanElement>(null);
-  const { zoom, transform, handlers } = useScreenZoom({ layer, isDrag: kit.isDrag });
-  kit.useStowFade(chip, stowed);
-  const hint = useId();
-  return (
-    <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} data-call-owns-drag={zoom > 1 ? '' : undefined} {...handlers}>
-      <div ref={layer} className="absolute inset-0 transition-transform duration-200 motion-reduce:transition-none" style={{ transform, transformOrigin: 'center' }} data-call-screen-layer="">
-        <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={title} member={member.userId} />
-      </div>
-      <span id={hint} hidden>
-        {translateCallControls(language, 'callControls.screenZoom.hint')}
-      </span>
-      <div className="absolute bottom-2 right-2 overflow-hidden rounded-full border-2" style={{ borderColor: kit.colorOf(member.userId) }} data-call-screen-medallion="">
-        <PeerAvatar presenceKey={member.userId} initials={initialsOf(member.name)} color={kit.colorOf(member.userId)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
-      </div>
-      <span ref={chip} className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" aria-hidden={stowed ? true : undefined} data-call-stow="top" data-call-chrome-keep="" data-call-stowed={stowed ? '' : undefined} data-call-screen-banner="">
-        <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={14} />
-        <span className="truncate">{title}</span>
-        {zoom > 1 ? <span aria-hidden="true">{` · ${zoomLabel(zoom, language)}`}</span> : null}
-      </span>
-    </div>
-  );
-}
-
 /**
  * Le bandeau des autres : des vignettes de 84 × 112 en rangée sous la une, en colonne de 128 à sa droite en
  * paysage (P14.1, P14.2) ; ce qui défile s'efface en fondu à ses deux bords, sur les 8 de son liseré (la recette
@@ -291,6 +253,15 @@ const stripBox = (strip: Filmstrip): CSSProperties => {
 };
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
+/** L'écran partagé avant que son chunk n'arrive (préchargé avec la grille, il est là d'ordinaire) : l'image entière, sans geste. */
+function ScreenWaiting({ member, stream }: { readonly member: CallMember; readonly stream: MediaStream | undefined }) {
+  return (
+    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-card" data-call-slot={member.userId}>
+      <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={member.name} member={member.userId} />
+    </div>
+  );
+}
 
 /** Le bandeau des autres, qui sort par son bord au plein écran total (U2b) et revient par lui (U2.10) ; il reste au plein écran (U2). */
 function OthersStrip({ kit, side, hidden, children }: { readonly kit: CallGridKit; readonly side: Filmstrip; readonly hidden: boolean; readonly children: ReactNode }) {
@@ -357,7 +328,7 @@ const capsuleFace = (button: SpotlightButton, language: InterfaceLanguage): Caps
  */
 function SpotlightCapsule({ kit, language, screen, level, leaving, stowed, onButton, children }: CapsuleProps) {
   const place = useRef<HTMLDivElement>(null);
-  kit.useStowFade(place, stowed);
+  useStowFade(place, stowed);
   return (
     <div ref={place} className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} style={STOW_CLEARANCE} aria-hidden={stowed ? true : undefined} data-call-stow="top" data-call-chrome-keep="" data-call-stowed={stowed ? '' : undefined} data-call-spotlight-place="">
       <kit.Arrives leaving={leaving} prominent={screen} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
@@ -382,12 +353,13 @@ function ShareAnnounce({ sharer, language }: { readonly sharer: CallMember | nul
 
 const STOW_CLEARANCE = { '--stow-clearance': '3.75rem' } as CSSProperties;
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, fullScreen, onFullScreen, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false, compact = false }: CallGridProps) {
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, fullScreen: wanted, onFullScreen, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false, compact = false }: CallGridProps) {
   const press = kit.usePressedChrome(chromeVisible);
   /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
   const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+  const fullScreen = fullScreenLevelFor(wanted, view?.screen === true);
   const held = useHeldVideos(members);
   const shown = useRef<{ readonly screen: boolean; readonly level: FullScreenLevel } | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -421,11 +393,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
       if (button === 'grid') onChoose(chooseGrid(sharer?.userId ?? null));
       if (level !== 'off' || button !== 'grid') onFullScreen(fullScreenLevelAfter(button, level, screen));
     };
-    return (
-      <SpotlightCapsule kit={kit} language={language} screen={screen} level={level} leaving={leaving} stowed={stowed} onButton={onButton}>
-        {below}
-      </SpotlightCapsule>
-    );
+    return <SpotlightCapsule kit={kit} language={language} screen={screen} level={level} leaving={leaving} stowed={stowed} onButton={onButton}>{below}</SpotlightCapsule>;
   };
   if (view !== null) shown.current = { screen: view.screen, level: fullScreen };
 
@@ -444,7 +412,9 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               <Slot {...tile(mine, null, selfLabel, 96)} />
             </div>
           ) : screen ? (
-            <SharedScreen key={featured.userId} kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} stowed={stowed} />
+            <Suspense key={featured.userId} fallback={<ScreenWaiting member={featured} stream={remoteStreams[featured.userId]} />}>
+              <kit.SharedScreen member={featured} stream={remoteStreams[featured.userId]} language={language} stowed={stowed} color={kit.colorOf(featured.userId)} isDrag={kit.isDrag} />
+            </Suspense>
           ) : (
             <div className="grid min-h-0 min-w-0 flex-1">
               <Slot {...tile(peer(featured), null, featured.name, 96)} />

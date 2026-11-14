@@ -36,5 +36,8 @@ export const fullScreenLevelAfter = (button: SpotlightButton, level: FullScreenL
   return button === 'full-screen' || button === 'total-full-screen' ? raisedFullScreen(level, screen) : loweredFullScreen(level);
 };
 
+/** Le niveau total est réservé à un écran partagé : une caméra à la une n'en a qu'un (#17961, 2026-11-14). */
+export const fullScreenLevelFor = (level: FullScreenLevel, screen: boolean): FullScreenLevel => (level === 'total' && !screen ? 'full' : level);
+
 /** Le bandeau des autres reste au plein écran (U2) ; seul le plein écran total (U2b) le retire. */
 export const fullScreenHidesStrip = (level: FullScreenLevel): boolean => level === 'total';

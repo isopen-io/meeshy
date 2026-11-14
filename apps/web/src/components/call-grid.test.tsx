@@ -11,10 +11,11 @@ import type { CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallGrid, type CallGridProps } from './call-grid';
-import { CALL_GRID_KIT } from './call-stage';
+import { CALL_GRID_KIT, callGridView } from './call-stage';
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await callGridView.load();
 });
 
 /**

@@ -79,6 +79,3 @@ export const choiceAfterSharerChange = (choice: SpotlightChoice, from: string | 
  * GARDE les caméras des autres ; `total` (U2b) ne montre que l'écran partagé — miroir de `GroupCallFullScreenLevel`.
  */
 export type FullScreenLevel = 'off' | 'full' | 'total';
-
-/** Le niveau total est réservé à un écran partagé : une caméra à la une n'en a qu'un (#17961, 2026-11-14). */
-export const fullScreenLevelFor = (level: FullScreenLevel, screen: boolean): FullScreenLevel => (level === 'total' && !screen ? 'full' : level);

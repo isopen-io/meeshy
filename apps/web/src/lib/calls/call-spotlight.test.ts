@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { choiceAfterSharerChange, fullScreenLevelFor, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from './call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelAfter, loweredFullScreen, raisedFullScreen, spotlightCapsuleButtons } from './call-spotlight-gestures';
+import { choiceAfterSharerChange, resolveSpotlight, type FullScreenLevel, type SpotlightChoice } from './call-spotlight';
+import { chooseGrid, chooseMember, chooseSelf, fullScreenHidesStrip, fullScreenLevelFor, fullScreenLevelAfter, loweredFullScreen, raisedFullScreen, spotlightCapsuleButtons } from './call-spotlight-gestures';
 import { SCREEN_MAX_ZOOM, screenPanAfterDrag, screenPanClamp, screenZoomAfterPinch, screenZoomAfterWheel, screenZoomResets, screenZoomTransform } from './screen-zoom';
 import type { CallMember } from './call-store';
 

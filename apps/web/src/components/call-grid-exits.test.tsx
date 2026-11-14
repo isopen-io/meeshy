@@ -9,7 +9,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { CallMember } from '@/lib/calls/call-store';
 
 import { CallGrid, type CallGridProps } from './call-grid';
-import { CALL_GRID_KIT } from './call-stage';
+import { CALL_GRID_KIT, callGridView } from './call-stage';
 
 /**
  * **RIEN NE DISPARAÎT D'UN COUP, SUR LA UNE D'UN GROUPE** (U1.12, U2.5, U2.10 ; #17406) — la capsule « Revenir à la
@@ -45,6 +45,7 @@ const sharingLive = () => ({ ...sharing, remoteStreams: { 'u-k': Object.definePr
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await callGridView.load();
   await loadPillMotion();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
