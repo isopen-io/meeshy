@@ -64,8 +64,25 @@ public class SharedLocationFix private constructor(
     }
 }
 
-/** Une personne à qui je montre ma position, et ce qu'elle en voit. */
-public data class SharedLocationRecipient(val userId: String, val precision: SharedLocationPrecision)
+/**
+ * Une personne à qui je montre ma position, ce qu'elle en voit et, quand elle tombe avant le terme du partage, SON
+ * échéance en secondes (`recipients[].expiresInSeconds`, #18205) : la passerelle la tient, même app tuée.
+ */
+public data class SharedLocationRecipient(
+    val userId: String,
+    val precision: SharedLocationPrecision,
+    val expiresInSeconds: Int? = null,
+) {
+    internal fun wire(): Map<String, Any> = buildMap {
+        put("userId", userId)
+        put("precision", precision.wire)
+        expiresInSeconds?.let { put("expiresInSeconds", it) }
+    }
+
+    /** Bornée comme le schéma serveur : un entier de 1 s à 8 h. */
+    internal fun bounded(): SharedLocationRecipient =
+        copy(expiresInSeconds = expiresInSeconds?.coerceIn(1, SharedLocationContract.RECIPIENT_DEADLINE_MAX_SECONDS))
+}
 
 /** La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière. */
 public class SharedLocationStartRequest private constructor(
@@ -73,8 +90,18 @@ public class SharedLocationStartRequest private constructor(
     public val duration: SharedLocationShareDuration,
     public val fix: SharedLocationFix,
 ) {
+    /** Au moins une personne part avec sa propre échéance. */
+    public val carriesDeadlines: Boolean get() = recipients.any { it.expiresInSeconds != null }
+
+    /**
+     * La même liste sans aucune échéance : une passerelle d'avant #18205 refuse la clé (`INVALID`), et le centre retire
+     * alors chacun à son échéance, comme avant.
+     */
+    public fun withoutDeadlines(): SharedLocationStartRequest =
+        SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix)
+
     public fun wire(): Map<String, Any> = mapOf(
-        "recipients" to recipients.map { mapOf("userId" to it.userId, "precision" to it.precision.wire) },
+        "recipients" to recipients.map { it.wire() },
         "durationMinutes" to duration.minutes,
         "position" to fix.wire(),
     )
@@ -87,7 +114,7 @@ public class SharedLocationStartRequest private constructor(
 
         /**
          * `null` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE
-         * précision (le schéma serveur refuse les doublons, insensibles à la casse).
+         * précision et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
          */
         public fun of(
             recipients: List<SharedLocationRecipient>,
@@ -95,8 +122,8 @@ public class SharedLocationStartRequest private constructor(
             fix: SharedLocationFix,
         ): SharedLocationStartRequest? {
             val valid = recipients.filter { objectId.matches(it.userId) }
-            val latest = valid.associate { it.userId.lowercase() to it.precision }
-            val ordered = valid.map { it.userId.lowercase() }.distinct().map { SharedLocationRecipient(it, latest.getValue(it)) }
+            val latest = valid.associateBy { it.userId.lowercase() }
+            val ordered = valid.map { it.userId.lowercase() }.distinct().map { latest.getValue(it).copy(userId = it).bounded() }
             if (ordered.isEmpty() || ordered.size > MAX_RECIPIENTS) return null
             return SharedLocationStartRequest(ordered, duration, fix)
         }

@@ -1135,3 +1135,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   mutations prouvées) ; `tsc` gateway et shared verts ; contrat partagé `vitest` 6/6 ; web `bun test` du lot 97/97,
   `tsc --noEmit`, build, `check-utilities`, `measure-weight` verts.
 - Prochain lot recommandé : #18467 (iOS + Android), puis #18389 (multi-appareils), puis #18431.
+
+## 2026-11-14 — réveil du soir : iOS et Android envoient l'échéance de chaque personne (#18467)
+
+- Reprise : aucune PR cercles ouverte ; #18469 (passerelle + web, #18205) fusionnée. Aucune branche n'écrit les chemins
+  du partage de position natif : lot réservé sur `claude/cercles-18467-natifs-echeance`.
+- Lot : SDK Swift et `:core:model` Kotlin — `SharedLocationRecipient.expiresInSeconds` (borné de 1 s à 8 h, la clé ne
+  part que si elle est posée), `SharedLocationStartRequest.carriesDeadlines` / `withoutDeadlines`, un doublon garde sa
+  dernière échéance. Les listes iOS et Android gagnent `deadlinedRecipients` (iso web : échéance arrondie à la seconde
+  au-dessus pour chaque personne qui tombe avant le terme, personne échue écartée). Les deux centres passent par
+  `startTolerant` : un refus `INVALID` d'une liste qui porte des échéances repart une fois sans elles (passerelle d'avant
+  #18205), sous la garde de compte (`isLive` / `isCurrent(ticket)`).
+- Audit adversarial avant PR : aucun bloquant. Retenus et témoignés : un refus autre que `INVALID` ne rejoue rien (iOS
+  et Android), titre de témoin Kotlin corrigé. Assumés : le bornage Kotlin se fait dans `SharedLocationStartRequest.of`
+  (seul chemin d'émission) et non à la construction ; après un accusé perdu, l'union peut faire couper la passerelle
+  plus tôt que l'écran ne le dit (sens du moins servi).
+- Gates locaux : `jvm-check` `:core:model` `*SharedLocation*` vert (52 témoins ; le premier passage a rougi sur un
+  témoin mal calculé, corrigé) ; gardes iOS cohésion et localisation vertes, `check_house_rules.sh` rouge comme sur
+  `dev` (hérité). iOS (SDK + app) et le centre Android ne compilent qu'en CI : preuve par la CI de `dev` après fusion.
+- Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée. #18205 se ferme avec ce
+  lot (serveur, web, iOS, Android).

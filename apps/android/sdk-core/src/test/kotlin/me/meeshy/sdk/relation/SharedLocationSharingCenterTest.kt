@@ -46,6 +46,7 @@ class SharedLocationSharingCenterTest {
         var updateGate: CompletableDeferred<SharedLocationStartVerdict>? = null
         val connected = MutableStateFlow(false)
         val starts = mutableListOf<SharedLocationStartRequest>()
+        val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         val updates = mutableListOf<SharedLocationFix>()
         var stops = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
@@ -56,7 +57,7 @@ class SharedLocationSharingCenterTest {
             emitter = object : SharedLocationEmitting {
                 override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
                     starts += request
-                    return startGate?.await() ?: startVerdict
+                    return startGate?.await() ?: queuedStartVerdicts.removeFirstOrNull() ?: startVerdict
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
@@ -462,5 +463,47 @@ class SharedLocationSharingCenterTest {
         assertThat(rig.stops).isEqualTo(0)
         assertThat(rig.starts).isEmpty()
         assertThat(rig.saved["me"]).isNull()
+    }
+
+    @Test
+    fun `l'echeance de chaque personne part a la passerelle et une passerelle d'avant recoit la meme liste sans`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        advanceTimeBy(1_500L)
+        val before = rig.starts.size
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isNull()
+        val tried = rig.starts.drop(before)
+        assertThat(tried).hasSize(2)
+        assertThat(tried.first().recipients.map { it.userId to it.expiresInSeconds })
+            .containsExactly(alice to 3_600, bob to 28_799).inOrder()
+        assertThat(tried.last().carriesDeadlines).isFalse()
+        assertThat(tried.last().recipients.map { it.userId }).containsExactly(alice, bob).inOrder()
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+    }
+
+    @Test
+    fun `un refus d'une liste sans echeance ne se rejoue pas`() = runTest {
+        val rig = Rig(this, startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID))
+
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(rig.starts).hasSize(1)
+    }
+
+    @Test
+    fun `un refus autre que la liste invalide ne renvoie pas la liste sans echeance`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        val before = rig.starts.size
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.RATE_LIMITED)
+
+        val problem = rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.RATE_LIMITED))
+        assertThat(rig.starts.drop(before)).hasSize(1)
     }
 }

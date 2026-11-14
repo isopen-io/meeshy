@@ -48,14 +48,24 @@ public struct SharedLocationFix: Sendable, Equatable {
     }
 }
 
-/// Une personne à qui je montre ma position, et ce qu'elle en voit.
+/// Une personne à qui je montre ma position, ce qu'elle en voit et, quand elle tombe avant le terme du partage, SON
+/// échéance en secondes (`recipients[].expiresInSeconds`, #18205) : la passerelle la tient, même app tuée.
 public struct SharedLocationRecipient: Sendable, Equatable, Hashable {
     public let userId: String
     public let precision: SharedLocationPrecision
+    /// Bornée comme le schéma serveur : un entier de 1 s à 8 h. `nil` : le terme du partage vaut pour elle.
+    public let expiresInSeconds: Int?
 
-    public init(userId: String, precision: SharedLocationPrecision) {
+    public init(userId: String, precision: SharedLocationPrecision, expiresInSeconds: Int? = nil) {
         self.userId = userId
         self.precision = precision
+        self.expiresInSeconds = expiresInSeconds.map { min(max($0, 1), SharedLocationContract.recipientDeadlineMaxSeconds) }
+    }
+
+    var wire: [String: Any] {
+        var wire: [String: Any] = ["userId": userId, "precision": precision.rawValue]
+        if let expiresInSeconds { wire["expiresInSeconds"] = expiresInSeconds }
+        return wire
     }
 }
 
@@ -69,25 +79,42 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public let fix: SharedLocationFix
 
     /// `nil` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE précision
-    /// (le schéma serveur refuse les doublons, insensibles à la casse).
+    /// et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
     public init?(recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
         let valid = recipients.filter { Self.isObjectId($0.userId) }
-        let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0.precision) }, uniquingKeysWith: { _, last in last })
+        let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0) }, uniquingKeysWith: { _, last in last })
         var seen = Set<String>()
         let ordered = valid.compactMap { recipient -> SharedLocationRecipient? in
             let key = recipient.userId.lowercased()
-            guard seen.insert(key).inserted, let precision = latest[key] else { return nil }
-            return SharedLocationRecipient(userId: key, precision: precision)
+            guard seen.insert(key).inserted, let last = latest[key] else { return nil }
+            return SharedLocationRecipient(userId: key, precision: last.precision, expiresInSeconds: last.expiresInSeconds)
         }
         guard !ordered.isEmpty, ordered.count <= Self.maxRecipients else { return nil }
-        self.recipients = ordered
+        self.init(validated: ordered, duration: duration, fix: fix)
+    }
+
+    private init(validated recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
+        self.recipients = recipients
         self.duration = duration
         self.fix = fix
     }
 
+    /// Au moins une personne part avec sa propre échéance.
+    public var carriesDeadlines: Bool { recipients.contains { $0.expiresInSeconds != nil } }
+
+    /// La même liste sans aucune échéance : une passerelle d'avant #18205 refuse la clé (`INVALID`), et le centre retire
+    /// alors chacun à son échéance, comme avant.
+    public var withoutDeadlines: SharedLocationStartRequest {
+        SharedLocationStartRequest(
+            validated: recipients.map { SharedLocationRecipient(userId: $0.userId, precision: $0.precision) },
+            duration: duration,
+            fix: fix
+        )
+    }
+
     public var wire: [String: Any] {
         [
-            "recipients": recipients.map { ["userId": $0.userId, "precision": $0.precision.rawValue] },
+            "recipients": recipients.map(\.wire),
             "durationMinutes": duration.rawValue,
             "position": fix.wire,
         ]

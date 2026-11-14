@@ -299,10 +299,11 @@ class SharedLocationSharingCenter internal constructor(
         previous: SharedLocationRoster,
     ): SharedLocationShareProblem? {
         val next = wanted.settled()
-        val request = SharedLocationStartRequest.of(next.recipients, next.serverDuration(clock()), fix)
+        val now = clock()
+        val request = SharedLocationStartRequest.of(next.deadlinedRecipients(now), next.serverDuration(now), fix)
             ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
-        val verdict = emitter.start(request)
+        val verdict = startTolerant(ticket, request)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
@@ -315,6 +316,17 @@ class SharedLocationSharingCenter internal constructor(
             }
             is SharedLocationStartVerdict.Refused -> SharedLocationShareProblem.Refused(verdict.outcome)
         }
+    }
+
+    /**
+     * Une passerelle d'avant #18205 refuse l'échéance par personne (`INVALID`) : la même liste repart sans, une fois, et
+     * le centre retire chacun à son échéance, comme avant.
+     */
+    private suspend fun startTolerant(ticket: Ticket, request: SharedLocationStartRequest): SharedLocationStartVerdict {
+        val verdict = emitter.start(request)
+        val legacy = verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID) && request.carriesDeadlines
+        if (!legacy || !isCurrent(ticket)) return verdict
+        return emitter.start(request.withoutDeadlines())
     }
 
     private suspend fun stopAll(ticket: Ticket): SharedLocationShareProblem? {
