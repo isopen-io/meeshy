@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import SwiftUI
 import MeeshySDK
 @testable import Meeshy
 
@@ -148,6 +149,38 @@ final class InteractivePopEnablerTests: XCTestCase {
 
         XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, true)
         XCTAssertEqual(shouldBegin(navigation), true)
+        window.isHidden = true
+    }
+
+    // MARK: - #18491 : le modificateur SwiftUI monte réellement l'activateur
+
+    private func pushSwiftUIScreen(for route: Route, on navigation: UINavigationController, in window: UIWindow) {
+        let host = UIHostingController(rootView: Color.clear.restoresEdgeSwipe(for: route))
+        navigation.pushViewController(host, animated: false)
+        window.layoutIfNeeded()
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+    }
+
+    func test_restoresEdgeSwipeModifier_restoredRouteAfterARiver_reEnablesTheGesture() {
+        let (window, navigation) = makeStack()
+        _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
+
+        pushSwiftUIScreen(for: .links, on: navigation, in: window)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, true)
+        XCTAssertEqual(shouldBegin(navigation), true)
+        window.isHidden = true
+    }
+
+    func test_restoresEdgeSwipeModifier_conversationRoute_leavesTheRiverPolicyToTheScreen() {
+        let (window, navigation) = makeStack()
+        _ = pushScreen(on: navigation, allowsEdgeSwipe: false)
+
+        pushSwiftUIScreen(for: .conversation(makeConversation()), on: navigation, in: window)
+
+        XCTAssertEqual(navigation.interactivePopGestureRecognizer?.isEnabled, false)
         window.isHidden = true
     }
 }
