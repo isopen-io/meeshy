@@ -157,9 +157,10 @@ extension CallView {
 
     // MARK: - Open Conversation During Call
 
-    /// Réduction vers la capsule : voir `CallPipMorph.contract`.
+    /// Réduction vers la capsule, en haut au centre : voir `CallPipMorph.contract`.
     func collapseIntoPip() {
         HapticFeedback.medium()
+        pipMorphTarget = CallShareCapsuleMotion.window(reduceMotion: reduceMotion, capsuleLive: true)
         CallPipMorph.contract(into: callManager, reduceMotion: reduceMotion, progress: $pipMorphProgress)
     }
 
