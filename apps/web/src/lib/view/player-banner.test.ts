@@ -6,7 +6,7 @@ import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtr
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { bannerShortCount, isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
+import { bannerShortCount, isLargeText, offeringRewardLabel, playerBannerLabel, playerBannerModel, playerBannerPieceLabels, type PlayerBannerModel } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — SEULEMENT CE QUI EXISTE. Le modèle ne pose
@@ -359,5 +359,33 @@ describe('le bandeau porte l’Offrande prête et la Flamme à risque (#17796)',
     const base = gameBlockFixture();
     const quiet = { ...base, chest: { ...base.chest, status: 'locked' as const }, flame: { ...base.flame, status: 'lit' as const } };
     expect(playerBannerModel(quiet)?.attention).toEqual({ chestReady: false, flameAtRisk: false });
+  });
+});
+
+describe('l’Offrande prête se dit sur le bandeau (#18199)', () => {
+  const READY: PlayerBannerModel = { ...shown(NEWCOMER), missions: { done: 3, total: 3 }, attention: { chestReady: true, flameAtRisk: false } };
+
+  test('la phrase lue la dit après le Rêve, et la pièce porte son propre nom', () => {
+    expect(playerBannerLabel(READY, 'fr')).toContain('Rêve : 3 sur 3, Offrande prête');
+    expect(playerBannerPieceLabels(READY, 'fr').offering).toBe('Offrande prête : l’ouvrir');
+  });
+
+  test('sans Offrande prête : ni phrase, ni pièce', () => {
+    const quiet: PlayerBannerModel = { ...READY, attention: { chestReady: false, flameAtRisk: false } };
+    expect(playerBannerLabel(quiet, 'fr')).not.toContain('Offrande');
+    expect(playerBannerPieceLabels(quiet, 'fr').offering).toBeNull();
+  });
+
+  test('le gain d’une Offrande ouverte se dit en étincelles, au singulier comme au pluriel', () => {
+    expect(offeringRewardLabel(1, 'fr')).toBe('Offrande ouverte : +1 étincelle');
+    expect(offeringRewardLabel(40, 'fr')).toBe('Offrande ouverte : +40 étincelles');
+  });
+
+  test('les sept langues disent l’Offrande, prête et ouverte', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(playerBannerPieceLabels(READY, language).offering).not.toMatch(/game\.banner/);
+      expect(offeringRewardLabel(40, language)).not.toMatch(/game\.banner/);
+      expect(offeringRewardLabel(40, language)).toContain('40');
+    }
   });
 });
