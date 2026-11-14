@@ -21,7 +21,7 @@ struct CallEffectsModeControls: View {
 
     @State private var config = VideoFilterConfig()
     @State private var picked: CallEffectsCategory? = nil
-    @State private var barMode: CallEffectsBarMode = .base
+    @State private var barMode: CallEffectsBarMode = CallEffectsBarRule.entering
     @State private var layers = CallEffectLayers()
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
 
@@ -37,7 +37,7 @@ struct CallEffectsModeControls: View {
                 onSettings: toggleSettings,
                 onAddLook: addLook,
                 onShowApplied: showApplied,
-                looks: { CallEffectsGenreChips(genres: genres, selected: category.kind, onSelect: selectGenre) }
+                looks: { CallEffectsGenreChips(genres: genres, selected: CallEffectsBarRule.pressed(category.kind, in: barMode), onSelect: selectGenre) }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -78,9 +78,11 @@ struct CallEffectsModeControls: View {
         case .applied:
             CallEffectsAppliedPanel(layers: layers, onRemove: remove)
                 .transition(settingsPanelTransition)
-        case .base:
+        case .looks:
             carousel
-                .transition(.opacity)
+                .transition(settingsPanelTransition)
+        case .base:
+            EmptyView()
         }
     }
 
@@ -115,12 +117,24 @@ struct CallEffectsModeControls: View {
         HapticFeedback.light()
     }
 
-    /// Un genre de la rangée : Visage ou Couleur ici, « Cadres » dans le Montage (le passage de
-    /// mode porte son propre retour haptique).
+    /// Un genre de la rangée ouvre son carrousel : Visage ou Couleur ici, « Cadres » dans le
+    /// Montage (le passage de mode porte son propre retour haptique) ; retoucher le genre ouvert
+    /// referme son carrousel.
     private func selectGenre(_ genre: CallEffectKind) {
         guard let look = CallEffectsCategory(kind: genre) else { return onOpenFrames() }
-        withAnimation(settingsAnimation) { picked = look }
+        let isOpen = CallEffectsBarRule.pressed(category.kind, in: barMode) == genre
+        withAnimation(settingsAnimation) {
+            barMode = CallEffectsBarRule.afterGenre(from: barMode, isOpen: isOpen)
+            picked = look
+        }
         HapticFeedback.light()
+    }
+
+    /// C1 généralisée — un look, une couleur ou une déformation choisis s'appliquent aussitôt, et
+    /// le carrousel se referme par le chemin inverse : la barre revient à son menu de base.
+    private func closeAfterChoice() {
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterChoice }
+        UIAccessibility.post(notification: .layoutChanged, argument: nil)
     }
 
     /// Appui long sur (+) : la liste des effets appliqués.
@@ -222,6 +236,7 @@ struct CallEffectsModeControls: View {
             set: { effect in
                 guard effect == .none || layers.allows(.face) else { return HapticFeedback.warning() }
                 config = config.selectingFaceEffect(effect)
+                closeAfterChoice()
             }
         )
     }
@@ -232,6 +247,7 @@ struct CallEffectsModeControls: View {
             set: { preset in
                 guard preset == .natural || layers.allows(.color) else { return HapticFeedback.warning() }
                 config = CallEffectsModeRule.applying(color: preset, to: config)
+                closeAfterChoice()
             }
         )
     }
@@ -341,7 +357,7 @@ struct CallMontageModeControls: View {
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var barMode: CallEffectsBarMode = .base
+    @State private var barMode: CallEffectsBarMode = CallEffectsBarRule.entering
     @State private var layers = CallEffectLayers()
 
     private static let thumbnailSize = CGSize(width: 48, height: 85)
@@ -358,7 +374,7 @@ struct CallMontageModeControls: View {
                 onSettings: toggleSettings,
                 onAddLook: addLook,
                 onShowApplied: showApplied,
-                looks: { CallEffectsGenreChips(genres: genres, selected: .frame, onSelect: openGenre) }
+                looks: { CallEffectsGenreChips(genres: genres, selected: CallEffectsBarRule.pressed(.frame, in: barMode), onSelect: openGenre) }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -417,15 +433,31 @@ struct CallMontageModeControls: View {
         guard let next = CallEffectsGenreRule.adding(from: .frame, layers: layers, row: genres) else {
             return HapticFeedback.warning()
         }
-        openGenre(next)
+        guard let look = CallEffectsCategory(kind: next) else {
+            withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterAddingLook(from: barMode) }
+            return HapticFeedback.light()
+        }
+        onOpenEffects(look)
     }
 
-    /// C1 — « Cadres » est pressée : le carrousel des cadres prend la place de la bande de looks.
-    /// « Visage » ou « Couleur » ouvre Effets sur ce genre ; le passage de mode porte son retour
-    /// haptique.
+    /// C1 — « Cadres » touché ouvre le carrousel des cadres au-dessus de la barre ; retouché, il le
+    /// referme. « Visage » ou « Couleur » ouvre Effets sur ce genre ; le passage de mode porte son
+    /// retour haptique.
     private func openGenre(_ genre: CallEffectKind) {
-        guard let look = CallEffectsCategory(kind: genre) else { return }
+        guard let look = CallEffectsCategory(kind: genre) else {
+            let isOpen = CallEffectsBarRule.pressed(.frame, in: barMode) == genre
+            withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterGenre(from: barMode, isOpen: isOpen) }
+            return HapticFeedback.light()
+        }
         onOpenEffects(look)
+    }
+
+    /// C1 généralisée — un cadre, une déclinaison ou l'option « Cadre » choisis s'appliquent
+    /// aussitôt, et le carrousel se referme par le chemin inverse : la barre revient à son menu de
+    /// base, l'option « Cadre » restant posée au-dessus d'elle.
+    private func closeAfterChoice() {
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterChoice }
+        UIAccessibility.post(notification: .layoutChanged, argument: nil)
     }
 
     private func showApplied() {
@@ -467,9 +499,14 @@ struct CallMontageModeControls: View {
     @ViewBuilder
     private func panelOrCarousel(people: Int) -> some View {
         switch barMode {
-        case .base:
+        case .looks:
             carousel(people: people)
-                .transition(.opacity)
+                .transition(panelTransition)
+        case .base:
+            if let held = holdChip(for: CallMontageFrameRule.reconcile(capture.choice, people: people)) {
+                held
+                    .transition(.opacity)
+            }
         case .settings:
             settingsPanel
                 .transition(panelTransition)
@@ -552,6 +589,7 @@ struct CallMontageModeControls: View {
         guard case .frame(let id) = selection, CallLiveFrameRule.mayHold(frameId: id, isOffered: hold.isOffered) else { return nil }
         return CallFrameHoldChip(isOn: hold.heldFrameId == id, isEnabled: !capture.isRecording) {
             hold.toggle(id)
+            closeAfterChoice()
         }
     }
 
@@ -576,7 +614,10 @@ struct CallMontageModeControls: View {
     private func choiceBinding(people: Int) -> Binding<CallMontageChoice> {
         Binding(
             get: { CallMontageFrameRule.base(of: CallMontageFrameRule.reconcile(capture.choice, people: people)) },
-            set: { capture.select(choice: $0) }
+            set: { choice in
+                capture.select(choice: choice)
+                closeAfterChoice()
+            }
         )
     }
 
@@ -591,7 +632,7 @@ struct CallMontageModeControls: View {
         let declinations = CallMontageFrameRule.declinations(of: item)
         if isSelected, declinations.count > 1, case .frame(let id) = declined(item, people: people) {
             CallFrameDeclinationPager(ids: declinations, selected: id, isSelected: isSelected, symbol: CallFrameCopy.choiceSymbol(item),
-                                      thumbnail: { capture.frameThumbnail($0) }, onSelect: { capture.select(choice: .frame($0)) })
+                                      thumbnail: { capture.frameThumbnail($0) }, onSelect: { chooseDeclination($0) })
         } else {
             CallModeThumbnail(image: thumbnail(item), symbol: CallFrameCopy.choiceSymbol(item), isSelected: isSelected)
         }
@@ -600,7 +641,13 @@ struct CallMontageModeControls: View {
     private func stepDeclination(_ offset: Int, people: Int) {
         guard case .frame(let id) = CallMontageFrameRule.reconcile(capture.choice, people: people),
               let next = CallFrameStyleRule.neighbour(of: id, offset: offset, in: CallFrameCatalogue.all) else { return }
-        capture.select(choice: .frame(next.id))
+        chooseDeclination(next.id)
+    }
+
+    /// Une déclinaison choisie est un cadre choisi : elle s'applique et le carrousel se referme.
+    private func chooseDeclination(_ id: String) {
+        capture.select(choice: .frame(id))
+        closeAfterChoice()
     }
 }
 
