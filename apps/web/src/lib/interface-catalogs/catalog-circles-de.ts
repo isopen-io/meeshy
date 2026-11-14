@@ -196,6 +196,7 @@ const de = {
   'shareLocation.offline': 'Standortfreigabe braucht eine Verbindung.',
   'shareLocation.rateLimited': 'Zu viele Sendungen, versuche es gleich erneut.',
   'shareLocation.failed': 'Standortfreigabe fehlgeschlagen, versuche es erneut.',
+  'shareLocation.stopPending': 'Die Freigabe endet, sobald du wieder online bist.',
 } as const satisfies CirclesCatalog;
 
 export default de;
