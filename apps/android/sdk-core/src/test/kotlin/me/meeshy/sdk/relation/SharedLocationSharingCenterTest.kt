@@ -152,6 +152,7 @@ class SharedLocationSharingCenterTest {
 
         assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
         assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+        rig.center.clear()
     }
 
     @Test
