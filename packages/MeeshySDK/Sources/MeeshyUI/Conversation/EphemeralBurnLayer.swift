@@ -28,7 +28,7 @@ struct EphemeralBurnLayer: ViewModifier, Animatable {
         let seed = seed
         let overhang = CGSize(width: EphemeralBurnOverhang.horizontal, height: EphemeralBurnOverhang.top)
         let maxSampleOffset = EphemeralBurnShaders.maxSampleOffset
-        let isEnabled = EphemeralBurnShaders.isActive(progress)
+        let isActive = EphemeralBurnShaders.isActive(progress)
         return content
             .padding(.horizontal, EphemeralBurnOverhang.horizontal)
             .padding(.top, EphemeralBurnOverhang.top)
@@ -39,7 +39,7 @@ struct EphemeralBurnLayer: ViewModifier, Animatable {
                         .float(drift), .float(seed), .float2(overhang)
                     ),
                     maxSampleOffset: maxSampleOffset,
-                    isEnabled: isEnabled
+                    isEnabled: isActive
                 )
             }
             .padding(.horizontal, -EphemeralBurnOverhang.horizontal)

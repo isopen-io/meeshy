@@ -79,7 +79,7 @@ public fun CodeFullSheet(
     ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = protectedContent)) {
         FullScreenDialogWindow()
         Column(modifier.fillMaxSize().background(syntaxColor(theme.background)).statusBarsPadding().navigationBarsPadding()) {
-            CodeSheetBar(fileName, language, content, accent, theme, exitAllowed, clipboard, onDismiss, onCopied)
+            CodeSheetBar(fileName, language, content, accent, theme, exitAllowed, clipboard, this@ViewerDialog::dismiss, onCopied)
             when (content) {
                 CodeContent.Loading -> CodeSheetStatus(fileName, language, stringResource(R.string.code_viewer_loading_file), theme)
                 CodeContent.Failed -> CodeSheetStatus(fileName, language, stringResource(R.string.code_viewer_load_error), theme)

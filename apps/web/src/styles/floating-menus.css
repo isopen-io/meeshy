@@ -129,6 +129,25 @@
 }
 
 /**
+ * Les MÊMES images sous un AUTRE nom (#18460, revue) : CSS ne relance pas une
+ * animation dont le nom ne change pas. Passer `floating-rung-in` en `reverse`
+ * une fois l'entrée jouée la laissait dans sa phase « après », tenue sur sa
+ * première image : l'échelle disparaissait d'un coup et restait montée,
+ * invisible, le temps de la cascade. Un nom neuf démarre une animation neuve,
+ * que `reverse` rejoue en miroir exact de l'entrée.
+ */
+@keyframes floating-rung-out {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+}
+
+/**
  * Le centrage vit dans le style de REPOS, pas seulement dans la keyframe.
  *
  * Défaut mesuré à la première écriture : `translate(-50%, -50%)` n'était écrit
@@ -154,7 +173,7 @@
  */
 @media (prefers-reduced-motion: no-preference) {
   .floating-rung[data-leaving] {
-    animation: floating-rung-in var(--floating-rung-ms) cubic-bezier(0.2, 0.9, 0.3, 1.2) reverse forwards;
+    animation: floating-rung-out var(--floating-rung-ms) cubic-bezier(0.2, 0.9, 0.3, 1.2) reverse forwards;
     animation-delay: calc((var(--rung-count) - 1 - var(--rung)) * var(--floating-rung-stagger));
   }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import MeeshySDK
 
 /// **Les octets d'un fichier audio se lisent HORS du fil principal** (#7010).
 ///
@@ -30,10 +31,18 @@ enum AudioBytesLoader {
     /// conteneur se parse et `prepareToPlay()` alloue ses tampons pendant que
     /// l'écran reste vivant. `enableRate` est posé AVANT la préparation, seul
     /// ordre que `AVAudioPlayer` honore.
-    nonisolated static func preparedPlayer(from data: Data) async -> Result<PreparedAudioPlayer, any Error> {
+    ///
+    /// Le GAIN se rend ici aussi (#18526) : les octets passent par
+    /// `AudioGainRenderer` à `AudioGainLaw.playbackGain` (120 %) avant d'entrer
+    /// dans `AVAudioPlayer`, dont le volume plafonne à 1 ; un rendu impossible
+    /// (fichier trop long, indéchiffrable) laisse jouer l'original.
+    nonisolated static func preparedPlayer(
+        from data: Data, gain: Float = AudioGainLaw.playbackGain
+    ) async -> Result<PreparedAudioPlayer, any Error> {
         await Task.detached(priority: .userInitiated) { () -> Result<PreparedAudioPlayer, any Error> in
             do {
-                let player = try AVAudioPlayer(data: data)
+                let bytes = AudioGainRenderer.amplified(data: data, gain: gain) ?? data
+                let player = try AVAudioPlayer(data: bytes)
                 player.enableRate = true
                 player.prepareToPlay()
                 return .success(PreparedAudioPlayer(player: player))

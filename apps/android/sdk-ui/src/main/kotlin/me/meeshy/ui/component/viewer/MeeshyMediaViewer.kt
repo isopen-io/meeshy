@@ -76,7 +76,7 @@ public fun MeeshyMediaViewer(
             gallery = gallery,
             initialIndex = initialIndex,
             accent = accent,
-            onDismiss = onDismiss,
+            onDismiss = this::dismiss,
             modifier = modifier,
             timestampFor = timestampFor,
             canCommentMedia = canCommentMedia,

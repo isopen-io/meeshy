@@ -101,7 +101,7 @@ struct AudioWaveformChipsTests {
     @Test("les puces vivent SUR l'onde, les temps ne vivent plus dessous")
     func player_mountsChipsOnTheWaveform() throws {
         let player = try source("Sources/MeeshyUI/Media/AudioPlayerView.swift")
-        #expect(player.contains(".overlay { waveformChips }"))
+        #expect(player.contains(".overlay(alignment: .bottomLeading) { waveformChips }"), "la puce vit dans la bande basse du ruban (#18526)")
         #expect(!player.contains("var timeRow"))
         #expect(!player.contains("AudioPlayerChipsColumn"))
     }
