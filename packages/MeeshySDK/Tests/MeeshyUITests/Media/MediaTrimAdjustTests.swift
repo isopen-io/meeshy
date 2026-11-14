@@ -134,6 +134,10 @@ final class MediaTrimAdjustTests: XCTestCase {
             }
             let autorises = rogneurs.filter { !$0.contains("MediaTrimStrip") }
             XCTAssertTrue(autorises.isEmpty, "\(fichier.lastPathComponent) déclare un second rogneur : \(autorises)")
+            let pistes = code.components(separatedBy: "\n").filter {
+                $0.range(of: #"(struct|class)\s+(?!Meeshy|Composer)\w*TrimTrack\w*\s*[:<]"#, options: .regularExpression) != nil
+            }
+            XCTAssertTrue(pistes.isEmpty, "\(fichier.lastPathComponent) déclare une seconde piste de coupe : \(pistes) — `MeeshyTrimTrack` est la seule du kit")
         }
     }
 }

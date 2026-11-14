@@ -76,7 +76,10 @@ extension SharedLocationsMapViewModel {
         self.init(
             live: SharedLocationsLiveHolder.live(),
             people: CirclePeopleDirectory.shared,
-            presence: { PresenceManager.shared.knownPresenceState(for: $0) }
+            presence: { PresenceManager.shared.knownPresenceState(for: $0) },
+            presenceRefresh: PresenceManager.shared.refreshSignal.$presenceVersion
+                .map { _ in () }
+                .eraseToAnyPublisher()
         )
     }
 }

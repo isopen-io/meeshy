@@ -1,0 +1,1310 @@
+{
+ "composant": "MeeshyTrimTrack",
+ "cle": "K21",
+ "loi": [
+  {
+   "nom": "borne-debut-zero",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "debut",
+   "entree": -5,
+   "attendu": [
+    0,
+    33
+   ]
+  },
+  {
+   "nom": "plancher-debut",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "debut",
+   "entree": 40,
+   "attendu": [
+    32.6,
+    33
+   ]
+  },
+  {
+   "nom": "plancher-fin",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "fin",
+   "entree": 10,
+   "attendu": [
+    18,
+    18.4
+   ]
+  },
+  {
+   "nom": "bord-fin",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "fin",
+   "entree": 60,
+   "attendu": [
+    18,
+    48
+   ]
+  },
+  {
+   "nom": "plafond-fin",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": 20,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "fin",
+   "entree": 47,
+   "attendu": [
+    18,
+    38
+   ]
+  },
+  {
+   "nom": "plafond-debut",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": 20,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "debut",
+   "entree": 2,
+   "attendu": [
+    13,
+    33
+   ]
+  },
+  {
+   "nom": "opposee-immobile-debut",
+   "duree": 10,
+   "plancher": 0.25,
+   "plafond": null,
+   "plage": [
+    2,
+    7
+   ],
+   "geste": "debut",
+   "entree": 3,
+   "attendu": [
+    3,
+    7
+   ]
+  },
+  {
+   "nom": "opposee-immobile-fin",
+   "duree": 10,
+   "plancher": 0.25,
+   "plafond": null,
+   "plage": [
+    2,
+    7
+   ],
+   "geste": "fin",
+   "entree": 8,
+   "attendu": [
+    2,
+    8
+   ]
+  },
+  {
+   "nom": "non-coupable",
+   "duree": 0.3,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    0,
+    0.3
+   ],
+   "geste": "debut",
+   "entree": 0.2,
+   "attendu": [
+    0,
+    0.3
+   ],
+   "coupable": false
+  },
+  {
+   "nom": "coupable",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    0,
+    48
+   ],
+   "geste": "debut",
+   "entree": 1,
+   "attendu": [
+    1,
+    48
+   ],
+   "coupable": true
+  }
+ ],
+ "butee": [
+  {
+   "nom": "bord-gauche",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "start",
+   "entree": -1,
+   "butee": "edge"
+  },
+  {
+   "nom": "plancher-debut",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "start",
+   "entree": 32.7,
+   "butee": "floor"
+  },
+  {
+   "nom": "plafond-fin",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": 20,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "end",
+   "entree": 39,
+   "butee": "ceiling"
+  },
+  {
+   "nom": "bord-droit",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "end",
+   "entree": 48.5,
+   "butee": "edge"
+  },
+  {
+   "nom": "libre",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "start",
+   "entree": 20,
+   "butee": null
+  },
+  {
+   "nom": "tete-sans-butee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plafond": null,
+   "plage": [
+    18,
+    33
+   ],
+   "partie": "playhead",
+   "entree": 20,
+   "butee": null
+  }
+ ],
+ "ajustement": [
+  {
+   "nom": "poignee-pas",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "partie": "start",
+   "haut": true,
+   "pas": 0.1,
+   "attendu": {
+    "plage": [
+     18.1,
+     33
+    ],
+    "tete": 24
+   }
+  },
+  {
+   "nom": "poignee-fin-bas",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "partie": "end",
+   "haut": false,
+   "pas": 0.1,
+   "attendu": {
+    "plage": [
+     18,
+     32.9
+    ],
+    "tete": 24
+   }
+  },
+  {
+   "nom": "pas-centieme",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "partie": "start",
+   "haut": true,
+   "pas": 0.01,
+   "attendu": {
+    "plage": [
+     18.01,
+     33
+    ],
+    "tete": 24
+   }
+  },
+  {
+   "nom": "tete-une-seconde",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "partie": "playhead",
+   "haut": true,
+   "pas": 1,
+   "attendu": {
+    "plage": [
+     18,
+     33
+    ],
+    "tete": 25
+   }
+  },
+  {
+   "nom": "tete-bornee-plage",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 32.5,
+   "partie": "playhead",
+   "haut": true,
+   "pas": 1,
+   "attendu": {
+    "plage": [
+     18,
+     33
+    ],
+    "tete": 33
+   }
+  },
+  {
+   "nom": "tete-bornee-source-retrait",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 47.5,
+   "partie": "playhead",
+   "haut": true,
+   "pas": 1,
+   "selection": "removed",
+   "attendu": {
+    "plage": [
+     18,
+     33
+    ],
+    "tete": 48
+   }
+  },
+  {
+   "nom": "derive-flottante",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    0.1,
+    33
+   ],
+   "tete": 24,
+   "partie": "start",
+   "haut": true,
+   "pas": 0.2,
+   "attendu": {
+    "plage": [
+     0.3,
+     33
+    ],
+    "tete": 24
+   }
+  }
+ ],
+ "geometrie": [
+  {
+   "nom": "x-debut",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "temps": 0,
+   "x": 14
+  },
+  {
+   "nom": "x-fin",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "temps": 48,
+   "x": 334
+  },
+  {
+   "nom": "x-milieu",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "temps": 24,
+   "x": 174
+  },
+  {
+   "nom": "temps-sous-x",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "x": 174,
+   "temps": 24,
+   "sens": "temps-depuis-x"
+  },
+  {
+   "nom": "temps-borne-gauche",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "x": 0,
+   "temps": 0,
+   "sens": "temps-depuis-x"
+  },
+  {
+   "nom": "temps-borne-droite",
+   "largeur": 348,
+   "retrait": 14,
+   "duree": 48,
+   "x": 400,
+   "temps": 48,
+   "sens": "temps-depuis-x"
+  }
+ ],
+ "precision": [
+  {
+   "nom": "echelle-plancher",
+   "points_par_seconde": 6.6,
+   "attendu": 500
+  },
+  {
+   "nom": "echelle-zoom",
+   "points_par_seconde": 20,
+   "attendu": 800
+  },
+  {
+   "nom": "fenetre",
+   "ancre": 10,
+   "largeur": 320,
+   "points_par_seconde": 500,
+   "attendu": [
+    9.68,
+    10.32
+   ]
+  },
+  {
+   "nom": "temps-vers-la-droite",
+   "ancre": 10,
+   "translation": 50,
+   "points_par_seconde": 500,
+   "attendu": 9.9
+  }
+ ],
+ "emission": [
+  {
+   "nom": "meme-plage",
+   "duree": 48,
+   "plancher": 0.4,
+   "de": [
+    18,
+    33
+   ],
+   "a": [
+    18,
+    33
+   ],
+   "emet": false
+  },
+  {
+   "nom": "plage-bornee-identique",
+   "duree": 48,
+   "plancher": 0.4,
+   "de": [
+    0,
+    48
+   ],
+   "a": [
+    -3,
+    60
+   ],
+   "emet": false
+  },
+  {
+   "nom": "autre-plage",
+   "duree": 48,
+   "plancher": 0.4,
+   "de": [
+    18,
+    33
+   ],
+   "a": [
+    18.1,
+    33
+   ],
+   "emet": true
+  }
+ ],
+ "interaction": [
+  {
+   "nom": "premier-contact",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": 20,
+   "edition": false,
+   "deja_en_butee": false,
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    },
+    {
+     "range": [
+      20,
+      33
+     ]
+    }
+   ],
+   "en_butee": false
+  },
+  {
+   "nom": "glisse-suivant",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    20,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": 21,
+   "edition": true,
+   "deja_en_butee": false,
+   "effets": [
+    {
+     "range": [
+      21,
+      33
+     ]
+    }
+   ],
+   "en_butee": false
+  },
+  {
+   "nom": "meme-valeur",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    21,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": 21,
+   "edition": true,
+   "deja_en_butee": false,
+   "effets": [],
+   "en_butee": false
+  },
+  {
+   "nom": "arrivee-en-butee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    21,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": -4,
+   "edition": true,
+   "deja_en_butee": false,
+   "effets": [
+    {
+     "range": [
+      0,
+      33
+     ]
+    },
+    {
+     "haptic": "light"
+    }
+   ],
+   "en_butee": true
+  },
+  {
+   "nom": "reste-en-butee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    0,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": -6,
+   "edition": true,
+   "deja_en_butee": true,
+   "effets": [],
+   "en_butee": true
+  },
+  {
+   "nom": "depart-en-butee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    0,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": -1,
+   "edition": false,
+   "deja_en_butee": false,
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    }
+   ],
+   "en_butee": true
+  },
+  {
+   "nom": "haptique-aucun",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    21,
+    33
+   ],
+   "geste": "glisser",
+   "partie": "start",
+   "entree": -4,
+   "edition": true,
+   "deja_en_butee": false,
+   "haptique": "none",
+   "effets": [
+    {
+     "range": [
+      0,
+      33
+     ]
+    }
+   ],
+   "en_butee": true
+  },
+  {
+   "nom": "precision-entree",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "precision",
+   "partie": "end",
+   "edition": false,
+   "effets": [
+    {
+     "editing": [
+      "end",
+      true
+     ]
+    },
+    {
+     "haptic": "medium"
+    }
+   ]
+  },
+  {
+   "nom": "precision-sans-haptique",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "precision",
+   "partie": "end",
+   "edition": false,
+   "haptique": "none",
+   "effets": [
+    {
+     "editing": [
+      "end",
+      true
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "lever",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "lever",
+   "partie": "end",
+   "edition": true,
+   "effets": [
+    {
+     "editing": [
+      "end",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "lever-sans-edition",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "lever",
+   "partie": "end",
+   "edition": false,
+   "effets": []
+  },
+  {
+   "nom": "toucher-la-piste",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "toucher",
+   "entree": 24,
+   "effets": [
+    {
+     "seek": 24
+    },
+    {
+     "haptic": "light"
+    }
+   ]
+  },
+  {
+   "nom": "toucher-hors-plage",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "toucher",
+   "entree": 40,
+   "effets": [
+    {
+     "seek": 33
+    },
+    {
+     "haptic": "light"
+    }
+   ]
+  },
+  {
+   "nom": "toucher-sans-onseek",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "toucher",
+   "entree": 24,
+   "peut_chercher": false,
+   "effets": []
+  },
+  {
+   "nom": "toucher-desactivee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "toucher",
+   "entree": 24,
+   "actif": false,
+   "effets": []
+  },
+  {
+   "nom": "glisser-tete",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "geste": "glisser-tete",
+   "entree": 26,
+   "tete": 24,
+   "edition": false,
+   "effets": [
+    {
+     "editing": [
+      "playhead",
+      true
+     ]
+    },
+    {
+     "seek": 26
+    }
+   ]
+  },
+  {
+   "nom": "balayage-poignee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "balayage",
+   "partie": "start",
+   "haut": true,
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    },
+    {
+     "range": [
+      18.1,
+      33
+     ]
+    },
+    {
+     "editing": [
+      "start",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "balayage-tete",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "balayage",
+   "partie": "playhead",
+   "haut": true,
+   "effets": [
+    {
+     "editing": [
+      "playhead",
+      true
+     ]
+    },
+    {
+     "seek": 25
+    },
+    {
+     "editing": [
+      "playhead",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "balayage-en-butee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    0.1,
+    33
+   ],
+   "tete": 24,
+   "geste": "balayage",
+   "partie": "start",
+   "haut": false,
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    },
+    {
+     "range": [
+      0,
+      33
+     ]
+    },
+    {
+     "haptic": "light"
+    },
+    {
+     "editing": [
+      "start",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "balayage-sans-effet",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    0,
+    33
+   ],
+   "tete": 24,
+   "geste": "balayage",
+   "partie": "start",
+   "haut": false,
+   "effets": []
+  },
+  {
+   "nom": "balayage-desactivee",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "balayage",
+   "partie": "start",
+   "haut": true,
+   "actif": false,
+   "effets": []
+  },
+  {
+   "nom": "balayage-non-coupable",
+   "duree": 0.3,
+   "plancher": 0.4,
+   "plage": [
+    0,
+    0.3
+   ],
+   "tete": 0.1,
+   "geste": "balayage",
+   "partie": "start",
+   "haut": true,
+   "effets": []
+  },
+  {
+   "nom": "clavier-fleche",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "end",
+   "commande": "arrowRight",
+   "effets": [
+    {
+     "editing": [
+      "end",
+      true
+     ]
+    },
+    {
+     "range": [
+      18,
+      33.1
+     ]
+    },
+    {
+     "editing": [
+      "end",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "clavier-maj-fleche",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "end",
+   "commande": "fineLeft",
+   "effets": [
+    {
+     "editing": [
+      "end",
+      true
+     ]
+    },
+    {
+     "range": [
+      18,
+      32.99
+     ]
+    },
+    {
+     "editing": [
+      "end",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "clavier-page",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "start",
+   "commande": "pageUp",
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    },
+    {
+     "range": [
+      19,
+      33
+     ]
+    },
+    {
+     "editing": [
+      "start",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "clavier-debut",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "start",
+   "commande": "home",
+   "effets": [
+    {
+     "editing": [
+      "start",
+      true
+     ]
+    },
+    {
+     "range": [
+      0,
+      33
+     ]
+    },
+    {
+     "haptic": "light"
+    },
+    {
+     "editing": [
+      "start",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "clavier-fin",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "end",
+   "commande": "end",
+   "effets": [
+    {
+     "editing": [
+      "end",
+      true
+     ]
+    },
+    {
+     "range": [
+      18,
+      48
+     ]
+    },
+    {
+     "haptic": "light"
+    },
+    {
+     "editing": [
+      "end",
+      false
+     ]
+    }
+   ]
+  },
+  {
+   "nom": "clavier-tete-debut",
+   "duree": 48,
+   "plancher": 0.4,
+   "plage": [
+    18,
+    33
+   ],
+   "tete": 24,
+   "geste": "commande",
+   "partie": "playhead",
+   "commande": "home",
+   "effets": [
+    {
+     "editing": [
+      "playhead",
+      true
+     ]
+    },
+    {
+     "seek": 18
+    },
+    {
+     "editing": [
+      "playhead",
+      false
+     ]
+    }
+   ]
+  }
+ ],
+ "recette": [
+  {
+   "nom": "repos",
+   "selection": "kept",
+   "actif": true,
+   "tenue": null,
+   "precision": false,
+   "poignee_jaune": true,
+   "contenu": 1,
+   "prise_debut": 18,
+   "tete": 3,
+   "opacite_fin": 1,
+   "opacite_decor": 1
+  },
+  {
+   "nom": "poignee-tenue",
+   "selection": "kept",
+   "actif": true,
+   "tenue": "start",
+   "precision": false,
+   "poignee_jaune": true,
+   "contenu": 1,
+   "prise_debut": 26,
+   "tete": 3,
+   "opacite_fin": 1,
+   "opacite_decor": 1
+  },
+  {
+   "nom": "tete-tenue",
+   "selection": "kept",
+   "actif": true,
+   "tenue": "playhead",
+   "precision": false,
+   "poignee_jaune": true,
+   "contenu": 1,
+   "prise_debut": 18,
+   "tete": 4,
+   "opacite_fin": 1,
+   "opacite_decor": 1
+  },
+  {
+   "nom": "precision",
+   "selection": "kept",
+   "actif": true,
+   "tenue": "start",
+   "precision": true,
+   "poignee_jaune": true,
+   "contenu": 1,
+   "prise_debut": 26,
+   "tete": 3,
+   "opacite_fin": 0,
+   "opacite_decor": 0
+  },
+  {
+   "nom": "retrait",
+   "selection": "removed",
+   "actif": true,
+   "tenue": null,
+   "precision": false,
+   "poignee_jaune": false,
+   "contenu": 1,
+   "prise_debut": 18,
+   "tete": 3,
+   "opacite_fin": 1,
+   "opacite_decor": 1
+  },
+  {
+   "nom": "desactivee",
+   "selection": "kept",
+   "actif": false,
+   "tenue": "start",
+   "precision": false,
+   "poignee_jaune": true,
+   "contenu": 0.4,
+   "prise_debut": 18,
+   "tete": 3,
+   "opacite_fin": 1,
+   "opacite_decor": 1
+  }
+ ],
+ "mesures": {
+  "hauteurs": {
+   "onde": 56,
+   "vignettes": 60
+  },
+  "rayon": 12,
+  "poignee": 14,
+  "liseré": 3,
+  "prise": {
+   "largeur": 3,
+   "repos": 18,
+   "tenue": 26,
+   "survol": 22,
+   "rayon": 2,
+   "opacite": 0.55
+  },
+  "tete": {
+   "largeur": 3,
+   "tenue": 4,
+   "halo": 8
+  },
+  "voile": 0.62,
+  "loupe": 0.78,
+  "desactive": 0.4,
+  "appui_long_s": 0.4,
+  "jeu_pt": 4,
+  "seuil_glisse_pt": 2,
+  "fondu_loupe_ms": 150,
+  "glissement_ms": 200,
+  "pas_s": 0.1,
+  "pas_maj_s": 0.01,
+  "pas_page_s": 1,
+  "pas_tete_s": 1,
+  "echelle_min_pt_s": 500,
+  "zoom": 40,
+  "reduction_releve": 0.7
+ },
+ "contraste_min": {
+  "tete_sur_lit": 21,
+  "duree_gardee_sur_lit": 10
+ },
+ "cible_minimale": {
+  "ios_pt": 44,
+  "android_dp": 48,
+  "web_px": 44
+ }
+}

@@ -81,7 +81,7 @@ export async function closeShareLinkRevokingGuests<T>(
   return { result, revocation: 'deferred' };
 }
 
-async function runWithRetries(
+export async function runWithRetries(
   params: RevocationLive & { readonly pendingSince: Date },
   attempt: number
 ): Promise<void> {
