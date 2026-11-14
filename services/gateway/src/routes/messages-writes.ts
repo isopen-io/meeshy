@@ -611,9 +611,12 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //
       // Forme reprise du handler socket, seul des quatre écrivains à la porter
       // avec les deux champs dans le même `update`.
+      // Une seule heure pour le retrait : celle qui est écrite est celle qui
+      // part sur le fil (#18159).
+      const deletedAt = new Date();
       await prisma.message.update({
         where: { id: messageId },
-        data: { translations: null, deletedAt: new Date() }
+        data: { translations: null, deletedAt }
       });
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
@@ -652,7 +655,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // modérateur retire le message de quelqu'un d'autre.
         authorId: message.senderId,
         messageId,
-        payload: { messageId, conversationId: message.conversationId },
+        payload: { messageId, conversationId: message.conversationId, deletedAt: deletedAt.toISOString() },
         onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
       });
 

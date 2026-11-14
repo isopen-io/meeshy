@@ -1142,7 +1142,13 @@ export class MessageHandler {
       // suppressions CONCURRENTES franchissaient toutes deux la lecture
       // d'amont et appliquaient toutes deux les effets du retrait, dont un
       // décompte NON idempotent.
-      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
+      // L'heure du retrait est prise UNE fois, et c'est elle qui part sur le
+      // fil : la valeur écrite en base et celle que les clients gravent sont
+      // alors la MÊME. Recomposer un `new Date()` à l'émission rendrait deux
+      // instants pour un seul retrait — l'écart est petit ici, et il n'existe
+      // pas du tout une fois la valeur passée.
+      const deletedAt = new Date();
+      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt }) === 'already-deleted') {
         this._sendGenericError(callback, 'Message not found', socket);
         return;
       }
@@ -1166,6 +1172,7 @@ export class MessageHandler {
       const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
+        deletedAt: deletedAt.toISOString(),
       };
       // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
       safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
