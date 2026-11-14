@@ -36,16 +36,15 @@ extension CallView {
         CallTopBannerTileNeighbor.duoTile(isShown: !isGroupStage && !isLiveFrameShown && callManager.isVideoEnabled && chromeVisibility.isVisible(.selfView), isAtTop: pipCorner.isTop, width: selfTileScale.width(isLandscape: true) * selfTileStowFactor, ownInset: Self.pipMargin, safeHorizontal: Self.railsSafeHorizontal, railsShown: selfTileRailsShown)
     }
 
-    /// #17791 — la place de la pile de bannières sous l'en-tête (partage local, enregistrement, capture), à sa hauteur mesurée.
+    /// #17791 · #18227 — la place de la pile de bannières sous l'en-tête (partage local, enregistrement, capture, pastilles de service), à sa hauteur mesurée.
     var selfTileTopBannerClearance: CGFloat {
         guard !CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside else { return 0 }
-        let counted = CallTopBannerStack.countedForSelfTile(
-            isLocalScreenShareShown: callManager.screenShare.isSharing,
-            isRecordingShown: callManager.recording.phase != .idle || callManager.recording.notice != nil,
-            isCaptureAlertShown: transcriptionService.captureJournal.alert != nil
-        )
+        let counted = CallTopBannerStack.countedForSelfTile(isLocalScreenShareShown: callManager.screenShare.isSharing, isRecordingShown: callManager.recording.phase != .idle || callManager.recording.notice != nil, isCaptureAlertShown: transcriptionService.captureJournal.alert != nil, service: servicePills.banners)
         return CallTopBannerStack.selfTileClearance(counted: counted, heights: topBannerHeights)
     }
+
+    /// #18227 (E3 · E4) — les pastilles de service de cet instant : le SEUL site qui lit la loi pour l'écran.
+    var servicePills: CallServicePills { CallServicePills.live(callManager, isConnectedLayout: showsConnectedLayout) }
 
     /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
     var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }

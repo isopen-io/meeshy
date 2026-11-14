@@ -2,57 +2,99 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Ce que rend la cascade du journal d'un appel (A1.13) : le journal servi, rien de gardé, ou un serveur
+/// injoignable — ce dernier se réessaie, il ne se lit jamais « Aucune transcription ».
+enum CallTranscriptReplay: Equatable {
+    case served(CallTranscript)
+    case nothingKept
+    case unreachable
+
+    var transcript: CallTranscript? {
+        guard case .served(let transcript) = self else { return nil }
+        return transcript
+    }
+
+    /// Un refus (je n'étais pas de l'appel) ou un appel inconnu disent que rien n'est à lire, comme Android
+    /// (`CallTranscriptState.forFailure`) ; tout autre échec — réseau coupé, serveur en panne — se réessaie.
+    /// La cause se lit par la loi unique `ContentFetchFailure`.
+    static func failing(_ error: Error) -> CallTranscriptReplay {
+        ContentFetchFailure.classify(error).isAbsence ? .nothingKept : .unreachable
+    }
+}
+
 /// Loads a call's transcript: the encrypted local cache first, the server
 /// replay as fallback, re-seeding the cache.
 /// App-side cascade (SDK Purity). Shared by both call detail sheets (#8698).
 enum CallTranscriptLoader {
     static func load(callId: String) async -> CallTranscript? {
-        if let local = await CallTranscriptStore.shared.transcript(for: callId) { return local }
+        await replay(callId: callId).transcript
+    }
+
+    static func replay(callId: String) async -> CallTranscriptReplay {
+        if let local = await CallTranscriptStore.shared.transcript(for: callId) { return .served(local) }
         return await fetchRemote(callId: callId)
     }
 
-    /// Fallback distant du replay : mappe le DTO wire vers le domaine
-    /// `CallTranscript`. La traduction affichée est résolue AU PRISME
-    /// (langue préférée du lecteur) — si aucune traduction ne matche,
-    /// l'original s'affiche (`nil`), jamais `translations.first` (règle
-    /// critique n°1 du Prisme). Le transcript récupéré en entier est
-    /// ré-ensemencé dans le cache local chiffré.
-    private static func fetchRemote(callId: String) async -> CallTranscript? {
-        guard let remote = try? await CallTranscriptRemoteService.shared.transcript(callId: callId),
-              !remote.segments.isEmpty || !(remote.captures ?? []).isEmpty else { return nil }
+    /// Fallback distant du replay : mappe le DTO wire vers le domaine `CallTranscript`, chaque phrase servie
+    /// au Prisme du lecteur (`replayedSegment`). Le transcript récupéré en entier est ré-ensemencé dans le
+    /// cache local chiffré.
+    private static func fetchRemote(callId: String) async -> CallTranscriptReplay {
+        let remote: APICallTranscript
+        do {
+            remote = try await CallTranscriptRemoteService.shared.transcript(callId: callId)
+        } catch {
+            return .failing(error)
+        }
+        guard !remote.segments.isEmpty || !(remote.captures ?? []).isEmpty else { return .nothingKept }
         let localUser = AuthManager.shared.currentUser
         let localUserId = localUser?.id ?? ""
         let localName = CallJournalAfterCall.youLabel
-        let preferredLanguage = CallLanguagePreference.preferredCallLanguage(for: localUser)
+        let readerPrism = ReaderPrism.resolve(for: localUser)
         let fetched = CallTranscript(
             callId: remote.callId,
             conversationId: remote.conversationId,
             callStartedAt: remote.callStartedAt,
-            segments: remote.segments.map { seg in
-                let isLocal = seg.speakerId == localUserId
-                let translation = isLocal
-                    ? nil
-                    : seg.translations.first(where: { $0.targetLanguage == preferredLanguage })
-                return CallTranscriptSegment(
-                    speakerId: seg.speakerId,
-                    speakerName: isLocal
-                        ? localName
-                        : (seg.speakerDisplayName
-                            ?? String(localized: "call.transcript.participant", defaultValue: "Participant", bundle: .main)),
-                    isLocal: isLocal,
-                    text: seg.text,
-                    translatedText: translation?.translatedText,
-                    translatedLanguage: translation?.targetLanguage,
-                    language: seg.language,
-                    capturedAt: Date(timeIntervalSince1970: Double(seg.capturedAtMs) / 1000)
-                )
+            segments: remote.segments.map {
+                replayedSegment($0, localUserId: localUserId, localName: localName, readerPrism: readerPrism)
             },
             captures: CallTranscriptCaptureMapping.captures(remote.captures ?? [], localUserId: localUserId, localName: localName)
         )
         if cachesReplay(hasMore: remote.hasMore) {
             await CallTranscriptStore.shared.saveMerging(fetched)
         }
-        return fetched
+        return .served(fetched)
+    }
+
+    /// A1.7 — une phrase relue du serveur. La traduction servie descend le Prisme STRICT du lecteur
+    /// (`ReaderPrism.resolve`, rangs 1 → 4) par la descente unique `PrismTranslationResolver` : la première
+    /// langue du lecteur servie gagne, la langue d'origine concourant à son rang ; aucune correspondance ⇒
+    /// l'original (`nil`), jamais `translations.first` ni la seule langue de rang 1. Ma phrase dit « Vous »
+    /// et n'est jamais traduite pour moi.
+    static func replayedSegment(
+        _ segment: APICallTranscriptSegment,
+        localUserId: String,
+        localName: String,
+        readerPrism: [String]
+    ) -> CallTranscriptSegment {
+        let isLocal = CallJournalAfterCall.isMine(userId: segment.speakerId, localUserId: localUserId)
+        let translation = isLocal ? nil : PrismTranslationResolver.resolve(
+            originalLanguage: segment.language,
+            candidates: segment.translations.map { PrismCandidate(language: $0.targetLanguage, value: $0.translatedText) },
+            preferredLanguages: readerPrism
+        )
+        return CallTranscriptSegment(
+            speakerId: segment.speakerId,
+            speakerName: isLocal
+                ? localName
+                : (segment.speakerDisplayName
+                    ?? String(localized: "call.transcript.participant", defaultValue: "Participant", bundle: .main)),
+            isLocal: isLocal,
+            text: segment.text,
+            translatedText: translation?.text,
+            translatedLanguage: translation?.language,
+            language: segment.language,
+            capturedAt: Date(timeIntervalSince1970: Double(segment.capturedAtMs) / 1000)
+        )
     }
 
     /// A1.6 — un replay lu jusqu'au bout se range au cache, en une écriture ; celui que la borne de pages
@@ -90,6 +132,18 @@ enum CallJournalAfterCall {
         return showsOriginal
             ? CallJournalLines(primary: segment.text, primaryIsTranslation: false, below: CallJournalLines.Below(kind: .translated, text: translated))
             : CallJournalLines(primary: translated, primaryIsTranslation: true, below: CallJournalLines.Below(kind: .original, text: segment.text))
+    }
+
+    /// A1.18 — les deux états d'une phrase traduite se SUPERPOSENT : la phrase garde la hauteur du plus haut,
+    /// « Voir l'original » ne fait que fondre leurs opacités, et aucune phrase ne glisse. Une phrase sans
+    /// traduction n'a qu'un état, toujours montré.
+    static func layers(for segment: CallTranscriptSegment, showsOriginal: Bool) -> [CallJournalLayer] {
+        guard servesTranslation(segment) else {
+            return [CallJournalLayer(lines: lines(for: segment, showsOriginal: showsOriginal), isShown: true)]
+        }
+        return [false, true].map { state in
+            CallJournalLayer(lines: lines(for: segment, showsOriginal: state), isShown: state == showsOriginal)
+        }
     }
 
     /// Le pied du journal : « Voir l'original », puis « Voir la traduction » une fois la bascule posée.
@@ -151,6 +205,12 @@ struct CallJournalLines: Equatable {
     let primary: String
     let primaryIsTranslation: Bool
     let below: Below?
+}
+
+/// Un état d'une phrase, posé dans sa pile : montré, ou gardé invisible pour tenir la hauteur (A1.18).
+struct CallJournalLayer: Equatable {
+    let lines: CallJournalLines
+    let isShown: Bool
 }
 
 enum CallTranscriptRetentionNotice: Equatable {
@@ -263,16 +323,17 @@ struct CallTranscriptSection: View {
     }
 
     /// « Voir l'original » au pied du journal : une bascule pour tout l'appel qui inverse les deux lignes de
-    /// chaque phrase traduite, en fondu (#17862, #17895). « Voir la traduction » rend l'état par défaut.
+    /// chaque phrase traduite, en fondu (#17862, #17895). « Voir la traduction » rend l'état par défaut. Aucune
+    /// transaction autour de la bascule : seules les opacités s'animent, la mise en page ne bouge pas (A1.18).
     private var originalToggle: some View {
         Button {
-            meeshyWithAnimation(.easeInOut(duration: 0.2), reduced: .easeInOut(duration: 0.12), reduceMotion: reduceMotion) {
-                showOriginalText.toggle()
-            }
+            showOriginalText.toggle()
         } label: {
             Text(CallJournalAfterCall.toggleLabel(showsOriginal: showOriginalText))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundStyle(Color(hex: accentHex))
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: reduceMotion ? 0.12 : 0.2), value: showOriginalText)
                 .meeshyTapTarget()
                 .padding(.vertical, -MeeshyTapTarget.inset(forVisualSide: 17))
         }
@@ -323,16 +384,31 @@ struct CallTranscriptSection: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(theme.textMuted)
             }
-            Text(lines.primary)
-                .font(.callout)
-                .foregroundStyle(lines.primaryIsTranslation ? speakerColor : theme.textPrimary)
-                .contentTransition(.opacity)
-            if let below = lines.below {
-                CallOriginalBelowText(text: below.text, kind: below.kind, ink: theme.textSecondary)
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(CallJournalAfterCall.layers(for: segment, showsOriginal: showOriginalText).enumerated()), id: \.offset) { _, layer in
+                    sentenceLines(layer.lines, speakerColor: speakerColor)
+                        .opacity(layer.isShown ? 1 : 0)
+                        .accessibilityHidden(!layer.isShown)
+                        .animation(.easeInOut(duration: reduceMotion ? 0.12 : 0.2), value: showOriginalText)
+                }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(CallJournalAfterCall.spokenLabel(name: name, elapsed: elapsedLabel, lines: lines))
+    }
+
+    /// La ligne principale d'une phrase et, quand elle en a une, la ligne dessous (« Original · » / « Traduit · »).
+    private func sentenceLines(_ lines: CallJournalLines, speakerColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            Text(lines.primary)
+                .font(.callout)
+                .foregroundStyle(lines.primaryIsTranslation ? speakerColor : theme.textPrimary)
+                .contentTransition(.opacity)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let below = lines.below {
+                CallOriginalBelowText(text: below.text, kind: below.kind, ink: theme.textSecondary)
+            }
+        }
     }
 
     /// La couleur d'une personne, la même avant et après la fin de l'appel,

@@ -8,7 +8,7 @@ import XCTest
 @MainActor
 final class CallChromeVisibilityTests: XCTestCase {
 
-    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner, .featuredCapsule, .captureAlert]
+    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner, .featuredCapsule, .captureAlert, .servicePill]
     private let permanent: [CallChromeElement] = [.captions, .selfView, .recordingConsent]
 
     func test_isVisible_revealed_showsEveryElement() {

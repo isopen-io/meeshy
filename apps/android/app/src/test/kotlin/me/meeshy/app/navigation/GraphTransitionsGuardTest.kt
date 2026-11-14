@@ -11,19 +11,29 @@ import org.junit.Test
  * locale ne se tolère que si elle délègue à [FeedOverlayTransition], à `EnterTransition.None` / `ExitTransition.None`
  * ou à une fonction `stack*`.
  *
+ * Toute l'app est lue, pas seulement `graph/` : une destination se déclare aussi dans `ChatDestination.kt` ou
+ * `MediaRoutes.kt`, et une transition passée par référence ou par valeur compte comme une lambda.
+ *
  * Mesuré le 2026-11-14 : 28 transitions locales (jeu 24, Réglages 4), ramenées à 0 par #18365. Le plafond 0 vaut
  * interdiction.
  */
 class GraphTransitionsGuardTest {
 
-    private val transition = Regex("""\b(enterTransition|exitTransition|popEnterTransition|popExitTransition)\s*=\s*\{""")
-    private val delegated = Regex("""FeedOverlayTransition|EnterTransition\.None|ExitTransition\.None|\bstack\w*\(""")
+    private val transition = Regex("""\b(enterTransition|exitTransition|popEnterTransition|popExitTransition)\s*=\s*""")
+    private val delegated = Regex("""FeedOverlayTransition|EnterTransition\.None|ExitTransition\.None|\bstack\w*\(|::stack\w*\b""")
 
     internal fun localTransitions(source: String): List<Int> =
         transition.findAll(source)
-            .filterNot { delegated.containsMatchIn(source.substring(it.range.last + 1, lambdaEnd(source, it.range.last + 1))) }
+            .filterNot { delegated.containsMatchIn(assigned(source, it.range.last + 1)) }
             .map { match -> source.substring(0, match.range.first).count { it == '\n' } + 1 }
             .toList()
+
+    /** Ce qui est affecté : le corps d'une lambda, ou l'expression (référence, valeur) jusqu'à la virgule ou la ligne. */
+    private fun assigned(text: String, from: Int): String {
+        if (text.getOrNull(from) == '{') return text.substring(from + 1, lambdaEnd(text, from + 1))
+        val end = text.indexOfAny(charArrayOf(',', '\n', ')'), from).let { if (it < 0) text.length else it }
+        return text.substring(from, end)
+    }
 
     private fun lambdaEnd(text: String, from: Int): Int {
         var depth = 1
@@ -39,12 +49,13 @@ class GraphTransitionsGuardTest {
         return index - 1
     }
 
+    /** Toutes les sources de l'app : un graphe se déclare aussi hors de `graph/` (ChatDestination.kt, MediaRoutes.kt). */
     private fun graphSources(): List<File> =
-        File("src/main/kotlin/me/meeshy/app/navigation/graph").listFiles { file -> file.extension == "kt" }.orEmpty().toList()
+        File("src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
 
     @Test
     fun `l'analyse voit les graphes`() {
-        assertThat(graphSources().size).isAtLeast(10)
+        assertThat(graphSources().count { "/navigation/graph/" in it.path.replace(File.separatorChar, '/') }).isAtLeast(10)
     }
 
     @Test
@@ -62,6 +73,29 @@ class GraphTransitionsGuardTest {
         )
 
         assertThat(found).containsExactly(6)
+    }
+
+    @Test
+    fun `une transition passee par reference ou par valeur compte aussi`() {
+        val found = localTransitions(
+            """
+            composable(
+                route = Routes.CHAT,
+                enterTransition = chatPush,
+                exitTransition = ::chatExit,
+                popEnterTransition = AnimatedContentTransitionScope<NavBackStackEntry>::stackPopEnter,
+            ) {}
+            """.trimIndent(),
+        )
+
+        assertThat(found).containsExactly(3, 4).inOrder()
+    }
+
+    @Test
+    fun `l'analyse voit aussi les destinations declarees hors du dossier des graphes`() {
+        val names = graphSources().map { it.name }
+
+        assertThat(names).containsAtLeast("ChatDestination.kt", "MediaRoutes.kt", "FeedNavGraph.kt")
     }
 
     @Test

@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.call
 
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+
 enum class CallVerticalEdge { Top, Bottom }
 
 /**
@@ -8,7 +10,7 @@ enum class CallVerticalEdge { Top, Bottom }
  * the movement by a short fade, with no displacement. Mirrors iOS `CallChromeStow`.
  */
 object CallChromeStow {
-    const val REDUCED_FADE_MILLIS: Int = 150
+    const val REDUCED_FADE_MILLIS: Int = MotionSpecs.REDUCED_FADE_MILLIS
 
     fun leavesByItsEdge(isVisible: Boolean, reduceMotion: Boolean): Boolean = !isVisible && !reduceMotion
 

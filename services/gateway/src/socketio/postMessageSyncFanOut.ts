@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Message } from '@meeshy/shared/types/index';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from './serverEmit';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
 import { fetchParticipantSuperset } from './participant-superset';
@@ -10,6 +9,7 @@ import {
   type UnreadBridgeBuilder,
 } from './emitUnreadCountsToRecipients';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
+import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
 import { toIsoOrNull } from './utils/lastMessagePreviewPrism';
 import { resolveLastMessagePreviewGroup } from './utils/lastMessagePreviewGroup';
 import type { QueuedPayloadFor } from './queuedEventContract';
@@ -171,8 +171,15 @@ export async function syncConversationListOnNewMessage(
     // alimente `message:new` ci-dessus : les deux événements portent donc
     // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
     // arriver derrière pour effacer ce que `message:new` vient d'installer.
-    for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
-      ctx.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+    //
+    // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Le `catch` nommé
+    // « non-bloquant » qui enveloppe cette unité attrapait bien la levée sans
+    // la CONFINER : les lecteurs suivants ET la pastille de non-lus douze
+    // lignes plus bas partaient avec elle.
+    emitConversationUpdatedPerReader(
+      ctx.io,
+      participantUserRoomTargets(allParticipants),
+      (participant) => ({
         ...updatePayload,
         // Parité avec le chemin WS (`MessageHandler.ts`) et
         // `emitConversationPreviewUpdate.ts` : les trois émetteurs composent le
@@ -180,8 +187,9 @@ export async function syncConversationListOnNewMessage(
         ...resolveLastMessagePreviewGroup(participant, message, new Date(), {
           quotedDeathAt: quotedDeathFor(params.quotedDeaths, participant),
         })
-      });
-    }
+      }),
+      (error, room) => logger.warn('conversation:updated fanout failed for one reader', { conversationId: normalizedId, room, error }),
+    );
 
     // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
     // Délégué à l'unité partagée par les trois transports d'envoi : la copie

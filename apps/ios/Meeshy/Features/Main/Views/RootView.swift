@@ -867,8 +867,8 @@ struct RootView: View {
         reelsRevealClosing = false
         reelsRevealMasked = true
         reelsRevealProgress = 0
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.35
-        withAnimation(.easeOut(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: true, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: true, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 1
         }
         // Wait for the reveal to FINISH before the first reel plays. Starting
@@ -907,8 +907,8 @@ struct RootView: View {
         // laissant le moteur vidéo (repris par la surface de fond du feed).
         PlaybackCoordinator.shared.stopAllAudio()
         HapticFeedback.light()
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
-        withAnimation(.easeIn(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: false, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: false, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 0
         }
         Task {
