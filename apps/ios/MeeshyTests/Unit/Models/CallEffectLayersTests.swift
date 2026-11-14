@@ -215,35 +215,84 @@ final class CallEffectLayersTests: XCTestCase {
 
     // MARK: - La barre revient au menu de base
 
+    private let allModes: [CallEffectsBarMode] = [.base, .looks, .settings, .applied]
+
     func test_bar_settingsToggles_betweenBaseAndSettings() {
         XCTAssertEqual(CallEffectsBarRule.afterSettings(from: .base), .settings)
+        XCTAssertEqual(CallEffectsBarRule.afterSettings(from: .looks), .settings)
         XCTAssertEqual(CallEffectsBarRule.afterSettings(from: .settings), .base)
         XCTAssertEqual(CallEffectsBarRule.afterSettings(from: .applied), .settings)
     }
 
-    func test_bar_anyChoice_returnsToTheBaseMenu() {
-        XCTAssertEqual(CallEffectsBarRule.afterAddingLook(from: .settings), .base)
-        XCTAssertEqual(CallEffectsBarRule.afterAddingLook(from: .applied), .base)
-        XCTAssertEqual(CallEffectsBarRule.afterRemoval, .base)
+    /// P8 et C1 tels que dessinés : un mode s'ouvre sur le carrousel du genre où l'on entre.
+    func test_bar_aModeOpensOnItsCarousel() {
+        XCTAssertEqual(CallEffectsBarRule.entering, .looks)
+    }
+
+    /// C1 généralisée (2026-11-14, remplace #17962 point 2) : un look, une couleur, une
+    /// déformation ou un cadre choisis referment le carrousel, en Effets comme en Montage, et la
+    /// barre revient au menu de base. Annuler une couche fait de même.
+    func test_bar_anyChoice_closesTheCarousel_andReturnsToTheBaseMenu() {
         XCTAssertEqual(CallEffectsBarRule.afterChoice, .base)
+        XCTAssertEqual(CallEffectsBarRule.afterRemoval, .base)
+        XCTAssertFalse(CallEffectsBarRule.showsCarousel(CallEffectsBarRule.afterChoice), "le carrousel ne reste pas après un choix")
+    }
+
+    /// (+) ouvre le carrousel d'un genre absent de la pile, d'où que l'on parte.
+    func test_bar_addingALook_opensItsCarousel_fromAnyState() {
+        for mode in allModes {
+            XCTAssertEqual(CallEffectsBarRule.afterAddingLook(from: mode), .looks, "\(mode)")
+        }
+    }
+
+    /// Un genre de la rangée ouvre son carrousel ; retoucher le genre déjà ouvert le referme.
+    func test_bar_aGenre_opensItsCarousel_andTheOpenGenreClosesIt() {
+        XCTAssertEqual(CallEffectsBarRule.afterGenre(from: .base, isOpen: false), .looks)
+        XCTAssertEqual(CallEffectsBarRule.afterGenre(from: .looks, isOpen: false), .looks)
+        XCTAssertEqual(CallEffectsBarRule.afterGenre(from: .looks, isOpen: true), .base)
+        XCTAssertEqual(CallEffectsBarRule.afterGenre(from: .settings, isOpen: false), .looks)
+        XCTAssertEqual(CallEffectsBarRule.afterGenre(from: .applied, isOpen: false), .looks)
+    }
+
+    /// Le genre pressé est celui dont le carrousel est ouvert ; au menu de base, aucun.
+    func test_bar_theGenreIsPressed_onlyWhileItsCarouselIsOpen() {
+        XCTAssertEqual(CallEffectsBarRule.pressed(.frame, in: .looks), .frame)
+        XCTAssertEqual(CallEffectsBarRule.pressed(.face, in: .looks), .face)
+        XCTAssertNil(CallEffectsBarRule.pressed(.frame, in: .base))
+        XCTAssertNil(CallEffectsBarRule.pressed(.color, in: .settings))
+        XCTAssertNil(CallEffectsBarRule.pressed(.face, in: .applied))
     }
 
     func test_bar_longPressOnPlus_opensTheAppliedList_onlyWhenThereIsOne() {
         XCTAssertEqual(CallEffectsBarRule.afterShowingApplied(from: .base, hasLayers: true), .applied)
+        XCTAssertEqual(CallEffectsBarRule.afterShowingApplied(from: .looks, hasLayers: true), .applied)
         XCTAssertEqual(CallEffectsBarRule.afterShowingApplied(from: .settings, hasLayers: true), .applied)
         XCTAssertEqual(CallEffectsBarRule.afterShowingApplied(from: .base, hasLayers: false), .base)
+        XCTAssertEqual(CallEffectsBarRule.afterShowingApplied(from: .looks, hasLayers: false), .looks)
     }
 
     func test_bar_aListThatLostItsLastLayer_closes() {
         XCTAssertEqual(CallEffectsBarRule.reconciled(.applied, hasLayers: false), .base)
         XCTAssertEqual(CallEffectsBarRule.reconciled(.applied, hasLayers: true), .applied)
         XCTAssertEqual(CallEffectsBarRule.reconciled(.settings, hasLayers: false), .settings)
+        XCTAssertEqual(CallEffectsBarRule.reconciled(.looks, hasLayers: false), .looks)
     }
 
-    func test_bar_looksShowOnlyOnTheBaseMenu() {
+    /// La rangée Visage · Couleur · Cadres vit au menu de base et sous un carrousel ouvert ;
+    /// réglages et liste resserrent la barre sur ‹ · Réglages · (+).
+    func test_bar_theGenreRow_showsOnTheBaseMenuAndUnderAnOpenCarousel() {
         XCTAssertTrue(CallEffectsBarRule.showsLooks(.base))
+        XCTAssertTrue(CallEffectsBarRule.showsLooks(.looks))
         XCTAssertFalse(CallEffectsBarRule.showsLooks(.settings))
         XCTAssertFalse(CallEffectsBarRule.showsLooks(.applied))
+    }
+
+    /// Le carrousel ne se montre que quand un genre l'a ouvert : jamais au menu de base.
+    func test_bar_theCarousel_showsOnlyWhenAGenreOpenedIt() {
+        XCTAssertTrue(CallEffectsBarRule.showsCarousel(.looks))
+        XCTAssertFalse(CallEffectsBarRule.showsCarousel(.base))
+        XCTAssertFalse(CallEffectsBarRule.showsCarousel(.settings))
+        XCTAssertFalse(CallEffectsBarRule.showsCarousel(.applied))
     }
 
     // MARK: - #17947 — un réglage continu laisse le panneau ouvert
@@ -254,7 +303,8 @@ final class CallEffectLayersTests: XCTestCase {
     func test_bar_back_closesTheSettingsPanel_elseReturnsToTheCall() {
         XCTAssertEqual(CallEffectsBarRule.afterBack(from: .settings), .base)
         XCTAssertEqual(CallEffectsBarRule.afterBack(from: .settings), CallEffectsBarRule.afterSettings(from: .settings), "le même chemin que retoucher Réglages")
-        XCTAssertNil(CallEffectsBarRule.afterBack(from: .base))
+        XCTAssertNil(CallEffectsBarRule.afterBack(from: .base), "un second ‹ quitte le mode")
+        XCTAssertNil(CallEffectsBarRule.afterBack(from: .looks))
         XCTAssertNil(CallEffectsBarRule.afterBack(from: .applied))
     }
 

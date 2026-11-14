@@ -54,6 +54,7 @@ import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.relation.SharedLocationShareProblem
+import me.meeshy.feature.profile.R
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
