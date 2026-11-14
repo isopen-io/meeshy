@@ -9,7 +9,7 @@ import MeeshySDK
 /// > « un vrai effet en utilisant la carte graphique si disponible pour brûler
 /// > les lettres ! faire disparaître comme des étincelles et les flammes autour
 /// > et un vent qui fait disparaître à gauche ou à droite selon la direction de
-/// > mouvement de l'appareil » (directive porteur 2026-11-13)
+/// > mouvement de l'appareil » (directive porteur, #17938)
 ///
 /// ## Pourquoi ce n'est pas un ornement
 ///
@@ -127,7 +127,7 @@ public struct EphemeralBurnEffect: ViewModifier {
         guard ignition == nil else { return }
         ignition = .ignite(rawWind: wind?.raw, side: side, seed: Double.random(in: 0..<1))
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(16))
+            guard await cancellableSleep(for: .milliseconds(16)) else { return }
             guard isBurning, ignition != nil else { return }
             withAnimation(.linear(duration: EphemeralBurn.fullDuration)) { progress = 1 }
         }

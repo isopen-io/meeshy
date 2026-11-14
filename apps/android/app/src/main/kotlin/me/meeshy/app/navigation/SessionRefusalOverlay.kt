@@ -18,12 +18,14 @@ import me.meeshy.app.auth.SessionClosedScreen
 import me.meeshy.app.auth.SessionRefusalScreen
 import me.meeshy.app.auth.SessionRefusalViewModel
 import me.meeshy.app.startup.AppOverlay
+import me.meeshy.ui.component.presentation.MeeshyCoverHost
 
 /**
  * Les deux refus de session qui couvrent l'app (iOS `ageGateOverlay` + retrait d'un compte supprimé) : « session fermée »
  * quand le compte a été supprimé ailleurs, « Meeshy est réservé aux 13 ans et plus » pour un mineur. Pleine page, un seul
  * bouton, aucun retour vers l'écran refusé. Hors ligne ou sur un 401 ordinaire, aucun des deux ne se lève : le réseau ne
- * signale que les refus nommés.
+ * signale que les refus nommés. L'écran monte du bas, se fond dans l'autre refus et redescend ([MeeshyCoverHost]) ; aucun
+ * retour système ne l'écoute.
  */
 class SessionRefusalOverlay @Inject constructor() : AppOverlay {
     override val order: Int = 9_000
@@ -37,12 +39,13 @@ class SessionRefusalOverlay @Inject constructor() : AppOverlay {
         LaunchedEffect(screen) {
             if (screen == SessionRefusalScreen.SESSION_CLOSED) auth.onExternalSessionOpened()
         }
-        when (screen) {
-            SessionRefusalScreen.SESSION_CLOSED -> SessionClosedScreen(onContinue = { refusals.acknowledgeClosed() })
-            SessionRefusalScreen.AGE_BELOW_MINIMUM -> AgeRefusalScreen(onAcknowledge = {
-                if (refusals.acknowledgeAge()) auth.logout()
-            })
-            null -> Unit
+        MeeshyCoverHost(value = screen) { shown ->
+            when (shown) {
+                SessionRefusalScreen.SESSION_CLOSED -> SessionClosedScreen(onContinue = { refusals.acknowledgeClosed() })
+                SessionRefusalScreen.AGE_BELOW_MINIMUM -> AgeRefusalScreen(onAcknowledge = {
+                    if (refusals.acknowledgeAge()) auth.logout()
+                })
+            }
         }
     }
 }

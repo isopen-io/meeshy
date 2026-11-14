@@ -26,7 +26,7 @@ import Foundation
 public enum EphemeralBurn {
 
     /// La combustion complète — assez longue pour être LUE, assez courte pour
-    /// ne pas retenir le fil. Portée de 0,6 à 1,2 s le 2026-11-13 (#17938) : la
+    /// ne pas retenir le fil. Portée de 0,6 à 1,2 s par #17938 : la
     /// destruction est devenue une vraie combustion — un front qui traverse la
     /// bulle lettre par lettre, des flammes qui s'élèvent, des étincelles que le
     /// vent emporte — et cela ne se lit pas en 600 ms. Même valeur que

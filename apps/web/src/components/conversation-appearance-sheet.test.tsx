@@ -211,19 +211,29 @@ describe('le sélecteur de fond', () => {
 
   test('« Plus dans la boutique » ferme la feuille et mène à la vitrine des fonds', async () => {
     const h = harness(200);
-    const pushed: string[] = [];
-    const original = window.history.pushState.bind(window.history);
-    window.history.pushState = ((data: unknown, unused: string, url?: string | URL | null) => {
-      pushed.push(String(url));
-      original(data, unused, url);
-    }) as typeof window.history.pushState;
-    let closed = false;
-    await open(h, () => {
-      closed = true;
-    });
-    await act(async () => (host.querySelector('[data-appearance-shop]') as HTMLElement).click());
-    expect(closed).toBe(true);
-    expect(pushed.at(-1)).toContain('volet=packs');
-    expect(pushed.at(-1)).toContain('domaine=wallpaper');
+    const reached: string[] = [];
+    const listen = (method: 'pushState' | 'replaceState') => {
+      const original = window.history[method].bind(window.history);
+      window.history[method] = ((data: unknown, unused: string, url?: string | URL | null) => {
+        if (url !== undefined && url !== null) reached.push(String(url));
+        original(data, unused, url);
+      }) as History['pushState'];
+      return () => {
+        window.history[method] = original;
+      };
+    };
+    const restore = [listen('pushState'), listen('replaceState')];
+    try {
+      let closed = false;
+      await open(h, () => {
+        closed = true;
+      });
+      await act(async () => (host.querySelector('[data-appearance-shop]') as HTMLElement).click());
+      expect(closed).toBe(true);
+      expect(reached.at(-1)).toContain('volet=packs');
+      expect(reached.at(-1)).toContain('domaine=wallpaper');
+    } finally {
+      restore.forEach((undo) => undo());
+    }
   });
 });
