@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -40,6 +38,7 @@ import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallTranscriptionActive
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -132,7 +131,7 @@ class CallDuoAudioCompactHeightTest {
                                 disposition = CallControlsDisposition.Rails,
                                 rows = emptyList(),
                                 items = emptyMap(),
-                                outputIcon = Icons.Filled.VolumeUp,
+                                outputIcon = MeeshyIcons.VolumeUpFilled,
                                 onToggleMenu = {},
                                 onToggleMute = {},
                                 onOutput = {},
