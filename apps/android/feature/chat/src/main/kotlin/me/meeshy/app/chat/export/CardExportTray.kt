@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +26,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoteButton
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -227,16 +234,27 @@ private fun TypefacePanel(state: CardTrayState, change: (CardFormat) -> Unit) {
             }
         }
         val toggle = anonymizeToggle(state)
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(R.string.export_card_typeface_pairs), color = MeeshyTheme.tokens.textSecondary,
-                style = MaterialTheme.typography.bodySmall, maxLines = 2, modifier = Modifier.weight(1f),
-            )
-            if (toggle != null) CardPill(CardLabels.toggle(toggle), format[toggle], { change(format.with(toggle, !format[toggle])) })
+        val note = MeeshyInfoNote(
+            question = stringResource(R.string.export_card_typeface_pairs_question),
+            text = stringResource(R.string.export_card_typeface_pairs),
+        )
+        var noteOpen by rememberSaveable { mutableStateOf(false) }
+        Column(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MeeshyInfoNoteButton(note = note, expanded = noteOpen, onToggle = { noteOpen = !noteOpen })
+                Spacer(Modifier.weight(1f))
+                if (toggle != null) CardPill(CardLabels.toggle(toggle), format[toggle], { change(format.with(toggle, !format[toggle])) })
+            }
+            if (noteOpen) {
+                Text(
+                    note.text, color = MeeshyTheme.tokens.textSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }

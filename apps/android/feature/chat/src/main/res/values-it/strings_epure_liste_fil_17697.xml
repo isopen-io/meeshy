@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">Scompare dopo la lettura.</string>
     <string name="conversation_settings_auto_translate_hint">I messaggi arrivano nella lingua di ogni membro.</string>
     <string name="conversation_settings_announcement_hint">Scrivono solo i ruoli autorizzati, gli altri leggono.</string>
+    <string name="chat_header_flame_card_orientation">Scintille guadagnate scrivendo in questa conversazione</string>
+    <string name="chat_header_flame_card_today_sparks">Scintille oggi</string>
+    <string name="chat_header_flame_card_total_sparks">Scintille in totale</string>
+    <string name="export_card_typeface_pairs_question">A cosa si applica il carattere?</string>
 </resources>

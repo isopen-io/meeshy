@@ -104,7 +104,7 @@ internal data class ConversationMenuInput(
  * LE menu d'une rangée, calculé une fois depuis [ConversationRowMenuCapabilities] : le composable
  * ne porte aucune condition, il parcourt [groups] dans l'ordre. Miroir de `ConversationMenuCatalog.make`,
  * dont il DIVERGE depuis l'épure (#17697, règle 6) : Renommer, Favori, Tags, Déplacer, Mentions seulement
- * et Mode de lecture sont rangés derrière « Plus » ; l'iOS les garde à la racine tant que son lot n'a pas suivi.
+ * Mode de lecture, Supprimer pour tous et Rendre obsolète sont rangés derrière « Plus » ; l'iOS les garde à la racine tant que son lot n'a pas suivi.
  */
 internal data class ConversationMenuModel(
     val header: List<ConversationMenuEntry>,
@@ -160,13 +160,13 @@ internal data class ConversationMenuModel(
                         (input.isPeerBlocked != null),
                     ConversationMenuEntry.REPORT to law.report,
                     ConversationMenuEntry.ADMIN_OPEN to (law.adminOpen && dest.admin),
+                    ConversationMenuEntry.DELETE_FOR_ALL to (input.isCreator && law.deleteForAll),
+                    ConversationMenuEntry.MAKE_OBSOLETE to law.obsolete,
                 ),
                 departure = offered(
                     ConversationMenuEntry.LEAVE to law.leave,
                     ConversationMenuEntry.DELETE to (law.removal == ConversationRowMenuCapabilities.Removal.DELETE),
                     ConversationMenuEntry.HIDE to (law.removal == ConversationRowMenuCapabilities.Removal.HIDE),
-                    ConversationMenuEntry.DELETE_FOR_ALL to (input.isCreator && law.deleteForAll),
-                    ConversationMenuEntry.MAKE_OBSOLETE to law.obsolete,
                 ),
             )
         }

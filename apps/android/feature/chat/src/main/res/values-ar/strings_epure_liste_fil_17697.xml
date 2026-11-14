@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">تختفي بعد القراءة.</string>
     <string name="conversation_settings_auto_translate_hint">تصل الرسائل بلغة كل عضو.</string>
     <string name="conversation_settings_announcement_hint">لا يكتب سوى أصحاب الأدوار المصرّح لها، والبقية يقرؤون.</string>
+    <string name="chat_header_flame_card_orientation">الشرارات المكتسبة بالكتابة في هذه المحادثة</string>
+    <string name="chat_header_flame_card_today_sparks">شرارات اليوم</string>
+    <string name="chat_header_flame_card_total_sparks">إجمالي الشرارات</string>
+    <string name="export_card_typeface_pairs_question">على ماذا ينطبق الخط؟</string>
 </resources>

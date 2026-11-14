@@ -21,7 +21,6 @@
     <string name="shareLink_detail_requireEmail">Email</string>
     <string name="shareLink_detail_requireNickname">Username</string>
     <string name="shareLink_detail_historyRight">History</string>
-    <string name="new_conversation_group_solo_hint">You can invite people later.</string>
     <string name="encryption_mode_hybrid_description">Encrypted on our servers, which can read your messages. Texts checked intact between compatible devices.</string>
     <string name="share_link_field_description">Description</string>
     <string name="share_link_field_slug">Link address</string>

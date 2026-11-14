@@ -21,7 +21,6 @@
     <string name="shareLink_detail_requireEmail">E-Mail</string>
     <string name="shareLink_detail_requireNickname">Benutzername</string>
     <string name="shareLink_detail_historyRight">Verlauf</string>
-    <string name="new_conversation_group_solo_hint">Du kannst später Personen einladen.</string>
     <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, die deine Nachrichten lesen können. Zwischen kompatiblen Geräten werden Texte auf Unversehrtheit geprüft.</string>
     <string name="share_link_field_description">Beschreibung</string>
     <string name="share_link_field_slug">Link-Adresse</string>

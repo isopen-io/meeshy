@@ -89,10 +89,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "new_conversation_group_solo_hint",
-          "status": "android-only"
-        },
-        {
           "androidName": "encryption_mode_hybrid_description",
           "status": "android-only"
         },

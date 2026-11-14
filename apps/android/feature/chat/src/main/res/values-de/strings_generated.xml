@@ -107,8 +107,6 @@
     <string name="chat_header_flame_card_open">Zum Spiel</string>
     <string name="chat_header_flame_card_streak_one">Tag in Folge hier</string>
     <string name="chat_header_flame_card_streak_other">Tage in Folge hier</string>
-    <string name="chat_header_flame_card_today">Heute</string>
-    <string name="chat_header_flame_card_total">Hier seit Beginn</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d Mitglied</item>
         <item quantity="other">%1$d Mitglieder</item>

@@ -39,6 +39,22 @@
         {
           "androidName": "conversation_settings_announcement_hint",
           "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_flame_card_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_flame_card_today_sparks",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_flame_card_total_sparks",
+          "status": "android-only"
+        },
+        {
+          "androidName": "export_card_typeface_pairs_question",
+          "status": "android-only"
         }
       ]
     }

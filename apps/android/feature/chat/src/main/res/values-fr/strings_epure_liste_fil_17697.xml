@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">Il disparaît après lecture.</string>
     <string name="conversation_settings_auto_translate_hint">Les messages arrivent dans la langue de chaque membre.</string>
     <string name="conversation_settings_announcement_hint">Seuls les rôles autorisés écrivent, les autres lisent.</string>
+    <string name="chat_header_flame_card_orientation">Étincelles gagnées en écrivant dans cette conversation</string>
+    <string name="chat_header_flame_card_today_sparks">Étincelles aujourd\'hui</string>
+    <string name="chat_header_flame_card_total_sparks">Étincelles au total</string>
+    <string name="export_card_typeface_pairs_question">À quoi s\'applique la police ?</string>
 </resources>

@@ -67,9 +67,6 @@ data class NewConversationUiState(
     /** Two peers and more already make a group: the switch says so and does not turn off. */
     val groupToggleEnabled: Boolean get() = selected.size <= 1
 
-    /** « Vous pouvez le créer seul… » under the switch while the group has no invitee yet. */
-    val showsSoloHint: Boolean get() = groupRequested && selected.isEmpty()
-
     /** La section Chiffrement (décision du 2026-11-01) : les modes offerts pour ce rôle et ce type. */
     val encryptionOffer: CreationEncryptionOffer
         get() = NewConversationLogic.encryptionOffer(platformRole, if (isGroup) selected.size else 1, groupRequested)

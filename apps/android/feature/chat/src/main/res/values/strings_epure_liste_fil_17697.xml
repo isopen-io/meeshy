@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">It disappears after reading.</string>
     <string name="conversation_settings_auto_translate_hint">Messages arrive in each member’s language.</string>
     <string name="conversation_settings_announcement_hint">Only allowed roles write, everyone else reads.</string>
+    <string name="chat_header_flame_card_orientation">Sparks earned by writing in this conversation</string>
+    <string name="chat_header_flame_card_today_sparks">Sparks today</string>
+    <string name="chat_header_flame_card_total_sparks">Sparks in total</string>
+    <string name="export_card_typeface_pairs_question">What does the font apply to?</string>
 </resources>

@@ -119,8 +119,6 @@
     <string name="chat_header_flame_card_open">افتح اللعبة</string>
     <string name="chat_header_flame_card_streak_one">يوم متتالٍ هنا</string>
     <string name="chat_header_flame_card_streak_other">أيام متتالية هنا</string>
-    <string name="chat_header_flame_card_today">اليوم</string>
-    <string name="chat_header_flame_card_total">هنا منذ البداية</string>
     <plurals name="chat_header_members">
         <item quantity="zero">لا أعضاء</item>
         <item quantity="one">عضو واحد</item>

@@ -21,7 +21,6 @@
     <string name="shareLink_detail_requireEmail">Correo</string>
     <string name="shareLink_detail_requireNickname">Usuario</string>
     <string name="shareLink_detail_historyRight">Historial</string>
-    <string name="new_conversation_group_solo_hint">Podrás invitar a más personas después.</string>
     <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, que pueden leer tus mensajes. Textos verificados intactos entre dispositivos compatibles.</string>
     <string name="share_link_field_description">Descripción</string>
     <string name="share_link_field_slug">Dirección del enlace</string>

@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">Ela desaparece após a leitura.</string>
     <string name="conversation_settings_auto_translate_hint">As mensagens chegam no idioma de cada membro.</string>
     <string name="conversation_settings_announcement_hint">Só os papéis autorizados escrevem, os outros leem.</string>
+    <string name="chat_header_flame_card_orientation">Faíscas ganhas ao escrever nesta conversa</string>
+    <string name="chat_header_flame_card_today_sparks">Faíscas hoje</string>
+    <string name="chat_header_flame_card_total_sparks">Faíscas no total</string>
+    <string name="export_card_typeface_pairs_question">A que se aplica a fonte?</string>
 </resources>

@@ -10,4 +10,8 @@
     <string name="share_blocked_after_read">Sie verschwindet nach dem Lesen.</string>
     <string name="conversation_settings_auto_translate_hint">Nachrichten kommen in der Sprache jedes Mitglieds an.</string>
     <string name="conversation_settings_announcement_hint">Nur berechtigte Rollen schreiben, alle anderen lesen.</string>
+    <string name="chat_header_flame_card_orientation">Funken, die du durch Schreiben in dieser Unterhaltung sammelst</string>
+    <string name="chat_header_flame_card_today_sparks">Funken heute</string>
+    <string name="chat_header_flame_card_total_sparks">Funken insgesamt</string>
+    <string name="export_card_typeface_pairs_question">Wofür gilt die Schrift?</string>
 </resources>
