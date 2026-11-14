@@ -93,6 +93,24 @@ public class SharedLocationRoster private constructor(
         }
     }
 
+    /**
+     * La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
+     * la passerelle la tient, même app tuée (#18205), iso `rosterOps.deadlinedRecipients` du web. Arrondie à la seconde
+     * au-dessus, jamais nulle ; une personne échue pendant l'attente d'un relevé ne part plus du tout.
+     */
+    public fun deadlinedRecipients(nowMillis: Long): List<SharedLocationRecipient> {
+        val live = pruned(nowMillis)
+        val term = nowMillis + live.serverDuration(nowMillis).millis
+        return live.recipients.map { recipient ->
+            val until = live.entries.getValue(recipient.userId).untilMillis
+            if (until >= term) {
+                recipient
+            } else {
+                recipient.copy(expiresInSeconds = maxOf(1L, (until - nowMillis + 999L) / 1_000L).toInt())
+            }
+        }
+    }
+
     /** La liste telle que le serveur la reçoit, dans un ordre stable. */
     public val recipients: List<SharedLocationRecipient>
         get() = entries.keys.sorted().map { SharedLocationRecipient(it, entries.getValue(it).precision) }

@@ -193,6 +193,7 @@
       ],
       "except": [
         "game.guide.step_of",
+        "game.rules.step.meaning",
         "game.rules.section_steps"
       ]
     },

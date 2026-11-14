@@ -41,6 +41,11 @@ final class GameEpureTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
     }
 
+    private func french(_ key: String, servedBy accessor: String, in catalog: Catalog, line: UInt = #line) throws -> String {
+        XCTAssertEqual(accessor, Bundle.main.localizedString(forKey: key, value: nil, table: nil), key, line: line)
+        return try XCTUnwrap(catalog[key]?["fr"], key, line: line)
+    }
+
     private func specifiers(in text: String) -> [String] {
         let regex = try? NSRegularExpression(pattern: #"%(\d+\$)?(@|lld|d|ld)"#)
         let range = NSRange(text.startIndex..., in: text)
@@ -496,7 +501,7 @@ final class GameEpureTests: XCTestCase {
     // MARK: - Épure 2/3 : le glossaire ne redit plus l'atlas, la confirmation ni la règle voisine (#17687)
 
     private static let frenchSecondPass: [String: String] = [
-        "game.rules.2.body": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.",
+        "game.rules.2.body": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle.",
         "game.rules.concept.steps.body": "Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.",
         "game.rules.concept.chest.body": "Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.",
         "game.rules.concept.treasury.body": "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.",
@@ -505,7 +510,7 @@ final class GameEpureTests: XCTestCase {
         "game2.prestige.meo": "En renaissant, ton niveau repart à 1 et tes étincelles à 0. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais.",
         "game.concept.prestige.use": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.",
         "game2.settings.celebrations.body": "Les cartes de Mee et Meo s’affichent sur Progression",
-        "game.concept.meesh.use": "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
+        "game.concept.meesh.use": "Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
     ]
 
     func test_secondPass_shortenedTexts_sayTheirNewFrench() throws {
@@ -534,7 +539,8 @@ final class GameEpureTests: XCTestCase {
         for repeated in ["Vingt états", "jusqu’à 499", "Ambassadeur", "Oracle", "Chaque niveau demande", "une épreuve tous les dix niveaux"] {
             XCTAssertFalse(rule2.contains(repeated), "la règle 2 redit « \(repeated) » : l'atlas et le glossaire le disent")
         }
-        XCTAssertTrue(rule2.contains("un million d’étincelles pour le niveau 100"))
+        XCTAssertFalse(rule2.contains("million"), "le chiffre est derrière le (i) de la fiche du niveau")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.level.what.note"]?["fr"]).contains("un million pour le niveau 100"))
         XCTAssertFalse(try XCTUnwrap(catalog["game.rules.concept.treasury.body"]?["fr"]).contains("L’héritage grandit"), "la règle 6 le dit")
         XCTAssertFalse(try XCTUnwrap(catalog["game.rules.badges.intro"]?["fr"]).contains("vingt"), "le titre « Les vingt médailles » le dit")
         XCTAssertFalse(try XCTUnwrap(catalog["game.rules.badges.imprint"]?["fr"]).contains("Frapper une Meesh"), "la règle 4 le dit")
@@ -907,45 +913,51 @@ final class GameEpureTests: XCTestCase {
     }
 
     func test_thirdPass_rules_putTheirLimitsAndTheirShareBehindAQuestion_theBodyKeepsTheLandmark() throws {
+        let catalog = try Self.catalog()
         let rules = GameGuideCopy.rules
         let limits = try XCTUnwrap(rules[0].note)
-        XCTAssertEqual(limits.question, "Y a-t-il des limites ?")
-        XCTAssertFalse(rules[0].body.contains(limits.text), "la phrase des limites a quitté le repos")
-        XCTAssertTrue(rules[0].body.contains("selon qui peut la voir"), "la valeur d'une publication reste au repos")
+        XCTAssertEqual(try french("game.rules.1.limits.question", servedBy: limits.question, in: catalog), "Y a-t-il des limites ?")
+        let body1 = try french("game.rules.1.body", servedBy: rules[0].body, in: catalog)
+        XCTAssertFalse(try body1.contains(french("game.rules.1.limits", servedBy: limits.text, in: catalog)), "la phrase des limites a quitté le repos")
+        XCTAssertTrue(body1.contains("selon qui peut la voir"), "la valeur d'une publication reste au repos")
         XCTAssertNil(rules[1].note, "la règle 2 se dit en une phrase")
         let share = try XCTUnwrap(rules[2].note)
-        XCTAssertEqual(share.question, "Comment se calcule la part figée ?")
-        XCTAssertTrue(share.text.contains("30 %"))
-        XCTAssertTrue(rules[2].body.contains("une part de ta lumière s’y fige"), "le repère reste au repos")
+        XCTAssertEqual(try french("game.rules.3.share.question", servedBy: share.question, in: catalog), "Comment se calcule la part figée ?")
+        XCTAssertTrue(try french("game.rules.3.share", servedBy: share.text, in: catalog).contains("30 %"))
+        XCTAssertTrue(try french("game.rules.3.body", servedBy: rules[2].body, in: catalog).contains("une part de ta lumière s’y fige"), "le repère reste au repos")
         for rule in rules where rule.index > 3 { XCTAssertNil(rule.note, "règle \(rule.index)") }
         let view = try code("Meeshy/Features/Game/GameRulesView.swift")
         XCTAssertTrue(view.contains("MeeshyInfoNoted(note: rule.note"), "la règle pose son (i)")
     }
 
     func test_thirdPass_glossary_tailwindStopsBehindAQuestion_allianceLosesItsJourneySentence() throws {
+        let catalog = try Self.catalog()
         let tailwind = try XCTUnwrap(GameRulesGlossary.entries.first { $0.key == .tailwind })
         let note = try XCTUnwrap(tailwind.note)
-        XCTAssertEqual(note.question, "Quand le Vent arrière s’arrête-t-il ?")
-        XCTAssertFalse(tailwind.body.contains("retombe"))
-        XCTAssertTrue(tailwind.body.contains("7 niveaux ou plus"), "la phrase visible garde le seuil")
+        XCTAssertEqual(try french("game.rules.concept.tailwind.stop.question", servedBy: note.question, in: catalog), "Quand le Vent arrière s’arrête-t-il ?")
+        let tailwindBody = try french("game.rules.concept.tailwind.body", servedBy: tailwind.body, in: catalog)
+        XCTAssertFalse(tailwindBody.contains("retombe"))
+        XCTAssertTrue(tailwindBody.contains("7 niveaux ou plus"), "la phrase visible garde le seuil")
         let duo = try XCTUnwrap(GameRulesGlossary.entries.first { $0.key == .duo })
         XCTAssertNil(duo.note)
-        XCTAssertFalse(duo.body.contains("voyage"))
-        XCTAssertTrue(duo.body.contains("niveau 20") && duo.body.contains("récompense double"), "l'orientation de l'alliance reste visible")
+        let duoBody = try french("game.rules.concept.duo.body", servedBy: duo.body, in: catalog)
+        XCTAssertFalse(duoBody.contains("voyage"))
+        XCTAssertTrue(duoBody.contains("niveau 20") && duoBody.contains("récompense double"), "l'orientation de l'alliance reste visible")
         for entry in GameRulesGlossary.entries where entry.key != .tailwind { XCTAssertNil(entry.note, entry.name) }
         let view = try code("Meeshy/Features/Game/GameRulesView.swift")
         XCTAssertTrue(view.contains("MeeshyInfoNoted(note: entry.note"))
     }
 
     func test_thirdPass_levelAndPrestigeSheets_putTheirFiguresBehindAQuestion() throws {
+        let catalog = try Self.catalog()
         let level = try XCTUnwrap(ConceptText.whatNote(.level))
-        XCTAssertEqual(level.question, "Combien d’étincelles par niveau ?")
-        XCTAssertTrue(level.text.contains("un million"))
-        XCTAssertFalse(ConceptText.what(.level).contains("million"))
+        XCTAssertEqual(try french("game.concept.level.what.note.question", servedBy: level.question, in: catalog), "Combien d’étincelles par niveau ?")
+        XCTAssertTrue(try french("game.concept.level.what.note", servedBy: level.text, in: catalog).contains("un million"))
+        XCTAssertFalse(try french("game.concept.level.what", servedBy: ConceptText.what(.level), in: catalog).contains("million"))
         let prestige = try XCTUnwrap(ConceptText.whatNote(.prestige))
-        XCTAssertEqual(prestige.question, "Combien de renaissances ?")
-        XCTAssertTrue(ConceptText.use(.prestige).contains("renaître, ou continuer à briller"), "le caractère facultatif reste au repos")
-        XCTAssertFalse(ConceptText.what(.prestige).contains("Sixième"))
+        XCTAssertEqual(try french("game.concept.prestige.what.note.question", servedBy: prestige.question, in: catalog), "Combien de renaissances ?")
+        XCTAssertTrue(try french("game.concept.prestige.use", servedBy: ConceptText.use(.prestige), in: catalog).contains("renaître, ou continuer à briller"), "le caractère facultatif reste au repos")
+        XCTAssertFalse(try french("game.concept.prestige.what", servedBy: ConceptText.what(.prestige), in: catalog).contains("Sixième"))
         for concept in ProgressionConcept.allCases where concept != .level && concept != .prestige {
             XCTAssertNil(ConceptText.whatNote(concept), "\(concept.rawValue) : pas de (i) vide")
         }
@@ -1022,7 +1034,7 @@ final class GameEpureTests: XCTestCase {
     }
 
     private static let formerLength: [String: Int] = [
-        "game2.settings.hidden.reopen_note": 54, "game.constellation.how": 95,
+        "game2.settings.hidden.reopen_note": 81, "game.constellation.how": 130,
         "game.photo.camera.unsupported": 80, "game2.door.season.none": 30, "game.photo.camera.denied": 98,
         "game2.duo.locked": 63, "game2.prestige.locked": 59, "game.guide.more": 24,
     ]
@@ -1039,9 +1051,9 @@ final class GameEpureTests: XCTestCase {
     }
 
     func test_seasonNone_isOneLine_andTheDoorRowStillSaysItsEmptyState() throws {
-        let value = try XCTUnwrap(try Self.catalog()["game2.door.season.none"]?["fr"])
+        let value = try french("game2.door.season.none", servedBy: GameText.doorSeasonNone, in: try Self.catalog())
         XCTAssertFalse(value.contains("pour le moment"))
-        XCTAssertEqual(GameText.doorSeasonNone, "Aucun voyage en cours")
+        XCTAssertEqual(value, "Aucun voyage en cours")
     }
 
     // MARK: - Lot 2/3 : les portes fermées ne redisent pas ce que les pastilles disent déjà
@@ -1059,8 +1071,8 @@ final class GameEpureTests: XCTestCase {
 
     func test_duoAndPrestigeLockedDoors_saySingleThreshold_inEveryLanguage_withoutTheCurrentLevel() throws {
         let catalog = try Self.catalog()
-        XCTAssertEqual(GameText.duoLocked(level: "20"), "L’alliance s’ouvre au niveau 20, pour vous deux.")
-        XCTAssertEqual(GameText.prestigeLocked, "La Renaissance s’ouvre au niveau 100.")
+        XCTAssertEqual(try french("game2.duo.locked", servedBy: GameText.duoLocked(level: "%@"), in: catalog), "L’alliance s’ouvre au niveau %@, pour vous deux.")
+        XCTAssertEqual(try french("game2.prestige.locked", servedBy: GameText.prestigeLocked, in: catalog), "La Renaissance s’ouvre au niveau 100.")
         for language in Self.otherLanguages {
             XCTAssertEqual(specifiers(in: try XCTUnwrap(catalog["game2.duo.locked"]?[language], language)).count, 1, "\(language) : un seul niveau")
             XCTAssertTrue(specifiers(in: try XCTUnwrap(catalog["game2.prestige.locked"]?[language], language)).isEmpty, language)
@@ -1162,23 +1174,27 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.league.why"]?["fr"]).contains("29 autres héros"))
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.season.why"]?["fr"]).contains("huit semaines"))
         XCTAssertTrue(try XCTUnwrap(catalog["game.concept.atlas.how"]?["fr"]).contains("reçois-en un"), "la règle des deux sens reste derrière le (i)")
-        XCTAssertTrue(ConceptText.what(.flame).contains("Braise au Soleil"), "le repère de la Flamme reste visible")
-        XCTAssertTrue(ConceptText.tip1(.flame).contains("un geste chaque jour"), "la règle d’un geste par jour est dite une fois")
-        XCTAssertTrue(ConceptText.use(.prestige).contains("renaître, ou continuer à briller"), "le caractère facultatif reste visible")
+        XCTAssertTrue(try french("game.concept.flame.what", servedBy: ConceptText.what(.flame), in: catalog).contains("Braise au Soleil"), "le repère de la Flamme reste visible")
+        XCTAssertTrue(try french("game.concept.flame.tip.1", servedBy: ConceptText.tip1(.flame), in: catalog).contains("un geste chaque jour"), "la règle d’un geste par jour est dite une fois")
+        XCTAssertTrue(try french("game.concept.prestige.use", servedBy: ConceptText.use(.prestige), in: catalog).contains("renaître, ou continuer à briller"), "le caractère facultatif reste visible")
     }
 
     func test_sheets_useCases_carryTheSecondarySentences_theLandmarksStayAtRest() throws {
+        let catalog = try Self.catalog()
         let level = try XCTUnwrap(ConceptText.useNote(.level))
-        XCTAssertEqual(level.question, "Quels cas particuliers ?")
-        XCTAssertTrue(level.text.contains("épreuve") && level.text.contains("quoi que tu frappes"))
-        XCTAssertFalse(ConceptText.use(.level).contains("épreuve"))
-        XCTAssertTrue(ConceptText.use(.level).contains("la renaissance au 100"), "les seuils d’ouverture restent visibles")
+        XCTAssertEqual(try french("game.fiche.use.cases_question", servedBy: level.question, in: catalog), "Quels cas particuliers ?")
+        let levelCases = try french("game.concept.level.use_cases", servedBy: level.text, in: catalog)
+        XCTAssertTrue(levelCases.contains("épreuve") && levelCases.contains("quoi que tu frappes"))
+        let levelUse = try french("game.concept.level.use", servedBy: ConceptText.use(.level), in: catalog)
+        XCTAssertFalse(levelUse.contains("épreuve"))
+        XCTAssertTrue(levelUse.contains("la renaissance au 100"), "les seuils d’ouverture restent visibles")
         let league = try XCTUnwrap(ConceptText.useNote(.league))
-        XCTAssertTrue(league.text.contains("accord") && league.text.contains("lundi"), "le consentement reste lisible, derrière le (i)")
-        XCTAssertFalse(ConceptText.use(.league).contains("accord"))
-        XCTAssertTrue(ConceptText.use(.league).contains("redescendent"), "promotion et relégation restent visibles")
-        XCTAssertFalse(ConceptText.use(.points).contains("Ta lumière frappe"), "la première phrase redisait la seconde")
-        XCTAssertTrue(ConceptText.use(.points).contains("ton niveau suit la lumière qui te reste"), "la conséquence sur le niveau reste visible, sans se dire perte (#17394)")
-        XCTAssertFalse(ConceptText.use(.meesh).contains("Garde"), "Garde / Dépense n’est plus dit en triple")
+        XCTAssertTrue(try french("game.concept.league.use_cases", servedBy: league.text, in: catalog).contains("lundi"), "la remise à zéro du lundi est derrière le (i)")
+        let leagueUse = try french("game.concept.league.use", servedBy: ConceptText.use(.league), in: catalog)
+        XCTAssertTrue(leagueUse.contains("accord") && leagueUse.contains("redescendent"), "le consentement, la promotion et la relégation se lisent au repos")
+        let pointsUse = try french("game.concept.points.use", servedBy: ConceptText.use(.points), in: catalog)
+        XCTAssertFalse(pointsUse.contains("Ta lumière frappe"), "la première phrase redisait la seconde")
+        XCTAssertTrue(pointsUse.contains("ton niveau suit la lumière qui te reste"), "la conséquence sur le niveau reste visible, sans se dire perte (#17394)")
+        XCTAssertFalse(try french("game.concept.meesh.use", servedBy: ConceptText.use(.meesh), in: catalog).contains("Garde"), "Garde / Dépense n’est plus dit en triple")
     }
 }

@@ -28,7 +28,7 @@ final class ComposerPendingTileGlyphTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent(
-            "Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift"), encoding: .utf8)
+            "Meeshy/Features/Main/Views/ConversationPendingAttachmentTile.swift"), encoding: .utf8)
         XCTAssertTrue(source.contains("ComposerPendingTileGlyph.center("), "La tuile consulte la loi.")
         XCTAssertFalse(source.contains("\"eye.fill\""), "L'œil annonçait « voir » sur un geste qui édite.")
         XCTAssertFalse(source.contains("\"play.circle.fill\""), "La lecture annonçait « voir » sur un geste qui édite.")

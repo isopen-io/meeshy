@@ -57,6 +57,55 @@ struct SharedLocationSendingTests {
         #expect(payload.recipients == [SharedLocationRecipient(userId: alice, precision: .neighborhood)])
     }
 
+    @Test func léchéanceDUnePersonne_partBornéeParLeContrat() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let payload = try #require(SharedLocationStartRequest(
+            recipients: [
+                SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 600),
+                SharedLocationRecipient(userId: bob, precision: .city, expiresInSeconds: 99_999),
+            ],
+            duration: .eightHours,
+            fix: fix
+        ))
+        let recipients = try #require(payload.wire["recipients"] as? [[String: Any]])
+        #expect(recipients[0]["expiresInSeconds"] as? Int == 600)
+        #expect(recipients[1]["expiresInSeconds"] as? Int == SharedLocationContract.recipientDeadlineMaxSeconds)
+        #expect(payload.carriesDeadlines)
+    }
+
+    @Test func uneÉchéanceNulle_vautUneSeconde_etUnDoublonGardeSaDernière() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let payload = try #require(SharedLocationStartRequest(
+            recipients: [
+                SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 0),
+                SharedLocationRecipient(userId: bob, precision: .city, expiresInSeconds: 60),
+                SharedLocationRecipient(userId: bob.uppercased(), precision: .city, expiresInSeconds: 120),
+            ],
+            duration: .oneHour,
+            fix: fix
+        ))
+        #expect(payload.recipients == [
+            SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 1),
+            SharedLocationRecipient(userId: bob, precision: .city, expiresInSeconds: 120),
+        ])
+    }
+
+    @Test func pourUnePasserelleDAvant_laMêmeListePartSansÉchéance() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let payload = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 600)],
+            duration: .eightHours,
+            fix: fix
+        ))
+        let legacy = payload.withoutDeadlines
+        #expect(!legacy.carriesDeadlines)
+        #expect(legacy.recipients == [SharedLocationRecipient(userId: alice, precision: .exact)])
+        #expect(legacy.duration == .eightHours)
+        #expect(legacy.fix == fix)
+        let recipients = try #require(legacy.wire["recipients"] as? [[String: Any]])
+        #expect(recipients[0]["expiresInSeconds"] == nil)
+    }
+
     @Test func sansDestinataireValide_rienNePart() throws {
         let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
         #expect(SharedLocationStartRequest(recipients: [], duration: .oneHour, fix: fix) == nil)

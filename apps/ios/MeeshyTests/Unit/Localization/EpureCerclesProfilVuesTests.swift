@@ -197,17 +197,23 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
     }
 
     func test_phonePrompt_header_showsTheBenefitAtRest_withoutExplainingSignIn() throws {
-        XCTAssertEqual(PhonePromptSheet.benefit, "Tes proches te retrouvent grâce à ton numéro.")
-        XCTAssertFalse(PhonePromptSheet.benefit.contains("connecter"))
+        XCTAssertEqual(PhonePromptSheet.benefit, served("contacts.phonePrompt.benefit"))
+        let benefit = try XCTUnwrap(try app()["contacts.phonePrompt.benefit"]?["fr"])
+        XCTAssertEqual(benefit, "Tes proches te retrouvent grâce à ton numéro.")
+        XCTAssertFalse(benefit.contains("connecter"))
     }
+
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 
     /// La connexion par numéro n'est dite nulle part ailleurs dans l'app : elle ne quitte pas l'écran, elle passe
     /// derrière un (i) dont le nom est la question (revue #18088, « aucun texte n'est perdu »).
     func test_phonePrompt_signIn_isBehindAnInfoNamedByItsQuestion_inSevenLanguages() throws {
         let note = PhonePromptSheet.signInNote
-        XCTAssertTrue(note.question.hasSuffix("?"))
-        XCTAssertTrue(note.text.contains("te connecter"))
         let catalog = try app()
+        XCTAssertEqual(note.question, served("contacts.phonePrompt.signIn.question"))
+        XCTAssertEqual(note.text, served("contacts.phonePrompt.signIn.note"))
+        XCTAssertTrue(try XCTUnwrap(catalog["contacts.phonePrompt.signIn.question"]?["fr"]).hasSuffix("?"))
+        XCTAssertTrue(try XCTUnwrap(catalog["contacts.phonePrompt.signIn.note"]?["fr"]).contains("te connecter"))
         for key in ["contacts.phonePrompt.signIn.question", "contacts.phonePrompt.signIn.note"] {
             let values = try XCTUnwrap(catalog[key], key)
             for language in Self.otherLanguages {
