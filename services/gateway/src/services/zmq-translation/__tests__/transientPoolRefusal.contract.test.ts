@@ -33,7 +33,7 @@ import {
   UNSUPPORTED_LANGUAGE_ERROR_CODE,
 } from '../types';
 
-const HANDLER_SOURCE = resolve(__dirname, '../../../../../translator/src/services/zmq_translation_handler.py');
+const HANDLER_SOURCE = resolve(__dirname, '../../../../../../services/translator/src/services/zmq_translation_handler.py');
 
 const pythonSource = (): string => readFileSync(HANDLER_SOURCE, 'utf8');
 
