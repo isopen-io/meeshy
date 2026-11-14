@@ -242,8 +242,9 @@ async def test_each_rejected_task_reaches_the_gateway_exactly_once(caplog):
         'messageId': 'msg-t1',
         'error': 'translation pool full',
         'conversationId': 'conv-1',
+        'errorCode': 'TRANSLATION_POOL_FULL',
     } in errors
-    assert all(set(e) == {'type', 'taskId', 'messageId', 'error', 'conversationId'} for e in errors)
+    assert all(set(e) == {'type', 'taskId', 'messageId', 'error', 'conversationId', 'errorCode'} for e in errors)
     assert pool.get_stats()['pool_full_rejections'] == 3
     _assert_no_text_logged(caplog)
 
