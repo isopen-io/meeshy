@@ -10,7 +10,8 @@ import SwiftUI
 /// changement de cible ne re-rendent ni les cibles ni l'hôte.
 ///
 /// Les centres des disques et les rappels sont posés par la vue
-/// `MeeshyDragTargets` ; sans elle, rien n'est survolé et `end()` rend `nil`.
+/// `MeeshyDragTargets` à chaque ouverture, et rendus à la fermeture ; sans
+/// elle, rien n'est survolé et `end()` rend `nil`.
 @MainActor
 public final class MeeshyDragTargetsState: ObservableObject {
     @Published public private(set) var isActive: Bool
@@ -65,12 +66,9 @@ public final class MeeshyDragTargetsState: ObservableObject {
     public func end() -> MeeshyDragTarget? {
         guard isActive else { return nil }
         let target = hovered
+        let callback = target.flatMap(handler(for:))
         reset()
-        switch target {
-        case .duplicate: onDuplicate?()
-        case .remove: onRemove?()
-        case nil: break
-        }
+        callback?()
         return target
     }
 
@@ -90,8 +88,28 @@ public final class MeeshyDragTargetsState: ObservableObject {
         self.centers = centers
     }
 
+    /// La vue est démontée : rien de l'hôte n'est retenu, aucun centre ne
+    /// survit à sa mise en page.
+    func release() {
+        centers = [:]
+        onDuplicate = nil
+        onRemove = nil
+    }
+
+    private func handler(for target: MeeshyDragTarget) -> (() -> Void)? {
+        switch target {
+        case .duplicate: return onDuplicate
+        case .remove: return onRemove
+        }
+    }
+
+    /// Les cibles sortent : les centres de cette mise en page et les rappels
+    /// de cette ouverture partent avec elles. La prochaine ouverture les
+    /// remesure et les relit ; aucun cycle hôte → état → rappel → hôte ne
+    /// survit à un glisser.
     private func reset() {
         isActive = false
         hovered = nil
+        release()
     }
 }
