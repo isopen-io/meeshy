@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import me.meeshy.ui.theme.MeeshyControlSize
+import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
 /**
@@ -164,6 +165,37 @@ class MeeshyLabeledSliderTest {
         val contrast = vectors().getValue("contraste_min").jsonObject.float("pouce")
         assertThat(MeeshyLabeledSliderRecipe.thumbContrast(MeeshyLabeledSliderInk.OnMedia, isDark = true))
             .isAtLeast(contrast.toDouble())
+    }
+
+    @Test
+    fun `le ton theme passe tout a l'encre du theme, et la teinte ne colore que le remplissage`() {
+        val theme = MeeshyLabeledSliderRecipe.resolve(
+            tone = MeeshyGlassTone.Theme, isEnabled = true, isPressed = false, isOffNeutral = false, tint = null,
+        )
+        val media = MeeshyLabeledSliderRecipe.resolve(
+            tone = MeeshyGlassTone.Deep, isEnabled = true, isPressed = false, isOffNeutral = false, tint = null,
+        )
+        val tinted = MeeshyLabeledSliderRecipe.resolve(
+            tone = MeeshyGlassTone.Deep, isEnabled = true, isPressed = false, isOffNeutral = false, tint = MeeshyPalette.Indigo500,
+        )
+        assertThat(theme.ink).isEqualTo(MeeshyLabeledSliderInk.Theme)
+        assertThat(media.ink).isEqualTo(MeeshyLabeledSliderInk.OnMedia)
+        listOf(true, false).forEach { isDark ->
+            assertThat(theme.fillColor(isDark)).isEqualTo(theme.inkColor(isDark))
+            assertThat(tinted.fillColor(isDark)).isEqualTo(MeeshyPalette.Indigo500)
+            assertThat(tinted.inkColor(isDark)).isEqualTo(media.inkColor(isDark))
+            assertThat(tinted.haloColor(isDark).copy(alpha = 1f)).isEqualTo(media.inkColor(isDark))
+        }
+    }
+
+    @Test
+    fun `au ton theme, le pouce garde son contraste en clair comme en sombre`() {
+        val contrast = vectors().getValue("contraste_min").jsonObject.float("pouce").toDouble()
+        listOf(true, false).forEach { isDark ->
+            assertWithMessage("sombre=$isDark")
+                .that(MeeshyLabeledSliderRecipe.thumbContrast(MeeshyLabeledSliderInk.Theme, isDark))
+                .isAtLeast(contrast)
+        }
     }
 
     // endregion
