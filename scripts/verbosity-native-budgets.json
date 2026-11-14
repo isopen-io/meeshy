@@ -19,10 +19,10 @@
       "explanations": 90
     },
     "android:feature/chat": {
-      "labels": 1065,
-      "words": 4114,
-      "long": 51,
-      "explanations": 103
+      "labels": 1047,
+      "words": 4041,
+      "long": 50,
+      "explanations": 98
     },
     "android:feature/community": {
       "labels": 118,
@@ -92,7 +92,7 @@
     },
     "android:sdk-ui": {
       "labels": 937,
-      "words": 3307,
+      "words": 3322,
       "long": 22,
       "explanations": 71
     },

@@ -186,12 +186,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.fact.encryptedOnServerServerReads",
-          "androidName": "encryption_fact_encrypted_on_server_server_reads",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.fact.onlyParticipantsRead",
           "androidName": "encryption_fact_only_participants_read",
           "status": "adopted"

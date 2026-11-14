@@ -5,6 +5,10 @@
       "resDir": "feature/chat/src/main/res",
       "entries": [
         {
+          "androidName": "encryption_fact_encrypted_on_server_server_reads",
+          "status": "android-only"
+        },
+        {
           "androidName": "action_more",
           "status": "android-only"
         },

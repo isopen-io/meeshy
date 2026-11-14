@@ -14,4 +14,5 @@
     <string name="chat_header_flame_card_today_sparks">Étincelles aujourd\'hui</string>
     <string name="chat_header_flame_card_total_sparks">Étincelles au total</string>
     <string name="export_card_typeface_pairs_question">À quoi s\'applique la police ?</string>
+    <string name="encryption_fact_encrypted_on_server_server_reads">Vos messages sont chiffrés sur nos serveurs.</string>
 </resources>
