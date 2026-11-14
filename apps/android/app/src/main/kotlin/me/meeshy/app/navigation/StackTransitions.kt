@@ -32,6 +32,9 @@ private fun NavBackStackEntry.isCall(): Boolean = destination.route == Routes.CA
 
 private val reduceMotion: Boolean get() = FeedOverlayTransition.reduceMotion
 
+/** Un appel vivant a sa capsule en haut : l'écran d'appel s'y contracte et s'en redéploie (#18218). */
+private val capsuleLive: Boolean get() = CallCapsuleTransitions.capsuleLive
+
 private fun NavBackStackEntry.isStacked(): Boolean = NavBackChrome.isPushed(destination.route)
 
 /** Une entrée empilée : le glissement [slide], ou le fondu court sous réduction — [slide] n'est alors jamais construit. */
@@ -52,7 +55,7 @@ internal fun stackedExit(reduce: Boolean, slide: () -> ExitTransition): ExitTran
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackEnter(): EnterTransition =
     if (targetState.isCall()) {
-        CallCapsuleTransitions.enter(reduceMotion)
+        CallCapsuleTransitions.windowEnter(reduceMotion, capsuleLive)
     } else if (initialState.isCall()) {
         CallCapsuleTransitions.underlayEnter(reduceMotion)
     } else if (targetState.isReels()) {
@@ -67,7 +70,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackEnter(): Ent
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackExit(): ExitTransition =
     if (initialState.isCall()) {
-        CallCapsuleTransitions.exit(reduceMotion)
+        CallCapsuleTransitions.windowExit(reduceMotion, capsuleLive)
     } else if (targetState.isCall()) {
         CallCapsuleTransitions.underlayExit(reduceMotion)
     } else if (targetState.isReels()) {
@@ -97,7 +100,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackPopEnter(): 
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.stackPopExit(): ExitTransition =
     if (initialState.isCall()) {
-        CallCapsuleTransitions.exit(reduceMotion)
+        CallCapsuleTransitions.windowExit(reduceMotion, capsuleLive)
     } else if (initialState.isReels()) {
         fadeOut(tween(RevealGeometry.CLOSE_MILLIS), targetAlpha = 1f)
     } else if (initialState.isStacked()) {
