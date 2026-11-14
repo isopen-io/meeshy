@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// L'état des cibles, tenu par l'HÔTE : son geste de glisser à un doigt appelle
