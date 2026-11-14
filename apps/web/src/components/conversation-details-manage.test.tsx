@@ -304,6 +304,10 @@ describe('la fiche du groupe, épurée (#18361)', () => {
   });
 
   test('le surnom : « Surnom » à l’écran, la consigne derrière un (i) « À quoi sert le surnom ? »', async () => {
+    sessionStore.setState({
+      session: { status: 'authenticated', user: { id: 'u-moi', username: 'moi', displayName: 'Moi Même' }, token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    try {
     await mount(conversation());
     expect($('[data-conversation-options-rename]')?.textContent).toContain('Surnom');
     expect($('[data-conversation-options-rename]')?.textContent).not.toContain('Donnez un surnom');
@@ -313,5 +317,8 @@ describe('la fiche du groupe, épurée (#18361)', () => {
     const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
     expect(note?.textContent).toBe('Donnez un surnom à cette conversation : vous seul le voyez.');
     expect(note?.className).toContain('sr-only');
+    } finally {
+      sessionStore.setState({ session: { status: 'anonymous' } });
+    }
   });
 });

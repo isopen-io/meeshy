@@ -50,13 +50,19 @@ export function chosenCreationMode(offer: CreationEncryptionOffer, picked: Creat
 
 /** Les mots du choix (`catalog-conversation-encryption-*.ts`, le français porte ceux de la décision). */
 export const CREATION_ENCRYPTION_KEY = {
-  server: { title: 'conversationEncryption.creation.server.title', detail: 'conversationEncryption.creation.server.detail' },
-  hybrid: { title: 'conversationEncryption.creation.hybrid.title', detail: 'conversationEncryption.creation.hybrid.detail' },
-  e2ee: { title: 'conversationEncryption.creation.endToEnd.title', detail: null },
+  server: { title: 'conversationEncryption.creation.server.title', detail: 'conversationEncryption.creation.server.detail', more: 'conversationEncryption.creation.server.more' },
+  hybrid: { title: 'conversationEncryption.creation.hybrid.title', detail: 'conversationEncryption.creation.hybrid.detail', more: 'conversationEncryption.creation.hybrid.more' },
+  e2ee: { title: 'conversationEncryption.creation.endToEnd.title', detail: null, more: null },
 } as const satisfies Record<
   CreationEncryptionMode,
-  { readonly title: ConversationEncryptionCatalogKey; readonly detail: ConversationEncryptionCatalogKey | null }
+  { readonly title: ConversationEncryptionCatalogKey; readonly detail: ConversationEncryptionCatalogKey | null; readonly more: ConversationEncryptionCatalogKey | null }
 >;
+
+/**
+ * Chaque mode tient en UNE ligne (`detail`) ; ce que le mode change VRAIMENT (`more`) est derrière un (i) dont le nom est
+ * cette question (épure #18361, règle 1). Le bout en bout n'a pas de `more` : sa ligne est déjà sa raison d'être grisé.
+ */
+export const CREATION_INFO_KEY = 'conversationEncryption.creation.info' as const satisfies ConversationEncryptionCatalogKey;
 
 export const CREATION_UNAVAILABILITY_KEY = {
   'groups-not-yet': 'conversationEncryption.creation.unavailable.groupsNotYet',

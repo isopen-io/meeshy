@@ -9,7 +9,6 @@ import { emptyStudioPage, type StudioPage, type StudioVisualAsset } from '@/lib/
 import { flush, registerStudioBench } from '@/test-support/story-studio-bench';
 
 import { ComposerCapture } from './composer-retouch';
-import { ComposerTopRow } from './composer-top-row';
 
 /**
  * LA CAMÉRA DE LA BARRE DE COMPOSITION (#9123, miroir

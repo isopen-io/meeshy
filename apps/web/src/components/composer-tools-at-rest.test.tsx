@@ -62,10 +62,16 @@ describe('derrière le « + »', () => {
     for (const name of TOOLS) expect({ name, present: tool(el, name) !== null }).toEqual({ name, present: true });
   });
 
-  test('les photos, la caméra et les stickers restent atteignables par le MÊME « + » (panneau)', () => {
+  test('les photos, la caméra et les stickers restent atteignables par le MÊME « + » (panneau)', async () => {
     const el = mount();
     act(() => plus(el)?.click());
+    for (let tries = 0; tries < 50 && el.querySelector('[data-composer-panel]') === null; tries += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
     expect(el.querySelector('[data-composer-panel]')).not.toBeNull();
+    expect(el.querySelector('[aria-label="Choisir des photos"]')).not.toBeNull();
   });
 
   test('un outil armé reste à l’écran panneau refermé, et se retire d’un toucher', () => {

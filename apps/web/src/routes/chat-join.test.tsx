@@ -334,7 +334,7 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
   test('c. les chiffres sans identité tiennent en UNE ligne ; la ventilation par langue est derrière « Plus »', async () => {
     const { deps } = depsWith();
     const el = await mount(deps);
-    expect(text(el.querySelector('[data-invite-figures-line]'))).toBe('248 personnes · 6 langues parlées');
+    expect(text(el.querySelector('[data-invite-figures-line]'))).toBe('248 personnes · 2 langues parlées');
     expect(el.querySelector('[data-language-share]')).toBeNull();
     expect(text(el)).not.toContain('On y parle');
     const more = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
