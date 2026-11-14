@@ -30,6 +30,7 @@ import type {
   TranslationErrorPayload
 } from './types';
 import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
+import { isTransientPoolRefusal } from './utils/zmq-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqTranslationClient
@@ -375,7 +376,8 @@ export class ZmqTranslationClient extends EventEmitter {
       // ARRÊT : un arrêt chargé ouvrait le disjoncteur et bloquait TOUTES les
       // traductions 30 s (#17004). Le refus est neutre : il ne compte pas, et
       // ne remet pas non plus la série à zéro — ce n'est pas un succès.
-      if (event.error !== 'translation pool full') this._cbRecordError();
+      const transientRefusal = isTransientPoolRefusal(event);
+      if (!transientRefusal) this._cbRecordError();
 
       // « pool full » est un refus TRANSITOIRE, pas un échec : le pool de
       // workers du translator est saturé à l'instant t, et la même requête
@@ -395,7 +397,7 @@ export class ZmqTranslationClient extends EventEmitter {
       // Un refus qui arrive pour un taskId DÉJÀ soldé (dernière langue rendue,
       // ou deadman tombé) n'a plus rien à réarmer — il s'annonce tout de suite,
       // sinon personne ne l'apprend jamais.
-      if (event.error === 'translation pool full') {
+      if (transientRefusal) {
         this.stats.pool_full_rejections++;
         if (event.taskId && this.requestSender.hasPendingRequest(event.taskId)) return;
       }

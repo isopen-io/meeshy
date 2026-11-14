@@ -22,6 +22,13 @@ from .zmq_request_frame import parse_request_frame
 
 logger = logging.getLogger(__name__)
 
+# Refus TRANSITOIRE (#17189) : pool saturé ou arrêt en cours, la passerelle
+# laisse la requête armée et le renvoie. Le libellé reste émis pour les
+# passerelles qui ne lisent pas encore le code. Contrat confronté à
+# `services/gateway/src/services/zmq-translation/types.ts` par les deux côtés.
+TRANSLATION_POOL_FULL = 'TRANSLATION_POOL_FULL'
+POOL_FULL_ERROR = 'translation pool full'
+
 
 def _accepted_error_codes(request_data: dict) -> tuple:
     """Les codes terminaux que la passerelle ANNONCE savoir lire. Une passerelle
@@ -426,8 +433,9 @@ class TranslationHandler:
             'type': 'translation_error',
             'taskId': task.task_id,
             'messageId': task.message_id,
-            'error': 'translation pool full',
-            'conversationId': task.conversation_id
+            'error': POOL_FULL_ERROR,
+            'conversationId': task.conversation_id,
+            'errorCode': TRANSLATION_POOL_FULL
         }
 
     def release_inflight(self, task_id: str) -> None:

@@ -137,6 +137,7 @@ class TestLiveCaptionAtShutdown:
             "messageId": "call-caption:call42:1200",
             "error": "translation pool full",
             "conversationId": "conv-call",
+            "errorCode": "TRANSLATION_POOL_FULL",
         }]
         assert handler.claim_inflight("cap-1", ttl_s=600) is True
 

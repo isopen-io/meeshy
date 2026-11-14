@@ -968,3 +968,32 @@ socket jusqu'au client.
 1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 28 — 2026-11-14
+
+- **Base** : `origin/dev` @ `a978a2c2`. Le lot du cycle 27 (#17205) y est fusionné.
+- **Branche** : `claude/determined-volta-6f599d`.
+- **Objectif** : #17189. Le refus transitoire du traducteur (« translation pool full ») devient un contrat déclaré : un `errorCode` additif `TRANSLATION_POOL_FULL`, lu par la passerelle à côté du libellé historique, et un test de contrat qui tombe si l'un des deux côtés change.
+- **Livré** (passerelle et traducteur ; aucune charge socket vers les clients ne change) :
+  - **Traducteur** : `_pool_full_error` ajoute `errorCode: 'TRANSLATION_POOL_FULL'` en dernière clé, à côté de `error: 'translation pool full'`. Le code et le libellé deviennent deux constantes de module. Une ancienne passerelle reçoit le même JSON avec un champ de plus ; son parseur, qui n'est pas strict, le relaie déjà sans effet.
+  - **Passerelle** : `TRANSLATION_POOL_FULL_ERROR_CODE` et `LEGACY_POOL_FULL_ERROR` sont déclarés dans `zmq-translation/types.ts`, à côté de `UNSUPPORTED_LANGUAGE`. Un prédicat unique, `isTransientPoolRefusal` (`utils/zmq-helpers.ts`, hors du barrel qui chargerait l'addon zeromq), reconnaît le code OU le libellé. Il remplace le littéral aux trois sites : le disjoncteur neutre, la requête laissée armée avec `pool_full_rejections`, et `MessageTranslationService` (diff net 0, fichier hors budget).
+  - **Décision** : le code n'est pas négocié par `acceptsErrorCodes`. Il est additif et ne termine pas la requête : une passerelle qui l'ignore lit le libellé et garde le même comportement. `UNSUPPORTED_LANGUAGE`, lui, se négocie parce qu'il REMPLACE un comportement.
+- **Tests** :
+  - `transientPoolRefusal.contract.test.ts` (11) : il lit la source Python, teste le prédicat et le client avec le code seul.
+  - `test_pool_full_error_code.py` (3) : le test symétrique, qui lit `types.ts`.
+  - Un témoin s'ajoute à `MessageTranslationService.translationFailedNoConversation`.
+  - Sept témoins Python figeaient la forme du refus : ils l'ont gardée exacte, avec `errorCode` en plus.
+  - **Rouge avant correctif** : passerelle `11 failed, 12 passed`, traducteur `5 failed, 18 passed`. La QA l'a reproduit avec le code de `origin/dev` : 11/181 côté passerelle, 14/76 côté traducteur.
+  - **Vert** : relancé par moi, passerelle `23 passed` sur 2 suites et traducteur `23 passed`. La QA mesure 47 suites et 949 tests côté passerelle ; `tsc --noEmit` sort à 0. Côté traducteur : `475 passed, 18 skipped, 1 xfailed`, plus 8 erreurs connues ou d'environnement (`TestRealTranslatorIntegration`, `soundfile`).
+  - **Mutations QA** : 9 sur 9 tuées (libellé, code et constante TS renommés, `errorCode` retiré, chaque branche du prédicat retirée, chaque site ramené au libellé seul).
+- **QA** : favorable avec réserves.
+  - Défaut corrigé dans le lot : le chemin du test jest vers le Python échappait à `scripts/ci/voie-parite.mjs`, si bien qu'une PR qui ne touche que le traducteur ne l'aurait pas lancé. Le chemin cite maintenant `services/translator/…`.
+  - Réserves : lecture par expression régulière, `as never`. Elles partent dans #18497, avec la bascule et le retrait.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18436 (logs de la boucle de réception, branche morte, `never awaited`).
+2. #17132, #17133, #18154 et #18371.
+3. #18497 seulement après déploiement du traducteur sur le staging ET en production. Mesurer d'abord.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

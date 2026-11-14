@@ -6,7 +6,7 @@
 import { readStoredFile } from '../../attachments/atRest/atRestFiles';
 import { existsSync, statSync } from 'fs';
 import path from 'path';
-import { AUDIO_BASE64_SIZE_THRESHOLD } from '../types';
+import { AUDIO_BASE64_SIZE_THRESHOLD, LEGACY_POOL_FULL_ERROR, TRANSLATION_POOL_FULL_ERROR_CODE } from '../types';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ZmqHelpers' });
@@ -158,3 +158,11 @@ export function translationTargetNamespace(messageId: string): string | null {
 export function isMessageTranslationTarget(messageId: string): boolean {
   return translationTargetNamespace(messageId) === null;
 }
+
+/**
+ * Le seul site qui reconnaît le refus transitoire : par son code, ou par son
+ * libellé tant qu'un translator ancien peut encore ne porter que lui.
+ * Confronté à la source Python par `transientPoolRefusal.contract.test.ts`.
+ */
+export const isTransientPoolRefusal = (event: { readonly error?: string; readonly errorCode?: string }): boolean =>
+  event.errorCode === TRANSLATION_POOL_FULL_ERROR_CODE || event.error === LEGACY_POOL_FULL_ERROR;
