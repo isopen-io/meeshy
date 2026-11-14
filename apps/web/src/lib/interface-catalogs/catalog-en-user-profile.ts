@@ -21,7 +21,6 @@ const enUserProfile = {
   'userProfile.posts.empty': 'No posts',
   'userProfile.posts.emptyPosts': 'No posts here',
   'userProfile.posts.emptyReels': 'No reels here',
-  'userProfile.posts.emptyFilter': 'Tap the tile again to see everything.',
   'userProfile.posts.error': 'Could not load the posts',
   'userProfile.posts.loadMore': 'Load more',
   'userProfile.posts.loaded': 'Posts added: {count}',

@@ -150,7 +150,7 @@ const fr = {
   'media.retry': 'Réessayer',
   'report.post.title': 'Signaler cette publication',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
-  'bookmarks.title': 'Publications enregistrées',
+  'bookmarks.title': 'Enregistrés',
   'bookmarks.back': 'Retour aux réglages',
   'bookmarks.loading': 'Chargement des publications enregistrées',
   'bookmarks.empty.title': 'Aucune publication enregistrée',

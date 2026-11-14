@@ -162,7 +162,7 @@ const es = {
   'feed.post.open': 'Abrir la publicación de {author}',
   'feed.post.original.open': 'Publicación original de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
-  'bookmarks.title': 'Publicaciones guardadas',
+  'bookmarks.title': 'Guardados',
   'bookmarks.back': 'Volver a los ajustes',
   'bookmarks.loading': 'Cargando tus publicaciones guardadas',
   'bookmarks.empty.title': 'Aún no hay publicaciones guardadas',

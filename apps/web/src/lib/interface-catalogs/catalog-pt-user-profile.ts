@@ -21,7 +21,6 @@ const ptUserProfile = {
   'userProfile.posts.empty': 'Sem publicações',
   'userProfile.posts.emptyPosts': 'Nenhuma publicação aqui',
   'userProfile.posts.emptyReels': 'Nenhum reel aqui',
-  'userProfile.posts.emptyFilter': 'Toque novamente no bloco para ver tudo.',
   'userProfile.posts.error': 'Não foi possível carregar as publicações',
   'userProfile.posts.loadMore': 'Carregar mais',
   'userProfile.posts.loaded': 'Publicações adicionadas: {count}',

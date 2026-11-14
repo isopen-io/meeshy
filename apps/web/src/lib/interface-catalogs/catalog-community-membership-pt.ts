@@ -56,7 +56,7 @@ const ptCommunityMembership = {
   'community.invite.failed': 'O convite falhou. Tente novamente.',
   'community.invite.refused': 'Já não pode convidar para esta comunidade.',
   'community.create.members.title': 'Adicionar membros',
-  'community.create.members.search': 'Pesquisar por nome ou usuário…',
+  'community.create.members.search': 'Pesquisar',
   'community.create.members.remove': 'Remover {name}',
   'community.posts.tabs.label': "Conteúdo da comunidade",
   'community.posts.tab.channels': "Conversas",

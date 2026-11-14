@@ -21,7 +21,6 @@ const esUserProfile = {
   'userProfile.posts.empty': 'Sin publicaciones',
   'userProfile.posts.emptyPosts': 'Ninguna publicación aquí',
   'userProfile.posts.emptyReels': 'Ningún reel aquí',
-  'userProfile.posts.emptyFilter': 'Toca de nuevo la casilla para volver a verlo todo.',
   'userProfile.posts.error': 'No se pudieron cargar las publicaciones',
   'userProfile.posts.loadMore': 'Cargar más',
   'userProfile.posts.loaded': 'Publicaciones añadidas: {count}',

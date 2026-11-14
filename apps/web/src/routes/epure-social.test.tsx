@@ -164,7 +164,9 @@ describe('un état vide tient en une ligne', () => {
 
   test('clavier d’appel : ni sous-titre redit, ni consigne', () => {
     const html = renderToStaticMarkup(<KeypadStatusView language="fr" status="idle" onRetry={() => undefined} />);
-    expect(html.match(/<p /g)?.length).toBe(1);
+    expect(html).not.toContain('<p');
+    const none = renderToStaticMarkup(<KeypadStatusView language="fr" status="none" onRetry={() => undefined} />);
+    expect(none.match(/<p /g)?.length).toBe(1);
   });
 
   test('découvrir : DiscoverEmpty sans sous-titre ne rend que le titre', () => {
@@ -186,11 +188,11 @@ describe('un état vide tient en une ligne', () => {
     expect(seen(renderToStaticMarkup(<CommunityConversationsEmpty language="fr" />))).toBe('Aucune conversation');
   });
 
-  test('profil : la liste vide de publications ne dit que son titre ; filtrée, elle garde la raison du filtre', () => {
-    const all = renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter="all" />);
+  test('profil : la liste vide de publications ne dit que son titre ; filtrée, elle ne dit que ce qui manque et rend son geste', () => {
+    const all = renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter="all" onClear={() => undefined} />);
     expect(all.match(/<p\b/g)?.length).toBe(1);
-    const reels = renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter="reels" />);
-    expect(reels.match(/<p\b/g)?.length).toBe(2);
+    const reels = renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter="reels" onClear={() => undefined} />);
+    expect(reels.match(/<p\b/g)?.length).toBe(1);
   });
 });
 

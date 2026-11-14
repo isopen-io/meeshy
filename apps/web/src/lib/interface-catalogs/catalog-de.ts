@@ -162,7 +162,7 @@ const de = {
   'feed.post.open': 'Beitrag von {author} öffnen',
   'feed.post.original.open': 'Ursprünglicher Beitrag von {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
-  'bookmarks.title': 'Gespeicherte Beiträge',
+  'bookmarks.title': 'Gespeichert',
   'bookmarks.back': 'Zurück zu den Einstellungen',
   'bookmarks.loading': 'Gespeicherte Beiträge werden geladen',
   'bookmarks.empty.title': 'Noch keine gespeicherten Beiträge',

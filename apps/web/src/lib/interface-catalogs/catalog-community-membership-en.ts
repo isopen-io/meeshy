@@ -56,7 +56,7 @@ const enCommunityMembership = {
   'community.invite.failed': 'The invitation failed. Try again.',
   'community.invite.refused': 'You can no longer invite to this community.',
   'community.create.members.title': 'Add members',
-  'community.create.members.search': 'Search by name or username…',
+  'community.create.members.search': 'Search',
   'community.create.members.remove': 'Remove {name}',
   'community.posts.tabs.label': "Community content",
   'community.posts.tab.channels': "Conversations",

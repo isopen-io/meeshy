@@ -21,7 +21,6 @@ const deUserProfile = {
   'userProfile.posts.empty': 'Keine Beiträge',
   'userProfile.posts.emptyPosts': 'Hier keine Beiträge',
   'userProfile.posts.emptyReels': 'Hier keine Reels',
-  'userProfile.posts.emptyFilter': 'Tippe erneut auf die Kachel, um alles zu sehen.',
   'userProfile.posts.error': 'Die Beiträge konnten nicht geladen werden',
   'userProfile.posts.loadMore': 'Mehr laden',
   'userProfile.posts.loaded': 'Hinzugefügte Beiträge: {count}',

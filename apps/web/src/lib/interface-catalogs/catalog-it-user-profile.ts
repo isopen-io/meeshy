@@ -21,7 +21,6 @@ const itUserProfile = {
   'userProfile.posts.empty': 'Nessuna pubblicazione',
   'userProfile.posts.emptyPosts': 'Nessun post qui',
   'userProfile.posts.emptyReels': 'Nessun reel qui',
-  'userProfile.posts.emptyFilter': 'Tocca di nuovo il riquadro per rivedere tutto.',
   'userProfile.posts.error': 'Impossibile caricare le pubblicazioni',
   'userProfile.posts.loadMore': 'Carica altro',
   'userProfile.posts.loaded': 'Pubblicazioni aggiunte: {count}',

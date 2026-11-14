@@ -21,7 +21,6 @@ const arUserProfile = {
   'userProfile.posts.empty': 'لا توجد منشورات',
   'userProfile.posts.emptyPosts': 'لا توجد منشورات هنا',
   'userProfile.posts.emptyReels': 'لا توجد ريلز هنا',
-  'userProfile.posts.emptyFilter': 'انقر على البطاقة مرة أخرى لعرض كل شيء.',
   'userProfile.posts.error': 'تعذّر تحميل المنشورات',
   'userProfile.posts.loadMore': 'تحميل المزيد',
   'userProfile.posts.loaded': 'المنشورات المضافة: {count}',

@@ -56,7 +56,7 @@ const itCommunityMembership = {
   'community.invite.failed': 'L’invito non è riuscito. Riprova.',
   'community.invite.refused': 'Non puoi più invitare in questa community.',
   'community.create.members.title': 'Aggiungi membri',
-  'community.create.members.search': 'Cerca per nome o nome utente…',
+  'community.create.members.search': 'Cerca',
   'community.create.members.remove': 'Rimuovi {name}',
   'community.posts.tabs.label': "Contenuti della community",
   'community.posts.tab.channels': "Conversazioni",

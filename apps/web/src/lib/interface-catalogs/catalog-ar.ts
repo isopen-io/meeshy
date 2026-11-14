@@ -162,7 +162,7 @@ const ar = {
   'feed.post.open': 'فتح منشور {author}',
   'feed.post.original.open': 'المنشور الأصلي لـ {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
-  'bookmarks.title': 'المنشورات المحفوظة',
+  'bookmarks.title': 'المحفوظات',
   'bookmarks.back': 'العودة إلى الإعدادات',
   'bookmarks.loading': 'جارٍ تحميل منشوراتك المحفوظة',
   'bookmarks.empty.title': 'لا توجد منشورات محفوظة بعد',

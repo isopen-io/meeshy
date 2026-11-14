@@ -166,7 +166,7 @@ const pt = {
   'feed.post.open': 'Abrir a publicação de {author}',
   'feed.post.original.open': 'Publicação original de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
-  'bookmarks.title': 'Publicações salvas',
+  'bookmarks.title': 'Salvos',
   'bookmarks.back': 'Voltar às configurações',
   'bookmarks.loading': 'Carregando suas publicações salvas',
   'bookmarks.empty.title': 'Ainda não há publicações salvas',

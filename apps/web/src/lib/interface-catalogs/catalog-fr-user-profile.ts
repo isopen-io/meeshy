@@ -28,7 +28,6 @@ const frUserProfile = {
   'userProfile.posts.empty': 'Aucune publication',
   'userProfile.posts.emptyPosts': 'Aucun poste',
   'userProfile.posts.emptyReels': 'Aucun réel',
-  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
   'userProfile.posts.error': 'Impossible de charger les publications',
   'userProfile.posts.loadMore': 'Charger plus',
   'userProfile.posts.loaded': 'Publications ajoutées : {count}',
