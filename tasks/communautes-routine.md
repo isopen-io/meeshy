@@ -306,4 +306,6 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 ## 2026-11-14 — réveil 34 (01:40 UTC)
 
 - Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne »), retenue par le porteur pour décision : non touchée. #18105 (#16712) fusionnée.
-- Lot : #18104 (passerelle, sécurité) — en cours.
+- Lot : #18104 (passerelle, sécurité). Le balayage horaire des liens (`ExpiredShareLinksCleanupService.cleanup`) appelle désormais `closeLinksOfOrphanedSalons` (`services/conversations/orphanedSalonLinks.ts`, qui porte aussi `closeOrphanedSalonLinks`, sorti de `communitySalonExit.ts`) AVANT la reprise des révocations différées : il retrouve les salons VIVANTS d'une communauté privée ou désactivée qui ont encore un lien actif, dont un créateur est SORTI (ligne `creator` inactive) et qu'aucun créateur INSCRIT actif ne gouverne ; il ferme et marque leurs liens, et la reprise révoque leurs invités dans la même passe.
+- Décision prise : la preuve de sortie (ligne `creator` inactive) est exigée. Un salon qui n'a JAMAIS eu de ligne `creator` (données héritées) n'est pas « resté sans créateur » au sens de #16712, et une révocation ne se défait pas. La mesure en staging (invités sans lien, salons sans aucun créateur) reste à faire → suivi.
+- Témoins : `orphaned-salon-links-sweep.test.ts` (6) et `ExpiredShareLinksCleanupService.orphaned-salons.test.ts` (2) ; le second rouge sans le câblage.

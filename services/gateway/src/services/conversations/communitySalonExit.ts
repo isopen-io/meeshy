@@ -8,6 +8,7 @@ import { endConversationMembership, type DepartedMemberEphemeralState, type Memb
 import { runWithRetries } from '../../socketio/closeShareLinkRevokingGuests';
 import type { GuestSocketRegistry } from '../../socketio/revokeShareLinkGuests';
 import { resoudreSuccessionDuCreateur } from './creatorSuccession';
+import { closeOrphanedSalonLinks } from './orphanedSalonLinks';
 import { announceParticipantRoleWithCapabilities } from './obsoleteCapability';
 import { postConversationNotice, noticeActor, noticeBroadcast, type SocketNoticeGateway } from './conversationNotice';
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
@@ -91,6 +92,8 @@ export function communityGuardsItsSalons(community: {
  * (`guestAccessEnd`) refuse dès cet instant chaque invité — puis leurs invités
  * sont révoqués en arrière-plan par `runWithRetries` (nouvelles tentatives à
  * 1 puis 5 minutes), la reprise que le balayage horaire rejoue si elle échoue.
+ * Si la FERMETURE elle-même lève, le balayage horaire retrouve le salon
+ * (`closeLinksOfOrphanedSalons`, #18104).
  *
  * Contrat : NE REJETTE JAMAIS, `announcements` non plus — les deux routes
  * appelantes ont déjà commis le départ, et un 500 nierait un fait durable que le
@@ -170,29 +173,6 @@ async function exitEverySalon(deps: SalonExitDeps, request: SalonExitRequest): P
     announcements: announceEveryExit(deps, request, announced)
       .then(() => revokeOrphanedSalonGuests(deps, request, closedLinkIds)),
   };
-}
-
-async function closeOrphanedSalonLinks(
-  prisma: PrismaClient,
-  conversationIds: readonly string[],
-  now: Date,
-): Promise<readonly string[]> {
-  const closed: string[] = [];
-  for (const conversationId of conversationIds) {
-    try {
-      const links = await prisma.conversationShareLink.findMany({ where: { conversationId }, select: { id: true } });
-      if (links.length === 0) continue;
-      const ids = links.map((link) => link.id);
-      await prisma.conversationShareLink.updateMany({
-        where: { id: { in: ids } },
-        data: { isActive: false, guestRevocationPendingAt: now },
-      });
-      closed.push(...ids);
-    } catch (error) {
-      logger.error('Orphaned community salon links could not be closed', { conversationId, error });
-    }
-  }
-  return closed;
 }
 
 async function revokeOrphanedSalonGuests(

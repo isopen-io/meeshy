@@ -4,6 +4,7 @@ import { revokeShareLinkGuests, type GuestSocketRegistry } from '../socketio/rev
 import { runPendingGuestRevocation } from '../socketio/closeShareLinkRevokingGuests';
 import type { DepartedMemberEphemeralState } from '../socketio/endConversationMembership';
 import { guardedInterval } from '../utils/guarded-timer';
+import { closeLinksOfOrphanedSalons } from './conversations/orphanedSalonLinks';
 
 const log = enhancedLogger.child({ module: 'ExpiredShareLinksCleanupService' });
 
@@ -166,6 +167,10 @@ export class ExpiredShareLinksCleanupService {
     this.running = true;
     try {
       const swept = await this.revokeExpiredLinks();
+      // #18104 — un salon privé resté sans créateur dont la fermeture des liens
+      // a levé : ses liens sont marqués ici, puis révoqués par la reprise
+      // ci-dessous, dans la même passe.
+      await closeLinksOfOrphanedSalons(this.prisma, this.now());
       await this.resumePendingRevocations();
       await this.revokeGuestsOfMissingLinks();
       return swept;
