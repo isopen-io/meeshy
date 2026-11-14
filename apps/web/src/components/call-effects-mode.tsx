@@ -22,7 +22,7 @@ import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
-import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useEffectsBarMode } from './call-effects-bar';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, MODE_FIT, RIDER_FIT, SettingsGlass, STACKED, textOf, useEffectsBarMode, useRiderAtBar } from './call-effects-bar';
 import type { LiveFrameHold } from './call-live-frame-hold-option';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
@@ -261,6 +261,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const row = genreRow(true, onOpenFrames !== undefined);
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
+  useRiderAtBar(rider);
   const style = useRef('none');
   const puces = useSwapPresence<HTMLDivElement>(colorAvailable && showsLooks(bar.mode));
   const looks = useSwapPresence<HTMLDivElement>(colorAvailable && showsCarousel(bar.mode));
@@ -349,14 +350,14 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   };
 
   return (
-    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="effects" {...leavingAttributes}>
+    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className={`flex w-full flex-col items-center gap-3 ${MODE_FIT}`} data-call-mode="effects" {...leavingAttributes}>
       <div className="pointer-events-none fixed inset-0 z-0 bg-media-backdrop" data-call-mode-preview="effects">
         {preview}
       </div>
       {companions.length === 0 ? null : <CallEffectsCompanions language={language} companions={companions} captions={captions} floor={controls} />}
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
-        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+      <div ref={controls} className={`relative z-10 flex w-full flex-col items-center gap-3 ${MODE_FIT}`}>
+        <div ref={rider} className={`flex w-full flex-col items-center gap-3 ${RIDER_FIT}`} data-call-mode-rider="">
           <CaptureStatus status={studio.status} />
           <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
             {looks.mounted ? (
