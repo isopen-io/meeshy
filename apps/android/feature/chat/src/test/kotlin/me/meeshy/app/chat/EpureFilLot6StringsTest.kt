@@ -52,9 +52,28 @@ class EpureFilLot6StringsTest {
     }
 
     @Test
+    fun `la rangee dit au repos ce que fait le numero de securite, dans les sept langues`() {
+        val host = File(moduleRoot, "feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatSheetsHost.kt").readText()
+        assertThat(host).contains("subtitle = stringResource(R.string.encryption_safety_number_subtitle)")
+        val expected = mapOf(
+            "values" to "Compare it with your contact to check the encryption.",
+            "values-fr" to "Comparez-le avec votre contact pour vérifier le chiffrement.",
+            "values-es" to "Compáralo con tu contacto para verificar el cifrado.",
+            "values-pt" to "Compare com seu contato para verificar a criptografia.",
+            "values-de" to "Vergleiche sie mit deinem Kontakt, um die Verschlüsselung zu prüfen.",
+            "values-it" to "Confrontalo con il tuo contatto per verificare la crittografia.",
+            "values-ar" to "قارنه مع جهة اتصالك للتحقق من التشفير.",
+        )
+        expected.forEach { (folder, sentence) ->
+            assertWithMessage(folder).that(all(folder)["encryption_safety_number_subtitle"]).isEqualTo(sentence)
+        }
+    }
+
+    @Test
     fun `le manifeste declare la cle android-only et plus les deux anciennes`() {
         val manifest = File(moduleRoot, "i18n/manifest").walkTopDown().filter { it.extension == "json" }.joinToString("\n") { it.readText() }
         assertThat(manifest).contains("\"androidName\": \"encryption_safety_number_title\"")
+        assertThat(manifest).contains("\"androidName\": \"encryption_safety_number_subtitle\"")
         assertThat(manifest).doesNotContain("\"androidName\": \"encryption_legacy_title\"")
         assertThat(manifest).doesNotContain("\"androidName\": \"encryption_legacy_subtitle\"")
     }

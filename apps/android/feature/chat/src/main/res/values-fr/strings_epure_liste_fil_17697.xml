@@ -16,4 +16,5 @@
     <string name="export_card_typeface_pairs_question">À quoi s\'applique la police ?</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire.</string>
     <string name="encryption_safety_number_title">Numéro de sécurité</string>
+    <string name="encryption_safety_number_subtitle">Comparez-le avec votre contact pour vérifier le chiffrement.</string>
 </resources>

@@ -259,6 +259,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     ConversationInfoEntry(
                         icon = MeeshyIcons.LockFilled,
                         label = stringResource(R.string.encryption_safety_number_title),
+                        subtitle = stringResource(R.string.encryption_safety_number_subtitle),
                         onClick = openFrom { sheets.securityVerification = true },
                     ),
                 )

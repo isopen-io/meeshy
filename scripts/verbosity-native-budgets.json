@@ -19,10 +19,10 @@
       "explanations": 90
     },
     "android:feature/chat": {
-      "labels": 1045,
-      "words": 4035,
+      "labels": 1046,
+      "words": 4043,
       "long": 50,
-      "explanations": 97
+      "explanations": 98
     },
     "android:feature/community": {
       "labels": 118,
