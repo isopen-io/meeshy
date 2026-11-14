@@ -747,6 +747,46 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(bar.contains("label: CallEffectsBarRule.afterBack(from: mode) == nil ? CallModeCopy.backToCall : CallControlsCopy.closePanel"), "VoiceOver : ‹ dit ce qu'il fait")
     }
 
+    /// C1 généralisée (directive porteur du 2026-11-14, remplace #17962 point 2) — dans les deux modes
+    /// de la famille, un mode s'ouvre sur son carrousel, et un look, une couleur, une déformation, un
+    /// cadre ou une déclinaison choisis le referment : la barre revient à son menu de base, la rangée
+    /// Visage · Couleur · Cadres et ‹ · Réglages · (+). Les ambiances et « Plus d'ambiances » ne sont
+    /// pas des choix : on parcourt, le carrousel reste. L'option « Cadre » reste posée au menu de base.
+    func test_aChoice_closesTheCarousel_andReturnsTheBarToItsBaseMenu_inBothModes() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        for (name, host) in [("Effets", effects), ("Montage", montage)] {
+            XCTAssertTrue(host.contains("@State private var barMode: CallEffectsBarMode = CallEffectsBarRule.entering"), "\(name) s'ouvre sur son carrousel (P8, C1)")
+            XCTAssertTrue(host.contains("case .looks:"), "\(name) : le carrousel n'est posé que quand un genre l'a ouvert")
+            let close = try block("private func closeAfterChoice() {", until: "\n    }\n", in: host)
+            XCTAssertTrue(close.contains("barMode = CallEffectsBarRule.afterChoice"), "\(name) : un choix rend le menu de base")
+            XCTAssertTrue(close.contains("withAnimation(settingsAnimation)"), "\(name) : par le chemin inverse, fondu sous Réduire les animations")
+            XCTAssertTrue(host.contains("CallEffectsBarRule.pressed("), "\(name) : seul le genre ouvert est pressé")
+            XCTAssertTrue(host.contains("CallEffectsBarRule.afterGenre(from: barMode"), "\(name) : un genre ouvre son carrousel, le genre ouvert le referme")
+        }
+        for binding in ["private var faceBinding: Binding<CallFaceEffect> {", "private var colorBinding: Binding<VideoFilterPreset> {"] {
+            let body = try block(binding, until: "\n    }\n", in: effects)
+            XCTAssertTrue(body.contains("closeAfterChoice()"), "\(binding) : le look choisi referme le carrousel")
+        }
+        let choice = try block("private func choiceBinding(people: Int) -> Binding<CallMontageChoice> {", until: "\n    }\n", in: montage)
+        XCTAssertTrue(choice.contains("closeAfterChoice()"), "Le cadre choisi referme le carrousel du Montage")
+        let cell = try block("private func cell(_ item: CallMontageChoice, isSelected: Bool, people: Int) -> some View {", until: "\n    }\n", in: montage)
+        XCTAssertTrue(cell.contains("closeAfterChoice()"), "Une déclinaison choisie est un cadre choisi")
+        let moods = try block("{ tapped in", until: "}", in: montage)
+        XCTAssertFalse(moods.contains("closeAfterChoice"), "Une ambiance se parcourt : le carrousel reste")
+        let scope = try block("private func scopeToggle(scope: CallFrameScope, people: Int) -> CallFrameScopeToggle? {", until: "\n    }\n", in: montage)
+        XCTAssertFalse(scope.contains("barMode"), "« Plus d'ambiances » se parcourt : le carrousel reste")
+        let base = try block("case .base:", until: "case .settings:", in: montage)
+        XCTAssertTrue(base.contains("holdChip(for:"), "L'option « Cadre » reste posée quand le carrousel se referme")
+        XCTAssertTrue(montage.contains("onCapturePhoto: shoot"), "La photo à deux tapes reste sur le carrousel")
+        XCTAssertTrue(montage.contains("onStartRecording: film"), "Le film à l'appui long reste sur le carrousel")
+        let bar = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let chips = try block("struct CallEffectsGenreChips: View {", until: "struct CallEffectsBar<Looks: View>: View {", in: bar)
+        XCTAssertTrue(chips.contains("let selected: CallEffectKind?"), "Au menu de base, aucun genre n'est pressé")
+        XCTAssertFalse(chips.contains("guard !isSelected else { return }"), "Retoucher le genre ouvert le referme")
+    }
+
     /// #17948 — en groupe, toucher la vignette à la une range les contrôles (loi 11), comme toucher
     /// l'image ; le retour à la grille passe par la capsule « Revenir à la grille ». iOS le tenait
     /// déjà : témoin.
