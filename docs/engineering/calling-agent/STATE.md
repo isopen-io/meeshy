@@ -872,3 +872,9 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 24 — 2026-11-14 (en cours)
+
+- **Base** : `origin/dev` @ `fc9ac0a2`. Le lot du cycle 23 (#18063) y est fusionné.
+- **Branche** : `claude/determined-volta-vs83hp`.
+- **Objectif** : #18064. Les compteurs du client ZMQ (`translation_skipped`, `pool_full_rejections`, `errors_received`) se lisent dans le monitoring admin, et la `reason` loguée d'un refus est bornée.
