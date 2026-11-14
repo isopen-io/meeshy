@@ -137,8 +137,9 @@ final class SheetToolbarSemanticsTests: XCTestCase {
             // AudioPostComposerView.swift + EmojiPickerSheet.swift retirés au
             // LOT 1-A : leurs feuilles custom sont passées à `.cancellationAction`
             // (cf. `test_customComposerSheets_carryASemanticCancel`).
-            "CreateShareLinkView.swift",
-            "CreateTrackingLinkView.swift",
+            // #18429 — `CreateShareLinkView.swift` et `CreateTrackingLinkView.swift`
+            // en sortent : leurs feuilles ferment par le ✕ de l'en-tête partagé
+            // des liens, et le sélecteur de conversation par `.cancellationAction`.
             "InviteFriendsSheet.swift",
             "MagicLinkView.swift",
             "MyStoriesView.swift",

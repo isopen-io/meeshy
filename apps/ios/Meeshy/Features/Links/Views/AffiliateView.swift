@@ -5,14 +5,6 @@ import MeeshySDK
 import MeeshyUI
 
 struct AffiliateView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @Environment(\.meeshyPanelDismiss) private var panelDismiss
-    /// Retour operant dans les trois contextes de presentation : pile iPhone,
-    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
-    private var back: PanelBackAction {
-        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
-    }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false
@@ -20,21 +12,15 @@ struct AffiliateView: View {
     private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            // Retour en verre de l'en-tête partagé (#6481). `back()` reste le
-            // geste : il ferme aussi le panneau droit iPad.
-            CollapsibleHeaderPage(
-                title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
-                onBack: { back() },
-                titleColor: theme.textPrimary,
-                backArrowColor: Color(hex: accentColor),
-                backgroundColor: theme.backgroundPrimary,
-                trailing: { createLinkButton },
-                content: { affiliateContent }
-            )
-        }
+        LinksPage(
+            title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
+            accent: Color(hex: accentColor),
+            action: LinksPageAction(
+                label: String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main),
+                perform: { showCreateSheet = true }
+            ),
+            content: { affiliateContent }
+        )
         .sheet(isPresented: $showCreateSheet) {
             AffiliateCreateView { token in
                 viewModel.tokens.insert(token, at: 0)
@@ -43,28 +29,6 @@ struct AffiliateView: View {
             .presentationDragIndicator(.visible)
         }
         .task { await viewModel.load() }
-    }
-
-    // MARK: - Header Action
-
-    /// Le (+) devient un disque de verre, du diamètre du retour qui lui fait
-    /// face (#6481) — le glyphe plein cerclé
-    /// ne ressemblait à aucun autre chrome de la barre.
-    private var createLinkButton: some View {
-        Button {
-            HapticFeedback.light()
-            showCreateSheet = true
-        } label: {
-            Image(systemName: "plus")
-                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
-                .foregroundStyle(Color(hex: accentColor))
-                .frame(width: 40, height: 40)
-                .adaptiveGlass(in: Circle(), interactive: true)
-                .meeshyTapTarget()
-                .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
     }
 
     // MARK: - Content
@@ -244,28 +208,25 @@ struct AffiliateView: View {
 
             Spacer()
 
-            Button {
-                if let link = token.affiliateLink {
-                    UIPasteboard.general.string = link
-                    HapticFeedback.success()
-                }
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main),
+                size: .s36,
+                glyphTint: Color(hex: accentColor),
+                haptic: .none,
+                action: { token.affiliateLink.map { LinksClipboard.copy($0) } }
+            )
+            .disabled(token.affiliateLink == nil)
 
             shareTokenButton(token)
 
-            Button {
-                Task { await viewModel.deleteToken(token) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "trash",
+                label: String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main),
+                kind: .destructive,
+                size: .s36,
+                action: { Task { await viewModel.deleteToken(token) } }
+            )
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -298,9 +259,7 @@ struct AffiliateView: View {
     }
 
     private var shareTokenGlyph: some View {
-        Image(systemName: "square.and.arrow.up")
-            .font(MeeshyFont.relative(MeeshyIconSize.md))
-            .foregroundStyle(Color(hex: accentColor))
+        MeeshyGlassButtonFace(systemImage: "square.and.arrow.up", size: .s36, glyphTint: Color(hex: accentColor))
     }
 }
 
@@ -367,6 +326,7 @@ final class AffiliateViewModel: ObservableObject {
             tokens = snapshot
             await bestEffort("affiliateView.affiliateTokens.save.3", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list") }
             HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
         }
     }
 }
