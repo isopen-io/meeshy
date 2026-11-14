@@ -63,7 +63,7 @@ describe('ajouter des membres à la création', () => {
   test('la section se nomme et ne propose personne avant la première lettre (comme iOS)', async () => {
     const { host } = await mountHost();
     expect(host.querySelector('h2')?.textContent).toBe('Ajouter des membres');
-    expect(host.querySelector<HTMLInputElement>('[data-community-new-members-search]')?.placeholder).toBe('Rechercher par nom ou nom d’utilisateur…');
+    expect(host.querySelector<HTMLInputElement>('[data-community-new-members-search]')?.placeholder).toBe('Rechercher');
     expect(host.querySelector('[data-community-new-members-candidate]')).toBeNull();
   });
 

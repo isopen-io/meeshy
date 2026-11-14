@@ -66,6 +66,8 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
             CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)
                 .equatable()
                 .padding(.horizontal, MeeshySpacing.lg)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.captureAlert), reduceMotion: reduceMotion))
+                .callChromeVisibility(chrome.isVisible(.captureAlert))
         case .liveFrame:
             liveFrameStatus()
                 .padding(.horizontal, CallTopBannerStack.horizontalMargin)

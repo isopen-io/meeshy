@@ -23,6 +23,8 @@ import { browserCircle, paintFramed, type CircleOf, type FrameStudioLoader } fro
  * - **La carte de proposition** (C2) : en haut, sous l'en-tête, en verre
  *   prononcé ; rien ne change chez moi tant que je n'ai pas touché
  *   « Appliquer ». Elle ne se range jamais avec les commandes (loi 11).
+ *   « Non merci » est le disque de verre dessiné d'un bouton (C2.2, #17345),
+ *   sans flou à lui : la carte porte le seul flou.
  * - **La capsule de réponse** (C3, chez qui a proposé) : « Awa a appliqué
  *   votre cadre » ou « … garde son affichage », quatre secondes.
  * - **La surface** (C3) : le cadre composé par son peintre, les deux vidéos
@@ -120,7 +122,7 @@ function statusCard({ language, state, nameOf, onAccept, onDecline }: Pick<Statu
           <span>{proposalText(language, state.proposal.from, proposed)}</span>
         </p>
         <div className="flex gap-2">
-          <button type="button" onClick={onDecline} className="min-h-11 flex-1 rounded-full bg-media-fill font-semibold transition-transform active:scale-95 motion-reduce:transition-none" data-call-live-frame-decline="">
+          <button type="button" onClick={onDecline} className="glass-call-disc min-h-11 flex-1 rounded-full font-semibold transition-transform active:scale-95 motion-reduce:transition-none" data-call-live-frame-decline="">
             {t(language, 'callControls.liveFrame.decline')}
           </button>
           <button type="button" onClick={onAccept} className="min-h-11 flex-1 rounded-full font-semibold transition-transform active:scale-95 motion-reduce:transition-none" style={{ background: BRAND, color: 'var(--ios-on-brand)' }} data-call-live-frame-accept="">

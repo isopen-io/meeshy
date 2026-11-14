@@ -224,7 +224,6 @@ const itShellLabels = {
   'hashtag.loading': 'Caricamento delle pubblicazioni',
   'hashtag.error': 'Impossibile caricare questo hashtag',
   'hashtag.empty.title': 'Niente sotto #{tag}',
-  'hashtag.empty.body': 'Nessuna pubblicazione visibile porta questo hashtag.',
   'hashtag.loadMore': 'Carica altro',
   'hashtag.loadingMore': 'Caricamento…',
 } satisfies ShellLabelsCatalogSlice;

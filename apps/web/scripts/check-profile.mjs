@@ -272,8 +272,8 @@ try {
       check((await textOf(page, '[data-stat="totalMessages"] strong')) === '1204', `${label} : les statistiques servies`);
       await capture(page, `profil-${scheme}-${width}x${height}`);
       const ongletInks = {
-        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .truncate'),
-        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .truncate'),
+        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .whitespace-nowrap'),
+        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .whitespace-nowrap'),
         pastille: await contrastOf(page, '[data-profile-tab-badge="activity"]'),
       };
       await page.click('[data-profile-tab="activity"]');
@@ -461,15 +461,18 @@ try {
       const detailsInks = {
         nom: await contrastOf(page, '[data-user-hero] p'),
         identifiant: await contrastOf(page, '[data-user-hero] p:nth-of-type(2)'),
-        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .truncate'),
-        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .truncate'),
+        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .whitespace-nowrap'),
+        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .whitespace-nowrap'),
         valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
         ajouter: await contrastOf(page, '[data-profile-action="add"]'),
         /* « ÉCRIRE » entre à la revue de #7083 : 3,84 en clair à l'encre
            `--color-ios-brand`, le geste que l'audience de cet écran vient
            chercher. */
         ecrire: await contrastOf(page, '[data-profile-action="write"]'),
-        bloquer: await contrastOf(page, '[data-profile-action="block"]'),
+        bloquer: await (async () => {
+          if ((await page.$('[data-profile-action="block"]')) === null) await page.click('[data-profile-more]');
+          return contrastOf(page, '[data-profile-action="block"]');
+        })(),
         membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
       };
       const detailsFaibles = Object.entries(detailsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);

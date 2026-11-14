@@ -443,9 +443,9 @@ struct MessageOverlayMenu: View {
     /// les animations ». La cascade d'emojis est jouée par
     /// `EmojiReactionPicker` lui-même via `WaveTileModifier`.
     private func enter() {
-        withAnimation(reduceMotion
-                      ? .easeOut(duration: Self.reducedMotionFadeDuration)
-                      : .spring(response: 0.42, dampingFraction: 0.74)) {
+        meeshyWithAnimation(.spring(response: 0.42, dampingFraction: 0.74),
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
             isVisible = true
         }
     }
@@ -735,9 +735,9 @@ struct MessageOverlayMenu: View {
         // un fondu sous « Réduire les animations ». La cascade d'entree des
         // emojis n'a pas de symetrique a la sortie (le composant partage gere
         // son propre cycle de vie).
-        withAnimation(reduceMotion
-                      ? .easeOut(duration: Self.reducedMotionFadeDuration)
-                      : .spring(response: 0.32, dampingFraction: 0.86)) {
+        meeshyWithAnimation(.spring(response: 0.32, dampingFraction: 0.86),
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
             isVisible = false
         }
         delayed.run(after: .milliseconds(260)) {

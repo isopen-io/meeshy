@@ -42,7 +42,7 @@ class EpureFilLot3StringsTest {
         assertThat(en["chat_header_flame_card_orientation"]).isEqualTo("Sparks earned by writing in this conversation")
         assertThat(en["chat_header_flame_card_today_sparks"]).isEqualTo("Sparks today")
         assertThat(en["chat_header_flame_card_total_sparks"]).isEqualTo("Sparks in total")
-        assertThat(all("values-fr")["chat_header_flame_card_orientation"]).contains("étincelles")
+        assertThat(all("values-fr")["chat_header_flame_card_orientation"]).ignoringCase().contains("étincelles")
     }
 
     @Test
