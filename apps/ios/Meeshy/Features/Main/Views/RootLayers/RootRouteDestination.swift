@@ -18,6 +18,11 @@ struct RootRouteDestination: View {
     let onNotificationTap: (APINotification) -> Void
 
     var body: some View {
+        routeContent.restoresEdgeSwipe(for: route)
+    }
+
+    @ViewBuilder
+    private var routeContent: some View {
         switch route {
         case .conversation(let conv):
             ConversationView(
