@@ -4,7 +4,8 @@
 `b5e865400` (la tête juste après la fusion de #18369).*
 
 **Livré** : #18159 (le dernier des neuf pièges armés du cycle 157), #18380 et
-#18384 (tous deux trouvés par l'audit de ce cycle).
+#18384 (tous deux trouvés par l'audit de ce cycle), et #18399 — un rouge de
+`dev` qui n'était celui de personne, trouvé en allant chercher le verdict de CI.
 **Mesuré et inventorié, non corrigé** : #18381 et #18382 — deux issues ouvertes
 avec leur mesure, et #18385 pour la moitié iOS du lot A.
 **Mesuré CLEAN, et dit pour qu'on cesse d'y dépenser** : deux des quatre
@@ -221,6 +222,59 @@ balayage voisin de #17032, dont il réutilise le discriminant de porte.
 
 ---
 
+## Lot D — et `dev` était rouge, pour une raison qui n'était celle de personne (#18399)
+
+Trouvé en allant chercher le verdict de CI du lot C : le gate « Qualité TS »
+était ROUGE sur `dev` depuis `ea014872a` (09:27), **avant** la fusion de cette
+branche.
+
+`apps/web/scripts/check-utilities.mjs` mesure ce que l'APPLICATION peint — il
+oppose les classes citées dans un `className=` à la feuille RÉELLEMENT
+produite. Son balayage prenait aussi les TÉMOINS : **5 995 fichiers balayés
+dont 2 440 témoins, soit 41 %.**
+
+Une classe inventée par un test pour servir de MARQUEUR à une assertion n'est
+le nom d'aucun jeton. Elle ne peut donc avoir aucune règle, et l'opposer à la
+feuille pose une question dont la seule réponse possible est « rouge » :
+
+```tsx
+className="probe-sheet backdrop:bg-veil"
+expect(ghost?.className).toContain('probe-sheet');
+```
+
+> **Un balayage qui lit les témoins mesure autre chose que ce qu'il annonce.**
+> Il ne devient pas plus strict, il devient faux : la propriété gardée (« ce
+> que l'écran peint est déclaré ») ne porte pas sur un fichier qui ne peint
+> jamais.
+
+Et le rouge n'était celui de personne : il tombe sur `dev` et sur toute PR qui
+s'y rebase, pas sur le lot qui l'a déclenché. C'est le rayon de souffle exact
+de #5958 / #5960 — dont le témoin vit DÉJÀ dans ce fichier, pour une autre
+source de bruit, avec la même phrase : « `Gates web-v2` a échoué sur `dev` pour
+TOUTE PR, pas seulement celle qui touchait le fichier ». Ce lot-là avait
+répondu en retirant le bruit du PÉRIMÈTRE plutôt qu'en exemptant une classe ;
+c'est la même réponse ici, et **aucune ligne n'entre dans `ALLOWED`** — une
+exemption par classe gèle le symptôme et laisse le prochain témoin rougir.
+
+**Le prédicat est ÉTROIT par décision** : il exige le point avant `test` /
+`spec`, donc `latest.ts`, `contest.tsx` et `manifest.ts` restent dans le
+périmètre. Un filtre plus large retirerait de VRAIS écrans du balayage, ce
+qu'aucun rouge ne signalerait.
+
+> **Un faux rouge se voit ; un faux vert, non.** C'est pourquoi un gate se
+> resserre plus volontiers qu'il ne s'élargit, et pourquoi le témoin de ce lot
+> vérifie les DEUX bornes du périmètre : qu'aucun témoin n'y reste, et qu'il
+> reste plus de mille classes à balayer.
+
+| preuve | résultat |
+|---|---|
+| `node scripts/check-utilities.mjs` sur l'arbre construit | EXIT=0, « 1 318 classes employées, toutes portées par la feuille qui les sert » |
+| le MÊME gate, correctif retiré | « 1 classe(s) SANS RÈGLE … `probe-sheet` — `dialog-exit.test.tsx` » |
+| périmètre | 5 995 → 3 555 fichiers, 0 témoin, 1 265 classes toujours vues |
+| `apps/web/scripts/` | 647 témoins, dont 4 nouveaux |
+
+---
+
 ## Ce que l'audit a rendu CLEAN, et pourquoi le dire
 
 Deux des quatre questions sont revenues sans défaut, et les énumérer ÉVITE de
@@ -258,3 +312,4 @@ candidats, tous deux faux après lecture.
 | #18124, #18115 | les pièges armés du cycle 157 | ouvertes |
 | #18342 | les sept événements sans lecteur | ouverte — demande un verdict par événement |
 | #18385 | iOS doit lire le `deletedAt` servi | ouverte — demande Xcode |
+| #18399 | le balayage des classes lisait les témoins | **fermée** par le lot D |
