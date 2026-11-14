@@ -136,7 +136,7 @@ enum SettingsOrientation {
     }
 
     static var affiliate: String {
-        String(localized: "settings.tools.affiliate.hint", defaultValue: "Inviter des amis et gagner des récompenses", bundle: .main)
+        String(localized: "links.hub.affiliate.description", defaultValue: "Invitez et suivez qui s'inscrit par vos liens", bundle: .main)
     }
 
     static var lentilleList: String {

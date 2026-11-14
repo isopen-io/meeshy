@@ -183978,53 +183978,6 @@
         }
       }
     },
-    "settings.tools.affiliate.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ادعُ أصدقاءك واكسب مكافآت"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Freunde einladen und Belohnungen erhalten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invite friends and earn rewards"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invita a amigos y gana recompensas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inviter des amis et gagner des récompenses"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invita amici e ottieni ricompense"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convide amigos e ganhe recompensas"
-          }
-        }
-      }
-    },
     "settings.tools.bookmarks": {
       "extractionState": "manual",
       "localizations": {

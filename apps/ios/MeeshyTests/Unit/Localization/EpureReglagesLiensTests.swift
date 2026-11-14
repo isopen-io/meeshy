@@ -182,6 +182,15 @@ final class EpureReglagesLiensTests: XCTestCase {
         XCTAssertTrue(callsBody.contains("settings.privacy.calls.hide_ip"))
     }
 
+    /// La rangée « Parrainage » des réglages dit ce que dit l'écran qu'elle ouvre : le parrainage invite et compte les
+    /// inscrits, il ne promet aucune récompense que rien dans Meeshy ne verse.
+    func test_settingsAffiliateRow_saysWhatTheReferralScreenDoes_noPromisedReward() throws {
+        XCTAssertEqual(SettingsOrientation.affiliate, "Invitez et suivez qui s'inscrit par vos liens")
+        XCTAssertFalse(SettingsOrientation.affiliate.lowercased().contains("récompense"))
+        let app = try app()
+        XCTAssertNil(app["settings.tools.affiliate.hint"], "la phrase vit sous une seule clé, celle de l'écran des liens")
+    }
+
     // MARK: - Sessions : le titre de section suffit, la rangée garde ses dates
 
     func test_sessions_currentDevice_isNamedOnceByItsSectionTitle_notAgainByABadge() throws {
