@@ -55,6 +55,14 @@ nonisolated enum FeedRetention {
     /// pousser vers le bas le post en lecture.
     static let headHoldDepth: CGFloat = 160
 
+    /// Ce que le fil montre de sa présence : à l'écran, à sa place ; caché,
+    /// retiré vers le bas — ou, sous « Réduire les animations », seulement
+    /// effacé, sans échelle ni déplacement.
+    static func presentation(isShown: Bool, reduceMotion: Bool) -> FeedPresentation {
+        guard !isShown else { return FeedPresentation(scale: 1, drop: 0, opacity: 1, slides: true) }
+        return FeedPresentation(scale: hiddenScale, drop: hiddenDrop, opacity: 0, slides: true)
+    }
+
     static func isMounted(isShown: Bool, isRetained: Bool) -> Bool {
         isShown || isRetained
     }
@@ -74,6 +82,14 @@ nonisolated enum FeedRetention {
     static func holdsHead(offset: CGFloat, isShown: Bool) -> Bool {
         !isShown || offset < -headHoldDepth
     }
+}
+
+/// La pose du fil retenu, et si sa transition glisse ou se réduit à un fondu.
+nonisolated struct FeedPresentation: Equatable {
+    let scale: CGFloat
+    let drop: CGFloat
+    let opacity: Double
+    let slides: Bool
 }
 
 private struct FeedIsShownKey: EnvironmentKey {

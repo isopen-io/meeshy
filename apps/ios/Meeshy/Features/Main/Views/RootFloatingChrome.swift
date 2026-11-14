@@ -317,6 +317,24 @@ private struct LadderFollowAnchor: Equatable {
     let dragging: Bool
 }
 
+/// La pose d'un barreau d'échelle de menu, ouvert ou fermé.
+nonisolated struct MenuRungPose: Equatable {
+    let scale: CGFloat
+    let rotationDegrees: Double
+    let opacity: Double
+    let delay: Double
+}
+
+/// La loi des barreaux d'une échelle de menu : depuis le disque, en échelle et
+/// en rotation, décalés par rang à l'ouverture.
+nonisolated enum MenuRungMotion {
+    static func pose(isOpen: Bool, reduceMotion: Bool, delay: Double) -> MenuRungPose {
+        isOpen
+            ? MenuRungPose(scale: 1, rotationDegrees: 0, opacity: 1, delay: delay)
+            : MenuRungPose(scale: 0.3, rotationDegrees: -30, opacity: 0, delay: 0)
+    }
+}
+
 // MARK: - Menu Animation Modifier
 extension View {
     func menuAnimation(showMenu: Bool, delay: Double) -> some View {
