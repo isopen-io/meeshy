@@ -224,8 +224,8 @@ struct MeeshySelectionFeedbackTests {
     func source_doesNotMirror() throws {
         for file in ["MeeshySelectionFeedback.swift", "MeeshySnapGuides.swift", "MeeshySnapGuidesRule.swift"] {
             let code = try Self.code(file)
-            #expect(!code.contains("layoutDirection"), file)
-            #expect(!code.contains("flipsForRightToLeftLayoutDirection"), file)
+            #expect(!code.contains("layoutDirection"), "\(file)")
+            #expect(!code.contains("flipsForRightToLeftLayoutDirection"), "\(file)")
         }
     }
 

@@ -44,8 +44,8 @@ struct RelationRequestCasesTests {
         )
     }
 
-    @Test func theSharedFileCarriesTheSixteenCases() throws {
-        #expect(try cases().count == 16)
+    @Test func theSharedFileCarriesTheNineteenCases() throws {
+        #expect(try cases().count == 19)
     }
 
     @Test func everySharedCaseGivesTheSameVerdict() throws {

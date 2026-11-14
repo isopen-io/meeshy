@@ -60,7 +60,7 @@ struct MeeshyTimelineFriseRow<Content: View>: View, Equatable {
     var body: some View {
         HStack(spacing: MeeshyTimelineFriseRecipe.laneGap) {
             Image(systemName: track.systemImage)
-                .font(.system(size: MeeshyTimelineFriseRecipe.iconSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyTimelineFriseRecipe.iconSize, weight: .semibold))
                 .foregroundStyle(recipe.iconColor(isDark: model.isDark))
                 .frame(width: MeeshyTimelineFriseRecipe.laneWidth)
                 .accessibilityHidden(true)
