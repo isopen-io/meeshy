@@ -36,9 +36,18 @@ class EpureModesLectureStringsTest {
     private fun text(language: String, key: String): String =
         checkNotNull(byLanguage.getValue(language)[key]) { "$language : la clé $key manque" }
 
+    private companion object {
+        const val MENU_TWO_LINES = 64
+    }
+
     private val subtitles = listOf(
         "reading_mode_focal_subtitle", "reading_mode_script_subtitle", "reading_mode_summary_subtitle", "reading_mode_river_subtitle",
     )
+
+    @Test
+    fun `le portugais est celui du Bresil, comme le reste du catalogue`() {
+        subtitles.forEach { key -> assertWithMessage("pt/$key").that(text("pt", key)).doesNotContain("numa ") }
+    }
 
     @Test
     fun `les quatre sous-titres disent ce que fait le mode, en francais`() {
@@ -66,7 +75,7 @@ class EpureModesLectureStringsTest {
             folders.keys.forEach { language ->
                 val value = text(language, key)
                 assertWithMessage("$language/$key vide").that(value).isNotEmpty()
-                assertWithMessage("$language/$key tient sur une ligne").that(value.length).isAtMost(90)
+                assertWithMessage("$language/$key tient dans les deux lignes du menu").that(value.length).isAtMost(MENU_TWO_LINES)
                 if (language != "fr") assertWithMessage("$language/$key copié du français").that(value).isNotEqualTo(text("fr", key))
                 if (language != "fr" && language != "en") {
                     assertWithMessage("$language/$key copié de l'anglais").that(value).isNotEqualTo(text("en", key))

@@ -3,6 +3,6 @@
 <resources>
     <string name="reading_mode_focal_subtitle">Die aktuelle Nachricht wird in der Zeile hervorgehoben.</string>
     <string name="reading_mode_script_subtitle">Alle Nachrichten in einer flachen Zeile, gleich dicht.</string>
-    <string name="reading_mode_summary_subtitle">Erst eine Zusammenfassung, die Originalnachrichten einen Tipp entfernt.</string>
+    <string name="reading_mode_summary_subtitle">Erst die Zusammenfassung, die Originale einen Tipp entfernt.</string>
     <string name="reading_mode_river_subtitle">In aktiven Gruppen eine Spur pro Stimme.</string>
 </resources>
