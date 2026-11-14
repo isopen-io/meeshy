@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -58,7 +59,8 @@ import me.meeshy.sdk.model.call.railSide
 import kotlin.math.max
 
 private val RAIL_TOP = 56.dp
-private const val RAIL_SLIDE_MILLIS = 250
+/** Le pas d'un rail qui entre ou sort par son bord ; ma vignette qui lui cède son coin glisse au même pas (L2.8). */
+internal const val CALL_RAIL_SLIDE_MILLIS = 250
 
 /**
  * #17327 — À DEUX, le (…) fait sortir deux rails verticaux sur les bords : « Mon image » au début, « L'appel » à la fin,
@@ -81,6 +83,7 @@ internal fun CallActionRails(
     onRevive: () -> Unit = {},
 ) {
     val safeHorizontal = rememberCallSafeHorizontalDp()
+    TellsSelfTileTheRails(railsShown = rows.isNotEmpty())
     Box(
         modifier
             .fillMaxSize()
@@ -101,6 +104,14 @@ internal fun CallActionRails(
             }
         }
     }
+}
+
+/** L2.8 (#17965 point 1) — les rails disent à ma vignette qu'ils sont dehors : en paysage, elle leur cède son coin. */
+@Composable
+private fun TellsSelfTileTheRails(railsShown: Boolean) {
+    val neighbours = LocalCallSelfTileNeighbours.current ?: return
+    SideEffect { neighbours.railsShown = railsShown }
+    DisposableEffect(neighbours) { onDispose { neighbours.railsShown = false } }
 }
 
 /** Le retrait de zone sûre horizontal, identique des deux côtés : la fenêtre donne des bords physiques, pas de lecture. */
@@ -136,8 +147,8 @@ private fun BoxScope.CallActionRailSlot(
     AnimatedVisibility(
         visible = row != null,
         modifier = Modifier.align(if (side == CallRailSide.Leading) Alignment.CenterStart else Alignment.CenterEnd),
-        enter = if (reduceMotion) fadeIn(tween(fade)) else slideInHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeIn(tween(RAIL_SLIDE_MILLIS)),
-        exit = if (reduceMotion) fadeOut(tween(fade)) else slideOutHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeOut(tween(RAIL_SLIDE_MILLIS)),
+        enter = if (reduceMotion) fadeIn(tween(fade)) else slideInHorizontally(tween(CALL_RAIL_SLIDE_MILLIS)) { travelPx } + fadeIn(tween(CALL_RAIL_SLIDE_MILLIS)),
+        exit = if (reduceMotion) fadeOut(tween(fade)) else slideOutHorizontally(tween(CALL_RAIL_SLIDE_MILLIS)) { travelPx } + fadeOut(tween(CALL_RAIL_SLIDE_MILLIS)),
     ) {
         (row ?: lastRow)?.let { shown ->
             Box(Modifier.callReviveOnTouch(isHidden = row == null, onRevive = onRevive)) {

@@ -154,13 +154,13 @@ private fun CallGroupTilePlate(tile: GroupCallStageTile, modifier: Modifier) {
     val name = tile.displayName.ifBlank { stringResource(R.string.call_group_tile_unknown) }
     CallTileNameplate(text = name, modifier = modifier) {
         if (tile.isMicMuted) {
-            Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(PLATE_ICON))
+            Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(CALL_TILE_PLATE_ICON))
         }
         if (tile.isScreenSharing) {
-            Icon(MeeshyIcons.FlipToFront, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(PLATE_ICON))
+            Icon(MeeshyIcons.FlipToFront, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(CALL_TILE_PLATE_ICON))
         }
         if (tile.isReconnecting) {
-            Icon(MeeshyIcons.Sync, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(PLATE_ICON))
+            Icon(MeeshyIcons.Sync, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(CALL_TILE_PLATE_ICON))
         }
     }
 }
@@ -194,7 +194,8 @@ internal fun CallTileNameplate(text: String, modifier: Modifier = Modifier, lead
 private fun avatarSize(side: Dp): Dp = side * AVATAR_RATIO
 
 private val TILE_RADIUS = 16.dp
-private val PLATE_ICON = 14.dp
+/** L'icône d'état d'une plaque de vignette (micro coupé, partage, reconnexion), en groupe comme sur ma vignette de duo. */
+internal val CALL_TILE_PLATE_ICON = 14.dp
 private val BORDER_WIDTH = 1.5.dp
 private val SPEAKING_BORDER_WIDTH = 3.dp
 private const val BORDER_ALPHA = 0.55f

@@ -42,13 +42,13 @@ class CallSelfTileDuoPlateGuardTest {
 
     @Test
     fun `P1_4 - la plaque est lue avec la vignette par le lecteur d'ecran`() {
-        val plate = block(code("CallSelfTile.kt"), "private fun BoxScope.CallSelfTilePlate(", "\n}")
+        val plate = block(code("CallSelfTile.kt"), "private fun BoxScope.CallSelfTileNameplate(", "\n}")
         assertThat(plate).contains("clearAndSetSemantics { contentDescription = text }")
     }
 
     @Test
     fun `G1_2 - la plaque suit ma vignette rangee au toucher, a sa taille de petite vignette, sans couvrir le liseré`() {
-        val plate = block(code("CallSelfTile.kt"), "private fun BoxScope.CallSelfTilePlate(", "\n}")
+        val plate = block(code("CallSelfTile.kt"), "private fun BoxScope.CallSelfTileNameplate(", "\n}")
         assertThat(plate).contains("Alignment.BottomCenter")
         assertThat(plate).contains("callKeepsSmallTileSize(stowFactor, TransformOrigin(0.5f, 1f))")
         val keeps = block(code("CallSelfTile.kt"), "internal fun Modifier.callKeepsSmallTileSize(", "\n}")
@@ -62,7 +62,8 @@ class CallSelfTileDuoPlateGuardTest {
         val stage = code("CallStage.kt")
         assertThat(stage).contains("plateLeading = {")
         assertThat(stage).contains("MeeshyIcons.MicOff")
-        assertThat(stage).doesNotContain("compact = true")
+        assertThat(Regex("""CallPeerMutedBadge\(""").findAll(stage).count()).isEqualTo(1)
+        assertThat(stage).doesNotContain("callKeepsSmallTileSize(")
     }
 
     @Test
@@ -80,16 +81,19 @@ class CallSelfTileDuoPlateGuardTest {
 
     @Test
     fun `L2_8 - les rails disent qu'ils sont dehors, et ma vignette leur cede son coin en glissant, sans recomposer par image`() {
-        val rails = block(code("CallActionRails.kt"), "internal fun CallActionRails(", "\n}")
-        assertThat(rails).contains("LocalCallSelfTileNeighbours.current")
-        assertThat(rails).contains("railsShown = rows.isNotEmpty()")
+        val source = code("CallActionRails.kt")
+        assertThat(block(source, "internal fun CallActionRails(", "\n}")).contains("TellsSelfTileTheRails(railsShown = rows.isNotEmpty())")
+        val tells = block(source, "private fun TellsSelfTileTheRails(", "\n}")
+        assertThat(tells).contains("LocalCallSelfTileNeighbours.current")
+        assertThat(tells).contains("onDispose { neighbours.railsShown = false }")
 
         val tile = code("CallSelfTile.kt")
         assertThat(tile).contains("CallSelfTileLaw.railYieldDp(")
         val placed = block(tile, "private fun Modifier.callSelfTileOffset(", "\n}")
         assertThat(placed).contains("offset {")
-        assertThat(placed).contains("CallSelfTileLaw.railGlideDp(")
+        assertThat(placed).contains("railGlidePx(")
         assertThat(placed).contains("railGlide.value")
+        assertThat(block(tile, "private fun railGlidePx(", "\n}")).contains("CallSelfTileLaw.railGlideDp(")
         val glide = block(tile, "private fun rememberCallSelfTileRailGlide(", "\n}")
         assertThat(glide).contains("snapTo(")
         assertThat(glide).contains("animateTo(")
