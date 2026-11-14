@@ -15,8 +15,10 @@ const PILL_PADDING = 6;
 
 const EASING = 'cubic-bezier(0.2, 0.9, 0.3, 1)';
 
-/** Ce qui se range par le fondu : l'élément lui-même ou ses descendants. */
-const STOW_TARGETS = '[data-call-stow], [data-call-chrome-fade]:not([data-call-chrome-keep]), [data-call-pill-rest]';
+/** Ce qui se range par le fondu : l'élément lui-même, ou ses descendants que le rangement ambiant gouverne — pas ce qui se range par SON toucher (`data-call-chrome-keep`, U2.4). */
+const STOW_TARGETS = '[data-call-stow]:not([data-call-chrome-keep]), [data-call-chrome-fade]:not([data-call-chrome-keep]), [data-call-pill-rest]';
+
+const STOW_SELF = '[data-call-stow], [data-call-chrome-fade], [data-call-pill-rest]';
 
 const changed = (from: GlassSize, to: GlassSize): boolean => morphKeyframes(from, to, false) !== null;
 
@@ -92,7 +94,7 @@ export function fadeOpacity(element: HTMLElement, to: number, ms: number, previo
  */
 export function fadeStow(element: HTMLElement, stowed: boolean): void {
   if (!prefersReducedMotion()) return;
-  const targets = [...(element.matches(STOW_TARGETS) ? [element] : []), ...element.querySelectorAll<HTMLElement>(STOW_TARGETS)];
+  const targets = [...(element.matches(STOW_SELF) ? [element] : []), ...element.querySelectorAll<HTMLElement>(STOW_TARGETS)];
   for (const target of targets) if (typeof target.animate === 'function') target.animate([...stowFadeKeyframes(stowed)], { duration: STOW_REDUCED_MS, easing: 'linear' });
 }
 

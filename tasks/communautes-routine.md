@@ -20,6 +20,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
 | 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
 | 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
+| 2026-11-14 | Une image de profil ou de communauté ne désigne qu'un hôte Meeshy (passerelle) | voir réveil 38 | #16809 | voir réveil 38 |
 
 ## 2026-11-07 — lot 1
 
@@ -353,3 +354,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux (CI des branches coupée, #18048) : passerelle `unit/routes` + `routes/__tests__` + `security` 930/930 suites (14 155 tests), `tsc --noEmit` vert, cliquet `tsc-never-loaded-tests-ratchet` vert ; shared vitest ciblé 95/95. Un rouge corrigé en route : `search-tokens-write-guard` lit toute clé `displayName` dans le `data` d'un `user.update` comme une écriture de nom — la composition explicite du taux de complétion l'y faisait entrer, revenue à l'étalement.
 - PR #18355.
 - Prochain lot recommandé : #16809 (hôtes Meeshy, même loi), #18026 et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 38 (09:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18355 (#16811) fusionnée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev`.
+- Lot : #16809 (passerelle, sécurité, vie privée). Une image d'identité ABSOLUE — avatar ou bannière d'un profil, d'une communauté — n'est plus admise que sur un hôte de médias Meeshy : `meeshyMediaHosts.ts` (`services/attachments/`) lit les hôtes de `PUBLIC_URL`, `API_PUBLIC_URL`, `BACKEND_URL` et `MEESHY_MEDIA_HOSTS` (liste), plus `gate.meeshy.me` toujours ; l'hôte se compare à la forme que `URL` analyse (port compris), une adresse à identifiants est refusée. `identityImageIsCallers` refuse désormais toute référence qui ne désigne aucun fichier du volume (hôte tiers, route Meeshy qui ne sert pas un fichier) et son PROPRE fichier servi par un hôte tiers ; 400 `IDENTITY_IMAGE_NOT_OWNED`, rien d'écrit, aucune lecture.
+- Rétrocompatible : écriture stricte, lecture tolérante. La valeur DÉJÀ posée passe toujours (un renommage qui renvoie la bannière tierce existante n'échoue pas) ; les trois clients ne posent que la clé de leur propre téléversement. Le web n'a rien à changer.
+- Reste : #18404 — la mesure des lignes existantes vers un hôte tiers (User.avatar/banner, Community.avatar/banner) demande une base, et ce qu'on fait de celles qu'on trouve (laisser, purger, masquer à la lecture) est une décision.
+- Témoins : `meeshy-media-hosts.test.ts` (18), `profile-image-ownership.test.ts` et `settings.test.ts` (hôte tiers ⇒ 400, valeur tierce déjà posée ⇒ 200), `core.test.ts` (création). Fixtures de trois suites `users/` passées de `https://example.com/…` à un téléversement de l'appelant sur `gate.meeshy.me`.
+- Gates locaux : passerelle `unit/routes` + `unit/services` + `routes/__tests__` + `security` + cliquet `tsc-never-loaded-tests-ratchet` 1587/1588 suites (26 507 tests) — le rouge restant est `UploadProcessor.heif-conversion` (binaire natif absent sous `--ignore-scripts`, hors lot) ; `tsc --noEmit` vert.
+- Pas de revue adversariale : resserrement d'une validation d'entrée sur la règle de #16811, ni permission ni migration.
+- Prochain lot recommandé : #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; sinon #16741 ou #16879 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.

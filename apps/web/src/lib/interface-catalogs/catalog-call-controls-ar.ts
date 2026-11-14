@@ -81,6 +81,8 @@ const ar = {
   'callControls.selfTile.corner.bottom-left': 'صورتي المصغرة: أسفل اليسار',
   'callControls.selfTile.corner.bottom-right': 'صورتي المصغرة: أسفل اليمين',
   'callControls.spotlight.self': 'إبراز صورتي',
+  'callControls.fullscreen.total.enter': 'ملء الشاشة الكامل',
+  'callControls.fullscreen.total.exit': 'الخروج من ملء الشاشة الكامل',
   'callControls.screenZoom.hint': 'الشاشة المشتركة: اضغط بإصبعين أو Ctrl + عجلة الفأرة للتكبير، والمس مرتين لرؤيتها كاملة',
   'callControls.liveFrame.proposal': 'يقترح {name} الإطار «{frame}»',
   'callControls.liveFrame.proposal.anonymous': 'يقترح الطرف الآخر الإطار «{frame}»',

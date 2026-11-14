@@ -81,6 +81,8 @@ const es = {
   'callControls.selfTile.corner.bottom-left': 'Mi miniatura: abajo a la izquierda',
   'callControls.selfTile.corner.bottom-right': 'Mi miniatura: abajo a la derecha',
   'callControls.spotlight.self': 'Destacar mi imagen',
+  'callControls.fullscreen.total.enter': 'Pantalla completa total',
+  'callControls.fullscreen.total.exit': 'Salir de la pantalla completa total',
   'callControls.screenZoom.hint': 'Pantalla compartida: pellizca o Ctrl + rueda para hacer zoom, toca dos veces para verla entera',
   'callControls.liveFrame.proposal': '{name} te propone el marco «{frame}»',
   'callControls.liveFrame.proposal.anonymous': 'La otra persona te propone el marco «{frame}»',
