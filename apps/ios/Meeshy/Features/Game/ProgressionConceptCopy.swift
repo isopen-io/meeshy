@@ -75,6 +75,21 @@ enum ConceptText {
         }
     }
 
+    /// Le détail chiffré de « Qu’est-ce que c’est » : les seuils du niveau, le nombre de renaissances. Derrière un (i), jamais au repos.
+    static func whatNote(_ concept: ProgressionConcept) -> MeeshyInfoNote? {
+        switch concept {
+        case .level:
+            MeeshyInfoNote(
+                question: String(localized: "game.concept.level.what.note.question", defaultValue: "Combien d’étincelles par niveau ?", bundle: .main),
+                text: String(localized: "game.concept.level.what.note", defaultValue: "10 000 étincelles pour le niveau 10, un million pour le niveau 100.", bundle: .main))
+        case .prestige:
+            MeeshyInfoNote(
+                question: String(localized: "game.concept.prestige.what.note.question", defaultValue: "Combien de renaissances ?", bundle: .main),
+                text: String(localized: "game.concept.prestige.what.note", defaultValue: "Cinq renaissances au plus mènent au Sixième Âge.", bundle: .main))
+        case .points, .meesh, .glory, .flame, .missions, .league, .season, .elans, .badges, .defis, .succes, .showcase, .atlas: nil
+        }
+    }
+
     /// Le (i) de « Comment ça marche ? » : sa question est son nom accessible, sa note la phrase `how`.
     static func howNote(_ concept: ProgressionConcept) -> MeeshyInfoNote? {
         how(concept).map { MeeshyInfoNote(question: ficheHow, text: $0) }
@@ -338,7 +353,7 @@ enum ConceptText {
     /// Ce que c’est — la première phrase de « C’est quoi ? ».
     static func what(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur ta lumière : 10 000 étincelles pour le niveau 10, un million pour le niveau 100. Frapper une Meesh en fige une part, donc fait baisser ton niveau ; ce que tu as reçu reste reçu.", bundle: .main)
+        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.", bundle: .main)
         case .points: String(localized: "game.concept.points.what", defaultValue: "Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.what", defaultValue: "Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.what", defaultValue: "Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe.", bundle: .main)
@@ -346,7 +361,7 @@ enum ConceptText {
         case .missions: String(localized: "game.concept.missions.what", defaultValue: "Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.", bundle: .main)
         case .league: String(localized: "game.concept.league.what", defaultValue: "La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme.", bundle: .main)
         case .season: String(localized: "game.concept.season.what", defaultValue: "Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.what", defaultValue: "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.what", defaultValue: "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.what", defaultValue: "Un élan est un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.what", defaultValue: "Une médaille suit un geste précis : un message vocal, une story, une amitié nouée. Il y en a vingt.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.what", defaultValue: "Un défi est un palier chiffré dans une famille de gestes : un nombre à atteindre.", bundle: .main)

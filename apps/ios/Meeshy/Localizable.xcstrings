@@ -266505,43 +266505,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل تبادل حقيقي يُطلق شرارات. ويُطلق المنشور شراراته بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تخصّ إجراءاتك، لا شراراتك أبدًا: الزخم واللهب والفعاليات تُطلق المزيد منها مع كل إجراء."
+            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل تبادل حقيقي يُطلق شرارات. ويُطلق المنشور شراراته بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch lässt Funken sprühen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen."
+            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch lässt Funken sprühen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Writing, talking, posting, reacting, inviting: every real exchange makes sparks fly. A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move."
+            "value": "Writing, talking, posting, reacting, inviting: every real exchange makes sparks fly. A post makes them fly according to who can see it: public, community or friends."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada intercambio de verdad hace brotar chispas. Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto."
+            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada intercambio de verdad hace brotar chispas. Una publicación las hace brotar según quién puede verla: público, comunidad o amigos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste."
+            "value": "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni vero scambio fa scaturire scintille. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici. I limiti riguardano i tuoi gesti, mai le tue scintille: slanci, Fiamma ed eventi ne fanno scaturire di più a ogni gesto."
+            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni vero scambio fa scaturire scintille. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever, falar, publicar, reagir, convidar: cada troca de verdade faz saltar faíscas. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto."
+            "value": "Escrever, falar, publicar, reagir, convidar: cada troca de verdade faz saltar faíscas. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos."
+          }
+        }
+      }
+    },
+    "game.rules.1.limits": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحدود تخصّ إجراءاتك، لا شراراتك أبدًا: الزخم واللهب والفعاليات تُطلق المزيد منها مع كل إجراء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I limiti riguardano i tuoi gesti, mai le tue scintille: slanci, Fiamma ed eventi ne fanno scaturire di più a ogni gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto."
+          }
+        }
+      }
+    },
+    "game.rules.1.limits.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل هناك حدود؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gibt es Limits?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Are there limits?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Hay límites?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Y a-t-il des limites ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ci sono dei limiti?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existem limites?"
           }
         }
       }
@@ -266599,43 +266693,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك: مليون شرارة للمستوى 100. السكّ يصوغ جزءًا منه فينخفض مستواك."
+            "value": "شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus: eine Million Funken für Level 100. Eine Prägung bannt einen Teil davon und lässt das Level sinken."
+            "value": "Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Together, your sparks form your light, and your level is read from it: a million sparks for level 100. A mint binds part of it, so it lowers your level."
+            "value": "Together, your sparks form your light, and your level is read from it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Juntas, tus chispas forman tu luz, y tu nivel se lee en ella: un millón de chispas para el nivel 100. Acuñar fija una parte, así que lo hace bajar."
+            "value": "Juntas, tus chispas forman tu luz, y tu nivel se lee en ella."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser."
+            "value": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei: un milione di scintille per il livello 100. Un conio ne fissa una parte, quindi lo fa scendere."
+            "value": "Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela: um milhão de faíscas para o nível 100. Uma cunhagem cristaliza uma parte dela, então o faz baixar."
+            "value": "Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela."
           }
         }
       }
@@ -266693,43 +266787,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك. ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ."
+            "value": "تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %."
+            "value": "Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints."
+            "value": "A Meesh is minted by hand: part of your light is bound into it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones."
+            "value": "Una Meesh se acuña a mano: una parte de tu luz se fija en ella."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes."
+            "value": "Une Meesh se frappe à la main : une part de ta lumière s’y fige."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni."
+            "value": "Una Meesh si conia a mano: una parte della tua luce vi si fissa."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens."
+            "value": "Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela."
+          }
+        }
+      }
+    },
+    "game.rules.3.share": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens."
+          }
+        }
+      }
+    },
+    "game.rules.3.share.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف يُحسب الجزء المصوغ؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie berechnet sich der gebannte Teil?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How is the bound part worked out?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo se calcula la parte fijada?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment se calcule la part figée ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come si calcola la parte fissata?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como se calcula a parte cristalizada?"
           }
         }
       }
@@ -274909,53 +275097,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sem limite a partir da patente %@."
-          }
-        }
-      }
-    },
-    "game.atlas.tiers.prestige": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يُتاح الانبعاث عند المستوى %@: وهو اختياري، ويمكن لنورك أن يواصل النمو."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Wiedergeburt öffnet sich ab Level %@: Sie ist freiwillig, dein Licht kann auch weiter wachsen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rebirth opens at level %@: it’s optional, your light can also keep growing."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El renacimiento se ofrece en el nivel %@: es opcional, tu luz también puede seguir creciendo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La renaissance s’offre au niveau %@ : elle est facultative, ta lumière peut aussi grandir encore."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La rinascita si offre al livello %@: è facoltativa, la tua luce può anche continuare a crescere."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O renascimento se oferece no nível %@: é opcional, sua luz também pode continuar crescendo."
           }
         }
       }
@@ -287036,53 +287177,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Convite enviado a %@. Aguardando a resposta."
-          }
-        }
-      }
-    },
-    "game2.duo.no_friends": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحتاج إلى صديق مقبول لتعقد تحالفًا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für ein Bündnis brauchst du einen bestätigten Freund."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You need an accepted friend to form an alliance."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Necesitas un amigo aceptado para sellar una alianza."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il te faut un ami accepté pour faire alliance."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ti serve un amico accettato per stringere un’alleanza."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você precisa de um amigo aceito para fazer aliança."
           }
         }
       }
@@ -312291,53 +312385,6 @@
         }
       }
     },
-    "game.rules.concepts_intro": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كل عنصر في اللعبة، بوضوح."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jedes Element des Spiels, verständlich erklärt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every element of the game, in plain words."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada elemento del juego, en claro."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque élément du jeu, en clair."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ogni elemento del gioco, in chiaro."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada elemento do jogo, em palavras simples."
-          }
-        }
-      }
-    },
     "game.rules.step.meaning": {
       "extractionState": "manual",
       "localizations": {
@@ -312391,43 +312438,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مستواك هو الرقم في وسط حلقتك. ويُقرأ من نورك: 10٬000 شرارة للمستوى 10، ومليون للمستوى 100. سكّ Meesh يصوغ جزءًا منه، فيُخفض مستواك؛ وما تلقّيته يبقى لك."
+            "value": "مستواك هو الرقم في وسط حلقتك: يُقرأ من نورك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Level ist die Zahl in der Mitte deines Rings. Es ergibt sich aus deinem Licht: 10.000 Funken für Level 10, eine Million für Level 100. Eine Meesh zu prägen bannt einen Teil davon und senkt damit dein Level; was du empfangen hast, bleibt empfangen."
+            "value": "Dein Level ist die Zahl in der Mitte deines Rings: Es ergibt sich aus deinem Licht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your level is the number at the centre of your ring. It is read from your light: 10,000 sparks for level 10, a million for level 100. Minting a Meesh binds part of it, so it lowers your level; what you received stays received."
+            "value": "Your level is the number at the centre of your ring: it is read from your light."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu nivel es la cifra del centro de tu anillo. Se lee en tu luz: 10.000 chispas para el nivel 10, un millón para el nivel 100. Acuñar una Meesh fija una parte de ella, así que baja tu nivel; lo recibido sigue recibido."
+            "value": "Tu nivel es la cifra del centro de tu anillo: se lee en tu luz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur ta lumière : 10 000 étincelles pour le niveau 10, un million pour le niveau 100. Frapper une Meesh en fige une part, donc fait baisser ton niveau ; ce que tu as reçu reste reçu."
+            "value": "Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo livello è il numero al centro del tuo anello. Si legge sulla tua luce: 10 000 scintille per il livello 10, un milione per il livello 100. Coniare una Meesh ne fissa una parte, quindi abbassa il tuo livello; ciò che hai ricevuto resta ricevuto."
+            "value": "Il tuo livello è il numero al centro del tuo anello: si legge sulla tua luce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu nível é o número no centro do seu anel. Ele se lê na sua luz: 10.000 faíscas para o nível 10, um milhão para o nível 100. Cunhar uma Meesh cristaliza uma parte dela, então baixa o seu nível; o que foi recebido continua recebido."
+            "value": "Seu nível é o número no centro do seu anel: ele se lê na sua luz."
+          }
+        }
+      }
+    },
+    "game.concept.level.what.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10٬000 شرارة للمستوى 10، ومليون للمستوى 100."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10.000 Funken für Level 10, eine Million für Level 100."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10,000 sparks for level 10, a million for level 100."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10.000 chispas para el nivel 10, un millón para el nivel 100."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 000 étincelles pour le niveau 10, un million pour le niveau 100."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 000 scintille per il livello 10, un milione per il livello 100."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10.000 faíscas para o nível 10, um milhão para o nível 100."
+          }
+        }
+      }
+    },
+    "game.concept.level.what.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كم شرارة لكل مستوى؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Funken pro Level?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many sparks per level?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuántas chispas por nivel?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combien d’étincelles par niveau ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quante scintille per livello?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantas faíscas por nível?"
           }
         }
       }
@@ -313143,43 +313284,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100، حين يصير نورك مجرّة. وهو اختياري: خمسة انبعاثات على الأكثر تقود إلى العصر السادس."
+            "value": "الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100، حين يصير نورك مجرّة. وهو اختياري."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig: Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter."
+            "value": "Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional: five rebirths at most lead to the Sixth Age."
+            "value": "Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100, cuando tu luz se ha vuelto Galaxia. Es opcional: cinco renacimientos como máximo llevan a la Sexta Edad."
+            "value": "El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100, cuando tu luz se ha vuelto Galaxia. Es opcional."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge."
+            "value": "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa: cinque rinascite al massimo portano alla Sesta Era."
+            "value": "La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O renascimento abre uma nova Era da sua lenda, oferecida no nível 100, quando a sua luz se tornou Galáxia. Ele é opcional: cinco renascimentos no máximo levam à Sexta Era."
+            "value": "O renascimento abre uma nova Era da sua lenda, oferecida no nível 100, quando a sua luz se tornou Galáxia. Ele é opcional."
+          }
+        }
+      }
+    },
+    "game.concept.prestige.what.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خمسة انبعاثات على الأكثر تقود إلى العصر السادس."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Five rebirths at most lead to the Sixth Age."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinco renacimientos como máximo llevan a la Sexta Edad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinq renaissances au plus mènent au Sixième Âge."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinque rinascite al massimo portano alla Sesta Era."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinco renascimentos no máximo levam à Sexta Era."
+          }
+        }
+      }
+    },
+    "game.concept.prestige.what.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كم انبعاثًا؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Wiedergeburten?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many rebirths?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuántos renacimientos?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combien de renaissances ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quante rinascite?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantos renascimentos?"
           }
         }
       }
@@ -314459,43 +314694,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يمنحك ⁦+25 %⁩ على شرارات أفعالك ما دام مستواك أدنى من ذروة نورك بسبعة مستويات أو أكثر، ويتوقف حين يعود الفرق إلى 6."
+            "value": "يمنحك ⁦+25 %⁩ على شرارات أفعالك ما دام مستواك أدنى من ذروة نورك بسبعة مستويات أو أكثر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % auf die Funken deiner Aktionen, solange dein Level 7 oder mehr Level unter deinem hellsten Licht liegt. Er endet, sobald der Abstand wieder auf 6 sinkt."
+            "value": "+25 % auf die Funken deiner Aktionen, solange dein Level 7 oder mehr Level unter deinem hellsten Licht liegt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % on the sparks of your moves while your level is 7 or more levels below your highest light. It stops as soon as the gap falls back to 6."
+            "value": "+25 % on the sparks of your moves while your level is 7 or more levels below your highest light."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % en las chispas de tus gestos mientras tu nivel esté 7 niveles o más por debajo de tu luz más alta. Se detiene en cuanto la diferencia vuelve a 6."
+            "value": "+25 % en las chispas de tus gestos mientras tu nivel esté 7 niveles o más por debajo de tu luz más alta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6."
+            "value": "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % sulle scintille dei tuoi gesti finché il tuo livello è 7 livelli o più sotto la tua luce più alta. Si ferma appena la distanza torna a 6."
+            "value": "+25 % sulle scintille dei tuoi gesti finché il tuo livello è 7 livelli o più sotto la tua luce più alta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25% nas faíscas dos seus gestos enquanto o seu nível estiver 7 níveis ou mais abaixo do auge da sua luz. Ele para assim que a diferença volta a 6."
+            "value": "+25% nas faíscas dos seus gestos enquanto o seu nível estiver 7 níveis ou mais abaixo do auge da sua luz."
           }
         }
       }
@@ -314506,43 +314741,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة. وهو يُقدّم رحلتك بضع خطوات أيضًا."
+            "value": "مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung. Es bringt deine Reise auch ein paar Schritte voran."
+            "value": "Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles. It also carries your journey a few strides further."
+            "value": "Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica. También hace avanzar tu viaje unos pasos."
+            "value": "Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas."
+            "value": "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia. Fa anche avanzare il tuo viaggio di qualche passo."
+            "value": "Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra. Ela também faz a sua viagem avançar alguns passos."
+            "value": "Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra."
           }
         }
       }
@@ -314731,6 +314966,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vento a favor"
+          }
+        }
+      }
+    },
+    "game.rules.concept.tailwind.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتوقف حين يعود الفرق إلى 6."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er endet, sobald der Abstand wieder auf 6 sinkt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It stops as soon as the gap falls back to 6."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se detiene en cuanto la diferencia vuelve a 6."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il s’arrête dès que l’écart retombe à 6."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si ferma appena la distanza torna a 6."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ele para assim que a diferença volta a 6."
+          }
+        }
+      }
+    },
+    "game.rules.concept.tailwind.stop.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى تتوقف الرياح المواتية؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann endet der Rückenwind?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When does the Tailwind stop?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo se detiene el Viento de cola?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand le Vent arrière s’arrête-t-il ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando si ferma il Vento in poppa?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando o Vento a favor para?"
           }
         }
       }

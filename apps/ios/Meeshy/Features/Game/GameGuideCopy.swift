@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// CE QUE DISENT MEE ET MEO (#9379) — conception, partie III. Chaque
 /// intervention suit la même structure :
@@ -273,6 +274,8 @@ enum GameGuideCopy {
         let index: Int
         let title: String
         let body: String
+        /// Le détail secondaire (une limite, un calcul) : derrière un (i) dont le nom est la question.
+        var note: MeeshyInfoNote?
         var id: Int { index }
     }
 
@@ -280,13 +283,19 @@ enum GameGuideCopy {
         [
             Rule(index: 1,
                  title: String(localized: "game.rules.1.title", defaultValue: "Chaque geste fait jaillir des étincelles", bundle: .main),
-                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.", bundle: .main)),
+                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis.", bundle: .main),
+                 note: MeeshyInfoNote(
+                    question: String(localized: "game.rules.1.limits.question", defaultValue: "Y a-t-il des limites ?", bundle: .main),
+                    text: String(localized: "game.rules.1.limits", defaultValue: "Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.", bundle: .main))),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les étincelles forment ta lumière", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
-                 body: String(localized: "game.rules.3.body", defaultValue: "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.", bundle: .main)),
+                 body: String(localized: "game.rules.3.body", defaultValue: "Une Meesh se frappe à la main : une part de ta lumière s’y fige.", bundle: .main),
+                 note: MeeshyInfoNote(
+                    question: String(localized: "game.rules.3.share.question", defaultValue: "Comment se calcule la part figée ?", bundle: .main),
+                    text: String(localized: "game.rules.3.share", defaultValue: "Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.", bundle: .main))),
             Rule(index: 4,
                  title: String(localized: "game.rules.4.title", defaultValue: "Frapper fige ta lumière", bundle: .main),
                  body: String(localized: "game.rules.4.body", defaultValue: "La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.", bundle: .main)),
@@ -341,12 +350,11 @@ enum GameRulesGlossary {
         let key: GameRulesGlossaryKey
         let name: String
         let body: String
+        var note: MeeshyInfoNote?
         var id: String { key.rawValue }
     }
 
     static var sectionTitle: String { String(localized: "game.rules.section_concepts", defaultValue: "Chaque concept, en clair", bundle: .main) }
-
-    static var intro: String { String(localized: "game.rules.concepts_intro", defaultValue: "Chaque élément du jeu, en clair.", bundle: .main) }
 
     /// Ce qui suit chaque concept : un `switch` exhaustif — un concept ajouté à la liste partagée sans décision ici
     /// ne compile pas.
@@ -366,7 +374,7 @@ enum GameRulesGlossary {
     }
 
     static var entries: [Entry] {
-        keys.map { Entry(key: $0, name: name($0), body: body($0)) }
+        keys.map { Entry(key: $0, name: name($0), body: body($0), note: note($0)) }
     }
 
     static func name(_ key: GameRulesGlossaryKey) -> String {
@@ -378,6 +386,14 @@ enum GameRulesGlossary {
         case .tailwind: String(localized: "game.rules.concept.tailwind.name", defaultValue: "Vent arrière", bundle: .main)
         case .duo: String(localized: "game.rules.concept.duo.name", defaultValue: "L’Alliance", bundle: .main)
         }
+    }
+
+    /// Ce qui ne vaut que dans un cas : la fin du Vent arrière tient derrière sa question, la phrase visible garde le seuil.
+    static func note(_ key: GameRulesGlossaryKey) -> MeeshyInfoNote? {
+        guard case .tailwind = key else { return nil }
+        return MeeshyInfoNote(
+            question: String(localized: "game.rules.concept.tailwind.stop.question", defaultValue: "Quand le Vent arrière s’arrête-t-il ?", bundle: .main),
+            text: String(localized: "game.rules.concept.tailwind.stop", defaultValue: "Il s’arrête dès que l’écart retombe à 6.", bundle: .main))
     }
 
     static func body(_ key: GameRulesGlossaryKey) -> String {
@@ -401,8 +417,8 @@ enum GameRulesGlossary {
         case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.", bundle: .main)
         case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.", bundle: .main)
         case .steps: String(localized: "game.rules.concept.steps.body", defaultValue: "Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.", bundle: .main)
-        case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.", bundle: .main)
-        case .duo: String(localized: "game.rules.concept.duo.body", defaultValue: "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.", bundle: .main)
+        case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.", bundle: .main)
+        case .duo: String(localized: "game.rules.concept.duo.body", defaultValue: "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double.", bundle: .main)
         }
     }
 }

@@ -169,7 +169,9 @@ struct ProgressionConceptContent: View {
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             section(ConceptText.ficheWhat) {
-                sentence(ConceptText.what(concept))
+                MeeshyInfoNoted(note: ConceptText.whatNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
+                    sentence(ConceptText.what(concept))
+                }
                 MeeshyInfoNoted(note: ConceptText.howNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
                     sentence(ConceptText.why(concept), strong: true)
                 }
