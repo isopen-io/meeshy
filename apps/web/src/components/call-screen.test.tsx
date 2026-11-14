@@ -515,6 +515,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
     expect(callChromeStore.getState().stowed).toBe(false);
+    /* P8.14 (#17831) : la couche repart en fondu, montée le temps de son départ, puis se retire. */
+    expect(view.find('[data-call-mode="effects"]')?.hasAttribute('data-leaving')).toBe(true);
+    await afterMotion();
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();

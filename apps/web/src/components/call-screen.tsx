@@ -443,7 +443,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
   /* Le Montage qui repart redescend par le bas avant de se démonter (C1.12) ; Effets se démonte à l'instant. */
-  const held = useModeHold(chrome.mode, ['montage']);
+  const held = useModeHold(chrome.mode, ['montage', 'effects']);
   const disposition = controlsDisposition({ participantCount: participantCountOf(call, layout), showsGroupGrid: layout === 'grid' });
   const rails = railRows(disposition, set, shown);
   const viewport = useCallViewport();
@@ -715,6 +715,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         startOn={looksStart}
         hold={liveFrameHold(call, liveFrame)}
         onOpenFrames={offer.montage ? () => send({ type: 'enter-mode', mode: 'montage' }) : undefined}
+        leaving={held.leaving}
+        onGone={held.gone}
       />
     ) : held.mode === 'montage' ? (
       <CallMontageMode language={language} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} leaving={held.leaving} onGone={held.gone} colorAvailable={support.color} blurAvailable={support.blur} onAddLook={offer.effects ? openEffectsOn : undefined} />

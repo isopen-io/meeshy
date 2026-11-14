@@ -47,7 +47,7 @@ describe('la règle générale lit sa durée dans une propriété que l’appel 
   const app = sheet('app.css');
 
   test('sous « Réduire les animations », la durée de toute animation est `--reduced-fade`, toujours imposée', () => {
-    expect(reducedBlocks(app)).toMatch(/animation-duration:\s*var\(--reduced-fade\)\s*!important/);
+    expect(reducedBlocks(app)).toMatch(/animation-duration:\s*var\(--reduced-fade, 0\.01ms\)\s*!important/);
     expect(reducedBlocks(app)).toMatch(/transition-duration:\s*0s\s*!important/);
   });
 
@@ -77,7 +77,7 @@ describe('ce que l’appel fond sous « Réduire les animations » garde un fond
   });
 
   test('ces fondus réduits n’animent que l’opacité : aucun déplacement', () => {
-    for (const name of ['call-motion.css', 'call-captions.css', 'call-unfolded-original.css']) expect({ name, moves: /transform:\s*(?!none)/.test(reducedBlocks(sheet(name)).replace(/--reduced-fade[^;]*;/g, '')) }).toEqual({ name, moves: false });
+    for (const name of ['call-motion.css', 'call-captions.css', 'call-unfolded-original.css']) expect({ name, moves: /transform:(?!\s*none)/.test(reducedBlocks(sheet(name)).replace(/--reduced-fade[^;]*;/g, '')) }).toEqual({ name, moves: false });
   });
 
   test('la réaction s’efface sur place le temps de sa vie, au lieu de disparaître en 0,01 ms', () => {
