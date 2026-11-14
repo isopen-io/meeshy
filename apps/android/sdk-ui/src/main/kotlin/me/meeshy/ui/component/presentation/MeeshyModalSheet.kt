@@ -67,8 +67,8 @@ public fun MeeshyModalSheet(
 ) {
     val scope = rememberCoroutineScope()
     val dismissRequested by rememberUpdatedState(onDismissRequest)
-    val exit = remember(sheetState, scope) { SheetExit(sheetState, scope) }
     val departure = LocalSheetDeparture.current
+    val exit = remember(sheetState, scope) { SheetExit(sheetState, scope, departure) }
     if (departure != null) {
         DisposableEffect(departure) {
             departure.sheets += 1
@@ -76,12 +76,15 @@ public fun MeeshyModalSheet(
         }
         LaunchedEffect(departure.departing) {
             if (!departure.departing) return@LaunchedEffect
-            sheetState.hide()
-            departure.left()
+            try {
+                sheetState.hide()
+            } finally {
+                if (departure.departing) exit.departed()
+            }
         }
     }
     ModalBottomSheet(
-        onDismissRequest = { if (departure?.departing != true) dismissRequested() },
+        onDismissRequest = { if (departure?.departing != true && !exit.hasDeparted) dismissRequested() },
         modifier = modifier,
         sheetState = sheetState,
         containerColor = containerColor,
@@ -124,8 +127,28 @@ public fun <T : Any> MeeshySheetPresence(item: T?, content: @Composable (T) -> U
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-private class SheetExit(private val state: SheetState, private val scope: CoroutineScope) {
+private class SheetExit(
+    private val state: SheetState,
+    private val scope: CoroutineScope,
+    private val departure: SheetDeparture?,
+) {
     private var leaving = false
+
+    /**
+     * Vrai une fois la feuille rendue à son hôte : le `onDismissRequest` qu'une descente concurrente de Material (retour
+     * système, glissé) rappelle ensuite ne doit plus rien fermer, l'état l'étant déjà.
+     */
+    var hasDeparted = false
+        private set
+
+    /**
+     * Rend la feuille à son hôte, que sa descente soit allée au bout ou qu'un retour ou un glissé l'ait interrompue :
+     * sans quoi la fenêtre cachée resterait montée, et bloquerait l'écran.
+     */
+    fun departed() {
+        hasDeparted = true
+        departure?.left()
+    }
 
     fun leaveThen(then: () -> Unit) {
         if (leaving) return

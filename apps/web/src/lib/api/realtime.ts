@@ -20,6 +20,7 @@ import { bindProfileDecorSync } from '../profile-decor/equip';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
 import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindCommunityLiveLazily } from './community-live-binding';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
@@ -131,6 +132,8 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
   /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
   const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* `community:updated` (#18435) : un renommage ou une bascule de confidentialité se voit chez chaque membre. */
+  const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
   const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
@@ -145,6 +148,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unstickers();
     ungame();
     unappearance();
+    uncommunity();
     unpresence();
     unrevoke();
   };

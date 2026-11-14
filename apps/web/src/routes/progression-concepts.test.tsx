@@ -204,18 +204,34 @@ describe('un ancien serveur, sans bloc `game`', () => {
 
 describe('la fiche d’un concept : même gabarit partout', () => {
   for (const concept of PROGRESSION_CONCEPTS) {
-    test(`${concept} : héros, « C’est quoi ? », « Où j’en suis » (la phrase d’état, puis les données), « Comment en gagner », « Comment m’en servir », dans cet ordre`, () => {
+    test(`${concept} : l’instant d’abord — héros, « Où j’en suis », les gestes — puis l’explication : « C’est quoi ? », « Comment en gagner », « Comment m’en servir »`, () => {
       const page = fiche(concept, playing);
       const shown = ficheView(concept, playing, NOW);
       const sections = [...page.querySelectorAll('[data-fiche-section]')].map((section) => section.getAttribute('data-fiche-section'));
       const where = shown.state !== null || shown.facts.length > 0;
-      expect(sections.slice(0, where ? 5 : 4)).toEqual(where ? ['hero', 'what', 'where', 'earn', 'use'] : ['hero', 'what', 'earn', 'use']);
+      const moment = ['hero', ...(where ? ['where'] : []), ...(sections.includes('gestures') ? ['gestures'] : [])];
+      expect(sections.slice(0, moment.length + 3)).toEqual([...moment, 'what', 'earn', 'use']);
       if (shown.hero === 'generic') expect(page.querySelector('[data-fiche-section="hero"]')?.textContent).toContain(conceptView(concept, playing, NOW).value);
       expect(page.querySelectorAll('[data-fiche-section="where"] li').length).toBe(shown.facts.length);
       expect(page.querySelectorAll('[data-fiche-section="earn"] li').length).toBeGreaterThanOrEqual(1);
       expect(page.querySelectorAll('[data-fiche-section="earn"] li').length).toBeLessThanOrEqual(3);
     });
   }
+
+  for (const concept of PROGRESSION_CONCEPTS) {
+    test(`${concept} : « C’est quoi ? » mène au carnet des règles, ouvert à l’entrée de ce concept`, () => {
+      const link = fiche(concept, playing).querySelector<HTMLAnchorElement>('[data-fiche-section="what"] a[data-fiche-rule-link]');
+      expect(link?.textContent).toBe('Comment ça marche');
+      expect(link?.getAttribute('href')).toBe(`/me/progression/regles?section=concept-${concept}`);
+      expect(link?.style.minHeight).toBe('44px');
+    });
+  }
+
+  test('les gestes de la mission du jour passent avant toute explication', () => {
+    const sections = [...fiche('missions', playing).querySelectorAll('[data-fiche-section]')].map((section) => section.getAttribute('data-fiche-section'));
+    expect(sections.indexOf('gestures')).toBeGreaterThan(-1);
+    expect(sections.indexOf('gestures')).toBeLessThan(sections.indexOf('what'));
+  });
 
   for (const concept of PROGRESSION_CONCEPTS) {
     test(`${concept} : « C’est quoi ? » dit le pourquoi et le comment de la vue — une seule source de texte`, () => {

@@ -140,6 +140,51 @@ struct MeeshyDragTargetsTests {
         #expect(wasActiveInCallback == false)
     }
 
+    @Test("un tic à l'entrée, aucun à la sortie, au lâcher ni à l'annulation")
+    @MainActor
+    func state_haptic_onlyOnEntry() {
+        let spy = HapticSpy()
+        let state = Self.state(centers: [.remove: CGPoint(x: 195, y: 764)], haptic: .medium, spy: spy)
+        state.begin()
+        state.move(to: CGPoint(x: 195, y: 764))
+        #expect(spy.count == 1)
+        #expect(state.end() == .remove)
+        #expect(spy.count == 1, "rien au lâcher")
+        state.updateCenters([.remove: CGPoint(x: 195, y: 764)])
+        state.begin()
+        state.move(to: CGPoint(x: 195, y: 764))
+        state.cancel()
+        #expect(spy.count == 2, "rien à l'annulation")
+    }
+
+    @Test("les cibles sortent : l'état ne retient ni les rappels de l'hôte ni les centres de cette mise en page")
+    @MainActor
+    func state_reset_releasesHostAndCenters() {
+        final class Host {}
+        var host: Host? = Host()
+        weak var weakHost = host
+        let state = Self.state(centers: [.remove: CGPoint(x: 195, y: 764)], haptic: .none, spy: HapticSpy())
+        state.bind(haptic: .none, onDuplicate: nil, onRemove: { [host] in _ = host })
+        host = nil
+        #expect(weakHost != nil, "le rappel tient l'hôte pendant le glisser")
+        state.begin()
+        state.move(to: CGPoint(x: 195, y: 764))
+        #expect(state.end() == .remove)
+        #expect(weakHost == nil, "rien de l'hôte n'est retenu une fois les cibles sorties")
+        state.begin()
+        state.move(to: CGPoint(x: 195, y: 764))
+        #expect(state.hovered == nil, "les centres se remesurent à chaque ouverture")
+        state.cancel()
+    }
+
+    @Test("une cible par rappel passé, aucune sans rappel")
+    func rule_offered_followsTheCallbacks() {
+        #expect(MeeshyDragTargetsRule.offered(duplicate: true, remove: true) == [.duplicate, .remove])
+        #expect(MeeshyDragTargetsRule.offered(duplicate: false, remove: true) == [.remove])
+        #expect(MeeshyDragTargetsRule.offered(duplicate: true, remove: false) == [.duplicate])
+        #expect(MeeshyDragTargetsRule.offered(duplicate: false, remove: false).isEmpty)
+    }
+
     // MARK: - Recette
 
     @Test("la recette : les mesures de la planche, les rayons de capture et de sortie")
@@ -183,6 +228,22 @@ struct MeeshyDragTargetsTests {
         #expect(duplicate.fill == .white && duplicate.fillOpacity == MeeshyGlassButtonRecipe.restFillOpacity && duplicate.ink == .onSolid)
         let remove = MeeshyDragTargetsRecipe.disc(target: .remove, isHot: true, tone: .deep, material: .drawn)
         #expect(remove.fill == .red && remove.ink == .onMedia)
+    }
+
+    @Test("au chaud à fond plein, l'ombre de la surface K01 ; aucune au repos, sous Liquid Glass ni en fond plein")
+    func recipe_disc_hotShadowIsTheSurfaceShadow() {
+        let surface = MeeshyGlassRecipe.resolve(
+            tone: .deep, density: .dense, isTinted: false, isInteractive: false,
+            isPressed: false, material: .drawn, reduceMotion: false
+        )
+        for target in MeeshyDragTarget.allCases {
+            let hot = MeeshyDragTargetsRecipe.disc(target: target, isHot: true, tone: .deep, material: .drawn)
+            #expect(hot.shadow?.opacity == surface.shadowOpacity && hot.shadow?.radius == surface.shadowRadius)
+            #expect(hot.shadow?.y == surface.shadowY)
+            #expect(MeeshyDragTargetsRecipe.disc(target: target, isHot: false, tone: .deep, material: .drawn).shadow == nil)
+            #expect(MeeshyDragTargetsRecipe.disc(target: target, isHot: true, tone: .deep, material: .liquid).shadow == nil)
+            #expect(MeeshyDragTargetsRecipe.disc(target: target, isHot: true, tone: .deep, material: .opaque).shadow == nil)
+        }
     }
 
     @Test("sous Liquid Glass, la poubelle chaude est un verre teinté de rouge, la duplication un verre à fond blanc")

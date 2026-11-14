@@ -26,7 +26,7 @@ struct ShareLinkArrivalsListView: View {
     private var secondaryInk: Color { isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500 }
 
     var body: some View {
-        ScrollView {
+        LinksPage(title: ShareLinkDetailCopy.arrivals, accent: MeeshyColors.brandPrimary) {
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 if viewModel.totalCount > 0 {
                     Text(ShareLinkDetailCopy.arrivalsTotal(viewModel.totalCount))
@@ -41,9 +41,6 @@ struct ShareLinkArrivalsListView: View {
             .padding(.bottom, 60)
         }
         .refreshable { await viewModel.refresh() }
-        .background(ThemeManager.shared.backgroundGradient.ignoresSafeArea())
-        .navigationTitle(ShareLinkDetailCopy.arrivals)
-        .navigationBarTitleDisplayMode(.inline)
         .task {
             guard !viewModel.hasLoadedServerPage else { return }
             await viewModel.loadFirstPage()

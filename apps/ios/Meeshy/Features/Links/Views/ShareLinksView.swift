@@ -11,48 +11,37 @@ struct ShareLinksView: View {
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @State private var showCreate = false
 
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @Environment(\.meeshyPanelDismiss) private var panelDismiss
-    /// Retour operant dans les trois contextes de presentation : pile iPhone,
-    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
-    private var back: PanelBackAction {
-        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
-    }
-
     private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: MeeshySpacing.xl) {
-                        Text(String(localized: "share.links.intro", defaultValue: "Un lien invite dans une conversation : vous fixez ce que les invités peuvent faire et jusqu’à quand.", bundle: .main))
-                            .font(.footnote)
-                            .foregroundStyle(theme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, MeeshySpacing.lg)
-                        if let stats = viewModel.stats {
-                            shareLinkStatsOverview(stats)
-                                .padding(.horizontal, MeeshySpacing.lg)
-                        }
-                        linksSection
-                            .padding(.horizontal, MeeshySpacing.lg)
-                    }
-                    .padding(.top, MeeshySpacing.sm)
-                    .padding(.bottom, 40)
+        LinksPage(
+            title: String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main),
+            accent: Color(hex: accentColor),
+            action: LinksPageAction(
+                label: String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main),
+                perform: { showCreate = true }
+            )
+        ) {
+            VStack(spacing: MeeshySpacing.xl) {
+                Text(String(localized: "share.links.intro", defaultValue: "Un lien invite dans une conversation : vous fixez ce que les invités peuvent faire et jusqu’à quand.", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                if let stats = viewModel.stats {
+                    shareLinkStatsOverview(stats)
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
-                .refreshable {
-                    await viewModel.load(.pullToRefresh)
-                }
+                linksSection
+                    .padding(.horizontal, MeeshySpacing.lg)
             }
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, 40)
         }
-        .navigationBarHidden(true)
+        .refreshable {
+            await viewModel.load(.pullToRefresh)
+        }
         .task { await viewModel.load() }
         .sheet(isPresented: $showCreate) {
             CreateShareLinkView { _ in
@@ -60,43 +49,6 @@ struct ShareLinksView: View {
             }
             .conversationListObject(conversationListViewModel)
         }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundStyle(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
-                .font(.headline.weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Button {
-                HapticFeedback.light()
-                showCreate = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
-                    .foregroundStyle(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Stats overview
@@ -253,16 +205,14 @@ struct ShareLinksView: View {
 
             Spacer()
 
-            Button {
-                UIPasteboard.general.string = link.joinUrl
-                HapticFeedback.success()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(MeeshyColors.shareAccent)
-            }
-            .padding(.horizontal, MeeshySpacing.xs)
-            .accessibilityLabel(String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main),
+                size: .s36,
+                glyphTint: MeeshyColors.shareAccent,
+                haptic: .none,
+                action: { LinksClipboard.copy(link.joinUrl) }
+            )
 
             Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(MeeshyIconSize.xs))

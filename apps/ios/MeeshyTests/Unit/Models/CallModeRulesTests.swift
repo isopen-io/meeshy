@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// #8578 — le carrousel unique d'un mode : l'élément choisi au centre, agrandi,

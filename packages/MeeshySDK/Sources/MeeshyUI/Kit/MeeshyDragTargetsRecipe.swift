@@ -19,6 +19,10 @@ public nonisolated struct MeeshyDragTargetsDiscRecipe: Equatable, Sendable {
     public let ink: MeeshyGlassButtonInk
     public let ringWidth: Double
     public let ringOpacity: Double
+    /// L'ombre de la surface K01 sous le disque chaud à fond plein ; `nil` au
+    /// repos (le verre porte la sienne), sous Liquid Glass (le système la
+    /// dessine) et en fond plein de « réduire la transparence ».
+    public let shadow: MeeshyGlassButtonShadow?
     let button: MeeshyGlassButtonRecipe
 
     public func fillColor(isDark: Bool) -> Color {
@@ -91,8 +95,20 @@ public nonisolated enum MeeshyDragTargetsRecipe {
             ink: isHot ? button.ink : .onMedia,
             ringWidth: ringWidth,
             ringOpacity: isHot ? ringOpacity : 0,
+            shadow: isHot && button.glass == .none ? surfaceShadow(tone: tone, material: material) : nil,
             button: button
         )
+    }
+
+    /// L'ombre de la surface K01, celle du verre dense du ton : la planche pose
+    /// une ombre portée sous le disque chaud, que le fond plein n'a pas.
+    static func surfaceShadow(tone: MeeshyGlassTone, material: MeeshyGlassMaterial) -> MeeshyGlassButtonShadow? {
+        let surface = MeeshyGlassRecipe.resolve(
+            tone: tone, density: .dense, isTinted: false, isInteractive: false,
+            isPressed: false, material: material, reduceMotion: false
+        )
+        guard surface.shadowOpacity > 0 else { return nil }
+        return MeeshyGlassButtonShadow(opacity: surface.shadowOpacity, radius: surface.shadowRadius, y: surface.shadowY)
     }
 
     /// L'objet glissé : réduit et allégé au-dessus de la poubelle seulement.

@@ -90,6 +90,7 @@
     <string name="call_effects_companions_more">%1$d مشاركين آخرين</string>
     <string name="call_effects_companions_move">النقل إلى الجهة الأخرى</string>
     <string name="call_effects_layer_undo">إلغاء %1$s</string>
+    <string name="call_effects_settings_panel">إعدادات صورتي</string>
     <string name="call_ended">انتهت المكالمة</string>
     <string name="call_ended_connection_lost">انقطع الاتصال</string>
     <string name="call_ended_declined">مكالمة مرفوضة</string>
@@ -178,7 +179,10 @@
     <string name="call_live_frame_label">إطار مباشر</string>
     <string name="call_live_frame_none">بلا إطار</string>
     <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
+    <string name="call_live_frame_peer_released">أزال %1$s الإطار</string>
+    <string name="call_live_frame_peer_released_anonymous">أزال الطرف الآخر الإطار</string>
     <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
+    <string name="call_mode_carousel_position">%1$d من %2$d</string>
     <string name="call_mode_gesture_hint">انقر مرتين لالتقاط صورة · اضغط مطولًا للتصوير</string>
     <string name="call_mode_montage_title">مونتاج المكالمة</string>
     <string name="call_mode_photo">التقاط صورة</string>

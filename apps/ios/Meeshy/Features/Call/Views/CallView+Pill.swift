@@ -141,10 +141,9 @@ extension CallView {
 
     /// Les rangées naissent du bas du bloc, là où est le (…) ; la rangée de base s'y retire par
     /// le même morphisme (le verre se resserre). Réduire les animations : un fondu, rien ne bouge.
+    /// Loi 17.2 — la transition porte son mouvement : la mise en page, elle, se pose d'un coup.
     private var unfoldTransition: AnyTransition {
-        reduceMotion
-            ? .opacity
-            : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
+        (reduceMotion ? .opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))).animation(disclosureAnimation)
     }
 
     /// UN bloc de verre : le panneau ouvert OU (en groupe) les familles, PUIS les
@@ -179,19 +178,22 @@ extension CallView {
             if text.showsCaptionsBand {
                 VStack(spacing: 0) {
                     captionsBand(hasOwnGlass: false)
+                        .modifier(CallGlassFollow(reduceMotion: reduceMotion))
                     if text.hasBaseRow { pillHairline }
                 }
-                .transition(.opacity)
+                .transition(AnyTransition.opacity.animation(disclosureAnimation))
             }
             if text.hasBaseRow {
                 baseRow.transition(unfoldTransition)
             }
         }
-        .clipShape(Self.pillShape)
-        .callControlsGlass(in: Self.pillShape)
+        .modifier(CallGlassSpace())
+        .modifier(CallMorphingGlass(shape: Self.pillShape, reduceMotion: reduceMotion) {
+            Color.clear.callControlsGlass(in: Self.pillShape)
+        })
         .frame(maxWidth: CallPillWidth.maxWidth(for: text, unfoldsAbove: unfoldsAbove))
-        .animation(disclosureAnimation, value: layer)
-        .animation(disclosureAnimation, value: text)
+        .animation(nil, value: layer)
+        .animation(nil, value: text)
     }
 
     var pillHairline: some View {
@@ -225,8 +227,10 @@ extension CallView {
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             HStack(alignment: .top, spacing: 0) {
                 moreButton(captioned: captioned)
+                    .modifier(CallGlassFollow(reduceMotion: reduceMotion))
                     .frame(maxWidth: .infinity)
                 muteButton(captioned: captioned)
+                    .modifier(CallGlassFollow(reduceMotion: reduceMotion))
                     .frame(maxWidth: .infinity)
                 // §7.1/§7.3 — sur Mac la sortie est celle du système : un
                 // basculement de haut-parleur y serait un contrôle inerte.
@@ -237,6 +241,7 @@ extension CallView {
                         diameter: Self.pillGlyphDiameter,
                         onToggleSpeaker: { callManager.toggleSpeaker() }
                     )
+                    .modifier(CallGlassFollow(reduceMotion: reduceMotion))
                     .frame(maxWidth: .infinity)
                 }
                 CallPillButton(
@@ -249,6 +254,7 @@ extension CallView {
                 ) {
                     callManager.endCall()
                 }
+                .modifier(CallGlassFollow(reduceMotion: reduceMotion))
                 .frame(maxWidth: .infinity)
             }
         }

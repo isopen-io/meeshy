@@ -266,9 +266,13 @@ describe("la famille appel — un masque de fondu UNIQUE, un verre qui se LIT da
     expect(grid).not.toContain("'linear-gradient(to ");
   });
 
-  test("le verre de la pastille d'appel se lit `media-hairline`, jamais un blanc 22 % en dur", () => {
+  /* Témoin qui ÉVOLUE (#18223, S1.2) : le filet `media-hairline` était le fond d'« Arrêter » ; la planche S1, iOS
+     et Android en font une capsule blanche à encre rouge, lue dans la charte (`--color-on-media`, `--ios-error-dark`,
+     ceux du bandeau « Vous partagez »). La règle tient : aucun blanc en dur. */
+  test("« Arrêter » de la pastille d'appel se lit dans la charte, jamais un blanc 22 % en dur", () => {
     expect(scanSource(pill)).toEqual([]);
-    expect(pill).toContain('var(--color-media-hairline)');
+    expect(pill).toContain("background: 'var(--color-on-media)'");
+    expect(pill).toContain("color: 'var(--ios-error-dark)'");
     expect(pill).not.toContain('white 22%');
   });
 });

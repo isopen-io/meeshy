@@ -3,12 +3,13 @@ import MeeshySDK
 import MeeshyUI
 
 /// Bulle avatar circulaire — forme repliée de l'appel en cours, atteinte par
-/// swipe depuis `FloatingCallPillView`. Déplaçable (drag libre, clipse au
+/// swipe depuis `FloatingCallPillView`. Au palier cercle, c'est le disque rogné
+/// aimanté au bord (`CallEdgeDisk`, #18458). Déplaçable (drag libre, clipse au
 /// bord le plus proche), pinçable (4 paliers de taille cercle → small →
 /// medium → large, morphing continu — spec
-/// 2026-08-03-call-bubble-pip-resize-morph-design.md), tap → plein écran,
-/// appui long (palier cercle uniquement) → mini-menu rapide
-/// (mute/haut-parleur/raccrocher). Aux paliers rectangle, ces 3 actions sont
+/// 2026-08-03-call-bubble-pip-resize-morph-design.md), tap → plein écran
+/// déployé depuis l'endroit où elle flotte (P18.4), appui long (palier cercle
+/// uniquement) → mini-menu rapide (mute/haut-parleur/raccrocher). Aux paliers rectangle, ces 3 actions sont
 /// à la place une barre persistante en haut du cadre. Montée dans la fenêtre
 /// passe-plat du point de retour (`CallReturnPointWindowHost`, #8739), au-dessus
 /// de tout plein écran ; elle se montre selon `CallReturnPoint.showsBubble` —
@@ -22,6 +23,10 @@ struct CallBubbleView: View {
     // iPadRootView+Sheets) already hold their own @ObservedObject callManager.
     @ObservedObject var callManager: CallManager
     let isMainScreenCovered: Bool
+    /// L'écran principal montre la conversation de l'appel (#18457) : en audio
+    /// la bulle se tait (la puce d'en-tête suffit), en vidéo elle est la
+    /// vignette, jamais le cercle.
+    var isInCallConversation: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isMenuRevealed = false
@@ -34,12 +39,28 @@ struct CallBubbleView: View {
     private let menuButtonDiameter: CGFloat = 44
     private let menuButtonGap: CGFloat = 8
 
+    private var isVideo: Bool {
+        callManager.isVideoEnabled || callManager.isRemoteVideoEnabled
+    }
+
+    private var presence: CallReducedPresence {
+        CallReducedPresence.resolve(
+            displayMode: callManager.displayMode,
+            isActive: callManager.callState.isActive,
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        )
+    }
+
     var body: some View {
         if CallReturnPoint.showsBubble(
             displayMode: callManager.displayMode,
             callState: callManager.callState,
             isSystemPiPActive: callManager.isSystemPiPActive,
-            isMainScreenCovered: isMainScreenCovered
+            isMainScreenCovered: isMainScreenCovered,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
         ) {
             GeometryReader { geometry in
                 bubbleCluster(in: geometry)
@@ -57,7 +78,10 @@ struct CallBubbleView: View {
     /// palier snappé au repos (`pinchScale == 1`), suit l'échelle du doigt en
     /// direct pendant un pinch actif.
     private var currentProgress: CGFloat {
-        CallBubbleGestureResolver.progress(startingTier: callManager.bubbleSizeTier, scale: pinchScale)
+        CallBubbleGestureResolver.progress(
+            startingTier: CallReducedPresence.effectiveTier(stored: callManager.bubbleSizeTier, presence: presence),
+            scale: pinchScale
+        )
     }
 
     /// Vrai tant que la forme est encore proche du cercle — c'est cette
@@ -89,15 +113,22 @@ struct CallBubbleView: View {
 
             shareStopSlot(size: size)
 
-            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)
-                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                .overlay(alignment: .topTrailing) { signalBadge }
-                .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
-                .overlay(alignment: .top) {
-                    tierControlBar
-                        .opacity(controlOpacity)
-                        .allowsHitTesting(controlOpacity > 0.5)
-                }
+            if isCircleRegion {
+                // #18458 — au palier cercle, l'appel réduit est le disque rogné aimanté au
+                // bord : ses cercles disent la ligne, la durée continue dessus, le réseau
+                // ne s'y montre que dégradé. Pas d'étiquette sous lui.
+                CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)
+            } else {
+                CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                    .overlay(alignment: .topTrailing) { signalBadge }
+                    .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
+                    .overlay(alignment: .top) {
+                        tierControlBar
+                            .opacity(controlOpacity)
+                            .allowsHitTesting(controlOpacity > 0.5)
+                    }
+            }
         }
         // Le cadre touchable de la fenêtre passe-plat, mesuré AVANT les
         // décalages pour les suivre : élargi au glyphe de signal, et aux
@@ -122,8 +153,7 @@ struct CallBubbleView: View {
             if isMenuRevealed {
                 closeMenu()
             } else {
-                HapticFeedback.medium()
-                callManager.displayMode = .fullScreen
+                expandToFullScreen(in: geometry)
             }
         }
         .accessibilityElement(children: .contain)
@@ -134,7 +164,7 @@ struct CallBubbleView: View {
         .accessibilityValue(accessibilityTierLabel(for: callManager.bubbleSizeTier))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: String(localized: "a11y.call.bubble.expand", defaultValue: "Revenir au plein écran", bundle: .main)) {
-            callManager.displayMode = .fullScreen
+            expandToFullScreen(in: geometry)
         }
         .accessibilityAction(named: String(localized: "a11y.call.bubble.quickMenu", defaultValue: "Ouvrir le mini-menu d'appel", bundle: .main)) {
             revealMenu()
@@ -260,15 +290,31 @@ struct CallBubbleView: View {
         CallSignalStrength.from(level: callManager.liveVideoQualityLevel, connection: callManager.connectionQuality)
     }
 
+    // MARK: - P18.4 — l'appel se redéploie depuis l'endroit où la bulle flotte
+
+    private func expandToFullScreen(in geometry: GeometryProxy) {
+        HapticFeedback.medium()
+        let center = bubbleCenter(in: geometry, size: CallBubbleGestureResolver.interpolatedSize(progress: currentProgress))
+        let origin = CallShareCapsuleMotion.window(reduceMotion: reduceMotion, bubbleCenter: center, in: geometry.size)
+        CallPipMorph.expand(callManager, from: origin, reduceMotion: reduceMotion)
+    }
+
     // MARK: - Positioning
 
     private func bubbleCenter(in geometry: GeometryProxy, size: CGSize) -> CGPoint {
         let margin = CallBubbleGestureResolver.bubbleEdgeMargin
         let halfWidth = size.width / 2
         let safeArea = geometry.safeAreaInsets
-        let x: CGFloat = callManager.bubbleEdge == .trailing
-            ? geometry.size.width - safeArea.trailing - margin - halfWidth
-            : safeArea.leading + margin + halfWidth
+        // #18458 — le disque du palier cercle est rogné par le bord ; il rentre dans
+        // l'écran, à la marge des autres paliers, quand son mini-menu s'ouvre.
+        let x: CGFloat
+        if isCircleRegion && !isMenuRevealed {
+            x = CallEdgeDiskLaw.centerX(edge: callManager.bubbleEdge, screenWidth: geometry.size.width, diameter: size.width)
+        } else {
+            x = callManager.bubbleEdge == .trailing
+                ? geometry.size.width - safeArea.trailing - margin - halfWidth
+                : safeArea.leading + margin + halfWidth
+        }
         let availableHeight = geometry.size.height - safeArea.top - safeArea.bottom
         let rawY = callManager.bubbleVerticalFraction * availableHeight
         let clampedY = CallBubbleGestureResolver.clampedVerticalPosition(

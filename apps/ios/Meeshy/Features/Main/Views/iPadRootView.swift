@@ -210,7 +210,7 @@ struct iPadRootView: View {
         // détail se referme, comme l'iPhone revient à la liste — jamais un fil mort où l'on écrit encore.
         .onReceive(conversationViewModel.conversationLeavesDetail) { removedId in
             guard iPadSelectionRule.closesDetail(activeConversationId: activeConversation?.id, removedId: removedId) else { return }
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { activeConversation = nil }
+            withAnimation(iPadPanelMotion.spring) { activeConversation = nil }
         }
         // `initial: true` covers the cold-launch race where a Universal Link
         // sets `pendingDeepLink` from AppDelegate.continue:userActivity: BEFORE
@@ -277,7 +277,7 @@ struct iPadRootView: View {
                 gameTrail.trail.push(route, over: root)
                 return true
             }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            withAnimation(iPadPanelMotion.spring) {
                 gameTrail.trail = GamePanelTrail()
                 rightPanelRoute = route
             }
@@ -289,9 +289,9 @@ struct iPadRootView: View {
                 gameTrail.trail.pop()
                 return
             }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                if rightPanelRoute != nil {
-                    rightPanelRoute = nil
+            withAnimation(iPadPanelMotion.spring) {
+                if let route = rightPanelRoute {
+                    rightPanelRoute = iPadPanelBack.route(poppedFrom: route)
                 } else if activeConversation != nil {
                     activeConversation = nil
                 }
@@ -438,7 +438,8 @@ struct iPadRootView: View {
                 ),
                 notificationManager: notifications.manager,
                 onOpenConversation: openConversation,
-                onNotificationTap: handleNotificationTap
+                onNotificationTap: handleNotificationTap,
+                onPop: { router.pop() }
             )
         case .conversationList:
             iPadConversationList(showFeedButton: false)
@@ -464,8 +465,8 @@ struct iPadRootView: View {
             },
             onNewConversation: { showNewConversation = true },
             iPadNotificationCount: notifications.unreadCount,
-            onNotificationsTap: { rightPanelRoute = .notifications },
-            onSettingsTap: { rightPanelRoute = .settings },
+            onNotificationsTap: { router.push(.notifications) },
+            onSettingsTap: { router.push(.settings) },
             iPadFeedAction: feedAction,
             selectedConversationId: activeConversation?.id
         )
@@ -474,3 +475,8 @@ struct iPadRootView: View {
 
 }
 
+/// Le ressort UNIQUE de la colonne droite de l'iPad (#18443) : une route du panneau, une conversation posée,
+/// un retour ou une fermeture avancent au même rythme.
+enum iPadPanelMotion {
+    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.85)
+}

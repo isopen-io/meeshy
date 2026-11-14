@@ -103,6 +103,29 @@ struct CallPresentationLayer: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// #18457 — l'écran visible est la conversation de l'appel : sa puce
+    /// d'en-tête suffit, le bandeau se tait et la bande avec lui.
+    private func isInCallConversation(of callManager: CallManager?) -> Bool {
+        callManager.map {
+            CallReducedPresence.isInCallConversation(
+                visibleConversationId: miniPlayerCurrentConversationId(),
+                callConversationId: $0.conversationId
+            )
+        } ?? false
+    }
+
+    private func pillShowing(of callManager: CallManager?, isInCallConversation: Bool) -> Bool {
+        callManager.map {
+            FloatingCallPillView.isShowingPill(
+                displayMode: $0.displayMode,
+                callState: $0.callState,
+                isSystemPiPActive: $0.isSystemPiPActive,
+                isInCallConversation: isInCallConversation,
+                isVideo: $0.isVideoEnabled || $0.isRemoteVideoEnabled
+            )
+        } ?? false
+    }
+
     func body(content: Content) -> some View {
         // Compression de frame, PAS augmentation de safe area : la bannière
         // d'appel est le premier élément d'un VStack au-dessus du contenu,
@@ -128,13 +151,8 @@ struct CallPresentationLayer: ViewModifier {
         // pendant le PiP système, et une bande sans sa barre serait un ruban
         // indigo posé sur rien.
         let callManager = calls.manager
-        let pillShowing = callManager.map {
-            FloatingCallPillView.isShowingPill(
-                displayMode: $0.displayMode,
-                callState: $0.callState,
-                isSystemPiPActive: $0.isSystemPiPActive
-            )
-        } ?? false
+        let isInCallConversation = isInCallConversation(of: callManager)
+        let pillShowing = pillShowing(of: callManager, isInCallConversation: isInCallConversation)
         VStack(spacing: 0) {
             // La BANDE DU HAUT (#6579) — le site UNIQUE qui peint la zone
             // status-bar au-dessus de la barre active. Montée ICI parce que ce
@@ -152,7 +170,8 @@ struct CallPresentationLayer: ViewModifier {
                 .modifier(TopChromeBand(callIsActive: pillShowing, audio: audioBarContext, banner: bannerSurface))
                 .zIndex(TopChromeBarMotion.bandLayer)
             if let callManager {
-                FloatingCallPillView(callManager: callManager, isLastBar: audioBarContext == nil, topInset: topInset)
+                FloatingCallPillView(callManager: callManager, isLastBar: audioBarContext == nil, topInset: topInset,
+                                     isInCallConversation: isInCallConversation)
             }
             MiniAudioPlayerBar(
                 coordinatorForTesting: miniPlayerCoordinator,
@@ -200,6 +219,9 @@ struct CallPresentationLayer: ViewModifier {
                 // passe-plat au-dessus de toute présentation : un viewer de
                 // story ou une visionneuse ne la recouvre plus.
                 CallReturnPointPresenter.shared.bind()
+                // #18457 — la bulle sait quelle conversation l'écran montre : la
+                // racine, seule à connaître son routeur, le lui remet.
+                CallReturnPointPresenter.shared.visibleConversationProvider = miniPlayerCurrentConversationId
                 CallPlaybackInterruptionBinding.shared.bind()
                 #if DEBUG
                 CallDebugIncomingTrigger.arm()

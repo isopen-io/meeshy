@@ -29,6 +29,21 @@ enum iPadRightColumn: Equatable {
     }
 }
 
+/// Le retour d'une page du panneau droit (#18443) : une sous-page d'une communauté rend la communauté, comme
+/// la pile de l'iPhone ; toute autre page ferme le panneau. `Router.onPopRequested` le lit.
+enum iPadPanelBack {
+    static func route(poppedFrom route: Route) -> Route? {
+        switch route {
+        case .communityMembers(let communityId), .communityInvite(let communityId):
+            return .communityDetail(communityId)
+        case .communitySettings(let community):
+            return .communityDetail(community.id)
+        default:
+            return nil
+        }
+    }
+}
+
 /// La pile du JEU au-dessus de la route racine du panneau droit (#9564, amendement n° 4). Elle ne vaut que pour SA
 /// racine : un panneau ouvert sur une autre route part d'une pile vide, sans jamais rejouer une page d'avant.
 struct GamePanelTrail {
@@ -91,6 +106,8 @@ struct iPadRightPanel: View {
     let notificationManager: NotificationToastManager
     let onOpenConversation: (Conversation) -> Void
     let onNotificationTap: (APINotification) -> Void
+    /// `router.pop()` : le retour anime le panneau et rend le parent d'une sous-page (#18443).
+    let onPop: () -> Void
 
     var body: some View {
         NavigationStack(path: $gamePath) {
@@ -121,7 +138,7 @@ struct iPadRightPanel: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         HapticFeedback.light()
-                        rightPanelRoute = nil
+                        onPop()
                     } label: {
                         Image(systemName: "chevron.backward")
                     }
@@ -133,7 +150,7 @@ struct iPadRightPanel: View {
         // Rend `dismiss()` opérant pour les écrans racine du panneau : ils ne
         // sont ni poussés ni présentés, leur bouton retour n'avait donc aucun
         // effet. Cf. `PanelBackAction`.
-        .environment(\.meeshyPanelDismiss, { rightPanelRoute = nil })
+        .environment(\.meeshyPanelDismiss, onPop)
     }
 }
 
@@ -149,6 +166,8 @@ struct iPadPanelDestination: View {
     let notificationManager: NotificationToastManager
     let onOpenConversation: (Conversation) -> Void
     let onNotificationTap: (APINotification) -> Void
+    /// Le retour du panneau (`router.pop()`) : « Terminé » d'une invitation rend la communauté (#18443).
+    @Environment(\.meeshyPanelDismiss) private var panelBack
 
     var body: some View {
         switch route {
@@ -223,7 +242,7 @@ struct iPadPanelDestination: View {
                 }
             )
         case .communityInvite(let communityId):
-            CommunityInviteView(communityId: communityId, onDone: { rightPanelRoute = nil })
+            CommunityInviteView(communityId: communityId, onDone: { panelBack?() })
         case .notifications:
             NotificationListView(
                 onNotificationTap: { notification in
@@ -434,7 +453,7 @@ struct iPadResizableHandle: View {
             RoundedRectangle(cornerRadius: 2)
                 .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.light)))
                 .frame(width: 4, height: 36)
-                .animation(.easeInOut(duration: 0.15), value: isDragging)
+                .animation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), value: isDragging)
         }
         .frame(width: handleWidth)
         .contentShape(Rectangle())
