@@ -98,7 +98,7 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.send.e2ee.recipientWithoutEncryptedDevice": "Votre correspondant doit mettre Meeshy à jour : message non parti.",
         "conversation.send.e2ee.regimeChanged": "Le chiffrement a changé : message non parti. Touchez pour le renvoyer.",
         "conversation.send.e2ee.sealedOnlyInConversation": "Message chiffré non parti : ouvrez la conversation et touchez-le pour l’envoyer.",
-        "conversation.send.e2ee.servedWithoutEndToEnd": "Le serveur la dit non chiffrée : message non parti. Voir la fiche Chiffrement.",
+        "conversation.send.e2ee.servedWithoutEndToEnd": "Le serveur la dit sans bout en bout : message non parti. Voir Chiffrement.",
         "conversation.send.e2ee.unkeptOutsideConversation": "Message chiffré non gardé : ouvrez la conversation pour le réécrire.",
         "conversation.view.delete_for_everyone.hint": "Pour tout le monde : jusqu’à 2 h après l’envoi.",
         "message.translation.e2ee.serverRefused": "Chiffrée de bout en bout : traduite sur votre appareil, jamais par le serveur.",
@@ -881,5 +881,20 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertFalse(sheet.lowercased().contains("master pin\""), "le texte de repli ne dit plus « master PIN »")
         XCTAssertFalse(sheet.contains("le master PIN"))
         XCTAssertFalse(sheet.contains("votre master PIN"))
+    }
+
+    func test_servedWithoutEndToEndRefusal_neverSaysTheConversationIsUnencrypted_inEveryLanguage() throws {
+        let message = EndToEndSendRefusal.servedWithoutEndToEnd.userMessage
+        XCTAssertTrue(message.contains("bout en bout"), "le refus nomme ce qui manque : le bout en bout, pas le chiffrement")
+        XCTAssertFalse(message.contains("non chiffrée"), "la conversation reste chiffrée sur nos serveurs : « non chiffrée » est un contresens")
+        XCTAssertLessThanOrEqual(message.count, 80)
+        let app = try Self.catalog(Self.appCatalogPath)
+        let served = try XCTUnwrap(app["conversation.send.e2ee.servedWithoutEndToEnd"])
+        let endToEnd = ["en": "end-to-end", "es": "extremo a extremo", "pt-BR": "ponta a ponta", "de": "Ende-zu-Ende", "it": "end-to-end", "ar": "بين الطرفين"]
+        for (language, words) in endToEnd {
+            let value = try XCTUnwrap(served[language], language)
+            XCTAssertTrue(value.contains(words), "\(language) : « \(value) » doit nommer le bout en bout")
+            XCTAssertLessThanOrEqual(value.count, 80, language)
+        }
     }
 }

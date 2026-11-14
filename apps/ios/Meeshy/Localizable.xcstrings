@@ -321524,43 +321524,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعرضها الخادم دون تشفير: الرسالة لم تُرسل. راجع بطاقة التشفير."
+            "value": "يعرضها الخادم دون تشفير تام بين الطرفين: الرسالة لم تُرسل. راجع التشفير."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Server zeigt sie unverschlüsselt: Nachricht nicht gesendet. Siehe das Blatt Verschlüsselung."
+            "value": "Laut Server ohne Ende-zu-Ende: Nachricht nicht gesendet. Siehe Verschlüsselung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The server shows it unencrypted: message not sent. See the Encryption sheet."
+            "value": "The server shows it without end-to-end: message not sent. See Encryption."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El servidor la muestra sin cifrar: mensaje no enviado. Consulta la ficha Cifrado."
+            "value": "El servidor la muestra sin extremo a extremo: mensaje no enviado. Ver Cifrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le serveur la dit non chiffrée : message non parti. Voir la fiche Chiffrement."
+            "value": "Le serveur la dit sans bout en bout : message non parti. Voir Chiffrement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il server la mostra non crittografata: messaggio non inviato. Vedi la scheda Crittografia."
+            "value": "Il server la mostra senza end-to-end: messaggio non inviato. Vedi Crittografia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O servidor a mostra sem criptografia: mensagem não enviada. Veja a ficha Criptografia."
+            "value": "O servidor a mostra sem ponta a ponta: mensagem não enviada. Veja Criptografia."
           }
         }
       }
