@@ -51,6 +51,7 @@
     <string name="community_members_section_creator">المنشئون</string>
     <string name="community_members_section_member">الأعضاء</string>
     <string name="community_members_section_moderator">المشرفون</string>
+    <string name="community_online">%1$d متصل الآن</string>
     <string name="community_privacy_private">خاص</string>
     <string name="community_privacy_public">عام</string>
     <string name="community_role_admin">مدير</string>
