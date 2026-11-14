@@ -33,7 +33,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,7 +81,7 @@ internal fun CallGroupTile(
     mirror: Boolean,
     modifier: Modifier = Modifier,
     fit: Boolean = false,
-    zoom: Float = 1f,
+    videoLayer: Modifier = Modifier,
 ) {
     val accentHex = remember(tile.colorKey) { CallTileRim.groupTile(tile.colorKey) }
     val accent = remember(accentHex) { hexColor(accentHex) }
@@ -111,10 +110,7 @@ internal fun CallGroupTile(
                 eglContext = eglContext,
                 mirror = mirror,
                 fit = fit,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = zoom
-                    scaleY = zoom
-                },
+                modifier = Modifier.fillMaxSize().then(videoLayer),
             )
         } else {
             CallAvatarDisc(

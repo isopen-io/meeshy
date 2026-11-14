@@ -279,6 +279,7 @@ fun CallScreen(
                                 modifier = stageModifier,
                                 onFocusChange = { groupFocus = it },
                                 isCompactHeight = isCompactHeight,
+                                selfCameraZoom = selfCamera.zoom,
                             )
                         }
                     } else {

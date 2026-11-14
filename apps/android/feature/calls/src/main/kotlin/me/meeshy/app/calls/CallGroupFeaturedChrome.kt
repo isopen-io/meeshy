@@ -1,8 +1,11 @@
 package me.meeshy.app.calls
 
+import androidx.annotation.StringRes
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -20,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
@@ -48,6 +53,7 @@ import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallVerticalEdge
 import me.meeshy.sdk.model.call.group.CallStageRect
 import me.meeshy.sdk.model.call.group.GroupCallStageFocus
+import me.meeshy.sdk.model.call.group.GroupCallSpotlightButton
 import me.meeshy.sdk.model.call.group.GroupCallStageGeometry
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -96,30 +102,31 @@ private class CallCapsuleSpot {
 }
 
 /**
- * U1.10 · U1.12 · #8550 — la capsule « Revenir à la grille · Plein écran » de la personne à la une. Elle vit au niveau de
+ * U1.10 · U1.12 · #8550 — la capsule « Revenir à la grille · Plein écran » de la personne à la une ; en plein écran, elle
+ * porte aussi la montée au plein écran total et la descente d'un niveau ([buttons], loi 15, #17961). Elle vit au niveau de
  * la SCÈNE, pas dans la vignette : elle survit donc au plein écran (aucun fondu rejoué à la bascule) et repart en fondu
  * quand la scène revient à la grille, au lieu de disparaître sur la même image. Elle se range AVEC les contrôles
  * ([isChromeVisible], `CallChromeElement.FeaturedCapsule`) : elle sort par le haut de l'écran, et revient au second
  * toucher. Posée sur le coin haut-fin de la case de la une ([GroupCallStageGeometry.rects]), qu'elle suit au rythme du
- * mouvement de la scène. [width] et [height] sont la taille de la scène.
+ * mouvement de la scène. [width] et [height] sont la taille de la scène ; [isStripHidden], le plein écran total.
  */
 @Composable
 internal fun CallGroupFeaturedCapsule(
     tileIds: List<String>,
     featuredId: String?,
     focus: GroupCallStageFocus,
-    isFullScreen: Boolean,
+    isStripHidden: Boolean,
     width: Dp,
     height: Dp,
     isCompactHeight: Boolean,
     isChromeVisible: Boolean,
+    buttons: List<GroupCallSpotlightButton>,
     onRevive: () -> Unit,
-    onGrid: () -> Unit,
-    onToggleFullScreen: () -> Unit,
+    onButton: (GroupCallSpotlightButton) -> Unit,
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val target = featuredId?.let { GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isFullScreen, isRtl, isCompactHeight)[it] }
+    val target = featuredId?.let { GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isStripHidden, isRtl, isCompactHeight)[it] }
     val spot = remember { CallCapsuleSpot() }
     if (target != null) spot.rect = target
     val isPresent = target != null
@@ -131,11 +138,10 @@ internal fun CallGroupFeaturedCapsule(
             presence = presence,
             isChromeVisible = isChromeVisible,
             isInteractive = isPresent && isChromeVisible,
-            isFullScreen = isFullScreen,
+            buttons = buttons,
             reduceMotion = reduceMotion,
             onRevive = onRevive,
-            onGrid = onGrid,
-            onToggleFullScreen = onToggleFullScreen,
+            onButton = onButton,
         )
     }
 }
@@ -147,11 +153,10 @@ private fun CallGroupCapsuleBox(
     presence: State<Float>,
     isChromeVisible: Boolean,
     isInteractive: Boolean,
-    isFullScreen: Boolean,
+    buttons: List<GroupCallSpotlightButton>,
     reduceMotion: Boolean,
     onRevive: () -> Unit,
-    onGrid: () -> Unit,
-    onToggleFullScreen: () -> Unit,
+    onButton: (GroupCallSpotlightButton) -> Unit,
 ) {
     val move: AnimationSpec<Float> = if (reduceMotion) snap() else tween(STAGE_MOTION_MILLIS, easing = FastOutSlowInEasing)
     val left = animateFloatAsState(held.left, move, label = "callCapsuleLeft")
@@ -179,38 +184,56 @@ private fun CallGroupCapsuleBox(
             edgeMargin = stageTop + MeeshySpacing.sm,
         ) {
             CallGroupSpotlightControls(
-                isFullScreen = isFullScreen,
+                buttons = buttons,
                 isInteractive = isInteractive,
-                onGrid = onGrid,
-                onToggleFullScreen = onToggleFullScreen,
+                reduceMotion = reduceMotion,
+                onButton = onButton,
                 modifier = Modifier.graphicsLayer { alpha = presence.value },
             )
         }
     }
 }
 
-/** « Revenir à la grille » et « Plein écran », dans UN verre au ton de l'écran — iOS `spotlightControls`. */
+/**
+ * « Revenir à la grille », puis « Plein écran » (qui garde sa place et monte d'un niveau à chaque appui), puis
+ * « Quitter » au glyphe rentrer, dans UN verre au ton de l'écran — iOS `spotlightControls`. La capsule s'allonge ou se
+ * resserre par sa taille quand un bouton paraît ou part (loi 17) ; « Réduire les animations » la pose d'un coup.
+ */
 @Composable
 private fun CallGroupSpotlightControls(
-    isFullScreen: Boolean,
+    buttons: List<GroupCallSpotlightButton>,
     isInteractive: Boolean,
-    onGrid: () -> Unit,
-    onToggleFullScreen: () -> Unit,
+    reduceMotion: Boolean,
+    onButton: (GroupCallSpotlightButton) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val inert = if (isInteractive) Modifier else Modifier.clearAndSetSemantics { }
+    val resize: FiniteAnimationSpec<IntSize> = if (reduceMotion) snap() else tween(STAGE_MOTION_MILLIS, easing = FastOutSlowInEasing)
     CallGlassPlate(modifier = modifier.then(inert), shape = CircleShape) {
         CallToneScrim()
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
-            CallGroupSpotlightButton(MeeshyIcons.GridView, stringResource(R.string.call_group_grid), isInteractive, onGrid)
-            CallGroupSpotlightButton(
-                icon = if (isFullScreen) MeeshyIcons.CloseFullscreen else MeeshyIcons.OpenInFull,
-                label = stringResource(if (isFullScreen) R.string.call_group_fullscreen_exit else R.string.call_group_fullscreen_enter),
-                isEnabled = isInteractive,
-                onClick = onToggleFullScreen,
-            )
+        Row(modifier = Modifier.animateContentSize(resize), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
+            buttons.forEach { button ->
+                key(button) {
+                    CallGroupSpotlightButton(button.icon(), stringResource(button.label()), isInteractive) { onButton(button) }
+                }
+            }
         }
     }
+}
+
+private fun GroupCallSpotlightButton.icon(): ImageVector = when (this) {
+    GroupCallSpotlightButton.Grid -> MeeshyIcons.GridView
+    GroupCallSpotlightButton.FullScreen, GroupCallSpotlightButton.TotalFullScreen -> MeeshyIcons.OpenInFull
+    GroupCallSpotlightButton.ExitFullScreen, GroupCallSpotlightButton.ExitTotalFullScreen -> MeeshyIcons.CloseFullscreen
+}
+
+@StringRes
+private fun GroupCallSpotlightButton.label(): Int = when (this) {
+    GroupCallSpotlightButton.Grid -> R.string.call_group_grid
+    GroupCallSpotlightButton.FullScreen -> R.string.call_group_fullscreen_enter
+    GroupCallSpotlightButton.TotalFullScreen -> R.string.call_spotlight_total_enter
+    GroupCallSpotlightButton.ExitFullScreen -> R.string.call_group_fullscreen_exit
+    GroupCallSpotlightButton.ExitTotalFullScreen -> R.string.call_spotlight_total_exit
 }
 
 @Composable
@@ -226,5 +249,5 @@ private fun CallGroupSpotlightButton(icon: ImageVector, label: String, isEnabled
     }
 }
 
-private val SPOTLIGHT_BUTTON = 44.dp
+private val SPOTLIGHT_BUTTON = 48.dp
 private val CHIP_ICON = 14.dp
