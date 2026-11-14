@@ -8,6 +8,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -17,7 +22,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * Un champ de formulaire de lien dont le libellé NOMME seul (épure #17697, règle 1) : la précision passe
- * derrière un (i) en fin de champ, nommé par la QUESTION, et la note se déplie sous le champ.
+ * derrière un (i) en fin de champ, nommé par la QUESTION, et la note se déplie sous le champ. Échap la referme,
+ * comme `MeeshyInfoNoted`.
  */
 @Composable
 internal fun ShareLinkNotedField(
@@ -31,7 +37,15 @@ internal fun ShareLinkNotedField(
     modifier: Modifier = Modifier,
 ) {
     val expanded = openNoteId == note.id
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    val close = { onOpenNoteIdChange(MeeshyInfoNote.closed(openNoteId, note.id)) }
+    Column(
+        modifier = modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+            val isEscape = expanded && event.key == Key.Escape && event.type == KeyEventType.KeyUp
+            if (isEscape) close()
+            isEscape
+        },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -54,7 +68,7 @@ internal fun ShareLinkNotedField(
                 text = note.text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.semantics { dismiss { onOpenNoteIdChange(MeeshyInfoNote.closed(openNoteId, note.id)); true } },
+                modifier = Modifier.semantics { dismiss { close(); true } },
             )
         }
     }

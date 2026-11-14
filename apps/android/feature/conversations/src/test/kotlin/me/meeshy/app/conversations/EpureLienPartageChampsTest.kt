@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
@@ -7,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
@@ -79,6 +81,15 @@ class EpureLienPartageChampsTest {
             compose.onNode(hasContentDescription("Who reads this message?"), useUnmergedTree = true).fetchSemanticsNode()
                 .config.getOrNull(SemanticsProperties.StateDescription),
         ).isEqualTo("Guests who open the link see it.")
+    }
+
+    @Test
+    fun theScreenReaderCloseAction_foldsTheOpenNote() {
+        setForm()
+        compose.onNodeWithContentDescription("Who sees this name?", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Only you see it; guests don't.", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.Dismiss)
+        compose.onNodeWithText("Only you see it; guests don't.", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
