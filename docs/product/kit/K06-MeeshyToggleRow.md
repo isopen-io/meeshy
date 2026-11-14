@@ -97,6 +97,7 @@ Relevé le 2026-11-12 : la fiche d'origine ne décrivait que iOS. Le lot Android
 - **Désactivé, la raison garde son encre** (choix 11, iOS) : tête, titre et accessoire baissent à 62 %, le sous-titre non, et le filet non plus. La ligne entière ne baissait plus d'un bloc.
 - **Tête et pastille du titre muettes pour le lecteur d'écran**, comme sur iOS (`accessibilityHidden`) : le titre les nomme.
 - **`selected` ne vit que sur la coche et la case** (§ 5) : une bascule dit son état par `stateDescription`, jamais par une sélection en plus ; une coche non retenue est lue « non sélectionnée ». Le composant iOS pose encore `isSelected` sur une bascule ouverte (`isChosen`), à l'inverse de sa propre fiche : écart iOS, hors de ce lot.
+- **La bascule fermée suit la planche (`.tg`)** et non le Material par défaut (piste indigo sombre cerclée, petit pouce indigo) : piste à l'encre de la ligne × `MeeshyOpacity.medium`, pouce blanc (`OnMedia`) de même taille ouvert ou fermé, sans liseré (`trackOffColor`, `thumbColor` de la recette, propres à Android). Gabarit Material 52 × 32 dp gardé (la planche dessine 46 × 28) : écart de plateforme.
 - **La coche paraît et s'efface en fondu de 200 ms** (`AnimatedVisibility`, opacité seule, rien sous « Réduire les animations »), le miroir de l'animation d'accessoire d'iOS.
 
 Écarts imposés par la plateforme ou laissés : la tête de ligne en `dp` ne suit pas la taille du texte (iOS : `MeeshyFont.relative`) ; la ligne mesure 48 dp au lieu de 46 dès qu'elle se touche (choix 1) ; l'instantané « pressé » est celui du repos (choix 4).
