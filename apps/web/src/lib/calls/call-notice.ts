@@ -25,7 +25,7 @@ export type CallNoticeTarget = {
   /** Ceux que la passerelle a servis sur le résumé (#17868, A1.2) ; `null`/absent : la carte ne dit aucun nom. */
   readonly participants?: readonly CallParticipant[] | null;
   /** Le lecteur : la ligne se résout chez lui, le message étant le même pour tous. */
-  readonly viewerId?: string;
+  readonly viewerId?: string | undefined;
 };
 
 export type CallParticipant = { readonly userId: string; readonly displayName: string };
@@ -57,7 +57,7 @@ export function decodeCallParticipants(raw: unknown): readonly CallParticipant[]
  * vides, dans l'ordre servi, puis « vous » si le lecteur a pris part ; la jointure est celle de la langue
  * (`Intl.ListFormat`). `null` quand aucun autre nom n'est servi : pas de ligne.
  */
-export function callParticipantsLine({ participants, viewerId = '', language }: { readonly participants: readonly CallParticipant[] | null | undefined; readonly viewerId?: string; readonly language: InterfaceLanguage }): string | null {
+export function callParticipantsLine({ participants, viewerId = '', language }: { readonly participants: readonly CallParticipant[] | null | undefined; readonly viewerId?: string | undefined; readonly language: InterfaceLanguage }): string | null {
   const served = participants ?? [];
   const others = served
     .filter((person) => person.userId !== viewerId)

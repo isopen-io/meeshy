@@ -19,11 +19,8 @@ beforeAll(async () => {
 
 const row: SystemRow = { kind: 'call', callType: 'video', text: 'Appel vidéo · 04:32' };
 
-const people = [
-  { userId: 'u_awa', displayName: 'Awa' },
-  { userId: 'u_me', displayName: 'Charles' },
-  { userId: 'u_karim', displayName: 'Karim' },
-];
+const me = { userId: 'u_me', displayName: 'Charles' };
+const people = [{ userId: 'u_awa', displayName: 'Awa' }, me, { userId: 'u_karim', displayName: 'Karim' }];
 
 const target = (overrides: Partial<CallNoticeTarget> = {}): CallNoticeTarget => ({
   conversationId: 'c1',
@@ -60,7 +57,7 @@ describe('la ligne des participants de la carte d’appel', () => {
   });
 
   test('un seul nom ou une liste absente : aucune ligne, le libellé reste celui d’avant', () => {
-    for (const participants of [null, [], [people[1]]]) {
+    for (const participants of [null, [], [me]]) {
       const html = render(target({ participants }));
       expect(html).not.toContain('data-call-card-participants');
       expect(html).toMatch(/aria-label="Appel vidéo · 04:32"/);

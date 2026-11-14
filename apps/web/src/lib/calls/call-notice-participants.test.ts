@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { callNoticeTarget, callParticipantsLine, decodeCallParticipants } from './call-notice';
 
@@ -11,17 +12,16 @@ import { callNoticeTarget, callParticipantsLine, decodeCallParticipants } from '
  */
 
 beforeAll(async () => {
-  await Promise.all(['fr', 'en', 'es', 'de', 'ar'].map((language) => loadInterfaceCatalog(language as 'fr')));
+  await Promise.all((['fr', 'en', 'es', 'de', 'ar'] as const).map((language) => loadInterfaceCatalog(language)));
 });
 
-const team = [
-  { userId: 'u_awa', displayName: 'Awa' },
-  { userId: 'u_me', displayName: 'Charles' },
-  { userId: 'u_karim', displayName: 'Karim' },
-  { userId: 'u_lina', displayName: 'Lina' },
-];
+const awa = { userId: 'u_awa', displayName: 'Awa' };
+const me = { userId: 'u_me', displayName: 'Charles' };
+const karim = { userId: 'u_karim', displayName: 'Karim' };
+const lina = { userId: 'u_lina', displayName: 'Lina' };
+const team = [awa, me, karim, lina];
 
-const line = (participants: ReturnType<typeof decodeCallParticipants>, viewerId: string, language = 'fr') => callParticipantsLine({ participants, viewerId, language });
+const line = (participants: ReturnType<typeof decodeCallParticipants>, viewerId: string, language: InterfaceLanguage = 'fr') => callParticipantsLine({ participants, viewerId, language });
 
 const callMessage = (participants?: unknown) => ({
   conversationId: 'c1',
@@ -38,11 +38,11 @@ describe('la ligne des participants', () => {
   });
 
   test('un duo se lit en deux noms', () => {
-    expect(line([team[0], team[1]], 'u_me')).toBe('Awa et vous');
+    expect(line([awa, me], 'u_me')).toBe('Awa et vous');
   });
 
   test('un lecteur qui n’a pas pris part n’est pas ajouté', () => {
-    expect(line([team[0], team[2]], 'u_me')).toBe('Awa et Karim');
+    expect(line([awa, karim], 'u_me')).toBe('Awa et Karim');
   });
 
   test('un identifiant de lecteur vide n’est jamais « vous »', () => {
@@ -52,19 +52,19 @@ describe('la ligne des participants', () => {
   test('aucune ligne quand aucun autre nom n’est servi', () => {
     expect(line(null, 'u_me')).toBeNull();
     expect(line([], 'u_me')).toBeNull();
-    expect(line([team[1]], 'u_me')).toBeNull();
-    expect(line([{ userId: 'u_x', displayName: '  ' }, team[1]], 'u_me')).toBeNull();
+    expect(line([me], 'u_me')).toBeNull();
+    expect(line([{ userId: 'u_x', displayName: '  ' }, me], 'u_me')).toBeNull();
   });
 
   test('les noms servis sont rognés', () => {
-    expect(line([{ userId: 'u_x', displayName: '  Awa ' }, team[1]], 'u_me')).toBe('Awa et vous');
+    expect(line([{ userId: 'u_x', displayName: '  Awa ' }, me], 'u_me')).toBe('Awa et vous');
   });
 
   test('le « vous » est celui de la langue du lecteur, la conjonction aussi', () => {
-    expect(line([team[0], team[1]], 'u_me', 'en')).toBe('Awa and you');
-    expect(line([team[0], team[1]], 'u_me', 'es')).toBe('Awa y tú');
-    expect(line([team[0], team[1]], 'u_me', 'de')).toBe('Awa und du');
-    expect(line([team[0], team[1]], 'u_me', 'ar')).toContain('أنت');
+    expect(line([awa, me], 'u_me', 'en')).toBe('Awa and you');
+    expect(line([awa, me], 'u_me', 'es')).toBe('Awa y tú');
+    expect(line([awa, me], 'u_me', 'de')).toBe('Awa und du');
+    expect(line([awa, me], 'u_me', 'ar')).toContain('أنت');
   });
 });
 
@@ -74,7 +74,7 @@ describe('le décodeur de participants du résumé', () => {
   });
 
   test('clé absente ou malformée ⇒ aucune liste, jamais d’exception', () => {
-    for (const raw of [undefined, null, 'Awa', 42, {}, [{ userId: 'u_awa' }], ['x'], [{ userId: 7, displayName: null }], [team[0], { userId: 'u_y' }]]) {
+    for (const raw of [undefined, null, 'Awa', 42, {}, [{ userId: 'u_awa' }], ['x'], [{ userId: 7, displayName: null }], [awa, { userId: 'u_y' }]]) {
       expect(decodeCallParticipants(raw)).toBeNull();
     }
   });
