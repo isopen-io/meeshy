@@ -55,6 +55,42 @@ enum CallPillText: Equatable, Sendable {
     }
 }
 
+/// P9b.15 (#17529, #18206) — en duo audio, le journal ouvert dans la pilule RÉDUIT l'avatar de 120 à
+/// 56 pt en en-tête compact, le nom et la durée à côté. Le passage est un morphisme : UNE vue
+/// d'avatar, dessinée à sa taille de repos et réduite par une échelle, glisse vers l'en-tête pendant
+/// que le nom et la durée la rejoignent en fondu (≈ 200 ms) ; « Réduire les animations » en fait un
+/// fondu court, sans déplacement ni échelle. Mêmes vecteurs qu'Android (`CallAudioStageLayout`).
+nonisolated enum CallAudioStageLayout {
+    static let fullAvatarSize: CGFloat = 120
+    static let compactAvatarSize: CGFloat = 56
+    static let morphDuration: TimeInterval = 0.2
+
+    static var shrinkScale: CGFloat { compactAvatarSize / fullAvatarSize }
+
+    static func avatarSize(isCompact: Bool) -> CGFloat {
+        isCompact ? compactAvatarSize : fullAvatarSize
+    }
+
+    static func faceScale(isCompact: Bool) -> CGFloat {
+        isCompact ? shrinkScale : 1
+    }
+
+    static func morphs(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
+
+    static func transitionDuration(reduceMotion: Bool) -> TimeInterval {
+        morphs(reduceMotion: reduceMotion) ? morphDuration : CallChromeStow.reducedFadeDuration
+    }
+
+    /// Une identité pour les deux dispositions tant que l'avatar se déplace ; sous « Réduire les
+    /// animations », une par disposition, qui se fondent sur place.
+    static func identity(isCompact: Bool, reduceMotion: Bool) -> Int {
+        guard !morphs(reduceMotion: reduceMotion) else { return 0 }
+        return isCompact ? 2 : 1
+    }
+}
+
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre
 /// des sous-titres rangés sont limités à 560 pt pour que l'œil ne balaie pas tout
 /// l'écran (paysage, tablette) ; la pilule au repos garde ses 440 pt.
