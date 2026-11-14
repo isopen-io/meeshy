@@ -267,10 +267,7 @@ class GameEpureResourcesTest {
 
     @Test
     fun `la regle des etincelles ne redit ni les epreuves ni les phases ni les plafonds que le carnet dit ailleurs`() {
-        assertThat(text(R.string.game_rules_2_body)).isEqualTo(
-            "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. " +
-                "Un million d’étincelles pour le niveau 100. Chaque niveau demande un peu plus que le précédent.",
-        )
+        assertThat(text(R.string.game_rules_2_body)).isEqualTo("Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.")
         assertThat(text(R.string.game_rules_concept_steps_body)).contains("Tant qu’elle n’est pas réussie")
         assertThat(text(R.string.game_atlas_tiers_line)).contains("Vingt états")
     }
@@ -462,4 +459,37 @@ class GameEpureResourcesTest {
             assertThat(valueIn(folder, "game_concept_league_use").length).isAtMost(100)
         }
     }
+
+    @Test
+    fun `les regles huit, le vent arriere et la question du ruban sont courts et traduits dans les sept langues`() {
+        val expectedFr = mapOf(
+            "game_rules_2_body" to "Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.",
+            "game_rules_8_body" to "Chaque signe devient une photo avec Mee et Meo, gardée dans ta Chronique.",
+            "game_rules_concept_tailwind_body" to "+25\u00a0% d’étincelles tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.",
+            "game_rules_badges_ribbon_question" to "Que signifient le ruban et l’émail ?",
+        )
+        expectedFr.forEach { (name, fr) ->
+            assertThat(valueIn("values-fr", name)).isEqualTo(fr)
+            retiredLanguages.forEach { folder ->
+                assertThat(valueIn(folder, name)).isNotEmpty()
+                if (folder != "values-fr") assertThat(valueIn(folder, name)).isNotEqualTo(fr)
+                assertThat(declaredCount(folder, name)).isEqualTo(1)
+            }
+        }
+        assertThat(valueIn("values", "game_rules_8_body")).isEqualTo("Each sign becomes a photo with Mee and Meo, kept in your Chronicle.")
+        assertThat(valueIn("values", "game_rules_concept_tailwind_body")).isEqualTo("+25 % sparks while your level is 7 or more below your highest light.")
+        assertThat(valueIn("values", "game_rules_badges_ribbon_question")).isEqualTo("What do the ribbon and the enamel mean?")
+        assertThat(valueIn("values", "game_rules_2_body")).isEqualTo("Your level is read from your light: a million sparks make level 100.")
+    }
+
+    @Test
+    fun `la regle huit et le vent arriere ne redisent ni leur titre ni leur seuil`() {
+        assertThat(text(R.string.game_rules_8_body)).doesNotContain("À chaque évolution")
+        assertThat(text(R.string.game_rules_concept_tailwind_body)).doesNotContain("retombe")
+        assertThat(text(R.string.game_rules_2_body)).doesNotContain("un peu plus")
+    }
+
+    private fun declaredCount(folder: String, name: String): Int =
+        resDir().resolve(folder).listFiles { f -> f.extension == "xml" }.orEmpty()
+            .sumOf { Regex("""<string\s+name="$name"""").findAll(it.readText()).count() }
 }

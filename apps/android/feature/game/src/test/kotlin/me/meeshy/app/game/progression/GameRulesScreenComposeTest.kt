@@ -108,4 +108,27 @@ class GameRulesScreenComposeTest {
         compose.onNodeWithContentDescription(context.getString(R.string.game_rules_3_question)).performClick()
         compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertExists()
     }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `le ruban et l email rejoignent la ligne de l echelle derriere un i nomme par sa question`() {
+        show(focused = GameRulesSection.Badges)
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ladder)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_imprint)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ribbon)).assertDoesNotExist()
+        val info = compose.onNodeWithContentDescription(context.getString(R.string.game_rules_badges_ribbon_question))
+        info.assertExists()
+        assertThat(info.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+            .isEqualTo(context.getString(R.string.game_rules_badges_ribbon))
+        info.performClick()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ribbon)).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `la regle huit et le vent arriere disent leur phrase courte au repos`() {
+        show(focused = null)
+        compose.onNodeWithText(context.getString(R.string.game_rules_8_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_concept_tailwind_body)).assertExists()
+    }
 }
