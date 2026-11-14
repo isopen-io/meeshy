@@ -349,10 +349,12 @@ nonisolated struct BubbleContent: Equatable {
         }
     }
 
-    /// Un envoi en cours se voit au repos sur cette rangée plate (#16130) : la puce n'a
-    /// aucun contenu qui dise que le message existe encore. Les autres rangées attendent
-    /// #16542.
-    var pinsPendingDelivery: Bool { isMe && viewOnceChipState != nil }
+    /// Un envoi en cours se voit au repos sur la rangée plate, pour TOUT message de
+    /// l'expéditeur (#16542, #18420) : l'horloge ou l'anneau de téléversement n'attend
+    /// pas un défilement. La vue unique l'exigeait la première (#16130) : sa puce n'a
+    /// aucun contenu qui dise que le message existe encore. Les coches d'un message
+    /// parti restent au geste (`FocalMetaRow.showsDeliveryAtRest`).
+    var pinsPendingDelivery: Bool { isMe }
 
     /// Le chrome à peindre au-dessus du message : celui d'une vue unique
     /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
