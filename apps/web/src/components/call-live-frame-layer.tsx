@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { GlyphSvg } from '@/components/glyph';
@@ -166,27 +166,31 @@ type SurfaceProps = {
   readonly call: MontageCall;
   readonly stage: () => Element | null;
   readonly circleOf?: CircleOf;
+  /** Ce que la colonne du journal retire à la scène, côté fin (W1, #17929) : la toile se peint à la place qui reste. */
+  readonly bleed?: number;
 };
 
-const viewportSize = (): { readonly width: number; readonly height: number } => (typeof window === 'undefined' ? { width: 1080, height: 1920 } : { width: window.innerWidth, height: window.innerHeight });
+const viewportSize = (bleed: number): { readonly width: number; readonly height: number } => (typeof window === 'undefined' ? { width: 1080, height: 1920 } : { width: Math.max(window.innerWidth - bleed, 1), height: window.innerHeight });
 
-function FramedCanvas({ language, studio, shown: { frameId, remoteSharedName }, call, stage, circleOf = browserCircle }: Omit<SurfaceProps, 'shown'> & { readonly shown: ShownFrame }) {
+function FramedCanvas({ language, studio, shown: { frameId, remoteSharedName }, call, stage, circleOf = browserCircle, bleed = 0 }: Omit<SurfaceProps, 'shown'> & { readonly shown: ShownFrame }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const frame = studio.find(frameId);
   const base = circleOf(call, language);
   const circle = remoteSharedName === null ? base : { ...base, people: base.people.map((person) => (person.isSelf ? person : { ...person, name: remoteSharedName })) };
-  const latest = useRef({ frame, circle });
-  latest.current = { frame, circle };
-  const size = liveFramePaintSize(viewportSize(), typeof window === 'undefined' ? 1 : window.devicePixelRatio);
+  const latest = useRef({ frame, circle, bleed });
+  latest.current = { frame, circle, bleed };
+  const size = liveFramePaintSize(viewportSize(bleed), typeof window === 'undefined' ? 1 : window.devicePixelRatio);
+  const paint = (): void => {
+    const { frame: shown, circle: people, bleed: reserved } = latest.current;
+    if (shown === null) return;
+    const chrome: FrameChrome = { viewport: viewportSize(reserved), ...LIVE_FRAME_RESERVE };
+    paintFramed(canvas.current, stage(), studio, shown, people, 'preview', chrome);
+  };
+
+  /* Redimensionner une toile l'efface : la place qui change est repeinte avant l'image, pas au tour suivant de l'horloge. */
+  useLayoutEffect(paint, [size.width, size.height]);
 
   useEffect(() => {
-    const paint = (): void => {
-      const { frame: shown, circle: people } = latest.current;
-      if (shown === null) return;
-      const viewport = viewportSize();
-      const chrome: FrameChrome = { viewport, ...LIVE_FRAME_RESERVE };
-      paintFramed(canvas.current, stage(), studio, shown, people, 'preview', chrome);
-    };
     paint();
     const clock = startFrameClock({ fps: LIVE_FRAME_FPS, tick: paint, driver: () => stage()?.querySelector<HTMLVideoElement>('video') ?? null });
     return () => clock.stop();
