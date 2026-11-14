@@ -314,7 +314,7 @@ export function GameSeason(props: GameSeasonProps) {
               className="rounded-chip px-4 text-body font-bold disabled:opacity-60"
               style={{ minHeight: 44, backgroundColor: 'var(--color-warn)', color: 'var(--color-on-state)' }}
             >
-              {gameText('game.season.seal.buy', { price: meeshCount(season.sealPrice) })}
+              {gameText('game.season.seal.buy')}
             </button>
           </>
         )}
