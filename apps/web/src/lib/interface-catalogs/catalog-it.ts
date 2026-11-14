@@ -654,6 +654,9 @@ const it = {
 
   'a11y.floating.rung.discover.requests.one': 'Scopri, {count} richiesta ricevuta',
   'a11y.floating.rung.discover.requests.other': 'Scopri, {count} richieste ricevute',
+  'a11y.floating.rung.game.chest-ready': 'La mia Leggenda, Offerta pronta',
+  'a11y.floating.rung.game.flame-at-risk': 'La mia Leggenda, Fiamma in pericolo',
+  'a11y.floating.rung.game.both': 'La mia Leggenda, Offerta pronta, Fiamma in pericolo',
 
   'links.hub.share.title': 'Condivisione',
   'links.hub.share.description': 'Invita i contatti a unirsi alle tue conversazioni',

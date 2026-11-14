@@ -33,6 +33,7 @@ import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.chrome.FloatingMenuLadder
+import me.meeshy.sdk.model.game.GameAttention
 import me.meeshy.ui.component.auth.AnimatedBrandLogo
 import me.meeshy.ui.component.chrome.FloatingButtonSemantics
 import me.meeshy.ui.component.chrome.FloatingButtonSize
@@ -69,12 +70,13 @@ internal fun MeeshyFloatingChrome(
     val pendingFriendRequests by chromeViewModel.pendingFriendRequests.collectAsStateWithLifecycle()
     val gameHidden by chromeViewModel.gameHidden.collectAsStateWithLifecycle()
     val actsRing by chromeViewModel.actsRing.collectAsStateWithLifecycle()
+    val gameAttention by chromeViewModel.gameAttention.collectAsStateWithLifecycle()
     val leftStorage by floatingButtonPositions.leftStorage.collectAsStateWithLifecycle()
     val rightStorage by floatingButtonPositions.rightStorage.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val feedOpen = currentRoute == Routes.FEED
-    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests, gameHidden)
+    val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests, gameHidden, gameAttention)
     val navigateToProfile: () -> Unit = {
         floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
@@ -195,6 +197,15 @@ private fun RootMenuLadderEntry.label(): String = stringResource(
     },
 )
 
+/** Le nom de « Ma Legende » quand le jeu signale quelque chose (#18165) ; `null` = le nom du barreau. */
+@Composable
+private fun RootMenuLadderEntry.attentionLabel(attention: GameAttention): String? = when (attentionLabelKey(attention)) {
+    "a11y_floating_rung_game_both" -> stringResource(R.string.a11y_floating_rung_game_both)
+    "a11y_floating_rung_game_chest_ready" -> stringResource(R.string.a11y_floating_rung_game_chest_ready)
+    "a11y_floating_rung_game_flame_at_risk" -> stringResource(R.string.a11y_floating_rung_game_flame_at_risk)
+    else -> null
+}
+
 private fun NavController.openLadderEntry(entry: RootMenuLadderEntry) {
     when (entry) {
         RootMenuLadderEntry.GAME -> navigate(GameRoutes.PROGRESSION) { launchSingleTop = true }
@@ -215,16 +226,18 @@ private fun rememberMenuLadderItems(
     unreadNotifications: Int,
     pendingFriendRequests: Int,
     gameHidden: Boolean,
+    gameAttention: GameAttention,
 ): List<RadialMenuItem> {
     val entries = remember(gameHidden) { rootMenuLadderEntries(gameHidden = gameHidden) }
-    val labels = entries.map { it.label() }
-    return remember(labels, unreadNotifications, pendingFriendRequests) {
+    val labels = entries.map { it.attentionLabel(gameAttention) ?: it.label() }
+    return remember(labels, unreadNotifications, pendingFriendRequests, gameAttention) {
         entries.mapIndexed { index, entry ->
             RadialMenuItem(
                 icon = entry.icon(),
                 label = labels[index],
                 color = hexColor(entry.colorHex),
                 badgeCount = entry.badgeCount(unreadNotifications, pendingFriendRequests),
+                dot = entry.showsAttentionDot(gameAttention),
                 onSelect = { navController.openLadderEntry(entry) },
             )
         }

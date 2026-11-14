@@ -70,6 +70,9 @@ struct RootFloatingChrome: View {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
+    /// Ce que le jeu signale au barreau « Ma Légende » (#18165) — rien sous « Jeu masqué ».
+    private var gameAttention: GameAttention { gamePrefs.prefs.hidden ? .none : actsRingStore.attention }
+
     private var ladder: [RootMenuLadderEntry] { RootMenuLadderEntry.ladder(gameHidden: gamePrefs.prefs.hidden) }
 
     var body: some View {
@@ -271,9 +274,10 @@ struct RootFloatingChrome: View {
                 ThemedActionButton(
                     icon: entry.icon,
                     color: entry.colorHex,
-                    label: entry.label,
+                    label: entry.accessibilityLabel(attention: gameAttention),
                     hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                     badge: menuBadgeCount(entry.badge),
+                    showsDot: entry.showsAttentionDot(gameAttention),
                     // L'échelle est montée EN PERMANENCE (opacité 0, zIndex −1
                     // menu fermé) pour que le ressort d'ouverture parte d'un
                     // état existant : le glow/pulse ne doit vivre que menu
