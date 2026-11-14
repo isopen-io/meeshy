@@ -340,8 +340,8 @@ final class CallAudioStageLayoutTests: XCTestCase {
     func test_duoAudio_morphsOneAvatar_insteadOfSwappingTwoLayouts() throws {
         let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
         let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
-        XCTAssertTrue(duo.contains("CallAudioStage(isCompact: pillText.compactsAudioLayout"))
-        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: pillText.compactsAudioLayout)"))
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"))
+        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: isCompact)"), "#18488 : la scène décide la forme, l'avatar la suit")
         XCTAssertFalse(duo.contains("if pillText.compactsAudioLayout {"), "deux sous-arbres échangés : l'avatar s'effaçait et reparaissait")
         XCTAssertFalse(duo.contains("callAvatarPair(size: 56)"), "un seul avatar, pas un second à 56 pt")
         let audio = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var audioCallLayout: some View", in: connected))
@@ -358,8 +358,8 @@ final class CallAudioStageLayoutTests: XCTestCase {
         XCTAssertTrue(stage.contains("AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))"), "le repos : l'avatar au-dessus du nom")
         XCTAssertTrue(stage.contains("compact.transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
         XCTAssertTrue(stage.contains("rest.transition(.opacity)"))
-        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(isCompact: isCompact, reduceMotion: reduceMotion))"))
-        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: isCompact)"), "≈ 200 ms, pas le ressort du (…)")
+        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(form: form, reduceMotion: reduceMotion))"))
+        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: form.isCompact)"), "≈ 200 ms, pas le ressort du (…)")
         XCTAssertTrue(stage.contains("alignment: isCompact ? .topLeading : .center"), "bord de tête : droite à gauche compris")
         let states = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+States.swift"))
         let pair = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func audioAvatarPair(isCompact: Bool) -> some View", in: states))
@@ -454,6 +454,12 @@ final class CallAudioCompactHeightTests: XCTestCase {
         XCTAssertLessThan(CallJournalSizing.compactMinimum, CallJournalSizing.minimum)
     }
 
+    func test_listHeight_theGroupKeepsItsShare_theDuoReadsItsBudget() {
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: true, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.minimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.compactMinimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 844, topClearance: 84, bottomInset: 32), 844 * 0.45, accuracy: 0.001)
+    }
+
     func test_journalBudget_theReserveCountsTheCompactHeader_theJournalChrome_andTheBaseRow() {
         let reserved = CallJournalSizing.reservedAround(topClearance: 84, bottomInset: 32)
         XCTAssertEqual(reserved,
@@ -484,9 +490,8 @@ final class CallAudioCompactHeightTests: XCTestCase {
 
     func test_theJournalPanel_ofTheDuo_readsItsBudget() throws {
         let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
-        let panel = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var journalPanelRows: some View", in: transcript))
-        XCTAssertTrue(panel.contains("CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height, reservedAround:"))
-        XCTAssertTrue(panel.contains("isGroupStage"), "le groupe garde sa hauteur : sa grille a sa propre loi")
+        let rows = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var journalPanelRows: some View", in: transcript))
+        XCTAssertTrue(rows.contains("CallJournalSizing.listHeight(isGroup: isGroupStage, windowHeight: DeviceLayout.windowSize.height"), "le duo lit son budget, le groupe garde sa hauteur : sa grille a sa propre loi")
     }
 }
 
