@@ -143,7 +143,7 @@
     "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift::ReelSceneView.body": 110,
     "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift::ReelVideoView.content": 98,
     "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift::ReelsPlayerView.body": 134,
-    "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift::RootFloatingChrome.draggableFloatingButtons": 127,
+    "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift::RootFloatingChrome.draggableFloatingButtons": 97,
     "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift::CallPresentationLayer.body": 154,
     "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift::RootRouteDestination.body": 187,
     "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift::RootSheetsLayer.body": 117,

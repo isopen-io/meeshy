@@ -22,6 +22,24 @@ struct RootFloatingChrome: View {
     let onPush: (Route) -> Void
     /// « Jeu masqué » : le barreau du jeu quitte l'échelle (#17769), comme le bandeau quitte l'écran.
     @ObservedObject var gamePrefs: GameDevicePrefsStore = .current()
+    /// L'anneau des actes du jour autour du disque du menu (#17768), lu dans le cache du jeu.
+    @StateObject var actsRingStore = MenuActsRingStore()
+
+    /// « Jeu masqué » : aucun anneau, comme aucun barreau du jeu.
+    private var actsRing: GameActsRing? { gamePrefs.prefs.hidden ? nil : actsRingStore.ring }
+
+    /// Ce que VoiceOver lit après « Menu » : les notifications en attente, puis les actes du jour, menu fermé.
+    private var menuA11yValue: String? {
+        let notifications = unreadCount > 0
+            ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), unreadCount)
+            : nil
+        let acts = showMenu ? nil : actsRing.map { ring in
+            String(format: String(localized: "a11y.floating.menu.acts", defaultValue: "Actes du jour : %1$lld sur %2$lld", bundle: .main),
+                   ring.done, ring.total)
+        }
+        let parts = [notifications, acts].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
 
     private var ladder: [RootMenuLadderEntry] { RootMenuLadderEntry.ladder(gameHidden: gamePrefs.prefs.hidden) }
 
@@ -43,6 +61,9 @@ struct RootFloatingChrome: View {
             }
 
             menuLadder
+        }
+        .task(id: gamePrefs.prefs.hidden) { @MainActor in
+            await actsRingStore.activate(hidden: gamePrefs.prefs.hidden)
         }
         // L'aperçu d'appui long d'une conversation passe au-dessus de tout :
         // les bulles s'effacent et ne captent aucun de ses touchers (#17260).
@@ -115,9 +136,7 @@ struct RootFloatingChrome: View {
             // ne peut pas le découvrir par tâtonnement.
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), unreadCount)
-                : nil,
+            rightA11yValue: menuA11yValue,
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
@@ -142,40 +161,49 @@ struct RootFloatingChrome: View {
                     }
                 }
             },
-            rightContent: {
-                // Menu button content — porte l'avatar de l'utilisateur (ou ses
-                // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
-                // rouge quand le menu est ouvert ; le badge de notifications reste.
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: showMenu ? [MeeshyColors.error, MeeshyColors.indigo300] : [MeeshyColors.indigo600, MeeshyColors.indigo300],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    MeeshyAvatar(
-                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                        context: .custom(38),
-                        avatarURL: AuthManager.shared.currentUser?.avatar, thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
-                        ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
-                    )
-                    .allowsHitTesting(false)
-
-                    // Badge
-                    if !showMenu && unreadCount > 0 {
-                        NotificationBadge(count: unreadCount)
-                            .accessibilityLabel(UnreadCountLabel.notifications(unreadCount))
-                    }
-                }
-            }
+            rightContent: { menuButtonContent }
         )
         .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
             if let measured, measured.isMeasured { floatingGeometry = measured }
         }
         .zIndex(100)
+    }
+
+    /// Le disque du menu : l'avatar dans l'anneau dégradé, l'anneau des actes du jour autour, et le badge.
+    private var menuButtonContent: some View {
+        // Menu button content — porte l'avatar de l'utilisateur (ou ses
+        // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
+        // rouge quand le menu est ouvert ; le badge de notifications reste.
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: showMenu ? [MeeshyColors.error, MeeshyColors.indigo300] : [MeeshyColors.indigo600, MeeshyColors.indigo300],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            MeeshyAvatar(
+                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                context: .custom(38),
+                avatarURL: AuthManager.shared.currentUser?.avatar, thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
+            )
+            .allowsHitTesting(false)
+
+            // L'anneau des actes du jour (#17768) entoure le disque, sans le toucher ; immobile (#17381).
+            if let actsRing {
+                MenuActsRingView(ring: actsRing, diameter: FloatingButtonGeometry.buttonSize)
+                    .frame(width: FloatingButtonGeometry.buttonSize, height: FloatingButtonGeometry.buttonSize)
+            }
+
+            // Badge
+            if !showMenu && unreadCount > 0 {
+                NotificationBadge(count: unreadCount)
+                    .accessibilityLabel(UnreadCountLabel.notifications(unreadCount))
+            }
+        }
     }
 
     // MARK: - Menu Ladder (positioned relative to menu button)
