@@ -336,3 +336,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : shared vitest 9651 (après correction du témoin périmé) ; passerelle `unit/routes/communities` + `unit/routes/users` + cliquet `tsc-never-loaded-tests-ratchet` 88/88 suites, `tsc --noEmit` vert ; web `bun test src/lib/api src/lib/profile src/routes` 9073/9073, `tsc --noEmit` vert.
 - Pas de revue adversariale : resserrement d'une validation d'entrée, ni permission ni migration.
 - Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), puis #16809 (hôtes Meeshy) ; #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 36 (05:38 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne », #18014). Le porteur a accepté le risque de l'oracle « communauté fabriquée » (décision consignée à 04:58 UTC, aucune parade) et la PR est sortie du brouillon ; dernière poussée 40 minutes avant, sans session active : run consacré à sa fusion, aucun lot nouveau.
+- `origin/dev` intégré sans conflit. Gates locaux sur la tête intégrée : passerelle `unit/routes/communities` + `community-online-count` + cliquet `tsc-never-loaded-tests-ratchet` 33/33 suites (530 tests), `tsc --noEmit` vert (il n'avait pas pu tourner au run précédent : client Prisma généré ici) ; web `bun test src/lib/api src/routes/community` 4226/4226, `tsc --noEmit` vert, `bun run build` + `measure-weight.mjs` verts. `check-communities.mjs` ne tourne pas en conteneur (Playwright cherche `chromium_headless_shell-1248`, absent) — hors lot.
+- Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
