@@ -64,6 +64,7 @@ struct CallPillButtonLabel: View {
                     .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    .transition(AnyTransition.opacity.animation(.easeInOut(duration: CallPillMotion.reducedDuration)))
             }
         }
         .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)

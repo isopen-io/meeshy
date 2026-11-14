@@ -17,4 +17,19 @@ nonisolated enum CallReducedRule {
         guard let title else { return duration }
         return "\(title) · \(duration)"
     }
+
+    /// P18.3 — l'étiquette unique de l'appel réduit, quelle que soit sa forme : « nom ·
+    /// durée » une fois l'appel établi ; avant, le nom seul (la phase est un glyphe),
+    /// jamais une durée de « 00:00 ».
+    static func label(title: String?, duration: String, isConnected: Bool, unknown: String) -> String {
+        guard isConnected else { return title ?? unknown }
+        return caption(title: title, duration: duration)
+    }
+
+    /// P18.2 — la clé de la couleur de l'autre sur l'appel réduit : son identifiant,
+    /// sinon son nom, sur la MÊME palette (Android `CallTileRim.peerAvatar`) ; sans l'un
+    /// ni l'autre, aucune couleur inventée.
+    static func colorKey(peerId: String?, peerName: String?) -> String? {
+        CallFrameTextsRule.meaningful(peerId) ?? CallFrameTextsRule.meaningful(peerName)
+    }
 }

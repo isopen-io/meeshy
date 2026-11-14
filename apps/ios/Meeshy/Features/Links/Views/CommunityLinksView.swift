@@ -7,75 +7,28 @@ struct CommunityLinksView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = CommunityLinksViewModel()
 
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @Environment(\.meeshyPanelDismiss) private var panelDismiss
-    /// Retour operant dans les trois contextes de presentation : pile iPhone,
-    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
-    private var back: PanelBackAction {
-        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
-    }
     @Environment(\.routerCommands) private var router
 
     private let accent = MeeshyColors.communityAccent
     private let accentHex = MeeshyColors.communityAccentHex
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                header
-                
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: MeeshySpacing.xl) {
-                        communityStatsOverview.padding(.horizontal, MeeshySpacing.lg)
-                        communityLinksSection.padding(.horizontal, MeeshySpacing.lg)
-                    }
-                    .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
-                }
-                .refreshable { await viewModel.load() }
+        LinksPage(
+            title: String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main),
+            accent: accent,
+            action: LinksPageAction(
+                label: String(localized: "community.links.create.a11y", defaultValue: "Créer une communauté", bundle: .main),
+                perform: { router.push(.communityCreate) }
+            )
+        ) {
+            VStack(spacing: MeeshySpacing.xl) {
+                communityStatsOverview.padding(.horizontal, MeeshySpacing.lg)
+                communityLinksSection.padding(.horizontal, MeeshySpacing.lg)
             }
+            .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
         }
-        .navigationBarHidden(true)
+        .refreshable { await viewModel.load() }
         .task { await viewModel.load() }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Button {
-                HapticFeedback.light()
-                router.push(.communityCreate)
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
-                    .foregroundColor(accent)
-            }
-            .accessibilityLabel(String(localized: "community.links.create.a11y", defaultValue: "Créer une communauté", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
     }
 
     private var communityStatsOverview: some View {
@@ -141,8 +94,7 @@ struct CommunityLinksView: View {
     }
 
     private func copyJoinLink(_ link: CommunityLink) {
-        UIPasteboard.general.string = link.joinUrl
-        HapticFeedback.success()
+        LinksClipboard.copy(link.joinUrl)
     }
 
     private func communityLinkRow(_ link: CommunityLink) -> some View {
@@ -161,12 +113,14 @@ struct CommunityLinksView: View {
                     .font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted).lineLimit(1)
             }
             Spacer()
-            Button {
-                copyJoinLink(link)
-            } label: {
-                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(accent)
-            }.padding(.horizontal, MeeshySpacing.xs)
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main),
+                size: .s36,
+                glyphTint: accent,
+                haptic: .none,
+                action: { copyJoinLink(link) }
+            )
             // Nested inside the row's NavigationLink, this Button is unreachable by
             // VoiceOver — the link absorbs its whole label as one element. Hide the
             // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
