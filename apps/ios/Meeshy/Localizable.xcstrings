@@ -145676,53 +145676,6 @@
         }
       }
     },
-    "message-detail.edits.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يظهر سجل التعديلات هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsverlauf erscheint hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit history appears here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El historial de ediciones aparece aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'historique des modifications apparaît ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La cronologia delle modifiche appare qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O histórico de edições aparece aqui"
-          }
-        }
-      }
-    },
     "message-detail.edits.history-title": {
       "extractionState": "manual",
       "localizations": {
@@ -145766,53 +145719,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Histórico"
-          }
-        }
-      }
-    },
-    "message-detail.edits.none-detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يتم تعديل هذه الرسالة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Nachricht wurde nicht bearbeitet"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This message has not been edited"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este mensaje no ha sido editado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce message n'a pas été modifié"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo messaggio non è stato modificato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta mensagem não foi editada"
           }
         }
       }
