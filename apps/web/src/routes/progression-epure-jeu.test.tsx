@@ -75,6 +75,8 @@ describe('rien n’est dit deux fois', () => {
     expect(shown).not.toContain('Hauts faits');
     expect(shown).not.toMatch(/\d+ \/ \d+/);
     expect(host.querySelector('section[aria-labelledby="progression-achievements"] h2')?.textContent).toBe('Hauts faits');
+    expect(shown).not.toContain('Obtenu le');
+    expect(host.textContent).toContain('Obtenu le');
   });
 
   test('Défis : le titre ne se répète pas dans la page, une phrase d’orientation reste lue au repos', async () => {
@@ -84,6 +86,14 @@ describe('rien n’est dit deux fois', () => {
     expect(shown).toContain('Chaque défi est un palier à atteindre dans une famille de gestes.');
     expect(host.querySelector('#progression-generated')?.className).toContain('sr-only');
     expect(shown).not.toMatch(/^Défis/);
+  });
+
+  test('Défis : le compteur d’une famille se lit « 1/20 » (une valeur, un mot) ; l’en-tête de page porte le total', async () => {
+    const sections = progress.achievementSections ?? [];
+    const host = await mount(<GeneratedAchievements sections={sections} />);
+    const shown = visibleText(host);
+    for (const section of sections) expect(shown).toContain(`${section.unlockedCount}/${section.attainableCount}`);
+    expect(shown).not.toMatch(/\d+ \/ \d+/);
   });
 
   test('Vitrine : le titre de carte ne répète ni le nom ni le compte déjà en en-tête', async () => {
@@ -102,12 +112,15 @@ describe('rien n’est dit deux fois', () => {
 describe('le carnet : la Chronique se dit, les cartes ne se répètent pas', () => {
   const standing = gameBlockFixture({ mintedLifetime: 21, flameRecord: 8, streak: 6 });
 
-  test('une phrase sous le titre dit ce qu’est la Chronique ; « sur cet appareil » reste en fin de page', async () => {
+  test('une phrase sous le titre dit ce qu’est la Chronique ; « sur cet appareil » est derrière « Où vivent mes photos ? »', async () => {
     const host = await mount(<CarnetBody env={emptyNotebookEnv()} />);
     await settle();
     const shown = visibleText(host);
     expect(shown).toContain('La Chronique garde en photo les moments où tes aïeux se manifestent.');
-    expect(shown.indexOf('La Chronique garde')).toBeLessThan(shown.indexOf('Tes photos vivent sur cet appareil.'));
+    expect(shown).not.toContain('sur cet appareil');
+    const button = [...host.querySelectorAll('button')].find((candidate) => candidate.getAttribute('aria-label') === 'Où vivent mes photos ?');
+    expect(button).toBeDefined();
+    expect(host.querySelector(`[id="${button?.getAttribute('aria-controls')}"]`)?.textContent).toBe('Tes photos vivent sur cet appareil.');
   });
 
   test('« Premiers pas » n’est dit qu’une fois : le surtitre de la carte ne répète pas son groupe', async () => {

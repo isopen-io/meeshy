@@ -20,7 +20,9 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount, gameText } from '@/lib/view/game-copy';
+import { awardedDate } from '@/lib/view/game-copy-v2';
 import { badgeDetail, defiDetail, succesDetail } from '@/lib/view/game-detail';
 import {
   achievementCopy,
@@ -230,7 +232,16 @@ export function AchievementsSection({
                     {copy.title}
                   </span>
                   <span className="text-check" style={{ color: INK_2 }}>
-                    {achievement.unlocked ? (dated ?? gameText('game.progression.unlocked')) : copy.condition}
+                    {achievement.unlocked && dated !== null && achievement.reachedAt !== null ? (
+                      <>
+                        <span aria-hidden="true">{awardedDate(achievement.reachedAt, currentInterfaceLanguage())}</span>
+                        <span className="sr-only">{dated}</span>
+                      </>
+                    ) : achievement.unlocked ? (
+                      gameText('game.progression.unlocked')
+                    ) : (
+                      copy.condition
+                    )}
                   </span>
                   <GameRarityLine entry={entry} />
                 </div>
@@ -297,8 +308,8 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
             <h3 className="text-caption font-semibold" style={{ color: INK }}>
               {achievementSectionTitle(vue.section)}
             </h3>
-            <span className="text-check" style={{ color: INK_2 }}>
-              {vue.unlockedCount} / {vue.attainableCount}
+            <span className="text-check tabular-nums" style={{ color: INK_2 }}>
+              {`${vue.unlockedCount}/${vue.attainableCount}`}
             </span>
           </div>
           <ul
@@ -331,9 +342,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                   {generatedAchievementLabel(entry.family, entry.tier)}
                 </span>
                 {entry.unlocked ? (
-                  <span className="text-check" style={{ color: INK_2 }}>
-                    {gameText('game.detail.earned')}
-                  </span>
+                  <span className="sr-only">{gameText('game.detail.earned')}</span>
                 ) : null}
               </GameTouch>
               </li>

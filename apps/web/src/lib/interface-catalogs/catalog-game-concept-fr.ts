@@ -261,6 +261,7 @@ const fr = {
   'game.notebook.legacy_quarantine': 'Une ancienne Chronique de cet appareil n’appartient à aucun compte connu : elle n’est montrée à personne.',
   'game.notebook.legacy_delete': 'Supprimer l’ancienne Chronique',
   'game.notebook.device_only': 'Tes photos vivent sur cet appareil.',
+  'game.notebook.device_q': 'Où vivent mes photos ?',
   'game.notebook.intro': 'La Chronique garde en photo les moments où tes aïeux se manifestent.',
   'game.succes.intro': 'Un haut fait récompense une première fois ou un exploit.',
   'game.defis.intro': 'Chaque défi est un palier à atteindre dans une famille de gestes.',

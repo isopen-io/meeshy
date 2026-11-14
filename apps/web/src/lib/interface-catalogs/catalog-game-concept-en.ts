@@ -263,6 +263,7 @@ const en = {
   'game.notebook.legacy_quarantine': 'An old Chronicle on this device belongs to no known account: it is shown to no one.',
   'game.notebook.legacy_delete': 'Delete the old Chronicle',
   'game.notebook.device_only': 'Your photos live on this device.',
+  'game.notebook.device_q': 'Where do my photos live?',
   'game.notebook.intro': 'The Chronicle keeps in photos the moments when your ancestors show themselves.',
   'game.succes.intro': 'A great deed rewards a first or a feat.',
   'game.defis.intro': 'Each challenge is a tier to reach within a family of moves.',

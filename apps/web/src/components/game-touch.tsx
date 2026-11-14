@@ -210,9 +210,12 @@ export function GameRequirementLine({ concept, current, required, record = false
         className="flex min-h-[44px] items-center rounded-chip px-2.5 py-1 text-check font-bold"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: GAME_INK }}
       >
-        <span className="sr-only">{reached.label} </span>
-        {reached.value} / <span className="sr-only">{needed.label} </span>
-        {needed.value}
+        <span>
+          <span className="sr-only">{reached.label} </span>
+          {`${reached.value} / `}
+          <span className="sr-only">{needed.label} </span>
+          {needed.value}
+        </span>
       </GameTouch>
     </div>
   );

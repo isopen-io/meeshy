@@ -263,6 +263,7 @@ const de = {
   'game.notebook.legacy_quarantine': 'Eine alte Chronik auf diesem Gerät gehört zu keinem bekannten Konto: Sie wird niemandem gezeigt.',
   'game.notebook.legacy_delete': 'Alte Chronik löschen',
   'game.notebook.device_only': 'Deine Fotos leben auf diesem Gerät.',
+  'game.notebook.device_q': 'Wo leben meine Fotos?',
   'game.notebook.intro': 'Die Chronik hält in Fotos die Momente fest, in denen sich deine Ahnen zeigen.',
   'game.succes.intro': 'Eine Heldentat belohnt ein erstes Mal oder eine Glanzleistung.',
   'game.defis.intro': 'Jede Herausforderung ist eine Stufe, die du in einer Familie von Aktionen erreichst.',

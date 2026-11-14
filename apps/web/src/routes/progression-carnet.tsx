@@ -8,7 +8,9 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/ap
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { GameBird } from '@/components/game';
+import { gameHint } from '@/components/game-hint';
 import { GlyphSvg } from '@/components/glyph';
+import { InfoNoted } from '@/components/info-hint';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
@@ -334,9 +336,11 @@ export function CarnetBody({
 
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
-      <p className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.notebook.intro')}
-      </p>
+      <InfoNoted note={gameHint('game.notebook.device_q', 'game.notebook.device_only')} className="px-1">
+        <p className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.notebook.intro')}
+        </p>
+      </InfoNoted>
 
       {legacy === 'quarantined' ? (
         <section data-carnet-legacy="" className="flex flex-col gap-2 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
@@ -393,10 +397,11 @@ export function CarnetBody({
         </section>
       )}
 
-      <p data-carnet-size="" className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
-        {kept.length === 0 ? null : `${gameText('game.notebook.size', { size: notebookSizeLabel(notebookBytes(kept), currentInterfaceLanguage()) })} `}
-        {gameText('game.notebook.device_only')}
-      </p>
+      {kept.length === 0 ? null : (
+        <p data-carnet-size="" className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.notebook.size', { size: notebookSizeLabel(notebookBytes(kept), currentInterfaceLanguage()) })}
+        </p>
+      )}
 
       {taking === null ? null : (
         <GamePhotoFlow

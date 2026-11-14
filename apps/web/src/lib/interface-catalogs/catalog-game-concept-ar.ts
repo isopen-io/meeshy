@@ -263,6 +263,7 @@ const ar = {
   'game.notebook.legacy_quarantine': 'سيرة قديمة على هذا الجهاز لا تنتمي إلى أي حساب معروف: لا تُعرض على أحد.',
   'game.notebook.legacy_delete': 'احذف السيرة القديمة',
   'game.notebook.device_only': 'صورك موجودة على هذا الجهاز.',
+  'game.notebook.device_q': 'أين توجد صوري؟',
   'game.notebook.intro': 'تحفظ السيرة بالصور اللحظات التي يتجلّى فيها أجدادك.',
   'game.succes.intro': 'تكافئ المأثرة مرةً أولى أو فعلًا استثنائيًا.',
   'game.defis.intro': 'كل تحدٍّ درجة تبلغها داخل عائلة من الإجراءات.',

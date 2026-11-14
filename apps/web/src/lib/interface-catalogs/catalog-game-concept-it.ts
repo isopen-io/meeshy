@@ -263,6 +263,7 @@ const it = {
   'game.notebook.legacy_quarantine': 'Una vecchia Cronaca di questo dispositivo non appartiene a nessun account noto: non viene mostrata a nessuno.',
   'game.notebook.legacy_delete': 'Elimina la vecchia Cronaca',
   'game.notebook.device_only': 'Le tue foto vivono su questo dispositivo.',
+  'game.notebook.device_q': 'Dove vivono le mie foto?',
   'game.notebook.intro': 'La Cronaca conserva in foto i momenti in cui i tuoi antenati si manifestano.',
   'game.succes.intro': 'Un’impresa premia una prima volta o un’azione eccezionale.',
   'game.defis.intro': 'Ogni sfida è un gradino da raggiungere in una famiglia di gesti.',
