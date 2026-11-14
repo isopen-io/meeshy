@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 
-import { bannerCloseKeyframes, followKeyframes, inlineSlideKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
+import { bannerCloseKeyframes, LEAVING, followKeyframes, inlineSlideKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * RIEN N'APPARAÎT NI NE DISPARAÎT D'UN COUP (#17406, #17536 ; `CallChromeStow` et
@@ -232,5 +234,24 @@ describe('ce qui se recentre quand la colonne du journal entre ou repart (W1.20)
   test('sous « Réduire les animations », un fondu court sans déplacement ; un écart sous le demi-pixel ne joue rien', () => {
     expect(inlineSlideKeyframes(184, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
     expect(inlineSlideKeyframes(0.2, false)).toBeNull();
+  });
+});
+
+/**
+ * LE MOUVEMENT EST INTERRUPTIBLE (loi 17.11 ; iOS `CallChromeVisibility`, Android `CallConnectedLayout`) — ce qui
+ * repart est marqué sortant et caché au lecteur d'écran, mais aucun contrôle n'est rendu insensible au toucher le
+ * temps de son mouvement : ni `inert`, ni `pointer-events: none` posés par la feuille de l'appel.
+ */
+describe('ce qui repart reste touchable jusqu’à la fin de son mouvement (loi 17.11)', () => {
+  test('marqué sortant et caché au lecteur d’écran, jamais inerte', () => {
+    expect(LEAVING).toEqual({ 'data-leaving': '', 'aria-hidden': true });
+  });
+
+  test('aucune règle `[data-leaving]` des feuilles de l’appel ne retire le doigt', () => {
+    for (const name of ['call-motion.css', 'call-captions.css', 'call-unfolded-original.css']) {
+      const css = readFileSync(new URL(`../../styles/${name}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+      const deaf = [...css.matchAll(/([^{}]*\[data-leaving\][^{}]*)\{([^}]*)\}/g)].filter(([, , body]) => /pointer-events:\s*none/.test(body ?? '')).map(([, selector]) => selector?.trim());
+      expect({ name, deaf }).toEqual({ name, deaf: [] });
+    }
   });
 });

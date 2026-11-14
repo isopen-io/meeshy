@@ -379,6 +379,8 @@ try {
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : puis ils ne laissent rien`);
       await page.click('[data-call-control-pill] [data-call-more]');
       check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : refermer les actions les rend`);
+      const reducedIn = await page.$eval('[data-call-control-pill] [data-call-pill-text^="captions"]', (element) => `${getComputedStyle(element).animationName} ${getComputedStyle(element).animationDuration}`).catch(() => null);
+      check(reducedIn === 'call-pill-text-in 0.15s', `${label} : et ils reviennent en fondu court de 150 ms, que la règle générale ne coupe plus (loi 17.10, ${reducedIn})`);
       await page.emulateMedia({ reducedMotion: 'no-preference' });
 
       await openActions(page);
