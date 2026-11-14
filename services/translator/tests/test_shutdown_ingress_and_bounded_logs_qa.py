@@ -133,7 +133,8 @@ class TestGatewayPathDuringShutdown:
 
         assert _sent(pub_socket) == [
             b'{"type": "translation_error", "taskId": "t-1", "messageId": "m-9", '
-            b'"error": "translation pool full", "conversationId": "conv-9"}'
+            b'"error": "translation pool full", "conversationId": "conv-9", '
+            b'"errorCode": "TRANSLATION_POOL_FULL"}'
         ]
 
 

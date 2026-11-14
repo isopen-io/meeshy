@@ -166,6 +166,17 @@ describe('l’échéance de chacun, telle que la passerelle la tient (#18205)', 
     expect(rosterOps.deadlinedRecipients(roster, T)).toEqual([{ userId: AMI, precision: 'city' }]);
   });
 
+  test('une seule personne publiée quelques millisecondes après son ajout n’en porte toujours pas : l’échéance se compare à la seconde, comme elle voyage (#18539)', () => {
+    const roster = rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T });
+    expect(rosterOps.deadlinedRecipients(roster, T + 5)).toEqual([{ userId: AMI, precision: 'city' }]);
+    expect(rosterOps.deadlinedRecipients(roster, T + 999)).toEqual([{ userId: AMI, precision: 'city' }]);
+  });
+
+  test('passé une seconde, l’échéance est réellement plus courte que le terme : elle part (#18539)', () => {
+    const roster = rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T });
+    expect(rosterOps.deadlinedRecipients(roster, T + 1001)).toEqual([{ userId: AMI, precision: 'city', expiresInSeconds: 3599 }]);
+  });
+
   test('une personne échue pendant l’attente d’un relevé ne part pas, même pour une seconde', () => {
     const roster = rosterOps.adding(rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T }), {
       userId: AUTRE,

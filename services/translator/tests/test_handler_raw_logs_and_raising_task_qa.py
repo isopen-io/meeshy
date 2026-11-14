@@ -95,6 +95,7 @@ async def test_real_queue_raising_entry_is_reported_once_and_released(monkeypatc
         "messageId": "msg-qa",
         "error": "translation pool full",
         "conversationId": "c-qa",
+        "errorCode": "TRANSLATION_POOL_FULL",
     }]
     assert "t-real" not in handler._inflight_tasks
     assert not [r for r in caplog.records if SECRET in r.getMessage()]

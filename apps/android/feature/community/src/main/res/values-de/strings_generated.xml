@@ -51,6 +51,7 @@
     <string name="community_members_section_creator">Ersteller</string>
     <string name="community_members_section_member">Mitglieder</string>
     <string name="community_members_section_moderator">Moderatoren</string>
+    <string name="community_online">%1$d online</string>
     <string name="community_privacy_private">Privat</string>
     <string name="community_privacy_public">Öffentlich</string>
     <string name="community_role_admin">Admin</string>
