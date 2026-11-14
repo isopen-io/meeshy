@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallChromeStow
+import me.meeshy.sdk.model.call.CallServicePills
 import me.meeshy.sdk.model.call.CallTileSize
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
@@ -245,23 +246,34 @@ private fun bannerClearanceSpec(reduceMotion: Boolean) =
     if (reduceMotion) snap<Dp>() else tween<Dp>(CallChromeStow.fadeMillis(reduceMotion = false))
 
 /**
- * Le dégagement de ma vignette sous la pile : MON partage, l'enregistrement (carte, capsule, avis) et la capsule de capture
- * comptent chacun leur hauteur mesurée (un partage reçu ne touche pas sa place, #17730) ; il glisse avec les bandeaux —
- * transformation seule, un saut net sous « Réduire les animations ».
+ * Le dégagement de ma vignette sous la pile : MON partage, l'enregistrement (carte, capsule, avis), la capsule de capture et les
+ * pastilles de service ([servicePills], E3 · E4) comptent chacun leur hauteur mesurée (un partage reçu ne touche pas sa place,
+ * #17730) ; il glisse avec les bandeaux — transformation seule, un saut net sous « Réduire les animations ».
  */
 @Composable
-internal fun rememberSelfTileBannerClearance(heights: CallTopBannerHeights, isCaptureAlertShown: Boolean, reduceMotion: Boolean): State<Dp> {
+internal fun rememberSelfTileBannerClearance(
+    heights: CallTopBannerHeights,
+    isCaptureAlertShown: Boolean,
+    servicePills: CallServicePills,
+    reduceMotion: Boolean,
+): State<Dp> {
     val flags = rememberLocalBannerFlags()
-    val counted = CallTopBannerStack.countedForSelfTile(flags.isSharing, flags.isRecordingShown, isCaptureAlertShown)
+    val counted = CallTopBannerStack.countedForSelfTile(
+        flags.isSharing,
+        flags.isRecordingShown,
+        isCaptureAlertShown,
+        service = servicePills.banners,
+    )
     val target = CallTopBannerStack.selfTileClearanceDp(counted, heights.snapshot()).dp
     return animateDpAsState(target, bannerClearanceSpec(reduceMotion), label = "callSelfTileBannerClearance")
 }
 
 /**
  * L4.11 — la place que la grille de groupe cède à la pile : tous les bandeaux présents comptent (un partage reçu aussi, le cadre
- * en direct aussi), chacun à sa hauteur mesurée ; plein écran, la pile est rangée et la grille reprend tout. La grille glisse
- * avec les bandeaux par sa seule translation ([CallGroupGridClearance.shift]) et ne se remet en page qu'une fois par mouvement
- * ([CallTopBannerStack.groupGridLayoutClearanceDp]) : ni ses vignettes ni leurs vidéos ne se remesurent à chaque image.
+ * en direct aussi, les pastilles de service aussi), chacun à sa hauteur mesurée ; plein écran, la pile est rangée et la grille
+ * reprend tout. La grille glisse avec les bandeaux par sa seule translation ([CallGroupGridClearance.shift]) et ne se remet en
+ * page qu'une fois par mouvement ([CallTopBannerStack.groupGridLayoutClearanceDp]) : ni ses vignettes ni leurs vidéos ne se
+ * remesurent à chaque image.
  */
 @Composable
 internal fun rememberGroupGridBannerClearance(
@@ -269,6 +281,7 @@ internal fun rememberGroupGridBannerClearance(
     isPeerScreenSharing: Boolean,
     isCaptureAlertShown: Boolean,
     isStageFullScreen: Boolean,
+    servicePills: CallServicePills,
     reduceMotion: Boolean,
 ): CallGroupGridClearance {
     val flags = rememberLocalBannerFlags()
@@ -277,6 +290,7 @@ internal fun rememberGroupGridBannerClearance(
         isRecordingShown = flags.isRecordingShown,
         isCaptureAlertShown = isCaptureAlertShown,
         isLiveFrameShown = heights.isReported(CallTopBanner.LiveFrame),
+        service = servicePills.banners,
     )
     val target = CallTopBannerStack.groupGridClearanceDp(present, heights.snapshot(), isStageFullScreen)
     val targetNow = rememberUpdatedState(target)
