@@ -60,7 +60,7 @@
     <string name="reveal_streak_subtitle">%1$d giorni di fila.</string>
     <string name="game_progression_offline_empty">Offline — nessun progresso in memoria.</string>
     <string name="progression_elans_empty">Pubblica una storia, un post o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica le tue scintille.</string>
-    <string name="game_rules_concept_duo_body">Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia.</string>
+    <string name="game_rules_concept_duo_body">Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia. Fa anche avanzare il tuo viaggio di qualche passo.</string>
     <string name="game2_guide_moment_league_relegated_means">Gli ultimi 5 riscendono; le scintille ripartono da zero, nient’altro cala.</string>
     <string name="game_concept_points_what">Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce.</string>
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto.</string>

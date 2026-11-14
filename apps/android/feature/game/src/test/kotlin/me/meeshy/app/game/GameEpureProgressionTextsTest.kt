@@ -41,9 +41,9 @@ class GameEpureProgressionTextsTest {
     }
 
     @Test
-    fun `la fiche Alliance ne redit plus que le voyage avance`() {
+    fun `la fiche Alliance dit toujours qu elle fait avancer le voyage, seul endroit ou ce fait se lit`() {
         assertThat(valueIn("values-fr", "game_rules_concept_duo_body"))
-            .isEqualTo("Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double.")
+            .isEqualTo("Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.")
     }
 
     @Test

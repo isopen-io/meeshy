@@ -60,7 +60,7 @@
     <string name="reveal_streak_subtitle">%1$d días seguidos.</string>
     <string name="game_progression_offline_empty">Sin conexión — ningún progreso en memoria.</string>
     <string name="progression_elans_empty">Publica una historia, una publicación o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.</string>
-    <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica.</string>
+    <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica. También hace avanzar tu viaje unos pasos.</string>
     <string name="game2_guide_moment_league_relegated_means">Los 5 últimos bajan; las chispas vuelven a cero, nada más baja.</string>
     <string name="game_concept_points_what">Cada intercambio de verdad hace brotar chispas: juntas forman tu luz.</string>
     <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto.</string>
