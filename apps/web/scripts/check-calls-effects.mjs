@@ -54,7 +54,10 @@
  *     vignettes et l'aperçu se peignent, deux tapes photographient le cadre
  *     (JPEG 1080 × 1920) ; une troisième personne arrive (caméra coupée) et
  *     plus AUCUNE ambiance n'offre de cadre de duo ;
- *  9. aucune erreur de page.
+ *  9. aucune erreur de page ;
+ * 10. à 1 280 px, colonne du journal ouverte, la surface du cadre en direct se
+ *     borne à la scène réduite et suit son glissé (transform seul), en LTR et en
+ *     RTL ; la colonne repartie, elle couvre de nouveau la fenêtre (#17929, W1).
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -625,6 +628,97 @@ try {
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
 
       await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
+      await openActions(page);
+      await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
+    } catch (error) {
+      failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
+    }
+    check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
+    await context.close();
+  }
+
+  // ------------------------------------------------ 10. le cadre en direct suit la scène quand la colonne du journal s'ouvre (W1, #17929)
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+    await context.addInitScript(ARM_PEER);
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const label = 'sombre 1280×800 (W1)';
+    const geometry = () =>
+      page.evaluate(() => {
+        const box = (selector) => {
+          const node = document.querySelector(selector);
+          if (node === null) return null;
+          const { left, right, top, bottom, width, height } = node.getBoundingClientRect();
+          return { left, right, top, bottom, width, height };
+        };
+        const canvas = document.querySelector('canvas[data-call-live-frame-surface]');
+        return { bounds: box('[data-call-live-frame-bounds]'), stage: box('[data-call-stage-surface]'), column: box('[data-call-journal-column]:not([data-leaving])'), canvas: canvas === null ? null : { cw: canvas.clientWidth, ch: canvas.clientHeight, w: canvas.width, h: canvas.height }, viewport: window.innerWidth };
+      });
+    const settled = () => page.waitForFunction(() => (document.querySelector('[data-call-live-frame-bounds]')?.getAnimations({ subtree: true }) ?? []).every((animation) => animation.playState !== 'running'), undefined, { timeout: 4000 }).then(() => true, () => false);
+    /** La toile redimensionnée est repeinte à sa place : sa matrice a le rapport de sa case (aucune attente à durée fixe). */
+    const repainted = () => until(page, () => { const canvas = document.querySelector('canvas[data-call-live-frame-surface]'); return canvas !== null && canvas.clientWidth > 0 && Math.abs(canvas.width / canvas.height - canvas.clientWidth / canvas.clientHeight) < 0.02; });
+    const near = (a, b) => a !== undefined && b !== undefined && Math.abs(a - b) <= 1.5;
+    const toggleJournal = async () => {
+      await openActions(page);
+      return page.evaluate(() => {
+        document.querySelector('[data-call-control="journal"]')?.click();
+        const moved = document.querySelector('[data-call-live-frame-bounds]')?.getAnimations() ?? [];
+        return moved.flatMap((animation) => (animation.effect?.getKeyframes() ?? []).flatMap((frame) => Object.keys(frame))).filter((key) => !['offset', 'computedOffset', 'easing', 'composite', 'transform'].includes(key));
+      });
+    };
+    const bounded = async (rtl) => {
+      const g = await geometry();
+      const side = rtl ? 'à gauche' : 'à droite';
+      check(g.column !== null && g.bounds !== null && g.stage !== null, `${label}${rtl ? ' RTL' : ''} : la colonne est ouverte et la surface du cadre est posée`);
+      if (g.column === null || g.bounds === null || g.stage === null) return;
+      check(rtl ? g.bounds.left >= g.column.right - 1.5 : g.bounds.right <= g.column.left + 1.5, `${label}${rtl ? ' RTL' : ''} : la surface du cadre s'arrête avant la colonne, ${side} (${Math.round(g.bounds.left)}–${Math.round(g.bounds.right)} px, colonne ${Math.round(g.column.left)}–${Math.round(g.column.right)})`);
+      check(near(g.bounds.left, g.stage.left) && near(g.bounds.right, g.stage.right), `${label}${rtl ? ' RTL' : ''} : la surface du cadre a la place de la scène réduite (${Math.round(g.bounds.width)} px pour ${Math.round(g.stage.width)})`);
+      check(g.canvas !== null && g.canvas.cw > 0 && Math.abs(g.canvas.w / g.canvas.h - g.canvas.cw / g.canvas.ch) < 0.02, `${label}${rtl ? ' RTL' : ''} : la toile est peinte à la taille de cette place, sans déformation (${JSON.stringify(g.canvas)})`);
+    };
+    try {
+      check(await startConnectedVideoCall(page), `${label} : l'appel se connecte et la caméra s'allume`);
+      await openActions(page);
+      await page.click('[data-call-control="capture"]');
+      check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
+      await page.click('[data-call-effects-category="frames"]');
+      check(await until(page, () => document.querySelectorAll('[data-call-frame-moods] [data-call-frame-mood]').length > 2), `${label} : les ambiances de cadre se montrent`);
+      await page.evaluate(() => document.querySelectorAll('[data-call-frame-moods] [data-call-frame-mood]')[1]?.click());
+      check(await until(page, () => document.querySelector('[data-call-mode="montage"] [data-carousel-item]')?.getAttribute('data-carousel-item')?.endsWith('.duo') === true), `${label} : une ambiance offre des cadres de duo, le premier passe à l'aperçu`);
+      check(await appears(page, '[data-call-live-frame-hold]'), `${label} : un cadre de duo offre « Cadre en direct »`);
+      await page.click('[data-call-live-frame-hold]');
+      await page.keyboard.press('Escape');
+      check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
+      check(await appears(page, 'canvas[data-call-live-frame-surface]'), `${label} : le cadre gardé se peint autour des deux vidéos`);
+      await settled();
+      const before = await geometry();
+      check(before.bounds !== null && near(before.bounds.width, before.viewport), `${label} : colonne fermée, la surface couvre la fenêtre (${Math.round(before.bounds?.width ?? 0)} px sur ${before.viewport})`);
+
+      const impure = await toggleJournal();
+      check(impure.length === 0, `${label} : la surface rejoint la scène par la transformation seule (propriétés animées hors transform : ${JSON.stringify(impure)})`);
+      check(await appears(page, '[data-call-journal-column]:not([data-leaving])'), `${label} : « Journal » ouvre la colonne`);
+      await settled();
+      await repainted();
+      await bounded(false);
+      await capture(page, 'cadre-colonne-dark-1280x800');
+
+      await toggleJournal();
+      check(await vanishes(page, '[data-call-journal-column]'), `${label} : « Journal » referme la colonne`);
+      await settled();
+      await repainted();
+      const after = await geometry();
+      check(after.bounds !== null && near(after.bounds.width, after.viewport) && after.canvas !== null && Math.abs(after.canvas.w / after.canvas.h - after.canvas.cw / after.canvas.ch) < 0.02, `${label} : la colonne repartie, la surface couvre de nouveau la fenêtre (${Math.round(after.bounds?.width ?? 0)} px)`);
+
+      await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+      await toggleJournal();
+      check(await appears(page, '[data-call-journal-column]:not([data-leaving])'), `${label} RTL : « Journal » ouvre la colonne`);
+      await settled();
+      await repainted();
+      await bounded(true);
+      await capture(page, 'cadre-colonne-rtl-dark-1280x800');
+      await page.evaluate(() => document.documentElement.setAttribute('dir', 'ltr'));
       await openActions(page);
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
     } catch (error) {
