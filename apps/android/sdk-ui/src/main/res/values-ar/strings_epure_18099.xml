@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
 <resources>
-    <string name="post_daily_limit_comment">بلغتَ حدّ التعليقات: يُستأنف عند الساعة %1$s. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
-    <string name="post_daily_limit_comment_untimed">بلغتَ حدّ التعليقات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
-    <string name="post_daily_limit_reaction">بلغتَ حدّ التفاعلات: يُستأنف عند الساعة %1$s. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
-    <string name="post_daily_limit_reaction_untimed">بلغتَ حدّ التفاعلات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="post_daily_limit_comment">بلغتَ حدّ التعليقات: يُستأنف عند الساعة %1$s</string>
+    <string name="post_daily_limit_comment_untimed">بلغتَ حدّ التعليقات</string>
+    <string name="post_daily_limit_reaction">بلغتَ حدّ التفاعلات: يُستأنف عند الساعة %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">بلغتَ حدّ التفاعلات</string>
+    <string name="post_daily_limit_note_question">هل يمسّ هذا الحدّ شراراتي؟</string>
+    <string name="post_daily_limit_note">يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
     <string name="bubble_failed_attachment_right">هذا النوع من المرفقات غير مسموح به هنا بعد.</string>
     <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل.</string>
     <string name="bring_silent_question">ماذا لو كان هاتفه في الوضع الصامت؟</string>

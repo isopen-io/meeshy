@@ -3,6 +3,9 @@ package me.meeshy.sdk.model.feedback
 /** Nature d'un toast de retour : miroir de `FeedbackToastType` (iOS). */
 enum class FeedbackToastKind { SUCCESS, ERROR, INFO }
 
+/** La note d'un toast : la QUESTION qui nomme son (i) et le texte qui y répond, lu par le lecteur d'écran même repliée (#18099). */
+data class FeedbackToastInfo(val question: String, val text: String)
+
 /** Un toast de retour affiché : miroir de `FeedbackToast` (iOS), identifié pour que sa fermeture ne vise jamais son successeur. */
 data class FeedbackToast(
     val id: Long,
@@ -10,6 +13,7 @@ data class FeedbackToast(
     val kind: FeedbackToastKind,
     val isTappable: Boolean,
     val shownAtMillis: Long,
+    val info: FeedbackToastInfo? = null,
 ) {
     /** Même message, même nature, dans la fenêtre de [FeedbackToastTiming.DEDUP_WINDOW_MILLIS] : à ne pas ré-afficher. */
     fun isDuplicateOf(message: String, kind: FeedbackToastKind, nowMillis: Long): Boolean =

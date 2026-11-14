@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
 import me.meeshy.sdk.model.profile.ProfilePostsEmptyKind
+import me.meeshy.ui.component.feedback.dailyGestureLimitInfo
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.icons.MeeshyIcons
@@ -76,6 +77,7 @@ fun rememberProfilePostsItems(
                 is ProfilePostsEffect.Notice -> viewModel.toasts.show(
                     context.getString(effect.notice.messageRes()),
                     if (effect.notice.isError) FeedbackToastKind.ERROR else FeedbackToastKind.SUCCESS,
+                    info = effect.notice.takeIf { it == FeedNotice.DAILY_REACTION_LIMIT }?.let { dailyGestureLimitInfo(context) },
                 )
             }
         }

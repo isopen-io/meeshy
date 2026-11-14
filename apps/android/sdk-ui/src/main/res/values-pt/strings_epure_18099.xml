@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
 <resources>
-    <string name="post_daily_limit_comment">Limite de comentários atingido: retoma às %1$s. Conta seus gestos, nunca suas faíscas.</string>
-    <string name="post_daily_limit_comment_untimed">Limite de comentários atingido. Conta seus gestos, nunca suas faíscas.</string>
-    <string name="post_daily_limit_reaction">Limite de reações atingido: retoma às %1$s. Conta seus gestos, nunca suas faíscas.</string>
-    <string name="post_daily_limit_reaction_untimed">Limite de reações atingido. Conta seus gestos, nunca suas faíscas.</string>
+    <string name="post_daily_limit_comment">Limite de comentários atingido: retoma às %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Limite de comentários atingido</string>
+    <string name="post_daily_limit_reaction">Limite de reações atingido: retoma às %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Limite de reações atingido</string>
+    <string name="post_daily_limit_note_question">Este limite afeta as minhas faíscas?</string>
+    <string name="post_daily_limit_note">Conta seus gestos, nunca suas faíscas.</string>
     <string name="bubble_failed_attachment_right">Este tipo de anexo ainda não é permitido aqui.</string>
     <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado.</string>
     <string name="bring_silent_question">E se o telefone dela estiver no silencioso?</string>

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
 <resources>
-    <string name="post_daily_limit_comment">Limite di commenti raggiunto: riprende alle %1$s. Conta i tuoi gesti, mai le tue scintille.</string>
-    <string name="post_daily_limit_comment_untimed">Limite di commenti raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
-    <string name="post_daily_limit_reaction">Limite di reazioni raggiunto: riprende alle %1$s. Conta i tuoi gesti, mai le tue scintille.</string>
-    <string name="post_daily_limit_reaction_untimed">Limite di reazioni raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="post_daily_limit_comment">Limite di commenti raggiunto: riprende alle %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Limite di commenti raggiunto</string>
+    <string name="post_daily_limit_reaction">Limite di reazioni raggiunto: riprende alle %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Limite di reazioni raggiunto</string>
+    <string name="post_daily_limit_note_question">Questo limite tocca le mie scintille?</string>
+    <string name="post_daily_limit_note">Conta i tuoi gesti, mai le tue scintille.</string>
     <string name="bubble_failed_attachment_right">Questo tipo di allegato non è ancora consentito qui.</string>
     <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche bloccato.</string>
     <string name="bring_silent_question">E se il suo telefono è in silenzioso?</string>

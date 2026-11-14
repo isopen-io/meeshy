@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
 <resources>
-    <string name="post_daily_limit_comment">Limite de commentaires atteinte : reprise à %1$s. Elle compte vos gestes, jamais vos étincelles.</string>
-    <string name="post_daily_limit_comment_untimed">Limite de commentaires atteinte. Elle compte vos gestes, jamais vos étincelles.</string>
-    <string name="post_daily_limit_reaction">Limite de réactions atteinte : reprise à %1$s. Elle compte vos gestes, jamais vos étincelles.</string>
-    <string name="post_daily_limit_reaction_untimed">Limite de réactions atteinte. Elle compte vos gestes, jamais vos étincelles.</string>
+    <string name="post_daily_limit_comment">Limite de commentaires atteinte : reprise à %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Limite de commentaires atteinte</string>
+    <string name="post_daily_limit_reaction">Limite de réactions atteinte : reprise à %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Limite de réactions atteinte</string>
+    <string name="post_daily_limit_note_question">Cette limite touche-t-elle mes étincelles ?</string>
+    <string name="post_daily_limit_note">Elle compte vos gestes, jamais vos étincelles.</string>
     <string name="bubble_failed_attachment_right">Ce type de pièce jointe n’est pas encore autorisé ici.</string>
     <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même verrouillé.</string>
     <string name="bring_silent_question">Et si son téléphone est en silencieux ?</string>
