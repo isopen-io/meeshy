@@ -1,5 +1,5 @@
 {
-  "lockfileVersion": 1,
+  "lockfileVersion": 3,
   "configVersion": 1,
   "workspaces": {
     "": {
@@ -207,7 +207,9 @@
     "browserslist": "4.28.8",
     "dompurify": "3.4.11",
     "fast-uri": "3.1.2",
-    "form-data@2": "2.5.6",
+    "form-data@2": {
+      ".": "2.5.6",
+    },
     "light-my-request": "6.6.0",
     "lodash": "4.17.21",
     "lodash-es": "4.17.23",
@@ -218,7 +220,9 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "serialize-javascript": "7.0.3",
-    "undici@6": "6.24.0",
+    "undici@6": {
+      ".": "6.24.0",
+    },
     "uuid": "11.1.1",
     "vitest": "^5.1.0",
     "zod": "4.4.3",
@@ -3153,8 +3157,6 @@
     "jest-runtime/glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
 
     "jest-runtime/strip-bom": ["strip-bom@4.0.0", "", {}, "sha512-3xurFv5tEgii33Zi8Jtp55wEIILR9eh34FAW00PZf+JnSsTmV/ioewSgQl97JHvgjoRGwPShsWm+IdrxB35d0w=="],
-
-    "jsdom/undici": ["undici@8.12.3", "", {}, "sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw=="],
 
     "jsdom/whatwg-url": ["whatwg-url@17.3.0", "", { "dependencies": { "@exodus/bytes": "^1.16.0", "tr46": "^7.0.0", "webidl-conversions": "^8.0.1" } }, "sha512-KwOAJrpf+GTgBvcBQJcP38sMF0DsQKdwtG+TxM2pW44P6E5k0hDbWrDmyuJDIF0Uef0aQq0ZoJs+5oI+k8ddhg=="],
 
