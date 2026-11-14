@@ -194,7 +194,9 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
     const note = el.ownerDocument.getElementById(info?.getAttribute('aria-controls') ?? '');
     expect(note?.textContent).toContain('Vous pouvez le créer seul');
     expect(note?.className).toContain('sr-only');
+    expect(groupToggle(el)?.getAttribute('aria-describedby')).toBe(note?.id ?? 'absente');
     await click(firstPerson(el));
+    expect(groupToggle(el)?.hasAttribute('aria-describedby')).toBe(false);
     expect(el.querySelector('button[aria-label="Peut-on créer un groupe seul ?"]')).toBeNull();
   });
 

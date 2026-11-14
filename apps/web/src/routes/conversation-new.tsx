@@ -365,14 +365,15 @@ function GroupToggle({ on, solo, onToggle }: { readonly on: boolean; readonly so
   const noted = on && solo;
   return (
     <div className="mb-2 shrink-0">
-      <div className="flex items-center gap-1">
+      <div className="mx-4 flex items-center gap-1">
         <button
           type="button"
           role="switch"
           aria-checked={on}
           data-new-group-toggle
+          {...(noted ? { 'aria-describedby': info.id } : {})}
           onClick={onToggle}
-          className="ms-4 flex min-w-0 flex-1 items-center gap-3 rounded-[14px] px-3.5 py-2 text-start focus-visible:outline-2"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] px-3.5 py-2 text-start focus-visible:outline-2"
           style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-card)' }}
         >
           <span
@@ -397,7 +398,7 @@ function GroupToggle({ on, solo, onToggle }: { readonly on: boolean; readonly so
             {on ? <Glyph name="check" size={12} /> : null}
           </span>
         </button>
-        {noted ? <InfoHintButton hint={hint} state={info} /> : <span className="me-4" />}
+        {noted ? <InfoHintButton hint={hint} state={info} /> : null}
       </div>
       {noted ? <InfoHintText hint={hint} state={info} className="px-4" /> : null}
     </div>
