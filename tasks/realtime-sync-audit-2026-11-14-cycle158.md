@@ -3,9 +3,15 @@
 *2026-11-14. Branche `claude/exciting-planck-yajbnj`, partie de `dev` à
 `aaa84631` (la tête juste après la fusion du cycle 157).*
 
-**Livré** : la fusion de #18160 (cycles 156 + 157) dans `dev`, puis #18240 (le
-message de la garde) et #18121 (son extension au miroir Swift).
-**Mesuré et inventorié, non corrigé** : #18120, qui demande du Swift compilé.
+**Livré, fusionné dans `dev`** : #18160 (les cycles 156 + 157, qui attendaient),
+#18240 (le message de la garde), #18121 (son extension au miroir Swift), #18249
+(un contrat qui mentait sur son propre émetteur), #18116 (les objets imbriqués),
+#18123 (les cinq idiomes de routage Android), #18269 (le miroir Swift dans les
+deux sens), #18159 (sept pièges armés retirés) et #18252 + #18340 (quatre des
+six rouges Android de `dev`).
+**Mesuré et inventorié, non corrigé** : #18120 (demande du Swift compilé) et les
+deux derniers rouges de `dev`, qui demandent une décision de copie de l'épure
+#18099 — #18340 les documente.
 
 ---
 
@@ -323,6 +329,37 @@ comptait : la tolérance aux clés en trop.
 ne compile — et la branche défendable est l'autre : une suppression a une heure
 SERVEUR, que le contrat ne sert à personne (iOS et le web ont le même trou).
 C'est un lot d'émetteur + contrat + trois miroirs, pas un retrait.
+
+---
+
+## Lot I — vérifier la CI APRÈS chaque fusion, et ce que ça a rendu
+
+Ce cycle a fusionné cinq PR dans `dev`. Après chacune, le run `android.yml`
+correspondant a été ouvert et lu — c'est ce qui a rendu la moitié du travail
+ci-dessus, et aucune de ces causes n'aurait pu être vue autrement :
+`android.yml` ne tourne **ni sur PR ni en `workflow_dispatch`** sous
+`CI_DEV_SEUL` (#18048), donc un lot Android n'est prouvable qu'une fois FUSIONNÉ.
+
+| rouge | cause | état |
+|---|---|---|
+| `:feature:chat:compileDebugKotlin` | `stringResource` dans la lambda NON-inline de `joinToString` | **corrigé, vert en CI** |
+| cliquet de verbosité | « %lld en ligne » compté comme explication parce que sa clé contenait le nom de son ÉCRAN | **corrigé, vert en CI** |
+| `KitGlassRatchetTest` | 65 appels de verre dessiné pour un plafond de 64 | **corrigé, vert en CI** |
+| `:app:compileDebugUnitTestKotlin` | lambda finale liée au paramètre `info` ajouté APRÈS `onTap` | **corrigé**, fusionné |
+| `EpureComposantsPartagesStringsTest` | un texte retiré côté Android survit dans la SOURCE iOS | ouvert — #18340 |
+| `StickerSheetPagesRobolectricTest` | l'épure a raccourci Android seul, le témoin garde la parité iOS | ouvert — #18340 |
+
+> **Une lambda finale se lie au DERNIER paramètre.** Ajouter un paramètre après
+> un `(() -> Unit)?` déplace donc silencieusement tous les appels à lambda
+> finale. Ici le compilateur l'a attrapé parce que les types diffèrent ; si le
+> paramètre ajouté avait été une lambda lui aussi, **rien n'aurait rougi** et
+> l'action du toast serait devenue sa note.
+
+Les deux derniers ne sont **pas** corrigés, et la raison est une frontière, pas
+une difficulté : ils demandent de choisir une copie produit — dans sept langues
+pour le premier — qui appartient à l'épure. Aligner le témoin sur le texte livré
+serait pire que de le laisser rouge : il garde explicitement la parité iOS, et
+le faire taire supprimerait le seul signal de la divergence.
 
 ---
 
