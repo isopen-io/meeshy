@@ -238,7 +238,7 @@ describe('ConversationDetailsSheet — ce que la feuille montre (#7829)', () => 
     act(() => document.querySelector<HTMLButtonElement>('[data-conversation-details-share]')?.click());
     await settle();
     expect(copies).toEqual(['https://meeshy.me/chat/mshy_lyon']);
-    expect(document.querySelector('[role="status"]')?.textContent).toBe('Lien copié — il ne reste qu’à le coller.');
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Lien copié.');
   });
 
   test('une conversation DIRECTE ne propose aucun lien de partage (la passerelle le refuserait)', async () => {

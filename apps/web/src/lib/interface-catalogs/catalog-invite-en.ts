@@ -28,6 +28,7 @@ const en = {
   'invite.stats.languages.one': 'language spoken',
   'invite.stats.languages.other': 'languages spoken',
   'invite.stats.spoken': 'Spoken here',
+  'invite.more': 'More',
   'invite.stats.share': '{language} {percent}',
   'invite.rights.title': 'Without an account, you can',
   'invite.rights.messages': 'Write messages',

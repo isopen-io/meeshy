@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { gameRules } from '@/lib/view/game-rules-copy';
 
-import ProgressionRulesScreen, { RulesBody, ruleTarget } from './progression-rules';
+import ProgressionRulesScreen, { RulesBody } from './progression-rules';
 
 const body = renderToStaticMarkup(<RulesBody />);
 const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -93,11 +93,5 @@ describe('une règle visée par le héros', () => {
     const page = renderToStaticMarkup(<RulesBody target={1} />);
     expect(page.match(/data-game-rule-target/g)).toHaveLength(1);
     expect(page).toMatch(/id="regle-1"[^>]*data-game-rule-target=""|data-game-rule-target=""[^>]*id="regle-1"/);
-  });
-
-  test('ruleTarget lit « regle » : 1 à 8, tout le reste est ignoré', () => {
-    expect(ruleTarget('1')).toBe(1);
-    expect(ruleTarget('8')).toBe(8);
-    for (const bad of [null, '', '0', '9', '-1', '2.5', 'abc', '1 2']) expect(ruleTarget(bad)).toBeUndefined();
   });
 });

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
-import { CREATION_ENCRYPTION_KEY, CREATION_UNAVAILABILITY_KEY } from '@/lib/conversation-new/encryption';
+import { CREATION_ENCRYPTION_KEY, CREATION_INFO_KEY, CREATION_UNAVAILABILITY_KEY } from '@/lib/conversation-new/encryption';
 import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-encryption-catalog';
 import { encryptionRegime } from '@/lib/view/conversation-encryption-explanation';
 import {
@@ -13,6 +13,9 @@ import {
   SWITCH_KEY,
   SWITCH_REFUSAL_KEY,
 } from '@/lib/view/conversation-encryption-switch';
+
+import { SETTINGS_GLYPHS } from './glyphs-settings';
+import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
 
 /**
  * **« CHANGER DE MODE » DANS LA FICHE CHIFFREMENT** (#14648) — miroir de
@@ -115,7 +118,12 @@ export function ConversationEncryptionSwitch({
           const keys = CREATION_ENCRYPTION_KEY[target.mode];
           const detail = target.unavailability === null ? keys.detail : CREATION_UNAVAILABILITY_KEY[target.unavailability];
           return (
-            <li key={target.mode}>
+            <SwitchTargetRow
+              key={target.mode}
+              mode={target.mode}
+              moreText={keys.more === null || target.unavailability !== null ? null : t(keys.more)}
+              infoLabel={t(CREATION_INFO_KEY)}
+            >
               <button
                 type="button"
                 disabled={busy || !target.available}
@@ -137,7 +145,7 @@ export function ConversationEncryptionSwitch({
                   </span>
                 )}
               </button>
-            </li>
+            </SwitchTargetRow>
           );
         })}
       </ul>
@@ -153,5 +161,33 @@ export function ConversationEncryptionSwitch({
         {feedbackText}
       </p>
     </div>
+  );
+}
+
+/**
+ * Un mode proposé : sa ligne, et — quand il a un détail — un (i) à côté du bouton, jamais dedans (un bouton n'en
+ * contient pas un autre). La note reste lue repliée (épure #18361, règle 1).
+ */
+function SwitchTargetRow({
+  mode,
+  moreText,
+  infoLabel,
+  children,
+}: {
+  readonly mode: CreationEncryptionMode;
+  readonly moreText: string | null;
+  readonly infoLabel: string;
+  readonly children: ReactNode;
+}) {
+  const state = useInfoHint();
+  const hint = { text: moreText ?? '', label: infoLabel, glyph: SETTINGS_GLYPHS.info };
+  return (
+    <li data-conversation-encryption-switch-row={mode}>
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">{children}</div>
+        {moreText === null ? null : <InfoHintButton hint={hint} state={state} />}
+      </div>
+      {moreText === null ? null : <InfoHintText hint={hint} state={state} className="px-1" />}
+    </li>
   );
 }

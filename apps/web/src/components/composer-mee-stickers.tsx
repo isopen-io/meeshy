@@ -16,6 +16,8 @@ import { isFavorite } from '@/lib/stickers/favorites';
 import type { StickerFavorite } from '@/lib/stickers/favorites';
 
 import { FavoriteStar } from './sticker-favorite-star';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
+import { InfoNoted } from './info-hint';
 
 /**
  * LES STICKERS DE MEE ET MEO (#9034, #9058, #9068, #9069, #9141) — trois
@@ -116,15 +118,18 @@ export function MeeStickerPanel({
     list.length === 0 ? null : (
       <section key={section} data-mee-section={section} className="flex flex-col gap-2">
         {heading !== null ? (
-          <header className="flex flex-col gap-0.5">
-            <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              {translate(language, heading.title)}
-            </h3>
-            {heading.hint !== undefined ? (
-              <p data-mee-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {translate(language, heading.hint)}
-              </p>
-            ) : null}
+          <header>
+            <InfoNoted
+              note={
+                heading.hint === undefined
+                  ? undefined
+                  : { text: translate(language, heading.hint), label: translate(language, 'composer.sticker.intent.question'), glyph: SETTINGS_GLYPHS.info }
+              }
+            >
+              <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                {translate(language, heading.title)}
+              </h3>
+            </InfoNoted>
           </header>
         ) : null}
         <ul className="grid grid-cols-4 gap-2">

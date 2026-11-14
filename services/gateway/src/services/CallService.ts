@@ -38,6 +38,7 @@ import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
+import { resolveCallSummaryParticipantIds } from './calls/callSummaryParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { assertCallableConversationType, assertViewerMayStartCall } from './calls/callStartAdmission';
 import { commitCallEnd } from './calls/endCallRetry';
@@ -1252,6 +1253,7 @@ export class CallService {
           participantId,
           role: ParticipantRole.initiator,
           leftAt: null,
+          answeredAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
         }
@@ -1460,6 +1462,7 @@ export class CallService {
           participantId,
           role: ParticipantRole.participant,
           leftAt: null,
+          answeredAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true) : false
         }
@@ -2619,7 +2622,8 @@ export class CallService {
    * `updated` → `message:edited` broadcast.
    */
   async createCallSummaryMessage(
-    callId: string
+    callId: string,
+    options: { readonly participantsBestEffort?: boolean } = {}
   ): Promise<{ kind: 'created' | 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> } | null> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
@@ -2634,7 +2638,9 @@ export class CallService {
         metadata: true,
         bytesSent: true,
         bytesReceived: true,
-        networkQuality: true
+        networkQuality: true,
+        invitedUserIds: true,
+        conversation: { select: { type: true } }
       }
     });
     if (!call) {
@@ -2681,7 +2687,14 @@ export class CallService {
     // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
     // line) in a single pass. Persisted on `Message.metadata`; survives both the
     // socket broadcast and REST history.
-    const built = buildCallSummaryWithMetadata({
+    // #18242 — participants lus APRÈS `findExisting()` ; une panne remonte (reprise de postCallSummary) sauf en best-effort.
+    const readParticipantIds = (): Promise<ReadonlyArray<string>> =>
+      resolveCallSummaryParticipantIds(this.prisma, call).catch((error: unknown) => {
+        if (!options.participantsBestEffort) throw error;
+        logger.warn('Call summary posted without participants', { callId, error: error instanceof Error ? error.message : String(error) });
+        return [];
+      });
+    const facts = {
       status: call.status,
       endReason: call.endReason,
       callType,
@@ -2693,8 +2706,9 @@ export class CallService {
       networkQuality: call.networkQuality,
       answeredAt: call.answeredAt,
       endedById
-    });
-    if (!built) {
+    };
+    const terminal = buildCallSummaryWithMetadata(facts);
+    if (!terminal) {
       // Non-terminal → nothing to do. GC housekeeping stays silent UNLESS a
       // live message was already posted: that bubble would read "en cours"
       // forever, so it converts to the failed terminal state.
@@ -2708,18 +2722,18 @@ export class CallService {
       const conversion = buildGarbageCollectedConversion({
         callId: call.id,
         initiatorId: call.initiatorId,
-        callType
+        callType,
+        participantUserIds: await readParticipantIds()
       });
       return applyUpdate(existing.id, conversion.summary.content, conversion.metadata);
     }
-    const { summary, metadata: callMetadata } = built;
-
     const existing = await findExisting();
+    if (existing && !isLiveMessage(existing)) {
+      // A concurrent terminal path already posted the final summary.
+      return null;
+    }
+    const { summary, metadata: callMetadata } = buildCallSummaryWithMetadata({ ...facts, participantUserIds: await readParticipantIds() }) ?? terminal;
     if (existing) {
-      if (!isLiveMessage(existing)) {
-        // A concurrent terminal path already posted the final summary.
-        return null;
-      }
       const updated = await applyUpdate(existing.id, summary.content, callMetadata);
       this.creditCallEngagement(call.id);
       return updated;

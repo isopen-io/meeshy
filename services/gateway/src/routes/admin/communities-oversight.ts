@@ -60,6 +60,7 @@ import {
 import { ADMIN_PERSON_SELECT } from './oversight-people';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
 import {
   booleen,
   chaine,
@@ -398,6 +399,8 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
             { communityId, createdBy: current.creator.id, outsiders, now: new Date() },
           );
         }
+        // #18435 — une désactivée n'annonce rien (le diffuseur ne lit que les actives).
+        scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId });
 
         await withAudit(request, {
           action: 'ADMIN_COMMUNITY_UPDATED',

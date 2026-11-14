@@ -764,6 +764,10 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForSelector('[data-message]');
     await page.waitForTimeout(300);
 
+    /* Les outils sont rangés derrière le « + » (épure #18361, règle 6) : on l'ouvre comme la personne le ferait. */
+    await page.locator('button[aria-label="Ouvrir le menu des pièces jointes"]').click();
+    await page.waitForSelector('[data-composer-effects]');
+
     const TOGGLES = [
       ['[data-composer-ephemeral]', 'éphémère'],
       ['[data-composer-blur]', 'flou'],
@@ -1004,7 +1008,7 @@ for (const scheme of ['light', 'dark']) {
           field: box(field),
           toolbarRight: rightmost,
           toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
-          doors: toolbar?.querySelector('[data-composer-sticker]') !== null && toolbar?.querySelector('[data-composer-camera]') !== null,
+          doors: toolbar?.querySelector('[data-composer-sticker]') === null && toolbar?.querySelector('[data-composer-camera]') === null,
           pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
           pill: pillPainted === null ? null : `${Math.round(pillPainted.left)}→${Math.round(pillPainted.right)}`,
           pillWhole,
@@ -1031,7 +1035,7 @@ for (const scheme of ['light', 'dark']) {
           `${tag} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(m.toolbarRight)}, cadre ←${Math.round(m.frame.left)})`,
         );
       }
-      expect(m.doors, `${tag} · la barre porte le sticker et la caméra (#9082)`);
+      expect(m.doors, `${tag} · la barre ne double plus le sticker et la caméra, rangés dans le menu du + (#18361)`);
       expect(!m.barOverflows, `${tag} · la barre d'outils ne déborde pas de sa boîte (#7992 — scrollWidth/clientWidth ${m.barOverflow})`);
       expect(m.escaping.length === 0, `${tag} · aucun contrôle de l'angle droit ne sort de la barre (${m.escaping.join(', ') || 'tous dedans'})`);
       expect(
