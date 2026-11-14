@@ -62,9 +62,10 @@ export const MINIMUM_ROUTES = 100;
 /**
  * Les événements du contrat réellement confrontés, mesurés le 2026-11-14 — à comparer aux 176 que
  * `ServerToClientEvents` déclare. Le chiffre vit ICI, et pas seulement dans une prose, pour qu'une
- * extension de l'extracteur (#18123) ait un endroit où se voir monter.
+ * extension de l'extracteur ait un endroit où se voir monter : il est passé de 110 à 125 quand les
+ * deux derniers idiomes de routage ont rejoint la lecture (#18123).
  */
-export const SWEPT_EVENTS_AT_LAST_MEASURE = 110;
+export const SWEPT_EVENTS_AT_LAST_MEASURE = 125;
 
 export type KotlinField = {
   readonly name: string;
@@ -89,7 +90,7 @@ export type Route = {
   readonly className: string | undefined;
 };
 
-const kotlinFiles = (dir: string, out: string[] = []): string[] => {
+export const kotlinFiles = (dir: string, out: string[] = []): string[] => {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) kotlinFiles(path, out);
@@ -130,6 +131,9 @@ const splitTopLevel = (source: string): string[] => {
   if (current.trim()) parts.push(current);
   return parts;
 };
+
+/** Les commentaires retirés — la lecture partagée avec le module des parseurs manuels. */
+export const withoutComments = (source: string): string => stripComments(source);
 
 /** Fin de la liste de paramètres d'une `data class`, par équilibrage des délimiteurs. */
 const closingParenIndex = (source: string, openAt: number): number => {
@@ -214,6 +218,12 @@ export const readKotlin = () => {
       /SocketInboundRoute\.decoding\(\s*SocketEventNames\.(\w+)\s*,\s*json\s*,\s*(\w+)(\.serializer\(\))?/g,
     ))
       add(match[1], match[3] ? match[2] : subjects.get(match[2]));
+    /* Le QUATRIÈME idiome (#18123) : `on(EVENT) { args -> decode<T>(args) }`, le type réifié.
+       Il porte les quatre `viewing:*`, que les trois premiers ne voyaient pas. La fenêtre est
+       bornée pour ne pas apparier un `decode<…>` d'une route VOISINE — un appariement par
+       proximité confronterait un type au contrat d'un autre événement, et conclurait faux. */
+    for (const match of source.matchAll(/\bon\(\s*SocketEventNames\.(\w+)\s*\)[\s\S]{0,260}?decode<(\w+)>/g))
+      add(match[1], match[2]);
   }
 
   const resolveClass = (name: string | undefined): KotlinClass | undefined => {

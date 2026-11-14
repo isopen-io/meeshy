@@ -58,7 +58,7 @@ import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.MeeshyFeedbackToast
 import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.component.MeeshyInfoNoteButton
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.kit.MeeshyGlass
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyRadius
@@ -170,7 +170,7 @@ private fun ToastPill(toast: FeedbackToast, center: FeedbackToastCenter, noteOpe
             }
         }
         if (note != null && noteOpen == note.id) {
-            MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg)) {
+            MeeshyGlass(shape = RoundedCornerShape(MeeshyRadius.lg)) {
                 Text(
                     text = note.text,
                     style = MaterialTheme.typography.bodySmall,
