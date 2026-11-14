@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// **Les gardes de source de la refonte de Progression** (#9564) — ce qu'aucun rendu ne peut dire à la place du code :
