@@ -39,10 +39,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 /** Durée d'entrée du bandeau (iOS `.animation(.easeOut(duration: 0.25))`). */
 internal const val PENDING_LINK_ENTER_MILLIS = 250
 
-/**
- * « Connectez-vous : le contenu qu'on vous a partagé s'ouvrira juste après. » (iOS `PendingLinkNotice`), posé au-dessus
- * de l'écran de connexion quand un lien qui demande un compte attend. Le fond est la teinte de marque à faible opacité.
- */
 /** Le bandeau se déplie en fondu ; sous « Réduire les animations », il prend sa place en fondu court, sans pousser l'écran. */
 internal fun pendingLinkBannerEnter(reduce: Boolean): EnterTransition = meeshyEnter(
     reduce,
@@ -50,12 +46,17 @@ internal fun pendingLinkBannerEnter(reduce: Boolean): EnterTransition = meeshyEn
         expandVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = LinearOutSlowInEasing)),
 )
 
+/** La sortie symétrique : repli en fondu, ou fondu court seul sous « Réduire les animations ». */
 internal fun pendingLinkBannerExit(reduce: Boolean): ExitTransition = meeshyExit(
     reduce,
     fadeOut(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)) +
         shrinkVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)),
 )
 
+/**
+ * « Connectez-vous : le contenu qu'on vous a partagé s'ouvrira juste après. » (iOS `PendingLinkNotice`), posé au-dessus
+ * de l'écran de connexion quand un lien qui demande un compte attend. Le fond est la teinte de marque à faible opacité.
+ */
 @Composable
 internal fun PendingLinkBanner(isVisible: Boolean, modifier: Modifier = Modifier) {
     AnimatedVisibility(
