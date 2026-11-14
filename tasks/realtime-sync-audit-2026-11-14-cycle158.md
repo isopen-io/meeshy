@@ -193,6 +193,90 @@ imbriqué vidé (Swift, les trois `comment.author`).
 
 ---
 
+## Lot F — #18123 : les CINQ idiomes de routage, et la famille `call:*` enfin confrontée
+
+La garde Kotlin n'en lisait que trois, et le trou avait une FORME plutôt qu'une
+taille : toute la famille `call:*` sociale route par un **parseur écrit à la
+main**, sans aucune classe `@Serializable` à confronter, et les quatre
+`viewing:*` par un `decode<T>` **réifié** derrière `socketManager.on(…)`.
+
+> La QUESTION ne change pas d'un idiome à l'autre — « le miroir exige-t-il une
+> clé que le contrat ne garantit pas ? » — **seule la PREUVE change.** Un parseur
+> manuel dit son exigence par `o.str("x") ?: return@decode null` : sans la clé, il
+> rend `null`, la route écarte la trame, et rien ne rougit. Même panne que
+> `MissingFieldException`, autre mécanisme, même silence.
+
+Et le rapport le DIT, au lieu de recopier le symptôme de kotlinx : un lecteur qui
+chercherait un `MissingFieldException` dans un fichier qui n'en produit aucun
+conclurait que la garde se trompe. Le `MirrorIdentity` du cycle (lot B) a servi
+une troisième fois sans une ligne de duplication.
+
+**Couverture : 110 → 125 des 176 événements.** Zéro divergence sur les seize
+événements neufs : les douze parseurs d'appel et les quatre `viewing:*` sont
+conformes — et le dire est un résultat, pas un vide.
+
+### Deux pièges, mesurés plutôt que prévenus
+
+- **Un index global des corps de fonction par NOM rendait le dernier homonyme.**
+  `recordingStarted`, `recordingStopped` et `previewSignal` existent ailleurs dans
+  le dépôt : trois routes revenaient « sans aucune exigence », donc silencieusement
+  non gardées, et la garde restait verte. Le corps se cherche désormais dans le
+  fichier qui DÉCLARE l'objet nommé par la route. **C'est la faute des deux
+  `struct Update` Swift, dans l'autre langage, à une heure d'intervalle.**
+- **`previewSignal` ne lit aucune clé : il DÉLÈGUE** à `CallSignalMapper`. Il est
+  ÉNUMÉRÉ comme non confronté et exclu du compte de couverture — *un zéro qu'on
+  ne distingue pas d'une absence est le mode de panne silencieux d'une garde qui
+  déduit sa table.*
+
+Vu rougir : une clé requise injectée dans
+`CallSocialEventParser.mutedByModerator` (le rapport nomme le fichier du PARSEUR
+et son vrai symptôme) et dans `ViewingChange` (les trois `viewing:*` d'un coup).
+
+---
+
+## Lot G — #18269 : le miroir Swift gardé dans les DEUX sens
+
+La quatrième case d'un tableau à deux entrées. Kotlin avait ses deux gardes
+(#18070 et #18158) ; Swift n'en avait qu'une (#18121).
+
+|  | le miroir **EXIGE** trop | le miroir **DÉCLARE** trop |
+|---|---|---|
+| Kotlin | #18070 | #18158 |
+| Swift | #18121 | **ce lot** |
+
+**Mesure sur 101 types de FIL : UN seul champ** déclaré et absent du contrat —
+`FriendRequestRejectedEvent.senderId`, délibéré et documenté sur place (*« il ne
+sert qu'à router l'émission côté gateway : déclaré optionnel par tolérance,
+jamais lu »*), et son consommateur ne lit que `rejecterId`.
+
+Le miroir Swift est donc **propre dans les deux sens aujourd'hui**. L'enjeu
+n'était pas une moisson : c'est que la prochaine dérive rougisse chez celui qui
+l'écrit, comme elle le fait côté Kotlin depuis le cycle 157.
+
+Deux frontières, chacune mesurée plutôt que posée par prudence : le **FICHIER**
+décide (hors de `Sockets/`, un type a un producteur REST), et les types à
+`init(from:)` **manuel** sont écartés — les compter rendait 18 constats dont
+**17** de cette forme, et un outil qui crie à tort finit désarmé.
+
+---
+
+## Ce que ce cycle a appris sur son propre outillage
+
+J'ai reconstruit à la main un harnais Gradle « Kotlin pur » pour compiler
+`:core:model` sans AGP. **Il existait**, committé et documenté :
+`./apps/android/meeshy.sh jvm-check` — et il fait davantage (`:core:crypto`,
+`:core:e2ee`, exclusion des fichiers liés à Android). Vérifié depuis :
+`BUILD SUCCESSFUL in 3m 45s` sur l'arbre de ce cycle.
+
+Le `CLAUDE.md` RACINE ne le mentionne pas ; celui d'`apps/android` le porte en
+tête de son bandeau. Et le journal du cycle précédent citait
+`gradle -p scripts/jvm-check` — un chemin RELATIF à un répertoire qu'il ne
+nommait pas, que j'ai lu comme « un brouillon disparu avec sa session ».
+
+Leçon : `tasks/lessons/2026-11-14-le-claude-md-du-repertoire-dit-l-outil-que-la-racine-ignore.md`.
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
@@ -215,5 +299,7 @@ rougira le jour où on l'en sortira** — et il attend une session avec Xcode.
 | #18249 | le contrat de `notification:new` redéclarait une jumelle plus lâche | **fermée** par ce lot |
 | #18116 | les champs imbriqués, les deux miroirs | **fermée** par ce lot (UN cran ; au-delà il faudrait suivre alias et unions) |
 | #18120 | la portée COMMUNAUTÉ n'atteint jamais iOS | ouverte — inventoriée par la garde, demande Xcode |
-| #18123 | les deux idiomes de routage Kotlin non vus (66 événements) | ouverte |
+| #18123 | les deux idiomes de routage Kotlin non vus | **fermée** par ce lot (110 → 125 des 176) |
+| #18269 | le miroir Swift gardé dans un seul sens | **fermée** par ce lot |
+| #18252 | les deux rouges Android de `dev` | **fermée** par ce lot |
 | #18159, #18124, #18115 | les pièges armés du cycle 157 | ouvertes |

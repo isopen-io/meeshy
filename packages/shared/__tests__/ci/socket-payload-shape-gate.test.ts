@@ -77,13 +77,17 @@
 //
 // ─── Ce que la garde ne couvre PAS (dit à voix haute) ──────────────────────
 //
-// **Un tiers des événements du contrat, et c'est le trou le plus coûteux.**
-// Mesuré le 2026-11-14 : la garde balaie **110 des 176** événements de
-// `ServerToClientEvents`. Elle déduit ses couples de TROIS idiomes de routage ;
-// le dépôt en a CINQ. Les deux autres — `SocketInboundRoute.raw(…)` et
-// `socketManager.on(…)` suivi d'un `decode<T>` réifié — lui sont invisibles, et
-// avec eux toute la famille `call:*`, les quatre `viewing:*`,
-// `user:preferences-updated`, `talkie:chunk` et `message:starred`.
+// **Un quart des événements du contrat.** Mesuré le 2026-11-14 après #18123 : la
+// garde balaie **125 des 176** événements de `ServerToClientEvents`, par CINQ
+// idiomes de routage — les trois d'origine, plus le `decode<T>` réifié derrière
+// `socketManager.on(…)` (les quatre `viewing:*`) et la route qui appelle un
+// PARSEUR écrit à la main (les douze `call:*` sociaux, dont aucune classe
+// `@Serializable` ne porte la forme).
+//
+// Ce qui reste hors de portée est d'une autre nature : `user:preferences-updated`
+// et `talkie:chunk` décodent dans une fermeture sans type nommé, la famille
+// `call:*` de signalisation lit ses charges à la main sans passer par un parseur
+// nommé, et `message:starred` n'a aucun lecteur Android.
 //
 // Les quatre invariants ci-dessous NE PEUVENT PAS voir ce trou : ils vérifient
 // que ce qui est balayé se résout, jamais que le balayage atteint tout. Un
@@ -129,7 +133,9 @@ import {
   readContract,
   readKotlin,
 } from './socket-payload-shape/mirror-contract';
+import { readManualParserRoutes } from './socket-payload-shape/kotlin-manual-parser';
 import {
+  KOTLIN_MANUAL_PARSER_MIRROR,
   KOTLIN_MIRROR,
   describeNestedFindings,
   describeRequiredFieldFinding,
@@ -138,6 +144,7 @@ import {
 
 const kotlin = readKotlin();
 const contract = readContract();
+const manualParsers = readManualParserRoutes();
 describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat DÉCLARE (#18070)", () => {
   it('balaie un nombre plausible de routes — une table déduite qui se vide ne rougit jamais toute seule', () => {
     expect(kotlin.classCount).toBeGreaterThan(0);
@@ -153,7 +160,12 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
    */
   it('confronte toujours autant d\'événements du contrat qu\'à la dernière mesure', () => {
     const sweptEvents = new Set(
-      kotlin.routes.map((route) => route.event).filter((event): event is string => event !== undefined && contract.has(event)),
+      [
+        ...kotlin.routes.map((route) => route.event),
+        /* Une route qui DÉLÈGUE n'est pas confrontée : la compter gonflerait la couverture d'un
+           événement dont la garde ne sait rien. */
+        ...manualParsers.filter((route) => !route.delegated).map((route) => route.event),
+      ].filter((event): event is string => event !== undefined && contract.has(event)),
     );
     expect(
       sweptEvents.size,
@@ -261,5 +273,52 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
 
     const report = [...findings].sort();
     expect(report, `\n${report.join('\n')}\n`).toEqual([]);
+  });
+  /**
+   * Le CINQUIÈME idiome (#18123) : la route qui appelle un PARSEUR écrit à la main. Toute la
+   * famille `call:*` sociale passe par là — douze événements qu'aucune des deux gardes ne voyait,
+   * faute de classe `@Serializable` sur ce chemin.
+   *
+   * La question ne change pas, seule la preuve change : `o.str("x") ?: return@decode null` dit
+   * qu'une clé est EXIGÉE, et son absence fait rendre `null` au parseur — l'événement est écarté,
+   * et rien ne rougit. Même panne que `MissingFieldException`, autre mécanisme, même silence.
+   */
+  it('tout champ EXIGÉ par un parseur manuel existe au contrat, et y est REQUIS', () => {
+    const divergences = new Map<string, string>();
+
+    for (const route of manualParsers) {
+      const declared = route.event === undefined ? undefined : contract.get(route.event);
+      if (!declared) continue;
+      const byName = new Map(declared.map((field) => [field.name, field] as const));
+      for (const key of route.requiredKeys) {
+        const counterpart = byName.get(key);
+        if (counterpart && !counterpart.optional) continue;
+        divergences.set(
+          `${route.event}|${key}`,
+          describeRequiredFieldFinding({
+            event: route.event as string,
+            field: key,
+            typeName: `${route.parser}.${route.fn}()`,
+            mirrorFile: route.parserFile,
+            presence: counterpart ? 'optional' : 'absent',
+            mirror: KOTLIN_MANUAL_PARSER_MIRROR,
+          }),
+        );
+      }
+    }
+
+    const report = [...divergences.values()].sort();
+    expect(report, `\n${report.join('\n')}\n`).toEqual([]);
+  });
+
+  it('résout l\'événement et le corps de CHAQUE route à parseur manuel, et énumère ce qui délègue', () => {
+    expect(manualParsers.length, 'balayage vide : un idiome de routage a changé de forme').toBeGreaterThanOrEqual(10);
+    const unresolved = manualParsers
+      .filter((route) => route.event === undefined)
+      .map((route) => `SocketEventNames.${route.constName} — constante inconnue`);
+    expect(unresolved, unresolved.join('\n')).toEqual([]);
+
+    const delegated = manualParsers.filter((route) => route.delegated).map((route) => route.event as string).sort();
+    expect(delegated, 'routes dont le parseur délègue un cran plus bas — non confrontées').toEqual(['call:preview-signal']);
   });
 });
