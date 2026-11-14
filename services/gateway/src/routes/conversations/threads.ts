@@ -31,6 +31,7 @@ import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFil
 import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire } from '../../services/messaging/serverAtRest';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -373,11 +374,12 @@ export function registerThreadsRoutes(
       const opened = await revealAtRestRowsForWire([parent, ...replies], gatewayKeyring(prisma));
       const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, opened.map((m) => served(m as unknown as ThreadMessage)));
       // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
-      const [signedParent, ...signedReplies] = await signMessagesAttachmentsForReader(prisma, {
+      // #18242 B2 — et le nom des participants d'un résumé d'appel, lu à la lecture.
+      const [signedParent, ...signedReplies] = await withCallSummaryParticipantNames(prisma, await signMessagesAttachmentsForReader(prisma, {
         messages: [servedParent, ...servedReplies],
         readerParticipantId,
         signer: readerFileUrlSignerFromEnv(new Date()),
-      });
+      }), { conversationId });
       return sendSuccess(reply, {
         parent: signedParent,
         replies: signedReplies,

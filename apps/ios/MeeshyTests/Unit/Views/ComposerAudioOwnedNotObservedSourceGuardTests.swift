@@ -57,13 +57,18 @@ final class ComposerAudioOwnedNotObservedSourceGuardTests: XCTestCase {
     /// valeur n'atteint aucun lecteur n'a corrigé personne ; ici, pire, il
     /// retirerait un lecteur qui existait.
     func test_thePendingAudioTileObservesThePlayerItDraws() throws {
-        let code = try strippedSource("ConversationView+ComposerAttachments.swift")
+        let tile = try strippedSource("ConversationPendingAttachmentTile.swift")
         XCTAssertTrue(
-            code.contains("@ObservedObject var player: AudioPlaybackManager"),
+            tile.contains("@ObservedObject var player: AudioPlaybackManager"),
             "La tuile d'un audio en attente DOIT observer le lecteur : c'est elle qui rend « lecture » ou « pause » (#6226)."
         )
         XCTAssertFalse(
-            code.contains("let isPlaying = pendingAudioPlayer.isPlaying"),
+            tile.contains("@ObservedObject var player: AudioPlaybackManager\n    let onTap"),
+            "La tuile ENVELOPPE (ConversationPendingAttachmentTile) ne l'observe pas : elle le remet à l'onde et à la commande (#7171)."
+        )
+        let root = try strippedSource("ConversationView+ComposerAttachments.swift")
+        XCTAssertFalse(
+            root.contains("let isPlaying = pendingAudioPlayer.isPlaying"),
             "L'état de lecture ne doit plus être lu depuis le corps de la racine : c'est cette lecture qui l'abonnait au lecteur (#6226)."
         )
     }

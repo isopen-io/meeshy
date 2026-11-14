@@ -90,6 +90,7 @@
     <string name="call_effects_companions_more">%1$d more participants</string>
     <string name="call_effects_companions_move">Move to the other side</string>
     <string name="call_effects_layer_undo">Cancel %1$s</string>
+    <string name="call_effects_settings_panel">My image settings</string>
     <string name="call_ended">Call ended</string>
     <string name="call_ended_connection_lost">Connection lost</string>
     <string name="call_ended_declined">Call declined</string>
@@ -178,7 +179,10 @@
     <string name="call_live_frame_label">Live frame</string>
     <string name="call_live_frame_none">No frame</string>
     <string name="call_live_frame_not_proposed">The frame is applied on your side but couldn\'t be offered</string>
+    <string name="call_live_frame_peer_released">%1$s removed the frame</string>
+    <string name="call_live_frame_peer_released_anonymous">The other person removed the frame</string>
     <string name="call_live_frame_proposal">%1$s suggests the “%2$s” frame</string>
+    <string name="call_mode_carousel_position">%1$d of %2$d</string>
     <string name="call_mode_gesture_hint">double-tap for a photo · hold to film</string>
     <string name="call_mode_montage_title">Call montage</string>
     <string name="call_mode_photo">Take a photo</string>

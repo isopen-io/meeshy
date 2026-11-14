@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 import { createDraftStore, type StorageLike } from '@/lib/send/draft-store';
@@ -82,6 +83,7 @@ describe('Composer — le brouillon restaure texte ET langue (#6175)', () => {
           />,
         );
       });
+      openComposerTools(container);
       return container;
     };
 

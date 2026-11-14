@@ -25,7 +25,7 @@ const de = {
   'conversationStats.loading': 'Statistiken werden geladen',
   'conversationStats.error': 'Die Statistiken konnten nicht geladen werden.',
   'conversationStats.retry': 'Erneut versuchen',
-  'conversationStats.empty': 'Noch keine Nachrichten — die Statistiken kommen mit der Unterhaltung.',
+  'conversationStats.empty': 'Keine Nachrichten',
   'conversationStats.offline': 'Offline — zuletzt bekannte Statistiken.',
   'conversationStats.offline_empty': 'Offline — die Statistiken wurden noch nicht geladen.',
 } satisfies ConversationStatsCatalog;

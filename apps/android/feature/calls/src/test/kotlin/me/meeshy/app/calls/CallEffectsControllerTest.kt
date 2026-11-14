@@ -81,6 +81,40 @@ class CallEffectsControllerTest {
         assertThat(CallEffectsController(rig.effects).state.value.category).isEqualTo(CallEffectsCategory.Face)
     }
 
+    /**
+     * #17819 — la couche d'Effets fond en sortant : rentrer dans le mode pendant ce fondu retrouve la même couche, encore
+     * composée. Une session close par ‹ s'y rouvre, sur la rangée demandée et la pile que l'appel tient, comme une entrée neuve.
+     */
+    @Test
+    fun `re-entering while the layer still fades reopens a session closed by back, as a fresh entry`() {
+        val rig = Rig()
+        rig.controller.change { it.selecting(CallFaceEffect.Angel) }
+        rig.controller.finish()
+        rig.effects.requestEffectsCategory(CallEffectsCategory.Color)
+
+        rig.controller.reopen()
+
+        assertThat(rig.controller.state.value.category).isEqualTo(CallEffectsCategory.Color)
+        rig.controller.change { it.selecting(VideoFilterPreset.Warm) }
+        assertThat(rig.effects.layers.value.bottomToTop.map { it.kind }).containsExactly(CallEffectKind.Face, CallEffectKind.Color).inOrder()
+        assertThat(rig.effects.config.value.faceEffect).isEqualTo(CallFaceEffect.Angel)
+        assertThat(rig.effects.config.value.activePresetId()).isEqualTo(VideoFilterPreset.Warm)
+        assertThat(rig.controller.finish()).isTrue()
+    }
+
+    @Test
+    fun `re-entering a session still open changes nothing, the row asked for stays to come`() {
+        val rig = Rig()
+        rig.controller.change { it.selecting(CallFaceEffect.Toad) }
+        val before = rig.controller.state.value
+        rig.effects.requestEffectsCategory(CallEffectsCategory.Color)
+
+        rig.controller.reopen()
+
+        assertThat(rig.controller.state.value).isEqualTo(before)
+        assertThat(CallEffectsController(rig.effects).state.value.category).isEqualTo(CallEffectsCategory.Color)
+    }
+
     @Test
     fun `nothing changes once the session is over`() {
         val rig = Rig()

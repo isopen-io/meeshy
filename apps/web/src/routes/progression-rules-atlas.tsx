@@ -307,8 +307,8 @@ function Family({ family, folds }: { readonly family: AtlasFamily; readonly fold
 export function RulesAtlas() {
   const folds = useOneOpen();
   return (
-    <section aria-labelledby="atlas-titre" data-game-atlas="" className="flex flex-col gap-3">
-      <h2 id="atlas-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
+    <section data-rules-section="atlas" aria-labelledby="atlas-titre" data-game-atlas="" className="flex scroll-mt-20 flex-col gap-3">
+      <h2 id="atlas-titre" tabIndex={-1} className="text-title font-bold" style={{ color: GAME_INK }}>
         {gameText('game.rules.atlas.title')}
       </h2>
       {ATLAS_FAMILIES.map((family) => (

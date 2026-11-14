@@ -280,7 +280,7 @@ const remonterJusquAuTexte = async (page) => {
  * PAR-DESSUS : l'éphémère gagne (ordre iOS `ComposerProtection.dominant`).
  *
  * Et chaque teinte se LIT (dimension 5) : le contraste se mesure sur les
- * PIXELS de la caméra, entre le fond dominant de sa cible et le pixel le plus
+ * PIXELS de la pastille de langue, entre le fond dominant de sa cible et le pixel le plus
  * contrasté du glyphe — l'encre telle qu'elle est peinte, voile et verre
  * compris, jamais une valeur déclarée. Seuil 3:1 (WCAG 1.4.11, objet
  * graphique).
@@ -310,7 +310,7 @@ const teinteDesIcones = async (page, scheme) => {
     page.waitForFunction(
       (jeton) => {
         const racine = document.querySelector('[data-composer]');
-        const camera = document.querySelector('[data-composer-camera]');
+        const camera = document.querySelector('[data-composer-language] > span');
         if (racine === null || camera === null) return false;
         const sonde = document.createElement('span');
         sonde.style.color = `var(${jeton})`;
@@ -325,7 +325,7 @@ const teinteDesIcones = async (page, scheme) => {
 
   const contraste = async () => {
     const boite = await page.evaluate(() => {
-      const r = document.querySelector('[data-composer-camera]')?.getBoundingClientRect();
+      const r = document.querySelector('[data-composer-language]')?.getBoundingClientRect();
       return r === undefined ? null : { x: r.x, y: r.y, width: r.width, height: r.height };
     });
     if (boite === null) return null;
@@ -364,16 +364,20 @@ const teinteDesIcones = async (page, scheme) => {
   const constater = async (etat, jeton) => {
     const m = await lire(jeton);
     expect(
-      m !== null && m.icones >= 5 && m.ecarts.length === 0,
+      m !== null && m.icones >= 3 && m.ecarts.length === 0,
       `${scheme} · ${etat} : les ${m?.icones ?? 0} icônes de la rangée haute peignent ${jeton} (${m?.attendu}) — écarts : ${m?.ecarts.join(' ; ') || 'aucun'}`,
     );
     const c = await contraste();
-    expect(c !== null && c.ratio >= 3, `${scheme} · ${etat} : la caméra tient ${c?.ratio}:1 sur son fond ${c?.fond} (≥ 3:1)`);
+    expect(c !== null && c.ratio >= 3, `${scheme} · ${etat} : la pastille de langue tient ${c?.ratio}:1 sur son fond ${c?.fond} (≥ 3:1)`);
     await page.screenshot({ path: join(CAPTURES, `composeur-teinte-${etat}-${scheme}.png`), clip: await page.evaluate(() => {
       const r = document.querySelector('[data-composer-toolbar]').getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     }) });
   };
+
+  /* Les outils sont rangés derrière le « + » (épure #18361) : on l'ouvre comme la personne le ferait. */
+  await page.locator('button[aria-label="Ouvrir le menu des pièces jointes"]').click();
+  await page.waitForSelector('[data-composer-effects]');
 
   await constater('repos', '--color-ios-ink-2');
 

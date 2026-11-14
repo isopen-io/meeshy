@@ -117,12 +117,16 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.settings.panel",
           "androidName": "call_effects_settings_panel",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.carousel.position",
           "androidName": "call_mode_carousel_position",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",

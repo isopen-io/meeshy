@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { Glyph } from './glyph';
+import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
 import type { GlyphName } from './glyphs';
 
 /**
@@ -22,7 +24,13 @@ import type { GlyphName } from './glyphs';
 export type QuickAction = {
   readonly key: string;
   readonly label: string;
+  /** L'explication, derrière un (i) : lue repliée, ouverte au toucher (épure #18361, règle 1). */
   readonly hint: string;
+  /**
+   * Le nom accessible du (i) : la QUESTION à laquelle `hint` répond. Seule l'action NOMINALE en porte un ; une porte
+   * rangée derrière « Plus » garde son indice en `title`, sans (i) (règle « un (i) n'est pas un dépotoir »).
+   */
+  readonly hintQuestion?: string;
   readonly glyph: GlyphName;
   /**
    * HÉROS au démarrage — miroir de `ConversationListQuickActions.Action.heroes`
@@ -52,8 +60,8 @@ export const HERO_THRESHOLD = 10;
 export const showsHeroes = (conversationCount: number): boolean => conversationCount <= HERO_THRESHOLD;
 
 type QuickActionsProps = {
-  readonly title: string;
-  readonly subtitle: string;
+  /** Le libellé de « Plus » — là où se rangent les portes qui ne sont pas l'action nominale. */
+  readonly moreLabel: string;
   readonly actions: readonly QuickAction[];
   /**
    * Le compte BRUT de conversations, jamais le compte AFFICHÉ.
@@ -67,24 +75,24 @@ type QuickActionsProps = {
 };
 
 /**
- * Rien à proposer ⇒ **rien ne se peint**, titre et sous-titre compris.
+ * **UNE ACTION NOMINALE, LE RESTE DERRIÈRE « PLUS »** (épure #18361, règles 2, 4 et 6) — plus de titre ni de sous-titre
+ * (« Et maintenant ? » redisait ce que l'action dit déjà), l'explication de l'action est derrière un (i), et les portes
+ * ordinaires (story, humeur) se rangent derrière « Plus » : elles restent atteignables, d'un toucher de plus.
  *
- * Un en-tête « Et maintenant ? » suivi du vide est exactement la promesse non
- * tenue qu'on cherche à éliminer : il annonce des issues et n'en montre
- * aucune. C'est le défaut que portait l'état vide de la liste, qui récitait
- * « Un message, une story, un mood, un post — ou invitez vos amis » sous
- * ZÉRO bouton. Le bloc entier est donc conditionné à l'existence d'une porte.
+ * Tant qu'on DÉMARRE (≤ `HERO_THRESHOLD`), l'action nominale est le gros bouton plein ; passé le seuil, la même action
+ * reste là, plus discrète. Rien à proposer ⇒ **rien ne se peint** : un bloc annonçant des issues sans en montrer
+ * aucune est la promesse non tenue que cette page a déjà dû corriger.
  */
-export function QuickActions({ title, subtitle, actions, conversationCount }: QuickActionsProps) {
+export function QuickActions({ moreLabel, actions, conversationCount }: QuickActionsProps) {
   const [retour, setRetour] = useState<string | null>(null);
+  const [opened, setOpened] = useState(false);
+  const moreId = useId();
 
   if (actions.length === 0) return null;
 
-  // Tant qu'on DÉMARRE, les héros sortent de la grille ; passé le seuil, tout
-  // le monde redevient une tuile — exactement `Action.tiles(showsHeroes:)`.
   const enDemarrage = showsHeroes(conversationCount);
-  const heros = enDemarrage ? actions.filter((a) => a.hero) : [];
-  const tuiles = enDemarrage ? actions.filter((a) => !a.hero) : actions;
+  const principales = actions.filter((a) => a.hero);
+  const rangees = actions.filter((a) => !a.hero);
 
   const lancer = (action: QuickAction) => {
     setRetour(null);
@@ -92,79 +100,85 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
   };
 
   return (
-    <section aria-label={title} className="grid gap-3 px-2 pt-6">
-      <div className="grid gap-1">
-        <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {title}
-        </p>
-        <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {subtitle}
-        </p>
-      </div>
-
-      {heros.map((action) => (
-        <div key={action.key} className="grid gap-1">
-          <button
-            type="button"
-            onClick={() => lancer(action)}
-            aria-describedby={`${action.key}-indice`}
-            className="flex w-full items-center gap-3 rounded-hero px-4 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{
-              minHeight: 52,
-              background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
-              outlineColor: 'var(--color-ios-brand)',
-            }}
-          >
-            <Glyph name={action.glyph} size={22} />
-            <span className="flex-1 text-start">{action.label}</span>
-          </button>
-          <p id={`${action.key}-indice`} className="px-1 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {action.hint}
-          </p>
-        </div>
+    <section className="grid gap-3 px-2 pt-6">
+      {principales.map((action) => (
+        <PrimaryAction key={action.key} action={action} quiet={!enDemarrage} onRun={lancer} />
       ))}
 
-      {tuiles.length > 0 ? (
-        <ul className="grid grid-cols-3 gap-2">
-          {tuiles.map((action) => (
-            <li key={action.key}>
-              <button
-                type="button"
-                onClick={() => lancer(action)}
-                title={action.hint}
-                className="grid w-full place-items-center gap-1.5 rounded-hero px-1 py-3 focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  minHeight: 88,
-                  backgroundColor: 'var(--color-ios-card)',
-                  border: '1px solid var(--color-edge)',
-                  outlineColor: 'var(--color-ios-brand)',
-                }}
-              >
-                <span
-                  className="grid size-11 place-items-center rounded-chip text-ios-on-brand"
-                  style={{ background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))' }}
-                >
-                  <Glyph name={action.glyph} size={20} />
-                </span>
-                <span className="text-mini" style={{ color: 'var(--color-ios-ink)' }}>
-                  {action.label}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {rangees.length === 0 ? null : (
+        <div className="grid justify-items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpened((v) => !v)}
+            aria-expanded={opened}
+            aria-controls={moreId}
+            className="btn-press min-h-11 rounded-chip px-4 text-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+          >
+            {moreLabel}
+          </button>
+          <ul id={moreId} hidden={!opened} className="grid w-full grid-cols-3 gap-2">
+              {rangees.map((action) => (
+                <li key={action.key}>
+                  <button
+                    type="button"
+                    onClick={() => lancer(action)}
+                    title={action.hint}
+                    className="grid w-full place-items-center gap-1.5 rounded-hero px-1 py-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    style={{ minHeight: 88, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)', outlineColor: 'var(--color-ios-brand)' }}
+                  >
+                    <span
+                      className="grid size-11 place-items-center rounded-chip text-ios-on-brand"
+                      style={{ background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))' }}
+                    >
+                      <Glyph name={action.glyph} size={20} />
+                    </span>
+                    <span className="text-mini" style={{ color: 'var(--color-ios-ink)' }}>
+                      {action.label}
+                    </span>
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       {/* Le retour d'un geste INVISIBLE — annoncé au lecteur d'écran, pas
           seulement peint : `aria-live` porte autant que le pixel. */}
-      <p
-        role="status"
-        aria-live="polite"
-        className="px-1 text-mini"
-        style={{ color: 'var(--color-ios-ink-2)', minHeight: 18 }}
-      >
+      <p role="status" aria-live="polite" className="px-1 text-mini" style={{ color: 'var(--color-ios-ink-2)', minHeight: 18 }}>
         {retour ?? ''}
       </p>
     </section>
+  );
+}
+
+function PrimaryAction({ action, quiet, onRun }: { readonly action: QuickAction; readonly quiet: boolean; readonly onRun: (action: QuickAction) => void }) {
+  const state = useInfoHint();
+  const hint = action.hintQuestion === undefined ? null : { text: action.hint, label: action.hintQuestion, glyph: SETTINGS_GLYPHS.info };
+  return (
+    <div className="relative grid gap-1" data-quick-action-primary={quiet ? 'quiet' : 'hero'}>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onRun(action)}
+          className="flex w-full min-w-0 flex-1 items-center gap-3 rounded-hero px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={
+            quiet
+              ? { minHeight: 44, color: 'var(--color-ios-brand)', border: '1px solid var(--color-edge)', outlineColor: 'var(--color-ios-brand)' }
+              : {
+                  minHeight: 52,
+                  color: 'var(--color-ios-on-brand)',
+                  background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
+                  outlineColor: 'var(--color-ios-brand)',
+                }
+          }
+        >
+          <Glyph name={action.glyph} size={22} />
+          <span className="flex-1 text-start">{action.label}</span>
+        </button>
+        {hint === null ? null : <InfoHintButton hint={hint} state={state} />}
+      </div>
+      {hint === null ? null : <InfoHintText hint={hint} state={state} className="px-1" />}
+    </div>
   );
 }

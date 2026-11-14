@@ -5,7 +5,6 @@ import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph, GlyphSvg } from './glyph';
 import { FlameEyeGlyph } from './flame-eye-glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
-import { COMPOSER_GLYPHS } from './glyphs-composer';
 import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -78,9 +77,7 @@ export function ComposerTopRow({
   effectCount,
   effectsPanelOpen,
   onToggleEffects,
-  onOpenStickers,
-  onPickLibrary,
-  onOpenCamera,
+  toolsOpen = false,
   languageCode,
   onOpenLanguage,
   languagePillRef,
@@ -107,14 +104,13 @@ export function ComposerTopRow({
   readonly effectsPanelOpen: boolean;
   /** Tap sur la baguette : ouvre/ferme le panneau d'effets (#7980). */
   readonly onToggleEffects: () => void;
-  /** La porte de la feuille de stickers (#9082) — absente ⇒ rien. */
-  readonly onOpenStickers?: () => void;
-  /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
-   * absente ⇒ rien. */
-  readonly onPickLibrary?: (files: FileList | null) => void;
-  /** La caméra de l'angle droit (#9082) — elle ouvre le studio plein écran,
-   * viseur armé (#9123) ; absente ⇒ rien. */
-  readonly onOpenCamera?: () => void;
+  /**
+   * LES OUTILS RANGÉS DERRIÈRE LE « + » (épure #18361, règle 6) : fermé, la rangée ne porte que la langue d'écriture
+   * (Prisme) et le compteur ; les quatre outils paraissent quand le menu du « + » est ouvert. Un outil ARMÉ reste à
+   * l'écran, menu fermé — on voit ce qui s'appliquera, et on le retire d'un toucher. Photos, caméra et stickers n'ont
+   * plus de doublon ici : ils sont dans le menu.
+   */
+  readonly toolsOpen?: boolean;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
   readonly languagePillRef?: Ref<HTMLButtonElement>;
@@ -149,107 +145,103 @@ export function ComposerTopRow({
             navigateur dans les DEUX schémas, sous la barre en LARGEUR
             pendant que le témoin unitaire, qui ne lisait que la CLASSE
             `min-h-11`, restait vert. */}
-        <button
-          type="button"
-          onClick={onToggleEphemeral}
-          disabled={locks.ephemeral}
-          aria-pressed={ephemeralSeconds !== undefined}
-          aria-expanded={ephemeralPickerOpen}
-          data-composer-ephemeral
-          {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
-          aria-label={
-            locks.ephemeral
-              ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
-              : ephemeralSeconds === undefined
-                ? translate(language, 'composer.ephemeral.activate')
-                : translate(language, 'composer.ephemeral.active', { duration: ephemeralDuration })
-          }
-        >
-          {/* LA FLAMME-ŒIL (#8304) n'a pas de libellé court : son
-              pictogramme DIT le choix, comme sur iOS. */}
-          {isAfterReadChoice(ephemeralSeconds) ? (
-            <span data-glyph="flameEye" className="inline-flex">
-              <FlameEyeGlyph size={16} />
-            </span>
-          ) : (
-            <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
-          )}
-          {armedEphemeral !== undefined && armedEphemeral.label !== '' ? (
-            <span className="text-title font-bold">{armedEphemeral.label}</span>
-          ) : null}
-        </button>
+        {toolsOpen || ephemeralSeconds !== undefined || ephemeralPickerOpen || locks.ephemeral ? (
+          <button
+            type="button"
+            onClick={onToggleEphemeral}
+            disabled={locks.ephemeral}
+            aria-pressed={ephemeralSeconds !== undefined}
+            aria-expanded={ephemeralPickerOpen}
+            data-composer-ephemeral
+            {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
+            style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
+            aria-label={
+              locks.ephemeral
+                ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
+                : ephemeralSeconds === undefined
+                  ? translate(language, 'composer.ephemeral.activate')
+                  : translate(language, 'composer.ephemeral.active', { duration: ephemeralDuration })
+            }
+          >
+            {/* LA FLAMME-ŒIL (#8304) n'a pas de libellé court : son
+                pictogramme DIT le choix, comme sur iOS. */}
+            {isAfterReadChoice(ephemeralSeconds) ? (
+              <span data-glyph="flameEye" className="inline-flex">
+                <FlameEyeGlyph size={16} />
+              </span>
+            ) : (
+              <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
+            )}
+            {armedEphemeral !== undefined && armedEphemeral.label !== '' ? (
+              <span className="text-title font-bold">{armedEphemeral.label}</span>
+            ) : null}
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          onClick={onToggleBlur}
-          disabled={locks.blurred}
-          aria-pressed={blurred}
-          data-composer-blur
-          {...(locks.blurred ? { 'data-imposed': '' } : {})}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
-          aria-label={
-            locks.blurred
-              ? translate(language, 'composer.protection.imposed.blur')
-              : blurred
-                ? translate(language, 'composer.blur.active')
-                : translate(language, 'composer.blur.activate')
-          }
-        >
-          <Glyph name="eyeSlash" size={16} />
-          {blurred ? <span className="text-title font-bold">{translate(language, 'composer.blur.label')}</span> : null}
-        </button>
+        {toolsOpen || blurred || locks.blurred ? (
+          <button
+            type="button"
+            onClick={onToggleBlur}
+            disabled={locks.blurred}
+            aria-pressed={blurred}
+            data-composer-blur
+            {...(locks.blurred ? { 'data-imposed': '' } : {})}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
+            style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
+            aria-label={
+              locks.blurred
+                ? translate(language, 'composer.protection.imposed.blur')
+                : blurred
+                  ? translate(language, 'composer.blur.active')
+                  : translate(language, 'composer.blur.activate')
+            }
+          >
+            <Glyph name="eyeSlash" size={16} />
+            {blurred ? <span className="text-title font-bold">{translate(language, 'composer.blur.label')}</span> : null}
+          </button>
+        ) : null}
 
         {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Chaque
             protection porte SA couleur (#7667) : flamme rouge d'alerte
             (directive porteur ; décision #7677), « 1 » violet et flou gris
             du fil (#7599) — et le flou et la vue unique sont exclusifs
             (`toggledVeil`). */}
-        <button
-          type="button"
-          onClick={onToggleViewOnce}
-          aria-pressed={viewOnce}
-          data-composer-view-once
-          data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
-          aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
-        >
-          <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
-          {viewOnce ? <span className="text-title font-bold">{translate(language, 'composer.viewOnce.label')}</span> : null}
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleEffects}
-          aria-expanded={effectsPanelOpen}
-          data-composer-effects
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
-          aria-label={
-            effectCount > 0
-              ? translate(language, effectCount === 1 ? 'composer.effects.active.one' : 'composer.effects.active.other', { count: String(effectCount) })
-              : translate(language, 'composer.effects.add')
-          }
-        >
-          <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
-          {effectCount > 0 ? <span className="text-title font-bold">{effectCount}</span> : null}
-        </button>
-
-        {onOpenStickers === undefined ? null : (
+        {toolsOpen || viewOnce ? (
           <button
             type="button"
-            onClick={onOpenStickers}
-            data-composer-sticker
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--composer-icon)' }}
-            aria-label={translate(language, 'composer.attach.sticker')}
+            onClick={onToggleViewOnce}
+            aria-pressed={viewOnce}
+            data-composer-view-once
+            data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+            style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
+            aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
           >
-            <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={16} />
+            <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
+            {viewOnce ? <span className="text-title font-bold">{translate(language, 'composer.viewOnce.label')}</span> : null}
           </button>
-        )}
+        ) : null}
+
+        {toolsOpen || effectCount > 0 || effectsPanelOpen ? (
+          <button
+            type="button"
+            onClick={onToggleEffects}
+            aria-expanded={effectsPanelOpen}
+            data-composer-effects
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+            style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
+            aria-label={
+              effectCount > 0
+                ? translate(language, effectCount === 1 ? 'composer.effects.active.one' : 'composer.effects.active.other', { count: String(effectCount) })
+                : translate(language, 'composer.effects.add')
+            }
+          >
+            <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
+            {effectCount > 0 ? <span className="text-title font-bold">{effectCount}</span> : null}
+          </button>
+        ) : null}
+
 
       </div>
 
@@ -267,42 +259,6 @@ export function ComposerTopRow({
           </span>
         ) : null}
 
-        {/* LA PHOTOTHÈQUE (#9120) — images ET vidéos, à côté de la caméra
-            (miroir `ComposerGlassDoors.trailing` → [library, camera, fold]) ;
-            sans `capture`, elle ouvre la galerie, jamais l'objectif. */}
-        {onPickLibrary === undefined ? null : (
-          <label
-            data-composer-library
-            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--composer-icon)' }}
-          >
-            <Glyph name="image" size={16} />
-            <input
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              className="sr-only"
-              aria-label={translate(language, 'composer.attach.photo.action')}
-              onChange={(e) => {
-                onPickLibrary(e.currentTarget.files);
-                e.currentTarget.value = '';
-              }}
-            />
-          </label>
-        )}
-
-        {onOpenCamera === undefined ? null : (
-          <button
-            type="button"
-            data-composer-camera
-            onClick={onOpenCamera}
-            aria-label={translate(language, 'composer.attach.camera.action')}
-            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--composer-icon)' }}
-          >
-            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
-          </button>
-        )}
     </div>
   );
 }

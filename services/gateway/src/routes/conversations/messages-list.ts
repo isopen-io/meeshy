@@ -49,6 +49,7 @@ import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { hidingServedTo } from '../../services/messaging/captureNoticeVisibility';
 import {
   backfillCitedAttachments,
@@ -759,7 +760,8 @@ export function registerMessagesListRoute(
 
       // #16421 — une ligne d'arrivées écrite avant que le pseudo y voyage
       // reçoit celui du compte de chaque arrivant (une requête pour la page).
-      mappedMessages.splice(0, mappedMessages.length, ...(await withNoticeUsernames(prisma, mappedMessages)));
+      // #18242 B2 — et le nom des participants d'un résumé d'appel, lu à la lecture (une requête aussi).
+      mappedMessages.splice(0, mappedMessages.length, ...(await withCallSummaryParticipantNames(prisma, await withNoticeUsernames(prisma, mappedMessages), { conversationId })));
 
       // #7578 — une vue unique se sert PAR LECTEUR : qui l'a déjà ouverte ne
       // reçoit plus que l'état (`consumedByMe`), ni texte, ni traduction, ni
