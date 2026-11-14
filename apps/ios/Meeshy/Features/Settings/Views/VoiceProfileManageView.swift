@@ -98,7 +98,7 @@ struct VoiceProfileManageView: View {
         EmptyStateView(
             icon: "person.wave.2.fill",
             title: String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main),
-            subtitle: String(localized: "voice.profile.empty.description", defaultValue: "Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main),
+            subtitle: String(localized: "voice.profile.empty.description", defaultValue: "Vos vocaux traduits garderont votre voix.", bundle: .main),
             actionLabel: String(localized: "voice.profile.create", defaultValue: "Créer un profil vocal", bundle: .main),
             accentColor: accentColor,
             onAction: { showWizard = true }
@@ -154,9 +154,11 @@ struct VoiceProfileManageView: View {
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .foregroundStyle(theme.textPrimary)
 
-                Text(statusDescription(for: profile.status))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundStyle(theme.textSecondary)
+                if let description = statusDescription(for: profile.status) {
+                    Text(description)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundStyle(theme.textSecondary)
+                }
             }
 
             Spacer()
@@ -283,16 +285,11 @@ struct VoiceProfileManageView: View {
     // d'échantillons de calibration reste fonctionnel via « Ajouter ».
     private var samplesSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundStyle(theme.textSecondary)
-            }
+            Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
             Spacer()
-            // Le (+) reste dans sa carte, à côté de l'indication qu'il sert, et
+            // Le (+) reste dans sa carte, à côté du titre qu'il sert, et
             // porte le verre adaptatif des actions d'en-tête (#6481).
             Button {
                 HapticFeedback.light()
@@ -404,23 +401,28 @@ struct VoiceProfileManageView: View {
         }
     }
 
-    private func statusLabel(for status: VoiceProfileStatus) -> String {
+    private func statusLabel(for status: VoiceProfileStatus) -> String { status.displayLabel }
+
+    /// Les états « Actif », « En attente » et « Analyse en cours » se suffisent : leur description répétait le libellé (épure #18078, règle 2). « Échec » et « Expiré » disent quoi faire.
+    private func statusDescription(for status: VoiceProfileStatus) -> String? {
         switch status {
+        case .pending, .processing: return nil
+        case .ready: return nil
+        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)
+        }
+    }
+}
+
+/// Le mot du statut d'un profil vocal, le même sur l'écran de gestion et sur le récapitulatif de l'assistant.
+extension VoiceProfileStatus {
+    var displayLabel: String {
+        switch self {
         case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
         case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
         case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
         case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Échec", bundle: .main)
         case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expiré", bundle: .main)
-        }
-    }
-
-    private func statusDescription(for status: VoiceProfileStatus) -> String {
-        switch status {
-        case .pending: return String(localized: "voice.profile.status.pending.description", defaultValue: "Votre profil est en file d'attente", bundle: .main)
-        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos échantillons vocaux", bundle: .main)
-        case .ready: return String(localized: "voice.profile.status.ready.description", defaultValue: "Votre profil vocal est prêt à l'emploi", bundle: .main)
-        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
-        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)
         }
     }
 }

@@ -1008,3 +1008,30 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : l'émission web (#14109), l'arrière-plan (#18135), l'indicateur global « tu partages » (#18136, iOS ;
   Android à suivre), la révocation iOS (#18166).
 - Prochain lot recommandé : la révocation iOS (#18166, sécurité), puis l'émission web (#14109).
+
+## 2026-11-14 — réveil de l'après-midi : arrêter un partage de position marche toujours, sur iOS (#18166)
+
+- Reprise : aucune PR cercles ouverte ; #18170 (émission Android) fusionnée. Aucune branche n'écrit le centre iOS :
+  lot réservé sur `claude/cercles-18166-ios-revocation`.
+- Lot : la RÉVOCATION iOS, iso du centre Android audité. `SharedLocationSharingCenter.swift` : un verrou d'ordre
+  d'arrivée (`SharedLocationSerialGate`) sérialise démarrages, arrêts, échéances et mises à jour (une mise à jour
+  saute son tour si le verrou est pris) ; une réponse arrivée après `abandon()` n'adopte, n'écrit ni ne rallume rien ;
+  sans relevé (liste reprise d'un lancement, permission retirée), retirer une personne ARRÊTE tout ; un accusé perdu
+  (`SharedLocationSendOutcome.unconfirmed`, nouveau cas du SDK, `.timedOut` ne vaut plus `.offline`) garde « Arrêter »
+  pour l'union des deux listes (`SharedLocationRoster.union`) ; une échéance non soldée est rejouée toutes les 30 s
+  (`SharedLocationWakeScheduling`) et à chaque socket accrochée (`socketReady`, depuis `connectionState`) ; la ligne
+  de la fiche reste tant qu'un partage court, même sous Ami (`showsRow`). Aucune chaîne neuve : un accusé perdu dit
+  le message hors ligne, comme Android.
+- Témoins XCTest : un par scénario de l'issue, plus le compte quitté et `union` ; le témoin du SDK suit le nouveau cas.
+- Gates locaux : `check_house_rules.sh` vert (36 règles), `check_cohesion_budget.sh` identique avec et sans le lot,
+  `check_localization.py` et `check_test_registration.sh` verts. Swift ne compile pas en conteneur : la preuve est
+  la CI de `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné. `abandon()` n'était appelé qu'à l'ouverture d'une fiche :
+  après un changement de compte, le centre du compte quitté réconciliait sur la socket du suivant (un `start` au nom de
+  l'autre compte) et effaçait sa propre liste sur un `NOT_SHARING`. Le centre connaît désormais son compte (`owner`) et
+  ne lit, n'émet ni n'adopte rien tant que le compte connecté n'est pas le sien (`isLive`, iso du ticket Android),
+  avant chaque émission et après chaque `await`. Suivis ouverts : « Arrêter » tenté hors ligne jamais rejoué, iOS et
+  Android (#18204) ; échéance par destinataire tenue par la passerelle, seule réponse quand l'app dort (#18205).
+  Mineurs non traités : « Arrêter » peut attendre le relevé (jusqu'à 30 s) quand aucun n'a été envoyé ; un accusé
+  perdu dit « a besoin du réseau » (même phrase qu'Android).
+- Prochain lot recommandé : l'émission web (#14109), puis #18204 (iOS + Android), puis la passerelle #18205.

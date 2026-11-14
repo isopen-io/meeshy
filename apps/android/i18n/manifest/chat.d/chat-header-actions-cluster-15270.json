@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "call.header.rejoin.a11y",
-          "androidName": "chat_call_rejoin_a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.header.share",
           "androidName": "chat_header_share",
           "status": "adopted"

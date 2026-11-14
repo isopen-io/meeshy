@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="community_add_channel_empty_hint">أنشئ محادثة أولًا لإضافتها هنا.</string>
+    <string name="community_create_privacy_private_description">يمكن للأعضاء المدعوّين فقط الانضمام</string>
+    <string name="community_create_privacy_public_description">يمكن للجميع اكتشافه والانضمام إليه</string>
+</resources>

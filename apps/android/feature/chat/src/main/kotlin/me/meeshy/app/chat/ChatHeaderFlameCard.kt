@@ -78,13 +78,18 @@ private fun HeaderFlameCardContent(card: HeaderFlameCard, onOpenProgression: () 
                 fontWeight = FontWeight.SemiBold,
             )
         }
+        Text(
+            text = stringResource(R.string.chat_header_flame_card_orientation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         CardRow(
-            label = stringResource(R.string.chat_header_flame_card_today),
+            label = stringResource(R.string.chat_header_flame_card_today_sparks),
             value = "+" + CompactCountFormat.text(card.todayPoints, locale),
             tint = MeeshyPalette.Warning,
         )
         CardRow(
-            label = stringResource(R.string.chat_header_flame_card_total),
+            label = stringResource(R.string.chat_header_flame_card_total_sparks),
             value = CompactCountFormat.text(card.totalPoints, locale),
             tint = null,
         )

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_section_actions">Aktionen</string>
+    <string name="encryption_fact_not_yet_decrypted_notifications">Das Entschlüsseln von Benachrichtigungen auf dem Gerät, um ihren Text anzuzeigen, ist noch nicht verfügbar.</string>
+    <string name="participant_profile_allowed_can_send_audios">Sprachnachrichten senden</string>
+    <string name="participant_profile_allowed_can_send_files">Dateien senden</string>
+    <string name="participant_profile_allowed_can_send_images">Fotos senden</string>
+    <string name="participant_profile_allowed_can_send_links">Links senden</string>
+    <string name="participant_profile_allowed_can_send_locations">Standort teilen</string>
+    <string name="participant_profile_allowed_can_send_messages">Nachrichten schreiben</string>
+    <string name="participant_profile_allowed_can_send_videos">Videos senden</string>
+    <string name="participant_profile_allowed_can_view_history">Frühere Nachrichten sehen</string>
+    <string name="participant_profile_denied_can_send_audios">Kann keine Sprachnachrichten senden</string>
+    <string name="participant_profile_denied_can_send_files">Kann keine Dateien senden</string>
+    <string name="participant_profile_denied_can_send_images">Kann keine Fotos senden</string>
+    <string name="participant_profile_denied_can_send_links">Kann keine Links senden</string>
+    <string name="participant_profile_denied_can_send_locations">Kann den Standort nicht teilen</string>
+    <string name="participant_profile_denied_can_send_messages">Kann keine Nachrichten schreiben</string>
+    <string name="participant_profile_denied_can_send_videos">Kann keine Videos senden</string>
+</resources>

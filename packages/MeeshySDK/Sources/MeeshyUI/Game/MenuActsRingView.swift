@@ -9,7 +9,7 @@ import MeeshySDK
 // mouvement attend la table #17381.
 
 /// Où commence et où finit chaque segment, en fractions du tour, à partir du haut et dans le sens des aiguilles.
-public enum MenuActsRingGeometry {
+public nonisolated enum MenuActsRingGeometry {
     /// Le jour entre deux segments, en fraction du tour (14 unités sur 300, comme le web).
     public static let gap: Double = 14.0 / 300.0
     /// L'anneau déborde le disque de quelques points, sans le toucher.

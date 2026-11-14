@@ -29,6 +29,8 @@ struct TrackingLinksView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: MeeshySpacing.xl) {
+                        SettingsSentence(text: String(localized: "tracking.links.orientation", defaultValue: "Un lien de suivi compte les clics et dit d'où ils viennent.", bundle: .main))
+                            .padding(.horizontal, MeeshySpacing.lg)
                         if let stats = viewModel.stats {
                             trackingStatsOverview(stats).padding(.horizontal, MeeshySpacing.lg)
                         }
@@ -80,7 +82,7 @@ struct TrackingLinksView: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl))
                     .foregroundColor(accent)
             }
-            .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main))
+            .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main))
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
@@ -150,10 +152,11 @@ struct TrackingLinksView: View {
     private var trackingEmptyState: some View {
         EmptyStateView(
             icon: "chart.bar.fill",
-            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main),
-            subtitle: String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main),
+            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de suivi", bundle: .main),
+            actionLabel: String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
             accentColor: MeeshyColors.trackingAccentHex,
-            compact: true
+            compact: true,
+            onAction: { showCreate = true }
         )
         .padding(.vertical, MeeshySpacing.xxl)
     }
@@ -182,6 +185,8 @@ struct TrackingLinksView: View {
                         Text("· \(c)").font(.caption).foregroundStyle(theme.textMuted).lineLimit(1)
                     }
                 }
+                Text(TrackingLinkRowDates.line(for: link))
+                    .font(.caption2).foregroundStyle(theme.textMuted).lineLimit(1)
             }
 
             Spacer()
@@ -205,6 +210,24 @@ struct TrackingLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
+    }
+}
+
+/// Ce qui permet de reconnaître un lien de suivi dans la liste : la date de création et, s'il a servi, celle de son
+/// dernier clic (règle 7 de l'épure). Aucune date inventée : un lien jamais cliqué ne dit que sa création.
+enum TrackingLinkRowDates {
+    static func line(for link: TrackingLink, now: Date = Date(), locale: Locale = .current) -> String {
+        let created = String(
+            format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
+            link.createdAt.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+        )
+        let lastClick = link.lastClickedAt.map { last in
+            String(
+                format: String(localized: "tracking.links.row.lastClick", defaultValue: "Dernier clic %@", bundle: .main),
+                RelativeTimeFormatter.fullString(for: min(last, now), now: now, locale: locale)
+            )
+        }
+        return [created, lastClick].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

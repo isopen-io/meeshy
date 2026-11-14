@@ -134,6 +134,9 @@ class CallLiveFrameUiTest {
         carousel().assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Screen"))
         rule.runOnIdle { action("Next montage")() }
         rule.waitForIdle()
+        val activate = carousel().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!
+        rule.runOnIdle { activate() }
+        rule.waitForIdle()
 
         assertThat(me.meeshy.sdk.model.call.montage.CallMontagePickRule.choice(capture.pick.value, 2))
             .isEqualTo(me.meeshy.sdk.model.call.montage.CallMontageChoice.Classic(me.meeshy.sdk.model.call.montage.CallMontageStyle.COVER))

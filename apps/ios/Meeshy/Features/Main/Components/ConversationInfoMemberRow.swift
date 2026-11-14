@@ -82,7 +82,7 @@ struct ConversationInfoMemberRow: View {
     private func roleBadgeLabel(_ role: String) -> String {
         switch role.lowercased() {
         case "admin", "creator": return String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .main)
-        case "moderator": return String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .main)
+        case "moderator": return String(localized: "conversation.role.moderator", defaultValue: "Modérateur", bundle: .main)
         default: return role.capitalized
         }
     }

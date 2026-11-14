@@ -145,7 +145,6 @@ final class EmailSignInWordingTests: XCTestCase {
         ("auth.magiclink.resendLabel", "Renvoyer le lien", "Resend the link"),
         ("auth.magiclink.sent.title", "E-mail envoyé", "Email sent"),
         ("auth.magiclink.sent.subtitle", "Ouvrez le lien reçu à", "Open the link sent to"),
-        ("auth.signup.email.hintLabel", "Pourquoi un lien", "Why a link"),
     ]
 
     func test_imposedVocabulary_isServedInFrenchAndEnglish_andShippedInEveryLocale() throws {
@@ -197,22 +196,20 @@ final class EmailSignInWordingTests: XCTestCase {
         XCTAssertTrue(body.contains("\"wand.and.stars\""), "le héros de l'écran reste la baguette")
     }
 
-    // MARK: - UN composant (i), deux écrans
+    // MARK: - Le (i) partagé vit dans MeeshyUI, l'inscription ne le monte plus
 
-    func test_infoHint_isOneComponentSharedBySignupAndMagicLink() throws {
+    func test_infoHint_isOneSharedComponent_theSignupDoesNotMountAnymore() throws {
         let hint = try code(Self.infoHint)
         XCTAssertTrue(hint.contains("\"info.circle\""))
-        XCTAssertTrue(hint.contains("HapticFeedback.light()"), "déplier un (i) se sent, sur les deux écrans")
+        XCTAssertTrue(hint.contains("HapticFeedback.light()"), "déplier un (i) se sent")
         XCTAssertTrue(hint.contains("meeshyTapTarget()"), "le (i) est un glyphe : sa cible ne peut pas être son dessin")
         XCTAssertTrue(hint.contains("accessibilityLabel(hint.buttonLabel)"),
                       "plusieurs (i) sur un écran ne se distinguent que par ce qu'ils annoncent")
         XCTAssertTrue(hint.contains("accessibilityValue(hint.text)"))
 
-        for path in [Self.signupView] {
-            let body = try code(path)
-            XCTAssertTrue(body.contains("AuthInfoHintButton("), "\(path) monte le (i) partagé")
-            XCTAssertFalse(body.contains("Image(systemName: \"info.circle\")"),
-                           "\(path) : un (i) recopié sur place est une jumelle qui divergera")
-        }
+        let body = try code(Self.signupView)
+        XCTAssertFalse(body.contains("AuthInfoHintButton("), "l'inscription dit sa phrase au repos (#17671)")
+        XCTAssertFalse(body.contains("Image(systemName: \"info.circle\")"),
+                       "un (i) recopié sur place est une jumelle qui divergera")
     }
 }

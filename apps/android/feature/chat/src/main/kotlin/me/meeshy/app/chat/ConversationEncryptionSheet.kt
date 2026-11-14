@@ -95,7 +95,10 @@ internal fun ConversationEncryptionSheet(
                 else -> {
                     StateBlock(view, state.status)
                     if (view.servedGap) NoticeText(R.string.encryption_detail_served_gap)
-                    ConversationEncryptionExplanationSections(ConversationEncryptionExplanation.of(view.regime.wireMode(), isDirect))
+                    ConversationEncryptionExplanationSections(
+                        explanation = ConversationEncryptionExplanation.of(view.regime.wireMode(), isDirect),
+                        footerStatesFinality = view.content == ConversationEncryptionContent.Activation,
+                    )
                     when (val content = view.content) {
                         ConversationEncryptionContent.Activation -> ActivationBlock(state, accentColor, viewModel)
                         is ConversationEncryptionContent.Active -> if (content.offersModeChange) ModeChangeBlock(state, view.regime, accentColor, viewModel)
@@ -187,7 +190,6 @@ private fun StateBlock(view: ConversationEncryptionView, status: ConversationEnc
         icon = regime.icon(),
         tint = if (regime == ConversationEncryptionRegime.END_TO_END) EncryptionSuccessTint else if (isEncrypted) MeeshyPalette.Indigo500 else EncryptionWarningTint,
         title = stringResource(if (isEncrypted) R.string.encryption_detail_active_label else R.string.encryption_detail_inactive_label),
-        subtitle = stringResource(regime.summaryRes()),
     )
     if (!isEncrypted) return
     val locale = LocalConfiguration.current.locales[0]
@@ -196,16 +198,6 @@ private fun StateBlock(view: ConversationEncryptionView, status: ConversationEnc
         val text = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale).withZone(ZoneId.systemDefault()).format(at)
         EncryptionDetailLine(stringResource(R.string.encryption_detail_enabled_on), text)
     }
-    EncryptionDetailLine(
-        stringResource(R.string.encryption_detail_translation),
-        stringResource(
-            when {
-                regime == ConversationEncryptionRegime.END_TO_END -> R.string.encryption_detail_translation_on_device
-                status?.canTranslate == true -> R.string.encryption_detail_translation_available
-                else -> R.string.encryption_detail_translation_disabled
-            },
-        ),
-    )
 }
 
 private fun ConversationEncryptionRegime.modeChoice(): ConversationEncryptionModeChoice =

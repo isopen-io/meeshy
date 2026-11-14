@@ -85,18 +85,18 @@ enum StoryDirectRepost {
         case .audienceWidening:
             return String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main)
         case .other:
-            return String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main)
+            return String(localized: "story.repost.error.generic", defaultValue: "Échec du repartage", bundle: .main)
         }
     }
 
     static func successMessage(for destination: StoryRepostDestination) -> String {
         switch destination {
         case .story:
-            return String(localized: "story.mine.repost.success", defaultValue: "Story republiée", bundle: .main)
+            return String(localized: "story.mine.repost.success", defaultValue: "Story repartagée", bundle: .main)
         case .post:
-            return String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main)
+            return String(localized: "story.repost.success", defaultValue: "Repartagé dans ton feed", bundle: .main)
         case .reel:
-            return String(localized: "story.repost.success.reel", defaultValue: "Republié dans tes réels", bundle: .main)
+            return String(localized: "story.repost.success.reel", defaultValue: "Repartagé dans tes réels", bundle: .main)
         }
     }
 }
@@ -692,7 +692,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main),
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Repartager", bundle: .main),
                     outlineTint: outlineTint(.repost)
                 ) {
                     guard let story = currentStory else { return }

@@ -2,6 +2,6 @@
 <!-- lot: talkie-reveil (#17144) — le réveil du talkie d'urgence : canal de la notification et action « Lire ». -->
 <resources>
     <string name="talkie_wake_channel_name">Talkie di emergenza</string>
-    <string name="talkie_wake_channel_description">Appare quando una persona vicina ti parla e riproduce la sua voce, anche con Meeshy in background</string>
+    <string name="talkie_wake_channel_description">Una persona vicina ti parla: la sua voce suona, anche in background</string>
     <string name="talkie_wake_play">Riproduci</string>
 </resources>

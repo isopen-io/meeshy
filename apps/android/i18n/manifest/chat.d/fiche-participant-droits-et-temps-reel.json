@@ -4,64 +4,18 @@
     ":feature:chat": {
       "resDir": "feature/chat/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canViewHistory",
-          "androidName": "participant_profile_allowed_can_view_history",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendMessages",
-          "androidName": "participant_profile_allowed_can_send_messages",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendImages",
-          "androidName": "participant_profile_allowed_can_send_images",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendFiles",
-          "androidName": "participant_profile_allowed_can_send_files",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendVideos",
-          "androidName": "participant_profile_allowed_can_send_videos",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendAudios",
-          "androidName": "participant_profile_allowed_can_send_audios",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendLinks",
-          "androidName": "participant_profile_allowed_can_send_links",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.allowed.canSendLocations",
-          "androidName": "participant_profile_allowed_can_send_locations",
-          "status": "adopted"
-        },
+        { "androidName": "participant_profile_allowed_can_view_history", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_messages", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_images", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_files", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_videos", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_audios", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_links", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_locations", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "participantProfile.birthday",
           "androidName": "participant_profile_info_birthday",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.email",
-          "androidName": "participant_profile_info_email",
           "status": "adopted"
         },
         {
@@ -108,26 +62,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "participantProfile.linkRequires",
-          "androidName": "participant_profile_entry_link_requires",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.linkLanguages",
-          "androidName": "participant_profile_entry_link_languages",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "participantProfile.requireNickname",
           "androidName": "participant_profile_require_nickname",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.requireEmail",
-          "androidName": "participant_profile_require_email",
           "status": "adopted"
         },
         {
@@ -164,12 +100,6 @@
           "catalog": "app",
           "iosKey": "participantProfile.historyGrant.error",
           "androidName": "participant_profile_history_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.historyGrant.label",
-          "androidName": "participant_profile_history_label",
           "status": "adopted"
         },
         {

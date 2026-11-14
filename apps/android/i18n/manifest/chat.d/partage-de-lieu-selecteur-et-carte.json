@@ -18,7 +18,6 @@
         { "catalog": "app", "iosKey": "location.precision.badge.neighborhood", "status": "adopted" },
         { "catalog": "app", "iosKey": "location.precision.badge.city", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.chip.kind.location", "status": "adopted" },
-        { "catalog": "app", "iosKey": "a11y.message.location", "status": "adopted" },
         { "catalog": "app", "iosKey": "message.action.copyAddress", "status": "adopted" },
         { "androidName": "chat_action_map", "status": "android-only" }
       ]

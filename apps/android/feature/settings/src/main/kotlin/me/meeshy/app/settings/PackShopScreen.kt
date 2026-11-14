@@ -132,8 +132,7 @@ fun PackShopScreen(
                         .padding(horizontal = MeeshySpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
-                    ui.balance?.let { Balance(it) }
-                    failureText?.let { FailureLine(it) }
+                    ShopSummary(balance = ui.balance, failure = failureText)
                     Shelf(
                         ui, language,
                         onRetry = { haptics.light(); viewModel.retry() },
@@ -156,6 +155,16 @@ fun PackShopScreen(
         onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
         onBuy = { slug -> haptics.light(); viewModel.buy(slug) },
     )
+    }
+}
+
+/** Au repos : ce que sont les Meeshes, puis le solde et l'échec éventuel. */
+@Composable
+internal fun ShopSummary(balance: Int?, failure: String?) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+        SettingsOrientation(stringResource(R.string.settings_packs_orientation))
+        balance?.let { Balance(it) }
+        failure?.let { FailureLine(it) }
     }
 }
 

@@ -65,7 +65,7 @@ class GameAttentionTest {
     }
 
     @Test
-    fun `les deux signaux coexistent ; isRaised des qu'un signal est leve`() {
+    fun `les deux signaux coexistent et isRaised des qu'un signal est leve`() {
         assertThat(law(chest = ChestStatus.Ready, flame = FlameStatus.AtRisk))
             .isEqualTo(GameAttention(chestReady = true, flameAtRisk = true))
         assertThat(GameAttention.None.isRaised).isFalse()

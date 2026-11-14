@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">Chiffrement de bout en bout</string>
     <string name="encrypted_devices_title">Mes appareils chiffrés</string>
     <string name="encrypted_devices_loading">Chargement de vos appareils chiffrés</string>
-    <string name="encrypted_devices_offline_empty">Vous êtes hors ligne. Connectez-vous pour voir vos appareils chiffrés.</string>
+    <string name="encrypted_devices_offline_empty">Hors ligne : vos appareils reviendront avec le réseau.</string>
     <string name="encrypted_devices_error">Vos appareils chiffrés n’ont pas pu être chargés.</string>
     <string name="encrypted_devices_retry">Réessayer</string>
-    <string name="encrypted_devices_offline">Vous êtes hors ligne. Cette liste n’est peut-être pas à jour.</string>
-    <string name="encrypted_devices_stale">Cette liste n’a pas pu être actualisée et n’est peut-être pas à jour.</string>
+    <string name="encrypted_devices_offline">Hors ligne : dernière liste connue.</string>
+    <string name="encrypted_devices_stale">Actualisation impossible : dernière liste connue.</string>
     <string name="encrypted_devices_current">Cet appareil</string>
     <string name="encrypted_devices_retiring">Retrait de %1$s en cours</string>
     <string name="encrypted_devices_retire_a11y">Retirer %1$s</string>

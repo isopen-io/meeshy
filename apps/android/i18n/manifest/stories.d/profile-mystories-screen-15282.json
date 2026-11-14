@@ -29,27 +29,13 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "story.mine.queue.empty.title",
           "androidName": "my_stories_queue_empty_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.mine.queue.empty.subtitle",
-          "androidName": "my_stories_queue_empty_subtitle",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
           "iosKey": "story.mine.drafts.empty.title",
           "androidName": "my_stories_drafts_empty_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.mine.drafts.empty.subtitle",
-          "androidName": "my_stories_drafts_empty_subtitle",
           "status": "adopted"
         },
         {

@@ -6,18 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "context.search",
-          "androidName": "context_search",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "context.call",
-          "androidName": "context_call",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "context.details",
           "androidName": "context_details",
           "status": "adopted"
@@ -38,12 +26,6 @@
           "catalog": "app",
           "iosKey": "context.admin_open",
           "androidName": "context_admin_open",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "context.more_options",
-          "androidName": "context_more_options",
           "status": "adopted"
         },
         {

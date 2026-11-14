@@ -5,10 +5,4 @@
     <string name="profile_block_confirm_action">Block</string>
     <string name="profile_block_cancel">Cancel</string>
     <string name="profile_block_fallback_name">this person</string>
-    <string name="profile_block_failed">Unable to block this user</string>
-    <string name="profile_unblock_failed">Unable to unblock this user</string>
-    <string name="profile_block_entry">Block</string>
-    <string name="profile_unblock_entry">Unblock</string>
-    <string name="profile_block_entry_a11y">Block %1$s</string>
-    <string name="profile_unblock_entry_a11y">Unblock %1$s</string>
 </resources>

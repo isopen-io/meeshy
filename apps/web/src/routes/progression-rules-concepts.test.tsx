@@ -68,7 +68,7 @@ describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #1
   test('le niveau se lit sur ta lumière, la frappe le fait baisser, le rang ne baisse pas', () => {
     const rules = gameRules('fr');
     expect(rules[1]?.body).toContain('ton niveau se lit sur elle');
-    expect(rules[1]?.body).toContain('Une frappe en fige une part, donc le fait baisser');
+    expect(rules[1]?.body).not.toContain('Une frappe en fige une part');
     expect(rules[2]?.body).toContain('une part de ta lumière s’y fige');
     expect(rules[2]?.body).toContain('30 %');
     expect(rules[3]?.body).toContain('ton niveau baisse d’autant');

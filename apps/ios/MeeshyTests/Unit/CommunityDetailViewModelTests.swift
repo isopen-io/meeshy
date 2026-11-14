@@ -217,7 +217,7 @@ final class CommunityDetailViewModelTests: XCTestCase {
     }
 
     func test_causeDuRefus_seDitDansLeCatalogue_jamaisDansLeMessageDuServeur() {
-        XCTAssertFalse(CommunityLoadFailure.refused.message.contains("Access denied"))
+        XCTAssertFalse((CommunityLoadFailure.refused.message ?? "").contains("Access denied"))
         XCTAssertFalse(CommunityLoadFailure.refused.title.isEmpty)
         XCTAssertNotEqual(CommunityLoadFailure.refused.actionLabel, CommunityLoadFailure.network.actionLabel)
     }

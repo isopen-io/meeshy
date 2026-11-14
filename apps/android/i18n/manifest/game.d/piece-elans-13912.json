@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "progression.elans.empty",
-          "androidName": "progression_elans_empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "progression.elans.hint",
           "androidName": "progression_elans_hint",
           "status": "adopted"

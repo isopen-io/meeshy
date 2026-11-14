@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- lot: refus-types-limite-du-jour-mode-lent — bannière du mode lent des nouveaux comptes (#14885). -->
 <resources>
-    <string name="gesture_refusal_slow_mode">يمكن للحسابات الجديدة إرسال رسالة كل 30 ثانية. يمكنك الكتابة مجددًا بعد %1$d ث.</string>
+    <string name="gesture_refusal_slow_mode">الحسابات الجديدة: رسالة كل 30 ث. أعد المحاولة بعد %1$d ث.</string>
 </resources>
