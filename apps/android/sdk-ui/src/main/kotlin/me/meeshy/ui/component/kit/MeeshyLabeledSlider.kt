@@ -135,7 +135,7 @@ public fun MeeshyLabeledSlider(
             valueText = if (showsValue) valueText else null,
             ink = recipe.inkColor(isDark),
             valueColor = recipe.valueColor(isDark),
-            alpha = recipe.contentOpacity,
+            contentAlpha = recipe.contentOpacity,
             onReset = reset,
         )
         MeeshySliderTrack(
@@ -166,13 +166,13 @@ private fun MeeshyLabeledSliderHeader(
     valueText: String?,
     ink: Color,
     valueColor: Color,
-    alpha: Float,
+    contentAlpha: Float,
     onReset: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { this.alpha = alpha }
+            .graphicsLayer { alpha = contentAlpha }
             .clearAndSetSemantics {},
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
