@@ -313,6 +313,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "settings_packs_orientation",
+          "status": "android-only"
+        },
+        {
           "androidName": "settings_packs_title",
           "status": "android-only"
         },
