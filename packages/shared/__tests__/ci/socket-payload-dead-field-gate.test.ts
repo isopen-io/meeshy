@@ -108,13 +108,6 @@ const DIVERGENCES_CONNUES: readonly (Divergence & { readonly issue: string; read
     note: "PANNE VIVANTE — lu par `MessageDeltaApplier.kt:90` : `mine` est toujours faux, la pastille de MA réaction à une pièce jointe ne s'allume jamais. L'émetteur pose `participantId` ; corriger demande de trancher QUELLE identité comparer.",
   },
   {
-    className: 'MessageDeletedEvent',
-    field: 'deletedAt',
-    events: ['message:deleted'],
-    issue: '#18159',
-    note: "LU, mais avec un repli sain — `MessageRealtimeApplier.kt:43` fait `deletedAt ?: now`, donc la bulle est datée par l'horloge du DEVICE au lieu de celle du serveur. `MessageDeletedEventData` ne porte aucun horodatage.",
-  },
-  {
     className: 'AttachmentUpdatedEvent',
     field: 'url',
     events: ['message:attachment-updated'],

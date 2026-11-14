@@ -4,17 +4,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
+import type { FullScreenLevel, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import type { CallMember } from '@/lib/calls/call-store';
 
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallGrid, type CallGridProps } from './call-grid';
-import { CALL_GRID_KIT } from './call-stage';
+import { CALL_GRID_KIT, callGridView } from './call-stage';
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await callGridView.load();
 });
 
 /**
@@ -50,8 +51,8 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
   self: { stream: null, cameraOn: false, mirrored: true, micMuted: false },
   choice: null,
   onChoose: () => undefined,
-  immersive: false,
-  onToggleImmersive: () => undefined,
+  fullScreen: 'off',
+  onFullScreen: () => undefined,
   moderation: null,
   language: 'fr',
   ...overrides,
@@ -124,10 +125,16 @@ describe('CallGrid', () => {
     expect(html).not.toContain('data-call-shared-screen');
   });
 
-  test('plein écran : le bandeau s’efface, le bouton dit comment en sortir', () => {
-    const html = grid({ ...sharing, immersive: true });
-    expect(html).not.toContain('data-call-strip');
+  test('plein écran (U2, #17961) : le bandeau des caméras RESTE, le bouton dit comment en sortir', () => {
+    const html = grid({ ...sharing, fullScreen: 'full' });
+    expect(html).toContain('data-call-strip=""');
     expect(html).toContain('aria-label="Quitter le plein écran"');
+  });
+
+  test('plein écran total (U2b, #17961) : le partage seul, aucun bandeau', () => {
+    const html = grid({ ...sharing, fullScreen: 'total' });
+    expect(html).not.toContain('data-call-strip');
+    expect(html).toContain('aria-label="Quitter le plein écran total"');
   });
 
   test('une personne invitée sonne dans sa tuile, et sa tuile ne se met pas en avant', () => {
@@ -250,8 +257,9 @@ describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
     expect(spotlight({ landscape: true })).toMatch(/class="relative flex min-h-\[140px\][^"]*flex-row/);
   });
 
-  test('plein écran : aucun bandeau, en paysage comme en portrait', () => {
-    expect(spotlight({ immersive: true, landscape: true })).not.toContain('data-call-strip');
+  test('plein écran d’une caméra (un seul niveau, #17961) : le bandeau reste, en paysage comme en portrait', () => {
+    expect(spotlight({ fullScreen: 'full', landscape: true })).toContain('data-call-strip=""');
+    expect(spotlight({ fullScreen: 'full' })).toContain('data-call-strip=""');
   });
 });
 
@@ -268,7 +276,7 @@ describe('CallGrid — une seule capsule de verre : « Revenir à la grille » p
   });
 
   test('en plein écran, « Revenir à la grille » reste, et « Quitter le plein écran » prend la place de l’autre', () => {
-    const inside = capsule(grid({ choice: { kind: 'self' }, immersive: true }));
+    const inside = capsule(grid({ choice: { kind: 'self' }, fullScreen: 'full' }));
     expect(inside.indexOf('aria-label="Revenir à la grille"')).toBeLessThan(inside.indexOf('aria-label="Quitter le plein écran"'));
   });
 });
@@ -289,17 +297,19 @@ describe('CallGrid — les gestes (#8392)', () => {
 
   const mount = (overrides: Partial<CallGridProps>) => {
     const chosen: SpotlightChoice[] = [];
+    const levels: FullScreenLevel[] = [];
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<CallGrid {...props({ ...overrides, onChoose: (choice) => chosen.push(choice) })} />));
+    const recorded = (next: Partial<CallGridProps>) => props({ ...next, onChoose: (choice) => chosen.push(choice), onFullScreen: (level) => levels.push(level) });
+    act(() => root.render(<CallGrid {...recorded(overrides)} />));
     const press = (selector: string) => act(() => (host.querySelector(selector) as HTMLElement | null)?.click());
     const done = () => {
       act(() => root.unmount());
       host.remove();
     };
-    const render = (next: Partial<CallGridProps>) => act(() => root.render(<CallGrid {...props({ ...next, onChoose: (choice) => chosen.push(choice) })} />));
-    return { chosen, press, done, host, render };
+    const render = (next: Partial<CallGridProps>) => act(() => root.render(<CallGrid {...recorded(next)} />));
+    return { chosen, levels, press, done, host, render };
   };
 
   test('chaque vidéo dit À QUI elle est — le membre, ou moi : la capture pose chaque visage dans SA case (#8743)', () => {
@@ -392,6 +402,63 @@ describe('CallGrid — les gestes (#8392)', () => {
     view.done();
   });
 
+  test('« Plein écran » monte d’un niveau à chaque appui, « Quitter » redescend, « Revenir à la grille » sort de tout (U2.2, #17961)', () => {
+    const view = mount({ ...sharing, remoteStreams: { 'u-k': domVideo() } });
+    view.press('button[aria-label="Plein écran"]');
+    view.render({ ...sharing, remoteStreams: { 'u-k': domVideo() }, fullScreen: 'full' });
+    view.press('button[aria-label="Plein écran total"]');
+    view.render({ ...sharing, remoteStreams: { 'u-k': domVideo() }, fullScreen: 'total' });
+    view.press('button[aria-label="Quitter le plein écran total"]');
+    view.render({ ...sharing, remoteStreams: { 'u-k': domVideo() }, fullScreen: 'full' });
+    view.press('button[aria-label="Quitter le plein écran"]');
+    expect(view.levels).toEqual(['full', 'total', 'full', 'off']);
+    view.render({ ...sharing, remoteStreams: { 'u-k': domVideo() }, fullScreen: 'total' });
+    view.press('button[aria-label="Revenir à la grille"]');
+    expect(view.levels.at(-1)).toBe('off');
+    expect(view.chosen).toEqual([{ kind: 'grid', dismissedSharer: 'u-k' }]);
+    view.done();
+  });
+
+  test('zoomé, l’écran partagé à la une se déplace au doigt, borné à son cadre, par un seul calque GPU (U2.7, #17754)', async () => {
+    const view = mount({ ...sharing, remoteStreams: { 'u-k': domVideo() } });
+    const screen = () => view.host.querySelector('[data-call-shared-screen]') as HTMLElement;
+    const layer = () => view.host.querySelector('[data-call-screen-layer]') as HTMLElement;
+    Object.defineProperty(screen(), 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, right: 400, bottom: 200, width: 400, height: 200, x: 0, y: 0, toJSON: () => ({}) }) });
+    const finger = (type: string, x: number, y: number) => act(() => void screen().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, clientX: x, clientY: y, pointerType: 'touch', button: 0 })));
+    const flush = () => act(async () => void (await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))));
+    finger('pointerdown', 200, 100);
+    finger('pointermove', 260, 100);
+    await flush();
+    finger('pointerup', 260, 100);
+    expect(layer().style.transform).toBe('');
+    act(() => void screen().dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY: -69.3 * 3, bubbles: true, cancelable: true }), 'ctrlKey', { value: true })));
+    finger('pointerdown', 200, 100);
+    finger('pointermove', 260, 90);
+    await flush();
+    finger('pointerup', 260, 90);
+    expect(layer().style.transform).toMatch(/translate3d\(60px, -10px, 0\) scale\(/);
+    expect(screen().hasAttribute('data-call-owns-drag')).toBe(true);
+    finger('pointerdown', 200, 100);
+    finger('pointermove', 2000, 100);
+    await flush();
+    finger('pointerup', 2000, 100);
+    expect(Number(/translate3d\((-?[\d.]+)px/.exec(layer().style.transform)?.[1])).toBeLessThanOrEqual(200);
+    view.done();
+  });
+
+  test('une caméra qui se coupe cède à l’avatar EN FONDU, dans la grille aussi (loi 17.12) : l’avatar monte par-dessus l’image', () => {
+    const cameras = (cameraOn: boolean) => ({ members: [member('u-a', 'Awa', { cameraOn })], remoteStreams: { 'u-a': domVideo() } });
+    const view = mount(cameras(true));
+    const veil = () => view.host.querySelector('[data-call-tile="u-a"] [data-call-camera-off]');
+    expect(veil()?.classList.contains('invisible')).toBe(true);
+    view.render(cameras(false));
+    expect(veil()?.classList.contains('invisible')).toBe(false);
+    expect(view.host.querySelector('[data-call-tile="u-a"] [data-call-camera-off]')?.textContent).toContain('AW');
+    view.render(cameras(true));
+    expect(view.host.querySelector('[data-call-tile="u-a"] video[data-call-member="u-a"]')).not.toBeNull();
+    view.done();
+  });
+
   test('« Grille » pendant un partage congédie CE partage', () => {
     const domStream = Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] });
     const view = mount({ ...sharing, remoteStreams: { 'u-k': domStream } });
@@ -404,7 +471,7 @@ describe('CallGrid — les gestes (#8392)', () => {
 describe('CallGrid — droite à gauche : capsule et plaque se posent au coin de FIN et de DÉBUT (U3.5, U3.2)', () => {
   test('la capsule de la une est ancrée au coin de fin, jamais à droite en dur', () => {
     const html = grid({ choice: { kind: 'self' } });
-    expect(html).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade/);
+    expect(html).toMatch(/class="absolute end-2 top-2[^"]*"[^>]*data-call-spotlight-place=""/);
     expect(html).not.toContain('right-2 top-2');
   });
 
@@ -415,18 +482,85 @@ describe('CallGrid — droite à gauche : capsule et plaque se posent au coin de
   });
 });
 
-describe('CallGrid — « Quitter le plein écran » reste visible en plein écran (U2.4)', () => {
-  const full = () => grid({ choice: { kind: 'self' }, immersive: true });
+describe('CallGrid — la capsule et la puce se rangent au toucher, en plein écran aussi (U2.4, U2.5, U1.10 ; #17961 point 1)', () => {
+  const place = (html: string) => /<div[^>]*data-call-spotlight-place=""[^>]*>/.exec(html)?.[0] ?? '';
+  const chip = (html: string) => /<span[^>]*data-call-screen-banner=""[^>]*>/.exec(html)?.[0] ?? '';
 
-  test('le bloc de la capsule échappe au rangement du chrome quand l’écran est plein', () => {
-    expect(full()).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade="" data-call-chrome-keep=""/);
-    expect(grid({ choice: { kind: 'self' } })).not.toContain('data-call-chrome-keep');
+  test('la capsule sort vers le HAUT avec l’en-tête (U1.10), jamais un fondu sur place', () => {
+    expect(place(grid({ choice: { kind: 'self' } }))).toContain('data-call-stow="top"');
+    expect(place(grid({ choice: { kind: 'self' } }))).not.toContain('data-call-chrome-fade');
+  });
+
+  test('commandes rangées : la capsule est rangée, et ne se lit plus', () => {
+    const stowed = place(grid({ choice: { kind: 'self' }, chromeVisible: false }));
+    expect(stowed).toContain('data-call-stowed=""');
+    expect(stowed).toContain('aria-hidden="true"');
+    expect(place(grid({ choice: { kind: 'self' } }))).not.toContain('data-call-stowed');
+  });
+
+  test('en plein écran, la capsule n’échappe plus au toucher : rangée avec les commandes, rendue avec elles (U2.4)', () => {
+    expect(place(grid({ choice: { kind: 'self' }, fullScreen: 'full' }))).not.toContain('data-call-stowed');
+    expect(place(grid({ choice: { kind: 'self' }, fullScreen: 'full', chromeVisible: false }))).toContain('data-call-stowed=""');
+    expect(place(grid({ ...sharing, fullScreen: 'total', chromeVisible: false }))).toContain('data-call-stowed=""');
+  });
+
+  test('la puce « Écran de X · 2× » se range et revient avec la capsule, aux deux niveaux (U2.5)', () => {
+    expect(chip(grid(sharing))).toContain('data-call-stow="top"');
+    expect(chip(grid(sharing))).not.toContain('data-call-stowed');
+    expect(chip(grid({ ...sharing, chromeVisible: false }))).toContain('data-call-stowed=""');
+    expect(chip(grid({ ...sharing, fullScreen: 'full', chromeVisible: false }))).toContain('data-call-stowed=""');
+    expect(chip(grid({ ...sharing, fullScreen: 'total', chromeVisible: false }))).toContain('data-call-stowed=""');
   });
 
   test('le bouton est un glyphe sur verre, comme « Plein écran » : jamais un disque blanc actif', () => {
-    const button = (html: string) => /<button[^>]*data-call-fullscreen[^>]*>/.exec(html)?.[0] ?? '';
+    const full = () => grid({ choice: { kind: 'self' }, fullScreen: 'full' });
+    const button = (html: string) => /<button[^>]*data-call-fullscreen="exit"[^>]*>/.exec(html)?.[0] ?? '';
     expect(button(full())).not.toContain('background:var(--color-on-media)');
     expect(button(full())).toContain('aria-pressed="true"');
     expect(button(full())).toContain('aria-label="Quitter le plein écran"');
+  });
+});
+
+describe('CallGrid — deux niveaux de plein écran pour un écran partagé, un seul pour une caméra (U2.2, #17961)', () => {
+  const labels = (html: string) => [...html.slice(html.indexOf('data-call-spotlight-capsule')).matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((match) => match[1]).slice(0, 3);
+
+  test('à la une : « Revenir à la grille · Plein écran »', () => {
+    expect(labels(grid(sharing)).slice(0, 2)).toEqual(['Revenir à la grille', 'Plein écran']);
+  });
+
+  test('U2 : « Revenir à la grille · Plein écran total · Quitter le plein écran »', () => {
+    expect(labels(grid({ ...sharing, fullScreen: 'full' }))).toEqual(['Revenir à la grille', 'Plein écran total', 'Quitter le plein écran']);
+  });
+
+  test('U2b : « Revenir à la grille · Quitter le plein écran total »', () => {
+    expect(labels(grid({ ...sharing, fullScreen: 'total' })).slice(0, 2)).toEqual(['Revenir à la grille', 'Quitter le plein écran total']);
+  });
+
+  test('une caméra en plein écran : « Revenir à la grille · Quitter le plein écran », jamais de plein écran total', () => {
+    const html = grid({ choice: { kind: 'member', userId: 'u-b' }, fullScreen: 'full' });
+    expect(html).not.toContain('Plein écran total');
+    expect(labels(html).slice(0, 2)).toEqual(['Revenir à la grille', 'Quitter le plein écran']);
+  });
+});
+
+describe('CallGrid — le lecteur d’écran annonce le partage qui prend la une (U2.1, #18180)', () => {
+  const region = (html: string) => /<span[^>]*data-call-share-announce=""[^>]*>([^<]*)<\/span>/.exec(html);
+
+  test('une zone vive TOUJOURS montée, vide sans partage', () => {
+    const quiet = region(grid());
+    expect(quiet?.[0]).toContain('role="status"');
+    expect(quiet?.[1]).toBe('');
+  });
+
+  test('un partage commence : elle dit qui partage, et la puce ne le redit pas', () => {
+    expect(region(grid(sharing))?.[1]).toBe('Kofi partage son écran');
+    expect(/<span[^>]*data-call-screen-banner=""[^>]*>/.exec(grid(sharing))?.[0]).not.toContain('role="status"');
+  });
+});
+
+describe('CallGrid — une seule couleur par personne (loi 18.2)', () => {
+  test('le médaillon de qui partage porte SA couleur d’identifiant, celle de son liseré et de ses sous-titres', () => {
+    const medallion = /data-call-screen-medallion=""[\s\S]*?<\/div>\s*<\/div>/.exec(grid(sharing))?.[0] ?? '';
+    expect(medallion).toContain(`linear-gradient(135deg, ${speakerColor('u-k')}`);
   });
 });

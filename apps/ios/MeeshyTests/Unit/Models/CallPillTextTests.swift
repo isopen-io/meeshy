@@ -292,3 +292,82 @@ final class CallCaptionsFooterTests: XCTestCase {
         XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR", isEvent: true)]), .none)
     }
 }
+
+/// P9b.15 (#18206, #17529) — repos ↔ journal en duo audio : l'avatar glisse et se réduit vers
+/// l'en-tête compact (120 → 56) pendant que le nom et la durée le rejoignent en fondu, ≈ 200 ms,
+/// puis le chemin inverse ; « Réduire les animations » ⇒ un fondu court, sans déplacement ni
+/// échelle. Mêmes vecteurs qu'Android (`CallAudioStageLayout`) et le web (`PORTRAIT_MORPH_MS`).
+@MainActor
+final class CallAudioStageLayoutTests: XCTestCase {
+
+    func test_avatarGoesFrom120To56_theSizeOfTheCompactHeader() {
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(isCompact: false), 120)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(isCompact: true), 56)
+        XCTAssertEqual(CallAudioStageLayout.fullAvatarSize, 120)
+        XCTAssertEqual(CallAudioStageLayout.shrinkScale, 56.0 / 120.0, accuracy: 0.0001)
+    }
+
+    func test_theFaceShrinksByAScale_drawnAtItsRestingSize() {
+        XCTAssertEqual(CallAudioStageLayout.faceScale(isCompact: false), 1)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(isCompact: true), CallAudioStageLayout.shrinkScale, accuracy: 0.0001)
+        XCTAssertEqual(
+            CallAudioStageLayout.fullAvatarSize * CallAudioStageLayout.faceScale(isCompact: true),
+            CallAudioStageLayout.avatarSize(isCompact: true),
+            accuracy: 0.0001
+        )
+    }
+
+    func test_thePassageIsAMorph_andUnderReduceMotionAShortFade() {
+        XCTAssertTrue(CallAudioStageLayout.morphs(reduceMotion: false))
+        XCTAssertFalse(CallAudioStageLayout.morphs(reduceMotion: true))
+        XCTAssertEqual(CallAudioStageLayout.transitionDuration(reduceMotion: false), 0.2, accuracy: 0.0001)
+        XCTAssertEqual(CallAudioStageLayout.transitionDuration(reduceMotion: true), CallChromeStow.reducedFadeDuration, accuracy: 0.0001)
+    }
+
+    func test_oneAvatarIdentity_carriesTheMorph_twoUnderReduceMotion() {
+        XCTAssertEqual(
+            CallAudioStageLayout.identity(isCompact: true, reduceMotion: false),
+            CallAudioStageLayout.identity(isCompact: false, reduceMotion: false),
+            "une seule vue : elle glisse et se réduit, jamais recréée"
+        )
+        XCTAssertNotEqual(
+            CallAudioStageLayout.identity(isCompact: true, reduceMotion: true),
+            CallAudioStageLayout.identity(isCompact: false, reduceMotion: true),
+            "Réduire les animations : deux vues qui se fondent sur place, sans déplacement ni échelle"
+        )
+    }
+
+    func test_duoAudio_morphsOneAvatar_insteadOfSwappingTwoLayouts() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
+        XCTAssertTrue(duo.contains("CallAudioStage(isCompact: pillText.compactsAudioLayout"))
+        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: pillText.compactsAudioLayout)"))
+        XCTAssertFalse(duo.contains("if pillText.compactsAudioLayout {"), "deux sous-arbres échangés : l'avatar s'effaçait et reparaissait")
+        XCTAssertFalse(duo.contains("callAvatarPair(size: 56)"), "un seul avatar, pas un second à 56 pt")
+        let audio = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var audioCallLayout: some View", in: connected))
+        XCTAssertFalse(audio.contains("callAvatarPair("), "la scène pose l'avatar ; le repos ne porte que le nom, la durée et les états")
+        let header = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallCompactAudioHeader", in: connected))
+        XCTAssertFalse(header.contains("avatar"), "l'en-tête compact ne porte que le nom et la durée")
+        XCTAssertTrue(header.contains(".accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"), "la durée reste nommée au lecteur d'écran (P9b.2)")
+    }
+
+    func test_audioStage_changesItsArrangement_keepsTheAvatar_andFadesTheText() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallAudioStage<", in: connected))
+        XCTAssertTrue(stage.contains("AnyLayout(HStackLayout(spacing: MeeshySpacing.md))"), "l'en-tête compact : l'avatar puis le nom et la durée")
+        XCTAssertTrue(stage.contains("AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))"), "le repos : l'avatar au-dessus du nom")
+        XCTAssertTrue(stage.contains("compact.transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
+        XCTAssertTrue(stage.contains("rest.transition(.opacity)"))
+        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(isCompact: isCompact, reduceMotion: reduceMotion))"))
+        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: isCompact)"), "≈ 200 ms, pas le ressort du (…)")
+        XCTAssertTrue(stage.contains("alignment: isCompact ? .topLeading : .center"), "bord de tête : droite à gauche compris")
+        let states = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+States.swift"))
+        let pair = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func audioAvatarPair(isCompact: Bool) -> some View", in: states))
+        XCTAssertTrue(pair.contains("avatarCircle(size: CallAudioStageLayout.fullAvatarSize)"), "dessiné à sa taille de repos")
+        XCTAssertTrue(pair.contains(".scaleEffect(CallAudioStageLayout.faceScale(isCompact: isCompact))"), "réduit par une échelle : une transformation")
+        XCTAssertTrue(pair.contains("CallPeerSpeechRing(callManager: callManager, mesh: mesh)"), "P9b.13 : l'anneau suit l'avatar à sa taille")
+        XCTAssertLessThan(try XCTUnwrap(pair.range(of: "CallPeerSpeechRing(")).lowerBound,
+                          try XCTUnwrap(pair.range(of: "localAvatarBadge(")).lowerBound,
+                          "l'anneau entoure le disque de l'autre, pas la pastille locale")
+    }
+}

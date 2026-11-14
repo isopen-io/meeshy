@@ -2,11 +2,11 @@
   "views": {
     "about": {
       "total": 1223,
-      "firstScreen": 126
+      "firstScreen": 129
     },
     "account-deletion": {
       "total": 276,
-      "firstScreen": 100
+      "firstScreen": 110
     },
     "admin": {
       "total": 14,
@@ -106,7 +106,7 @@
     },
     "c-conversation": {
       "total": 136,
-      "firstScreen": 103
+      "firstScreen": 104
     },
     "calls": {
       "total": 47,
@@ -122,7 +122,7 @@
     },
     "child-safety": {
       "total": 707,
-      "firstScreen": 132
+      "firstScreen": 143
     },
     "communities": {
       "total": 38,
@@ -150,7 +150,7 @@
     },
     "faq": {
       "total": 875,
-      "firstScreen": 91
+      "firstScreen": 95
     },
     "feed": {
       "total": 436,
@@ -218,11 +218,11 @@
     },
     "me-progression-atlas": {
       "total": 75,
-      "firstScreen": 72
+      "firstScreen": 73
     },
     "me-progression-badges": {
       "total": 162,
-      "firstScreen": 67
+      "firstScreen": 70
     },
     "me-progression-carnet": {
       "total": 43,
@@ -481,6 +481,90 @@
       },
       "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
       "issue": 17641
+    },
+    "about": {
+      "de": {
+        "total": 1223,
+        "firstScreen": 126
+      },
+      "a": {
+        "total": 1223,
+        "firstScreen": 129
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "account-deletion": {
+      "de": {
+        "total": 276,
+        "firstScreen": 100
+      },
+      "a": {
+        "total": 276,
+        "firstScreen": 110
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "child-safety": {
+      "de": {
+        "total": 707,
+        "firstScreen": 132
+      },
+      "a": {
+        "total": 707,
+        "firstScreen": 143
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "faq": {
+      "de": {
+        "total": 875,
+        "firstScreen": 91
+      },
+      "a": {
+        "total": 875,
+        "firstScreen": 95
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "me-progression-atlas": {
+      "de": {
+        "total": 75,
+        "firstScreen": 72
+      },
+      "a": {
+        "total": 75,
+        "firstScreen": 73
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "me-progression-badges": {
+      "de": {
+        "total": 162,
+        "firstScreen": 67
+      },
+      "a": {
+        "total": 162,
+        "firstScreen": 70
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "c-conversation": {
+      "de": {
+        "total": 136,
+        "firstScreen": 103
+      },
+      "a": {
+        "total": 136,
+        "firstScreen": 104
+      },
+      "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
+      "issue": 18392
     }
   }
 }

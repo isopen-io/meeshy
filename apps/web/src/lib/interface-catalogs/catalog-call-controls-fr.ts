@@ -85,6 +85,8 @@ const fr = {
   'callControls.selfTile.corner.bottom-left': 'Ma vignette : en bas à gauche',
   'callControls.selfTile.corner.bottom-right': 'Ma vignette : en bas à droite',
   'callControls.spotlight.self': 'Mettre mon image à la une',
+  'callControls.fullscreen.total.enter': 'Plein écran total',
+  'callControls.fullscreen.total.exit': 'Quitter le plein écran total',
   'callControls.screenZoom.hint': 'Écran partagé : pincez ou Ctrl + molette pour zoomer, touchez deux fois pour le revoir entier',
   'callControls.liveFrame.proposal': '{name} vous propose le cadre « {frame} »',
   'callControls.liveFrame.proposal.anonymous': 'Votre correspondant vous propose le cadre « {frame} »',

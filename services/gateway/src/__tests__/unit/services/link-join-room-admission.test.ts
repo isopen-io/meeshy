@@ -55,7 +55,7 @@ const shareLinkRow = () => ({
   conversation: { id: CONV_ID, title: 'Équipe', type: 'group', isActive: true, closedAt: null },
 });
 
-function fakePrisma(options: { readonly existingMembership?: { id: string; isActive: boolean } } = {}) {
+function fakePrisma(options: { readonly existingMembership?: { id: string; isActive: boolean } } = {}, order: string[] = []) {
   return {
     conversationShareLink: {
       findFirst: jest.fn(async () => shareLinkRow()),
@@ -71,7 +71,7 @@ function fakePrisma(options: { readonly existingMembership?: { id: string; isAct
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'participant-1', avatar: null, ...data })),
       update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'participant-1', avatar: null, ...data })),
     },
-    message: { create: jest.fn(async () => ({ id: 'msg-1' })) },
+    message: { create: jest.fn(async () => { order.push('system-message'); return { id: 'msg-1' }; }) },
     conversation: { update: jest.fn(async () => ({})) },
   };
 }
@@ -86,8 +86,10 @@ async function join(params: {
 }) {
   const executeur = executeurImmediat();
   const joined: RoomJoin[] = [];
+  /* L'ORDRE des deux gestes, dans le même journal — c'est lui que #18384 garde. */
+  const order: string[] = [];
   const outcome = await performLinkJoin({
-    prisma: fakePrisma({ existingMembership: params.existingMembership }) as never,
+    prisma: fakePrisma({ existingMembership: params.existingMembership }, order) as never,
     key: LINK_ID,
     authContext: params.registered
       ? ({ type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID } as never)
@@ -101,6 +103,7 @@ async function join(params: {
       : {
           arrivalRooms: {
             joinUserToConversationRoom: async (userId: string, conversationId: string) => {
+              order.push('room-join');
               if (params.throws) throw new Error('adapter down');
               joined.push({ userId, conversationId });
             },
@@ -108,7 +111,7 @@ async function join(params: {
         }),
   });
   await executeur.settle();
-  return { outcome, joined };
+  return { outcome, joined, order };
 }
 
 describe('la jointure par lien admet le compte dans la room du fil', () => {
@@ -146,6 +149,34 @@ describe('la jointure par lien admet le compte dans la room du fil', () => {
   it('aucune capacité de room fournie : la jointure aboutit quand même', async () => {
     const { outcome } = await join({ registered: true, rooms: false });
     expect(outcome.kind).toBe('joined');
+  });
+});
+
+/**
+ * #18384 — L'ADMISSION DANS LA ROOM PRÉCÈDE LE MESSAGE D'ARRIVÉE.
+ *
+ * `postJoinSystemMessage` diffuse `message:new` vers `conversation:<id>`. Tant
+ * que la socket de l'arrivant n'y est pas, il ne reçoit PAS son propre message
+ * d'arrivée — et la file hors ligne ne le rattrape pas : il figure déjà dans
+ * `connectedUsers` et ne porte aucun marqueur d'injoignabilité.
+ *
+ * Le doc-comment du site disait déjà la loi — « L'admission dans la room,
+ * AVANT l'annonce : (…) c'est la première qui décide s'il recevra quoi que ce
+ * soit du fil ». Elle était vraie de l'annonce d'adhésion et fausse du message
+ * système, qui part plus tôt, dans une autre fonction.
+ */
+describe("l'admission dans la room précède le message d'arrivée (#18384)", () => {
+  it('un COMPTE qui rejoint est DANS la room avant que son arrivée ne soit écrite', async () => {
+    const { order } = await join({ registered: true });
+
+    expect(order).toEqual(['room-join', 'system-message']);
+  });
+
+  it("un adaptateur en panne n'empêche pas le message d'arrivée", async () => {
+    const { outcome, order } = await join({ registered: true, throws: true });
+
+    expect(outcome.kind).toBe('joined');
+    expect(order).toEqual(['room-join', 'system-message']);
   });
 });
 
