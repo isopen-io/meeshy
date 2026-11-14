@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.call.CallAudioStageLayout
+import me.meeshy.sdk.model.call.CallDuoAudioFit
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeStow
@@ -255,12 +256,14 @@ internal fun CallConnectedColumn(
         val stageMaxHeight = maxHeight
         val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
         val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
+        // #18488 : un duo AUDIO à hauteur compacte garde sa pilule entière — ce qui l'entoure se resserre (CallDuoAudioFit).
+        val compactAudio = groupStage == null && CallHeaderLaw.centersPeerBlock(videoStage) && isCompactHeight
         // P11.1 : en groupe, sur la grille, la scène part du haut de la zone sûre et l'en-tête flotte sur sa première rangée ;
         // à la une, en hauteur compacte (L4.2) ou sous une pile (L4.11), elle reste sous la rangée de l'en-tête. En duo, rien
         // ne change.
         val columnTop = if (groupStage != null) 0.dp else MeeshySpacing.xl
         Column(
-            modifier = Modifier.matchParentSize().padding(start = MeeshySpacing.xl, end = MeeshySpacing.xl, bottom = MeeshySpacing.xl, top = columnTop),
+            modifier = Modifier.matchParentSize().padding(start = MeeshySpacing.xl, end = MeeshySpacing.xl, bottom = CallDuoAudioFit.columnBottomDp(compactAudio).dp, top = columnTop),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -281,7 +284,8 @@ internal fun CallConnectedColumn(
             } else {
                 // #17529 : le journal ouvert dans la pilule resserre l'avatar en en-tête compact (P9b).
                 CallAudioStageSwitch(
-                    compact = CallAudioStageLayout.compacts(pillText, isVideoStage = videoStage),
+                    compact = CallAudioStageLayout.compacts(pillText, isVideoStage = videoStage, isCompactHeight = isCompactHeight, controlsShown = controlsVisible),
+                    stageHeightDp = stageMaxHeight.value,
                     state = state,
                     peer = peer,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -301,7 +305,7 @@ internal fun CallConnectedColumn(
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 onInteraction = chrome::onInteraction,
                 releasesRoom = !pillText.isOnStage(chromeState.isStageFullScreen),
-                bottomPadding = MeeshySpacing.xl,
+                bottomPadding = CallDuoAudioFit.blockBottomDp(compactAudio).dp,
             ) {
                 CallControlsPill(
                     state = state,
@@ -323,22 +327,14 @@ internal fun CallConnectedColumn(
                     rowsMaxHeight = callPillRowsMaxHeight(stageMaxHeight, hasGrid = groupStage != null),
                     captions = { CallCaptionsBandHost(state = state, hasOwnGlass = false) },
                     panelContent = { panel ->
-                        when (panel) {
-                            CallScreenPanel.Record -> CallRecordingKindPanel(
-                                onPick = { kind ->
-                                    recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
-                                    chrome.close()
-                                },
-                            )
-                            CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
-                            CallScreenPanel.Journal -> CallJournalPanel(
-                                onClose = chrome::close,
-                                captures = state.liveCaptures,
-                                peerName = state.peerName,
-                                participantNames = state.participantNames,
-                            )
-                            else -> Unit
-                        }
+                        CallConnectedPanel(
+                            panel = panel,
+                            state = state,
+                            chrome = chrome,
+                            recording = recordingViewModel,
+                            reactions = reactionsViewModel,
+                            journalListDp = if (compactAudio) CallDuoAudioFit.journalListDp(stageMaxHeight.value) else null,
+                        )
                     },
                 )
             }
@@ -395,3 +391,32 @@ private fun CallGroupStageTopReserve(base: Dp, clearance: CallGroupGridClearance
 /** L4.11 — la grille suit la pile des bandeaux par sa seule translation, lue au dessin : ni remesure ni recomposition par image. */
 private fun Modifier.glidesUnderTheBannerStack(clearance: CallGroupGridClearance): Modifier =
     graphicsLayer { translationY = clearance.shift.toPx() }
+
+/** The panel the pill draws in place of its rows: the recording kinds, the reactions or the journal (#17343). */
+@Composable
+private fun CallConnectedPanel(
+    panel: CallScreenPanel,
+    state: CallUiState,
+    chrome: CallChromeController,
+    recording: CallRecordingViewModel,
+    reactions: CallReactionsViewModel,
+    journalListDp: Float?,
+) {
+    when (panel) {
+        CallScreenPanel.Record -> CallRecordingKindPanel(
+            onPick = { kind ->
+                recording.onEvent(CallRecordingUiEvent.Pick(kind))
+                chrome.close()
+            },
+        )
+        CallScreenPanel.React -> CallReactionsPanel(onReact = reactions::react)
+        CallScreenPanel.Journal -> CallJournalPanel(
+            onClose = chrome::close,
+            captures = state.liveCaptures,
+            peerName = state.peerName,
+            participantNames = state.participantNames,
+            listHeightDp = journalListDp,
+        )
+        else -> Unit
+    }
+}

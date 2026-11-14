@@ -171,3 +171,31 @@ private nonisolated final class MockCrashReporter: CrashReporting, @unchecked Se
         lock.withLock { _nonFatals.append(error) }
     }
 }
+
+// MARK: - L'archive des rapports surfacés (#18494)
+
+/// Un rapport montré au porteur n'est plus effacé : il part dans `archive/`,
+/// et l'archive garde les plus récents jusqu'au plafond.
+final class CrashReportArchiveLawTests: XCTestCase {
+
+    func test_kept_underCap_keepsEverything() {
+        XCTAssertEqual(CrashReportArchiveLaw.kept(count: 12, cap: 200), 12)
+    }
+
+    func test_kept_overCap_keepsTheCap() {
+        XCTAssertEqual(CrashReportArchiveLaw.kept(count: 250, cap: 200), 200)
+    }
+
+    func test_kept_zeroOrNegativeCap_neverEmptiesTheArchive() {
+        XCTAssertEqual(CrashReportArchiveLaw.kept(count: 5, cap: 0), 1)
+        XCTAssertEqual(CrashReportArchiveLaw.kept(count: 5, cap: -3), 1)
+    }
+
+    func test_kept_emptyArchive_isZero() {
+        XCTAssertEqual(CrashReportArchiveLaw.kept(count: 0, cap: 200), 0)
+    }
+
+    func test_cap_isTwoHundredReports() {
+        XCTAssertEqual(CrashDiagnosticsManager.maxArchivedReports, 200)
+    }
+}

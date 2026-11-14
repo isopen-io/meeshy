@@ -15,7 +15,16 @@ import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { callsAvailable } from '@/lib/calls/calls-availability';
-import { PROFILE_DESTINATION, feedDiscDestination, gameRungLabelKey, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
+import {
+  FLOATING_RUNG_MS,
+  FLOATING_RUNG_STAGGER_MS,
+  PROFILE_DESTINATION,
+  feedDiscDestination,
+  floatingLadderExitMs,
+  gameRungLabelKey,
+  menuLadderFor,
+  type FloatingDestination,
+} from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import { belowScreenTop } from '@/lib/view/safe-area';
 import {
@@ -187,6 +196,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   const roving = useRovingMenu({
     itemCount: ladder.length,
+    layer: false,
+    exitMs: floatingLadderExitMs(ladder.length),
     /* Une rotation échelle ouverte change la place : le pas se remesure. */
     onResize: () => setRooms(measureLadderRooms(roving.buttonRef.current)),
   });
@@ -360,13 +371,23 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
             : { transform: `translate(${menu.offset.x}px, ${menu.offset.y}px) scale(1.15)` }),
         }}
       >
-        {open ? (
+        {roving.mounted ? (
           <div
             ref={menuRef}
             role="menu"
             aria-label={translate(langue, 'a11y.floating.menu.ladder')}
             onKeyDown={onMenuKeyDown}
+            /* EN SORTIE, L'ÉCHELLE EST PEINTE MAIS NE RÉPOND PLUS (#18460) : ni
+               toucher, ni tabulation, ni lecteur d'écran. */
+            inert={roving.leaving}
             className="pointer-events-none absolute inset-0"
+            style={
+              {
+                '--floating-rung-ms': `${FLOATING_RUNG_MS}ms`,
+                '--floating-rung-stagger': `${FLOATING_RUNG_STAGGER_MS}ms`,
+                '--rung-count': ladder.length,
+              } as React.CSSProperties
+            }
           >
             {ladder.map((destination, index) => (
               <Link
@@ -378,6 +399,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
                   itemRefs.current[index] = el;
                 }}
                 onClick={() => setOpen(false)}
+                data-leaving={roving.leaving ? '' : undefined}
                 aria-label={rungLabel(langue, destination, counts, attention)}
                 className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={

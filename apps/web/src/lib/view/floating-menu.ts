@@ -276,3 +276,18 @@ export type GameRungLabelKey =
   | 'a11y.floating.rung.game.both'
   | 'a11y.floating.rung.game.chest-ready'
   | 'a11y.floating.rung.game.flame-at-risk';
+
+/**
+ * **LA CASCADE DE L'ÉCHELLE** (#18460) — `menuAnimation` d'iOS
+ * (`RootView.swift:1756-1767`) : 0,32 s par barreau, 0,04 s de retard par rang.
+ * Posées en variables CSS sur l'échelle (`floating-menus.css`), elles règlent
+ * l'entrée et la sortie, qui la rejoue à l'envers, cascade inversée.
+ */
+export const FLOATING_RUNG_MS = 320;
+
+export const FLOATING_RUNG_STAGGER_MS = 40;
+
+/** Le temps que l'échelle reste montée après sa fermeture : le dernier barreau, retard compris. */
+export function floatingLadderExitMs(rungs: number): number {
+  return rungs <= 0 ? 0 : FLOATING_RUNG_MS + (rungs - 1) * FLOATING_RUNG_STAGGER_MS;
+}
