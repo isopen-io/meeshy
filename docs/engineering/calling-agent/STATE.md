@@ -942,3 +942,9 @@ socket jusqu'au client.
 1. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 27 — 2026-11-14 (en cours)
+
+- **Base** : `origin/dev` @ `8ab427ff`. Le lot du cycle 26 (#18232) y est fusionné.
+- **Branche** : `claude/determined-volta-c27utf8`.
+- **Objectif** : #17205. Un premier frame multipart qui n'est pas de l'UTF-8, ou qui n'est pas un objet JSON, est refusé proprement par le traducteur.
