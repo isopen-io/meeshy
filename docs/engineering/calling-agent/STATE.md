@@ -895,3 +895,9 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132, #17133 et #18154.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 25 — 2026-11-14 (réservé)
+
+- **Base** : `origin/dev` @ `ac59c0e6`. Le lot du cycle 24 (#18064) y est fusionné.
+- **Branche** : `claude/determined-volta-ah45gp`.
+- **Objectif** : #18097. `_handleTranslationError` reçoit un `TranslationErrorPayload`, et aucun `translation:failed` ne part sans `conversationId`.
