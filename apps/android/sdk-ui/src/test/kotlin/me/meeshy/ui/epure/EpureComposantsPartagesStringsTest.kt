@@ -245,12 +245,13 @@ class EpureComposantsPartagesStringsTest {
     @Test
     fun `l'echec d'ouverture d'un contenu tient dans son titre et son bouton, sans sous-titre reseau ni serveur`() {
         val sources = File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.joinToString("\n") { it.readText() }
-        listOf("content_failure_network_body", "content_failure_server_body").forEach { key ->
+        listOf("content_failure_network_body", "content_failure_server_body", "content_failure_unavailable_body").forEach { key ->
             assertThat(sources).doesNotContain("R.string.$key")
             folders.keys.forEach { language ->
                 assertWithMessage("$language/$key").that(byLanguage.getValue(language).containsKey(key)).isFalse()
             }
         }
+        assertThat(text("fr", "content_failure_unavailable_title")).isNotEmpty()
         assertThat(text("fr", "content_failure_server_title")).isNotEmpty()
         assertThat(text("fr", "content_failure_retry")).isNotEmpty()
     }
