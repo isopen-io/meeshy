@@ -40,6 +40,7 @@ import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import { isAfterReadMessage } from '@/lib/view/after-read';
+import { burnFrontOf } from '@/lib/view/ephemeral-burn-front';
 import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
@@ -156,8 +157,10 @@ export type ThreadSummaryCapability = {
  * l'arrivée (#11223). La SORTIE ne se pose pas ici : elle se joue sur le `<li>`
  * entier (`rowLeavingProps`), qui emporte séparateurs, capsule et note.
  */
-function rowMotionProps(row: { readonly destroying: boolean; readonly id: string; readonly arriving: boolean; readonly exit: RowExitState }) {
-  if (row.destroying) return { 'data-destroying': '', className: 'ephemeral-destroying' };
+const documentIsRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+
+function rowMotionProps(row: { readonly destroying: boolean; readonly isMine: boolean; readonly id: string; readonly arriving: boolean; readonly exit: RowExitState }) {
+  if (row.destroying) return { 'data-destroying': '', 'data-burn-front': burnFrontOf({ isMine: row.isMine, rtl: documentIsRtl() }), className: 'ephemeral-destroying' };
   if (row.exit.returning.has(row.id)) return { 'data-returning': '', className: 'thread-row-returning' };
   return row.arriving ? { 'data-arriving': '', className: 'thread-row-arrival' } : {};
 }
@@ -798,7 +801,7 @@ export function ThreadModes({
                     voisins se resserrent à mesure, sans saut de liste. Avec
                     `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
                 <div
-                  {...rowMotionProps({ destroying: rowPhase === 'destroying', id: p.message.id, arriving: threadRowKeyOf(p.message) === arrivingKey, exit: rowExit })}
+                  {...rowMotionProps({ destroying: rowPhase === 'destroying', isMine: rowIsMine, id: p.message.id, arriving: threadRowKeyOf(p.message) === arrivingKey, exit: rowExit })}
                   {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                   {...(takesMessageGestures(p.message) ? { 'data-row': p.message.id } : {})}
                   {...sealedProps(p.message, Date.now())}

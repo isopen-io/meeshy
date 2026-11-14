@@ -185,9 +185,11 @@ final class EpureReglagesLiensTests: XCTestCase {
     /// La rangée « Parrainage » des réglages dit ce que dit l'écran qu'elle ouvre : le parrainage invite et compte les
     /// inscrits, il ne promet aucune récompense que rien dans Meeshy ne verse.
     func test_settingsAffiliateRow_saysWhatTheReferralScreenDoes_noPromisedReward() throws {
-        XCTAssertEqual(SettingsOrientation.affiliate, "Invitez et suivez qui s'inscrit par vos liens")
-        XCTAssertFalse(SettingsOrientation.affiliate.lowercased().contains("récompense"))
         let app = try app()
+        XCTAssertEqual(SettingsOrientation.affiliate, Bundle.main.localizedString(forKey: "links.hub.affiliate.description", value: nil, table: nil))
+        let sentence = try XCTUnwrap(app["links.hub.affiliate.description"]?["fr"])
+        XCTAssertEqual(sentence, "Invitez et suivez qui s'inscrit par vos liens")
+        XCTAssertFalse(sentence.lowercased().contains("récompense"))
         XCTAssertNil(app["settings.tools.affiliate.hint"], "la phrase vit sous une seule clé, celle de l'écran des liens")
     }
 

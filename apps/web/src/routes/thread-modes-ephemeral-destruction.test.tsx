@@ -171,6 +171,22 @@ for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
     expect(host.textContent ?? '').toContain(SECRET);
   });
 
+  test('la bulle d’autrui brûle depuis son bord intérieur, le front filant vers la gauche (#18556)', async () => {
+    const message = messageOf({ id: 'm-brule', ephemeralDuration: 600 });
+    noteEphemeralReception('m-brule', Date.now());
+    const host = await monte(mode, message, new Set(['m-brule']));
+
+    expect(host.querySelector('[data-destroying]')?.getAttribute('data-burn-front')).toBe('left');
+  });
+
+  test('ma bulle brûle vers la droite (#18556)', async () => {
+    const message = messageOf({ id: 'm-brule', senderId: 'u-viewer', ephemeralDuration: 600 });
+    noteEphemeralReception('m-brule', Date.now());
+    const host = await monte(mode, message, new Set(['m-brule']));
+
+    expect(host.querySelector('[data-destroying]')?.getAttribute('data-burn-front')).toBe('right');
+  });
+
   test('un éphémère qui court n’est PAS en destruction', async () => {
     const message = messageOf({ id: 'm-brule', ephemeralDuration: 600 });
     noteEphemeralReception('m-brule', Date.now());
