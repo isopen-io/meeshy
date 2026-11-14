@@ -80,7 +80,6 @@ fun NewConversationScreen(
     state.error?.let { error ->
         AlertDialog(
             onDismissRequest = viewModel::dismissError,
-            title = { Text(stringResource(R.string.new_conversation_error_title)) },
             text = { Text(stringResource(error.messageRes())) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.new_conversation_ok)) }

@@ -17,7 +17,6 @@
         <item quantity="many">%1$s+ عضو</item>
         <item quantity="other">%1$s+ عضو</item>
     </plurals>
-    <string name="members_sheet_error_title">خطأ</string>
     <string name="members_sheet_error_ok">حسنًا</string>
     <string name="members_sheet_swipe_remove">إزالة</string>
     <string name="add_participant_failed">تعذّرت إضافة هذا العضو.</string>
