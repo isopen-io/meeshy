@@ -8,6 +8,8 @@ import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
@@ -163,11 +165,42 @@ public data class MeeshyColorDotsRecipe(
         public fun ringScale(isSelected: Boolean, isPressed: Boolean): Double =
             if (isSelected || isPressed) 1.0 else RING_ENTER_SCALE
 
-        /** Vrai quand le glyphe se lit mieux en blanc qu'en indigo sombre sur ces arrêts (le pire arrêt d'un dégradé compte). */
-        public fun glyphPrefersLight(stops: List<Color>): Boolean {
-            if (stops.isEmpty()) return true
-            return worstContrast(MeeshyMediaChromeColors.OnMedia, stops) >= worstContrast(MeeshyPalette.Indigo950, stops)
+        /**
+         * Le cercle pendant sa transition : [selectedFraction] va de 0 (non courante) à 1 (courante) au ressort, le doigt
+         * posé ([isPressed]) agit sans attendre. Aux deux bouts, c'est [ringOpacity].
+         */
+        public fun ringOpacity(selectedFraction: Double, isPressed: Boolean): Double =
+            mix(ringOpacity(false, isPressed), ringOpacity(true, isPressed), selectedFraction)
+
+        /** L'échelle du cercle pendant sa transition ; aux deux bouts, c'est [ringScale]. */
+        public fun ringScale(selectedFraction: Double, isPressed: Boolean): Double =
+            mix(ringScale(false, isPressed), ringScale(true, isPressed), selectedFraction)
+
+        /** Les arrêts de couleur d'un remplissage : un pour l'uni, ceux du dégradé, aucun pour le creux. */
+        public fun stops(fill: MeeshyColorDotFill): List<Color> = when (fill) {
+            is MeeshyColorDotFill.Solid -> listOf(fill.color)
+            is MeeshyColorDotFill.Gradient -> fill.colors
+            MeeshyColorDotFill.Hollow -> emptyList()
         }
+
+        /**
+         * L'encre du glyphe : celle du groupe sur un disque creux ou sans arrêt, sinon la plus contrastée du blanc et de
+         * l'indigo sombre (le pire arrêt d'un dégradé compte). Miroir de `glyphInk(on:groupInk:)` (iOS).
+         */
+        public fun glyphInk(fill: MeeshyColorDotFill, groupInk: Color): Color {
+            val stops = stops(fill)
+            if (stops.isEmpty()) return groupInk
+            val light = worstContrast(MeeshyMediaChromeColors.OnMedia, stops)
+            val dark = worstContrast(MeeshyPalette.Indigo950, stops)
+            return if (light >= dark) MeeshyMediaChromeColors.OnMedia else MeeshyPalette.Indigo950
+        }
+
+        /**
+         * Le défilement qui centre la cellule [index] d'une ligne vue par [viewport] dp, borné à zéro. Le dernier bord est
+         * borné par le défilement lui-même.
+         */
+        public fun scrollTarget(index: Int, cell: Double, viewport: Double): Double =
+            if (index < 0 || !viewport.isFinite()) 0.0 else (index * cell + cell / 2 - viewport / 2).coerceAtLeast(0.0)
 
         /** Le contraste WCAG le plus faible d'une encre sur des arrêts de couleur. */
         public fun worstContrast(ink: Color, stops: List<Color>): Double = stops.minOf { contrast(ink, it) }
@@ -191,12 +224,23 @@ public data class MeeshyColorDotsRecipe(
             return if (rest > 0) full + rest else full
         }
 
+        private fun mix(from: Double, to: Double, fraction: Double): Double = from + (to - from) * fraction.coerceIn(0.0, 1.0)
+
         private const val CONTRAST_OFFSET: Double = 0.05
     }
 }
 
 /** Les mots du kit : le nom d'une pastille sans nom, par sa position. Jamais le code de la couleur. */
 public object MeeshyColorDotsWords {
+
+    /**
+     * La position dite d'une pastille sans nom : [template] (`kit_color_dots_position`, deux `%n$s`) rempli du rang à
+     * partir de un et du total, écrits dans les chiffres du lecteur ([locale]). Miroir de `position(index:total:…)` (iOS).
+     */
+    public fun position(index: Int, total: Int, locale: Locale, template: String): String {
+        val numbers = NumberFormat.getIntegerInstance(locale)
+        return String.format(locale, template, numbers.format(index + 1), numbers.format(total))
+    }
 
     /** Le nom dit : celui de la pastille s'il n'est pas vide, sinon [position] (rang à partir de un, total). */
     public fun spokenName(dot: MeeshyColorDot, index: Int, total: Int, position: (Int, Int) -> String): String {

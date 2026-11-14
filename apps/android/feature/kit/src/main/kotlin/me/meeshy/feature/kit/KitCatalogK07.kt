@@ -1,10 +1,6 @@
 package me.meeshy.feature.kit
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,20 +8,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import me.meeshy.ui.component.kit.MeeshyColorDot
 import me.meeshy.ui.component.kit.MeeshyColorDotFill
 import me.meeshy.ui.component.kit.MeeshyColorDotSize
 import me.meeshy.ui.component.kit.MeeshyColorDots
 import me.meeshy.ui.component.kit.MeeshyColorDotsLayout
+import me.meeshy.ui.component.kit.MeeshyGlassButton
+import me.meeshy.ui.component.kit.MeeshyGlassButtonSize
 import me.meeshy.ui.component.kit.MeeshyGlassTone
 import me.meeshy.ui.component.kit.MeeshyKitCatalogBackdrop
 import me.meeshy.ui.component.kit.MeeshyKitCatalogEntry
 import me.meeshy.ui.component.kit.MeeshyKitCatalogState
-import me.meeshy.ui.theme.MeeshyAdaptiveColors
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 private const val STATE_TEXT = "texte"
 private const val STATE_DRAWING = "dessin"
@@ -35,136 +32,146 @@ private const val STATE_GRADIENT = "degrade"
 private const val STATE_THEME = "theme"
 private const val STATE_DISABLED = "desactive"
 
-/** Les noms des pastilles de l'échantillon : des identifiants de développement, pas des textes publiés (fiche K07 §1). */
-private object SampleNames {
-    const val TEXT_GROUP = "Couleur du texte"
-    const val BACKGROUND_GROUP = "Arrière-plan"
-    const val DRAWING_GROUP = "Couleur du dessin"
-    const val RANDOM = "Aléatoire"
-    const val CORAL = "Corail"
-    const val SAFFRON = "Safran"
-    const val BLUE = "Bleu"
-    const val AMETHYST = "Améthyste"
-    const val SKY = "Ciel"
-    const val EMERALD = "Émeraude"
-    const val TEAL = "Sarcelle"
-    const val ROSE = "Rose"
-    const val INDIGO = "Indigo"
-}
+/** Les largeurs des vues de la planche : A3 (358), A13 (338), S1 et les autres (342). Bornées par la scène de la tuile. */
+private const val A3_WIDTH_DP = 358
+private const val A13_WIDTH_DP = 338
+private const val S1_WIDTH_DP = 342
 
-/** Les états de K07, ceux de la fiche : texte, dessin, fond, sans courante, dégradé, thème et désactivé. */
+/** Les états de K07, ceux de la fiche et du catalogue iOS : mêmes identifiants, mêmes fonds, mêmes tuiles pressées. */
 internal val entryK07: MeeshyKitCatalogEntry = MeeshyKitCatalogEntry(
     key = "K07",
     name = "MeeshyColorDots",
     states = listOf(
-        MeeshyKitCatalogState(id = STATE_TEXT, boardView = "A3", backdrop = MeeshyKitCatalogBackdrop.Dark),
-        MeeshyKitCatalogState(id = STATE_DRAWING, boardView = "A13", backdrop = MeeshyKitCatalogBackdrop.Media),
-        MeeshyKitCatalogState(id = STATE_BACKGROUND, boardView = "S1", backdrop = MeeshyKitCatalogBackdrop.Media),
-        MeeshyKitCatalogState(id = STATE_NO_CURRENT, backdrop = MeeshyKitCatalogBackdrop.Dark),
-        MeeshyKitCatalogState(id = STATE_GRADIENT, backdrop = MeeshyKitCatalogBackdrop.Dark),
-        MeeshyKitCatalogState(id = STATE_THEME, backdrop = MeeshyKitCatalogBackdrop.Light),
-        MeeshyKitCatalogState(id = STATE_DISABLED, backdrop = MeeshyKitCatalogBackdrop.Dark),
+        MeeshyKitCatalogState(id = STATE_TEXT, boardView = "A3", backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_DRAWING, boardView = "A13", backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_BACKGROUND, boardView = "S1", backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_NO_CURRENT, backdrop = MeeshyKitCatalogBackdrop.Media),
+        MeeshyKitCatalogState(id = STATE_GRADIENT, backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_THEME, backdrop = MeeshyKitCatalogBackdrop.Light, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_DISABLED, backdrop = MeeshyKitCatalogBackdrop.Media),
     ),
 )
 
-/** Un échantillon : les pastilles, la courante de départ, et la disposition de la vue. */
-private data class ColorDotsSample(
-    val dots: List<MeeshyColorDot>,
-    val selection: String?,
-    val label: String,
-    val size: MeeshyColorDotSize,
-    val layout: MeeshyColorDotsLayout,
-    val tone: MeeshyGlassTone?,
-    val enabled: Boolean,
-    val withTrailing: Boolean,
-)
-
-private fun solid(id: String, name: String, color: Color): MeeshyColorDot =
-    MeeshyColorDot(id = id, fill = MeeshyColorDotFill.Solid(color), name = name)
-
-private val TEXT_DOTS: List<MeeshyColorDot> = listOf(
-    solid("coral", SampleNames.CORAL, MeeshyPalette.TileCoral),
-    solid("saffron", SampleNames.SAFFRON, MeeshyPalette.TileSaffron),
-    solid("blue", SampleNames.BLUE, MeeshyPalette.TileBlue),
-    solid("amethyst", SampleNames.AMETHYST, MeeshyPalette.TileAmethyst),
-    solid("sky", SampleNames.SKY, MeeshyPalette.TileSky),
-    solid("emerald", SampleNames.EMERALD, MeeshyPalette.TileEmerald),
-    solid("teal", SampleNames.TEAL, MeeshyPalette.TileTeal),
-    solid("rose", SampleNames.ROSE, MeeshyPalette.TileRose),
-    solid("indigo", SampleNames.INDIGO, MeeshyPalette.Indigo950),
-    solid("violet", "Violet", MeeshyPalette.Violet950),
-    solid("purple", "Pourpre", MeeshyPalette.Purple500),
-    solid("success", "Vert", MeeshyPalette.Success),
-    solid("error", "Rouge", MeeshyPalette.Error),
-    solid("warning", "Ambre", MeeshyPalette.Warning),
-)
-
-private val SAMPLES: Map<String, ColorDotsSample> = mapOf(
-    STATE_TEXT to ColorDotsSample(
-        dots = TEXT_DOTS, selection = "rose", label = SampleNames.TEXT_GROUP,
-        size = MeeshyColorDotSize.S32, layout = MeeshyColorDotsLayout.Wrap, tone = null, enabled = true, withTrailing = false,
-    ),
-    STATE_DRAWING to ColorDotsSample(
-        dots = TEXT_DOTS.take(9), selection = "indigo", label = SampleNames.DRAWING_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Row, tone = null, enabled = true, withTrailing = false,
-    ),
-    STATE_BACKGROUND to ColorDotsSample(
-        dots = TEXT_DOTS + TEXT_DOTS.take(3), selection = "blue", label = SampleNames.BACKGROUND_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Wrap, tone = null, enabled = true, withTrailing = true,
-    ),
-    STATE_NO_CURRENT to ColorDotsSample(
-        dots = TEXT_DOTS.take(5), selection = null, label = SampleNames.TEXT_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Wrap, tone = null, enabled = true, withTrailing = false,
-    ),
-    STATE_GRADIENT to ColorDotsSample(
-        dots = listOf(
-            MeeshyColorDot(id = "none", fill = MeeshyColorDotFill.Hollow, name = SampleNames.RANDOM),
-            MeeshyColorDot(
-                id = "sunrise",
-                fill = MeeshyColorDotFill.Gradient(listOf(MeeshyPalette.TileCoral, MeeshyPalette.TileSaffron)),
-                name = SampleNames.CORAL,
-            ),
-        ) + TEXT_DOTS.take(3),
-        selection = "sunrise", label = SampleNames.BACKGROUND_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Wrap, tone = null, enabled = true, withTrailing = false,
-    ),
-    STATE_THEME to ColorDotsSample(
-        dots = TEXT_DOTS.take(6), selection = "blue", label = SampleNames.TEXT_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Wrap, tone = MeeshyGlassTone.Theme, enabled = true, withTrailing = false,
-    ),
-    STATE_DISABLED to ColorDotsSample(
-        dots = TEXT_DOTS.take(4), selection = "coral", label = SampleNames.TEXT_GROUP,
-        size = MeeshyColorDotSize.S28, layout = MeeshyColorDotsLayout.Wrap, tone = null, enabled = false, withTrailing = false,
-    ),
-)
-
-private val RANDOM_ACTION: @Composable () -> Unit = {
-    Text(text = SampleNames.RANDOM)
+/** Les noms de l'échantillon : des textes de démonstration du catalogue, pas des chaînes publiées (fiche K07 § 1). */
+private object ColorDotsSampleNames {
+    const val TEXT_GROUP = "Couleur du texte"
+    const val STROKE_GROUP = "Couleur du trait"
+    const val BACKGROUND_GROUP = "Arrière-plan"
+    const val ACCENT_GROUP = "Couleur d'accent"
+    const val RANDOM = "Aléatoire"
 }
 
-/** Le groupe de K07 dans son panneau : la courante change au toucher, en place. */
+private fun dot(id: String, color: Color, name: String? = null): MeeshyColorDot =
+    MeeshyColorDot(id = id, fill = MeeshyColorDotFill.Solid(color), name = name)
+
+/** Les palettes de démonstration, en jetons nommés : celles du catalogue iOS, dans le même ordre. */
+private object ColorDotsSamplePalette {
+    val drawing: List<MeeshyColorDot> = listOf(
+        dot("blanc", MeeshyMediaChromeColors.OnMedia, "Blanc"),
+        dot("indigo", MeeshyPalette.Indigo500, "Indigo"),
+        dot("corail", MeeshyPalette.TileCoral, "Corail"),
+        dot("safran", MeeshyPalette.TileSaffron, "Safran"),
+        dot("emeraude", MeeshyPalette.TileEmerald, "Émeraude"),
+        dot("ciel", MeeshyPalette.TileSky, "Ciel"),
+        dot("amethyste", MeeshyPalette.TileAmethyst, "Améthyste"),
+        dot("rose", MeeshyPalette.TileRose, "Rose"),
+        dot("nuit", MeeshyPalette.Indigo950, "Nuit"),
+    )
+
+    val text: List<MeeshyColorDot> = drawing + listOf(
+        dot("bleu", MeeshyPalette.TileBlue, "Bleu"),
+        dot("sarcelle", MeeshyPalette.TileTeal, "Sarcelle"),
+        dot("cyan", MeeshyPalette.TileCyan, "Cyan"),
+        dot("ambre", MeeshyPalette.Amber500, "Ambre"),
+        dot("orange", MeeshyPalette.Orange500, "Orange"),
+    )
+
+    val background: List<MeeshyColorDot> = text + listOf(
+        dot("violet", MeeshyPalette.Purple600),
+        dot("gris", MeeshyPalette.Neutral500),
+        dot("succes", MeeshyPalette.Success),
+    )
+
+    val special: List<MeeshyColorDot> = listOf(
+        MeeshyColorDot(id = "aucun", fill = MeeshyColorDotFill.Hollow, name = "Aucun"),
+        MeeshyColorDot(
+            id = "auto",
+            fill = MeeshyColorDotFill.Solid(MeeshyMediaChromeColors.OnMedia),
+            name = "Automatique",
+            icon = MeeshyIcons.MagicWand,
+        ),
+        MeeshyColorDot(
+            id = "marque",
+            fill = MeeshyColorDotFill.Gradient(listOf(MeeshyPalette.Indigo500, MeeshyPalette.Purple500)),
+            name = "Dégradé Meeshy",
+        ),
+        MeeshyColorDot(
+            id = "aube",
+            fill = MeeshyColorDotFill.Gradient(listOf(MeeshyPalette.TileCoral, MeeshyPalette.TileSaffron)),
+            name = "Aube",
+        ),
+    )
+}
+
+/** L'échantillon d'un état : la planche à sa largeur, la courante de départ (la première, sauf « sans courante »). */
+private data class ColorDotsSample(
+    val dots: List<MeeshyColorDot>,
+    val label: String,
+    val widthDp: Int = S1_WIDTH_DP,
+    val size: MeeshyColorDotSize = MeeshyColorDotSize.S28,
+    val layout: MeeshyColorDotsLayout = MeeshyColorDotsLayout.Wrap,
+    val tone: MeeshyGlassTone? = null,
+    val ringless: Boolean = false,
+    val enabled: Boolean = true,
+    val withRandom: Boolean = false,
+)
+
+private fun sampleFor(stateId: String): ColorDotsSample = when (stateId) {
+    STATE_TEXT -> ColorDotsSample(
+        ColorDotsSamplePalette.text, ColorDotsSampleNames.TEXT_GROUP, widthDp = A3_WIDTH_DP, size = MeeshyColorDotSize.S32,
+    )
+    STATE_DRAWING -> ColorDotsSample(
+        ColorDotsSamplePalette.drawing, ColorDotsSampleNames.STROKE_GROUP, widthDp = A13_WIDTH_DP, layout = MeeshyColorDotsLayout.Row,
+    )
+    STATE_BACKGROUND -> ColorDotsSample(ColorDotsSamplePalette.background, ColorDotsSampleNames.BACKGROUND_GROUP, withRandom = true)
+    STATE_NO_CURRENT -> ColorDotsSample(ColorDotsSamplePalette.drawing, ColorDotsSampleNames.STROKE_GROUP, ringless = true)
+    STATE_GRADIENT -> ColorDotsSample(ColorDotsSamplePalette.special, ColorDotsSampleNames.BACKGROUND_GROUP)
+    STATE_THEME -> ColorDotsSample(ColorDotsSamplePalette.drawing, ColorDotsSampleNames.ACCENT_GROUP, tone = MeeshyGlassTone.Theme)
+    else -> ColorDotsSample(ColorDotsSamplePalette.drawing, ColorDotsSampleNames.STROKE_GROUP, enabled = false)
+}
+
+/**
+ * Le groupe de K07 à la largeur de sa vue : la courante change au toucher, en place ; la tuile « pressé » fige le
+ * pré-cercle sur la deuxième pastille ; S1 porte « Aléatoire » (un bouton rond de K02) en fin de flux. Miroir du
+ * catalogue iOS (`MeeshyKitCatalog+K07.swift`).
+ */
 @Composable
-@Suppress("UNUSED_PARAMETER")
 internal fun ContentK07(state: MeeshyKitCatalogState, isPressed: Boolean) {
-    val sample = SAMPLES.getValue(state.id)
-    var selection by remember(state.id) { mutableStateOf(sample.selection) }
-    val panelIsDark = if (state.id == STATE_THEME) MeeshyTheme.isDark else true
-    Box(
-        modifier = Modifier
-            .background(MeeshyAdaptiveColors.backgroundPrimary(isDark = panelIsDark), RoundedCornerShape(MeeshyRadius.lg))
-            .padding(MeeshySpacing.sm),
-    ) {
-        MeeshyColorDots(
-            dots = sample.dots,
-            label = sample.label,
-            modifier = Modifier,
-            selection = selection,
-            size = sample.size,
-            layout = sample.layout,
-            tone = sample.tone,
-            enabled = sample.enabled,
-            onSelect = { selection = it },
-            trailing = if (sample.withTrailing) RANDOM_ACTION else null,
-        )
+    val sample = remember(state.id) { sampleFor(state.id) }
+    var selection by remember(state.id) { mutableStateOf(if (sample.ringless) null else sample.dots.first().id) }
+    val random: (@Composable () -> Unit)? = if (sample.withRandom) {
+        {
+            MeeshyGlassButton(
+                icon = MeeshyIcons.Shuffle,
+                label = ColorDotsSampleNames.RANDOM,
+                onClick = { selection = sample.dots.random().id },
+                size = MeeshyGlassButtonSize.S36,
+            )
+        }
+    } else {
+        null
     }
+    MeeshyColorDots(
+        dots = sample.dots,
+        label = sample.label,
+        modifier = Modifier.widthIn(max = sample.widthDp.dp),
+        selection = selection,
+        size = sample.size,
+        layout = sample.layout,
+        tone = sample.tone,
+        enabled = sample.enabled,
+        pressedDot = if (isPressed) sample.dots[1].id else null,
+        onSelect = { selection = it },
+        trailing = random,
+    )
 }

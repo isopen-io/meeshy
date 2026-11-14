@@ -1,7 +1,11 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.ui.graphics.Color
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
+import java.text.NumberFormat
+import java.util.Locale
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
@@ -9,6 +13,9 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.meeshy.ui.theme.MeeshyAdaptiveColors
+import me.meeshy.ui.theme.MeeshyMediaChromeColors
+import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
 /**
@@ -113,5 +120,96 @@ class MeeshyColorDotsRecipeTest {
         val contrast = vectors().getValue("contrast").jsonObject
         assertThat(MeeshyColorDotsRecipe.INK_MIN_CONTRAST).isAtLeast(contrast.double("inkMin"))
         assertThat(MeeshyColorDotsRecipe.GLYPH_MIN_CONTRAST).isAtLeast(contrast.double("glyphMin"))
+    }
+
+    @Test
+    fun `l'encre du cercle tient son contraste sur les fonds sombres du kit`() {
+        val backdrops = listOf(MeeshyAdaptiveColors.backgroundPrimary(isDark = true), MeeshyPalette.Indigo950)
+
+        assertThat(MeeshyColorDotsRecipe.worstContrast(MeeshyMediaChromeColors.OnMedia, backdrops))
+            .isAtLeast(MeeshyColorDotsRecipe.INK_MIN_CONTRAST)
+    }
+
+    @Test
+    fun `le glyphe prend la plus contrastee des deux encres, au moins 4 pour 1 sur chaque teinte du kit`() {
+        val tints = listOf(
+            MeeshyPalette.TileCoral, MeeshyPalette.TileSaffron, MeeshyPalette.TileBlue, MeeshyPalette.TileAmethyst,
+            MeeshyPalette.TileSky, MeeshyPalette.TileEmerald, MeeshyPalette.TileTeal, MeeshyPalette.TileCyan,
+            MeeshyPalette.TileRose, MeeshyPalette.Indigo500, MeeshyPalette.Indigo950, MeeshyPalette.Amber500,
+            MeeshyPalette.Orange500, MeeshyPalette.Purple600, MeeshyPalette.Neutral500, MeeshyPalette.Success,
+            MeeshyMediaChromeColors.OnMedia,
+        )
+
+        tints.forEach { tint ->
+            val ink = MeeshyColorDotsRecipe.glyphInk(MeeshyColorDotFill.Solid(tint), groupInk = MeeshyMediaChromeColors.OnMedia)
+            assertThat(MeeshyColorDotsRecipe.worstContrast(ink, listOf(tint))).isAtLeast(MeeshyColorDotsRecipe.GLYPH_MIN_CONTRAST)
+        }
+        assertThat(MeeshyColorDotsRecipe.glyphInk(MeeshyColorDotFill.Solid(MeeshyMediaChromeColors.OnMedia), Color.Unspecified))
+            .isEqualTo(MeeshyPalette.Indigo950)
+    }
+
+    @Test
+    fun `le glyphe d'un disque creux ou sans arret prend l'encre du groupe`() {
+        val group = MeeshyPalette.Indigo500
+
+        assertThat(MeeshyColorDotsRecipe.glyphInk(MeeshyColorDotFill.Hollow, group)).isEqualTo(group)
+        assertThat(MeeshyColorDotsRecipe.glyphInk(MeeshyColorDotFill.Gradient(emptyList()), group)).isEqualTo(group)
+    }
+
+    @Test
+    fun `le cercle en transition rejoint les etats du vecteur a ses deux bouts, le doigt pose sans attendre`() {
+        listOf(false, true).forEach { pressed ->
+            assertThat(MeeshyColorDotsRecipe.ringOpacity(selectedFraction = 0.0, isPressed = pressed))
+                .isWithin(0.001).of(MeeshyColorDotsRecipe.ringOpacity(isSelected = false, isPressed = pressed))
+            assertThat(MeeshyColorDotsRecipe.ringOpacity(selectedFraction = 1.0, isPressed = pressed))
+                .isWithin(0.001).of(MeeshyColorDotsRecipe.ringOpacity(isSelected = true, isPressed = pressed))
+            assertThat(MeeshyColorDotsRecipe.ringScale(selectedFraction = 0.0, isPressed = pressed))
+                .isWithin(0.001).of(MeeshyColorDotsRecipe.ringScale(isSelected = false, isPressed = pressed))
+            assertThat(MeeshyColorDotsRecipe.ringScale(selectedFraction = 1.0, isPressed = pressed))
+                .isWithin(0.001).of(MeeshyColorDotsRecipe.ringScale(isSelected = true, isPressed = pressed))
+        }
+        assertThat(MeeshyColorDotsRecipe.ringOpacity(selectedFraction = 1.2, isPressed = false)).isWithin(0.001).of(1.0)
+    }
+
+    @Test
+    fun `une ligne qui defile centre la courante, jamais avant le debut`() {
+        assertThat(MeeshyColorDotsRecipe.scrollTarget(index = 6, cell = 48.0, viewport = 200.0)).isWithin(0.001).of(212.0)
+        assertThat(MeeshyColorDotsRecipe.scrollTarget(index = 0, cell = 48.0, viewport = 200.0)).isWithin(0.001).of(0.0)
+        assertThat(MeeshyColorDotsRecipe.scrollTarget(index = -1, cell = 48.0, viewport = 200.0)).isWithin(0.001).of(0.0)
+    }
+
+    private fun positionTemplate(qualifier: String): String {
+        val file = generateSequence(File("").absoluteFile) { it.parentFile }
+            .map { File(it, "apps/android/sdk-ui/src/main/res/$qualifier/strings_generated.xml") }
+            .first { it.exists() }
+        val match = Regex("""<string name="kit_color_dots_position">([^<]+)</string>""").find(file.readText())
+        return checkNotNull(match) { "kit_color_dots_position absente de $qualifier" }.groupValues[1]
+    }
+
+    @Test
+    fun `la position s'ecrit dans les chiffres du lecteur, sans placeholder brut`() {
+        val arabic = Locale.forLanguageTag("ar-SA")
+        val said = MeeshyColorDotsWords.position(index = 2, total = 17, locale = arabic, template = positionTemplate("values-ar"))
+        val numbers = NumberFormat.getIntegerInstance(arabic)
+
+        assertThat(said).contains(numbers.format(3))
+        assertThat(said).contains(numbers.format(17))
+        listOf("values" to Locale.ENGLISH, "values-fr" to Locale.FRENCH, "values-ar" to arabic).forEach { (qualifier, locale) ->
+            val rendered = MeeshyColorDotsWords.position(index = 2, total = 17, locale = locale, template = positionTemplate(qualifier))
+            listOf("%s", "%d", "%1$", "%2$").forEach { assertThat(rendered).doesNotContain(it) }
+        }
+        assertThat(MeeshyColorDotsWords.position(index = 4, total = 17, locale = Locale.FRENCH, template = positionTemplate("values-fr")))
+            .isEqualTo("Couleur 5 sur 17")
+    }
+
+    @Test
+    fun `les fichiers de K07 ne portent ni verre ni code de couleur`() {
+        val forbidden = Regex("""\bMeeshyGlass\(|MeeshyGlassGroup|MeeshyGlassSurface|LiquidGlass|Color\(0x|#[0-9A-Fa-f]{6}\b""")
+        listOf("MeeshyColorDots.kt", "MeeshyColorDotsRecipe.kt").forEach { name ->
+            val file = generateSequence(File("").absoluteFile) { it.parentFile }
+                .map { File(it, "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/$name") }
+                .first { it.exists() }
+            assertWithMessage(name).that(forbidden.find(file.readText())?.value).isNull()
+        }
     }
 }

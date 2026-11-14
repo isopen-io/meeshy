@@ -7,7 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -46,6 +48,8 @@ class MeeshyColorDotsTest {
         initial: String?,
         enabled: Boolean,
         onSelect: (String) -> Unit,
+        size: MeeshyColorDotSize = MeeshyColorDotSize.S28,
+        pressedDot: String? = null,
     ) {
         var selection by remember { mutableStateOf(initial) }
         MeeshyTheme(darkTheme = false) {
@@ -53,7 +57,9 @@ class MeeshyColorDotsTest {
                 dots = items,
                 label = GROUP_LABEL,
                 selection = selection,
+                size = size,
                 enabled = enabled,
+                pressedDot = pressedDot,
                 onSelect = {
                     selection = it
                     onSelect(it)
@@ -112,6 +118,58 @@ class MeeshyColorDotsTest {
         compose.setContent { Group(items = emptyList(), initial = null, enabled = true, onSelect = {}) }
 
         compose.onNodeWithContentDescription(GROUP_LABEL).assertDoesNotExist()
+    }
+
+    @Test
+    fun `retoucher la courante rappelle onSelect, l'hote decide`() {
+        val received = mutableListOf<String>()
+        compose.setContent { Group(items = dots, initial = "bleu", enabled = true, onSelect = { received += it }) }
+
+        compose.onNodeWithContentDescription("Bleu").performClick()
+        compose.onNodeWithContentDescription("Bleu").performClick()
+
+        assertThat(received).containsExactly("bleu", "bleu")
+        compose.onNodeWithContentDescription("Bleu").assertIsSelected()
+    }
+
+    @Test
+    fun `une pastille sans nom se dit par sa position, jamais par son code`() {
+        val unnamed = listOf(dot("rose", "Rose"), MeeshyColorDot(id = "#3498DB", fill = MeeshyColorDotFill.Solid(Color.White)), dot("vert", "Vert"))
+        compose.setContent { Group(items = unnamed, initial = null, enabled = true, onSelect = {}) }
+
+        compose.onNodeWithContentDescription("Color 2 of 3").assertIsNotSelected()
+        compose.onAllNodesWithContentDescription("#3498DB", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `le groupe porte son nom`() {
+        compose.setContent { Group(items = dots, initial = null, enabled = true, onSelect = {}) }
+
+        compose.onNodeWithContentDescription(GROUP_LABEL).assertExists()
+    }
+
+    @Test
+    fun `la grande taille garde la cible de 48 dp`() {
+        compose.setContent { Group(items = dots, initial = null, enabled = true, onSelect = {}, size = MeeshyColorDotSize.S32) }
+
+        compose.onNodeWithContentDescription("Bleu").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `la petite taille garde la cible de 48 dp`() {
+        compose.setContent { Group(items = dots, initial = null, enabled = true, onSelect = {}, size = MeeshyColorDotSize.S28) }
+
+        compose.onNodeWithContentDescription("Rose").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `le pre-cercle fige ne choisit rien`() {
+        val received = mutableListOf<String>()
+        compose.setContent { Group(items = dots, initial = "rose", enabled = true, onSelect = { received += it }, pressedDot = "bleu") }
+
+        compose.onNodeWithContentDescription("Bleu").assertIsNotSelected()
+        compose.onNodeWithContentDescription("Rose").assertIsSelected()
+        assertThat(received).isEmpty()
     }
 
     private companion object {
