@@ -9,17 +9,20 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +61,7 @@ fun AffiliateScreen(
     val actions = rememberLinkActions()
     val haptics = rememberMeeshyHaptics()
 
+    var pendingDelete by remember { mutableStateOf<AffiliateToken?>(null) }
     var pendingCreate by rememberSaveable { mutableStateOf(openCreate) }
     LaunchedEffect(pendingCreate) {
         if (pendingCreate) { viewModel.openCreate(); pendingCreate = false }
@@ -88,15 +92,19 @@ fun AffiliateScreen(
         },
     ) {
         if (state.refreshFailed) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_affiliate_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 LinkStatTile(MeeshyIcons.Link, state.tokens.linkCount, R.plurals.links_count_links, accent, Modifier.weight(1f))
                 LinkStatTile(MeeshyIcons.PersonVerified, state.tokens.signupCount, R.plurals.links_count_signups, accent, Modifier.weight(1f))
                 LinkStatTile(MeeshyIcons.Touch, state.tokens.clickCount, stringResource(R.string.links_affiliate_stat_clicks), accent, Modifier.weight(1f))
             }
-        }
-        item(key = "section", contentType = "section") {
-            LinksSectionTitle(stringResource(R.string.links_affiliate_section_my_links), accent)
         }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }
@@ -114,7 +122,7 @@ fun AffiliateScreen(
                     accent = accent,
                     onCopy = { token.affiliateLink?.let(actions::copy) },
                     onShare = { token.affiliateLink?.let(actions::share) },
-                    onDelete = { viewModel.delete(token.id) },
+                    onDelete = { pendingDelete = token },
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -124,6 +132,26 @@ fun AffiliateScreen(
     state.createSheet?.let { sheet ->
         AffiliateCreateSheet(sheet = sheet, accent = accent, viewModel = viewModel)
     }
+
+    pendingDelete?.let { token ->
+        AffiliateDeleteDialog(
+            onConfirm = { viewModel.delete(token.id); pendingDelete = null },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun AffiliateDeleteDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.links_affiliate_delete_title)) },
+        text = { Text(stringResource(R.string.links_affiliate_delete_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.links_affiliate_delete_confirm), color = MeeshyTheme.tokens.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.links_common_cancel)) } },
+    )
 }
 
 @Composable
@@ -149,6 +177,9 @@ private fun TokenRow(
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
+            affiliateRowFactsText(token)?.let { facts ->
+                Text(facts, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
+            }
         }
         IconButton(onClick = onCopy, enabled = hasLink) {
             Icon(MeeshyIcons.Copy, stringResource(R.string.links_affiliate_action_copy), tint = accent, modifier = Modifier.size(20.dp).alpha(if (hasLink) 1f else 0.4f))
@@ -186,14 +217,22 @@ private fun AffiliateCreateSheet(sheet: AffiliateCreateSheet, accent: Color, vie
                 accent = accent,
                 placeholder = stringResource(R.string.links_affiliate_create_name_placeholder),
             )
-            LinkField(
-                label = stringResource(R.string.links_affiliate_create_max_uses_label),
-                value = sheet.form.maxUses,
-                onValueChange = { value -> viewModel.editForm { it.withMaxUses(value) } },
-                accent = accent,
-                placeholder = stringResource(R.string.links_affiliate_create_max_uses_placeholder),
-                keyboardType = KeyboardType.Number,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+                LinkField(
+                    label = stringResource(R.string.links_affiliate_create_max_uses_label),
+                    value = sheet.form.maxUses,
+                    onValueChange = { value -> viewModel.editForm { it.withMaxUses(value) } },
+                    accent = accent,
+                    placeholder = stringResource(R.string.links_affiliate_create_max_uses_placeholder),
+                    keyboardType = KeyboardType.Number,
+                )
+                Text(
+                    stringResource(R.string.links_affiliate_create_max_uses_note),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier.padding(start = MeeshySpacing.xs),
+                )
+            }
             if (sheet.failed) LinkFormError(stringResource(R.string.links_affiliate_create_error))
             LinkPrimaryButton(
                 text = stringResource(R.string.links_affiliate_create_button),

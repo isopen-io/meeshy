@@ -108,12 +108,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.entryConditions",
-          "androidName": "shareLink_detail_entryConditions",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.expiration",
           "androidName": "shareLink_detail_expiration",
           "status": "adopted"
@@ -152,12 +146,6 @@
           "catalog": "app",
           "iosKey": "shareLink.detail.fieldNickname",
           "androidName": "shareLink_detail_fieldNickname",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.guestRights",
-          "androidName": "shareLink_detail_guestRights",
           "status": "adopted"
         },
         {

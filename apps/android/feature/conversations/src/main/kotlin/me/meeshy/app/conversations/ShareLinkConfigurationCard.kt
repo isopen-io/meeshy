@@ -62,13 +62,13 @@ internal fun ShareLinkConfigurationCard(link: MyShareLink, onEdit: () -> Unit) {
                 }
             }
 
-            Subtitle(stringResource(R.string.shareLink_detail_guestRights))
+            Subtitle(stringResource(R.string.share_link_section_permissions))
             RightRow(stringResource(R.string.share_link_permission_messages), settings.allowMessages)
             RightRow(stringResource(R.string.shareLink_detail_historyRight), settings.allowHistory)
             RightRow(stringResource(R.string.share_link_permission_images), settings.allowImages)
             RightRow(stringResource(R.string.share_link_permission_files), settings.allowFiles)
 
-            Subtitle(stringResource(R.string.shareLink_detail_entryConditions))
+            Subtitle(stringResource(R.string.share_link_section_access))
             ValueRow(
                 stringResource(R.string.shareLink_detail_meeshyAccount),
                 stringResource(

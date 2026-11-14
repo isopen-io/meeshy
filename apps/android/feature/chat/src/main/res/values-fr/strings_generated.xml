@@ -1,12 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_composer_language_hint">Choisir la langue d\'envoi du message</string>
-    <string name="a11y_message_location">position partagée</string>
     <string name="add_participant_add_button">Ajouter</string>
     <string name="add_participant_close">Fermer</string>
     <string name="add_participant_member_badge">Membre</string>
     <string name="add_participant_no_results">Aucun utilisateur trouvé</string>
-    <string name="add_participant_prompt">Recherchez par nom ou @pseudo</string>
     <string name="add_participant_search_hint">Recherchez par nom ou @pseudo</string>
     <string name="add_participant_title">Ajouter un membre</string>
     <string name="attachment_loading_a11y_failed">Échec du chargement</string>
@@ -42,12 +40,7 @@
     <string name="chat_back">Retour</string>
     <string name="chat_call_audio">Appel audio</string>
     <string name="chat_call_rejoin">Rejoindre</string>
-    <string name="chat_call_rejoin_a11y">Appel en cours, toucher pour rejoindre</string>
     <string name="chat_call_return">Appel en cours, toucher pour revenir</string>
-    <string name="chat_call_video">Appel vidéo</string>
-    <string name="chat_camera_chooser_photo">Photo</string>
-    <string name="chat_camera_chooser_title">Prendre une photo ou une vidéo</string>
-    <string name="chat_camera_chooser_video">Vidéo</string>
     <string name="chat_cancel_edit">Annuler la modification</string>
     <string name="chat_cancel_reply">Annuler la réponse</string>
     <plurals name="chat_clipboard_char_count">
@@ -68,7 +61,6 @@
     <string name="chat_composer_reply_video">Vidéo</string>
     <string name="chat_composer_reply_voice">Message vocal</string>
     <string name="chat_composer_reply_you">Vous</string>
-    <string name="chat_create_share_link">Créer le lien de partage</string>
     <string name="chat_date_today">Aujourd\'hui</string>
     <string name="chat_date_yesterday">Hier</string>
     <string name="chat_delete_confirm_cancel">Annuler</string>
@@ -79,32 +71,13 @@
         <item quantity="many">Supprimer %1$d messages ?</item>
         <item quantity="other">Supprimer %1$d messages ?</item>
     </plurals>
-    <string name="chat_editing_label">Édition de message</string>
     <string name="chat_effect_blurred">Flou</string>
-    <string name="chat_effect_confetti">Confettis</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
     <string name="chat_effect_duration_5m">5 min</string>
-    <string name="chat_effect_fireworks">Feu d’artifice</string>
-    <string name="chat_effect_glow">Lueur</string>
-    <string name="chat_effect_pulse">Pulsation</string>
-    <string name="chat_effect_rainbow">Arc-en-ciel</string>
-    <string name="chat_effect_shake">Secousse</string>
-    <string name="chat_effect_sparkle">Paillettes</string>
     <string name="chat_effect_view_once">Voir une fois</string>
-    <string name="chat_effect_zoom">Zoom</string>
     <string name="chat_effects_active">actif</string>
-    <plurals name="chat_effects_active_count">
-        <item quantity="one">%1$d effet actif</item>
-        <item quantity="many">%1$d effets actifs</item>
-        <item quantity="other">%1$d effets actifs</item>
-    </plurals>
-    <string name="chat_effects_chip_a11y">%1$s, %2$s</string>
-    <string name="chat_effects_clear_all">Tout effacer</string>
-    <string name="chat_effects_done">Terminer</string>
-    <string name="chat_effects_duration_a11y">Durée %1$s</string>
     <string name="chat_effects_inactive">inactif</string>
-    <string name="chat_effects_section_permanent">Effet permanent</string>
     <string name="chat_engagement_a11y_streak">%1$s · Étincelles : %2$d · Aujourd\'hui : %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d jour</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d jours</string>
@@ -115,15 +88,12 @@
     <string name="chat_ephemeral_after_read">Après lecture</string>
     <string name="chat_ephemeral_after_read_a11y">Après lecture, quand le lecteur quitte la conversation</string>
     <string name="chat_ephemeral_off">Désactivé</string>
-    <string name="chat_exit_blocked_after_read">Il disparaît après lecture : il ne se transfère, ne s’enregistre et ne se partage pas.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Cette pièce n’appartient plus au message.</string>
     <string name="chat_exit_blocked_encrypted_source">Ce contenu chiffré se copie depuis cet appareil.</string>
     <string name="chat_exit_blocked_source_unavailable">Le message d’origine n’est plus disponible.</string>
     <string name="chat_exit_blocked_title">Ce message ne sort pas de Meeshy</string>
     <string name="chat_exit_blocked_understood">Compris</string>
-    <string name="chat_exit_blocked_view_once">Il est à vue unique : il ne se transfère, ne s’enregistre et ne se partage pas. Il reste dans la conversation, le temps d’être vu.</string>
     <string name="chat_explorer_close_translation">Fermer la traduction</string>
-    <string name="chat_explorer_original">Original</string>
     <string name="chat_explorer_original_banner">Original • %1$s</string>
     <string name="chat_explorer_retranslate">Retraduire</string>
     <string name="chat_explorer_retranslate_a11y">Retraduire</string>
@@ -134,8 +104,6 @@
         <item quantity="many">%1$d membres</item>
         <item quantity="other">%1$d membres</item>
     </plurals>
-    <string name="chat_forward_search_hint">Rechercher une conversation...</string>
-    <string name="chat_forward_sent">Transféré</string>
     <string name="chat_guest_bar_close">Fermer la conversation</string>
     <string name="chat_header_flame_card_hide">Masquer la flamme</string>
     <string name="chat_header_flame_card_hint">Ouvre la série de la conversation</string>
@@ -237,7 +205,6 @@
     <string name="contact_card_toast_request_failed">Impossible d\'envoyer la demande</string>
     <string name="context_invite_friends">Inviter mes amis</string>
     <string name="conversation_accessRevoked">Accès révoqué à cette conversation</string>
-    <string name="conversation_analysis_summary">Résumé</string>
     <string name="conversation_analysis_title">Analyse IA</string>
     <string name="conversation_analysis_trait_communication">Communication</string>
     <string name="conversation_analysis_trait_emotional">Émotionnel</string>
@@ -266,11 +233,9 @@
     <string name="conversation_info_tab_options">Options</string>
     <string name="conversation_info_tab_stats">Stats</string>
     <string name="conversation_members_add">Ajouter</string>
-    <string name="conversation_members_add_a11y">Ajouter un membre</string>
     <string name="conversation_members_ban_confirm">Bannir</string>
     <string name="conversation_members_demote_member">Rétrograder Membre</string>
     <string name="conversation_members_demote_moderator">Rétrograder en modérateur</string>
-    <string name="conversation_members_open">Membres</string>
     <string name="conversation_members_promote_admin">Promouvoir administrateur</string>
     <string name="conversation_members_promote_moderator">Promouvoir Modérateur</string>
     <string name="conversation_members_remove_cancel">Annuler</string>
@@ -288,7 +253,6 @@
     </plurals>
     <string name="conversation_options_archive">Archiver</string>
     <string name="conversation_options_archive_title">Archiver la conversation ?</string>
-    <string name="conversation_options_block_a11y">Bloquer %1$s</string>
     <string name="conversation_options_block_confirm">Bloquer</string>
     <string name="conversation_options_block_message">Vous ne recevrez plus de messages de %1$s. Vous pourrez le débloquer dans les réglages.</string>
     <string name="conversation_options_block_success">Utilisateur bloqué</string>
@@ -339,7 +303,6 @@
     <string name="conversation_stats_content_types">Types de contenu</string>
     <string name="conversation_stats_languages">Langues</string>
     <string name="conversation_stats_messages">Messages</string>
-    <string name="conversation_stats_participants">Participants</string>
     <string name="conversation_stats_period_all">Tous</string>
     <string name="conversation_stats_period_month">30j</string>
     <string name="conversation_stats_period_week">7j</string>
@@ -369,7 +332,6 @@
     <string name="encryption_detail_activate">Activer le chiffrement</string>
     <string name="encryption_detail_activation_footer_final">Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.</string>
     <string name="encryption_detail_active_label">Chiffrement actif</string>
-    <string name="encryption_detail_details_header">Détails</string>
     <string name="encryption_detail_direct_already_end_to_end">Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour y échanger. Celle-ci reste chiffrée sur nos serveurs.</string>
     <string name="encryption_detail_direct_not_a_pair">Ce tête-à-tête ne réunit pas exactement deux membres inscrits : le chiffrement de bout en bout n’y est pas possible.</string>
     <string name="encryption_detail_enabled_on">Activé le</string>
@@ -385,7 +347,6 @@
     <string name="encryption_detail_translation_available">Disponible</string>
     <string name="encryption_detail_translation_disabled">Désactivé</string>
     <string name="encryption_detail_translation_on_device">Sur l’appareil</string>
-    <string name="encryption_done">Terminé</string>
     <string name="encryption_fact_device_limit">Votre compte peut avoir jusqu’à 16 appareils chiffrés. Au-delà, l’application vous propose d’en retirer un ; un appareil retiré ne lit plus les nouveaux messages chiffrés.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_fact_end_to_end_is_final">Une fois activé, le chiffrement de bout en bout ne se désactive plus.</string>
@@ -534,7 +495,6 @@
     <string name="location_settings_open">Réglages de partage de position</string>
     <string name="location_title">Choisir un lieu</string>
     <string name="location_unknown">Lieu inconnu</string>
-    <string name="media_hub_all_loaded">Tout est chargé</string>
     <string name="media_hub_empty">Rien à afficher dans « %1$s » pour l’instant.</string>
     <string name="media_hub_empty_search">Aucun résultat pour « %1$s ».</string>
     <string name="media_hub_error">Impossible de charger cette liste.</string>
@@ -574,9 +534,7 @@
     <string name="member_management_title">MEMBRES</string>
     <string name="message_action_copyAddress">Copier l\'adresse</string>
     <string name="message_detail_edits_current">Actuel</string>
-    <string name="message_detail_edits_empty">L\'historique des modifications apparaît ici</string>
     <string name="message_detail_edits_history_title">Historique</string>
-    <string name="message_detail_edits_none_detail">Ce message n\'a pas été modifié</string>
     <string name="message_detail_edits_none_title">Aucune modification</string>
     <string name="message_detail_edits_previous_one">%1$d version précédente</string>
     <string name="message_detail_edits_previous_other">%1$d versions précédentes</string>
@@ -632,15 +590,12 @@
     <string name="participant_profile_denied_can_send_videos">Ne peut pas envoyer de vidéos</string>
     <string name="participant_profile_entry_link_expires">Expire le</string>
     <string name="participant_profile_entry_link_inactive">Ce lien a été désactivé</string>
-    <string name="participant_profile_entry_link_languages">Langues admises</string>
-    <string name="participant_profile_entry_link_requires">Exige</string>
     <string name="participant_profile_entry_link_title">Réglages du lien</string>
     <string name="participant_profile_entry_link_uses">Entrées</string>
     <string name="participant_profile_has_left">Cette personne a quitté la conversation</string>
     <string name="participant_profile_history">Historique</string>
     <string name="participant_profile_history_clear">Retirer</string>
     <string name="participant_profile_history_error">Échec de la mise à jour</string>
-    <string name="participant_profile_history_label">Voit l’historique depuis</string>
     <string name="participant_profile_info_birthday">Naissance</string>
     <string name="participant_profile_info_country">Pays</string>
     <string name="participant_profile_info_joined">Arrivé le</string>
@@ -648,7 +603,6 @@
     <string name="participant_profile_info_via_link">Par le lien</string>
     <string name="participant_profile_no_account">sans compte</string>
     <string name="participant_profile_require_birthday">date de naissance</string>
-    <string name="participant_profile_require_email">email</string>
     <string name="participant_profile_require_nickname">pseudo</string>
     <string name="participant_profile_retry">Réessayer</string>
     <string name="participant_profile_unavailable">Fiche indisponible</string>
@@ -705,11 +659,9 @@
     <string name="share_action_copy_text">Copier le texte</string>
     <string name="share_action_save">Enregistrer</string>
     <string name="share_action_share_out">Partager hors de Meeshy</string>
-    <string name="share_blocked_after_read">Il disparaît après lecture : il ne se transfère, ne s’enregistre et ne se partage pas.</string>
     <string name="share_blocked_title">Ce message ne sort pas de Meeshy</string>
     <string name="share_blocked_unavailable">Ce contenu n’est plus disponible.</string>
     <string name="share_blocked_understood">Compris</string>
-    <string name="share_blocked_view_once">Il est à vue unique : il ne se transfère, ne s’enregistre et ne se partage pas. Il reste dans la conversation, le temps d’être vu.</string>
     <string name="share_button_a11y">Envoyer à %1$d destinataires</string>
     <string name="share_button_forward">Transférer · %1$d</string>
     <string name="share_button_send">Envoyer · %1$d</string>
@@ -733,7 +685,6 @@
     <string name="share_detail_direct">Conversation</string>
     <string name="share_detail_friend">Ami · pas encore de conversation</string>
     <string name="share_detail_group_unsized">Groupe</string>
-    <string name="share_empty_body">Cherchez une personne par son nom, son pseudo ou son numéro.</string>
     <string name="share_empty_title">Personne ici pour l’instant</string>
     <string name="share_encryption_warning">« %1$s » n’est pas chiffrée : ce message y sortira du chiffrement de bout en bout.</string>
     <string name="share_error_generic">Erreur lors du partage</string>
@@ -762,15 +713,10 @@
     <string name="share_status_sent">Envoyé</string>
     <string name="share_target_cancel">Annuler</string>
     <string name="share_target_loading">Chargement des conversations…</string>
-    <string name="share_target_preview_title">Ce qui part</string>
-    <string name="share_target_search_hint">Rechercher des conversations</string>
-    <string name="share_target_send">Envoyer</string>
-    <string name="share_target_sent">Envoyé</string>
     <string name="share_target_studio">Modifier dans le studio</string>
     <string name="share_title_forward">Transférer</string>
     <string name="share_title_send">Envoyer</string>
     <string name="share_toast_open">Ouvrir</string>
-    <string name="share_toast_published">Publié</string>
     <string name="share_toast_sent_to">Envoyé à %1$s</string>
     <string name="share_withdrawn_after_read">Un message qui disparaît après lecture reste dans cette conversation.</string>
     <string name="share_withdrawn_others_leave">Les %1$d autres messages partent.</string>

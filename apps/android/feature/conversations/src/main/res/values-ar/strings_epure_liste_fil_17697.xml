@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure de la liste et des liens (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="links_hub_affiliate_description">ادعُ شبكتك إلى Meeshy وتابع من يسجّل</string>
+    <string name="links_hub_tracking_description">تابع نقرات روابطك وحملاتها</string>
+    <string name="links_hub_affiliate_create_a11y">إنشاء رابط إحالة</string>
+    <string name="links_hub_tracking_create_a11y">إنشاء رابط تتبُّع</string>
+    <string name="links_tracking_create_a11y">إنشاء رابط تتبُّع</string>
+    <string name="links_tracking_empty_title">لا توجد روابط تتبُّع</string>
+    <string name="links_tracking_create_title">رابط تتبُّع جديد</string>
+    <string name="links_community_title">المجتمعات</string>
+    <string name="links_affiliate_create_title">رابط إحالة جديد</string>
+    <string name="links_affiliate_create_max_uses_label">تحديد عدد التسجيلات</string>
+    <string name="links_affiliate_create_max_uses_note">بعد ذلك، لا يسجّل الرابط أحدًا</string>
+    <string name="links_affiliate_intro">كل من يسجّل في Meeshy عبر هذا الرابط يصبح من المُحالين من طرفك.</string>
+    <string name="links_common_created">أُنشئ في %1$s</string>
+    <string name="links_affiliate_row_uses">%1$d من %2$d</string>
+    <string name="links_affiliate_delete_title">حذف رابط الإحالة هذا؟</string>
+    <string name="links_affiliate_delete_body">لن يتيح بعد الآن التسجيل باسمك. يبقى المُحالون من طرفك لك.</string>
+    <string name="links_affiliate_delete_confirm">حذف</string>
+    <string name="dialogs_master_pin_title">رمز PIN رئيسي مطلوب</string>
+    <string name="dialogs_master_pin_message">حدّده في الإعدادات لقفل محادثة.</string>
+</resources>

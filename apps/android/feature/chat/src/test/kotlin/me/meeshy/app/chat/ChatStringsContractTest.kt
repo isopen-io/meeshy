@@ -20,7 +20,6 @@ class ChatStringsContractTest {
     private val folders = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 
     private val pluralNames = listOf(
-        "chat_effects_active_count",
         "chat_forward_members",
         "chat_pinned_count",
         "chat_typing_many",

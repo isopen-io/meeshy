@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du fil (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="participant_profile_entry_link_languages">Erlaubte Sprachen</string>
+    <string name="participant_profile_entry_link_requires">Bei Ankunft verlangt</string>
+    <string name="participant_profile_require_email">E-Mail</string>
+    <string name="chat_exit_blocked_view_once">Sie ist einmalig ansehbar: Sie bleibt hier, bis sie gesehen wurde.</string>
+    <string name="share_blocked_view_once">Sie ist einmalig ansehbar: Sie bleibt hier, bis sie gesehen wurde.</string>
+    <string name="chat_exit_blocked_after_read">Sie verschwindet nach dem Lesen.</string>
+    <string name="share_blocked_after_read">Sie verschwindet nach dem Lesen.</string>
+</resources>

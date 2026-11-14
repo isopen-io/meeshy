@@ -81,7 +81,6 @@ fun TrackingLinksScreen(
     ) {
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
         state.stats?.let { stats -> item(key = "stats", contentType = "stats") { StatsRow(stats, accent) } }
-        item(key = "section", contentType = "section") { LinksSectionTitle(stringResource(R.string.links_tracking_section_my_links)) }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }
             state.links.links.isEmpty() -> item(key = "empty", contentType = "empty") {
@@ -140,6 +139,9 @@ private fun TrackingRow(link: TrackingLink, accent: Color, onOpen: () -> Unit, o
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
+            trackingRowDateText(link)?.let { date ->
+                Text(date, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
+            }
         }
         IconButton(onClick = onCopy) {
             Icon(MeeshyIcons.Copy, stringResource(R.string.links_common_copy_link), tint = accent, modifier = Modifier.size(20.dp))

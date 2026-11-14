@@ -267,15 +267,6 @@ private fun LinksList(
         stats?.let {
             item(key = "stats", contentType = "stats") { StatsHeader(it) }
         }
-        item(key = "section") {
-            Text(
-                text = stringResource(R.string.my_share_links_section),
-                style = MaterialTheme.typography.labelLarge,
-                color = MeeshyTheme.tokens.textSecondary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = MeeshySpacing.xs),
-            )
-        }
         items(links, key = { it.id }, contentType = { "link" }) { link ->
             ShareLinkRow(
                 link = link,

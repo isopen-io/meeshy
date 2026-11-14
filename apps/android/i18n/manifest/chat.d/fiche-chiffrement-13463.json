@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.detailsHeader",
-          "androidName": "encryption_detail_details_header",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.detail.enabledOn",
           "androidName": "encryption_detail_enabled_on",
           "status": "adopted"
@@ -384,12 +378,6 @@
           "catalog": "app",
           "iosKey": "common.close",
           "androidName": "encryption_close",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "common.done",
-          "androidName": "encryption_done",
           "status": "adopted"
         },
         {

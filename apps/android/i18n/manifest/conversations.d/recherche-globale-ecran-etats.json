@@ -55,10 +55,6 @@
         {
           "androidName": "global_search_summary_expired",
           "status": "android-only"
-        },
-        {
-          "androidName": "global_search_summary_ephemeral",
-          "status": "android-only"
         }
       ]
     }

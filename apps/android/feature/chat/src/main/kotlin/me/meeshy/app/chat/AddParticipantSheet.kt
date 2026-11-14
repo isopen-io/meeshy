@@ -131,9 +131,7 @@ internal fun AddParticipantSheet(
                     CircularProgressIndicator(color = accentColor, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
 
-                state.query.trim().length < 2 -> AddParticipantMessage(
-                    stringResource(R.string.add_participant_prompt),
-                )
+                state.query.trim().length < 2 -> Unit
 
                 state.results.isEmpty() -> AddParticipantMessage(
                     stringResource(R.string.add_participant_no_results),

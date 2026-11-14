@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure de la liste et des liens (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="links_hub_affiliate_description">Invita la tua rete su Meeshy e segui chi si iscrive</string>
+    <string name="links_hub_tracking_description">Segui i clic e le campagne dei tuoi link</string>
+    <string name="links_hub_affiliate_create_a11y">Crea un link di referral</string>
+    <string name="links_hub_tracking_create_a11y">Crea un link di tracciamento</string>
+    <string name="links_tracking_create_a11y">Crea un link di tracciamento</string>
+    <string name="links_tracking_empty_title">Nessun link di tracciamento</string>
+    <string name="links_tracking_create_title">Nuovo link di tracciamento</string>
+    <string name="links_community_title">Community</string>
+    <string name="links_affiliate_create_title">Nuovo link di referral</string>
+    <string name="links_affiliate_create_max_uses_label">Limita le iscrizioni</string>
+    <string name="links_affiliate_create_max_uses_note">Oltre il limite, il link non iscrive più nessuno</string>
+    <string name="links_affiliate_intro">Chi si iscrive a Meeshy da questo link diventa un tuo invitato.</string>
+    <string name="links_common_created">Creato il %1$s</string>
+    <string name="links_affiliate_row_uses">%1$d su %2$d</string>
+    <string name="links_affiliate_delete_title">Eliminare questo link di referral?</string>
+    <string name="links_affiliate_delete_body">Non permetterà più di iscriversi a tuo nome. I tuoi invitati restano tuoi.</string>
+    <string name="links_affiliate_delete_confirm">Elimina</string>
+    <string name="dialogs_master_pin_title">PIN principale richiesto</string>
+    <string name="dialogs_master_pin_message">Impostalo nelle impostazioni per bloccare una conversazione.</string>
+</resources>

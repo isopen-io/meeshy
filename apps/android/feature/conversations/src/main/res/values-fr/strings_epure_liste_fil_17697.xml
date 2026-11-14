@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure de la liste et des liens (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="links_hub_affiliate_description">Invitez votre réseau sur Meeshy et suivez vos inscrits</string>
+    <string name="links_hub_tracking_description">Suivez les clics et les campagnes de vos liens</string>
+    <string name="links_hub_affiliate_create_a11y">Créer un lien de parrainage</string>
+    <string name="links_hub_tracking_create_a11y">Créer un lien de suivi</string>
+    <string name="links_tracking_create_a11y">Créer un lien de suivi</string>
+    <string name="links_tracking_empty_title">Aucun lien de suivi</string>
+    <string name="links_tracking_create_title">Nouveau lien de suivi</string>
+    <string name="links_community_title">Communautés</string>
+    <string name="links_affiliate_create_title">Nouveau lien de parrainage</string>
+    <string name="links_affiliate_create_max_uses_label">Limiter les inscriptions</string>
+    <string name="links_affiliate_create_max_uses_note">Au-delà, le lien n’inscrit plus personne</string>
+    <string name="links_affiliate_intro">Qui s’inscrit sur Meeshy par ce lien devient votre filleul.</string>
+    <string name="links_common_created">Créé le %1$s</string>
+    <string name="links_affiliate_row_uses">%1$d sur %2$d</string>
+    <string name="links_affiliate_delete_title">Supprimer ce lien de parrainage ?</string>
+    <string name="links_affiliate_delete_body">Il ne permettra plus de s’inscrire en votre nom. Vos filleuls restent les vôtres.</string>
+    <string name="links_affiliate_delete_confirm">Supprimer</string>
+    <string name="dialogs_master_pin_title">Master PIN requis</string>
+    <string name="dialogs_master_pin_message">Définissez-le dans les réglages pour verrouiller une conversation.</string>
+</resources>

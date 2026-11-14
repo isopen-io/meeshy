@@ -186,12 +186,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.info.block.a11y",
-          "androidName": "conversation_options_block_a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.info.block.success",
           "androidName": "conversation_options_block_success",
           "status": "adopted"

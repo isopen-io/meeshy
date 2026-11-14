@@ -13,14 +13,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "swipe_mute",
-          "status": "android-only"
-        },
-        {
-          "androidName": "swipe_unmute",
-          "status": "android-only"
-        },
-        {
           "androidName": "swipe_archive",
           "status": "android-only"
         },
@@ -34,10 +26,6 @@
         },
         {
           "androidName": "swipe_mark_unread",
-          "status": "android-only"
-        },
-        {
-          "androidName": "swipe_hide",
           "status": "android-only"
         }
       ]

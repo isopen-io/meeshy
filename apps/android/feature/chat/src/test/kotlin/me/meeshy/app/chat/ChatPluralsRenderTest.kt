@@ -43,12 +43,6 @@ class ChatPluralsRenderTest {
     }
 
     @Test
-    fun `french active effects drop the parenthesised plural`() {
-        assertThat(render("fr", R.plurals.chat_effects_active_count, 1)).isEqualTo("1 effet actif")
-        assertThat(render("fr", R.plurals.chat_effects_active_count, 2)).isEqualTo("2 effets actifs")
-    }
-
-    @Test
     fun `french pinned and typing counts use their own plural`() {
         assertThat(render("fr", R.plurals.chat_pinned_count, 1)).isEqualTo("1 message épinglé")
         assertThat(render("fr", R.plurals.chat_pinned_count, 5)).isEqualTo("5 messages épinglés")

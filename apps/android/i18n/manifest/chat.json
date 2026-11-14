@@ -31,12 +31,6 @@
         {
           "catalog": "app",
           "iosKey": "participants.add.prompt",
-          "androidName": "add_participant_prompt",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participants.add.prompt",
           "androidName": "add_participant_search_hint",
           "status": "adopted"
         },
@@ -135,10 +129,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_attach_file",
-          "status": "android-only"
-        },
-        {
           "androidName": "chat_attach_open",
           "status": "android-only"
         },
@@ -158,30 +148,6 @@
           "catalog": "app",
           "iosKey": "call.header.rejoin",
           "androidName": "chat_call_rejoin",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "bubble.call.video",
-          "androidName": "chat_call_video",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.camera.mode.photo",
-          "androidName": "chat_camera_chooser_photo",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "story.composer.start.a11y.camera",
-          "androidName": "chat_camera_chooser_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.camera.mode.video",
-          "androidName": "chat_camera_chooser_video",
           "status": "adopted"
         },
         {
@@ -225,16 +191,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_composer_sentiment",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.link.create.button.create",
-          "androidName": "chat_create_share_link",
-          "status": "adopted"
-        },
-        {
           "androidName": "chat_date_day_before_yesterday",
           "status": "android-only"
         },
@@ -252,20 +208,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sync.pill.editing.message",
-          "androidName": "chat_editing_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "composer.blur.label",
           "androidName": "chat_effect_blurred",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.confetti",
-          "androidName": "chat_effect_confetti",
           "status": "adopted"
         },
         {
@@ -297,59 +241,9 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_effect_explode",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.fireworks",
-          "androidName": "chat_effect_fireworks",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.glow",
-          "androidName": "chat_effect_glow",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.pulse",
-          "androidName": "chat_effect_pulse",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.rainbow",
-          "androidName": "chat_effect_rainbow",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.shake",
-          "androidName": "chat_effect_shake",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.sparkle",
-          "androidName": "chat_effect_sparkle",
-          "status": "adopted"
-        },
-        {
           "catalog": "app",
           "iosKey": "bubble.media.viewOnce",
           "androidName": "chat_effect_view_once",
-          "status": "adopted"
-        },
-        {
-          "androidName": "chat_effect_waoo",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effect.zoom",
-          "androidName": "chat_effect_zoom",
           "status": "adopted"
         },
         {
@@ -357,42 +251,6 @@
           "iosKey": "effects.active",
           "androidName": "chat_effects_active",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.effects.active",
-          "androidName": "chat_effects_active_count",
-          "kind": "plurals",
-          "fillMissingQuantities": true,
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.incoming.a11y.announced",
-          "androidName": "chat_effects_chip_a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effects.clear-all",
-          "androidName": "chat_effects_clear_all",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "2fa_done_button",
-          "androidName": "chat_effects_done",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "story.timeline.clip.tooltip.duration",
-          "androidName": "chat_effects_duration_a11y",
-          "status": "adopted"
-        },
-        {
-          "androidName": "chat_effects_ephemeral_duration",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -405,32 +263,8 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_effects_section_behavior",
-          "status": "android-only"
-        },
-        {
-          "androidName": "chat_effects_section_entry",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "effects.section.permanent",
-          "androidName": "chat_effects_section_permanent",
-          "status": "adopted"
-        },
-        {
-          "androidName": "chat_effects_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "chat_encryption_notice",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "audio.fullscreen.language.original",
-          "androidName": "chat_explorer_original",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -483,36 +317,12 @@
           "status": "android-only"
         },
         {
-          "androidName": "chat_forward_empty",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "conversation.members-count",
           "androidName": "chat_forward_members",
           "kind": "plurals",
           "fillMissingQuantities": true,
           "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.addChannel.search.prompt",
-          "androidName": "chat_forward_search_hint",
-          "status": "adopted"
-        },
-        {
-          "androidName": "chat_forward_send_a11y",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "bubble.meta.forwarded",
-          "androidName": "chat_forward_sent",
-          "status": "adopted"
-        },
-        {
-          "androidName": "chat_forward_title",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -559,10 +369,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "chat_message_actions",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "commands.menu.message",
           "androidName": "chat_message_placeholder",
@@ -607,18 +413,10 @@
           "status": "adopted"
         },
         {
-          "androidName": "chat_react_with",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "message-detail.reactions.all",
           "androidName": "chat_reactions_all",
           "status": "adopted"
-        },
-        {
-          "androidName": "chat_reactions_empty",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -672,10 +470,6 @@
         },
         {
           "androidName": "chat_scroll_to_bottom",
-          "status": "android-only"
-        },
-        {
-          "androidName": "chat_search",
           "status": "android-only"
         },
         {
@@ -811,27 +605,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "conversation_analysis_dynamic",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversation_analysis_emotions",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversation_analysis_empty",
-          "status": "android-only"
-        },
-        {
           "androidName": "conversation_analysis_engagement",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversation_analysis_error",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversation_analysis_health",
           "status": "android-only"
         },
         {
@@ -844,23 +618,9 @@
         },
         {
           "catalog": "app",
-          "iosKey": "reading_mode.summary.title",
-          "androidName": "conversation_analysis_summary",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "dashboard.section.ai-analysis",
           "androidName": "conversation_analysis_title",
           "status": "adopted"
-        },
-        {
-          "androidName": "conversation_analysis_tone",
-          "status": "android-only"
-        },
-        {
-          "androidName": "conversation_analysis_topics",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -901,12 +661,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "participants.add.a11y",
-          "androidName": "conversation_members_add_a11y",
-          "status": "adopted"
-        },
-        {
           "androidName": "conversation_members_ban",
           "status": "android-only"
         },
@@ -943,12 +697,6 @@
         {
           "androidName": "conversation_members_error",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.info.tab.members",
-          "androidName": "conversation_members_open",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -1142,12 +890,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "calls.detail.participants",
-          "androidName": "conversation_stats_participants",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.filter.all",
           "androidName": "conversation_stats_period_all",
           "status": "adopted"
@@ -1193,10 +935,6 @@
           "iosKey": "dashboard.sentiment.positive",
           "androidName": "conversation_stats_sentiment_positive",
           "status": "adopted"
-        },
-        {
-          "androidName": "conversation_stats_title",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1301,10 +1039,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "participant_profile_error",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "participantProfile.historyGrant.title",
           "androidName": "participant_profile_history",
@@ -1317,10 +1051,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "participant_profile_history_failed",
-          "status": "android-only"
-        },
-        {
           "androidName": "participant_profile_history_none",
           "status": "android-only"
         },
@@ -1330,10 +1060,6 @@
         },
         {
           "androidName": "participant_profile_history_since",
-          "status": "android-only"
-        },
-        {
-          "androidName": "participant_profile_joined",
           "status": "android-only"
         },
         {
@@ -1349,10 +1075,6 @@
           "iosKey": "conversations.error.retry",
           "androidName": "participant_profile_retry",
           "status": "adopted"
-        },
-        {
-          "androidName": "participant_profile_via_link",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1431,29 +1153,7 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.list.search_conversations",
-          "androidName": "share_target_search_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.sheet.title.send",
-          "androidName": "share_target_send",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "share.sent",
-          "androidName": "share_target_sent",
-          "status": "adopted"
-        },
-        {
           "androidName": "share_target_signed_out",
-          "status": "android-only"
-        },
-        {
-          "androidName": "share_target_title",
           "status": "android-only"
         },
         {

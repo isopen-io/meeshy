@@ -1,12 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_composer_language_hint">اختر لغة إرسال الرسالة</string>
-    <string name="a11y_message_location">موقع مشارَك</string>
     <string name="add_participant_add_button">إضافة</string>
     <string name="add_participant_close">إغلاق</string>
     <string name="add_participant_member_badge">عضو</string>
     <string name="add_participant_no_results">لم يتم العثور على مستخدم</string>
-    <string name="add_participant_prompt">ابحث بالاسم أو @اسم المستخدم</string>
     <string name="add_participant_search_hint">ابحث بالاسم أو @اسم المستخدم</string>
     <string name="add_participant_title">إضافة عضو</string>
     <string name="attachment_loading_a11y_failed">فشل التحميل</string>
@@ -42,12 +40,7 @@
     <string name="chat_back">رجوع</string>
     <string name="chat_call_audio">مكالمة صوتية</string>
     <string name="chat_call_rejoin">الانضمام</string>
-    <string name="chat_call_rejoin_a11y">مكالمة جارية، انقر للانضمام</string>
     <string name="chat_call_return">مكالمة جارية، اضغط للعودة</string>
-    <string name="chat_call_video">مكالمة فيديو</string>
-    <string name="chat_camera_chooser_photo">صورة</string>
-    <string name="chat_camera_chooser_title">التقاط صورة أو فيديو</string>
-    <string name="chat_camera_chooser_video">فيديو</string>
     <string name="chat_cancel_edit">إلغاء التعديل</string>
     <string name="chat_cancel_reply">إلغاء الرد</string>
     <plurals name="chat_clipboard_char_count">
@@ -71,7 +64,6 @@
     <string name="chat_composer_reply_video">فيديو</string>
     <string name="chat_composer_reply_voice">رسالة صوتية</string>
     <string name="chat_composer_reply_you">أنت</string>
-    <string name="chat_create_share_link">إنشاء رابط المشاركة</string>
     <string name="chat_date_today">اليوم</string>
     <string name="chat_date_yesterday">أمس</string>
     <string name="chat_delete_confirm_cancel">إلغاء</string>
@@ -85,35 +77,13 @@
         <item quantity="many">حذف %1$d رسالة؟</item>
         <item quantity="other">حذف %1$d رسالة؟</item>
     </plurals>
-    <string name="chat_editing_label">جارٍ تعديل رسالة</string>
     <string name="chat_effect_blurred">تمويه</string>
-    <string name="chat_effect_confetti">قصاصات</string>
     <string name="chat_effect_duration_15s">15 ث</string>
     <string name="chat_effect_duration_1m">1 د</string>
     <string name="chat_effect_duration_5m">٥ دقائق</string>
-    <string name="chat_effect_fireworks">ألعاب نارية</string>
-    <string name="chat_effect_glow">توهج</string>
-    <string name="chat_effect_pulse">نبض</string>
-    <string name="chat_effect_rainbow">قوس قزح</string>
-    <string name="chat_effect_shake">اهتزاز</string>
-    <string name="chat_effect_sparkle">بريق</string>
     <string name="chat_effect_view_once">عرض مرة واحدة</string>
-    <string name="chat_effect_zoom">تكبير</string>
     <string name="chat_effects_active">نشط</string>
-    <plurals name="chat_effects_active_count">
-        <item quantity="zero">%1$d تأثيرات نشطة</item>
-        <item quantity="one">%1$d تأثير نشط</item>
-        <item quantity="two">%1$d تأثيران نشطان</item>
-        <item quantity="few">%1$d تأثيرات نشطة</item>
-        <item quantity="many">%1$d تأثيرات نشطة</item>
-        <item quantity="other">%1$d تأثيرات نشطة</item>
-    </plurals>
-    <string name="chat_effects_chip_a11y">%1$s, %2$s</string>
-    <string name="chat_effects_clear_all">مسح الكل</string>
-    <string name="chat_effects_done">إنهاء</string>
-    <string name="chat_effects_duration_a11y">المدة %1$s</string>
     <string name="chat_effects_inactive">غير نشط</string>
-    <string name="chat_effects_section_permanent">تأثير دائم</string>
     <string name="chat_engagement_a11y_streak">%1$s · الشرارات: %2$d · اليوم: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d يوم</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d أيام</string>
@@ -124,15 +94,12 @@
     <string name="chat_ephemeral_after_read">بعد القراءة</string>
     <string name="chat_ephemeral_after_read_a11y">بعد القراءة، عندما يغادر القارئ المحادثة</string>
     <string name="chat_ephemeral_off">مُعطَّل</string>
-    <string name="chat_exit_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">لم يعد هذا العنصر جزءًا من الرسالة.</string>
     <string name="chat_exit_blocked_encrypted_source">يُنسخ هذا المحتوى المشفّر من هذا الجهاز.</string>
     <string name="chat_exit_blocked_source_unavailable">الرسالة الأصلية لم تعد متاحة.</string>
     <string name="chat_exit_blocked_title">هذه الرسالة لا تغادر Meeshy</string>
     <string name="chat_exit_blocked_understood">حسنًا</string>
-    <string name="chat_exit_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="chat_explorer_close_translation">إغلاق الترجمة</string>
-    <string name="chat_explorer_original">الأصل</string>
     <string name="chat_explorer_original_banner">الأصل • %1$s</string>
     <string name="chat_explorer_retranslate">إعادة الترجمة</string>
     <string name="chat_explorer_retranslate_a11y">إعادة الترجمة</string>
@@ -146,8 +113,6 @@
         <item quantity="many">%1$d عضوًا</item>
         <item quantity="other">%1$d عضو</item>
     </plurals>
-    <string name="chat_forward_search_hint">ابحث عن محادثة...</string>
-    <string name="chat_forward_sent">تمت إعادة التوجيه</string>
     <string name="chat_guest_bar_close">إغلاق المحادثة</string>
     <string name="chat_header_flame_card_hide">إخفاء الشعلة</string>
     <string name="chat_header_flame_card_hint">يفتح سلسلة المحادثة</string>
@@ -255,7 +220,6 @@
     <string name="contact_card_toast_request_failed">تعذر إرسال الطلب</string>
     <string name="context_invite_friends">دعوة أصدقائي</string>
     <string name="conversation_accessRevoked">تم إلغاء الوصول إلى هذه المحادثة</string>
-    <string name="conversation_analysis_summary">الملخص</string>
     <string name="conversation_analysis_title">تحليل بالذكاء الاصطناعي</string>
     <string name="conversation_analysis_trait_communication">التواصل</string>
     <string name="conversation_analysis_trait_emotional">عاطفي</string>
@@ -284,11 +248,9 @@
     <string name="conversation_info_tab_options">الخيارات</string>
     <string name="conversation_info_tab_stats">إحصاءات</string>
     <string name="conversation_members_add">إضافة</string>
-    <string name="conversation_members_add_a11y">إضافة عضو</string>
     <string name="conversation_members_ban_confirm">حظر</string>
     <string name="conversation_members_demote_member">خفض إلى عضو</string>
     <string name="conversation_members_demote_moderator">خفض إلى مشرف</string>
-    <string name="conversation_members_open">الأعضاء</string>
     <string name="conversation_members_promote_admin">ترقية إلى مدير</string>
     <string name="conversation_members_promote_moderator">ترقية إلى مشرف</string>
     <string name="conversation_members_remove_cancel">إلغاء</string>
@@ -309,7 +271,6 @@
     </plurals>
     <string name="conversation_options_archive">أرشفة</string>
     <string name="conversation_options_archive_title">أرشفة المحادثة؟</string>
-    <string name="conversation_options_block_a11y">حظر %1$s</string>
     <string name="conversation_options_block_confirm">حظر</string>
     <string name="conversation_options_block_message">لن تتلقى بعد الآن رسائل من %1$s. يمكنك إلغاء الحظر من الإعدادات.</string>
     <string name="conversation_options_block_success">تم حظر المستخدم</string>
@@ -360,7 +321,6 @@
     <string name="conversation_stats_content_types">أنواع المحتوى</string>
     <string name="conversation_stats_languages">اللغات</string>
     <string name="conversation_stats_messages">الرسائل</string>
-    <string name="conversation_stats_participants">المشاركون</string>
     <string name="conversation_stats_period_all">الكل</string>
     <string name="conversation_stats_period_month">30ي</string>
     <string name="conversation_stats_period_week">7ي</string>
@@ -390,7 +350,6 @@
     <string name="encryption_detail_activate">تفعيل التشفير</string>
     <string name="encryption_detail_activation_footer_final">لا يُوقَف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
     <string name="encryption_detail_active_label">التشفير النشط</string>
-    <string name="encryption_detail_details_header">التفاصيل</string>
     <string name="encryption_detail_direct_already_end_to_end">لديك بالفعل محادثة مشفّرة تمامًا بين الطرفين مع هذا الشخص: افتحها للدردشة فيها. تبقى هذه المحادثة مشفّرة على خوادمنا.</string>
     <string name="encryption_detail_direct_not_a_pair">لا تضم هذه المحادثة الثنائية عضوين مسجّلين بالضبط: التشفير التام بين الطرفين غير ممكن هنا.</string>
     <string name="encryption_detail_enabled_on">فُعّل في</string>
@@ -406,7 +365,6 @@
     <string name="encryption_detail_translation_available">متاح</string>
     <string name="encryption_detail_translation_disabled">معطّل</string>
     <string name="encryption_detail_translation_on_device">على الجهاز</string>
-    <string name="encryption_done">تم</string>
     <string name="encryption_fact_device_limit">يمكن أن يضم حسابك حتى 16 جهازًا مشفّرًا. بعد ذلك، يقترح التطبيق إزالة أحدها؛ ولا يقرأ الجهاز المُزال الرسائل المشفّرة الجديدة.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_fact_end_to_end_is_final">بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين.</string>
@@ -555,7 +513,6 @@
     <string name="location_settings_open">إعدادات مشاركة الموقع</string>
     <string name="location_title">اختيار مكان</string>
     <string name="location_unknown">مكان غير معروف</string>
-    <string name="media_hub_all_loaded">تم تحميل كل شيء</string>
     <string name="media_hub_empty">لا يوجد شيء في «%1$s» بعد.</string>
     <string name="media_hub_empty_search">لا توجد نتائج لـ «%1$s».</string>
     <string name="media_hub_error">تعذّر تحميل هذه القائمة.</string>
@@ -595,9 +552,7 @@
     <string name="member_management_title">الأعضاء</string>
     <string name="message_action_copyAddress">نسخ العنوان</string>
     <string name="message_detail_edits_current">الحالي</string>
-    <string name="message_detail_edits_empty">يظهر سجل التعديلات هنا</string>
     <string name="message_detail_edits_history_title">السجل</string>
-    <string name="message_detail_edits_none_detail">لم يتم تعديل هذه الرسالة</string>
     <string name="message_detail_edits_none_title">لا توجد تعديلات</string>
     <string name="message_detail_edits_previous_one">%1$d نسخة سابقة</string>
     <string name="message_detail_edits_previous_other">%1$d نسخ سابقة</string>
@@ -656,15 +611,12 @@
     <string name="participant_profile_denied_can_send_videos">لا يمكنه إرسال مقاطع فيديو</string>
     <string name="participant_profile_entry_link_expires">ينتهي في</string>
     <string name="participant_profile_entry_link_inactive">تم تعطيل هذا الرابط</string>
-    <string name="participant_profile_entry_link_languages">اللغات المسموح بها</string>
-    <string name="participant_profile_entry_link_requires">يتطلب</string>
     <string name="participant_profile_entry_link_title">إعدادات الرابط</string>
     <string name="participant_profile_entry_link_uses">الدخول</string>
     <string name="participant_profile_has_left">غادر هذا الشخص المحادثة</string>
     <string name="participant_profile_history">السجل</string>
     <string name="participant_profile_history_clear">إزالة</string>
     <string name="participant_profile_history_error">فشل التحديث</string>
-    <string name="participant_profile_history_label">يرى السجل منذ</string>
     <string name="participant_profile_info_birthday">تاريخ الميلاد</string>
     <string name="participant_profile_info_country">البلد</string>
     <string name="participant_profile_info_joined">انضم في</string>
@@ -672,7 +624,6 @@
     <string name="participant_profile_info_via_link">عبر الرابط</string>
     <string name="participant_profile_no_account">بدون حساب</string>
     <string name="participant_profile_require_birthday">تاريخ الميلاد</string>
-    <string name="participant_profile_require_email">بريد إلكتروني</string>
     <string name="participant_profile_require_nickname">اسم مستعار</string>
     <string name="participant_profile_retry">إعادة المحاولة</string>
     <string name="participant_profile_unavailable">الملف غير متاح</string>
@@ -729,11 +680,9 @@
     <string name="share_action_copy_text">نسخ النص</string>
     <string name="share_action_save">حفظ</string>
     <string name="share_action_share_out">مشاركة خارج Meeshy</string>
-    <string name="share_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
     <string name="share_blocked_title">هذه الرسالة لا تغادر Meeshy</string>
     <string name="share_blocked_unavailable">لم يعد هذا المحتوى متاحًا.</string>
     <string name="share_blocked_understood">حسنًا</string>
-    <string name="share_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="share_button_a11y">إرسال إلى %1$d من المستلمين</string>
     <string name="share_button_forward">إعادة توجيه · %1$d</string>
     <string name="share_button_send">إرسال · %1$d</string>
@@ -757,7 +706,6 @@
     <string name="share_detail_direct">محادثة</string>
     <string name="share_detail_friend">صديق · لا توجد محادثة بعد</string>
     <string name="share_detail_group_unsized">مجموعة</string>
-    <string name="share_empty_body">ابحث عن شخص باسمه أو اسم المستخدم أو رقمه.</string>
     <string name="share_empty_title">لا أحد هنا بعد</string>
     <string name="share_encryption_warning">«%1$s» غير مشفّرة: ستخرج هذه الرسالة هناك من التشفير التام بين الطرفين.</string>
     <string name="share_error_generic">خطأ أثناء المشاركة</string>
@@ -786,15 +734,10 @@
     <string name="share_status_sent">تم الإرسال</string>
     <string name="share_target_cancel">إلغاء</string>
     <string name="share_target_loading">جارٍ تحميل المحادثات…</string>
-    <string name="share_target_preview_title">ما سيُرسَل</string>
-    <string name="share_target_search_hint">البحث عن محادثات</string>
-    <string name="share_target_send">إرسال</string>
-    <string name="share_target_sent">تم الإرسال</string>
     <string name="share_target_studio">التعديل في الاستوديو</string>
     <string name="share_title_forward">إعادة توجيه</string>
     <string name="share_title_send">إرسال</string>
     <string name="share_toast_open">فتح</string>
-    <string name="share_toast_published">تم النشر</string>
     <string name="share_toast_sent_to">أُرسل إلى %1$s</string>
     <string name="share_withdrawn_after_read">تبقى الرسالة التي تختفي بعد القراءة في هذه المحادثة.</string>
     <string name="share_withdrawn_others_leave">تُرسَل الرسائل الـ %1$d الأخرى.</string>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure de la liste et des liens (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="links_hub_affiliate_description">Invite your network to Meeshy and follow who signs up</string>
+    <string name="links_hub_tracking_description">Follow the clicks and campaigns of your links</string>
+    <string name="links_hub_affiliate_create_a11y">Create a referral link</string>
+    <string name="links_hub_tracking_create_a11y">Create a tracking link</string>
+    <string name="links_tracking_create_a11y">Create a tracking link</string>
+    <string name="links_tracking_empty_title">No tracking links</string>
+    <string name="links_tracking_create_title">New tracking link</string>
+    <string name="links_community_title">Communities</string>
+    <string name="links_affiliate_create_title">New referral link</string>
+    <string name="links_affiliate_create_max_uses_label">Limit sign-ups</string>
+    <string name="links_affiliate_create_max_uses_note">Beyond that, the link no longer signs anyone up</string>
+    <string name="links_affiliate_intro">Whoever signs up to Meeshy through this link becomes your referral.</string>
+    <string name="links_common_created">Created %1$s</string>
+    <string name="links_affiliate_row_uses">%1$d of %2$d</string>
+    <string name="links_affiliate_delete_title">Delete this referral link?</string>
+    <string name="links_affiliate_delete_body">It will no longer let anyone sign up in your name. Your referrals stay yours.</string>
+    <string name="links_affiliate_delete_confirm">Delete</string>
+    <string name="dialogs_master_pin_title">Master PIN required</string>
+    <string name="dialogs_master_pin_message">Set it in settings to lock a conversation.</string>
+</resources>

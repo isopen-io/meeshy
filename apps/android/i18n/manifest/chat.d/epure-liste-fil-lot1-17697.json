@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "participant_profile_entry_link_languages",
+          "status": "android-only"
+        },
+        {
+          "androidName": "participant_profile_entry_link_requires",
+          "status": "android-only"
+        },
+        {
+          "androidName": "participant_profile_require_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_exit_blocked_view_once",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_blocked_view_once",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_exit_blocked_after_read",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_blocked_after_read",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

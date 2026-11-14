@@ -55,7 +55,11 @@ class EpureFilLot1StringsTest {
         "media_hub_all_loaded", "participant_profile_error", "participant_profile_history_failed", "participant_profile_history_label",
         "participant_profile_joined", "participant_profile_via_link", "share_target_preview_title", "share_target_search_hint",
         "share_target_send", "share_target_sent", "share_target_title", "share_toast_published",
+        "chat_effects_active_count",
     )
+
+    /** Mots que le lexique écrit pareil en français, en portugais et en italien : ce n'est pas une recopie. */
+    private val sameWordInFrench = setOf("participant_profile_require_email")
 
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()
 
@@ -97,7 +101,7 @@ class EpureFilLot1StringsTest {
     fun `a shortened label is translated, never copied from the French`() {
         val french = epure("values-fr")
         val copies = folders.filterNot { it == "values-fr" }.flatMap { folder ->
-            epure(folder).filter { (key, text) -> text == french[key] }.keys.map { "$folder:$it" }
+            epure(folder).filter { (key, text) -> text == french[key] && key !in sameWordInFrench }.keys.map { "$folder:$it" }
         }
         assertThat(copies).isEmpty()
     }

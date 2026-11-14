@@ -79,7 +79,7 @@ internal fun MessageDetailBanner(
             .background(accent.copy(alpha = 0.06f))
             .border(0.5.dp, accent.copy(alpha = 0.15f), shape)
             .padding(MeeshySpacing.md)
-            .semantics(mergeDescendants = true) { contentDescription = "$title, $detail" },
+            .semantics(mergeDescendants = true) { contentDescription = listOf(title, detail).filter { it.isNotBlank() }.joinToString(", ") },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -102,26 +102,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "participantProfile.linkRequires",
-          "androidName": "participant_profile_entry_link_requires",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.linkLanguages",
-          "androidName": "participant_profile_entry_link_languages",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "participantProfile.requireNickname",
           "androidName": "participant_profile_require_nickname",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.requireEmail",
-          "androidName": "participant_profile_require_email",
           "status": "adopted"
         },
         {
@@ -158,12 +140,6 @@
           "catalog": "app",
           "iosKey": "participantProfile.historyGrant.error",
           "androidName": "participant_profile_history_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "participantProfile.historyGrant.label",
-          "androidName": "participant_profile_history_label",
           "status": "adopted"
         },
         {

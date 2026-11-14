@@ -15,29 +15,18 @@
     <string name="conversations_lock_security_menu">Réglages de verrouillage</string>
     <string name="conversations_unlock_all">Déverrouiller toutes les conversations</string>
     <string name="conversations_lock_dots_a11y">%1$d chiffres saisis sur %2$d</string>
-    <string name="conversations_action_rename">Renommer la conversation</string>
-    <string name="conversations_rename_dialog_title">Renommer la conversation</string>
-    <string name="conversations_rename_field_label">Nom de la conversation</string>
     <string name="conversations_action_remove_favorite">Retirer le favori</string>
     <string name="conversations_favorite_set_content_description">Définir la réaction favorite %1$s</string>
     <string name="conversations_tags_add_content_description">Ajouter le tag</string>
     <string name="conversations_action_move_to_category">Déplacer vers une catégorie</string>
     <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
-    <string name="conversations_leave_confirm_message">Vous allez quitter « %1$s ». Vous ne recevrez plus de nouveaux messages de cette conversation.</string>
-    <string name="conversations_delete_for_me_confirm_message">« %1$s » sera définitivement supprimée de vos appareils uniquement. Les autres participants la conservent.</string>
     <string name="conversations_delete_for_all_confirm_message">« %1$s » sera fermée pour tous les participants. Plus personne ne pourra y écrire.</string>
-    <string name="new_conversation_search_hint">Rechercher des personnes</string>
-    <string name="share_link_field_max_uses">Utilisations maximum</string>
     <string name="share_link_created_title">Lien créé</string>
     <string name="my_share_links_share">Partager le lien</string>
     <string name="my_share_links_delete">Supprimer le lien</string>
     <string name="my_share_links_extend">Prolonger l\'expiration</string>
-    <string name="share_link_detail_open">Ouvrir les détails du lien</string>
-    <string name="share_link_detail_stats_max">Maximum</string>
-    <string name="share_link_detail_created">Créé le</string>
     <string name="share_link_detail_not_found">Ce lien n\'est plus disponible.</string>
-    <string name="share_link_detail_dismiss">Ignorer</string>
 
     <!-- Search bar trailing icons -->
 

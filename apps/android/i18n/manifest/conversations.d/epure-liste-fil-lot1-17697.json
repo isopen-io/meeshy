@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "links_hub_affiliate_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_tracking_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_affiliate_create_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_hub_tracking_create_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_tracking_create_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_tracking_empty_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_tracking_create_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_community_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_create_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_create_max_uses_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_create_max_uses_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_intro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_common_created",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_row_uses",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_delete_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_delete_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_affiliate_delete_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "dialogs_master_pin_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "dialogs_master_pin_message",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

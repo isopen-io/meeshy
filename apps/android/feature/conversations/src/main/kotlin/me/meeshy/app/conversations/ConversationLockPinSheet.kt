@@ -34,10 +34,10 @@ internal fun LockPinCopy.subtitleTakesName(): Boolean = when (this) {
     else -> false
 }
 
+/** Un titre qui dit déjà tout (« Confirmer… », « Supprimer… ») n'a pas de sous-titre. */
 @StringRes
-private fun LockPinCopy.subtitleRes(): Int = when (this) {
+internal fun LockPinCopy.subtitleRes(): Int? = when (this) {
     LockPinCopy.CREATE_MASTER_PIN -> R.string.conversations_lock_subtitle_create_master
-    LockPinCopy.CONFIRM_MASTER_PIN -> R.string.conversations_lock_subtitle_confirm_master
     LockPinCopy.VERIFY_MASTER_PIN -> R.string.conversations_lock_subtitle_verify_master
     LockPinCopy.ENTER_CODE -> R.string.conversations_lock_subtitle_enter_code
     LockPinCopy.CONFIRM_CODE -> R.string.conversations_lock_subtitle_confirm_code
@@ -46,8 +46,7 @@ private fun LockPinCopy.subtitleRes(): Int = when (this) {
     LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_subtitle_unlock_all
     LockPinCopy.CHANGE_VERIFY_MASTER_PIN -> R.string.conversations_lock_subtitle_change_verify
     LockPinCopy.NEW_MASTER_PIN -> R.string.conversations_lock_subtitle_new_master
-    LockPinCopy.CONFIRM_NEW_MASTER_PIN -> R.string.conversations_lock_subtitle_confirm_new
-    LockPinCopy.REMOVE_MASTER_PIN -> R.string.conversations_lock_subtitle_remove_master
+    LockPinCopy.CONFIRM_MASTER_PIN, LockPinCopy.CONFIRM_NEW_MASTER_PIN, LockPinCopy.REMOVE_MASTER_PIN -> null
 }
 
 @StringRes
@@ -73,11 +72,9 @@ fun ConversationLockPinSheet(
     val copy = prompt.copy
     val texts = LockPinSheetTexts(
         title = stringResource(copy.titleRes()),
-        subtitle = if (copy.subtitleTakesName()) {
-            stringResource(copy.subtitleRes(), conversationName)
-        } else {
-            stringResource(copy.subtitleRes())
-        },
+        subtitle = copy.subtitleRes()?.let { res ->
+            if (copy.subtitleTakesName()) stringResource(res, conversationName) else stringResource(res)
+        }.orEmpty(),
         errorText = prompt.error?.let { stringResource(it.messageRes()) },
         dotsDescription = stringResource(R.string.conversations_lock_dots_a11y, prompt.filledCount, prompt.pinLength),
         deleteDescription = stringResource(R.string.conversations_lock_delete_digit),

@@ -60,12 +60,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "share.sheet.empty.body",
-          "androidName": "share_empty_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "share.sheet.status.queued",
           "androidName": "share_status_queued",
           "status": "adopted"

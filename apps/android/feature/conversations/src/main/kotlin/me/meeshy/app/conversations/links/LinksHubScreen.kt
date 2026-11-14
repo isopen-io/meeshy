@@ -40,7 +40,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Le hub « Mes liens » (iOS `LinksHubView`, entrée du menu flottant) : une bannière et quatre cartes —
+ * Le hub « Mes liens » (iOS `LinksHubView`, entrée du menu flottant) : quatre cartes —
  * partage, suivi, communautés, parrainage — chacune avec son « + » de création (sauf communautés) et
  * ses deux chiffres, chargés en parallèle et animés.
  */
@@ -52,17 +52,16 @@ fun LinksHubScreen(
     viewModel: LinksHubViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val bannerAccent = linkAccent(LinksHubEntry.COMMUNITY.accentHex)
+    val accent = linkAccent(LinksHubEntry.COMMUNITY.accentHex)
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LinksPage(
         title = stringResource(R.string.links_hub_title),
-        accent = bannerAccent,
+        accent = accent,
         onBack = onBack,
         isRefreshing = state.isRefreshing,
         onRefresh = viewModel::refresh,
     ) {
-        item(key = "banner", contentType = "banner") { HubBanner(bannerAccent) }
         itemsIndexed(LinksHubEntry.entries, key = { _, entry -> entry.name }, contentType = { _, _ -> "card" }) { index, entry ->
             HubCard(
                 entry = entry,
@@ -72,22 +71,6 @@ fun LinksHubScreen(
                 modifier = Modifier.staggeredAppear(index),
             )
         }
-    }
-}
-
-@Composable
-private fun HubBanner(accent: androidx.compose.ui.graphics.Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth().linkSurface(accent, radius = 16.dp).padding(MeeshySpacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(MeeshyIcons.AddLink, contentDescription = null, tint = accent, modifier = Modifier.size(32.dp))
-        Text(
-            stringResource(R.string.links_hub_banner_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
     }
 }
 

@@ -13,5 +13,4 @@
     <string name="global_search_summary_hidden">1 hidden message</string>
     <string name="global_search_summary_view_once">1 view-once message</string>
     <string name="global_search_summary_expired">Message expired</string>
-    <string name="global_search_summary_ephemeral">Disappears after reading</string>
 </resources>

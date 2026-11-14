@@ -1,19 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="chat_composer_sentiment">Tom da mensagem</string>
     <string name="chat_record_voice">Gravar mensagem de voz</string>
     <string name="chat_effects_open">Efeitos da mensagem</string>
-    <string name="chat_attach_file">Anexar arquivo</string>
     <string name="chat_attach_open">Adicionar anexo</string>
     <string name="chat_composer_read_only">Você não pode enviar mensagens nesta conversa</string>
     <string name="chat_slow_mode_wait">Modo lento · aguarde %1$ds</string>
-    <string name="chat_effects_title">Efeitos da mensagem</string>
-    <string name="chat_effects_section_behavior">Comportamento</string>
-    <string name="chat_effects_section_entry">Animação de entrada</string>
-    <string name="chat_effects_ephemeral_duration">Duração efêmera</string>
     <string name="chat_effect_ephemeral">Efêmero</string>
-    <string name="chat_effect_explode">Explosão</string>
-    <string name="chat_effect_waoo">Waoo</string>
     <string name="chat_effect_duration_30s">30 s</string>
     <string name="chat_effect_duration_1h">1 h</string>
     <string name="chat_effect_duration_24h">24 h</string>
@@ -27,27 +19,20 @@
     <string name="chat_file_download_failed_server">Não foi possível baixar o arquivo.</string>
     <string name="chat_file_download_dismiss">Fechar</string>
     <string name="chat_file_open_failed">Nenhum aplicativo pode abrir este arquivo.</string>
-    <string name="chat_forward_title">Encaminhar para…</string>
-    <string name="chat_forward_empty">Nenhuma conversa</string>
-    <string name="chat_forward_send_a11y">Encaminhar para %1$s</string>
     <string name="chat_action_show_original">Ver original</string>
     <string name="chat_action_show_translation">Ver tradução</string>
     <string name="chat_action_explore_languages">Explorar idiomas</string>
     <string name="chat_action_unstar">Remover dos salvos</string>
-    <string name="chat_react_with">Reagir com %1$s</string>
-    <string name="chat_message_actions">Ações da mensagem</string>
     <string name="chat_encryption_notice">As mensagens desta conversa são criptografadas de ponta a ponta. Ninguém, nem mesmo o Meeshy, pode lê-las.</string>
     <string name="chat_date_day_before_yesterday">Anteontem</string>
     <string name="chat_scroll_to_bottom">Ir para a última mensagem</string>
     <string name="chat_unread_attachment">Anexo</string>
     <string name="chat_reply_thread_title">Tópico de respostas</string>
     <string name="chat_reply_thread_open">Mostrar o tópico de respostas</string>
-    <string name="chat_search">Pesquisar mensagens</string>
     <string name="chat_search_hint">Pesquisar nesta conversa</string>
     <string name="chat_search_previous">Resultado anterior</string>
     <string name="chat_search_next">Próximo resultado</string>
     <string name="chat_search_no_results">Sem resultados</string>
-    <string name="chat_reactions_empty">Ninguém ainda</string>
     <string name="image_saved_to_gallery">Guardado na galeria</string>
     <string name="image_save_failed">Falha ao guardar na galeria</string>
     <string name="chat_clipboard_remove">Remover conteúdo da área de transferência</string>
@@ -55,19 +40,11 @@
     <!-- Report a message -->
     <string name="report_message_error">Não foi possível enviar a denúncia. Tente novamente.</string>
     <!-- Conversation settings (admin) -->
-<string name="conversation_stats_title">Estatísticas</string>
     <string name="conversation_stats_activity_empty">Dados insuficientes</string>
     <string name="conversation_stats_empty">Ainda não há mensagens</string>
     <string name="conversation_stats_error">Não foi possível carregar as estatísticas</string>
-    <string name="conversation_analysis_empty">Ainda sem análise</string>
-    <string name="conversation_analysis_error">Não foi possível carregar a análise</string>
-    <string name="conversation_analysis_health">Pontuação de saúde</string>
     <string name="conversation_analysis_engagement">Envolvimento: %1$s</string>
     <string name="conversation_analysis_conflict">Conflito: %1$s</string>
-    <string name="conversation_analysis_tone">Tom</string>
-    <string name="conversation_analysis_topics">Tópicos</string>
-    <string name="conversation_analysis_emotions">Emoções</string>
-    <string name="conversation_analysis_dynamic">Dinâmica</string>
     <string name="conversation_analysis_personas">Perfis dos participantes</string>
     <string name="conversation_analysis_persona_confidence">%1$d%%</string>
     <string name="conversation_settings_saved">Configurações salvas</string>
@@ -88,19 +65,14 @@
     <string name="conversation_members_ban">Banir da conversa</string>
     <string name="conversation_members_ban_title">Banir este membro?</string>
     <string name="conversation_members_ban_message">%1$s será removido e não poderá voltar a entrar nesta conversa.</string>
-    <string name="share_target_title">Compartilhar no Meeshy</string>
     <string name="share_target_signed_out">Entre no Meeshy para compartilhar conteúdo.</string>
 
     <!-- Fiche d'un participant (#3943) -->
     <string name="participant_profile_open_a11y">Abrir o perfil de %1$s</string>
-    <string name="participant_profile_error">Não foi possível carregar este perfil</string>
-    <string name="participant_profile_joined">Entrou em %1$s</string>
-    <string name="participant_profile_via_link">Entrou por «%1$s»</string>
     <string name="participant_profile_no_restriction">Sem restrições</string>
     <string name="participant_profile_history_since">Vê o histórico desde %1$s</string>
     <string name="participant_profile_history_none">Vê a conversa desde a sua chegada</string>
     <string name="participant_profile_history_set">Abrir o histórico a partir de uma data</string>
-    <string name="participant_profile_history_failed">A alteração foi recusada</string>
     <string name="participant_profile_denied_can_view_history">Não vê as mensagens anteriores à sua chegada</string>
     <plurals name="chat_unread_separator_count">
         <item quantity="one">%1$d mensagem não lida</item>

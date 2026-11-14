@@ -61,6 +61,7 @@ class EpureListeLiensStringsTest {
         "share_link_detail_dismiss", "share_link_detail_expires", "share_link_detail_identifier", "share_link_detail_info_title",
         "share_link_detail_open", "share_link_detail_stats_max", "share_link_detail_stats_title", "share_link_detail_stats_uses",
         "share_link_field_max_uses", "share_link_picker_back", "swipe_hide", "swipe_mute", "swipe_unmute",
+        "conversations_badge_pinned",
     )
 
     private val sameWordInFrench = emptySet<String>()

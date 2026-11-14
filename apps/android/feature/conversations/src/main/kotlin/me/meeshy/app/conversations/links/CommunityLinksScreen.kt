@@ -69,7 +69,6 @@ fun CommunityLinksScreen(
                 LinkStatTile(MeeshyIcons.PersonFilled, stats.totalMembers, R.plurals.links_count_members, accent, Modifier.weight(1f))
             }
         }
-        item(key = "section", contentType = "section") { LinksSectionTitle(stringResource(R.string.links_community_section_mine)) }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }
             state.links.isEmpty() -> item(key = "empty", contentType = "empty") {

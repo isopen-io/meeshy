@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure de la liste et des liens (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="links_hub_affiliate_description">Lade dein Netzwerk zu Meeshy ein und verfolge, wer sich anmeldet</string>
+    <string name="links_hub_tracking_description">Verfolge die Klicks und Kampagnen deiner Links</string>
+    <string name="links_hub_affiliate_create_a11y">Empfehlungslink erstellen</string>
+    <string name="links_hub_tracking_create_a11y">Tracking-Link erstellen</string>
+    <string name="links_tracking_create_a11y">Tracking-Link erstellen</string>
+    <string name="links_tracking_empty_title">Keine Tracking-Links</string>
+    <string name="links_tracking_create_title">Neuer Tracking-Link</string>
+    <string name="links_community_title">Communities</string>
+    <string name="links_affiliate_create_title">Neuer Empfehlungslink</string>
+    <string name="links_affiliate_create_max_uses_label">Anmeldungen begrenzen</string>
+    <string name="links_affiliate_create_max_uses_note">Danach meldet der Link niemanden mehr an</string>
+    <string name="links_affiliate_intro">Wer sich über diesen Link bei Meeshy anmeldet, zählt zu deinen Empfohlenen.</string>
+    <string name="links_common_created">Erstellt am %1$s</string>
+    <string name="links_affiliate_row_uses">%1$d von %2$d</string>
+    <string name="links_affiliate_delete_title">Diesen Empfehlungslink löschen?</string>
+    <string name="links_affiliate_delete_body">Über ihn kann sich niemand mehr in deinem Namen anmelden. Deine Empfohlenen bleiben deine.</string>
+    <string name="links_affiliate_delete_confirm">Löschen</string>
+    <string name="dialogs_master_pin_title">Master-PIN erforderlich</string>
+    <string name="dialogs_master_pin_message">Lege sie in den Einstellungen fest, um eine Unterhaltung zu sperren.</string>
+</resources>
