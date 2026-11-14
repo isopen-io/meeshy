@@ -443,11 +443,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.league.use",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.season.name",
           "status": "adopted"
         },

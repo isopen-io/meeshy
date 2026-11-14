@@ -207,7 +207,6 @@
     <string name="game2_season_claim">Réclamer la halte %1$s</string>
     <string name="game2_season_completed">Voyage accompli : une coupe, une médaille datée et %1$s de gloire.</string>
     <string name="game2_season_heading">Voyage %1$s · semaine %2$s sur %3$s</string>
-    <string name="game2_season_none">Aucun voyage en cours.</string>
     <string name="game2_season_path">Chemin gratuit</string>
     <string name="game2_season_reward_fragment">Un fragment d’étoile</string>
     <string name="game2_season_reward_freeze">Une Veilleuse pour ta Flamme</string>
@@ -1041,7 +1040,6 @@
     <string name="game_state_meesh_next_missing">La Meesh n° %1$s figera %2$s de ta lumière : il manque %3$s.</string>
     <string name="game_state_meesh_next_ready">Tu peux frapper la Meesh n° %1$s : elle figera %2$s de ta lumière.</string>
     <string name="game_state_missions_claimed">Le rêve de cette nuit : %1$s sur %2$s actes. L’Offrande est ouverte : un nouveau rêve viendra cette nuit.</string>
-    <string name="game_state_missions_progress">Le rêve de cette nuit : %1$s sur %2$s actes.</string>
     <string name="game_state_missions_ready">Le rêve de cette nuit : %1$s sur %2$s actes. L’Offrande est là : ouvre-la.</string>
     <string name="game_state_points_missing">Ta lumière compte %1$s, soit %2$s. La Meesh n° %3$s en figera %4$s : il manque %5$s.</string>
     <string name="game_state_points_missing_plain">Ta lumière compte %1$s. La Meesh n° %2$s en figera %3$s : il manque %4$s.</string>
@@ -1226,5 +1224,4 @@
     <string name="reveal_composed_subtitle">Un palier de plus dans « %1$s ».</string>
     <string name="reveal_continue">Voir ma progression</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d jours d’affilée.</string>
 </resources>

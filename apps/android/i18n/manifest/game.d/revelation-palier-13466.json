@@ -557,12 +557,6 @@
           "iosKey": "reveal.ok",
           "androidName": "reveal_ok",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "reveal.streak.subtitle",
-          "androidName": "reveal_streak_subtitle",
-          "status": "adopted"
         }
       ]
     }

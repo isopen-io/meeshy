@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
     <string name="game2_league_consent_how_question">Wie werde ich eingeteilt?</string>
     <string name="game_concept_league_use">Achte auf deinen Platz und deine Zone: Die ersten 7 steigen auf, die letzten 5 steigen ab.</string>
+    <string name="game2_season_none">Keine Reise unterwegs.</string>
+    <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten.</string>
+    <string name="reveal_streak_subtitle">%1$d Tage in Folge.</string>
 </resources>

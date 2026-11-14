@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.</string>
     <string name="game2_league_consent_how_question">How am I placed?</string>
     <string name="game_concept_league_use">Look at your place and your zone: the top 7 climb, the bottom 5 go back down.</string>
+    <string name="game2_season_none">No journey under way.</string>
+    <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts.</string>
+    <string name="reveal_streak_subtitle">%1$d days in a row.</string>
 </resources>

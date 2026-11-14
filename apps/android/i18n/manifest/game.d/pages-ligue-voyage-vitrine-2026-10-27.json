@@ -126,11 +126,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.season.none",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.season.upcoming",
           "status": "adopted"
         },
@@ -297,11 +292,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.settings.hidden.reopen_note",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.notifications.title",
           "status": "adopted"
         },
         {

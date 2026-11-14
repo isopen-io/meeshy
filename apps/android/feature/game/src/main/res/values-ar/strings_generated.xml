@@ -207,7 +207,6 @@
     <string name="game2_season_claim">استلم المحطة ⁦%1$s⁩</string>
     <string name="game2_season_completed">اكتملت الرحلة: كأس، ووسام مؤرّخ، و%1$s من المجد.</string>
     <string name="game2_season_heading">الرحلة ⁦%1$s⁩ · الأسبوع ⁦%2$s⁩ من ⁦%3$s⁩</string>
-    <string name="game2_season_none">لا رحلة جارية.</string>
     <string name="game2_season_path">الطريق المجاني</string>
     <string name="game2_season_reward_fragment">شظية نجم</string>
     <string name="game2_season_reward_freeze">قنديل للهبك</string>
@@ -1047,7 +1046,6 @@
     <string name="game_state_meesh_next_missing">ستصوغ Meesh رقم %1$s من نورك %2$s: ينقصك %3$s.</string>
     <string name="game_state_meesh_next_ready">يمكنك سكّ Meesh رقم %1$s: ستصوغ من نورك %2$s.</string>
     <string name="game_state_missions_claimed">حلم هذه الليلة: %1$s من %2$s فصول. العطيّة مفتوحة: سيأتي حلم جديد هذه الليلة.</string>
-    <string name="game_state_missions_progress">حلم هذه الليلة: %1$s من %2$s فصول.</string>
     <string name="game_state_missions_ready">حلم هذه الليلة: %1$s من %2$s فصول. العطيّة هنا: افتحها.</string>
     <string name="game_state_points_missing">نورك يضمّ %1$s، أي %2$s. ستصوغ Meesh رقم %3$s منه %4$s: ينقصك %5$s.</string>
     <string name="game_state_points_missing_plain">نورك يضمّ %1$s. ستصوغ Meesh رقم %2$s منه %3$s: ينقصك %4$s.</string>
@@ -1247,5 +1245,4 @@
     <string name="reveal_composed_subtitle">مستوى إضافي في « %1$s ».</string>
     <string name="reveal_continue">عرض تقدُّمي</string>
     <string name="reveal_ok">حسنًا</string>
-    <string name="reveal_streak_subtitle">%1$d أيام متتالية.</string>
 </resources>

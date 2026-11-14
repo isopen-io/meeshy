@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
     <string name="game2_league_consent_how_question">Comment suis-je placé ?</string>
     <string name="game_concept_league_use">Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.</string>
+    <string name="game2_season_none">Aucun voyage en cours.</string>
+    <string name="game_state_missions_progress">Le rêve de cette nuit : %1$s sur %2$s actes.</string>
+    <string name="reveal_streak_subtitle">%1$d jours d’affilée.</string>
 </resources>

@@ -207,7 +207,6 @@
     <string name="game2_season_claim">Rast %1$s abholen</string>
     <string name="game2_season_completed">Reise vollbracht: ein Pokal, eine datierte Medaille und %1$s Ruhm.</string>
     <string name="game2_season_heading">Reise %1$s · Woche %2$s von %3$s</string>
-    <string name="game2_season_none">Keine Reise unterwegs.</string>
     <string name="game2_season_path">Kostenloser Weg</string>
     <string name="game2_season_reward_fragment">Ein Sternfragment</string>
     <string name="game2_season_reward_freeze">Eine Hüterin für deine Flamme</string>
@@ -1039,7 +1038,6 @@
     <string name="game_state_meesh_next_missing">Meesh Nr. %1$s wird %2$s deines Lichts bannen: Es fehlen %3$s.</string>
     <string name="game_state_meesh_next_ready">Du kannst Meesh Nr. %1$s prägen: Sie wird %2$s deines Lichts bannen.</string>
     <string name="game_state_missions_claimed">Der Traum dieser Nacht: %1$s von %2$s Akten. Die Gabe ist geöffnet: Heute Nacht kommt ein neuer Traum.</string>
-    <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten.</string>
     <string name="game_state_missions_ready">Der Traum dieser Nacht: %1$s von %2$s Akten. Die Gabe ist da: Öffne sie.</string>
     <string name="game_state_points_missing">Dein Licht zählt %1$s, also %2$s. Meesh Nr. %3$s wird %4$s davon bannen: Es fehlen %5$s.</string>
     <string name="game_state_points_missing_plain">Dein Licht zählt %1$s. Meesh Nr. %2$s wird %3$s davon bannen: Es fehlen %4$s.</string>
@@ -1219,5 +1217,4 @@
     <string name="reveal_composed_subtitle">Eine weitere Stufe in „%1$s“.</string>
     <string name="reveal_continue">Meinen Fortschritt ansehen</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d Tage in Folge.</string>
 </resources>

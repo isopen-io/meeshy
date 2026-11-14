@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens.</string>
     <string name="game2_league_consent_how_question">Como sou colocado?</string>
     <string name="game_concept_league_use">Olhe o seu lugar e a sua zona: os 7 primeiros sobem, os 5 últimos voltam a descer.</string>
+    <string name="game2_season_none">Nenhuma viagem em andamento.</string>
+    <string name="game_state_missions_progress">O sonho desta noite: %1$s de %2$s atos.</string>
+    <string name="reveal_streak_subtitle">%1$d dias seguidos.</string>
 </resources>

@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.</string>
     <string name="game2_league_consent_how_question">¿Cómo me colocan?</string>
     <string name="game_concept_league_use">Mira tu puesto y tu zona: los 7 primeros suben, los 5 últimos bajan.</string>
+    <string name="game2_season_none">Ningún viaje en curso.</string>
+    <string name="game_state_missions_progress">El sueño de esta noche: %1$s de %2$s actos.</string>
+    <string name="reveal_streak_subtitle">%1$d días seguidos.</string>
 </resources>

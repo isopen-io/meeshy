@@ -45,6 +45,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_season_none",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_season_seal_body",
           "status": "android-only"
         },
@@ -225,7 +229,15 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_state_missions_progress",
+          "status": "android-only"
+        },
+        {
           "androidName": "reveal_badge_axis_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reveal_streak_subtitle",
           "status": "android-only"
         }
       ]

@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">يتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ.</string>
     <string name="game2_league_consent_how_question">كيف يُحدَّد مكاني؟</string>
     <string name="game_concept_league_use">انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون، والخمسة الأخيرون يهبطون.</string>
+    <string name="game2_season_none">لا رحلة جارية.</string>
+    <string name="game_state_missions_progress">حلم هذه الليلة: %1$s من %2$s فصول.</string>
+    <string name="reveal_streak_subtitle">%1$d أيام متتالية.</string>
 </resources>

@@ -207,7 +207,6 @@
     <string name="game2_season_claim">Riscatta la sosta %1$s</string>
     <string name="game2_season_completed">Viaggio compiuto: una coppa, una medaglia datata e %1$s di gloria.</string>
     <string name="game2_season_heading">Viaggio %1$s · settimana %2$s su %3$s</string>
-    <string name="game2_season_none">Nessun viaggio in corso.</string>
     <string name="game2_season_path">Cammino gratuito</string>
     <string name="game2_season_reward_fragment">Un frammento di stella</string>
     <string name="game2_season_reward_freeze">Una Lucerna per la tua Fiamma</string>
@@ -1041,7 +1040,6 @@
     <string name="game_state_meesh_next_missing">La Meesh n. %1$s fisserà %2$s della tua luce: mancano %3$s.</string>
     <string name="game_state_meesh_next_ready">Puoi coniare la Meesh n. %1$s: fisserà %2$s della tua luce.</string>
     <string name="game_state_missions_claimed">Il sogno di stanotte: %1$s atti su %2$s. L’Offerta è aperta: un nuovo sogno arriverà stanotte.</string>
-    <string name="game_state_missions_progress">Il sogno di stanotte: %1$s atti su %2$s.</string>
     <string name="game_state_missions_ready">Il sogno di stanotte: %1$s atti su %2$s. L’Offerta è qui: aprila.</string>
     <string name="game_state_points_missing">La tua luce conta %1$s, cioè %2$s. La Meesh n. %3$s ne fisserà %4$s: mancano %5$s.</string>
     <string name="game_state_points_missing_plain">La tua luce conta %1$s. La Meesh n. %2$s ne fisserà %3$s: mancano %4$s.</string>
@@ -1226,5 +1224,4 @@
     <string name="reveal_composed_subtitle">Un traguardo in più in «%1$s».</string>
     <string name="reveal_continue">Vedi i miei progressi</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d giorni di fila.</string>
 </resources>

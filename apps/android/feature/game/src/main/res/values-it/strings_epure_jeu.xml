@@ -57,4 +57,7 @@
     <string name="game_rules_3_more" formatted="false">Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni.</string>
     <string name="game2_league_consent_how_question">Come vengo piazzato?</string>
     <string name="game_concept_league_use">Guarda il tuo posto e la tua zona: i primi 7 salgono, gli ultimi 5 riscendono.</string>
+    <string name="game2_season_none">Nessun viaggio in corso.</string>
+    <string name="game_state_missions_progress">Il sogno di stanotte: %1$s atti su %2$s.</string>
+    <string name="reveal_streak_subtitle">%1$d giorni di fila.</string>
 </resources>

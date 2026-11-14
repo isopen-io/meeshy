@@ -207,7 +207,6 @@
     <string name="game2_season_claim">Claim stop %1$s</string>
     <string name="game2_season_completed">Journey accomplished: a cup, a dated medal and %1$s glory.</string>
     <string name="game2_season_heading">Journey %1$s · week %2$s of %3$s</string>
-    <string name="game2_season_none">No journey under way.</string>
     <string name="game2_season_path">Free path</string>
     <string name="game2_season_reward_fragment">A star fragment</string>
     <string name="game2_season_reward_freeze">A Vigil for your Flame</string>
@@ -1039,7 +1038,6 @@
     <string name="game_state_meesh_next_missing">Meesh no. %1$s will bind %2$s of your light: %3$s still to come.</string>
     <string name="game_state_meesh_next_ready">You can mint Meesh no. %1$s: it will bind %2$s of your light.</string>
     <string name="game_state_missions_claimed">Tonight’s dream: %1$s of %2$s acts. The Offering is open: a new dream will come tonight.</string>
-    <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts.</string>
     <string name="game_state_missions_ready">Tonight’s dream: %1$s of %2$s acts. The Offering is here: open it.</string>
     <string name="game_state_points_missing">Your light holds %1$s, that is %2$s. Meesh no. %3$s will bind %4$s of it: %5$s still to come.</string>
     <string name="game_state_points_missing_plain">Your light holds %1$s. Meesh no. %2$s will bind %3$s of it: %4$s still to come.</string>
@@ -1219,5 +1217,4 @@
     <string name="reveal_composed_subtitle">One more milestone in “%1$s”.</string>
     <string name="reveal_continue">View my progress</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d days in a row.</string>
 </resources>
