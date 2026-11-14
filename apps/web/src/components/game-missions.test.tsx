@@ -209,7 +209,7 @@ describe('avant le niveau 5', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ score: 100, levelRecord: null, missions: [] })} />));
     expect(page).toContain('Au niveau 5, tes aïeux t’envoient chaque nuit un rêve');
     expect(page).toContain('Requis 5');
-    expect(page).toMatch(/Il manque \d+ niveaux?/);
+    expect(page).not.toContain('Il manque');
     expect(page).not.toContain('Ouvrir l’Offrande');
   });
 });

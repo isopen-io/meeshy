@@ -26,7 +26,7 @@ describe('les huit règles', () => {
   });
 
   test('la première règle dit que les limites comptent les gestes, jamais les points (porteur, 2026-10-08)', () => {
-    expect(gameRules('fr')[0]?.body).toContain('Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.');
+    expect(gameRules('fr')[0]?.body).toContain('Les limites portent sur tes gestes, jamais sur tes étincelles.');
     expect(text).toContain('Les limites portent sur tes gestes, jamais sur tes étincelles');
     expect(gameRules('fr')[0]?.body).toContain('Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis.');
   });

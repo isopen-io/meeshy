@@ -134,11 +134,11 @@ export type GameLeagueProps = {
 function LockedCard({ levelRecord }: { readonly levelRecord: number }) {
   return (
     <GameCard id="game-league-locked" labelledBy="game-league-locked-title">
-      <h2 id="game-league-locked-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+      <h2 id="game-league-locked-title" className="sr-only">
         {gameText('game.league.title')}
       </h2>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(levelRecord) })}
+        {gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL) })}
       </p>
       <GameRequirementLine concept="league" current={levelRecord} required={LEAGUE_MIN_LEVEL} record />
     </GameCard>
@@ -209,7 +209,7 @@ export function GameLeague(props: GameLeagueProps) {
     <>
       <GameCard id="game-league" labelledBy="game-league-title" tint={GAME_BRAND}>
         <h2 id="game-league-title" className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-          {gameText('game.league.title')} · {weekLabel(league.weekKey)}
+          {weekLabel(league.weekKey)}
         </h2>
         <PlacedHeader league={league} now={now} />
       </GameCard>
@@ -241,7 +241,7 @@ export function GameLeague(props: GameLeagueProps) {
       </GameCard>
 
       <GameCard id="game-league-pseudonym-card" labelledBy="game-league-pseudonym-title">
-        <h2 id="game-league-pseudonym-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <h2 id="game-league-pseudonym-title" className={league.pseudonym === null ? 'text-body font-bold' : 'sr-only'} style={{ color: GAME_INK }}>
           {gameText('game.league.pseudonym.title')}
         </h2>
         {league.pseudonym === null ? null : (
