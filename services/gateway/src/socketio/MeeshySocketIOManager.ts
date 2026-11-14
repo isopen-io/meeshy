@@ -213,6 +213,7 @@ function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
  * re-export de type s'efface à l'exécution.
  */
 import type { SocketUser } from './utils/socket-helpers.js';
+import { admitUserToConversationRoom } from './midSessionRoomAdmission.js';
 export type { SocketUser };
 
 export interface TranslationNotification {
@@ -3493,17 +3494,22 @@ export class MeeshySocketIOManager {
    * Called when a user is added to a conversation while already connected
    * (e.g. group invite mid-session) so they immediately receive message:new
    * events without requiring a reconnect.
+   *
+   * La loi vit dans `midSessionRoomAdmission.ts` (#18381) : réessais, marqueur
+   * d'injoignabilité et jonction par adaptateur. Ce site n'est plus qu'un
+   * cablâge de dépendances — tout ce qu'il ferait ici serait hors de portée de
+   * la jumelle d'authentification, qui porte les trois depuis #16687.
    */
   async joinUserToConversationRoom(userId: string, conversationId: string): Promise<void> {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return;
-    const room = ROOMS.conversation(conversationId);
-    await Promise.all(
-      Array.from(socketIds).map(async (socketId) => {
-        const socket = this.io.sockets.sockets.get(socketId);
-        if (!socket) return;
-        await socket.join(room);
-      })
+    await admitUserToConversationRoom(
+      {
+        io: this.io,
+        userSockets: this.userSockets,
+        socketById: (socketId: string) => this.io.sockets.sockets.get(socketId),
+        connectedUsers: this.connectedUsers,
+      },
+      userId,
+      conversationId,
     );
   }
 
