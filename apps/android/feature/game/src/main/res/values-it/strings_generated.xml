@@ -207,7 +207,7 @@
     <string name="game2_season_claim">Riscatta la sosta %1$s</string>
     <string name="game2_season_completed">Viaggio compiuto: una coppa, una medaglia datata e %1$s di gloria.</string>
     <string name="game2_season_heading">Viaggio %1$s · settimana %2$s su %3$s</string>
-    <string name="game2_season_none">Nessun viaggio è in corso per ora. Il prossimo parte presto.</string>
+    <string name="game2_season_none">Nessun viaggio in corso.</string>
     <string name="game2_season_path">Cammino gratuito</string>
     <string name="game2_season_reward_fragment">Un frammento di stella</string>
     <string name="game2_season_reward_freeze">Una Lucerna per la tua Fiamma</string>
@@ -240,7 +240,6 @@
     <string name="game2_settings_league_on">Sei nel torneo pubblico con il nome %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Sei nel torneo pubblico.</string>
     <string name="game2_settings_league_title">Torneo pubblico</string>
-    <string name="game2_settings_notifications_title">Notifiche del gioco</string>
     <string name="game2_settings_title">Impostazioni del gioco</string>
     <string name="game2_settings_visibility_title">Chi vede cosa</string>
     <string name="game2_showcase_awarded">Ottenuto il %1$s</string>
@@ -274,7 +273,6 @@
     <string name="game_atlas_coin_prism">Edizione prisma · ogni millesima</string>
     <string name="game_atlas_coin_reverse">Rovescio</string>
     <string name="game_atlas_coin_title">La Meesh: dritto e rovescio</string>
-    <string name="game_atlas_flames_line">Un giorno in più e la tua Fiamma cresce: dalla brace al sole.</string>
     <string name="game_atlas_flames_title">Le cinque Fiamme</string>
     <string name="game_atlas_leagues_line">Ogni settimana entri nel tuo torneo: i primi sette salgono al cerchio successivo.</string>
     <string name="game_atlas_leagues_title">Gli otto cerchi del torneo</string>
@@ -300,7 +298,6 @@
     <string name="game_atlas_tiers_line">Venti stati, dalla Scintilla alla Singolarità: il tuo anello cambia a ognuno.</string>
     <string name="game_atlas_tiers_prestige">La rinascita si offre al livello %1$s: è facoltativa, la tua luce può anche continuare a crescere.</string>
     <string name="game_atlas_tiers_title">I 20 stati della tua luce</string>
-    <string name="game_atlas_treasury_line">Tieni le tue Meesh: la tua Eredità cresce, dalla Borsa alla Riserva reale.</string>
     <string name="game_atlas_treasury_title">Le custodie dell’Eredità</string>
     <string name="game_atlas_trophies_line">Un trofeo si riceve in un momento preciso e non si spegne mai.</string>
     <string name="game_atlas_trophies_title">I trofei</string>
@@ -913,7 +910,6 @@
     <string name="game_photo_kicker_achievement">Impresa</string>
     <string name="game_photo_kicker_flame">Fiamma</string>
     <string name="game_photo_kicker_meesh">Meesh coniata</string>
-    <string name="game_photo_kicker_new_lap">Nuova Era</string>
     <string name="game_photo_kicker_rank">Nuovo rango</string>
     <string name="game_photo_kicker_start">Primi passi</string>
     <string name="game_photo_kicker_summit">In cima</string>
@@ -1048,7 +1044,7 @@
     <string name="game_state_meesh_next_missing">La Meesh n. %1$s fisserà %2$s della tua luce: mancano %3$s.</string>
     <string name="game_state_meesh_next_ready">Puoi coniare la Meesh n. %1$s: fisserà %2$s della tua luce.</string>
     <string name="game_state_missions_claimed">Il sogno di stanotte: %1$s atti su %2$s. L’Offerta è aperta: un nuovo sogno arriverà stanotte.</string>
-    <string name="game_state_missions_progress">Il sogno di stanotte: %1$s atti su %2$s, e %3$s da compiere per vedere l’Offerta.</string>
+    <string name="game_state_missions_progress">Il sogno di stanotte: %1$s atti su %2$s.</string>
     <string name="game_state_missions_ready">Il sogno di stanotte: %1$s atti su %2$s. L’Offerta è qui: aprila.</string>
     <string name="game_state_points_missing">La tua luce conta %1$s, cioè %2$s. La Meesh n. %3$s ne fisserà %4$s: mancano %5$s.</string>
     <string name="game_state_points_missing_plain">La tua luce conta %1$s. La Meesh n. %2$s ne fisserà %3$s: mancano %4$s.</string>
@@ -1111,9 +1107,6 @@
     <string name="game_treasury_tresor">Tesoro</string>
     <string name="progression_a11y_bar_level">Verso il livello %1$d</string>
     <string name="progression_a11y_bar_meesh">Verso la prossima Meesh</string>
-    <string name="progression_a11y_bar_streak">La tua Fiamma, verso la sua prossima soglia</string>
-    <string name="progression_a11y_tier_pending">Gradino %1$d da raggiungere</string>
-    <string name="progression_a11y_tier_reached">Gradino %1$d raggiunto</string>
     <string name="progression_achievement_a11y_hint">Tocca per vedere questa impresa in grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un messaggio vocale, uno di testo, una pubblicazione, una storia e un reel</string>
     <string name="progression_achievement_all_content_types_title">Tuttofare</string>
@@ -1235,7 +1228,6 @@
     <string name="reveal_close">Chiudi</string>
     <string name="reveal_composed_subtitle">Un traguardo in più in «%1$s».</string>
     <string name="reveal_continue">Vedi i miei progressi</string>
-    <string name="reveal_level_subtitle">La tua attività ti ha fatto salire di grado.</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d giorni di fila. La serie continua finché scrivi.</string>
+    <string name="reveal_streak_subtitle">%1$d giorni di fila.</string>
 </resources>

@@ -8,12 +8,10 @@
     <string name="game2_atlas_privacy">Privado por padrão: o jogo guarda o idioma e a data, nunca o interlocutor nem a conversa.</string>
     <string name="game2_settings_visibility_body">Escolha quem vê seu título, sua Herança, seus troféus e seu Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Não válido.</string>
-    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100, e uma prova a cada dez níveis: enquanto ela não for vencida, sua luz espera. Vinte estados. Os níveis vão até 499; o título Embaixador os abre até 1.000, e o título Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior.</string>
+    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100. Cada nível pede um pouco mais do que o anterior.</string>
     <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
     <string name="game2_prestige_meo">Seu nível recomeça em 1 e suas faíscas em 0; seu título, sua glória e suas Meeshes ficam. Seus ancestrais oferecem a você um troféu numerado e %1$s de glória.</string>
     <string name="game2_season_seal_body">Puramente decorativo: um objeto de coleção a cada %1$s paradas.</string>
-    <string name="game2_settings_notifications_body">No máximo uma por dia, em todos os seus aparelhos.</string>
-    <string name="game2_settings_notifications_switch">Notificações</string>
     <string name="game2_settings_friends_league_body">Seus amigos aceitos e você se veem na classificação semanal.</string>
     <string name="game_rules_section_rules">Regras</string>
     <string name="game_rules_section_concepts">Conceitos</string>

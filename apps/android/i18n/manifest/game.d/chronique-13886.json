@@ -60,12 +60,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.photo.kicker.new_lap",
-          "androidName": "game_photo_kicker_new_lap",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.photo.kicker.meesh",
           "androidName": "game_photo_kicker_meesh",
           "status": "adopted"

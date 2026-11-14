@@ -207,7 +207,7 @@
     <string name="game2_season_claim">Claim stop %1$s</string>
     <string name="game2_season_completed">Journey accomplished: a cup, a dated medal and %1$s glory.</string>
     <string name="game2_season_heading">Journey %1$s · week %2$s of %3$s</string>
-    <string name="game2_season_none">No journey is under way right now. The next one sets off soon.</string>
+    <string name="game2_season_none">No journey under way.</string>
     <string name="game2_season_path">Free path</string>
     <string name="game2_season_reward_fragment">A star fragment</string>
     <string name="game2_season_reward_freeze">A Vigil for your Flame</string>
@@ -240,7 +240,6 @@
     <string name="game2_settings_league_on">You are in the public joust under the name %1$s.</string>
     <string name="game2_settings_league_on_unnamed">You are in the public joust.</string>
     <string name="game2_settings_league_title">Public joust</string>
-    <string name="game2_settings_notifications_title">Game notifications</string>
     <string name="game2_settings_title">Game settings</string>
     <string name="game2_settings_visibility_title">Who sees what</string>
     <string name="game2_showcase_awarded">Earned on %1$s</string>
@@ -274,7 +273,6 @@
     <string name="game_atlas_coin_prism">Prism edition · every thousandth</string>
     <string name="game_atlas_coin_reverse">Back</string>
     <string name="game_atlas_coin_title">The Meesh: front and back</string>
-    <string name="game_atlas_flames_line">One more day and your Flame grows: from ember to sun.</string>
     <string name="game_atlas_flames_title">The five Flames</string>
     <string name="game_atlas_leagues_line">Every week, you enter your joust: the top seven climb to the next circle.</string>
     <string name="game_atlas_leagues_title">The joust’s eight circles</string>
@@ -300,7 +298,6 @@
     <string name="game_atlas_tiers_line">Twenty phases, from Spark to Singularity: your ring changes with each one.</string>
     <string name="game_atlas_tiers_prestige">Rebirth opens at level %1$s: it’s optional, your light can also keep growing.</string>
     <string name="game_atlas_tiers_title">The 20 phases of your light</string>
-    <string name="game_atlas_treasury_line">Keep your Meeshes: your Legacy grows, from the Purse to the royal Reserve.</string>
     <string name="game_atlas_treasury_title">The Legacy’s containers</string>
     <string name="game_atlas_trophies_line">A trophy is given at a precise moment, and it never fades.</string>
     <string name="game_atlas_trophies_title">The trophies</string>
@@ -913,7 +910,6 @@
     <string name="game_photo_kicker_achievement">Great deed</string>
     <string name="game_photo_kicker_flame">Flame</string>
     <string name="game_photo_kicker_meesh">Meesh minted</string>
-    <string name="game_photo_kicker_new_lap">New Age</string>
     <string name="game_photo_kicker_rank">New rank</string>
     <string name="game_photo_kicker_start">First steps</string>
     <string name="game_photo_kicker_summit">At the top</string>
@@ -1046,7 +1042,7 @@
     <string name="game_state_meesh_next_missing">Meesh no. %1$s will bind %2$s of your light: %3$s still to come.</string>
     <string name="game_state_meesh_next_ready">You can mint Meesh no. %1$s: it will bind %2$s of your light.</string>
     <string name="game_state_missions_claimed">Tonight’s dream: %1$s of %2$s acts. The Offering is open: a new dream will come tonight.</string>
-    <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts, and %3$s to fulfill to see the Offering.</string>
+    <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts.</string>
     <string name="game_state_missions_ready">Tonight’s dream: %1$s of %2$s acts. The Offering is here: open it.</string>
     <string name="game_state_points_missing">Your light holds %1$s, that is %2$s. Meesh no. %3$s will bind %4$s of it: %5$s still to come.</string>
     <string name="game_state_points_missing_plain">Your light holds %1$s. Meesh no. %2$s will bind %3$s of it: %4$s still to come.</string>
@@ -1108,9 +1104,6 @@
     <string name="game_treasury_tresor">Treasure</string>
     <string name="progression_a11y_bar_level">Towards level %1$d</string>
     <string name="progression_a11y_bar_meesh">Toward the next Meesh</string>
-    <string name="progression_a11y_bar_streak">Your Flame, towards its next landmark</string>
-    <string name="progression_a11y_tier_pending">Milestone %1$d to reach</string>
-    <string name="progression_a11y_tier_reached">Milestone %1$d reached</string>
     <string name="progression_achievement_a11y_hint">Tap to see this great deed in full.</string>
     <string name="progression_achievement_all_content_types_condition">A voice message, a text message, a post, a story and a reel</string>
     <string name="progression_achievement_all_content_types_title">Jack of all trades</string>
@@ -1228,7 +1221,6 @@
     <string name="reveal_close">Close</string>
     <string name="reveal_composed_subtitle">One more milestone in “%1$s”.</string>
     <string name="reveal_continue">View my progress</string>
-    <string name="reveal_level_subtitle">Your activity moved you up a rank.</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d days in a row. The streak keeps going as long as you write.</string>
+    <string name="reveal_streak_subtitle">%1$d days in a row.</string>
 </resources>

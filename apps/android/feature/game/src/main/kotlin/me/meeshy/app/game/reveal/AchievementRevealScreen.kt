@@ -286,12 +286,14 @@ private fun RevealTexts(plan: EngagementRevealPlan, res: android.content.res.Res
             color = MeeshyPalette.White,
             textAlign = TextAlign.Center,
         )
-        Text(
-            RevealCopy.subtitle(res, plan.subtitle),
-            style = meeshyText(MeeshyFontSize.body),
-            color = MeeshyPalette.Indigo200,
-            textAlign = TextAlign.Center,
-        )
+        RevealCopy.subtitle(res, plan.subtitle)?.let { subtitle ->
+            Text(
+                subtitle,
+                style = meeshyText(MeeshyFontSize.body),
+                color = MeeshyPalette.Indigo200,
+                textAlign = TextAlign.Center,
+            )
+        }
         // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
         if (rarityLine != null) {
             Text(

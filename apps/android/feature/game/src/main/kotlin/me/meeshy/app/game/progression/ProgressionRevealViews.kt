@@ -51,7 +51,6 @@ import me.meeshy.sdk.model.game.engagement.EngagementAxisFamily
 import me.meeshy.sdk.model.game.engagement.EngagementProgress
 import me.meeshy.sdk.model.game.engagement.EngagementRevealPlan
 import me.meeshy.sdk.model.game.engagement.RevealRim
-import me.meeshy.sdk.model.game.engagement.RevealSubtitle
 import me.meeshy.sdk.model.game.engagement.RevealTitle
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.ui.component.game.gameBounce
@@ -190,7 +189,7 @@ private fun AchievementListRow(row: AchievementRow, onOpen: () -> Unit) {
     val line = if (unlocked) {
         RevealCopy.obtained(res, locale, row.achievement.reachedAt) ?: stringResource(R.string.progression_unlocked)
     } else {
-        RevealCopy.subtitle(res, RevealSubtitle.LegacyCondition(row.achievement.key))
+        RevealCopy.condition(res, row.achievement.key)
     }
     val rarityLine = remember(row.rarity) { RevealRim.line(row.rarity) }
     val hint = stringResource(R.string.progression_achievement_a11y_hint)

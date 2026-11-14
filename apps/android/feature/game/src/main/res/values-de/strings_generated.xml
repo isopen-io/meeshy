@@ -207,7 +207,7 @@
     <string name="game2_season_claim">Rast %1$s abholen</string>
     <string name="game2_season_completed">Reise vollbracht: ein Pokal, eine datierte Medaille und %1$s Ruhm.</string>
     <string name="game2_season_heading">Reise %1$s · Woche %2$s von %3$s</string>
-    <string name="game2_season_none">Gerade ist keine Reise unterwegs. Die nächste bricht bald auf.</string>
+    <string name="game2_season_none">Keine Reise unterwegs.</string>
     <string name="game2_season_path">Kostenloser Weg</string>
     <string name="game2_season_reward_fragment">Ein Sternfragment</string>
     <string name="game2_season_reward_freeze">Eine Hüterin für deine Flamme</string>
@@ -240,7 +240,6 @@
     <string name="game2_settings_league_on">Du bist unter dem Namen %1$s im öffentlichen Turnier.</string>
     <string name="game2_settings_league_on_unnamed">Du bist im öffentlichen Turnier.</string>
     <string name="game2_settings_league_title">Öffentliches Turnier</string>
-    <string name="game2_settings_notifications_title">Spielbenachrichtigungen</string>
     <string name="game2_settings_title">Spieleinstellungen</string>
     <string name="game2_settings_visibility_title">Wer was sieht</string>
     <string name="game2_showcase_awarded">Erhalten am %1$s</string>
@@ -274,7 +273,6 @@
     <string name="game_atlas_coin_prism">Prisma-Edition · jede tausendste</string>
     <string name="game_atlas_coin_reverse">Rückseite</string>
     <string name="game_atlas_coin_title">Die Meesh: Vorder- und Rückseite</string>
-    <string name="game_atlas_flames_line">Ein Tag mehr und Deine Flamme wächst: von der Glut bis zur Sonne.</string>
     <string name="game_atlas_flames_title">Die fünf Flammen</string>
     <string name="game_atlas_leagues_line">Jede Woche trittst du in dein Turnier: Die ersten sieben steigen in den nächsten Kreis auf.</string>
     <string name="game_atlas_leagues_title">Die acht Kreise des Turniers</string>
@@ -300,7 +298,6 @@
     <string name="game_atlas_tiers_line">Zwanzig Gestalten, vom Funken bis zur Singularität: Dein Ring ändert sich mit jeder.</string>
     <string name="game_atlas_tiers_prestige">Die Wiedergeburt öffnet sich ab Level %1$s: Sie ist freiwillig, dein Licht kann auch weiter wachsen.</string>
     <string name="game_atlas_tiers_title">Die 20 Gestalten deines Lichts</string>
-    <string name="game_atlas_treasury_line">Behalte deine Meeshes: Dein Erbe wächst, von der Börse bis zur königlichen Reserve.</string>
     <string name="game_atlas_treasury_title">Die Behältnisse des Erbes</string>
     <string name="game_atlas_trophies_line">Eine Trophäe erhält man in einem bestimmten Moment, und sie erlischt nie.</string>
     <string name="game_atlas_trophies_title">Die Trophäen</string>
@@ -913,7 +910,6 @@
     <string name="game_photo_kicker_achievement">Heldentat</string>
     <string name="game_photo_kicker_flame">Flamme</string>
     <string name="game_photo_kicker_meesh">Meesh geprägt</string>
-    <string name="game_photo_kicker_new_lap">Neues Zeitalter</string>
     <string name="game_photo_kicker_rank">Neuer Rang</string>
     <string name="game_photo_kicker_start">Erste Schritte</string>
     <string name="game_photo_kicker_summit">Ganz oben</string>
@@ -1046,7 +1042,7 @@
     <string name="game_state_meesh_next_missing">Meesh Nr. %1$s wird %2$s deines Lichts bannen: Es fehlen %3$s.</string>
     <string name="game_state_meesh_next_ready">Du kannst Meesh Nr. %1$s prägen: Sie wird %2$s deines Lichts bannen.</string>
     <string name="game_state_missions_claimed">Der Traum dieser Nacht: %1$s von %2$s Akten. Die Gabe ist geöffnet: Heute Nacht kommt ein neuer Traum.</string>
-    <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten, und %3$s zu erfüllen, damit die Gabe erscheint.</string>
+    <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten.</string>
     <string name="game_state_missions_ready">Der Traum dieser Nacht: %1$s von %2$s Akten. Die Gabe ist da: Öffne sie.</string>
     <string name="game_state_points_missing">Dein Licht zählt %1$s, also %2$s. Meesh Nr. %3$s wird %4$s davon bannen: Es fehlen %5$s.</string>
     <string name="game_state_points_missing_plain">Dein Licht zählt %1$s. Meesh Nr. %2$s wird %3$s davon bannen: Es fehlen %4$s.</string>
@@ -1108,9 +1104,6 @@
     <string name="game_treasury_tresor">Schatz</string>
     <string name="progression_a11y_bar_level">Auf dem Weg zu Level %1$d</string>
     <string name="progression_a11y_bar_meesh">Zur nächsten Meesh</string>
-    <string name="progression_a11y_bar_streak">Deine Flamme, auf dem Weg zum nächsten Meilenstein</string>
-    <string name="progression_a11y_tier_pending">Stufe %1$d noch offen</string>
-    <string name="progression_a11y_tier_reached">Stufe %1$d erreicht</string>
     <string name="progression_achievement_a11y_hint">Tippe, um diese Heldentat groß zu sehen.</string>
     <string name="progression_achievement_all_content_types_condition">Eine Sprachnachricht, eine Textnachricht, ein Beitrag, eine Story und ein Reel</string>
     <string name="progression_achievement_all_content_types_title">Alleskönner</string>
@@ -1228,7 +1221,6 @@
     <string name="reveal_close">Schließen</string>
     <string name="reveal_composed_subtitle">Eine weitere Stufe in „%1$s“.</string>
     <string name="reveal_continue">Meinen Fortschritt ansehen</string>
-    <string name="reveal_level_subtitle">Deine Aktivität hat dich einen Rang aufsteigen lassen.</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d Tage in Folge. Die Serie läuft weiter, solange du schreibst.</string>
+    <string name="reveal_streak_subtitle">%1$d Tage in Folge.</string>
 </resources>

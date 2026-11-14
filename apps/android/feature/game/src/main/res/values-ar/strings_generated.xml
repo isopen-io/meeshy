@@ -207,7 +207,7 @@
     <string name="game2_season_claim">استلم المحطة ⁦%1$s⁩</string>
     <string name="game2_season_completed">اكتملت الرحلة: كأس، ووسام مؤرّخ، و%1$s من المجد.</string>
     <string name="game2_season_heading">الرحلة ⁦%1$s⁩ · الأسبوع ⁦%2$s⁩ من ⁦%3$s⁩</string>
-    <string name="game2_season_none">لا رحلة جارية الآن. تنطلق الرحلة القادمة قريبًا.</string>
+    <string name="game2_season_none">لا رحلة جارية.</string>
     <string name="game2_season_path">الطريق المجاني</string>
     <string name="game2_season_reward_fragment">شظية نجم</string>
     <string name="game2_season_reward_freeze">قنديل للهبك</string>
@@ -240,7 +240,6 @@
     <string name="game2_settings_league_on">أنت في المبارزة العامة باسم ⁨%1$s⁩.</string>
     <string name="game2_settings_league_on_unnamed">أنت في المبارزة العامة.</string>
     <string name="game2_settings_league_title">المبارزة العامة</string>
-    <string name="game2_settings_notifications_title">إشعارات اللعبة</string>
     <string name="game2_settings_title">إعدادات اللعبة</string>
     <string name="game2_settings_visibility_title">من يرى ماذا</string>
     <string name="game2_showcase_awarded">نُلت في %1$s</string>
@@ -274,7 +273,6 @@
     <string name="game_atlas_coin_prism">إصدار المنشور · كل ألف</string>
     <string name="game_atlas_coin_reverse">الظهر</string>
     <string name="game_atlas_coin_title">الـ Meesh: الوجه والظهر</string>
-    <string name="game_atlas_flames_line">يوم إضافي ويكبر لهبك: من الجمرة إلى الشمس.</string>
     <string name="game_atlas_flames_title">اللهبات الخمسة</string>
     <string name="game_atlas_leagues_line">كل أسبوع تدخل مبارزتك: يرتقي السبعة الأوائل إلى الحلقة التالية.</string>
     <string name="game_atlas_leagues_title">حلقات المبارزة الثماني</string>
@@ -300,7 +298,6 @@
     <string name="game_atlas_tiers_line">عشرون حالة، من الشرارة إلى التفرد: تتغيّر حلقتك مع كل حالة.</string>
     <string name="game_atlas_tiers_prestige">يُتاح الانبعاث عند المستوى %1$s: وهو اختياري، ويمكن لنورك أن يواصل النمو.</string>
     <string name="game_atlas_tiers_title">حالات نورك العشرون</string>
-    <string name="game_atlas_treasury_line">احتفظ بعملات Meesh: إرثك ينمو، من الكيس إلى الاحتياطي الملكي.</string>
     <string name="game_atlas_treasury_title">أوعية الإرث</string>
     <string name="game_atlas_trophies_line">تُمنح الكأس في لحظة محددة، ولا تنطفئ أبدًا.</string>
     <string name="game_atlas_trophies_title">الكؤوس</string>
@@ -913,7 +910,6 @@
     <string name="game_photo_kicker_achievement">مأثرة</string>
     <string name="game_photo_kicker_flame">اللهب</string>
     <string name="game_photo_kicker_meesh">Meesh مسكوكة</string>
-    <string name="game_photo_kicker_new_lap">عصر جديد</string>
     <string name="game_photo_kicker_rank">رتبة جديدة</string>
     <string name="game_photo_kicker_start">الخطوات الأولى</string>
     <string name="game_photo_kicker_summit">في القمة</string>
@@ -1054,7 +1050,7 @@
     <string name="game_state_meesh_next_missing">ستصوغ Meesh رقم %1$s من نورك %2$s: ينقصك %3$s.</string>
     <string name="game_state_meesh_next_ready">يمكنك سكّ Meesh رقم %1$s: ستصوغ من نورك %2$s.</string>
     <string name="game_state_missions_claimed">حلم هذه الليلة: %1$s من %2$s فصول. العطيّة مفتوحة: سيأتي حلم جديد هذه الليلة.</string>
-    <string name="game_state_missions_progress">حلم هذه الليلة: %1$s من %2$s فصول، و%3$s لتحقيقها حتى تظهر العطيّة.</string>
+    <string name="game_state_missions_progress">حلم هذه الليلة: %1$s من %2$s فصول.</string>
     <string name="game_state_missions_ready">حلم هذه الليلة: %1$s من %2$s فصول. العطيّة هنا: افتحها.</string>
     <string name="game_state_points_missing">نورك يضمّ %1$s، أي %2$s. ستصوغ Meesh رقم %3$s منه %4$s: ينقصك %5$s.</string>
     <string name="game_state_points_missing_plain">نورك يضمّ %1$s. ستصوغ Meesh رقم %2$s منه %3$s: ينقصك %4$s.</string>
@@ -1120,9 +1116,6 @@
     <string name="game_treasury_tresor">كنز</string>
     <string name="progression_a11y_bar_level">نحو المستوى %1$d</string>
     <string name="progression_a11y_bar_meesh">نحو الـ Meesh التالية</string>
-    <string name="progression_a11y_bar_streak">لهبك، نحو معلمه التالي</string>
-    <string name="progression_a11y_tier_pending">المرحلة %1$d لم تُبلغ بعد</string>
-    <string name="progression_a11y_tier_reached">تم بلوغ المرحلة %1$d</string>
     <string name="progression_achievement_a11y_hint">المس لترى هذه المأثرة بالحجم الكامل.</string>
     <string name="progression_achievement_all_content_types_condition">رسالة صوتية ورسالة نصية ومنشور وقصة وريل</string>
     <string name="progression_achievement_all_content_types_title">متعدّد المواهب</string>
@@ -1256,7 +1249,6 @@
     <string name="reveal_close">إغلاق</string>
     <string name="reveal_composed_subtitle">مستوى إضافي في « %1$s ».</string>
     <string name="reveal_continue">عرض تقدُّمي</string>
-    <string name="reveal_level_subtitle">نشاطك جعلك ترتقي رتبة.</string>
     <string name="reveal_ok">حسنًا</string>
-    <string name="reveal_streak_subtitle">%1$d أيام متتالية. تستمر السلسلة ما دمت تكتب.</string>
+    <string name="reveal_streak_subtitle">%1$d أيام متتالية.</string>
 </resources>

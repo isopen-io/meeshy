@@ -207,7 +207,7 @@
     <string name="game2_season_claim">Reclamar la parada %1$s</string>
     <string name="game2_season_completed">Viaje cumplido: una copa, una medalla fechada y %1$s de gloria.</string>
     <string name="game2_season_heading">Viaje %1$s · semana %2$s de %3$s</string>
-    <string name="game2_season_none">No hay ningún viaje en curso por ahora. El próximo sale pronto.</string>
+    <string name="game2_season_none">Ningún viaje en curso.</string>
     <string name="game2_season_path">Camino gratuito</string>
     <string name="game2_season_reward_fragment">Un fragmento de estrella</string>
     <string name="game2_season_reward_freeze">Una Vela para tu Llama</string>
@@ -240,7 +240,6 @@
     <string name="game2_settings_league_on">Estás en la justa pública con el nombre %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Estás en la justa pública.</string>
     <string name="game2_settings_league_title">Justa pública</string>
-    <string name="game2_settings_notifications_title">Notificaciones del juego</string>
     <string name="game2_settings_title">Ajustes del juego</string>
     <string name="game2_settings_visibility_title">Quién ve qué</string>
     <string name="game2_showcase_awarded">Obtenido el %1$s</string>
@@ -274,7 +273,6 @@
     <string name="game_atlas_coin_prism">Edición prisma · cada milésima</string>
     <string name="game_atlas_coin_reverse">Reverso</string>
     <string name="game_atlas_coin_title">La Meesh: anverso y reverso</string>
-    <string name="game_atlas_flames_line">Un día más y tu Llama crece: de la brasa al sol.</string>
     <string name="game_atlas_flames_title">Las cinco Llamas</string>
     <string name="game_atlas_leagues_line">Cada semana entras en tu justa: los siete primeros suben al círculo siguiente.</string>
     <string name="game_atlas_leagues_title">Los ocho círculos de la justa</string>
@@ -300,7 +298,6 @@
     <string name="game_atlas_tiers_line">Veinte estados, de la Chispa a la Singularidad: tu anillo cambia en cada uno.</string>
     <string name="game_atlas_tiers_prestige">El renacimiento se ofrece en el nivel %1$s: es opcional, tu luz también puede seguir creciendo.</string>
     <string name="game_atlas_tiers_title">Los 20 estados de tu luz</string>
-    <string name="game_atlas_treasury_line">Guarda tus Meeshes: tu Legado crece, del Monedero a la Reserva real.</string>
     <string name="game_atlas_treasury_title">Los recipientes del Legado</string>
     <string name="game_atlas_trophies_line">Un trofeo se recibe en un momento preciso y nunca se apaga.</string>
     <string name="game_atlas_trophies_title">Los trofeos</string>
@@ -913,7 +910,6 @@
     <string name="game_photo_kicker_achievement">Hazaña</string>
     <string name="game_photo_kicker_flame">Llama</string>
     <string name="game_photo_kicker_meesh">Meesh acuñada</string>
-    <string name="game_photo_kicker_new_lap">Nueva Edad</string>
     <string name="game_photo_kicker_rank">Nuevo rango</string>
     <string name="game_photo_kicker_start">Primeros pasos</string>
     <string name="game_photo_kicker_summit">En la cima</string>
@@ -1048,7 +1044,7 @@
     <string name="game_state_meesh_next_missing">La Meesh n.º %1$s fijará %2$s de tu luz: faltan %3$s.</string>
     <string name="game_state_meesh_next_ready">Puedes acuñar la Meesh n.º %1$s: fijará %2$s de tu luz.</string>
     <string name="game_state_missions_claimed">El sueño de esta noche: %1$s de %2$s actos. La Ofrenda está abierta: un nuevo sueño llegará esta noche.</string>
-    <string name="game_state_missions_progress">El sueño de esta noche: %1$s de %2$s actos, y %3$s por hacer realidad para ver la Ofrenda.</string>
+    <string name="game_state_missions_progress">El sueño de esta noche: %1$s de %2$s actos.</string>
     <string name="game_state_missions_ready">El sueño de esta noche: %1$s de %2$s actos. La Ofrenda está aquí: ábrela.</string>
     <string name="game_state_points_missing">Tu luz tiene %1$s, es decir, %2$s. La Meesh n.º %3$s fijará %4$s: faltan %5$s.</string>
     <string name="game_state_points_missing_plain">Tu luz tiene %1$s. La Meesh n.º %2$s fijará %3$s: faltan %4$s.</string>
@@ -1111,9 +1107,6 @@
     <string name="game_treasury_tresor">Tesoro</string>
     <string name="progression_a11y_bar_level">Hacia el nivel %1$d</string>
     <string name="progression_a11y_bar_meesh">Hacia la próxima Meesh</string>
-    <string name="progression_a11y_bar_streak">Tu Llama, hacia su próximo hito</string>
-    <string name="progression_a11y_tier_pending">Nivel %1$d por alcanzar</string>
-    <string name="progression_a11y_tier_reached">Nivel %1$d alcanzado</string>
     <string name="progression_achievement_a11y_hint">Toca para ver esta hazaña en grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un mensaje de voz, un mensaje de texto, una publicación, una historia y un reel</string>
     <string name="progression_achievement_all_content_types_title">Todoterreno</string>
@@ -1235,7 +1228,6 @@
     <string name="reveal_close">Cerrar</string>
     <string name="reveal_composed_subtitle">Un nivel más en «%1$s».</string>
     <string name="reveal_continue">Ver mi progreso</string>
-    <string name="reveal_level_subtitle">Tu actividad te ha hecho subir de rango.</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d días seguidos. La racha continúa mientras escribas.</string>
+    <string name="reveal_streak_subtitle">%1$d días seguidos.</string>
 </resources>

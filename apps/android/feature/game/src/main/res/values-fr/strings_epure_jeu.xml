@@ -8,12 +8,10 @@
     <string name="game2_atlas_privacy">Privé par défaut : le jeu garde la langue et la date, jamais l’interlocuteur ni la conversation.</string>
     <string name="game2_settings_visibility_body">Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Non valable.</string>
-    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.</string>
+    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100. Chaque niveau demande un peu plus que le précédent.</string>
     <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
     <string name="game2_prestige_meo">Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent. Tes aïeux t’offrent un trophée numéroté et %1$s de gloire.</string>
     <string name="game2_season_seal_body">Purement décoratif : un objet à collectionner toutes les %1$s haltes.</string>
-    <string name="game2_settings_notifications_body">Une par jour au plus, sur tous tes appareils.</string>
-    <string name="game2_settings_notifications_switch">Notifications</string>
     <string name="game2_settings_friends_league_body">Tes amis acceptés et toi vous voyez dans le classement de la semaine.</string>
     <string name="game_rules_section_rules">Règles</string>
     <string name="game_rules_section_concepts">Concepts</string>

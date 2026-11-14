@@ -73,14 +73,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "game2_settings_notifications_body",
-          "status": "android-only"
-        },
-        {
-          "androidName": "game2_settings_notifications_switch",
-          "status": "android-only"
-        },
-        {
           "androidName": "game2_settings_visibility_body",
           "status": "android-only"
         },
