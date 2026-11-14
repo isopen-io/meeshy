@@ -75,3 +75,34 @@ insuffisant : le témoin écrit pour le confirmer est tombé sur les DEUX. **Une
 hypothèse héritée d'un relevé se mesure avant d'être crue, même quand le relevé
 cite les bons numéros de ligne** — le relevé disait vrai sur la présence du
 `catch`, et rien sur ce qu'il contient.
+
+---
+
+## Le jumeau du même cycle : un doc-comment qui énonce un ORDRE
+
+Même cycle, autre lot (#18384). Trois portes d'admission postaient le message
+système d'arrivée **avant** d'admettre la socket de l'arrivant dans la room où
+ce message part. L'arrivant ne recevait donc pas son propre message d'arrivée.
+
+Et la loi était écrite, à l'endroit exact :
+
+```
+// L'admission dans la room, AVANT l'annonce : l'une sert l'arrivant, l'autre
+// parle de lui aux autres, et c'est la première qui décide s'il recevra quoi
+// que ce soit du fil.
+```
+
+Elle était vraie de l'**annonce d'adhésion** et fausse du **message système**,
+qui part plus tôt, **dans une autre fonction**. C'est le même discriminant que
+ci-dessus, pris par l'autre bout : ce qui échappe à une phrase est ce qui vit
+dans une autre unité que celle où la phrase est écrite.
+
+> **Devant un doc-comment qui énonce un ORDRE, demander : quels gestes cette
+> phrase VOIT-elle ?** Elle ne garde que ceux qui sont dans sa portée lexicale.
+> Tout geste de la même famille, posé dans une fonction appelée ou appelante,
+> est hors de son énoncé — et personne ne le relira en le cherchant, puisque la
+> règle a l'air d'être déjà écrite.
+
+Corollaire mesuré : **lancer un geste d'ordre sans l'attendre ne rétrécit la
+fenêtre que de façon non déterministe**, ce qui est pire qu'une fenêtre
+franche — le défaut devient intermittent, donc attribué au réseau.

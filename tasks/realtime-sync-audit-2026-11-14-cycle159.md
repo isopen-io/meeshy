@@ -3,10 +3,10 @@
 *2026-11-14. Branche `claude/message-deleted-server-clock`, partie de `dev` à
 `b5e865400` (la tête juste après la fusion de #18369).*
 
-**Livré** : #18159 (le dernier des neuf pièges armés du cycle 157) et #18380
-(trouvé par l'audit de ce cycle).
-**Mesuré et inventorié, non corrigé** : #18381, #18382, #18384 — trois issues
-ouvertes avec leur mesure.
+**Livré** : #18159 (le dernier des neuf pièges armés du cycle 157), #18380 et
+#18384 (tous deux trouvés par l'audit de ce cycle).
+**Mesuré et inventorié, non corrigé** : #18381 et #18382 — deux issues ouvertes
+avec leur mesure, et #18385 pour la moitié iOS du lot A.
 **Mesuré CLEAN, et dit pour qu'on cesse d'y dépenser** : deux des quatre
 questions de l'audit.
 
@@ -170,6 +170,57 @@ réintroduisant une émission à la main.
 
 ---
 
+## Lot C — le message d'arrivée partait avant que l'arrivant ne soit dans la room (#18384)
+
+Les QUATRE portes d'admission postent le même message système d'arrivée
+(`postJoinSystemMessage` → `message:new` vers `conversation:<id>`). **Les trois
+qui servent un COMPTE le faisaient avant d'y admettre sa socket.** L'arrivant ne
+recevait donc pas son propre message d'arrivée — et la file hors ligne ne le
+rattrapait pas : il figure déjà dans `connectedUsers` et ne porte aucun
+marqueur d'injoignabilité (#18381).
+
+Deux d'entre elles lançaient en plus l'admission **sans l'attendre**, ce qui
+faisait courir la fenêtre jusque dans les diffusions d'adhésion — que le
+doc-comment de la troisième déclarait pourtant précédées par elle :
+
+> « L'admission dans la room, AVANT l'annonce : l'une sert l'arrivant, l'autre
+> parle de lui aux autres, et **c'est la première qui décide s'il recevra quoi
+> que ce soit du fil** » — `performLinkJoin`
+
+La phrase était juste et ne couvrait que la seconde des deux diffusions. Le
+message système part plus tôt, **dans une autre fonction** — c'est ce qui l'a
+mise hors de portée de son propre énoncé.
+
+> **Un doc-comment qui énonce un ORDRE ne garde que les gestes qu'il voit.**
+> Même famille que « un commentaire qui ÉNONCE une contrainte est une
+> AFFIRMATION » (cycle 94), avec le discriminant de PORTÉE du lot B : ce qui
+> échappe à la phrase est ce qui vit dans une autre unité.
+
+Correctif : l'admission est hissée et **attendue** aux trois portes. Sur la
+porte par lien, elle descend dans `joinAsRegistered` — c'est là que l'ordre se
+décide — par un relais `admitToRoom`, et le bloc d'aval disparaît plutôt que de
+doubler l'appel. Fail-OPEN partout : l'adhésion est déjà PERSISTÉE quand ceci
+tourne, et un adaptateur en panne ne doit pas la retenir.
+
+**Lancer sans attendre ne RÉTRÉCIT la fenêtre que de façon non déterministe**,
+ce qui est pire qu'une fenêtre franche : le défaut devient intermittent, donc
+attribué au réseau.
+
+| preuve | résultat |
+|---|---|
+| `link-join-room-admission` | 9/9, dont deux témoins d'ORDRE rouges avant le lot (le vrai ordre observé, pas une lecture de source) |
+| `membership-admission-sites` | 7/7, dont deux balayages nouveaux — prouvés ROUGES en annulant le lot, et ils NOMMENT les deux fichiers |
+| `unit/routes/` + `audit2/` + `unit/services/` | verts |
+
+Le balayage est TEXTUEL, et il faut dire pourquoi : l'ordre de deux appels dans
+une fonction n'a pas de témoin de comportement bon marché aux quatre portes
+(chacune a son harnais, sa base, ses doubles). Celui de la porte par lien
+existe et observe le vrai ordre ; le balayage garde les trois autres, et
+surtout la CINQUIÈME, qui y entrera sans que personne y pense — comme le
+balayage voisin de #17032, dont il réutilise le discriminant de porte.
+
+---
+
 ## Ce que l'audit a rendu CLEAN, et pourquoi le dire
 
 Deux des quatre questions sont revenues sans défaut, et les énumérer ÉVITE de
@@ -201,7 +252,7 @@ candidats, tous deux faux après lecture.
 | #18380 | l'éventail qui tombe entier pour un lecteur | **fermé** par le lot B |
 | #18381 | un membre ajouté en cours de session peut devenir injoignable (ni réessai, ni marqueur, ni portée multi-nœud) | ouverte |
 | #18382 | les accusés de lecture et de remise n'ont ni file ni instantané de reconnexion | ouverte — demande un arbitrage produit entre deux branches |
-| #18384 | le message d'arrivée précède la jonction de room aux quatre portes | ouverte |
+| #18384 | le message d'arrivée précédait la jonction de room | **fermée** par le lot C |
 | #16726 | les marqueurs d'injoignabilité sont hérités par la mauvaise socket | déjà ouverte, confirmée vivante |
 | #18120 | la portée COMMUNAUTÉ n'atteint jamais iOS | ouverte — demande Xcode |
 | #18124, #18115 | les pièges armés du cycle 157 | ouvertes |
