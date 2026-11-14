@@ -80,12 +80,22 @@ class EpureComposantsPartagesStringsTest {
     @Test
     fun `la bulle non envoyee dit pourquoi en une phrase courte et ce qu on fait ensuite`() {
         assertThat(text("fr", "bubble_failed_media_lost"))
-            .isEqualTo("Non envoyé : média absent de cet appareil. Retirez-le, puis rechoisissez-le.")
+            .isEqualTo("Non envoyé : média absent de cet appareil. Touchez pour le retirer, puis rechoisissez-le.")
         assertThat(text("fr", "bubble_failed_location_refused"))
-            .isEqualTo("Non envoyé : lieu du fichier non retirable. Retirez-le, puis prenez-en un autre.")
+            .isEqualTo("Non envoyé : lieu du fichier non retirable. Touchez pour le retirer, puis prenez-en un autre.")
         assertThat(text("en", "bubble_failed_location_refused"))
-            .isEqualTo("Not sent: file location can’t be removed. Remove it, then choose another.")
+            .isEqualTo("Not sent: file location can’t be removed. Tap to remove it, then choose another.")
         assertThat(text("fr", "bubble_failed_attachment_right")).isEqualTo("Ce type de pièce jointe n’est pas encore autorisé ici.")
+    }
+
+    @Test
+    fun `la bulle non envoyee dit le geste qui la retire, dans chaque langue`() {
+        val tap = mapOf("en" to "Tap", "fr" to "Touchez", "es" to "Toca", "pt" to "Toque", "de" to "Tippe", "it" to "Tocca", "ar" to "انقر")
+        listOf("bubble_failed_media_lost", "bubble_failed_location_refused").forEach { key ->
+            tap.forEach { (language, word) ->
+                assertWithMessage("$language/$key nomme le geste").that(text(language, key)).contains(word)
+            }
+        }
     }
 
     @Test
