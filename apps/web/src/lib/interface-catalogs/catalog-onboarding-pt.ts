@@ -32,7 +32,7 @@ const pt = {
   'onboarding.email.failed': 'O link não foi enviado. Tenta de novo.',
 
   'onboarding.age.title': 'A tua data de nascimento',
-  'onboarding.age.body': 'Para te propor os espaços certos. Podes saltar.',
+  'onboarding.age.body': 'Para te propor os espaços certos.',
   'onboarding.age.skip': 'Saltar',
   'onboarding.age.check': 'Verifica a tua data de nascimento.',
   'onboarding.age.failed': 'A tua data não foi guardada. Tenta de novo.',
@@ -68,7 +68,7 @@ const pt = {
   'onboarding.story.verify': 'Para publicar a tua story, confirma primeiro o teu e-mail.',
 
   'onboarding.friends.title': 'Encontra a tua malta',
-  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo. Quando aceitarem, ganham pelo menos\u00A0+{points} os dois.',
+  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo.',
   'onboarding.friends.add': 'Adicionar',
   'onboarding.friends.addNamed': 'Adicionar {name}',
   'onboarding.friends.added': 'Enviado',

@@ -426,12 +426,10 @@ describe('VerifyEmailFlow — ce que l’écran DIT de l’e-mail reçu (#8034)'
     const { clock, now } = fakeClock();
     holdPendingVerification({ email: 'grace@icloud.example', password: 'secret-1', accountCreated: false });
     const el = mount('grace@icloud.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
-    expect(lead(el)).toContain(
-      'Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code et un lien à grace@icloud.example.',
-    );
-    expect(lead(el)).toContain('Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.');
-    expect(el.querySelector('[data-spam-hint]')).toBeNull();
-    expect(lead(el)).toContain('Vous n’avez pas reçu le code ?');
+    expect(lead(el)).toContain('Pour activer votre compte, prouvez que cette adresse est la vôtre : un code et un lien ont été envoyés à grace@icloud.example.');
+    expect(lead(el)).not.toContain('Ouvrez votre boîte mail');
+    expect(el.querySelector('[data-spam-hint]')).not.toBeNull();
+    expect(lead(el)).not.toContain('Vous n’avez pas reçu le code ?');
     expect(el.querySelector('strong')?.textContent).toBe('grace@icloud.example');
   });
 
@@ -473,5 +471,24 @@ describe('VerifyEmailFlow — le jeton du lien quitte l’historique une fois se
   test('hors ligne : l’entrée le garde', async () => {
     await verifyFrom('v-offline', { ok: false, status: 0, error: 'Failed to fetch' });
     expect(tokenInHistory()).toBe('v-offline');
+  });
+});
+
+describe('VerifyEmailFlow — ne dit rien deux fois (épure #17666)', () => {
+  test('UN seul titre : celui de la barre ; le titre de page « Vérifiez votre e-mail » n’existe plus', () => {
+    const { clock, now } = fakeClock();
+    const el = mount('ada@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
+    expect(el.textContent).toContain('Vérification de l’e-mail');
+    expect(el.textContent).not.toContain('Vérifiez votre e-mail');
+    expect(el.querySelector('h2')).toBeNull();
+  });
+
+  test('le renvoi tient dans son bouton : « Vous n’avez pas reçu le code ? » ne le précède plus, et le bouton reste atteignable', () => {
+    const { clock, now } = fakeClock();
+    const el = mount('ada@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
+    expect(el.textContent).not.toContain('Vous n’avez pas reçu le code ?');
+    const bouton = [...el.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('Renvoyer le code'));
+    expect(bouton).toBeDefined();
+    expect(bouton?.disabled).toBe(false);
   });
 });
