@@ -476,9 +476,9 @@
     },
     "ios:Meeshy/feed": {
       "labels": 233,
-      "words": 874,
-      "long": 7,
-      "explanations": 44
+      "words": 822,
+      "long": 3,
+      "explanations": 42
     },
     "ios:Meeshy/focal": {
       "labels": 23,
@@ -746,8 +746,8 @@
     },
     "ios:Meeshy/post": {
       "labels": 22,
-      "words": 141,
-      "long": 5,
+      "words": 103,
+      "long": 1,
       "explanations": 3
     },
     "ios:Meeshy/preview": {
@@ -955,10 +955,10 @@
       "explanations": 0
     },
     "ios:Meeshy/story": {
-      "labels": 188,
-      "words": 780,
-      "long": 8,
-      "explanations": 18
+      "labels": 187,
+      "words": 733,
+      "long": 7,
+      "explanations": 17
     },
     "ios:Meeshy/streak": {
       "labels": 3,
