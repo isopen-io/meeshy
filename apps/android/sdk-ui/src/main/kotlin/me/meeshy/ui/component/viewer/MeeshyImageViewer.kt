@@ -89,6 +89,7 @@ public fun MeeshyImageViewer(
         onDismissRequest = onDismiss,
         properties = viewerDialogProperties(secure),
     ) {
+        val leave: () -> Unit = this::dismiss
         val pagerState = rememberPagerState(
             initialPage = initialIndex.coerceIn(0, imageUrls.lastIndex),
             pageCount = { imageUrls.size },
@@ -168,7 +169,7 @@ public fun MeeshyImageViewer(
                     onZoomChanged = { zoomed -> if (index == pagerState.settledPage) currentPageZoomed = zoomed },
                     onTap = { chrome = chrome.tappingMedia() },
                     onDragProgress = { dragProgress = it },
-                    onDismiss = onDismiss,
+                    onDismiss = leave,
                     secure = secure,
                     onLongPress = {
                         if (exits.isNotEmpty()) {
@@ -190,7 +191,7 @@ public fun MeeshyImageViewer(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 ImageViewerTopBar(
-                    onClose = onDismiss,
+                    onClose = leave,
                     exits = exits,
                     isBusy = busy,
                     onExit = ::runExit,
