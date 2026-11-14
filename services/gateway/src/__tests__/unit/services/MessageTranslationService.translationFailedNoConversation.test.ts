@@ -96,7 +96,7 @@ describe('MessageTranslationService — translationFailed requires a conversatio
     fakeZmqClient.emit('translationError', translationError({ taskId: undefined }));
     await flushAsync();
 
-    expect(failures).toEqual([
+    expect(failures).toStrictEqual([
       { messageId: MESSAGE_ID, conversationId: CONVERSATION_ID, error: 'translation failed', taskId: undefined }
     ]);
   });
