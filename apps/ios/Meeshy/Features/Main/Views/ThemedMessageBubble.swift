@@ -376,7 +376,7 @@ struct ThemedMessageBubble: View {
                 // La destruction se VOIT. Posé sur le `Group`, donc
                 // sur la bulle comme sur le sticker : un éphémère détruit sous
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
-                .ephemeralBurn(isBurning: content.isBurning)
+                .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
                 // La flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
                 .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
                                     edge: content.isMe ? .trailing : .leading, overhang: 10)
@@ -632,7 +632,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
                 onConsumeViewOnce?(messageId) { _ in }
             }
         )
-        .ephemeralBurn(isBurning: content.isBurning)
+        .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
     }
 
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {

@@ -61,6 +61,7 @@ const frCall = {
   'call.a11y.screen': 'Appel avec {name}',
   'call.bubble.callBack': 'Rappeler',
   'call.bubble.join': 'Rejoindre',
+  'call.card.participants.you': 'vous',
   'call.callBack.named': 'Rappeler {name}',
   'call.you': 'Vous',
   'call.ended.removed': 'Vous avez été retiré de l’appel',

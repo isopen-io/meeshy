@@ -665,8 +665,16 @@ final class ConversationSocketHandler {
     /// retrouvait un registre vide entre les deux et stampait une réception
     /// NEUVE. #7453 — le balayage des bannières est le seul à savoir qu'un
     /// message PRÉCIS vient de mourir pendant que l'application est à l'écran.
+    ///
+    /// **Un éphémère ENCORE À L'ÉCRAN brûle avant de partir** (#17938) :
+    /// l'annonce demande la combustion à l'hôte AVANT de graver — l'hôte ne la
+    /// rallume pas si elle joue déjà, et le magasin garde une ligne qui vient
+    /// de mourir le temps de son feu (`MessageStore.burning`,
+    /// `EphemeralBurn.freshDeathWindow`). L'écriture destructrice, elle, reste
+    /// IMMÉDIATE : une mort différée survivrait à une app tuée dans la fenêtre.
     private func applyExpired(_ event: MessageExpiredEvent) async {
         StarredMessagesStore.shared.remove(messageId: event.messageId)
+        delegate?.burnAnnouncedEphemerals([event.messageId])
         EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
         if let persistence {
             let msgId = event.messageId

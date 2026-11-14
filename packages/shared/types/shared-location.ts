@@ -18,7 +18,13 @@
  * 4. `location:share-stop` → `location:share-ended` chez qui voyait le partage. Une
  *    baisse sous Ami, un blocage ou un retrait l'envoient aussi ; une remontée fait
  *    revenir la dernière position conservée, sans nouvel envoi ;
- * 5. le terme n'émet rien : chaque client cache le partage à `expiresAt` ;
+ * 5. le terme n'émet rien : chaque client cache le partage à `expiresAt`. Chaque
+ *    destinataire peut avoir SA échéance (`recipients[].expiresInSeconds`, #18205), plus
+ *    proche que le terme : la passerelle la tient (passé elle, plus rien ne part vers lui,
+ *    rattrapage et remontée de cercle compris) et lui sert la sienne en `expiresAt`, jamais
+ *    le terme du partage. Sans elle (client d'avant #18205), le terme vaut pour tous.
+ *    Un serveur d'avant #18205 refuse la clé (`INVALID`) : le client renvoie alors la liste
+ *    sans échéances ;
  * 6. `GET /relations/locations` rattrape, à la connexion, les partages servis au lecteur.
  */
 import { z } from 'zod';
@@ -26,6 +32,7 @@ import { z } from 'zod';
 import {
   SHARED_LOCATION_DURATIONS_MINUTES,
   SHARED_LOCATION_PRECISIONS,
+  SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS,
   SHARED_LOCATION_RECIPIENTS_MAX,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
@@ -48,7 +55,15 @@ export type SharedLocationPosition = z.infer<typeof sharedLocationPositionSchema
 export const sharedLocationStartPayloadSchema = z
   .object({
     recipients: z
-      .array(z.object({ userId: objectId, precision: z.enum(SHARED_LOCATION_PRECISIONS).optional() }).strict())
+      .array(
+        z
+          .object({
+            userId: objectId,
+            precision: z.enum(SHARED_LOCATION_PRECISIONS).optional(),
+            expiresInSeconds: z.number().int().positive().max(SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS).optional(),
+          })
+          .strict(),
+      )
       .min(1)
       .max(SHARED_LOCATION_RECIPIENTS_MAX)
       .refine((list) => new Set(list.map((r) => r.userId.toLowerCase())).size === list.length),
