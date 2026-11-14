@@ -148,6 +148,8 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override fun restore() {
+        val settled = loadedFor != null && loadedFor == accountId() && _roster.value.pruned(clock()) == _roster.value
+        if (settled) return
         scope.launch { reconcile() }
     }
 
@@ -180,7 +182,7 @@ class SharedLocationSharingCenter internal constructor(
     internal suspend fun didMove(fix: SharedLocationFix) {
         if (!lock.tryLock()) return
         try {
-            val ticket = currentTicket() ?: return
+            val ticket = currentTicket()?.takeIf(::isCurrent) ?: return
             if (_roster.value.isEmpty || !SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
             lastSent = SharedLocationUpdateGate.Sent(fix, clock())
             val verdict = emitter.update(fix)
