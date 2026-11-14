@@ -21,4 +21,13 @@
     <string name="links_affiliate_delete_confirm">Löschen</string>
     <string name="dialogs_master_pin_title">Master-PIN erforderlich</string>
     <string name="dialogs_master_pin_message">Lege sie in den Einstellungen fest, um eine Unterhaltung zu sperren.</string>
+    <string name="conversations_lock_error_master_incorrect">Master-PIN falsch</string>
+    <string name="conversations_lock_subtitle_create_master">Wählen Sie eine 6-stellige Master-PIN, um Ihre Sperren zu sichern</string>
+    <string name="conversations_lock_subtitle_new_master">Wählen Sie eine neue 6-stellige Master-PIN</string>
+    <string name="conversations_lock_title_confirm_master">Master-PIN bestätigen</string>
+    <string name="conversations_lock_title_create_master">Master-PIN erstellen</string>
+    <string name="conversations_lock_title_new_master">Neuer Master-PIN</string>
+    <string name="conversations_lock_title_remove_master">Master-PIN entfernen</string>
+    <string name="conversations_lock_title_verify_master">Master-PIN überprüfen</string>
+    <string name="conversations_remove_master_pin">Master-PIN entfernen</string>
 </resources>

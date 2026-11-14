@@ -21,4 +21,13 @@
     <string name="links_affiliate_delete_confirm">Delete</string>
     <string name="dialogs_master_pin_title">Master PIN required</string>
     <string name="dialogs_master_pin_message">Set it in settings to lock a conversation.</string>
+    <string name="conversations_lock_error_master_incorrect">Incorrect master PIN</string>
+    <string name="conversations_lock_subtitle_create_master">Choose a 6-digit master PIN to secure your locks</string>
+    <string name="conversations_lock_subtitle_new_master">Choose a new 6-digit master PIN</string>
+    <string name="conversations_lock_title_confirm_master">Confirm master PIN</string>
+    <string name="conversations_lock_title_create_master">Create master PIN</string>
+    <string name="conversations_lock_title_new_master">New master PIN</string>
+    <string name="conversations_lock_title_remove_master">Remove master PIN</string>
+    <string name="conversations_lock_title_verify_master">Verify master PIN</string>
+    <string name="conversations_remove_master_pin">Remove master PIN</string>
 </resources>

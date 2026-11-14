@@ -64,4 +64,25 @@ class EpureCodePinPrincipalTest {
                 .that(all(folder).getValue("dialogs_master_pin_title")).contains(word)
         }
     }
+
+    @Test
+    fun `the reworded lock texts live in a hand-written file the regeneration cannot rewrite`() {
+        val folders = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
+        val reworded = listOf(
+            "conversations_lock_error_master_incorrect", "conversations_lock_subtitle_create_master",
+            "conversations_lock_subtitle_new_master", "conversations_lock_title_confirm_master",
+            "conversations_lock_title_create_master", "conversations_lock_title_new_master",
+            "conversations_lock_title_remove_master", "conversations_lock_title_verify_master",
+            "conversations_remove_master_pin",
+        )
+        folders.forEach { folder ->
+            val generated = File(resDir, "$folder/strings_generated.xml").readText()
+            reworded.forEach { key ->
+                assertWithMessage("$folder/$key dans le catalogue généré").that(generated).doesNotContain("name=\"$key\"")
+                assertWithMessage("$folder/$key").that(all(folder)).containsKey(key)
+            }
+        }
+        assertWithMessage("values-fr").that(all("values-fr").getValue("conversations_lock_title_verify_master"))
+            .isEqualTo("Vérifier le code PIN principal")
+    }
 }

@@ -21,4 +21,13 @@
     <string name="links_affiliate_delete_confirm">Eliminar</string>
     <string name="dialogs_master_pin_title">Se requiere un PIN maestro</string>
     <string name="dialogs_master_pin_message">Configúralo en los ajustes para bloquear una conversación.</string>
+    <string name="conversations_lock_error_master_incorrect">PIN maestro incorrecto</string>
+    <string name="conversations_lock_subtitle_create_master">Elige un PIN maestro de 6 dígitos para proteger tus bloqueos</string>
+    <string name="conversations_lock_subtitle_new_master">Elige un nuevo PIN maestro de 6 dígitos</string>
+    <string name="conversations_lock_title_confirm_master">Confirmar el PIN maestro</string>
+    <string name="conversations_lock_title_create_master">Crear el PIN maestro</string>
+    <string name="conversations_lock_title_new_master">Nuevo PIN maestro</string>
+    <string name="conversations_lock_title_remove_master">Eliminar el PIN maestro</string>
+    <string name="conversations_lock_title_verify_master">Verificar el PIN maestro</string>
+    <string name="conversations_remove_master_pin">Eliminar el PIN maestro</string>
 </resources>

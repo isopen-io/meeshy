@@ -21,4 +21,13 @@
     <string name="links_affiliate_delete_confirm">Supprimer</string>
     <string name="dialogs_master_pin_title">Code PIN principal requis</string>
     <string name="dialogs_master_pin_message">Définissez-le dans les réglages pour verrouiller une conversation.</string>
+    <string name="conversations_lock_error_master_incorrect">Code PIN principal incorrect</string>
+    <string name="conversations_lock_subtitle_create_master">Choisissez un code PIN principal à 6 chiffres pour sécuriser vos verrous</string>
+    <string name="conversations_lock_subtitle_new_master">Choisissez un nouveau code PIN principal à 6 chiffres</string>
+    <string name="conversations_lock_title_confirm_master">Confirmer le code PIN principal</string>
+    <string name="conversations_lock_title_create_master">Créer le code PIN principal</string>
+    <string name="conversations_lock_title_new_master">Nouveau code PIN principal</string>
+    <string name="conversations_lock_title_remove_master">Supprimer le code PIN principal</string>
+    <string name="conversations_lock_title_verify_master">Vérifier le code PIN principal</string>
+    <string name="conversations_remove_master_pin">Supprimer le code PIN principal</string>
 </resources>

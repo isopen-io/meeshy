@@ -21,4 +21,13 @@
     <string name="links_affiliate_delete_confirm">حذف</string>
     <string name="dialogs_master_pin_title">رمز PIN الرئيسي مطلوب</string>
     <string name="dialogs_master_pin_message">حدّده في الإعدادات لقفل محادثة.</string>
+    <string name="conversations_lock_error_master_incorrect">رمز PIN الرئيسي غير صحيح</string>
+    <string name="conversations_lock_subtitle_create_master">اختر رمز PIN رئيسيًا من 6 أرقام لتأمين أقفالك</string>
+    <string name="conversations_lock_subtitle_new_master">اختر رمز PIN رئيسيًا جديدًا من 6 أرقام</string>
+    <string name="conversations_lock_title_confirm_master">تأكيد رمز PIN الرئيسي</string>
+    <string name="conversations_lock_title_create_master">إنشاء رمز PIN الرئيسي</string>
+    <string name="conversations_lock_title_new_master">رمز PIN رئيسي جديد</string>
+    <string name="conversations_lock_title_remove_master">حذف رمز PIN الرئيسي</string>
+    <string name="conversations_lock_title_verify_master">التحقق من رمز PIN الرئيسي</string>
+    <string name="conversations_remove_master_pin">حذف رمز PIN الرئيسي</string>
 </resources>

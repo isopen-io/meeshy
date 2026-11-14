@@ -235,10 +235,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.error.masterPinIncorrect",
           "androidName": "conversations_lock_error_master_incorrect",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -257,10 +255,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.subtitle.chooseMasterPin",
           "androidName": "conversations_lock_subtitle_create_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -269,10 +265,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.subtitle.chooseNewMasterPin",
           "androidName": "conversations_lock_subtitle_new_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "conversations_lock_subtitle_open",
@@ -291,10 +285,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.confirmMasterPin",
           "androidName": "conversations_lock_title_confirm_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -303,10 +295,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.createMasterPin",
           "androidName": "conversations_lock_title_create_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -315,10 +305,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.newMasterPin",
           "androidName": "conversations_lock_title_new_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -327,10 +315,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.removeMasterPin",
           "androidName": "conversations_lock_title_remove_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "conversations_lock_title_unlock",
@@ -341,10 +327,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.verifyMasterPin",
           "androidName": "conversations_lock_title_verify_master",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -443,10 +427,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.lock.title.removeMasterPin",
           "androidName": "conversations_remove_master_pin",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
