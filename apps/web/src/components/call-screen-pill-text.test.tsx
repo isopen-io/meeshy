@@ -427,6 +427,8 @@ describe('#17964 — « Journal » en disque blanc referme le journal dans la pi
       await view.settle();
       const toggle = inPill(view, '[data-call-journal-panel] [data-call-journal-toggle]');
       expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+      /* Loi 1, P6 : actif, il porte le pictogramme du Journal — la page et ses lignes du rail « L'appel » (`list.bullet.rectangle` d'iOS). */
+      expect([...(toggle?.querySelectorAll('svg[aria-hidden="true"] path') ?? [])].map((path) => path.getAttribute('d'))).toEqual(['M6 3.5h9l3 3v14H6z', 'M9 9.5h6M9 13h6M9 16.5h3.5']);
       expect(toggle?.closest('[aria-hidden="true"], [inert]')).toBeNull();
       expect(inPill(view, '[data-call-journal-panel] [data-panel-close]')).toBeNull();
       expect(inPill(view, '[data-call-journal-panel] [data-panel-back]')).toBeNull();
@@ -590,6 +592,7 @@ describe('#17933 — en groupe, la bande des sous-titres est celle du duo', () =
       const journal = panel?.querySelector('[data-call-captions-journal]');
       expect(journal?.tagName).toBe('BUTTON');
       expect(journal?.textContent).toBe('Journal');
+      expect(journal?.querySelector('svg')).toBeNull();
       expect(panel?.querySelector('.rounded-card, .glass-call, .glass-call-prominent')).toBeNull();
       expect(panel?.className).not.toContain('glass-call');
       view.done();

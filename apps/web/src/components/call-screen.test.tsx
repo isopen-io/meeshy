@@ -752,8 +752,11 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(at('[data-call-control="journal"]')).toBe(at('[data-call-control="invite"]') + 1);
     expect(at('[data-call-control="react"]')).toBe(at('[data-call-control="journal"]') + 1);
     expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-label')).toBe('Ouvrir le journal de l’appel');
+    const railGlyph = [...view.host.querySelectorAll('[data-call-control="journal"] svg path')].map((path) => path.getAttribute('d'));
     view.press('[data-call-control="journal"]');
     await settle(() => import('./call-journal-panel'));
+    /* Le même pictogramme au rail et dans « Journal » actif, au pied du journal (loi 1, P6). */
+    expect([...view.host.querySelectorAll('[data-call-journal-toggle] svg path')].map((path) => path.getAttribute('d'))).toEqual(railGlyph);
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);

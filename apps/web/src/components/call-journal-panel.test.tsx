@@ -114,6 +114,8 @@ describe('CallJournalPanel', () => {
     expect(toggle.style.background).toBe('var(--color-on-media)');
     expect(toggle.style.color).toBe('var(--ios-indigo-950)');
     expect(toggle.className).toContain('min-h-11');
+    expect(toggle.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+    expect(toggle.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
     const foot = toggle.closest('[data-call-journal-foot]') as HTMLElement;
     expect(foot.parentElement?.lastElementChild).toBe(foot);
     expect(view.find('[data-call-journal]')?.compareDocumentPosition(toggle)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
