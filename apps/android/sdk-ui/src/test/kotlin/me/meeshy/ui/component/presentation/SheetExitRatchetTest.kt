@@ -118,10 +118,10 @@ class SheetExitRatchetTest {
     }
 
     private companion object {
-        /** Mesuré à 73 le 2026-11-14 ; abaissé par chaque lot qui migre, jamais relevé. */
-        const val RAW_SHEET_CEILING = 73
+        /** Mesuré à 73 le 2026-11-14, 68 après le socle #18416 ; abaissé par chaque lot qui migre, jamais relevé. */
+        const val RAW_SHEET_CEILING = 68
 
-        /** Mesuré à 24 le 2026-11-14 ; abaissé par chaque lot qui migre, jamais relevé. */
-        const val NULL_VISIBILITY_CEILING = 24
+        /** Mesuré à 24 le 2026-11-14, 19 après le socle #18416 ; abaissé par chaque lot qui migre, jamais relevé. */
+        const val NULL_VISIBILITY_CEILING = 19
     }
 }
