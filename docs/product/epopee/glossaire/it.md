@@ -103,7 +103,7 @@ Il tono: si dà del **tu**, si scrive per un ragazzo di 13 anni, un’idea per f
 
 ### L’Eredità (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **Che cos’è** (fr. l’Héritage): le monete custodite per la stirpe. **Coniare una Meesh fissa una parte della tua luce in una moneta numerata**: la tua luce, e quindi il tuo livello, scende di altrettanto; ciò che hai ricevuto resta ricevuto.
+- **Che cos’è** (fr. l’Héritage): le monete custodite per la stirpe. **Coniare una Meesh fissa una parte della tua luce in una moneta numerata**, custodita per sempre; il tuo livello segue la luce che ti resta, e **nessun testo presenta questa discesa come una perdita** (#17394); ciò che hai ricevuto resta ricevuto.
 - **Coniare** (fr. frapper), **il conio** (fr. la frappe), **fissare** (fr. figer).
 - **La scheda delle Meesh** si chiama «L’Eredità». Nel quaderno delle regole, la moneta si chiama «La Meesh».
 - **Le custodie** (fr. contenants, nomi invariati): Borsa (1), Scarsella (10), Scrigno (50), Forziere (100, rango Voce I), Tesoro (500, Poliglotta III), Riserva (1 000, Ambasciatore III). Il nome comune è **custodia**, mai «scrigno» (che è una custodia precisa).

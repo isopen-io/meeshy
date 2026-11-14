@@ -98,7 +98,7 @@ Le compte de l'assistant d'inscription (`onboarding.progress`, « Schritt {curre
 
 ### Das Erbe (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **Ce que c'est** : les pièces gardées pour la lignée (**deine Linie**). **Eine Meesh zu prägen bannt einen Teil deines Lichts in eine nummerierte Münze** : dein Licht, donc dein Level, sinkt um ebenso viel ; was du empfangen hast, bleibt empfangen.
+- **Ce que c'est** : les pièces gardées pour la lignée (**deine Linie**). **Eine Meesh zu prägen bannt einen Teil deines Lichts in eine nummerierte Münze**, für immer bewahrt ; dein Level folgt dem Licht, das dir bleibt, et **aucun texte ne présente cette baisse comme une perte** (#17394) ; was du empfangen hast, bleibt empfangen.
 - **Le verbe** : **prägen** (frapper) ; **bannen** (figer) — « Gebanntes Licht » (la ligne de la frappe), « sie bannt N deines Lichts ».
 - **La fiche des Meeshes** s'appelle « Das Erbe ».
 - **Les Behältnisse** (contenants, inchangés) : Börse (1), Beutel (10), Schatulle (50), Truhe (100, Stimme I), Schatz (500, Polyglott III), Reserve (1 000, Botschafter III).

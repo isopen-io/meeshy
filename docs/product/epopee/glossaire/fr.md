@@ -99,7 +99,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 
 ### L'Héritage (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **Ce que c'est** : les pièces gardées pour la lignée. **Frapper une Meesh fige une part de ta lumière dans une pièce numérotée** : ta lumière, donc ton niveau, baisse d'autant ; ce qui a été reçu reste reçu.
+- **Ce que c'est** : les pièces gardées pour la lignée. **Frapper une Meesh fige une part de ta lumière dans une pièce numérotée**, gardée pour toujours ; ton niveau suit la lumière qui te reste, et **aucun texte ne présente cette baisse comme une perte** (#17394) ; ce qui a été reçu reste reçu.
 - **La fiche des Meeshes** s'appelle « L'Héritage ».
 - **Les contenants** (inchangés) : Bourse (1), Escarcelle (10), Coffret (50), Coffre (100, rang Voix I), Trésor (500, Polyglotte III), Réserve (1 000, Ambassadeur III).
 - **Les éditions** : argent ; or (chaque centième) ; prisme (chaque millième).

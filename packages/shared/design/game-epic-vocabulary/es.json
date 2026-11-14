@@ -258,6 +258,16 @@
       "keys": [
         "engagement.pill.streak."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])nivel(?:es)?(?![\\p{L}\\p{N}])[^.!?;:]*(?<![\\p{L}\\p{N}])(?:baj(?:a|an|e|en|ó|aron|ar)|desciend\\p{L}*|descend\\p{L}*|disminu\\p{L}*)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«tu nivel sigue la luz que te queda»: acuñar convierte una parte de tu luz en moneda, no quita nada (#17394)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:un\\s+)?nivel(?:es)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«sin cambiar tu nivel» (#17394)"
     }
   ],
   "names": {

@@ -226,6 +226,16 @@
       "keys": [
         "engagement.pill.streak."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])níve(?:l|is)(?![\\p{L}\\p{N}])[^.!?;:]*(?<![\\p{L}\\p{N}])(?:baix(?:a|am|ou|aram|e|ar)|ca(?:i|em|iu|íram|ir)|desc(?:e|em|eu|er)|diminu\\p{L}*)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“seu nível acompanha a luz que lhe resta”: cunhar transforma uma parte da sua luz em moeda, não tira nada (#17394)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:um\\s+)?níve(?:l|is)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“sem mudar seu nível” (#17394)"
     }
   ],
   "names": {

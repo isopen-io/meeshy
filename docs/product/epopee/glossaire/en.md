@@ -126,7 +126,7 @@ The tone: plain, warm English written for a 13-year-old, one idea per sentence. 
 
 ### The Legacy (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **What it is**: the coins kept for your line. **Minting a Meesh binds part of your light into a numbered coin**: your light, and so your level, drops by as much; what you received stays received.
+- **What it is**: the coins kept for your line. **Minting a Meesh binds part of your light into a numbered coin**, kept forever; your level follows the light you still hold, and **no text ever presents the drop as a loss** (#17394); what you received stays received.
 - **The Meeshes card** is called “The Legacy”.
 - **The containers** (unchanged): Purse (1), Pouch (10), Casket (50), Chest (100, rank Voice I), Treasure (500, Polyglot III), Reserve (1,000, Ambassador III).
 - **The editions**: silver; gold (every hundredth); prism (every thousandth).
