@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
@@ -149,7 +150,7 @@ public fun MeeshyToggleRow(
     val haptics = rememberMeeshyHaptics()
     val label = MeeshyToggleRowRecipe.accessibilityLabel(content.title, content.subtitle)
     val chosen = MeeshyToggleRowRecipe.isChosen(content.accessory)
-    val spokenValue = spokenValue(content.accessory)
+    val spokenValue = spokenValueOf(content.accessory)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -319,7 +320,7 @@ private fun AccessoryView(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTog
  * l'état d'appui, la ligne ne se recompose pas.
  */
 @Composable
-private fun MeeshyToggleRowVeil(
+private fun BoxScope.MeeshyToggleRowVeil(
     interactionSource: MutableInteractionSource,
     kind: MeeshyToggleRowKind,
     tone: MeeshyGlassTone?,
@@ -360,7 +361,7 @@ private fun MeeshyToggleRowVeil(
 }
 
 @Composable
-private fun spokenValue(accessory: MeeshyToggleRowAccessory): String? {
+private fun spokenValueOf(accessory: MeeshyToggleRowAccessory): String? {
     val on = stringResource(R.string.a11y_kit_toggle_on)
     val off = stringResource(R.string.a11y_kit_toggle_off)
     return when (val value = MeeshyToggleRowRecipe.valueFor(accessory)) {
