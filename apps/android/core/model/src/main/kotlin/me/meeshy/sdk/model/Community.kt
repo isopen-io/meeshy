@@ -54,6 +54,8 @@ data class ApiCommunity(
     @SerialName("_count") val count: ApiCommunityCount? = null,
     val memberCount: Int? = null,
     val conversationCount: Int? = null,
+    /** Agrégat anonyme servi par `GET /communities/:id` (#18014) ; `null` = communauté trop petite ou ancien serveur. */
+    val onlineMemberCount: Int? = null,
 )
 
 /** A community search result — port of APICommunitySearchResult (CommunityModels.swift). */

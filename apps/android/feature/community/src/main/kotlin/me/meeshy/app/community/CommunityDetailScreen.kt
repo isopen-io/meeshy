@@ -302,18 +302,36 @@ private fun DetailHeader(community: Community, accentHex: String) {
 @Composable
 private fun StatsRow(community: Community) {
     val tokens = MeeshyTheme.tokens
-    Row(
+    Column(
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(tokens.backgroundSecondary.copy(alpha = 0.5f))
             .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), MeeshyIcons.GroupFilled)
-        Box(Modifier.width(1.dp).height(30.dp).background(tokens.hairline))
-        StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), MeeshyIcons.Chat)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), MeeshyIcons.GroupFilled)
+            Box(Modifier.width(1.dp).height(30.dp).background(tokens.hairline))
+            StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), MeeshyIcons.Chat)
+        }
+        community.onlineLine?.let { OnlineLine(it) }
+    }
+}
+
+/** « N en ligne » derrière un point de la couleur de marque (iOS `onlineLine`) : un agrégat, jamais qui (#18014). */
+@Composable
+private fun OnlineLine(count: Int) {
+    val label = stringResource(R.string.community_online, count)
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(MeeshyPalette.Indigo500))
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 
