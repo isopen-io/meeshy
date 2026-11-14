@@ -287704,43 +287704,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الترتيب مجمّد كل يوم عند الساعة 4 صباحًا"
+            "value": "ترتيب الآخرين مجمّد كل يوم عند الساعة 4 صباحًا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rangliste täglich um 4 Uhr festgehalten"
+            "value": "Rangliste der anderen täglich um 4 Uhr festgehalten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Standings set every day at 4 a.m."
+            "value": "Others’ standings set every day at 4 a.m."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clasificación fijada cada día a las 4 h"
+            "value": "Clasificación de los demás fijada cada día a las 4 h"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classement figé chaque jour à 4 h"
+            "value": "Classement des autres figé chaque jour à 4 h"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classifica fissata ogni giorno alle 4"
+            "value": "Classifica degli altri fissata ogni giorno alle 4"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classificação fixada todo dia às 4 h"
+            "value": "Classificação dos outros fixada todo dia às 4 h"
           }
         }
       }

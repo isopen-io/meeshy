@@ -101,7 +101,7 @@ extension GameText {
 
     static var leagueCupBronze: String { String(localized: "game2.league.cup.bronze", defaultValue: "Coupe de bronze", bundle: .main) }
 
-    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Classement figé chaque jour à 4 h", bundle: .main) }
+    static var leagueSnapshot: String { String(localized: "game2.league.snapshot", defaultValue: "Classement des autres figé chaque jour à 4 h", bundle: .main) }
 
     static var leagueSnapshotNote: MeeshyInfoNote {
         MeeshyInfoNote(

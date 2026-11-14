@@ -104,7 +104,7 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         let limit: [String: Int] = [
             "game2.settings.celebrations.switch": 30, "game2.settings.notifications.switch": 30,
-            "game2.settings.friends_league.switch": 20, "game2.settings.hidden.body": 60, "game2.league.snapshot": 40,
+            "game2.settings.friends_league.switch": 20, "game2.settings.hidden.body": 60, "game2.league.snapshot": 50,
             "game2.atlas.privacy": 80, "game2.league.pseudonym.invalid": 80,
             "game2.league.pseudonym.hint_change": 60, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
             "game.flame_panel.freeze_full": 60, "game.photo.camera.unavailable": 100,
@@ -441,7 +441,8 @@ final class GameEpureTests: XCTestCase {
     func test_league_snapshotLine_saysItFrozenAtRest_andWhyBehindAnInfoButton() throws {
         let league = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
         XCTAssertTrue(league.contains("GameNoteInfo(text: GameText.leagueSnapshot, note: GameText.leagueSnapshotNote"))
-        XCTAssertEqual(try Self.catalog()["game2.league.snapshot"]?["fr"], "Classement figé chaque jour à 4 h")
+        XCTAssertEqual(try Self.catalog()["game2.league.snapshot"]?["fr"], "Classement des autres figé chaque jour à 4 h",
+                       "ta ligne est en direct : la phrase visible ne dit figé que ce qui l'est")
     }
 
     func test_showcase_visitorLineAndSkyLine_areBehindInfoButtonsOnTheirCardTitle() throws {
