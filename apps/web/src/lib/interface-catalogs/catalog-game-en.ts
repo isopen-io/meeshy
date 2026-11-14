@@ -617,7 +617,7 @@ const en = {
   'game.prestige.title': 'Rebirth',
   'game.prestige.stars': 'Rebirths: {stars} of {max}',
   'game.prestige.locked': 'Rebirth opens at level 100.',
-  'game.prestige.what': 'Being reborn sets your level back to 1 and opens a new Age for your legend; your rank never goes back.',
+  'game.prestige.what': 'Being reborn sets your level back to 1 and opens a new Age; your rank stays.',
   'game.prestige.max': 'Your legend has lived its five rebirths: the summit of summits.',
   'game.prestige.mee': 'Level 100: your light can be reborn, or keep growing.',
   'game.prestige.meo': 'When you are reborn, your level starts over at 1 and your sparks at 0. Your ancestors offer you a new Age, a numbered trophy and {glory} glory. Your rank never goes back.',

@@ -617,7 +617,7 @@ const de = {
   'game.prestige.title': 'Wiedergeburt',
   'game.prestige.stars': 'Wiedergeburten: {stars} von {max}',
   'game.prestige.locked': 'Die Wiedergeburt öffnet sich bei Level 100.',
-  'game.prestige.what': 'Die Wiedergeburt setzt dein Level auf 1 zurück und öffnet deiner Legende ein neues Zeitalter; dein Rang weicht nie zurück.',
+  'game.prestige.what': 'Die Wiedergeburt setzt dein Level auf 1 zurück und öffnet ein neues Zeitalter; dein Rang bleibt.',
   'game.prestige.max': 'Deine Legende hat ihre fünf Wiedergeburten erlebt: der Gipfel der Gipfel.',
   'game.prestige.mee': 'Level 100: Dein Licht kann wiedergeboren werden, oder weiter wachsen.',
   'game.prestige.meo': 'Bei der Wiedergeburt beginnt dein Level wieder bei 1 und deine Funken bei 0. Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und {glory} Ruhm. Dein Rang weicht nie zurück.',

@@ -617,7 +617,7 @@ const it = {
   'game.prestige.title': 'Rinascita',
   'game.prestige.stars': 'Rinascite: {stars} su {max}',
   'game.prestige.locked': 'La Rinascita si apre al livello 100.',
-  'game.prestige.what': 'Rinascere riporta il tuo livello a 1 e apre una nuova Era alla tua leggenda; il tuo rango non arretra mai.',
+  'game.prestige.what': 'Rinascere riporta il tuo livello a 1 e apre una nuova Era; il tuo rango resta.',
   'game.prestige.max': 'La tua leggenda ha vissuto le sue cinque rinascite: la vetta della vetta.',
   'game.prestige.mee': 'Livello 100: la tua luce può rinascere, o crescere ancora.',
   'game.prestige.meo': 'Rinascendo, il tuo livello riparte da 1 e le tue scintille da 0. I tuoi antenati ti offrono una nuova Era, un trofeo numerato e {glory} di gloria. Il tuo rango non arretra mai.',
