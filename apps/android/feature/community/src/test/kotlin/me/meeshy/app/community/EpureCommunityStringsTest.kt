@@ -37,7 +37,6 @@ class EpureCommunityStringsTest {
         "community_invite_empty_subtitle",
         "community_detail_posts_empty_action",
         "community_add_channel_conversation_fallback_name",
-        "community_add_channel_empty_hint",
     )
 
     @Test
@@ -76,8 +75,9 @@ class EpureCommunityStringsTest {
     }
 
     @Test
-    fun `the add-channel empty list is one line, with no hint under it`() {
+    fun `with no conversation to add, the sheet still says to create one first`() {
         assertThat(all("values-fr")["community_add_channel_empty_no_conversations"]).isEqualTo("Aucune conversation disponible")
-        assertThat(all("values-fr")).doesNotContainKey("community_add_channel_empty_hint")
+        assertThat(all("values-fr")["community_add_channel_empty_hint"]).isEqualTo("Créez d'abord une conversation pour l'ajouter ici.")
+        folders.forEach { assertWithMessage("hint absent de $it").that(all(it)["community_add_channel_empty_hint"]).isNotEmpty() }
     }
 }

@@ -10,6 +10,12 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "community.addChannel.empty.hint",
+          "androidName": "community_add_channel_empty_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "community.addChannel.empty.noConversations",
           "androidName": "community_add_channel_empty_no_conversations",
           "status": "adopted"
