@@ -17,6 +17,8 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -25,6 +27,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.icons.MeeshyIcons
@@ -51,6 +55,9 @@ class MeeshyChipRowBehaviorTest {
         compose.setContent { MeeshyTheme(darkTheme = false) { content() } }
         compose.waitForIdle()
     }
+
+    private val themes = listOf("Tout", "Nature", "Ville", "Fête", "Sport", "Voyage", "Cuisine", "Musique", "Art", "Cinéma", "Jeux", "Mode")
+        .map { MeeshyChip(id = it, title = it) }
 
     private val effects = listOf("none" to "Aucun", "fade" to "Fondu", "zoom" to "Zoom").map { (id, title) -> MeeshyChip(id = id, title = title) }
 
@@ -252,6 +259,28 @@ class MeeshyChipRowBehaviorTest {
     }
 
     @Test
+    fun `defiler ne recompose aucune puce`() {
+        val counts = mutableMapOf<String, Int>()
+        val label: @Composable (MeeshyChip<String>, Color) -> Unit = { chip, ink ->
+            counts[chip.id] = (counts[chip.id] ?: 0) + 1
+            Text(chip.title, color = ink)
+        }
+        show {
+            Box(Modifier.width(200.dp)) {
+                MeeshyChipRow(themes, setOf("Tout"), "Thèmes", onChange = { _, _ -> }, chipLabel = label)
+            }
+        }
+        val before = counts.toMap()
+        compose.onNodeWithContentDescription("Mode").assertIsNotDisplayed()
+
+        compose.onNodeWithContentDescription("Thèmes").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Tout").assertIsNotDisplayed()
+        assertThat(counts).isEqualTo(before)
+    }
+
+    @Test
     fun `les bords d'un defilement inconnu ne cachent rien, puis suivent la loi`() {
         assertThat(scrollEdgesOf(value = 0, maxValue = Int.MAX_VALUE)).isEqualTo(MeeshyScrollEdges.None)
         assertThat(scrollEdgesOf(value = 0, maxValue = 0)).isEqualTo(MeeshyScrollEdges.None)
@@ -263,6 +292,34 @@ class MeeshyChipRowBehaviorTest {
     // endregion
 
     // region Montrer la courante
+
+    @Test
+    fun `la courante est en vue a l'apparition, puis apres chaque changement`() {
+        var selection by mutableStateOf(setOf("Mode"))
+        show {
+            Box(Modifier.width(200.dp)) {
+                MeeshyChipRow(themes, selection, "Thèmes", onChange = { next, _ -> selection = next })
+            }
+        }
+
+        compose.onNodeWithContentDescription("Mode").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tout").assertIsNotDisplayed()
+
+        selection = setOf("Tout")
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Tout").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Mode").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun `les largeurs retenues sont celles des puces presentes, rien de plus`() {
+        val geometry = ChipRowGeometry<String>().apply { listOf("a", "b", "c").forEach { widths[it] = 100 } }
+
+        geometry.retain(listOf("b", "d"))
+
+        assertThat(geometry.widths.keys).containsExactly("b")
+    }
 
     @Test
     fun `la courante est centree dans la fenetre, bornee a la course du defilement`() {
