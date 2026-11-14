@@ -382,3 +382,57 @@ final class CallSelfTilePlateTests: XCTestCase {
         XCTAssertTrue(source.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: selfTileYieldsToRails(in: geo.size))"), "elle se décale et revient en mouvement ; Réduire les animations : un fondu court")
     }
 }
+
+/// Loi 17.1 · 17.12 (#18206) — ma vignette de duo ne paraît ni ne part d'un coup : quand ma caméra
+/// s'allume ou s'éteint, qu'un mode ou un cadre en direct la range, ou que la survie réseau la fait
+/// passer à la tuile « en pause », elle se fond à sa place (`CallRemoteVideoFade`, le fondu de
+/// l'image du correspondant) ; « Réduire les animations » garde le fondu, plus court.
+@MainActor
+final class CallSelfViewPresenceTests: XCTestCase {
+
+    private func presence(shown: Bool = true, video: Bool = true, track: Bool = true, suspended: Bool = false) -> CallSelfViewPresence {
+        CallSelfViewPresence.resolve(isShown: shown, isVideoEnabled: video, hasLocalVideoTrack: track, isVideoSuspended: suspended)
+    }
+
+    func test_myCamera_withItsTrack_isShown() {
+        XCTAssertEqual(presence(), .camera)
+    }
+
+    func test_aSuspendedCamera_thatKeepsItsTrack_stillShowsTheFrozenImage() {
+        XCTAssertEqual(presence(suspended: true), .camera, "L6-1 : la piste reste attachée, la vignette montre l'image gelée")
+    }
+
+    func test_aSuspendedCamera_withoutItsTrack_showsThePausedTile() {
+        XCTAssertEqual(presence(track: false, suspended: true), .paused)
+    }
+
+    func test_aCameraOff_showsNoTile() {
+        XCTAssertEqual(presence(video: false), .none)
+        XCTAssertEqual(presence(video: false, track: false, suspended: true), .none)
+        XCTAssertEqual(presence(track: false), .none, "aucune piste et aucune pause : rien à montrer")
+    }
+
+    func test_aHiddenSelfView_showsNoTile() {
+        XCTAssertEqual(presence(shown: false), .none, "groupe, mode Effets ou Montage, cadre en direct")
+        XCTAssertEqual(presence(shown: false, track: false, suspended: true), .none)
+    }
+
+    func test_duoSelfView_appearsLeavesAndChangesFace_byAFade() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let root = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var connectedView: some View", in: connected))
+        XCTAssertTrue(root.contains("duoSelfView"))
+        XCTAssertFalse(
+            root.contains("if !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown {"),
+            "une insertion sans transition faisait paraître ma vignette d'un coup"
+        )
+        let selfView = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoSelfView: some View", in: connected))
+        XCTAssertTrue(selfView.contains("pipView.transition(.opacity)"))
+        XCTAssertTrue(selfView.contains("localVideoSuspendedTile.transition(.opacity)"))
+        XCTAssertTrue(
+            selfView.contains(".animation(.easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)), value: presence)"),
+            "le fondu de l'image du correspondant (G4) : une loi pour la caméra qui se coupe, la sienne comme la mienne"
+        )
+        let resolve = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var selfViewPresence: CallSelfViewPresence", in: connected))
+        XCTAssertTrue(resolve.contains("CallSelfViewPresence.resolve(isShown: !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown"))
+    }
+}
