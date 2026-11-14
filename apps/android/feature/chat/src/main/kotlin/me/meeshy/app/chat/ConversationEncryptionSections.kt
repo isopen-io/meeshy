@@ -47,7 +47,10 @@ internal fun ConversationEncryptionExplanationSections(explanation: Conversation
             val note = topic.questionRes?.let { question ->
                 MeeshyInfoNote(
                     question = stringResource(question),
-                    text = topic.noted.joinToString(" ") { stringResource(it.textRes()) },
+                    /* `map` est `inline`, `joinToString` ne l'est PAS : sa lambda ouvre un contexte
+                       non-composable, où `stringResource` ne s'appelle pas. La résolution se fait donc
+                       AVANT la jointure. */
+                    text = topic.noted.map { stringResource(it.textRes()) }.joinToString(" "),
                 )
             }
             MeeshyInfoNoted(
