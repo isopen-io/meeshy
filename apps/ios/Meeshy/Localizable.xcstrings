@@ -163040,55 +163040,55 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف شراراتك."
+            "value": "حافظ على عدة عائلات في الوقت نفسه لتضاعف شراراتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken."
+            "value": "Halte mehrere Familien gleichzeitig am Laufen, um deine Funken zu vervielfachen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks."
+            "value": "Keep several families going at once to multiply your sparks."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas."
+            "value": "Mantén varias familias a la vez para multiplicar tus chispas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles."
+            "value": "Tiens plusieurs familles à la fois pour multiplier tes étincelles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica le tue scintille."
+            "value": "Porta avanti più famiglie insieme per moltiplicare le tue scintille."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica as suas faíscas."
+            "value": "Mantenha várias famílias ao mesmo tempo para multiplicar as suas faíscas."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publique um story, um post, um reels ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica suas faíscas."
+            "value": "Mantenha várias famílias ao mesmo tempo para multiplicar suas faíscas."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发布快拍、帖子、短视频，或发起一段对话：同时保持的每个类别都会让你的火花翻倍。"
+            "value": "同时保持多个类别，让你的火花翻倍。"
           }
         }
       }
@@ -163217,43 +163217,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا نشاط بعد. أرسل رسالة، انشر قصة… يضيء وسامك الأول مع أول إجراء."
+            "value": "لا نشاط بعد: يضيء وسامك الأول مع أول إجراء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf."
+            "value": "Noch keine Aktivität: Deine erste Medaille leuchtet bei der ersten Aktion auf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No activity yet. Send a message, post a story… your first medal lights up with your very first move."
+            "value": "No activity yet: your first medal lights up with your first move."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no hay actividad. Envía un mensaje, publica una historia… tu primera medalla se enciende con el primer gesto."
+            "value": "Aún no hay actividad: tu primera medalla se enciende con el primer gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste."
+            "value": "Aucune activité pour l’instant : ta première médaille s’allume au premier geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna attività per ora. Invia un messaggio, pubblica una storia… la tua prima medaglia si accende al primo gesto."
+            "value": "Nessuna attività per ora: la tua prima medaglia si accende al primo gesto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma atividade ainda. Envie uma mensagem, publique uma story… sua primeira medalha se acende no primeiro gesto."
+            "value": "Nenhuma atividade ainda: sua primeira medalha se acende no primeiro gesto."
           }
         }
       }

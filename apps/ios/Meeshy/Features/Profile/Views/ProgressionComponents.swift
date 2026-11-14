@@ -250,7 +250,7 @@ struct ProgressionNotice: View {
         case .empty:
             return String(
                 localized: "progression.empty",
-                defaultValue: "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.",
+                defaultValue: "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.",
                 bundle: .main
             )
         case .offline(let hasSnapshot):
