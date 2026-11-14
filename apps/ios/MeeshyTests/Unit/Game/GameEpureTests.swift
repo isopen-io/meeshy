@@ -69,7 +69,6 @@ final class GameEpureTests: XCTestCase {
         "game2.showcase.empty": "Tes trophées t’attendent : coupes de joute et de voyage, Renaissance, Flamme.",
         "game.flame_panel.freeze_full": "Tes Veilleuses sont au complet.",
         "game.photo.camera.unavailable": "Caméra indisponible. Choisis une photo dans ta galerie, ou garde la carte seule.",
-        "game.rules.concepts_intro": "Chaque élément du jeu, en clair.",
     ]
 
     func test_catalog_shortenedLabels_sayTheirNewFrench() throws {
@@ -109,7 +108,7 @@ final class GameEpureTests: XCTestCase {
             "game2.atlas.privacy": 80, "game2.league.pseudonym.invalid": 80,
             "game2.league.pseudonym.hint_change": 60, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
             "game.flame_panel.freeze_full": 60, "game.photo.camera.unavailable": 100,
-            "game.rules.concepts_intro": 60, "game2.atlas.intro": 100, "game2.league.friends.body": 100,
+            "game2.atlas.intro": 100, "game2.league.friends.body": 100,
             "game2.season.how": 100, "game2.season.seal.body": 100, "game2.settings.notifications.body": 100,
             "game2.showcase.visibility_hint": 100, "game2.settings.visibility.body": 120,
             "game2.settings.friends_league.body": 120,
@@ -822,5 +821,104 @@ final class GameEpureTests: XCTestCase {
         }
         XCTAssertNil(catalog["game.state.points.ready"], "fusionnée avec sa jumelle sans conversion")
         XCTAssertNil(catalog["game.state.points.missing"], "fusionnée avec sa jumelle sans conversion")
+    }
+
+    // MARK: - Épure 3/3 : les règles et les fiches disent une fois, le détail est à un toucher (#17687)
+
+    private static let thirdFrench: [String: String] = [
+        "game.rules.1.body": "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis.",
+        "game.rules.1.limits.question": "Y a-t-il des limites ?",
+        "game.rules.1.limits": "Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.",
+        "game.rules.2.body": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle.",
+        "game.rules.3.body": "Une Meesh se frappe à la main : une part de ta lumière s’y fige.",
+        "game.rules.3.share.question": "Comment se calcule la part figée ?",
+        "game.rules.3.share": "Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.",
+        "game.rules.concept.tailwind.body": "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.",
+        "game.rules.concept.tailwind.stop.question": "Quand le Vent arrière s’arrête-t-il ?",
+        "game.rules.concept.tailwind.stop": "Il s’arrête dès que l’écart retombe à 6.",
+        "game.rules.concept.duo.body": "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double.",
+        "game.concept.level.what": "Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.",
+        "game.concept.level.what.note.question": "Combien d’étincelles par niveau ?",
+        "game.concept.level.what.note": "10 000 étincelles pour le niveau 10, un million pour le niveau 100.",
+        "game.concept.prestige.what": "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative.",
+        "game.concept.prestige.what.note.question": "Combien de renaissances ?",
+        "game.concept.prestige.what.note": "Cinq renaissances au plus mènent au Sixième Âge.",
+    ]
+
+    private static let removedKeys = ["game.rules.concepts_intro", "game.atlas.tiers.prestige", "game2.duo.no_friends"]
+
+    func test_thirdPass_texts_sayTheirNewFrench_inTheSevenLanguages_neverCopiedFromFrench() throws {
+        let catalog = try Self.catalog()
+        for (key, expected) in Self.thirdFrench {
+            XCTAssertEqual(catalog[key]?["fr"], expected, key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, expected, "\(key) [\(language)] : copié du français")
+                XCTAssertEqual(specifiers(in: value), specifiers(in: expected), "\(key) [\(language)] : mêmes marqueurs")
+            }
+        }
+    }
+
+    func test_thirdPass_unreadKeys_areGoneFromEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        for key in Self.removedKeys { XCTAssertNil(catalog[key], "\(key) : plus aucun lecteur") }
+        let rules = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertFalse(rules.contains("GameRulesGlossary.intro"), "le titre de section dit déjà « Chaque concept, en clair »")
+    }
+
+    func test_thirdPass_rules_putTheirLimitsAndTheirShareBehindAQuestion_theBodyKeepsTheLandmark() throws {
+        let rules = GameGuideCopy.rules
+        let limits = try XCTUnwrap(rules[0].note)
+        XCTAssertEqual(limits.question, "Y a-t-il des limites ?")
+        XCTAssertFalse(rules[0].body.contains(limits.text), "la phrase des limites a quitté le repos")
+        XCTAssertTrue(rules[0].body.contains("selon qui peut la voir"), "la valeur d'une publication reste au repos")
+        XCTAssertNil(rules[1].note, "la règle 2 se dit en une phrase")
+        let share = try XCTUnwrap(rules[2].note)
+        XCTAssertEqual(share.question, "Comment se calcule la part figée ?")
+        XCTAssertTrue(share.text.contains("30 %"))
+        XCTAssertTrue(rules[2].body.contains("une part de ta lumière s’y fige"), "le repère reste au repos")
+        for rule in rules where rule.index > 3 { XCTAssertNil(rule.note, "règle \(rule.index)") }
+        let view = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertTrue(view.contains("MeeshyInfoNoted(note: rule.note"), "la règle pose son (i)")
+    }
+
+    func test_thirdPass_glossary_tailwindStopsBehindAQuestion_allianceLosesItsJourneySentence() throws {
+        let tailwind = try XCTUnwrap(GameRulesGlossary.entries.first { $0.key == .tailwind })
+        let note = try XCTUnwrap(tailwind.note)
+        XCTAssertEqual(note.question, "Quand le Vent arrière s’arrête-t-il ?")
+        XCTAssertFalse(tailwind.body.contains("retombe"))
+        XCTAssertTrue(tailwind.body.contains("7 niveaux ou plus"), "la phrase visible garde le seuil")
+        let duo = try XCTUnwrap(GameRulesGlossary.entries.first { $0.key == .duo })
+        XCTAssertNil(duo.note)
+        XCTAssertFalse(duo.body.contains("voyage"))
+        XCTAssertTrue(duo.body.contains("niveau 20") && duo.body.contains("récompense double"), "l'orientation de l'alliance reste visible")
+        for entry in GameRulesGlossary.entries where entry.key != .tailwind { XCTAssertNil(entry.note, entry.name) }
+        let view = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertTrue(view.contains("MeeshyInfoNoted(note: entry.note"))
+    }
+
+    func test_thirdPass_levelAndPrestigeSheets_putTheirFiguresBehindAQuestion() throws {
+        let level = try XCTUnwrap(ConceptText.whatNote(.level))
+        XCTAssertEqual(level.question, "Combien d’étincelles par niveau ?")
+        XCTAssertTrue(level.text.contains("un million"))
+        XCTAssertFalse(ConceptText.what(.level).contains("million"))
+        let prestige = try XCTUnwrap(ConceptText.whatNote(.prestige))
+        XCTAssertEqual(prestige.question, "Combien de renaissances ?")
+        XCTAssertTrue(ConceptText.what(.prestige).contains("facultative"), "le caractère facultatif reste au repos")
+        XCTAssertFalse(ConceptText.what(.prestige).contains("Sixième"))
+        for concept in ProgressionConcept.allCases where concept != .level && concept != .prestige {
+            XCTAssertNil(ConceptText.whatNote(concept), "\(concept.rawValue) : pas de (i) vide")
+        }
+        let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(page.contains("MeeshyInfoNoted(note: ConceptText.whatNote(concept)"))
+    }
+
+    func test_thirdPass_theLevelConsequence_isSaidByTheSparksSheetAndRule4_notByTheLevelSheet() throws {
+        let catalog = try Self.catalog()
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.points.use"]?["fr"]).contains("ton niveau, baisse d’autant"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.rules.4.body"]?["fr"]).contains("ton niveau baisse d’autant"))
+        for key in ["game.concept.level.what", "game.rules.2.body"] {
+            XCTAssertFalse(try XCTUnwrap(catalog[key]?["fr"]).contains("baisser"), key)
+        }
     }
 }
