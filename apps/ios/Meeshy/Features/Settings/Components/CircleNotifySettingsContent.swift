@@ -3,8 +3,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// « QUI EST PRÉVENU » (#14062) — trois familles qui se déplient action par
-/// action, chacune avec le sélecteur natif des sept crans. Sous Personne,
-/// Communauté et Public, une phrase dit en clair qui sera prévenu.
+/// action, chacune avec le sélecteur natif des sept crans. Sous
+/// chaque cran, une phrase dit en clair qui sera prévenu.
 struct CircleNotifySettingsContent: View {
     @ObservedObject var viewModel: CircleNotifySettingsViewModel
     let accent: Color
@@ -144,10 +144,13 @@ struct CircleNotifySettingsContent: View {
 
     static func explanation(of choice: RelationAudienceChoice) -> String? {
         switch choice {
+        case .blood: return String(localized: "circleNotify.explain.BLOOD", defaultValue: "Votre famille de cœur seulement.", bundle: .main)
+        case .close: return String(localized: "circleNotify.explain.CLOSE", defaultValue: "Sang et Proche.", bundle: .main)
+        case .friend: return String(localized: "circleNotify.explain.FRIEND", defaultValue: "Sang, Proche et Ami.", bundle: .main)
+        case .acquaintance: return String(localized: "circleNotify.explain.ACQUAINTANCE", defaultValue: "Du Sang à la Connaissance.", bundle: .main)
         case .nobody: return String(localized: "circleNotify.explain.NOBODY", defaultValue: "Personne de votre entourage n’est prévenu.", bundle: .main)
         case .community: return String(localized: "circleNotify.explain.COMMUNITY", defaultValue: "Vos liens, de Sang à Connaissance, et les communautés que vous partagez.", bundle: .main)
         case .public: return String(localized: "circleNotify.explain.PUBLIC", defaultValue: "Comme Communauté : sans abonnés, aucun inconnu n’est prévenu.", bundle: .main)
-        case .blood, .close, .friend, .acquaintance: return nil
         }
     }
 }

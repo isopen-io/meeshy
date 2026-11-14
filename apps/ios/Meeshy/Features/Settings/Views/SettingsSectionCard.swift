@@ -300,8 +300,15 @@ enum SettingsInfoNotes {
         )
     }
 
+    static var bringOff: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.notifications.bring.question", defaultValue: "Que se passe-t-il si je le coupe ?", bundle: .main),
+            text: String(localized: "settings.notifications.bring.note", defaultValue: "Coupé, personne ne peut plus faire sonner votre téléphone.", bundle: .main)
+        )
+    }
+
     static var all: [MeeshyInfoNote] {
         [galleryAutosave, renderedCapture, captureOriginal, cameraArming, libraryOpening, readingModes, compression, transcriptionAuto, encryption,
-         onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress]
+         onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress, bringOff]
     }
 }

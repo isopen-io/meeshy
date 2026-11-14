@@ -94,7 +94,8 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "lastSeen", icon: "clock.fill",
                     title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main),
-                    color: MeeshyColors.infoHex, keyPath: \.showLastSeen
+                    color: MeeshyColors.infoHex, keyPath: \.showLastSeen,
+                    summary: String(localized: "settings.privacy.last_seen.summary", defaultValue: "Vos proches voient quand vous étiez actif, vos amis si vous êtes en ligne.", bundle: .main)
                 ),
                 ToggleSpec(
                     id: "readReceipts", icon: "checkmark.message.fill",
@@ -146,11 +147,6 @@ struct PrivacySettingsView: View {
             icon: "photo.fill",
             color: MeeshyColors.tileSaffronHex,
             specs: [
-                ToggleSpec(
-                    id: "saveMedia", icon: "square.and.arrow.down.fill",
-                    title: String(localized: "settings.privacy.save_media", defaultValue: "Sauvegarder média", bundle: .main),
-                    color: "4ADE80", keyPath: \.saveMediaToGallery
-                ),
                 ToggleSpec(
                     id: "analytics", icon: "chart.bar.fill",
                     title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),

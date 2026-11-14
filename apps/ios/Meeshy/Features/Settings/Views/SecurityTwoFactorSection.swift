@@ -28,6 +28,12 @@ struct SecurityTwoFactorSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.bottom, MeeshySpacing.smPlus)
 
+                if viewModel.isEnabled {
+                    SettingsSentence(text: String(localized: "settings.security.2fa.backup_codes.summary", defaultValue: "Pour entrer sans votre téléphone ; de nouveaux codes annulent les anciens."))
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.bottom, MeeshySpacing.smPlus)
+                }
+
                 if let twoFactorError = viewModel.error {
                     Text(twoFactorError)
                         .font(.caption.weight(.medium))

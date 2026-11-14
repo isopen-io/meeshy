@@ -7,6 +7,8 @@ struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs: UserPreferencesManager
+    /// Le (i) ouvert : sa note se déplie sous la phrase, une seule à la fois.
+    @State private var openNoteID: String?
     @StateObject private var circleNotify: CircleNotifySettingsViewModel
     init(prefs: UserPreferencesManager = .shared) {
         self.prefs = prefs
@@ -89,7 +91,9 @@ struct NotificationSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 notifToggle(icon: "bell.and.waves.left.and.right.fill", title: String(localized: "settings.notifications.bring", defaultValue: "Recevoir des Bring", bundle: .main), color: MeeshyColors.warningHex,
                             keyPath: \.receivesBrings)
-                SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux. Coupé, personne ne peut plus faire sonner votre téléphone.", bundle: .main))
+                MeeshyInfoNoted(note: SettingsInfoNotes.bringOff, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                    SettingsSentence(text: String(localized: "settings.notifications.bring.summary", defaultValue: "Un son forcé pour l’urgence extrême, même en silencieux.", bundle: .main))
+                }
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.bottom, MeeshySpacing.sm + 2)
             }
