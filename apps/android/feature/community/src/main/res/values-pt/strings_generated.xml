@@ -51,6 +51,7 @@
     <string name="community_members_section_creator">Criadores</string>
     <string name="community_members_section_member">Membros</string>
     <string name="community_members_section_moderator">Moderadores</string>
+    <string name="community_online">%1$d online</string>
     <string name="community_privacy_private">Privada</string>
     <string name="community_privacy_public">Pública</string>
     <string name="community_role_admin">Admin</string>

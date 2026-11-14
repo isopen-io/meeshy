@@ -13,6 +13,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { onLayerEntry } from '@/lib/view/layer-entry';
+
 /**
  * LE ROUTEUR.
  *
@@ -132,12 +134,20 @@ export function isCurrentHref(url: string): boolean {
  *
  * Un `replace` EXPLICITE traverse : c'est ainsi qu'une redirection réécrit
  * l'entrée courante (garde de session, canonicalisation d'URL).
+ *
+ * **UNE DESTINATION CHOISIE DANS UNE COUCHE PREND LA PLACE DE SON ENTRÉE**
+ * (#18523). Un menu, une feuille ou une visionneuse ouverts ont posé une entrée
+ * à l'adresse de l'écran (`lib/view/use-back-dismiss.ts`). Pousser par-dessus
+ * la laissait sous la destination : un retour ramenait l'écran d'origine, le
+ * suivant ne changeait rien. Le lecteur a bien avancé d'un pas — l'entrée de
+ * l'écran reste dessous — donc `hasNavigatedInApp` le compte.
  */
 export function navigate(url: string, replace = false): void {
   if (!replace && isCurrentHref(url)) return;
   if (replace) window.history.replaceState(null, '', url);
   else {
-    window.history.pushState(null, '', url);
+    if (onLayerEntry()) window.history.replaceState(null, '', url);
+    else window.history.pushState(null, '', url);
     navigatedInApp = true;
   }
   notify();
