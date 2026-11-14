@@ -224,7 +224,7 @@ class MeeshyChipRowBehaviorTest {
 
         val bounds = compose.onNodeWithContentDescription("Un titre de puce bien plus large que la rangée qui le porte, sur une seule ligne")
             .getUnclippedBoundsInRoot()
-        assertThat(bounds.width).isAtMost(120.dp)
+        assertThat(bounds.right - bounds.left).isAtMost(120.dp)
     }
 
     // endregion
