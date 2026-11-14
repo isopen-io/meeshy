@@ -968,3 +968,26 @@ socket jusqu'au client.
 1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
 2. #17132, #17133, #18154 et #18371.
 3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 29 — 2026-11-14
+
+- **Base** : `origin/dev` @ `04a31e14`. Le lot du cycle 28 (#17189, PR #18498) n'est pas encore fusionné : sa CI tourne, et ses fichiers ne recoupent pas ceux de ce lot.
+- **Branche** : `claude/determined-volta-40rrxt`.
+- **Objectif** : #17132. Un lot refusé reste signalé à la passerelle même si `stop()` est lui-même annulé, une fois ou plus, pendant le report.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni les compteurs) :
+  - **`ConnectionManager._report_through_cancellation`** n'attend plus le report sous `asyncio.shield` puis par un `await report` sans protection. Il l'attend en boucle par `asyncio.wait`, qui ne l'annule pas. Chaque annulation suivante retrouve donc le même report, qui ne s'exécute qu'une fois. L'annulation n'est rendue qu'une fois le report fini.
+  - Un `shield` en boucle a été essayé puis écarté : si le report lève, `await shield(report)` relance l'exception avant la branche d'annulation. La boucle de flush ne voit alors jamais l'annulation, et `stop()` ne se termine pas. Le témoin « report qui lève » l'a montré.
+  - Un report qui lève après une annulation est journalisé par son seul type. Sans annulation, son exception est relancée telle quelle, comme avant.
+  - `connection_manager.py` passe de 609 à 618 lignes.
+- **Tests** : dans `test_shutdown_flush_cancel_and_quiet_logs_qa.py`, l'`xfail` de `TestSecondCancellation` est retiré. Deux témoins sont ajoutés : `TestThirdCancellation` (deux `cancel()`) et `TestReportThatRaisesAfterCancellation`.
+  - **Rouge avant correctif** : `3 failed, 3 passed`. La QA l'a reproduit avec le code de `origin/dev`.
+  - **Vert** : relancé par moi, `6 passed`. La QA mesure 29 fichiers : `447 passed, 6 skipped, 5 errors` avant comme après, avec une liste d'échecs identique. Les 5 erreurs, préexistantes, viennent de `TestRealTranslatorIntegration`. Sur 15 lancements avec `-W error::RuntimeWarning`, aucun avertissement « never retrieved ».
+  - **Mutations QA** : 8 sur 8 font rougir les témoins.
+- **QA** : favorable avec une réserve. `stop()` ne peut plus être annulé tant que le rappel de rejet n'a pas rendu la main. En production, le rappel est un envoi PUB qui ne bloque pas, et aucun appelant ne borne `stop()` → #18535.
+
+### Cycle suivant : par où reprendre
+
+0. Si les PR #18498 (cycle 28) ou de ce cycle ne sont pas fusionnées, les reprendre.
+1. #18436, une fois #18498 fusionnée, car elle touche `zmq_translation_handler.py`. Puis #17133 et #18535.
+2. #18371, #18154 et #18497.
+3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
