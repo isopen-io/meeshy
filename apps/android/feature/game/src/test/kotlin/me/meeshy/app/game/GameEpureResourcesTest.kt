@@ -69,6 +69,8 @@ class GameEpureResourcesTest {
     ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
         .map { "game_rules_concept_${it}_body" }
 
+    private val retiredByEpure2 = listOf("game_flame_panel_freeze_full", "game2_settings_visibility_body")
+
     private val retiredLanguages = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 
     private fun resDir(): File = listOf(File("src/main/res"), File("feature/game/src/main/res")).first { it.isDirectory }
@@ -83,6 +85,39 @@ class GameEpureResourcesTest {
         retiredLanguages.forEach { folder ->
             val declared = declaredNames(folder)
             assertThat(declared.intersect(retiredNames.toSet())).isEmpty()
+        }
+    }
+
+    @Test
+    fun `la jauge de Veilleuses et les quatre selecteurs ne sont plus doubles par une phrase`() {
+        retiredLanguages.forEach { folder -> assertThat(declaredNames(folder).intersect(retiredByEpure2.toSet())).isEmpty() }
+        val fields = Class.forName("me.meeshy.feature.game.R\$string").fields.map { it.name }.toSet()
+        assertThat(fields.intersect(retiredByEpure2.toSet())).isEmpty()
+    }
+
+    @Test
+    fun `les fiches Points Flamme et Renaissance disent en une phrase ce que c est`() {
+        assertThat(text(R.string.game_concept_points_what)).isEqualTo("Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.")
+        assertThat(text(R.string.game_concept_flame_what))
+            .isEqualTo("Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.")
+        assertThat(text(R.string.game_concept_prestige_what))
+            .isEqualTo("La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.")
+        listOf("game_concept_points_what", "game_concept_flame_what", "game_concept_prestige_what").forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value.count { it == '.' || it == '۔' }).isAtMost(1)
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+    }
+
+    @Test
+    fun `le plafond des cinq renaissances passe derriere le i et le caractere facultatif reste visible`() {
+        assertThat(text(R.string.game_concept_prestige_use)).contains("Cinq renaissances au plus mènent au Sixième Âge.")
+        assertThat(text(R.string.game_concept_prestige_what)).doesNotContain("cinq renaissances")
+        assertThat(text(R.string.game_concept_prestige_what)).contains("facultative")
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_concept_prestige_what")).doesNotContain("5").doesNotContain("٥")
         }
     }
 
@@ -124,8 +159,6 @@ class GameEpureResourcesTest {
 
     @Test
     fun `les reglages de visibilite disent au repos ce qui se regle et rangent la presence derriere un i`() {
-        assertThat(text(R.string.game2_settings_visibility_body))
-            .isEqualTo("Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas.")
         assertThat(text(R.string.game2_settings_visibility_question)).isEqualTo("Qui voit quand je joue ?")
         assertThat(text(R.string.game2_settings_visibility_presence))
             .isEqualTo("Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.")
@@ -148,7 +181,7 @@ class GameEpureResourcesTest {
     fun `les notes rangees derriere un i sont traduites dans les sept langues et jamais copiees du francais`() {
         listOf(
             "game2_settings_hidden_body", "game2_settings_hidden_question", "game2_settings_hidden_effects",
-            "game2_settings_visibility_body", "game2_settings_visibility_question", "game2_settings_visibility_presence",
+            "game2_settings_visibility_question", "game2_settings_visibility_presence",
             "game2_settings_friends_league_body", "game2_settings_friends_league_question", "game2_settings_friends_league_effects",
             "reveal_badge_axis_subtitle",
         ).forEach { name ->
@@ -225,7 +258,6 @@ class GameEpureResourcesTest {
     fun `la fiche de la piece et le panneau de la flamme ne gardent que la valeur`() {
         assertThat(text(R.string.game_detail_coin_what)).isEqualTo("La Meesh, c’est ta lumière figée dans une pièce numérotée.")
         assertThat(text(R.string.game_detail_fact_mint_next)).isEqualTo("Une sur cent est en or, une sur mille en prisme.")
-        assertThat(text(R.string.game_flame_panel_freeze_full)).isEqualTo("Toutes tes Veilleuses sont là.")
     }
 
     @Test

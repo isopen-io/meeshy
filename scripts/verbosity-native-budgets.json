@@ -50,8 +50,8 @@
     },
     "android:feature/game": {
       "labels": 1265,
-      "words": 8157,
-      "long": 116,
+      "words": 8100,
+      "long": 113,
       "explanations": 115
     },
     "android:feature/notifications": {
