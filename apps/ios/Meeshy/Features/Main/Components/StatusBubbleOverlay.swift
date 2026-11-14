@@ -11,10 +11,13 @@ struct StatusBubbleOverlay: View {
     var onRepublish: ((StatusEntry) -> Void)? = nil
     /// Touché du CONTENU du mood (pas la zone extérieure) → amorce la réponse.
     var onReplyTapped: (() -> Void)? = nil
+    /// Réagir à l'humeur (#18110) — `nil` sur sa propre humeur.
+    var reactionHandler: MoodReactionHandler? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
+    @State private var reactions = MoodReactionSelection()
 
     /// Décisions de layout pures — extraites pour être directement testables
     /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
@@ -153,6 +156,8 @@ struct StatusBubbleOverlay: View {
                     .foregroundStyle(theme.textMuted)
             }
 
+            reactionRow
+
             if onRepublish != nil {
                 Divider().opacity(0.3)
             }
@@ -277,11 +282,42 @@ struct StatusBubbleOverlay: View {
                 audioPlayer.togglePlayPause()
             }
         }
+        if reactionHandler != nil {
+            ForEach(MoodReactionSelection.emojis.filter { !reactions.placed.contains($0) }, id: \.self) { emoji in
+                Button(MoodQuickReactionRow.accessibilityLabel(for: emoji)) {
+                    HapticFeedback.light()
+                    react(with: emoji)
+                }
+            }
+        }
         if onRepublish != nil {
             Button(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main)) {
                 dismiss()
                 onRepublish?(status)
             }
+        }
+    }
+
+    // MARK: - React
+
+    @ViewBuilder private var reactionRow: some View {
+        if let reactionHandler {
+            MoodQuickReactionRow(
+                placed: reactions.placed,
+                tint: Color(hex: status.avatarColor),
+                onReact: react(with:)
+            )
+            .padding(.horizontal, -MeeshySpacing.xs)
+            .onAppear { reactions = reactions.merging(reactionHandler.placed(status.id)) }
+        }
+    }
+
+    private func react(with emoji: String) {
+        guard let reactionHandler, reactions.begin(emoji) else { return }
+        let statusId = status.id
+        Task {
+            let outcome = await reactionHandler.react(statusId, emoji)
+            reactions.settle(emoji, outcome: outcome)
         }
     }
 
