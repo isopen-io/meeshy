@@ -81,6 +81,19 @@ type Options = {
   statusMetrics?: Record<string, number>;
   /** `translationService.healthCheck()` : sa réponse, ou `'pend'` pour une sonde qui ne répond jamais. */
   health?: boolean | 'pend' | 'throw';
+  /** `translationService.getZmqClient` : absent (`'none'`), ou la fabrique du client ZMQ servi. */
+  zmqClient?: 'none' | (() => unknown);
+};
+
+const ZMQ_CLIENT_STATS = {
+  requests_sent: 140,
+  results_received: 131,
+  errors_received: 4,
+  pool_full_rejections: 3,
+  translation_skipped: 5,
+  avg_response_time: 210.5,
+  uptime_seconds: 7200,
+  memory_usage_mb: 256,
 };
 
 const STATUS_METRICS = {
@@ -101,6 +114,7 @@ async function buildApp({
   status = false,
   statusMetrics = STATUS_METRICS,
   health = true,
+  zmqClient = () => ({ getStats: () => ZMQ_CLIENT_STATS }),
 }: Options = {}) {
   const app: FastifyInstance = Fastify({ logger: false });
   app.decorate('prisma', {
@@ -134,6 +148,7 @@ async function buildApp({
       if (health === 'throw') throw new Error('zmq down');
       return health;
     },
+    ...(zmqClient === 'none' ? {} : { getZmqClient: zmqClient }),
   } as any);
   registerMonitoringRoutes(app);
   await app.ready();
@@ -186,7 +201,7 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
 
     expect(body.success).toBe(true);
     expect(Object.keys(data).sort()).toEqual(
-      ['backups', 'circuitBreakers', 'database', 'gateway', 'generatedAt', 'presenceUpdates', 'realtime', 'redis', 'translator'].sort()
+      ['backups', 'circuitBreakers', 'database', 'gateway', 'generatedAt', 'presenceUpdates', 'realtime', 'redis', 'translator', 'translatorClient'].sort()
     );
     expect(Number.isNaN(Date.parse(data.generatedAt))).toBe(false);
 
@@ -292,6 +307,108 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
     breakerStats.mockReturnValue({});
     const app = await buildApp();
     expect(JSON.parse((await read(app)).body).data.circuitBreakers).toEqual([]);
+    await app.close();
+  });
+});
+
+/**
+ * Les refus et échecs du CLIENT ZMQ de traduction (#18064). `ZMQClientStats`
+ * comptait les refus de pool plein, les traductions ignorées et les erreurs
+ * reçues sans qu'aucun lecteur de production ne les lise. Ils sortent sous une
+ * clé NEUVE, `translatorClient` : la carte `translator` historique ne change pas.
+ */
+describe('GET /admin/monitoring — les compteurs du client ZMQ (#18064)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    breakerStats.mockReturnValue({});
+  });
+
+  it('sert les compteurs du client ZMQ à travers le sérialiseur', async () => {
+    const app = await buildApp();
+    const data = JSON.parse((await read(app)).body).data;
+
+    expect(data.translatorClient).toEqual({
+      requestsSent: 140,
+      resultsReceived: 131,
+      errorsReceived: 4,
+      poolFullRejections: 3,
+      translationSkipped: 5,
+    });
+    expect(data.translatorClient).not.toHaveProperty('avgResponseTimeMs');
+    await app.close();
+  });
+
+  it('laisse la carte translator historique inchangée, clé pour clé', async () => {
+    const app = await buildApp();
+    const data = JSON.parse((await read(app)).body).data;
+
+    expect(Object.keys(data.translator).sort()).toEqual(
+      [
+        'avgProcessingTimeMs',
+        'cacheHitRate',
+        'errors',
+        'memoryUsageMb',
+        'poolFullRejections',
+        'reachable',
+        'received',
+        'requestsSent',
+        'uptimeSeconds',
+      ].sort()
+    );
+    expect(data.translator.poolFullRejections).toBe(1);
+    expect(data.translator.errors).toBe(2);
+    await app.close();
+  });
+
+  it.each([
+    ['le service n’expose pas de client', 'none' as const],
+    ['le client n’est pas encore initialisé', () => null],
+    ['le client ne sait pas lire ses statistiques', () => ({})],
+    [
+      'la lecture des statistiques lève',
+      () => ({
+        getStats: () => {
+          throw new Error('zmq down');
+        },
+      }),
+    ],
+  ])('vaut null, sans tomber, quand %s', async (_nom, zmqClient) => {
+    const app = await buildApp({ zmqClient });
+    const res = await read(app);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).data.translatorClient).toBeNull();
+    await app.close();
+  });
+
+  it('rend 0 pour un compteur absent ou non fini, jamais NaN', async () => {
+    const app = await buildApp({
+      zmqClient: () => ({ getStats: () => ({ requests_sent: Number.NaN, translation_skipped: 2 }) }),
+    });
+    const data = JSON.parse((await read(app)).body).data;
+    expect(data.translatorClient).toEqual({
+      requestsSent: 0,
+      resultsReceived: 0,
+      errorsReceived: 0,
+      poolFullRejections: 0,
+      translationSkipped: 2,
+    });
+    await app.close();
+  });
+
+  it('remonte les compteurs d’un VRAI ZmqTranslationClient après un refus reçu du fil', async () => {
+    const { ZmqTranslationClient } = await import('../../../../services/zmq-translation/ZmqTranslationClient');
+    const client = new ZmqTranslationClient();
+    const handler = (client as unknown as { messageHandler: { handleMessage(m: Buffer): Promise<void> } }).messageHandler;
+    await handler.handleMessage(
+      Buffer.from(
+        JSON.stringify({ type: 'translation_skipped', messageId: 'm-1', conversationId: 'c-1', reason: 'message_too_long' }),
+        'utf-8'
+      )
+    );
+
+    const app = await buildApp({ zmqClient: () => client });
+    const data = JSON.parse((await read(app)).body).data;
+    expect(data.translatorClient).toMatchObject({ translationSkipped: 1, poolFullRejections: 0, errorsReceived: 0 });
     await app.close();
   });
 });

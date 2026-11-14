@@ -45,6 +45,9 @@ const logger = enhancedLogger.child({ module: 'ZmqMessageHandler' });
 
 const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
+/** Une raison venue du fil ne remplit ni le journal ni l'événement relayé (#18064). */
+const SKIP_REASON_MAX_LENGTH = 64;
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== 'object' || value === null) return false;
   const proto = Object.getPrototypeOf(value);
@@ -332,7 +335,7 @@ export class ZmqMessageHandler extends EventEmitter {
       ...(typeof event.taskId === 'string' && event.taskId ? { taskId: event.taskId } : {}),
       messageId: typeof event.messageId === 'string' ? event.messageId : '',
       conversationId: typeof event.conversationId === 'string' ? event.conversationId : '',
-      reason: typeof event.reason === 'string' ? event.reason : 'unknown',
+      reason: typeof event.reason === 'string' ? event.reason.slice(0, SKIP_REASON_MAX_LENGTH) : 'unknown',
       ...(typeof event.length === 'number' ? { length: event.length } : {}),
       ...(typeof event.max_length === 'number' ? { maxLength: event.max_length } : {}),
     };
