@@ -47,8 +47,20 @@ const FOLLOW_OPTIONS: PositionOptions = { enableHighAccuracy: true, maximumAge: 
 const fixOfPosition = (position: GeolocationPosition) =>
   sharedLocationFixOf({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy });
 
-export function browserSharedLocationFixSource(geolocation: Geolocation | undefined = globalThis.navigator?.geolocation): SharedLocationFixSource {
+export function browserSharedLocationFixSource(
+  geolocation: Geolocation | undefined = globalThis.navigator?.geolocation,
+  permissions: Permissions | undefined = globalThis.navigator?.permissions,
+): SharedLocationFixSource {
   return {
+    /* Sans l'API des permissions, on ne sait pas : on répond non, et le centre s'abstient ou arrête. */
+    isGranted: async () => {
+      if (permissions === undefined) return false;
+      try {
+        return (await permissions.query({ name: 'geolocation' })).state === 'granted';
+      } catch {
+        return false;
+      }
+    },
     currentFix: () =>
       new Promise((resolve) => {
         if (geolocation === undefined) return resolve({ kind: 'unavailable' });
@@ -86,7 +98,8 @@ const accountOf = (session: SessionStoreApi): string | null => {
 /**
  * Le centre du compte connecté : un autre compte repart d'une liste vide, et le centre du
  * compte quitté est abandonné. Chaque socket accrochée (connexion, reconnexion) solde les
- * échéances passées pendant que l'onglet dormait ou était hors ligne.
+ * échéances passées pendant que l'onglet dormait ou était hors ligne, et un autre onglet
+ * du même compte qui change la liste (événement `storage`) la fait relire ici.
  */
 export function createSharedLocationSharingHolder({
   session,
@@ -123,7 +136,12 @@ export function createSharedLocationSharingHolder({
       owner: userId,
       currentAccount: () => accountOf(session),
     });
-    const unwatch = watch((live) => {
+    const key = rosterKey(userId);
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === key || event.key === null) center.refresh();
+    };
+    globalThis.addEventListener?.('storage', onStorage);
+    const unwatchSocket = watch((live) => {
       socket = live;
       const ready = (): void => void center.reconcile();
       live.on('connect', ready);
@@ -133,6 +151,10 @@ export function createSharedLocationSharingHolder({
         if (socket === live) socket = null;
       };
     });
+    const unwatch = (): void => {
+      unwatchSocket();
+      globalThis.removeEventListener?.('storage', onStorage);
+    };
     current = { userId, center, unwatch };
     return center;
   };

@@ -42,7 +42,9 @@ const flush = async (): Promise<void> => {
 function makeWorld({
   fix = { kind: 'fix', fix: PARIS } as SharedLocationFixResult,
   stored = null as string | null,
-}: { readonly fix?: SharedLocationFixResult; readonly stored?: string | null } = {}) {
+  granted = true,
+  memory = new Map<string, string>(),
+}: { readonly fix?: SharedLocationFixResult; readonly stored?: string | null; readonly granted?: boolean; readonly memory?: Map<string, string> } = {}) {
   const clock = { now: T0 };
   const account = { current: OWNER as string | null };
   const starts: SharedLocationStartPayload[] = [];
@@ -65,9 +67,13 @@ function makeWorld({
       return (stopQueue.shift() ?? (async () => true))();
     },
   };
-  const source = { result: fix, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
+  const source = { result: fix, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
   const fixes: SharedLocationFixSource = {
-    currentFix: async () => source.result,
+    isGranted: async () => source.granted,
+    currentFix: async () => {
+      source.prompts += 1;
+      return source.result;
+    },
     follow: (onFix) => {
       source.following += 1;
       source.listener = onFix;
@@ -77,7 +83,7 @@ function makeWorld({
       };
     },
   };
-  const memory = new Map<string, string>(stored === null ? [] : [['roster', stored]]);
+  if (stored !== null) memory.set('roster', stored);
   const timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
   const center = createSharedLocationSharingCenter({
     emitter,
@@ -119,6 +125,7 @@ function makeWorld({
     stopQueue,
     updateQueue,
     source,
+    memory,
     stored: () => decodeSharedLocationRoster(memory.get('roster') ?? null),
     advance,
   };
@@ -196,8 +203,9 @@ describe('arrêter', () => {
       durationMinutes: 60,
       now: T0,
     });
-    const world = makeWorld({ stored: JSON.stringify(roster), fix: { kind: 'denied' } });
+    const world = makeWorld({ stored: JSON.stringify(roster), granted: false });
     await world.center.stopSharing(AMI);
+    expect(world.source.prompts).toBe(0);
     expect(world.starts).toHaveLength(0);
     expect(world.stops()).toBe(1);
     expect(world.center.entry(AUTRE)).toBeNull();
@@ -249,7 +257,7 @@ describe('révocation (#18166)', () => {
     expect(world.center.entry(AMI)).not.toBeNull();
   });
 
-  test('une réponse arrivée après le changement de compte n’adopte, n’écrit ni ne suit rien', async () => {
+  test('une réponse arrivée après le changement de compte n’adopte ni ne suit rien, et la liste du compte quitté garde « Arrêter »', async () => {
     const world = makeWorld();
     const pending = deferred<SharedLocationVerdict>();
     world.startQueue.push(() => pending.promise);
@@ -259,7 +267,7 @@ describe('révocation (#18166)', () => {
     pending.resolve(STARTED);
     await sharing;
     expect(world.center.entry(AMI)).toBeNull();
-    expect(world.stored()).toEqual({});
+    expect(rosterOps.entry(world.stored(), AMI)).not.toBeNull();
     expect(world.source.following).toBe(0);
   });
 
@@ -322,5 +330,61 @@ describe('la ligne de la fiche', () => {
     expect(world.center.showsRow(AMI, false)).toBe(false);
     await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
     expect(world.center.showsRow(AMI, false)).toBe(true);
+  });
+});
+
+describe('audit adversarial (#18345)', () => {
+  test('deux onglets du même compte : un arrêt fait dans l’un n’est jamais republié par l’autre', async () => {
+    const memory = new Map<string, string>();
+    const tabA = makeWorld({ memory });
+    await tabA.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabB = makeWorld({ memory });
+    await tabA.center.stopSharing(AMI);
+    await tabB.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    expect(tabB.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+  });
+
+  test('la liste relue fait disparaître « Arrêter » dans l’autre onglet', async () => {
+    const memory = new Map<string, string>();
+    const tabA = makeWorld({ memory });
+    await tabA.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabB = makeWorld({ memory });
+    expect(tabB.center.entry(AMI)).not.toBeNull();
+    await tabA.center.stopSharing(AMI);
+    tabB.center.refresh();
+    expect(tabB.center.entry(AMI)).toBeNull();
+  });
+
+  test('avant l’accusé, la liste gardée couvre déjà la nouvelle personne : un onglet fermé garde « Arrêter »', async () => {
+    const world = makeWorld();
+    const pending = deferred<SharedLocationVerdict>();
+    world.startQueue.push(() => pending.promise);
+    const sharing = world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    await flush();
+    expect(rosterOps.entry(world.stored(), AMI)).not.toBeNull();
+    pending.resolve({ kind: 'refused', outcome: 'rate-limited' });
+    await sharing;
+    expect(rosterOps.entry(world.stored(), AMI)).toBeNull();
+  });
+
+  test('reprise sans permission accordée : ni suivi, ni demande au chargement', async () => {
+    const roster = rosterOps.adding({}, { userId: AMI, precision: 'city', durationMinutes: 60, now: T0 });
+    const world = makeWorld({ stored: JSON.stringify(roster), granted: false });
+    await flush();
+    expect(world.source.following).toBe(0);
+    expect(world.source.prompts).toBe(0);
+    const granted = makeWorld({ stored: JSON.stringify(roster) });
+    await flush();
+    expect(granted.source.following).toBe(1);
+  });
+
+  test('un retrait refusé (débit) retombe sur l’arrêt complet', async () => {
+    const world = makeWorld();
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'rate-limited' }));
+    expect(await world.center.stopSharing(AMI)).toBeNull();
+    expect(world.stops()).toBe(1);
+    expect(world.center.entry(AMI)).toBeNull();
   });
 });

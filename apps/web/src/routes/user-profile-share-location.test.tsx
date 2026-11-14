@@ -52,7 +52,7 @@ function makeCenter(): { center: SharedLocationSharingCenter; starts: unknown[];
         return true;
       },
     },
-    fixes: { currentFix: async () => ({ kind: 'fix', fix: PARIS }), follow: () => () => undefined },
+    fixes: { isGranted: async () => true, currentFix: async () => ({ kind: 'fix', fix: PARIS }), follow: () => () => undefined },
     storage: { getItem: (k) => memory.get(k) ?? null, setItem: (k, v) => void memory.set(k, v), removeItem: (k) => void memory.delete(k) },
     storageKey: 'roster',
     schedule: () => () => undefined,

@@ -37,6 +37,8 @@ export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: Shar
 
 /** La source des relevés : le navigateur (`shared-location-geolocation.ts`), un témoin la simule. */
 export type SharedLocationFixSource = {
+  /** La permission est-elle DÉJÀ accordée ? Sans geste de l'utilisateur, on ne demande jamais : on s'abstient (et dans le doute, on arrête). */
+  isGranted(): Promise<boolean>;
   /** Un relevé, demandant la permission « pendant l'utilisation » si elle n'a pas encore été donnée. */
   currentFix(): Promise<SharedLocationFixResult>;
   /** Suit la position ; rend de quoi cesser. */
@@ -64,6 +66,8 @@ export type SharedLocationSharingCenter = {
   stopSharing(userId: string): Promise<SharedLocationShareProblem | null>;
   /** Une échéance est passée, ou la socket vient de s'accrocher : solder ce qui doit l'être. */
   reconcile(): Promise<void>;
+  /** Relit la liste gardée : un autre onglet du même compte a pu la changer. */
+  refresh(): void;
   abandon(): void;
 };
 
@@ -71,6 +75,10 @@ export type SharedLocationSharingCenter = {
 export const SHARED_LOCATION_RETRY_MS = 30_000;
 /** Une seconde après l'échéance, pour que la personne soit bien sortie de la liste élaguée. */
 const DEADLINE_SLACK_MS = 1_000;
+/** Au-delà, `setTimeout` se déclenche aussitôt : on se réveille au plus tard à ce terme, et on réarme. */
+const MAX_TIMER_MS = 2_147_483_647;
+/** Un refus de retrait qui n'est pas un doute ni l'absence de réseau : on arrête tout plutôt que laisser la personne servie. */
+const STOP_ALL_ON: ReadonlySet<SharedLocationShareProblem> = new Set(['invalid', 'not-sharing', 'rate-limited', 'unavailable']);
 
 /** Un verrou d'ordre d'arrivée : celui qui le tient le passe au premier qui attend. */
 function createSerialGate() {
@@ -128,10 +136,24 @@ export function createSharedLocationSharingCenter({
   /* Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte courant. */
   const isLive = (): boolean => !abandoned && owner !== '' && currentAccount() === owner;
 
-  const adopt = (next: SharedLocationRoster): void => {
-    store.setState({ roster: next });
+  const persist = (next: SharedLocationRoster): void => {
     if (rosterOps.isEmpty(next)) storage.removeItem(storageKey);
     else storage.setItem(storageKey, encodeSharedLocationRoster(next));
+  };
+
+  const adopt = (next: SharedLocationRoster): void => {
+    store.setState({ roster: next });
+    persist(next);
+  };
+
+  /* La liste gardée fait foi : un autre onglet du même compte a pu arrêter ou ajouter quelqu'un. */
+  const reread = (): void => {
+    const kept = decodeSharedLocationRoster(storage.getItem(storageKey));
+    if (encodeSharedLocationRoster(kept) !== encodeSharedLocationRoster(roster())) store.setState({ roster: kept });
+    if (!rosterOps.isEmpty(kept)) return;
+    lastSent = null;
+    disarm();
+    stopFollowing();
   };
 
   const stopFollowing = (): void => {
@@ -160,7 +182,7 @@ export function createSharedLocationSharingCenter({
   const scheduleDeadline = (): void => {
     const at = rosterOps.nextDeadline(roster());
     if (at === null) return disarm();
-    arm(Math.max(0, at - now()) + DEADLINE_SLACK_MS);
+    arm(Math.min(MAX_TIMER_MS, Math.max(0, at - now()) + DEADLINE_SLACK_MS));
   };
 
   const didMove = async (fix: SharedLocationFix): Promise<void> => {
@@ -191,6 +213,8 @@ export function createSharedLocationSharingCenter({
     const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.recipients(next), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
     if (payload === null) return 'invalid';
     if (!isLive()) return 'failed';
+    /* Avant l'accusé, la liste gardée couvre les deux : un onglet fermé pendant l'attente garde « Arrêter » pour chacun. */
+    persist(rosterOps.union(previous, next));
     const verdict = await emitter.start(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
@@ -198,6 +222,7 @@ export function createSharedLocationSharingCenter({
       return null;
     }
     if (verdict.outcome === 'unconfirmed') engage(rosterOps.union(previous, next), fix);
+    else persist(roster());
     return verdict.outcome;
   };
 
@@ -213,17 +238,25 @@ export function createSharedLocationSharingCenter({
   /* Redémarrer avec une liste réduite demande une position : la dernière envoyée, sinon celle de l'appareil. Sans l'une ni l'autre, TOUT s'arrête. */
   const republish = async (next: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
     if (rosterOps.isEmpty(next)) return stopAll();
-    if (lastSent !== null) return publish(next, lastSent.fix, roster());
-    const current = await fixes.currentFix();
-    if (current.kind !== 'fix') return stopAll();
+    const fix = lastSent?.fix ?? (await silentFix());
+    if (fix === null) return stopAll();
     if (!isLive()) return 'failed';
-    return publish(next, current.fix, roster());
+    const problem = await publish(next, fix, roster());
+    return problem !== null && STOP_ALL_ON.has(problem) ? stopAll() : problem;
+  };
+
+  /* Un relevé SANS demande de permission : un retrait ou une échéance ne fait jamais surgir la demande du navigateur. */
+  const silentFix = async (): Promise<SharedLocationFix | null> => {
+    if (!(await fixes.isGranted())) return null;
+    const current = await fixes.currentFix();
+    return current.kind === 'fix' ? current.fix : null;
   };
 
   const locked = async (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
     await gate.enter();
     try {
       if (!isLive()) return 'failed';
+      reread();
       store.setState({ busy: true });
       return await operation();
     } finally {
@@ -250,11 +283,17 @@ export function createSharedLocationSharingCenter({
     reconcile: async () => {
       await locked(async () => {
         const pruned = rosterOps.pruned(roster(), now());
-        if (Object.keys(pruned).length === Object.keys(roster()).length) return null;
+        if (Object.keys(pruned).length === Object.keys(roster()).length) {
+          scheduleDeadline();
+          return null;
+        }
         const problem = await republish(pruned);
         if (problem !== null && isLive()) arm(SHARED_LOCATION_RETRY_MS);
         return problem;
       });
+    },
+    refresh: () => {
+      if (isLive()) reread();
     },
     abandon: () => {
       abandoned = true;
@@ -265,8 +304,10 @@ export function createSharedLocationSharingCenter({
 
   /* Une liste gardée d'un chargement précédent reprend : le partage serveur court toujours jusqu'à son terme, et « Arrêter » doit rester à un geste. */
   if (!rosterOps.isEmpty(restored) && isLive()) {
-    startFollowing();
     scheduleDeadline();
+    void fixes.isGranted().then((granted) => {
+      if (granted && isLive() && !rosterOps.isEmpty(roster())) startFollowing();
+    });
   }
   return center;
 }

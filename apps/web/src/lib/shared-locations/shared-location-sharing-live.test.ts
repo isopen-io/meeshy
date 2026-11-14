@@ -61,6 +61,13 @@ describe('le fil', () => {
 });
 
 describe('la géolocalisation du navigateur', () => {
+  test('la permission ne se lit que si le navigateur la dit accordée, sans jamais la demander', async () => {
+    const permissions = (state: string) => ({ query: async () => ({ state }) }) as unknown as Permissions;
+    expect(await browserSharedLocationFixSource(undefined, permissions('granted')).isGranted()).toBe(true);
+    expect(await browserSharedLocationFixSource(undefined, permissions('prompt')).isGranted()).toBe(false);
+    expect(await browserSharedLocationFixSource(undefined, undefined).isGranted()).toBe(false);
+  });
+
   const geolocation = (outcome: { position?: GeolocationPosition; code?: number }): Geolocation =>
     ({
       getCurrentPosition: (ok: PositionCallback, ko?: PositionErrorCallback | null) =>
@@ -112,7 +119,7 @@ describe('un centre par compte connecté', () => {
       session,
       watch: (w) => ((watcher = w), () => undefined),
       storage,
-      fixes: { currentFix: async () => ({ kind: 'denied' }), follow: () => () => undefined },
+      fixes: { isGranted: async () => false, currentFix: async () => ({ kind: 'denied' }), follow: () => () => undefined },
       schedule: () => () => undefined,
     });
     holder();
