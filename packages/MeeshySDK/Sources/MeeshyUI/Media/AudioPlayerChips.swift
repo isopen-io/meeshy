@@ -4,8 +4,8 @@ import MeeshySDK
 // MARK: - Speed Chip
 
 /// La puce de vitesse, à droite de l'onde. Le pourcentage d'avancement qui
-/// vivait sous elle est parti sur la forme d'onde, au bord de fin
-/// (`AudioWaveformChipsOverlay`, #18421), avec l'affordance plein écran.
+/// vivait sous elle est parti sur la forme d'onde, à côté du décompte de la
+/// durée (`AudioWaveformChipsOverlay`, #18421), avec l'affordance plein écran.
 struct AudioPlayerSpeedChip: View {
     let speed: PlaybackSpeed
     let isCompact: Bool
