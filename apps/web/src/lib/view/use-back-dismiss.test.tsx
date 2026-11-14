@@ -325,3 +325,130 @@ describe('useBackDismiss — deux couches EMPILÉES : le retour ferme celle du D
     expect(closed).toEqual([]);
   });
 });
+
+/**
+ * LA COUCHE QUI S'ALLUME SANS SE MONTER (#18460) — un menu ancré reste monté
+ * fermé : son hôte ne démonte rien quand il se ferme. `active` dit au crochet
+ * quand la couche existe ; l'entrée est posée au passage à vrai et rendue au
+ * passage à faux, comme un montage et un démontage.
+ */
+function Toggled({ active, onClose }: { active: boolean; onClose: () => void }) {
+  useBackDismiss(onClose, { active });
+  return <div data-active={String(active)} />;
+}
+
+function mountToggled(active: boolean, onClose: () => void): void {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<Toggled active={active} onClose={onClose} />);
+  });
+}
+
+describe('useBackDismiss — l’option active allume et éteint la couche sans démontage (#18460)', () => {
+  test('inactive ⇒ aucune entrée posée, et un retour ne la ferme pas', () => {
+    let closed = 0;
+    const before = window.history.length;
+    mountToggled(false, () => {
+      closed += 1;
+    });
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect({ entries: window.history.length - before, closed }).toEqual({ entries: 0, closed: 0 });
+  });
+
+  test('faux puis vrai ⇒ pose une entrée et inscrit la couche : un retour la ferme', () => {
+    let closed = 0;
+    const onClose = () => {
+      closed += 1;
+    };
+    window.history.replaceState(null, '', window.location.href);
+    mountToggled(false, onClose);
+    const idle = window.history.state as { readonly backDismiss?: unknown } | null;
+    act(() => {
+      root.render(<Toggled active onClose={onClose} />);
+    });
+    const state = window.history.state as { readonly backDismiss?: unknown } | null;
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect({ idle: typeof idle?.backDismiss, marker: typeof state?.backDismiss, closed }).toEqual({ idle: 'undefined', marker: 'string', closed: 1 });
+  });
+
+  test('vrai puis faux ⇒ rend son entrée à la micro-tâche, comme un démontage', async () => {
+    let backCalls = 0;
+    const originalBack = window.history.back.bind(window.history);
+    window.history.back = () => {
+      backCalls += 1;
+    };
+    try {
+      mountToggled(true, () => {});
+      act(() => {
+        root.render(<Toggled active={false} onClose={() => {}} />);
+      });
+      await act(async () => {});
+      expect(backCalls).toBe(1);
+    } finally {
+      window.history.back = originalBack;
+    }
+  });
+
+  test('activée deux fois, toujours montée ⇒ aucune entrée orpheline : chaque ouverture rend la sienne', async () => {
+    const onClose = () => {};
+    let pushes = 0;
+    let backs = 0;
+    const originalPush = window.history.pushState.bind(window.history);
+    const originalBack = window.history.back.bind(window.history);
+    window.history.pushState = (...args: Parameters<History['pushState']>) => {
+      pushes += 1;
+      originalPush(...args);
+    };
+    window.history.back = () => {
+      backs += 1;
+      originalBack();
+    };
+    try {
+      window.history.replaceState(null, '', window.location.href);
+      mountToggled(false, onClose);
+      for (const _ of [1, 2]) {
+        act(() => {
+          root.render(<Toggled active onClose={onClose} />);
+        });
+        await act(async () => {
+          root.render(<Toggled active={false} onClose={onClose} />);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+      }
+    } finally {
+      window.history.pushState = originalPush;
+      window.history.back = originalBack;
+    }
+    expect({ pushes, backs }).toEqual({ pushes: 2, backs: 2 });
+  });
+
+  test('Échap n’est écouté que pendant l’activation', () => {
+    let closed = 0;
+    const onClose = () => {
+      closed += 1;
+    };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const Esc = ({ active }: { active: boolean }) => {
+      useBackDismiss(onClose, { escape: true, active });
+      return null;
+    };
+    act(() => {
+      root.render(<Esc active={false} />);
+    });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    act(() => {
+      root.render(<Esc active />);
+    });
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    window.dispatchEvent(event);
+    expect({ closed, prevented: event.defaultPrevented }).toEqual({ closed: 1, prevented: true });
+  });
+});
