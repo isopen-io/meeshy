@@ -190,7 +190,7 @@ struct ProgressionConceptContent: View {
             }
             section(ConceptText.ficheEarn) {
                 sentence(ConceptText.tip1(concept))
-                sentence(ConceptText.tip2(concept))
+                if let tip = ConceptText.tip2(concept) { sentence(tip) }
             }
             section(ConceptText.ficheUse) {
                 MeeshyInfoNoted(note: ConceptText.useNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {

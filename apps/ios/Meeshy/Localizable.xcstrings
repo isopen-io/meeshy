@@ -296205,53 +296205,6 @@
         }
       }
     },
-    "game.concept.missions.how": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ثلاثة فصول لكل حلم. حين تتحقّق، تظهر العطيّة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drei Akte pro Traum. Sind sie erfüllt, erscheint die Gabe."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Three acts per dream. Once they’re complete, the Offering appears."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tres actos por sueño. Cuando los haces realidad, aparece la Ofrenda."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trois actes par rêve. Quand ils sont réalisés, l’Offrande apparaît."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tre atti per sogno. Quando sono compiuti, appare l’Offerta."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Três atos por sonho. Quando estão realizados, a Oferenda aparece."
-          }
-        }
-      }
-    },
     "game.concept.missions.tip.1": {
       "extractionState": "manual",
       "localizations": {
@@ -297000,53 +296953,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leve sua luz até o nível 100."
-          }
-        }
-      }
-    },
-    "game.concept.prestige.tip.2": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انبعث متى شئت: لا شيء يُلزمك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Werde wiedergeboren, wann du willst: Nichts zwingt dich."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Be reborn whenever you like: nothing forces you to."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renace cuando quieras: nada te obliga."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renais quand tu veux : rien ne t’y oblige."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rinasci quando vuoi: niente ti obbliga."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renasça quando quiser: nada obriga você."
           }
         }
       }
@@ -298316,53 +298222,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Escreva para alguém em um idioma diferente do seu."
-          }
-        }
-      }
-    },
-    "game.concept.atlas.tip.2": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انتظر ردّه: لا بد من رسالة في كل اتجاه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warte auf die Antwort: Es braucht eine Nachricht in jede Richtung."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wait for the reply: it takes a message each way."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Espera su respuesta: hace falta un mensaje en cada sentido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attends sa réponse : il faut un message dans chaque sens."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aspetta la risposta: serve un messaggio in ogni direzione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Espere a resposta: é preciso uma mensagem em cada sentido."
           }
         }
       }
@@ -312062,43 +311921,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
+            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
+            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial."
+            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
+            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
+            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
+            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
+            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100."
           }
         }
       }
@@ -312109,43 +311968,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل تبادل حقيقي يُطلق شرارات: ومعًا تصنع نورك. وكلما نما، اشتدّ سطوعه، وتألّقه هو مستواك."
+            "value": "كل تبادل حقيقي يُطلق شرارات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht. Je mehr es wächst, desto heller strahlt es, und sein Glanz ist dein Level."
+            "value": "Jeder echte Austausch lässt Funken sprühen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every real exchange makes sparks fly: together, they form your light. The more it grows, the brighter it shines, and how bright it shines is your level."
+            "value": "Every real exchange makes sparks fly."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada intercambio de verdad hace brotar chispas: juntas forman tu luz. Cuanto más crece, más brilla, y su brillo es tu nivel."
+            "value": "Cada intercambio de verdad hace brotar chispas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau."
+            "value": "Chaque vrai échange fait jaillir des étincelles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce. Più cresce, più brilla, e il suo splendore è il tuo livello."
+            "value": "Ogni vero scambio fa scaturire scintille."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada troca de verdade faz saltar faíscas: juntas, elas formam a sua luz. Quanto mais ela cresce, mais ela brilha, e o brilho dela é o seu nível."
+            "value": "Cada troca de verdade faz saltar faíscas."
           }
         }
       }
@@ -312156,43 +312015,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نورك يسكّ عملات Meesh لإرثك. وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره."
+            "value": "وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel."
+            "value": "Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much."
+            "value": "Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu luz acuña las Meeshes de tu legado. Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto."
+            "value": "Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant."
+            "value": "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto."
+            "value": "Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua luz cunha as Meeshes da sua herança. Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida."
+            "value": "Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida."
           }
         }
       }
@@ -312250,43 +312109,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "احتفظ بعملات Meesh لإرثك، أو أنفقها: قنديل للهبك، أو فصل تبدّله، أو خاتم الرحلة."
+            "value": "أنفقها: قنديل للهبك، أو فصل تبدّله، أو خاتم الرحلة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Behalte deine Meeshes für dein Erbe oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise."
+            "value": "Gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keep your Meeshes for your legacy, or spend them: a Vigil for your Flame, an act to change, the Journey Seal."
+            "value": "Spend them: a Vigil for your Flame, an act to change, the Journey Seal."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda tus Meeshes para tu legado, o gástalas: una Vela para tu Llama, un acto que cambiar, el Sello del viaje."
+            "value": "Gástalas: una Vela para tu Llama, un acto que cambiar, el Sello del viaje."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage."
+            "value": "Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Custodisci le tue Meesh per la tua eredità, oppure spendile: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio."
+            "value": "Spendile: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarde suas Meeshes para a sua herança, ou gaste-as: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem."
+            "value": "Gaste-as: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem."
           }
         }
       }
@@ -312297,43 +312156,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجدك ينمو ولا يتراجع أبدًا. وهو يمنحك رتبتك، من بين إحدى عشرة: من همس إلى أسطورة، ثم الخرافة."
+            "value": "إحدى عشرة رتبة، من همس إلى أسطورة، ثم الخرافة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Ruhm wächst und weicht nie zurück. Er gibt dir deinen Rang, einen von elf: von Flüstern bis Legende, dann der Mythos."
+            "value": "Elf Ränge, von Flüstern bis Legende, dann der Mythos."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your glory grows and never goes back. It gives you your rank, one of eleven: from Whisper to Legend, then Myth."
+            "value": "Eleven ranks, from Whisper to Legend, then Myth."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu gloria crece y nunca retrocede. Te da tu rango, uno entre once: de Murmullo a Leyenda, y luego el Mito."
+            "value": "Once rangos, de Murmullo a Leyenda, y luego el Mito."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe."
+            "value": "Onze rangs, de Murmure à Légende, puis le Mythe."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua gloria cresce e non arretra mai. Ti dà il tuo rango, fra undici: da Sussurro a Leggenda, poi il Mito."
+            "value": "Undici ranghi, da Sussurro a Leggenda, poi il Mito."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua glória cresce e nunca recua. Ela dá o seu título, entre onze: de Sussurro a Lenda, e depois o Mito."
+            "value": "Onze títulos, de Sussurro a Lenda, e depois o Mito."
           }
         }
       }
@@ -312391,43 +312250,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل، ويتغيّر شكله كلما كبر، من الجمرة إلى الشمس."
+            "value": "النار التي يأتمنك عليها أجدادك: من الجمرة إلى الشمس، يتغيّر شكلها كلما كبرت."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und wechselt dabei ihre Form, von der Glut bis zur Sonne."
+            "value": "Das Feuer, das dir deine Ahnen anvertrauen: Von der Glut bis zur Sonne wechselt sie beim Wachsen ihre Form."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move, and changes form as it grows, from Ember to Sun."
+            "value": "The fire your ancestors entrust to you: from Ember to Sun, it changes form as it grows."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto, y cambia de forma al crecer, de la Brasa al Sol."
+            "value": "El fuego que tus ancestros te confían: de la Brasa al Sol, cambia de forma al crecer."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil."
+            "value": "Le feu que tes aïeux te confient : de la Braise au Soleil, elle change de forme en grandissant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo, dalla Brace al Sole."
+            "value": "Il fuoco che i tuoi antenati ti affidano: dalla Brace al Sole, cambia forma crescendo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto, e muda de forma ao crescer, da Brasa ao Sol."
+            "value": "O fogo que seus ancestrais confiam a você: da Brasa ao Sol, ela muda de forma ao crescer."
           }
         }
       }
@@ -312485,43 +312344,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل ليلة، حلم من ثلاثة فصول: أهداف صغيرة تحقّقها خلال النهار، وكل فصل أغنى بالمجد من سابقه. وترافقه العطيّة."
+            "value": "ثلاثة فصول، كل فصل أغنى بالمجد من سابقه؛ وترافقها العطيّة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Nacht ein Traum in drei Akten: kleine Ziele für den Tag, die immer mehr Ruhm bringen. Die Gabe begleitet ihn."
+            "value": "Drei Akte, immer reicher an Ruhm; die Gabe begleitet sie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each night, a dream in three acts: small goals to fulfill during the day, richer and richer in glory. The Offering comes with it."
+            "value": "Three acts, richer and richer in glory; the Offering comes with them."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada noche, un sueño en tres actos: pequeñas metas que hacer realidad durante el día, cada vez más ricas en gloria. La Ofrenda lo acompaña."
+            "value": "Tres actos, cada vez más ricos en gloria; la Ofrenda los acompaña."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne."
+            "value": "Trois actes, de plus en plus riches en gloire ; l’Offrande les accompagne."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni notte, un sogno in tre atti: piccoli obiettivi da compiere in giornata, sempre più ricchi di gloria. L’Offerta lo accompagna."
+            "value": "Tre atti, sempre più ricchi di gloria; l’Offerta li accompagna."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toda noite, um sonho em três atos: pequenas metas para realizar durante o dia, cada vez mais ricas em glória. A Oferenda o acompanha."
+            "value": "Três atos, cada vez mais ricos em glória; a Oferenda os acompanha."
           }
         }
       }
@@ -312579,43 +312438,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المبارزة ترتيب الأسبوع: ثلاثون بطلًا بنور متقارب يتبارزون فيها بأسماء المبارزة. وهناك ثماني حلقات، من الكوارتز إلى المنشور."
+            "value": "ترتيب الأسبوع، بأسماء المبارزة. ثماني حلقات، من الكوارتز إلى المنشور."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Turnier ist die Wertung der Woche: Dreißig Helden von ähnlichem Licht messen sich dort unter ihrem Turniernamen. Es gibt acht Kreise, von Quarz bis Prisma."
+            "value": "Die Wertung der Woche, unter einem Turniernamen. Acht Kreise, von Quarz bis Prisma."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The joust is the week’s contest: thirty heroes of similar light measure themselves there under their joust names. There are eight circles, from Quartz to Prism."
+            "value": "The week’s contest, under a joust name. Eight circles, from Quartz to Prism."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La justa es la clasificación de la semana: treinta héroes de luz parecida se miden en ella con su nombre de justa. Hay ocho círculos, del Cuarzo al Prisma."
+            "value": "La clasificación de la semana, con un nombre de justa. Ocho círculos, del Cuarzo al Prisma."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme."
+            "value": "Le classement de la semaine, sous un nom de joute. Huit cercles, du Quartz au Prisme."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il torneo è la sfida della settimana: trenta eroi di luce simile vi si misurano con il loro nome di torneo. Ci sono otto cerchi, dal Quarzo al Prisma."
+            "value": "La sfida della settimana, con un nome di torneo. Otto cerchi, dal Quarzo al Prisma."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O torneio é a classificação da semana: trinta heróis de luz parecida se medem nele sob o seu nome de torneio. Há oito círculos, do Quartzo ao Prisma."
+            "value": "A classificação da semana, sob um nome de torneio. Oito círculos, do Quartzo ao Prisma."
           }
         }
       }
@@ -312626,43 +312485,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون. المبارزة العامة تطلب موافقتك؛ أما مبارزة الأصدقاء فتبقى مفتوحة دائمًا."
+            "value": "انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Achte auf deinen Platz und deine Zone: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab. Das öffentliche Turnier braucht deine Zustimmung; das Turnier der Freunde ist immer offen."
+            "value": "Achte auf deinen Platz und deine Zone: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Look at your place and your zone: the top 7 climb to the next circle, the bottom 5 go back down. The public joust needs your consent; the Friends’ Joust is always open."
+            "value": "Look at your place and your zone: the top 7 climb to the next circle, the bottom 5 go back down."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mira tu puesto y tu zona: los 7 primeros suben al círculo siguiente, los 5 últimos bajan. La justa pública pide tu consentimiento; la Justa de los amigos siempre está abierta."
+            "value": "Mira tu puesto y tu zona: los 7 primeros suben al círculo siguiente, los 5 últimos bajan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte."
+            "value": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda il tuo posto e la tua zona: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono. Il torneo pubblico chiede il tuo consenso; il Torneo degli amici resta sempre aperto."
+            "value": "Guarda il tuo posto e la tua zona: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olhe o seu lugar e a sua zona: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer. O torneio público pede o seu acordo; o Torneio dos amigos continua sempre aberto."
+            "value": "Olhe o seu lugar e a sua zona: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer."
           }
         }
       }
@@ -312673,43 +312532,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تدوم الرحلة ثمانية أسابيع، في أرض لغة، فيها أربعون محطة وهداياها المجانية."
+            "value": "أربعون محطة، لكل منها هديتها المجانية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Reise dauert acht Wochen in einem Sprachland, mit vierzig Rasten und ihren kostenlosen Geschenken."
+            "value": "Vierzig Rasten, jede mit ihrem kostenlosen Geschenk."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A journey lasts eight weeks, in the land of a language, with forty stops and their free gifts."
+            "value": "Forty stops, each with its free gift."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un viaje dura ocho semanas, en una tierra de idioma, con cuarenta paradas y sus regalos gratuitos."
+            "value": "Cuarenta paradas, cada una con su regalo gratuito."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits."
+            "value": "Quarante haltes, chacune avec son présent gratuit."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un viaggio dura otto settimane, in una terra di lingua, con quaranta soste e i loro doni gratuiti."
+            "value": "Quaranta soste, ciascuna con il suo dono gratuito."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma viagem dura oito semanas, numa terra de idioma, com quarenta paradas e os seus presentes gratuitos."
+            "value": "Quarenta paradas, cada uma com o seu presente gratuito."
           }
         }
       }
@@ -312767,43 +312626,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100، حين يصير نورك مجرّة. وهو اختياري."
+            "value": "عصر جديد لأسطورتك، حين يصير نورك مجرّة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig."
+            "value": "Ein neues Zeitalter deiner Legende, wenn dein Licht zur Galaxie geworden ist."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional."
+            "value": "A new Age of your legend, when your light has become a Galaxy."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100, cuando tu luz se ha vuelto Galaxia. Es opcional."
+            "value": "Una nueva Edad de tu leyenda, cuando tu luz se ha vuelto Galaxia."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative."
+            "value": "Un nouvel Âge de ta légende, quand ta lumière est devenue Galaxie."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa."
+            "value": "Una nuova Era della tua leggenda, quando la tua luce è diventata Galassia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O renascimento abre uma nova Era da sua lenda, oferecida no nível 100, quando a sua luz se tornou Galáxia. Ele é opcional."
+            "value": "Uma nova Era da sua lenda, quando a sua luz se tornou Galáxia."
           }
         }
       }
@@ -313425,43 +313284,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الأطلس جواز لغاتك: الأراضي التي عبرها صوتك، ختم لكل لغة تبادلت بها الرسائل فعلًا."
+            "value": "جواز لغاتك: الأراضي التي عبرها صوتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Atlas ist dein Sprachenpass: die Länder, die deine Stimme durchquert hat, ein Stempel für jede Sprache, in der du dich wirklich ausgetauscht hast."
+            "value": "Dein Sprachenpass: die Länder, die deine Stimme durchquert hat."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Atlas is your passport of languages: the lands your voice has crossed, one stamp for each language truly exchanged."
+            "value": "Your passport of languages: the lands your voice has crossed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Atlas es tu pasaporte de idiomas: las tierras que tu voz ha cruzado, un sello por cada idioma intercambiado de verdad."
+            "value": "Tu pasaporte de idiomas: las tierras que tu voz ha cruzado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’Atlas est ton passeport des langues : les terres que ta voix a traversées, un tampon par langue vraiment échangée."
+            "value": "Ton passeport des langues : les terres que ta voix a traversées."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’Atlante è il tuo passaporto delle lingue: le terre che la tua voce ha attraversato, un timbro per ogni lingua davvero scambiata."
+            "value": "Il tuo passaporto delle lingue: le terre che la tua voce ha attraversato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Atlas é o seu passaporte de idiomas: as terras que a sua voz atravessou, um carimbo por idioma realmente trocado."
+            "value": "O seu passaporte de idiomas: as terras que a sua voz atravessou."
           }
         }
       }
@@ -337401,43 +337260,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متى فُتحت المبارزة والتحالف بقيا مفتوحين، حتى إن انخفض مستواك."
+            "value": "متى فُتحت المبارزة والتحالف بقيا مفتوحين، حتى إن انخفض مستواك. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt."
+            "value": "Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Once open, the joust and the alliance stay open, even when your level drops."
+            "value": "Once open, the joust and the alliance stay open, even when your level drops. Every ten levels, from 10 to 100, your ancestors ask for a trial."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje."
+            "value": "Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse."
+            "value": "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende."
+            "value": "Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa."
+            "value": "Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
           }
         }
       }
@@ -337542,43 +337401,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل شيء يبدأ من الصفر كل اثنين."
+            "value": "كل شيء يبدأ من الصفر كل اثنين. المبارزة العامة تطلب موافقتك؛ أما مبارزة الأصدقاء فتبقى مفتوحة دائمًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeden Montag beginnt alles bei null."
+            "value": "Jeden Montag beginnt alles bei null. Das öffentliche Turnier braucht deine Zustimmung; das Turnier der Freunde ist immer offen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Everything starts again from zero each Monday."
+            "value": "Everything starts again from zero each Monday. The public joust needs your consent; the Friends’ Joust is always open."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todo vuelve a cero cada lunes."
+            "value": "Todo vuelve a cero cada lunes. La justa pública pide tu consentimiento; la Justa de los amigos siempre está abierta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tout repart de zéro chaque lundi."
+            "value": "Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tutto riparte da zero ogni lunedì."
+            "value": "Tutto riparte da zero ogni lunedì. Il torneo pubblico chiede il tuo consenso; il Torneo degli amici resta sempre aperto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tudo recomeça do zero toda segunda-feira."
+            "value": "Tudo recomeça do zero toda segunda-feira. O torneio público pede o seu acordo; o Torneio dos amigos continua sempre aberto."
           }
         }
       }

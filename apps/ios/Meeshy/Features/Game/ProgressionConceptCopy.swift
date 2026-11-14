@@ -55,16 +55,15 @@ enum ConceptText {
         }
     }
 
-    /// Comment ça marche — UNE phrase, rangée derrière le (i) de la fiche. Quatre concepts n'ont pas de phrase : ce que
+    /// Comment ça marche — UNE phrase, rangée derrière le (i) de la fiche. Cinq concepts n'ont pas de phrase : ce que
     /// `what` dit déjà (la frappe fige la lumière, la Flamme grandit chaque jour de geste, l'élan s'allume avec les
     /// familles, le haut fait s'accomplit d'un coup) n'est pas redit — leur clé n'a plus de lecteur et n'existe plus.
     static func how(_ concept: ProgressionConcept) -> String? {
         switch concept {
-        case .meesh, .flame, .elans, .succes: nil
+        case .meesh, .flame, .elans, .succes, .missions: nil
         case .level: String(localized: "game.concept.level.how", defaultValue: "Tes étincelles nourrissent l’anneau : plein, ta lumière gagne un niveau.", bundle: .main)
         case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque vrai échange en fait jaillir : écrire, parler, publier, réagir.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.how", defaultValue: "Frappes, nouveaux niveaux et hauts faits font grandir ta gloire.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.how", defaultValue: "Trois actes par rêve. Quand ils sont réalisés, l’Offrande apparaît.", bundle: .main)
         case .league: String(localized: "game.concept.league.how", defaultValue: "Tes étincelles de la semaine font ta place ; les premiers montent.", bundle: .main)
         case .season: String(localized: "game.concept.season.how", defaultValue: "Chaque acte réalisé te fait avancer de quelques pas, de halte en halte.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Ta lumière redevient Étincelle et ta légende entre dans un nouvel Âge.", bundle: .main)
@@ -116,8 +115,8 @@ enum ConceptText {
         }
     }
 
-    /// Le second conseil de la fiche.
-    static func tip2(_ concept: ProgressionConcept) -> String {
+    /// Le second conseil de la fiche. L’Atlas et la Renaissance n’en ont pas : leur règle est dite une fois, ailleurs.
+    static func tip2(_ concept: ProgressionConcept) -> String? {
         switch concept {
         case .level: String(localized: "game.concept.level.tip.2", defaultValue: "Garde ta Flamme allumée : elle nourrit tes rêves.", bundle: .main)
         case .points: String(localized: "game.concept.points.tip.2", defaultValue: "Déclenche un élan pour multiplier tes étincelles.", bundle: .main)
@@ -127,13 +126,12 @@ enum ConceptText {
         case .missions: String(localized: "game.concept.missions.tip.2", defaultValue: "Un acte ne te plaît pas ? Change-le, une fois par jour.", bundle: .main)
         case .league: String(localized: "game.concept.league.tip.2", defaultValue: "Vise les premières places avant dimanche soir.", bundle: .main)
         case .season: String(localized: "game.concept.season.tip.2", defaultValue: "Fais alliance avec un ami : la récompense double.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.tip.2", defaultValue: "Renais quand tu veux : rien ne t’y oblige.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.tip.2", defaultValue: "Reviens plusieurs jours de suite pour le garder.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.tip.2", defaultValue: "Une médaille éteinte se rallume : rien n’est perdu.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.tip.2", defaultValue: "Essaie des gestes nouveaux : chacun a ses défis.", bundle: .main)
         case .succes: String(localized: "game.concept.succes.tip.2", defaultValue: "Les plus rares font le plus grandir ta gloire.", bundle: .main)
         case .showcase: String(localized: "game.concept.showcase.tip.2", defaultValue: "Achève un voyage ou renais.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.tip.2", defaultValue: "Attends sa réponse : il faut un message dans chaque sens.", bundle: .main)
+        case .atlas, .prestige: nil
         }
     }
 
@@ -354,33 +352,33 @@ enum ConceptText {
     static func what(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.", bundle: .main)
-        case .points: String(localized: "game.concept.points.what", defaultValue: "Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.", bundle: .main)
+        case .points: String(localized: "game.concept.points.what", defaultValue: "Chaque vrai échange fait jaillir des étincelles.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.what", defaultValue: "Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.what", defaultValue: "Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.what", defaultValue: "Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.what", defaultValue: "Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.", bundle: .main)
-        case .league: String(localized: "game.concept.league.what", defaultValue: "La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme.", bundle: .main)
-        case .season: String(localized: "game.concept.season.what", defaultValue: "Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.what", defaultValue: "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.what", defaultValue: "Onze rangs, de Murmure à Légende, puis le Mythe.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.what", defaultValue: "Le feu que tes aïeux te confient : de la Braise au Soleil, elle change de forme en grandissant.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.what", defaultValue: "Trois actes, de plus en plus riches en gloire ; l’Offrande les accompagne.", bundle: .main)
+        case .league: String(localized: "game.concept.league.what", defaultValue: "Le classement de la semaine, sous un nom de joute. Huit cercles, du Quartz au Prisme.", bundle: .main)
+        case .season: String(localized: "game.concept.season.what", defaultValue: "Quarante haltes, chacune avec son présent gratuit.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.what", defaultValue: "Un nouvel Âge de ta légende, quand ta lumière est devenue Galaxie.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.what", defaultValue: "Un élan est un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.what", defaultValue: "Une médaille suit un geste précis : un message vocal, une story, une amitié nouée. Il y en a vingt.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.what", defaultValue: "Un défi est un palier chiffré dans une famille de gestes : un nombre à atteindre.", bundle: .main)
         case .succes: String(localized: "game.concept.succes.what", defaultValue: "Un haut fait est une distinction qui s’accomplit une seule fois, avec sa date et sa rareté.", bundle: .main)
         case .showcase: String(localized: "game.concept.showcase.what", defaultValue: "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.what", defaultValue: "L’Atlas est ton passeport des langues : les terres que ta voix a traversées, un tampon par langue vraiment échangée.", bundle: .main)
+        case .atlas: String(localized: "game.concept.atlas.what", defaultValue: "Ton passeport des langues : les terres que ta voix a traversées.", bundle: .main)
         }
     }
 
     /// Comment s’en servir — la section « Comment m’en servir » de la fiche.
     static func use(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
-        case .points: String(localized: "game.concept.points.use", defaultValue: "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100.", bundle: .main)
+        case .points: String(localized: "game.concept.points.use", defaultValue: "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.use", defaultValue: "Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre un acte pour voir où tu en es.", bundle: .main)
-        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent.", bundle: .main)
         case .season: String(localized: "game.concept.season.use", defaultValue: "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.", bundle: .main)
@@ -396,10 +394,10 @@ enum ConceptText {
     /// cas (un seuil qui ne se referme pas, un plafond, une remise à zéro) passe derrière un (i) nommé par sa question.
     static func useCases(_ concept: ProgressionConcept) -> String? {
         switch concept {
-        case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use_cases", defaultValue: "Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.use_cases", defaultValue: "L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
-        case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
         case .season: String(localized: "game.concept.season.use_cases", defaultValue: "Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.use_cases", defaultValue: "Une frappe n’en éteint aucune : une médaille dit ton total réel.", bundle: .main)
         case .points, .meesh, .flame, .prestige, .elans, .defis, .succes, .showcase, .atlas: nil
