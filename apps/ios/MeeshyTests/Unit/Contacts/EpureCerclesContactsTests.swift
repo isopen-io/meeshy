@@ -386,12 +386,19 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertFalse(ProgressionNotice(kind: .empty).text.contains("story"), "le premier geste est partout dans l'app : l'énumération part")
     }
 
-    func test_elansEmpty_keepsTheOrientationSentence_withoutTheEnumerationOfFamilies_inEveryLanguage() throws {
+    /// Sans élan, ni pastille de famille ni `elansHint` ne s'affichent : la phrase lue est la SEULE à dire ce qui
+    /// allume un élan. Elle nomme donc les gestes (publier, commenter, écrire), jamais le mot « famille » seul,
+    /// qu'un nouveau venu ne peut pas lire (règle 7, revue #18088).
+    func test_elansEmpty_saysWhichGesturesLightAnElan_withoutTheJargonFamily_inEveryLanguage() throws {
         let app = try app()
-        let expected = "Tiens plusieurs familles à la fois pour multiplier tes étincelles."
+        let expected = "Publie, commente et écris en même temps pour multiplier tes étincelles."
         XCTAssertEqual(app["progression.elans.empty"]?["fr"], expected)
         XCTAssertEqual(ProgressionCopy.elansEmpty, expected)
-        XCTAssertFalse(ProgressionCopy.elansEmpty.contains("réel"), "les pastilles de famille et elansHint disent déjà lesquelles")
+        for gesture in ["Publie", "commente", "écris"] {
+            XCTAssertTrue(ProgressionCopy.elansEmpty.contains(gesture), "l'état vide dit le geste « \(gesture) »")
+        }
+        XCTAssertFalse(ProgressionCopy.elansEmpty.contains("famille"), "« famille » n'est défini par aucune pastille tant qu'il n'y a pas d'élan")
+        XCTAssertLessThanOrEqual(ProgressionCopy.elansEmpty.count, 80, "une ligne, pas un paragraphe")
         let french = try XCTUnwrap(app["progression.elans.empty"]?["fr"])
         for language in Self.otherLanguages {
             let value = try XCTUnwrap(app["progression.elans.empty"]?[language])

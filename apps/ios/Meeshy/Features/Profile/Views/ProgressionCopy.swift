@@ -401,7 +401,7 @@ enum ProgressionCopy {
 
     static let elansEmpty = String(
         localized: "progression.elans.empty",
-        defaultValue: "Tiens plusieurs familles à la fois pour multiplier tes étincelles.",
+        defaultValue: "Publie, commente et écris en même temps pour multiplier tes étincelles.",
         bundle: .main
     )
 
