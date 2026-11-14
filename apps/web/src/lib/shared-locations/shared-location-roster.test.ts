@@ -64,11 +64,78 @@ describe('ce qui survit au rechargement', () => {
 
   test('une précision inconnue se relit à la ville, une ligne illisible se saute', () => {
     const text = JSON.stringify({ [AMI]: { precision: 'satellite', until: NOW }, [AUTRE]: { precision: 'exact' }, nope: { precision: 'exact', until: NOW } });
-    expect(decodeSharedLocationRoster(text)).toEqual({ [AMI]: { precision: 'city', until: NOW } });
+    expect(rosterOps.recipients(decodeSharedLocationRoster(text))).toEqual([{ userId: AMI, precision: 'city' }]);
+    expect(rosterOps.entry(decodeSharedLocationRoster(text), AMI)).toEqual({ precision: 'city', until: NOW });
   });
 
   test('rien, ou du texte corrompu, rend la liste vide', () => {
     expect(decodeSharedLocationRoster(null)).toEqual(EMPTY_ROSTER);
     expect(decodeSharedLocationRoster('{')).toEqual(EMPTY_ROSTER);
+  });
+});
+
+describe('le retrait en attente (#18388, iso #18204)', () => {
+  const both = rosterOps.adding(rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: NOW }), {
+    userId: AUTRE,
+    precision: 'exact',
+    durationMinutes: 60,
+    now: NOW,
+  });
+
+  test('retirer en attente sort la personne de la liste et garde son identifiant au plus 8 h', () => {
+    const roster = rosterOps.withdrawing(both, AMI.toUpperCase(), NOW);
+    expect(rosterOps.entry(roster, AMI)).toBeNull();
+    expect(rosterOps.isWithdrawalPending(roster, AMI)).toBe(true);
+    expect(rosterOps.hasPendingWithdrawals(roster)).toBe(true);
+    expect(rosterOps.recipients(roster)).toEqual([{ userId: AUTRE, precision: 'exact' }]);
+    expect(rosterOps.isWithdrawalPending(rosterOps.pruned(roster, NOW + 8 * HOUR), AMI)).toBe(false);
+    expect(rosterOps.isWithdrawalPending(rosterOps.pruned(roster, NOW + 8 * HOUR - 1), AMI)).toBe(true);
+  });
+
+  test('retirer quelqu’un qui n’est pas dans la liste ne change rien', () => {
+    expect(rosterOps.withdrawing(EMPTY_ROSTER, AMI, NOW)).toEqual(EMPTY_ROSTER);
+  });
+
+  test('un retrait seul garde la liste non vide, mais sans personne à qui envoyer', () => {
+    const alone = rosterOps.withdrawing(rosterOps.removing(both, AUTRE), AMI, NOW);
+    expect(rosterOps.isEmpty(alone)).toBe(false);
+    expect(rosterOps.hasRecipients(alone)).toBe(false);
+  });
+
+  test('la liste soldée n’a plus de retrait ; une liste soldée et sans échéance passée est réglée', () => {
+    const roster = rosterOps.withdrawing(both, AMI, NOW);
+    expect(rosterOps.isSettled(roster, NOW)).toBe(false);
+    expect(rosterOps.hasPendingWithdrawals(rosterOps.settled(roster))).toBe(false);
+    expect(rosterOps.isSettled(rosterOps.settled(roster), NOW)).toBe(true);
+    expect(rosterOps.isSettled(both, NOW + HOUR)).toBe(false);
+  });
+
+  test('ajouter de nouveau la personne retirée annule son retrait', () => {
+    const roster = rosterOps.adding(rosterOps.withdrawing(both, AMI, NOW), { userId: AMI, precision: 'city', durationMinutes: 60, now: NOW });
+    expect(rosterOps.isWithdrawalPending(roster, AMI)).toBe(false);
+    expect(rosterOps.entry(roster, AMI)).not.toBeNull();
+  });
+
+  test('l’union garde les retraits des deux listes, à la borne la plus lointaine', () => {
+    const a = rosterOps.withdrawing(both, AMI, NOW);
+    const b = rosterOps.withdrawing(both, AMI, NOW + HOUR);
+    expect(rosterOps.isWithdrawalPending(rosterOps.pruned(rosterOps.union(a, rosterOps.removing(b, AUTRE)), NOW + 8 * HOUR + 1), AMI)).toBe(true);
+  });
+
+  test('le retrait survit au rechargement, sans position, et une liste d’avant se relit sans retrait', () => {
+    const roster = rosterOps.withdrawing(both, AMI, NOW);
+    const text = encodeSharedLocationRoster(roster);
+    expect(text).not.toContain('latitude');
+    expect(decodeSharedLocationRoster(text)).toEqual(roster);
+    const before = JSON.stringify({ [AUTRE]: { precision: 'exact', until: NOW + HOUR } });
+    expect(rosterOps.hasPendingWithdrawals(decodeSharedLocationRoster(before))).toBe(false);
+    expect(rosterOps.entry(decodeSharedLocationRoster(before), AUTRE)).not.toBeNull();
+  });
+
+  test('une version d’avant relit la liste gardée sans se tromper de personnes : la clé des retraits n’est pas un identifiant', () => {
+    const text = encodeSharedLocationRoster(rosterOps.withdrawing(both, AMI, NOW));
+    const raw = JSON.parse(text) as Record<string, unknown>;
+    const ids = Object.keys(raw).filter((key) => /^[a-f0-9]{24}$/.test(key));
+    expect(ids).toEqual([AUTRE]);
   });
 });
