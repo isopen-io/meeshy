@@ -9,8 +9,9 @@
 const fr = {
   'soundsMine.title': 'Mes sons',
   'soundsMine.back': 'Retour aux réglages',
-  'soundsMine.empty.title': 'Aucun son dans votre bibliothèque',
+  'soundsMine.empty.title': 'Aucun son',
   'soundsMine.empty.subtitle': 'Les sons que vous importez ou qui sont extraits de vos vidéos apparaîtront ici.',
+  'soundsMine.empty.question': 'D’où viennent mes sons ?',
   'soundsMine.error.title': 'Impossible de charger vos sons',
   'soundsMine.untitled': 'Son original',
   'soundsMine.posts.one': '{count} publication',

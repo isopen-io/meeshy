@@ -224,7 +224,6 @@ const enShellLabels = {
   'hashtag.loading': 'Loading posts',
   'hashtag.error': 'Couldn’t load this hashtag',
   'hashtag.empty.title': 'Nothing under #{tag}',
-  'hashtag.empty.body': 'No visible post carries this hashtag.',
   'hashtag.loadMore': 'Load more',
   'hashtag.loadingMore': 'Loading…',
 } satisfies ShellLabelsCatalogSlice;

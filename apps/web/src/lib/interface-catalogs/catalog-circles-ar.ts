@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const ar = {
   'circles.section.requests': 'طلبات رفع المستوى',
+  'circles.intro': 'تحدد كل دائرة ما يراه الشخص منك: كلما اقتربت، زادت مشاركتك.',
   'circles.empty.title': 'ستظهر روابطك هنا',
   'circles.empty.subtitle': 'كلما تواصلت مع أشخاص، انضموا إلى دوائرك.',
   'circles.empty.action': 'البحث عن جهات اتصال',
@@ -81,7 +82,9 @@ const ar = {
   'circles.settings.blockBring.detail': 'لن يتمكن هذا الشخص من جعل هاتفك يرنّ بعد الآن. لن يتم إعلامه.',
   'circles.settings.blockBring.failed': 'تعذّر حفظ الإعداد',
   'bring.action': 'Bring',
-  'bring.explain': 'لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل. استثناءات: آيفون في الوضع الصامت وMeeshy مغلق لا يعرض سوى تنبيه ذي أولوية، والويب لا يرنّ إلا والتبويب مفتوح.',
+  'bring.explain': 'لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل.',
+  'bring.exceptions.question': 'متى لا يرنّ Bring؟',
+  'bring.exceptions': 'استثناءات: آيفون في الوضع الصامت وMeeshy مغلق لا يعرض سوى تنبيه ذي أولوية، والويب لا يرنّ إلا والتبويب مفتوح.',
   'bring.remaining': 'المتبقي اليوم: {count}',
   'bring.unlimited': 'بلا حدّ اليوم',
   'bring.confirm.title': 'هل تريد جعل هاتف {name} يرنّ؟',

@@ -7,6 +7,7 @@
  */
 const fr = {
   'circles.section.requests': 'Demandes de montée',
+  'circles.intro': 'Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.',
   'circles.empty.title': 'Vos liens apparaîtront ici',
   'circles.empty.subtitle': 'À mesure que vous échangez avec des personnes, elles rejoignent vos cercles.',
   'circles.empty.action': 'Trouver des contacts',
@@ -83,7 +84,9 @@ const fr = {
   'circles.settings.blockBring.detail': 'Cette personne ne pourra plus faire sonner votre téléphone. Elle n’en est pas prévenue.',
   'circles.settings.blockBring.failed': 'Le réglage n’a pas pu être enregistré',
   'bring.action': 'Bring',
-  'bring.explain': 'Pour une urgence extrême : son téléphone sonne, même verrouillé. Exceptions : un iPhone en silencieux avec Meeshy fermé ne montre qu’une alerte prioritaire, et le web ne sonne qu’onglet ouvert.',
+  'bring.explain': 'Pour une urgence extrême : son téléphone sonne, même verrouillé.',
+  'bring.exceptions.question': 'Quand le Bring ne sonne-t-il pas ?',
+  'bring.exceptions': 'Exceptions : un iPhone en silencieux avec Meeshy fermé ne montre qu’une alerte prioritaire, et le web ne sonne qu’onglet ouvert.',
   'bring.remaining': 'Restants aujourd’hui : {count}',
   'bring.unlimited': 'Sans limite aujourd’hui',
   'bring.confirm.title': 'Faire sonner le téléphone de {name} ?',
