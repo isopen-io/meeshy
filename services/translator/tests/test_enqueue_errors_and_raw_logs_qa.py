@@ -105,9 +105,10 @@ async def test_gateway_path_signals_each_task_of_a_raising_batch_exactly_once(ca
     messages = _published(pub_socket)
     assert sorted(m["taskId"] for m in messages) == ["g0", "g1", "g2"]
     assert all(
-        set(m) == {"type", "taskId", "messageId", "error", "conversationId"}
+        set(m) == {"type", "taskId", "messageId", "error", "conversationId", "errorCode"}
         and m["type"] == "translation_error"
         and m["error"] == "translation pool full"
+        and m["errorCode"] == "TRANSLATION_POOL_FULL"
         for m in messages
     )
     assert all(handler.claim_inflight(f"g{i}", ttl_s=30) for i in range(3))

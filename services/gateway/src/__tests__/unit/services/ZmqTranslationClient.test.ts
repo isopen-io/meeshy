@@ -52,8 +52,8 @@ jest.mock('crypto', () => ({
   randomUUID: jest.fn().mockReturnValue('test-uuid-1234')
 }));
 
-// Mock zmq-helpers for loadAudioAsBinary
 jest.mock('../../../services/zmq-translation/utils/zmq-helpers', () => ({
+  ...jest.requireActual<typeof import('../../../services/zmq-translation/utils/zmq-helpers')>('../../../services/zmq-translation/utils/zmq-helpers'),
   loadAudioAsBinary: jest.fn().mockResolvedValue({
     buffer: Buffer.from('fake-audio-data'),
     mimeType: 'audio/mp3',
