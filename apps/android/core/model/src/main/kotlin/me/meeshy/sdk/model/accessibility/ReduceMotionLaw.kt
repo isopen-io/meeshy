@@ -37,6 +37,8 @@ object RestingWaveform {
  * immediat, sans rebond, flottement ni echelle.
  */
 object MotionSpecs {
+    /** Le fondu qui remplace un deplacement sous « Reduire les animations » : miroir de `MeeshyMotion.reducedFade` (Accessibility.swift). */
+    const val REDUCED_FADE_MILLIS = 150
     const val PRESSABLE_SCALE = 0.93f
     const val BOUNCE_ON_TAP_SCALE = 0.92f
     const val BOUNCE_ON_FOCUS_SCALE = 1.02f

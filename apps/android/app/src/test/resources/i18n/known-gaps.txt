@@ -268,7 +268,6 @@ missing-key :feature:calls ar call_audio_sheet_title
 missing-key :feature:calls ar call_audio_speaker
 missing-key :feature:calls ar call_audio_usb
 missing-key :feature:calls ar call_audio_wired
-missing-key :feature:calls ar call_avatar_you
 missing-key :feature:calls ar call_connecting_label
 missing-key :feature:calls ar call_control_collapsed
 missing-key :feature:calls ar call_control_end_caption
@@ -315,10 +314,6 @@ missing-key :feature:calls ar call_projection_stop
 missing-key :feature:calls ar call_quality_excellent
 missing-key :feature:calls ar call_quality_fair
 missing-key :feature:calls ar call_quality_poor
-missing-key :feature:calls ar call_service_channel_name
-missing-key :feature:calls ar call_service_on_hold
-missing-key :feature:calls ar call_service_reconnecting
-missing-key :feature:calls ar call_service_unmute
 missing-key :feature:calls ar call_spoken_hours
 missing-key :feature:calls ar call_spoken_minutes
 missing-key :feature:calls ar call_spoken_seconds
@@ -365,7 +360,6 @@ missing-key :feature:calls de call_audio_sheet_title
 missing-key :feature:calls de call_audio_speaker
 missing-key :feature:calls de call_audio_usb
 missing-key :feature:calls de call_audio_wired
-missing-key :feature:calls de call_avatar_you
 missing-key :feature:calls de call_connecting_label
 missing-key :feature:calls de call_control_collapsed
 missing-key :feature:calls de call_control_end_caption
@@ -412,10 +406,6 @@ missing-key :feature:calls de call_projection_stop
 missing-key :feature:calls de call_quality_excellent
 missing-key :feature:calls de call_quality_fair
 missing-key :feature:calls de call_quality_poor
-missing-key :feature:calls de call_service_channel_name
-missing-key :feature:calls de call_service_on_hold
-missing-key :feature:calls de call_service_reconnecting
-missing-key :feature:calls de call_service_unmute
 missing-key :feature:calls de call_spoken_hours
 missing-key :feature:calls de call_spoken_minutes
 missing-key :feature:calls de call_spoken_seconds
@@ -462,7 +452,6 @@ missing-key :feature:calls it call_audio_sheet_title
 missing-key :feature:calls it call_audio_speaker
 missing-key :feature:calls it call_audio_usb
 missing-key :feature:calls it call_audio_wired
-missing-key :feature:calls it call_avatar_you
 missing-key :feature:calls it call_connecting_label
 missing-key :feature:calls it call_control_collapsed
 missing-key :feature:calls it call_control_end_caption
@@ -509,10 +498,6 @@ missing-key :feature:calls it call_projection_stop
 missing-key :feature:calls it call_quality_excellent
 missing-key :feature:calls it call_quality_fair
 missing-key :feature:calls it call_quality_poor
-missing-key :feature:calls it call_service_channel_name
-missing-key :feature:calls it call_service_on_hold
-missing-key :feature:calls it call_service_reconnecting
-missing-key :feature:calls it call_service_unmute
 missing-key :feature:calls it call_spoken_hours
 missing-key :feature:calls it call_spoken_minutes
 missing-key :feature:calls it call_spoken_seconds
