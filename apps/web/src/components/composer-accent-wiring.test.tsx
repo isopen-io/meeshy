@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 
@@ -52,6 +53,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     act(() => {
       root.render(<Composer onSend={onSend} preferred={['fr']} />);
     });
+    openComposerTools(container);
     return container;
   };
 
@@ -173,7 +175,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     const el = mount(() => {});
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
     expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-ios-ink-2)');
-    for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-view-once]', '[data-composer-effects]', '[data-composer-sticker]', '[data-composer-library]', '[data-composer-camera]']) {
+    for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-view-once]', '[data-composer-effects]']) {
       expect(el.querySelector<HTMLElement>(selector)?.style.color).toBe('var(--composer-icon)');
     }
     act(() => {

@@ -40,6 +40,7 @@ const es = {
   'listFilter.channels': 'Canales',
   'listFilter.pinned': 'Fijados',
   'listFilter.archived': 'Archivadas',
+  'listFilter.more': 'Más',
   'listRow.muted': 'Silenciada',
   'listRow.endToEnd': 'Cifrada de extremo a extremo',
   'listRow.announce.pin.on': 'Conversación fijada',
