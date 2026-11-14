@@ -21,6 +21,8 @@ public final class MeeshyDragTargetsState: ObservableObject {
     private var haptic: MeeshyDragTargetsHaptic = .medium
     private let playHaptic: @MainActor () -> Void
 
+    nonisolated deinit {}
+
     public init() {
         isActive = false
         hovered = nil
