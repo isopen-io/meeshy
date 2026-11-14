@@ -190,6 +190,7 @@ const ptShellLabels = {
   'newConversation.group.chosen.one': '{count} pessoa',
   'newConversation.group.chosen.other': '{count} pessoas',
   'newConversation.group.chosen.hint': 'Você pode criá-lo sozinho, para uma auditoria ou para reunir opiniões, e convidar depois.',
+  'newConversation.group.chosen.question': 'Dá para criar um grupo sozinho?',
   'newConversation.group.remove': 'Remover {name}',
 
   'summary.title': 'Resumo vivo',

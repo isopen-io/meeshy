@@ -195,6 +195,7 @@ const frShellLabels = {
   'newConversation.group.chosen.one': '{count} personne',
   'newConversation.group.chosen.other': '{count} personnes',
   'newConversation.group.chosen.hint': 'Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard.',
+  'newConversation.group.chosen.question': 'Peut-on créer un groupe seul ?',
   'newConversation.group.remove': 'Retirer {name}',
 
   'summary.title': 'Résumé Vivant',

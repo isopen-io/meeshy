@@ -5,6 +5,8 @@ import { useStore } from 'zustand/react';
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { CreationEncryptionPicker } from '@/components/creation-encryption-picker';
 import { Glyph } from '@/components/glyph';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoHintButton, InfoHintText, useInfoHint } from '@/components/info-hint';
 import { PeerAvatar } from '@/components/peer-avatar';
 import { createDirectConversation, createGroupConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
@@ -353,45 +355,52 @@ export default function ConversationNewScreen() {
  * qu'un tap PRODUIT. Personne choisie, il dit qu'un groupe se crée seul.
  */
 function GroupToggle({ on, solo, onToggle }: { readonly on: boolean; readonly solo: boolean; readonly onToggle: () => void }) {
+  const info = useInfoHint();
+  const language = currentInterfaceLanguage();
+  const hint = {
+    text: translate(language, 'newConversation.group.chosen.hint'),
+    label: translate(language, 'newConversation.group.chosen.question'),
+    glyph: SETTINGS_GLYPHS.info,
+  };
+  const noted = on && solo;
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      data-new-group-toggle
-      onClick={onToggle}
-      className="mx-4 mb-2 flex shrink-0 items-center gap-3 rounded-[14px] px-3.5 py-2 text-start focus-visible:outline-2"
-      style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-card)' }}
-    >
-      <span
-        aria-hidden="true"
-        className="grid size-8 shrink-0 place-items-center rounded-full"
-        style={{ color: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
-      >
-        <Glyph name="users" size={16} />
-      </span>
-      <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(currentInterfaceLanguage(), 'newConversation.title.group')}
-        </span>
-        {on && solo ? (
-          <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(currentInterfaceLanguage(), 'newConversation.group.chosen.hint')}
+    <div className="mb-2 shrink-0">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          data-new-group-toggle
+          onClick={onToggle}
+          className="ms-4 flex min-w-0 flex-1 items-center gap-3 rounded-[14px] px-3.5 py-2 text-start focus-visible:outline-2"
+          style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-card)' }}
+        >
+          <span
+            aria-hidden="true"
+            className="grid size-8 shrink-0 place-items-center rounded-full"
+            style={{ color: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+          >
+            <Glyph name="users" size={16} />
           </span>
-        ) : null}
-      </span>
-      <span
-        aria-hidden="true"
-        className="grid size-6 shrink-0 place-items-center rounded-full"
-        style={{
-          border: on ? 'none' : '1px solid color-mix(in srgb, var(--color-ios-ink-3) 50%, transparent)',
-          backgroundColor: on ? 'var(--color-ios-brand)' : 'transparent',
-          color: 'var(--color-ios-on-brand)',
-        }}
-      >
-        {on ? <Glyph name="check" size={12} /> : null}
-      </span>
-    </button>
+          <span className="min-w-0 flex-1 text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translate(language, 'newConversation.title.group')}
+          </span>
+          <span
+            aria-hidden="true"
+            className="grid size-6 shrink-0 place-items-center rounded-full"
+            style={{
+              border: on ? 'none' : '1px solid color-mix(in srgb, var(--color-ios-ink-3) 50%, transparent)',
+              backgroundColor: on ? 'var(--color-ios-brand)' : 'transparent',
+              color: 'var(--color-ios-on-brand)',
+            }}
+          >
+            {on ? <Glyph name="check" size={12} /> : null}
+          </span>
+        </button>
+        {noted ? <InfoHintButton hint={hint} state={info} /> : <span className="me-4" />}
+      </div>
+      {noted ? <InfoHintText hint={hint} state={info} className="px-4" /> : null}
+    </div>
   );
 }
 

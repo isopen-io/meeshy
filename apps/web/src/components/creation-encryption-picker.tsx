@@ -64,6 +64,7 @@ function LoadedPicker({
 
   const chosen = offer.choices.find((choice) => choice.mode === selected);
   const moreKey = chosen === undefined ? null : CREATION_ENCRYPTION_KEY[chosen.mode].more;
+  const currentKey = chosen === undefined ? null : CREATION_ENCRYPTION_KEY[chosen.mode].detail;
   const hint = { text: moreKey === null ? '' : t(moreKey), label: t(CREATION_INFO_KEY), glyph: SETTINGS_GLYPHS.info };
   return (
     <div className="px-4 pt-3" data-creation-encryption-block>
@@ -127,6 +128,11 @@ function LoadedPicker({
         {moreKey === null ? null : <InfoHintButton hint={hint} state={info} />}
       </div>
       {moreKey === null ? null : <InfoHintText hint={hint} state={info} />}
+      {currentKey === null ? null : (
+        <p data-creation-encryption-current className="px-1 text-caption" style={{ color: MUTED }}>
+          {t(currentKey)}
+        </p>
+      )}
       <p data-creation-encryption-footer className="px-1 text-caption" style={{ color: MUTED }}>
         {t(FACT_KEY.endToEndNeverTurnedOff)}
       </p>

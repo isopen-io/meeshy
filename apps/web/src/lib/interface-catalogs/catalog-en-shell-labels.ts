@@ -190,6 +190,7 @@ const enShellLabels = {
   'newConversation.group.chosen.one': '{count} person',
   'newConversation.group.chosen.other': '{count} people',
   'newConversation.group.chosen.hint': 'You can create it on your own, for an audit or to gather feedback, and invite people later.',
+  'newConversation.group.chosen.question': 'Can I create a group on my own?',
   'newConversation.group.remove': 'Remove {name}',
 
   'summary.title': 'Living Summary',

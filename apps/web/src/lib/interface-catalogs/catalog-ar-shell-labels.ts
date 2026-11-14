@@ -190,6 +190,7 @@ const arShellLabels = {
   'newConversation.group.chosen.one': '{count} شخص',
   'newConversation.group.chosen.other': '{count} أشخاص',
   'newConversation.group.chosen.hint': 'يمكنك إنشاؤها بمفردك، للتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا.',
+  'newConversation.group.chosen.question': 'هل يمكن إنشاء مجموعة بمفردي؟',
   'newConversation.group.remove': 'إزالة {name}',
 
   'summary.title': 'الملخّص الحيّ',

@@ -190,6 +190,7 @@ const itShellLabels = {
   'newConversation.group.chosen.one': '{count} persona',
   'newConversation.group.chosen.other': '{count} persone',
   'newConversation.group.chosen.hint': 'Puoi crearlo da solo, per un audit o per raccogliere pareri, e invitare più tardi.',
+  'newConversation.group.chosen.question': 'Si può creare un gruppo da soli?',
   'newConversation.group.remove': 'Rimuovi {name}',
 
   'summary.title': 'Riassunto vivo',

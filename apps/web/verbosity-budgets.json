@@ -137,8 +137,8 @@
       "firstScreen": 63
     },
     "conversations-new": {
-      "total": 54,
-      "firstScreen": 54
+      "total": 58,
+      "firstScreen": 58
     },
     "discover": {
       "total": 38,
@@ -553,6 +553,18 @@
       },
       "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
       "issue": 18238
+    },
+    "conversations-new": {
+      "de": {
+        "total": 54,
+        "firstScreen": 54
+      },
+      "a": {
+        "total": 58,
+        "firstScreen": 58
+      },
+      "motif": "La ligne du mode de chiffrement retenu (« Chiffré sur nos serveurs. ») se lit au repos, sous le résumé et au-dessus de la phrase d'irréversibilité",
+      "issue": 18361
     }
   }
 }

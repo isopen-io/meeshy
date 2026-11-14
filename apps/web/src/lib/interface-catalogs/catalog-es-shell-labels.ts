@@ -190,6 +190,7 @@ const esShellLabels = {
   'newConversation.group.chosen.one': '{count} persona',
   'newConversation.group.chosen.other': '{count} personas',
   'newConversation.group.chosen.hint': 'Puedes crearlo tú solo, para una auditoría o para recoger opiniones, e invitar más tarde.',
+  'newConversation.group.chosen.question': '¿Se puede crear un grupo a solas?',
   'newConversation.group.remove': 'Quitar a {name}',
 
   'summary.title': 'Resumen vivo',

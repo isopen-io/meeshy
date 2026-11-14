@@ -190,6 +190,7 @@ const deShellLabels = {
   'newConversation.group.chosen.one': '{count} Person',
   'newConversation.group.chosen.other': '{count} Personen',
   'newConversation.group.chosen.hint': 'Du kannst sie allein erstellen, für ein Audit oder um Meinungen zu sammeln, und später einladen.',
+  'newConversation.group.chosen.question': 'Kann man eine Gruppe allein erstellen?',
   'newConversation.group.remove': '{name} entfernen',
 
   'summary.title': 'Lebendige Zusammenfassung',

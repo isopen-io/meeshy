@@ -101,14 +101,12 @@ export function ConversationMediaSection({
         type="button"
         onClick={() => setHubOpen(true)}
         data-conversation-details-media-open
+        aria-labelledby={headingId}
         className="mt-2 flex w-full items-center gap-3 px-4 text-start"
         style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
       >
         <Glyph name="image" size={20} style={{ color: 'var(--accent)' }} />
-        <span className="flex-1 text-body font-medium">{translate(language, 'conversation.details.media.open')}</span>
-        <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {translate(language, 'conversation.details.media.more')}
-        </span>
+        <span className="flex-1 text-body font-medium">{translate(language, 'conversation.details.media.more')}</span>
         <Glyph name="caretDown" size={14} style={{ color: 'var(--color-ios-ink-3)', transform: 'rotate(-90deg)' }} />
       </button>
 
