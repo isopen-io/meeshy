@@ -256,7 +256,7 @@
       "labels": 32,
       "words": 92,
       "long": 0,
-      "explanations": 3
+      "explanations": 7
     },
     "ios:Meeshy/circles": {
       "labels": 94,
@@ -891,7 +891,7 @@
     "ios:Meeshy/settings": {
       "labels": 233,
       "words": 984,
-      "long": 12,
+      "long": 11,
       "explanations": 40
     },
     "ios:Meeshy/share": {

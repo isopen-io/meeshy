@@ -140,9 +140,9 @@ final class CircleNotifySettingsViewModelTests: XCTestCase {
         XCTAssertTrue(service.updates.isEmpty)
     }
 
-    func test_everyChoice_hasALabel_andOnlyNobodyCommunityPublicExplain() {
+    func test_everyChoice_hasALabel_andASentenceSayingWhoIsNotified() {
         let explained = RelationAudienceChoice.allCases.filter { CircleNotifySettingsContent.explanation(of: $0) != nil }
-        XCTAssertEqual(explained, [.nobody, .community, .public])
+        XCTAssertEqual(explained, RelationAudienceChoice.allCases)
         XCTAssertEqual(Set(RelationAudienceChoice.allCases.map(CircleNotifySettingsContent.label(of:))).count, 7)
         XCTAssertEqual(Set(CircleNotifyAction.allCases.map(CircleNotifySettingsContent.title(of:))).count, 11)
     }
