@@ -39,7 +39,7 @@ private const val STATE_DISABLED = "desactive"
 private val SAMPLE_WIDTH = 320.dp
 
 /** Les noms de l'échantillon : des identifiants de développement, pas des textes publiés (fiche K00 §1). */
-private object SampleNames {
+private object ChipSampleNames {
     const val OPENING_EFFECT = "Effet d'ouverture"
     const val EFFECTS = "Effets"
     const val THEMES = "Thèmes"
@@ -77,24 +77,24 @@ internal fun ContentK04(state: MeeshyKitCatalogState, isPressed: Boolean) {
     val onChange: (Set<String>, String) -> Unit = { next, _ -> selection = next }
     val sample = Modifier.width(SAMPLE_WIDTH)
     when (state.id) {
-        STATE_ICON -> SampleRow(sample, ICONS, SampleNames.EFFECTS, selection, onChange, isPressed)
-        STATE_OVERFLOW, STATE_OVERFLOW_MIDDLE -> SampleRow(sample, THEMES, SampleNames.THEMES, selection, onChange, isPressed)
-        STATE_WRAPPED -> SampleRow(sample, MENTION_MODES, SampleNames.MENTION_MODE, selection, onChange, isPressed, layout = MeeshyChipRowLayout.Wrap)
+        STATE_ICON -> SampleRow(sample, ICONS, ChipSampleNames.EFFECTS, selection, onChange, isPressed)
+        STATE_OVERFLOW, STATE_OVERFLOW_MIDDLE -> SampleRow(sample, THEMES, ChipSampleNames.THEMES, selection, onChange, isPressed)
+        STATE_WRAPPED -> SampleRow(sample, MENTION_MODES, ChipSampleNames.MENTION_MODE, selection, onChange, isPressed, layout = MeeshyChipRowLayout.Wrap)
         STATE_MULTIPLE -> SampleRow(
             sample,
             AUDIENCES.map { chip ->
-                if (chip.id in selection) chip.copy(trailing = MeeshyChipTrailing.Remove, hint = SampleNames.REMOVE_RECIPIENT) else chip
+                if (chip.id in selection) chip.copy(trailing = MeeshyChipTrailing.Remove, hint = ChipSampleNames.REMOVE_RECIPIENT) else chip
             },
-            SampleNames.RECIPIENTS, selection, onChange, isPressed, mode = MeeshyChipRowMode.Multiple, layout = MeeshyChipRowLayout.Wrap,
+            ChipSampleNames.RECIPIENTS, selection, onChange, isPressed, mode = MeeshyChipRowMode.Multiple, layout = MeeshyChipRowLayout.Wrap,
         )
-        STATE_EQUAL -> SampleRow(sample, CALL_TYPES, SampleNames.CALL_TYPE, selection, onChange, isPressed, layout = MeeshyChipRowLayout.Equal)
+        STATE_EQUAL -> SampleRow(sample, CALL_TYPES, ChipSampleNames.CALL_TYPE, selection, onChange, isPressed, layout = MeeshyChipRowLayout.Equal)
         STATE_THEME -> SampleRow(
             sample.background(MeeshyTheme.tokens.backgroundPrimary).padding(MeeshySpacing.sm),
-            EFFECTS, SampleNames.OPENING_EFFECT, selection, onChange, isPressed, surface = MeeshyChipRowSurface.Theme,
+            EFFECTS, ChipSampleNames.OPENING_EFFECT, selection, onChange, isPressed, surface = MeeshyChipRowSurface.Theme,
         )
-        STATE_COMPACT -> SampleRow(sample, EFFECTS, SampleNames.OPENING_EFFECT, selection, onChange, isPressed, size = MeeshyChipRowSize.Compact)
-        STATE_DISABLED -> SampleRow(sample, EFFECTS, SampleNames.OPENING_EFFECT, selection, onChange, isPressed, enabled = false)
-        else -> SampleRow(sample, EFFECTS, SampleNames.OPENING_EFFECT, selection, onChange, isPressed)
+        STATE_COMPACT -> SampleRow(sample, EFFECTS, ChipSampleNames.OPENING_EFFECT, selection, onChange, isPressed, size = MeeshyChipRowSize.Compact)
+        STATE_DISABLED -> SampleRow(sample, EFFECTS, ChipSampleNames.OPENING_EFFECT, selection, onChange, isPressed, enabled = false)
+        else -> SampleRow(sample, EFFECTS, ChipSampleNames.OPENING_EFFECT, selection, onChange, isPressed)
     }
 }
 
@@ -133,10 +133,10 @@ private val EFFECTS = listOf("none" to "Aucun", "fade" to "Fondu", "zoom" to "Zo
 private val ICONS = listOf(
     MeeshyChip(id = "all", title = "Tout", icon = MeeshyIcons.Globe),
     MeeshyChip(id = "favorites", title = "Favoris", icon = MeeshyIcons.Star),
-    MeeshyChip(id = "search", title = "", icon = MeeshyIcons.Search, accessibilityLabel = SampleNames.SEARCH),
+    MeeshyChip(id = "search", title = "", icon = MeeshyIcons.Search, accessibilityLabel = ChipSampleNames.SEARCH),
     MeeshyChip(
-        id = "language", title = SampleNames.LANGUAGE, trailing = MeeshyChipTrailing.Chevron, kind = MeeshyChipKind.Menu,
-        hint = SampleNames.OPEN_LIST,
+        id = "language", title = ChipSampleNames.LANGUAGE, trailing = MeeshyChipTrailing.Chevron, kind = MeeshyChipKind.Menu,
+        hint = ChipSampleNames.OPEN_LIST,
     ),
 )
 
