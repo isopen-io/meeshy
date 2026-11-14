@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { layerEntryState, layerMarkerOf } from './layer-entry';
 import { openModalLayer } from './modal-layers';
 
 /**
@@ -29,9 +30,10 @@ import { openModalLayer } from './modal-layers';
  * reculer d'une entrée défaisait la navigation elle-même (mesuré : `/notifications`
  * poussée, `/` rendue, sur `dev` comme sur la branche de #6288). L'entrée
  * posée porte donc une MARQUE, et le retour n'a lieu que si l'historique est
- * encore dessus. Le prix, assumé : après une telle navigation, l'entrée de la
- * couche reste sous la destination, et un retour y ramène l'écran d'origine —
- * exactement ce qu'on quittait.
+ * encore dessus. Le prix de #6313 — l'entrée de la couche restait sous la
+ * destination, et le retour suivant l'écran d'origine ne changeait rien — est
+ * levé par #18523 : `navigate()` (`lib/router.tsx`) lit `onLayerEntry()` (`layer-entry.ts`) et fait
+ * prendre à la destination LA PLACE de l'entrée de la couche.
  *
  * **L'ENTRÉE EST POSÉE DANS LE COMMIT QUI INSÈRE LA COUCHE** (#6319). Un effet
  * passif la posait APRÈS la peinture (Preact : un `requestAnimationFrame`
@@ -141,7 +143,7 @@ export function dismissAllLayers(options: { readonly successor?: boolean } = {})
 }
 
 function carriesMarker(state: unknown, marker: string): boolean {
-  return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
+  return layerMarkerOf(state) === marker;
 }
 
 function leaveEntry(marker: string, layer: symbol): void {
@@ -261,7 +263,7 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
     if (marker === null) {
       nextMarker += 1;
       marker = `back-dismiss-${nextMarker}`;
-      window.history.pushState({ backDismiss: marker }, '');
+      window.history.pushState(layerEntryState(marker), '');
     }
     const ownMarker = marker;
     heldEntry.current = ownMarker;
