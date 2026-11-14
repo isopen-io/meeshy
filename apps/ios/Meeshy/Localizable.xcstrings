@@ -305093,43 +305093,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلغتَ حدّ التعليقات — شراراتك لا تتغيّر."
+            "value": "بلغتَ حدّ التعليقات لهذا اليوم — شراراتك لا تتغيّر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kommentarlimit erreicht – deine Funken bleiben unberührt."
+            "value": "Tageslimit für Kommentare erreicht – deine Funken bleiben unberührt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comment limit reached — your sparks are untouched."
+            "value": "Today’s comment limit reached — your sparks are untouched."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Límite de comentarios alcanzado: tus chispas no se tocan."
+            "value": "Límite de comentarios de hoy alcanzado: tus chispas no se tocan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite de commentaires atteinte — vos étincelles ne bougent pas."
+            "value": "Limite de commentaires du jour atteinte — vos étincelles ne bougent pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite di commenti raggiunto — le tue scintille restano intatte."
+            "value": "Limite di commenti di oggi raggiunto — le tue scintille restano intatte."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite de comentários atingido — suas faíscas não mudam."
+            "value": "Limite de comentários de hoje atingido — suas faíscas não mudam."
           }
         }
       }
@@ -305140,43 +305140,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلغتَ حدّ التفاعلات — شراراتك لا تتغيّر."
+            "value": "بلغتَ حدّ التفاعلات لهذا اليوم — شراراتك لا تتغيّر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaktionslimit erreicht – deine Funken bleiben unberührt."
+            "value": "Tageslimit für Reaktionen erreicht – deine Funken bleiben unberührt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaction limit reached — your sparks are untouched."
+            "value": "Today’s reaction limit reached — your sparks are untouched."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Límite de reacciones alcanzado: tus chispas no se tocan."
+            "value": "Límite de reacciones de hoy alcanzado: tus chispas no se tocan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite de réactions atteinte — vos étincelles ne bougent pas."
+            "value": "Limite de réactions du jour atteinte — vos étincelles ne bougent pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite di reazioni raggiunto — le tue scintille restano intatte."
+            "value": "Limite di reazioni di oggi raggiunto — le tue scintille restano intatte."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Limite de reações atingido — suas faíscas não mudam."
+            "value": "Limite de reações de hoje atingido — suas faíscas não mudam."
           }
         }
       }

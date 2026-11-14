@@ -153,10 +153,10 @@ enum DailyGestureLimitNotice {
             switch limit.gesture {
             case .comment:
                 return String(localized: "post.daily_limit.comment.untimed",
-                              defaultValue: "Limite de commentaires atteinte — vos étincelles ne bougent pas.", bundle: .main)
+                              defaultValue: "Limite de commentaires du jour atteinte — vos étincelles ne bougent pas.", bundle: .main)
             case .reaction:
                 return String(localized: "post.daily_limit.reaction.untimed",
-                              defaultValue: "Limite de réactions atteinte — vos étincelles ne bougent pas.", bundle: .main)
+                              defaultValue: "Limite de réactions du jour atteinte — vos étincelles ne bougent pas.", bundle: .main)
             case .unlinkedRecipients:
                 return onlyUnlinkedRecipientsText
             }

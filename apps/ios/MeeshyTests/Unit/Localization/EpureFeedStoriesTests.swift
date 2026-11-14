@@ -86,9 +86,9 @@ final class EpureFeedStoriesTests: XCTestCase {
         "feed.nearby.empty.none.why.note": "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas.",
         "feed.unsent.composerBusy": "Terminez d'abord le brouillon en cours.",
         "post.daily_limit.comment": "Limite de commentaires atteinte — vos étincelles ne bougent pas. Reprise à %@.",
-        "post.daily_limit.comment.untimed": "Limite de commentaires atteinte — vos étincelles ne bougent pas.",
+        "post.daily_limit.comment.untimed": "Limite de commentaires du jour atteinte — vos étincelles ne bougent pas.",
         "post.daily_limit.reaction": "Limite de réactions atteinte — vos étincelles ne bougent pas. Reprise à %@.",
-        "post.daily_limit.reaction.untimed": "Limite de réactions atteinte — vos étincelles ne bougent pas.",
+        "post.daily_limit.reaction.untimed": "Limite de réactions du jour atteinte — vos étincelles ne bougent pas.",
         "post.audience.only_unlinked_limit": "Trop de personnes sans lien avec vous aujourd’hui. Retirez-en, ou réessayez demain.",
         "story.mine.failed.delete.message": "Cette story n'a jamais été publiée : sa dernière copie sera définitivement perdue.",
     ]
@@ -284,6 +284,19 @@ final class EpureFeedStoriesTests: XCTestCase {
         let toast = try code("apps/ios/Meeshy/Features/Main/Services/FeedbackToastManager.swift")
         XCTAssertFalse(toast.contains("La limite compte vos gestes"))
         XCTAssertTrue(toast.contains("vos étincelles ne bougent pas"))
+    }
+
+    /// Sans heure de reprise, le toast dit encore que la limite est QUOTIDIENNE : sinon l'utilisateur ne sait pas quand
+    /// il retrouve ses gestes.
+    func test_dailyLimitToastWithoutResetTime_stillSaysTheLimitIsForToday_inEveryLanguage() throws {
+        let app = try app()
+        let today = ["fr": "du jour", "en": "today", "es": "hoy", "pt-BR": "hoje", "de": "tages", "it": "oggi", "ar": "اليوم"]
+        for key in ["post.daily_limit.comment.untimed", "post.daily_limit.reaction.untimed"] {
+            for (language, word) in today {
+                let value = try XCTUnwrap(app[key]?[language], "\(key) [\(language)]")
+                XCTAssertTrue(value.lowercased().contains(word), "\(key) [\(language)] : « \(value) » ne dit plus « aujourd'hui »")
+            }
+        }
     }
 
     // MARK: - Modifier une publication : l'audience dit QUI voit, au repos (règle 7)
