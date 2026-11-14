@@ -209,6 +209,7 @@ public final class StoryMediaLoader {
         // l'appareil chauffe ou économise, y compris une fois préparé.
         let player = AVQueuePlayer(playerItem: item)
         MediaPolicyMonitor.shared.adopt(player, role: .prerolled)
+        PlaybackPlayerCensus.shared?.track(player)
         player.automaticallyWaitsToMinimizeStalling = false
 
         // Wait for readyToPlay before prerolling — preroll crashes if called too early
