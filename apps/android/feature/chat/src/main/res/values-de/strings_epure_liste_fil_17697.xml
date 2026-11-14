@@ -8,4 +8,6 @@
     <string name="share_blocked_view_once">Sie ist einmalig ansehbar: Sie bleibt hier, bis sie gesehen wurde.</string>
     <string name="chat_exit_blocked_after_read">Sie verschwindet nach dem Lesen.</string>
     <string name="share_blocked_after_read">Sie verschwindet nach dem Lesen.</string>
+    <string name="conversation_settings_auto_translate_hint">Nachrichten kommen in der Sprache jedes Mitglieds an.</string>
+    <string name="conversation_settings_announcement_hint">Nur berechtigte Rollen schreiben, alle anderen lesen.</string>
 </resources>

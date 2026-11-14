@@ -8,4 +8,6 @@
     <string name="share_blocked_view_once">إنها للعرض مرة واحدة: تبقى هنا حتى تُشاهَد.</string>
     <string name="chat_exit_blocked_after_read">تختفي بعد القراءة.</string>
     <string name="share_blocked_after_read">تختفي بعد القراءة.</string>
+    <string name="conversation_settings_auto_translate_hint">تصل الرسائل بلغة كل عضو.</string>
+    <string name="conversation_settings_announcement_hint">لا يكتب سوى أصحاب الأدوار المصرّح لها، والبقية يقرؤون.</string>
 </resources>

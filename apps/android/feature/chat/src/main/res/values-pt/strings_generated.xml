@@ -343,10 +343,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Mudar para ponta a ponta</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Mudar para criptografia de ponta a ponta?</string>
     <string name="encryption_detail_title">Criptografia</string>
-    <string name="encryption_detail_translation">Tradução</string>
-    <string name="encryption_detail_translation_available">Disponível</string>
-    <string name="encryption_detail_translation_disabled">Desativado</string>
-    <string name="encryption_detail_translation_on_device">No aparelho</string>
     <string name="encryption_fact_device_limit">Sua conta pode ter até 16 aparelhos criptografados. Além disso, o app propõe remover um; um aparelho removido não lê mais as novas mensagens criptografadas.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
     <string name="encryption_fact_end_to_end_is_final">Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada.</string>

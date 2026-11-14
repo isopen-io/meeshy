@@ -31,6 +31,14 @@
         {
           "androidName": "share_blocked_after_read",
           "status": "android-only"
+        },
+        {
+          "androidName": "conversation_settings_auto_translate_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_settings_announcement_hint",
+          "status": "android-only"
         }
       ]
     }

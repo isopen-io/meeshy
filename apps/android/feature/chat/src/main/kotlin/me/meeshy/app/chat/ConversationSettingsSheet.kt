@@ -127,6 +127,7 @@ internal fun ConversationSettingsSheet(
 
             SwitchRow(
                 label = stringResource(R.string.conversation_settings_announcement),
+                hint = stringResource(R.string.conversation_settings_announcement_hint),
                 checked = form.isAnnouncementChannel,
                 accentColor = accentColor,
                 onCheckedChange = viewModel::setAnnouncement,
@@ -144,6 +145,7 @@ internal fun ConversationSettingsSheet(
 
             SwitchRow(
                 label = stringResource(R.string.conversation_settings_auto_translate),
+                hint = stringResource(R.string.conversation_settings_auto_translate_hint),
                 checked = form.autoTranslateEnabled,
                 accentColor = accentColor,
                 onCheckedChange = viewModel::setAutoTranslate,
@@ -229,24 +231,30 @@ private fun SettingRadioRow(
 @Composable
 private fun SwitchRow(
     label: String,
+    hint: String,
     checked: Boolean,
     accentColor: Color,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = MeeshyTheme.tokens.textPrimary)
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(label, color = MeeshyTheme.tokens.textPrimary)
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
+            )
+        }
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 

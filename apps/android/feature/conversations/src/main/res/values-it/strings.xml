@@ -27,7 +27,6 @@
     <string name="my_share_links_delete">Elimina il link</string>
     <string name="my_share_links_extend">Prolunga la scadenza</string>
     <string name="share_link_detail_not_found">Questo link non è più disponibile.</string>
-    <string name="global_search_empty_title">Cerca in Meeshy</string>
     <string name="global_search_recent_title">Ricerche recenti</string>
     <string name="global_search_tab_users">Utenti</string>
     <string name="conversations_action_mark_unread">Segna come non letto</string>

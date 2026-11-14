@@ -27,7 +27,6 @@
     <string name="my_share_links_delete">حذف الرابط</string>
     <string name="my_share_links_extend">تمديد الصلاحية</string>
     <string name="share_link_detail_not_found">هذا الرابط لم يعد متاحًا.</string>
-    <string name="global_search_empty_title">ابحث في Meeshy</string>
     <string name="global_search_recent_title">عمليات البحث الأخيرة</string>
     <string name="global_search_tab_users">المستخدمون</string>
     <string name="conversations_action_mark_unread">تعليم كغير مقروء</string>

@@ -337,10 +337,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Switch to end-to-end</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Switch to end-to-end encryption?</string>
     <string name="encryption_detail_title">Encryption</string>
-    <string name="encryption_detail_translation">Translation</string>
-    <string name="encryption_detail_translation_available">Available</string>
-    <string name="encryption_detail_translation_disabled">Disabled</string>
-    <string name="encryption_detail_translation_on_device">On the device</string>
     <string name="encryption_fact_device_limit">Your account can have up to 16 encrypted devices. Beyond that, the app offers to remove one; a removed device no longer reads new encrypted messages.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_fact_end_to_end_is_final">Once turned on, end-to-end encryption can’t be turned off.</string>

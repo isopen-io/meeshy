@@ -54,24 +54,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation",
-          "androidName": "encryption_detail_translation",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.available",
-          "androidName": "encryption_detail_translation_available",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.disabled",
-          "androidName": "encryption_detail_translation_disabled",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.legacy.subtitle",
           "androidName": "encryption_legacy_subtitle",
           "status": "adopted"
@@ -344,12 +326,6 @@
           "catalog": "app",
           "iosKey": "conversation.encryption.fact.serverCannotTurnItOff",
           "androidName": "encryption_fact_server_cannot_turn_it_off",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.onDevice",
-          "androidName": "encryption_detail_translation_on_device",
           "status": "adopted"
         },
         {

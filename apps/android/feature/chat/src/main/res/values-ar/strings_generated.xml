@@ -361,10 +361,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">التبديل إلى التشفير التام</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">التبديل إلى التشفير التام بين الطرفين؟</string>
     <string name="encryption_detail_title">التشفير</string>
-    <string name="encryption_detail_translation">الترجمة</string>
-    <string name="encryption_detail_translation_available">متاح</string>
-    <string name="encryption_detail_translation_disabled">معطّل</string>
-    <string name="encryption_detail_translation_on_device">على الجهاز</string>
     <string name="encryption_fact_device_limit">يمكن أن يضم حسابك حتى 16 جهازًا مشفّرًا. بعد ذلك، يقترح التطبيق إزالة أحدها؛ ولا يقرأ الجهاز المُزال الرسائل المشفّرة الجديدة.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_fact_end_to_end_is_final">بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين.</string>

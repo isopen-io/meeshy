@@ -343,10 +343,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Passer en bout en bout</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Passer au chiffrement de bout en bout ?</string>
     <string name="encryption_detail_title">Chiffrement</string>
-    <string name="encryption_detail_translation">Traduction</string>
-    <string name="encryption_detail_translation_available">Disponible</string>
-    <string name="encryption_detail_translation_disabled">Désactivé</string>
-    <string name="encryption_detail_translation_on_device">Sur l’appareil</string>
     <string name="encryption_fact_device_limit">Votre compte peut avoir jusqu’à 16 appareils chiffrés. Au-delà, l’application vous propose d’en retirer un ; un appareil retiré ne lit plus les nouveaux messages chiffrés.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_fact_end_to_end_is_final">Une fois activé, le chiffrement de bout en bout ne se désactive plus.</string>

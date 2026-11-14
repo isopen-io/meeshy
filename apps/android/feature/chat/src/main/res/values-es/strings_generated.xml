@@ -343,10 +343,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Pasar a extremo a extremo</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">¿Pasar al cifrado de extremo a extremo?</string>
     <string name="encryption_detail_title">Cifrado</string>
-    <string name="encryption_detail_translation">Traducción</string>
-    <string name="encryption_detail_translation_available">Disponible</string>
-    <string name="encryption_detail_translation_disabled">Desactivado</string>
-    <string name="encryption_detail_translation_on_device">En el dispositivo</string>
     <string name="encryption_fact_device_limit">Tu cuenta puede tener hasta 16 dispositivos cifrados. Más allá, la app te propone quitar uno; un dispositivo quitado ya no lee los nuevos mensajes cifrados.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_fact_end_to_end_is_final">Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar.</string>

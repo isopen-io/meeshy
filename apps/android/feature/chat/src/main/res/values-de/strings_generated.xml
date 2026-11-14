@@ -337,10 +337,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Zu Ende-zu-Ende wechseln</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Zur Ende-zu-Ende-Verschlüsselung wechseln?</string>
     <string name="encryption_detail_title">Verschlüsselung</string>
-    <string name="encryption_detail_translation">Übersetzung</string>
-    <string name="encryption_detail_translation_available">Verfügbar</string>
-    <string name="encryption_detail_translation_disabled">Deaktiviert</string>
-    <string name="encryption_detail_translation_on_device">Auf dem Gerät</string>
     <string name="encryption_fact_device_limit">Dein Konto kann bis zu 16 verschlüsselte Geräte haben. Darüber hinaus schlägt die App vor, eines zu entfernen; ein entferntes Gerät liest keine neuen verschlüsselten Nachrichten mehr.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_fact_end_to_end_is_final">Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten.</string>

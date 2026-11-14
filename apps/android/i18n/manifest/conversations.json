@@ -587,10 +587,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "global_search_empty_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "global_search_hint",
           "status": "android-only"
         },

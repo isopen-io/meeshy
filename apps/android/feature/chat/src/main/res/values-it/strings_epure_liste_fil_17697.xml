@@ -8,4 +8,6 @@
     <string name="share_blocked_view_once">È a visualizzazione singola: resta qui finché non viene vista.</string>
     <string name="chat_exit_blocked_after_read">Scompare dopo la lettura.</string>
     <string name="share_blocked_after_read">Scompare dopo la lettura.</string>
+    <string name="conversation_settings_auto_translate_hint">I messaggi arrivano nella lingua di ogni membro.</string>
+    <string name="conversation_settings_announcement_hint">Scrivono solo i ruoli autorizzati, gli altri leggono.</string>
 </resources>

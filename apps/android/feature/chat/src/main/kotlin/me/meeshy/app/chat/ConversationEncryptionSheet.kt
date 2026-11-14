@@ -198,16 +198,6 @@ private fun StateBlock(view: ConversationEncryptionView, status: ConversationEnc
         val text = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale).withZone(ZoneId.systemDefault()).format(at)
         EncryptionDetailLine(stringResource(R.string.encryption_detail_enabled_on), text)
     }
-    EncryptionDetailLine(
-        stringResource(R.string.encryption_detail_translation),
-        stringResource(
-            when {
-                regime == ConversationEncryptionRegime.END_TO_END -> R.string.encryption_detail_translation_on_device
-                status?.canTranslate == true -> R.string.encryption_detail_translation_available
-                else -> R.string.encryption_detail_translation_disabled
-            },
-        ),
-    )
 }
 
 private fun ConversationEncryptionRegime.modeChoice(): ConversationEncryptionModeChoice =

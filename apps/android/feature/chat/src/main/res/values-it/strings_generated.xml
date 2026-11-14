@@ -343,10 +343,6 @@
     <string name="encryption_detail_switch_to_end_to_end_confirm">Passa a end-to-end</string>
     <string name="encryption_detail_switch_to_end_to_end_confirm_title">Passare alla crittografia end-to-end?</string>
     <string name="encryption_detail_title">Crittografia</string>
-    <string name="encryption_detail_translation">Traduzione</string>
-    <string name="encryption_detail_translation_available">Disponibile</string>
-    <string name="encryption_detail_translation_disabled">Disattivato</string>
-    <string name="encryption_detail_translation_on_device">Sul dispositivo</string>
     <string name="encryption_fact_device_limit">Il tuo account può avere fino a 16 dispositivi crittografati. Oltre, l’app ti propone di rimuoverne uno; un dispositivo rimosso non legge più i nuovi messaggi crittografati.</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano.</string>
     <string name="encryption_fact_end_to_end_is_final">Una volta attivata, la crittografia end-to-end non si può più disattivare.</string>
