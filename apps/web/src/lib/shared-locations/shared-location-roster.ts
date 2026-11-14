@@ -97,12 +97,16 @@ export const rosterOps = {
    * La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
    * la passerelle la tient, même onglet fermé (#18205). Arrondie à la seconde au-dessus, jamais nulle ; une personne
    * échue pendant l'attente d'un relevé ne part plus du tout.
+   *
+   * « Avant le terme » se juge À LA SECONDE, l'unité dans laquelle l'échéance voyage (#18539) : l'attente du relevé
+   * sépare toujours l'ajout de la publication de quelques millisecondes, et les comparer faisait partir, pour un
+   * partage d'une heure avec une seule personne, une échéance égale au terme.
    */
   deadlinedRecipients: (roster: SharedLocationRoster, now: number): readonly SharedLocationRecipient[] => {
-    const term = now + rosterOps.serverDurationMinutes(roster, now) * MINUTE;
+    const termSeconds = (rosterOps.serverDurationMinutes(roster, now) * MINUTE) / SECOND;
     return rosterOps.recipients(rosterOps.pruned(roster, now)).map((recipient) => {
-      const until = roster.entries[recipient.userId]!.until;
-      return until < term ? { ...recipient, expiresInSeconds: Math.max(1, Math.ceil((until - now) / SECOND)) } : recipient;
+      const expiresInSeconds = Math.max(1, Math.ceil((roster.entries[recipient.userId]!.until - now) / SECOND));
+      return expiresInSeconds < termSeconds ? { ...recipient, expiresInSeconds } : recipient;
     });
   },
   /** La liste telle que le serveur la reçoit, dans un ordre stable. */
