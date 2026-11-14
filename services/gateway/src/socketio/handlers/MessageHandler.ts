@@ -107,6 +107,7 @@ import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWri
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
+import { emitConversationUpdatedPerReader } from '../conversationUpdatedPerReader';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -1579,13 +1580,23 @@ export class MessageHandler {
         // Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
         // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
         // rechargement manuel.
+        //
+        // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Cette boucle
+        // vivait dans le `try` de fin de méthode, qui attrapait bien la levée
+        // sans la CONFINER : les lecteurs suivants, la pastille de non-lus et
+        // l'accusé de remise automatique (✓ → ✓✓) partaient avec elle, sur le
+        // transport PRIMAIRE d'envoi. Le site unique porte la règle et sa
+        // raison (`conversationUpdatedPerReader.ts`).
         const targets = participantUserRoomTargets(sharedParticipants);
-        for (const { room, participant } of targets) {
-          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        emitConversationUpdatedPerReader(
+          this.io,
+          targets,
+          (participant) => ({
             ...updatePayload,
             ...resolveLastMessagePreviewGroup(participant, message, new Date(), { quotedDeathAt: quotedDeathOf(participant) })
-          });
-        }
+          }),
+          (error, room) => handlerLogger.warn('conversation:updated fanout failed for one reader', { conversationId: normalizedId, room, error }),
+        );
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
