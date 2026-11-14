@@ -34,6 +34,8 @@ struct CallGroupStageTopReserve: View {
     let base: CGFloat
     let isStageFullScreen: Bool
     let reduceMotion: Bool
+    /// #18227 — les pastilles de service montrées (`CallServicePills.banners`) : la grille leur cède aussi sa place.
+    var service: Set<CallTopBanner> = []
 
     var body: some View {
         Color.clear
@@ -47,7 +49,8 @@ struct CallGroupStageTopReserve: View {
                 isScreenShareShown: screenShare.isSharing || screenShare.isRemoteSharing,
                 isRecordingShown: recording.phase != .idle || recording.notice != nil,
                 isCaptureAlertShown: captureJournal.alert != nil,
-                isLiveFrameShown: hasLiveFrameStatus
+                isLiveFrameShown: hasLiveFrameStatus,
+                service: service
             ),
             heights: heights,
             isStageFullScreen: isStageFullScreen
