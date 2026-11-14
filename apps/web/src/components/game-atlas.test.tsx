@@ -45,10 +45,10 @@ const props = (patch: Partial<GameAtlasProps> = {}): GameAtlasProps => ({
 describe('un passeport', () => {
   const html = renderToStaticMarkup(<GameAtlas {...props()} />);
 
-  test('le compte, la barre, et ce qui reste à découvrir', () => {
+  test('le compte et la barre — la jauge dit le reste, aucune ligne « à découvrir » ne le répète', () => {
     const t = text(html);
     expect(t).toMatch(/4 langues sur \d+/);
-    expect(t).toMatch(/\d+ langues à découvrir/);
+    expect(t).not.toMatch(/à découvrir/);
     expect(html).toContain('role="progressbar"');
   });
 

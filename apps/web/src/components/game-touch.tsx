@@ -168,7 +168,7 @@ export type GameSpendLineProps = {
   /** Une donnée de plus entre le solde et le prix : la part du solde qui paie (les points à convertir). */
   readonly between?: GameFactChip;
   /** Ce qu'il manque, dit avec son but : aucun geste ne dit « Il manque » sans dire pour quoi. */
-  readonly missing: GameMissingLine;
+  readonly missing?: GameMissingLine | undefined;
 };
 
 /**
@@ -186,7 +186,7 @@ export function GameSpendLine({ concept, held, cost, spendable, format, formatMi
   return (
     <>
       <GameFactChips concept={concept} chips={chips} marker="data-game-spend" />
-      {spend.affordable ? null : <MissingLine concept={concept} fact={missing.fact} line={missing.line(formatMissing(spend.missing))} amount={formatMissing(spend.missing)} />}
+      {spend.affordable || missing === undefined ? null : <MissingLine concept={concept} fact={missing.fact} line={missing.line(formatMissing(spend.missing))} amount={formatMissing(spend.missing)} />}
     </>
   );
 }

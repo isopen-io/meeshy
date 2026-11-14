@@ -209,7 +209,7 @@ export function GameLeague(props: GameLeagueProps) {
     <>
       <GameCard id="game-league" labelledBy="game-league-title" tint={GAME_BRAND}>
         <h2 id="game-league-title" className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-          {gameText('game.league.title')} · {weekLabel(league.weekKey)}
+          {weekLabel(league.weekKey)}
         </h2>
         <PlacedHeader league={league} now={now} />
       </GameCard>
@@ -241,7 +241,7 @@ export function GameLeague(props: GameLeagueProps) {
       </GameCard>
 
       <GameCard id="game-league-pseudonym-card" labelledBy="game-league-pseudonym-title">
-        <h2 id="game-league-pseudonym-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <h2 id="game-league-pseudonym-title" className="sr-only">
           {gameText('game.league.pseudonym.title')}
         </h2>
         {league.pseudonym === null ? null : (

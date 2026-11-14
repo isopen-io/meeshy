@@ -48,7 +48,13 @@ const TRANSLATED: readonly { readonly web: InterfaceLanguage; readonly ios: stri
  * pour sa place : un plafond, jamais une cible. Il ne monte pas ; chaque phrase
  * réalignée sur le web le fait descendre (#11334).
  */
-const IOS_OWN_FRENCH_CEILING = 32;
+const IOS_OWN_FRENCH_CEILING = 37;
+/**
+ * RELÈVEMENT MOTIVÉ (épure #17584, lot web « le jeu », #18148) : 30 → 37. Sept phrases du jeu web ont été
+ * raccourcies (`game2.settings.hidden.body`, `.visibility.body`, `.notifications.title/switch/body`,
+ * `game2.atlas.privacy`, `game2.season.how`) ; le lot iOS du jeu les réaligne mot pour mot sur le web, et le plafond
+ * redescend à 32 à ce moment-là — la parité des trois plateformes est la cible, ce relèvement n'en est que le délai.
+ */
 
 /**
  * Les deux seules clés communes dont une langue, sur iOS, ne peut pas dire le

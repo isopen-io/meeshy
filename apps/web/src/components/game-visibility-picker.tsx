@@ -25,12 +25,15 @@ import { GAME_BRAND, GAME_INK } from './game-surface';
  */
 export function GameVisibilityPicker({
   legend,
+  legendHidden = false,
   value,
   disabled,
   busy = false,
   onChange,
 }: {
   readonly legend: string;
+  /** La légende reste lue, sans être vue : le titre du bloc la dit déjà (épure #17584, règle 2). */
+  readonly legendHidden?: boolean;
   readonly value: GameVisibility['showcase'];
   readonly disabled: boolean;
   /** Un réglage part : le choix est suspendu, le focus reste où il est. */
@@ -40,7 +43,7 @@ export function GameVisibilityPicker({
   const name = useId();
   return (
     <fieldset className="flex min-w-0 flex-col gap-1.5" data-game-visibility="">
-      <legend className="text-caption font-semibold" style={{ color: GAME_INK }}>
+      <legend className={legendHidden ? 'sr-only' : 'text-caption font-semibold'} style={{ color: GAME_INK }}>
         {legend}
       </legend>
       <div className="flex flex-wrap gap-2">
