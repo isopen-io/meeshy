@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { isProfileImageReference } from '../utils/profile-image-reference';
 import { updateAvatarSchema, updateBannerSchema } from '../utils/validation';
 
 /**
@@ -31,5 +32,45 @@ describe.each([
     expect(accepte('2026/../../etc/passwd')).toBe(false);
     expect(accepte('//evil.example/a.png')).toBe(false);
     expect(accepte('')).toBe(false);
+  });
+});
+
+/**
+ * La branche `/api/` court-circuitait toute la règle (#16810) : `/api/../../x`
+ * ou n'importe quelle route GET de la passerelle passait comme avatar ou
+ * bannière, de profil comme de communauté. Elle n'admet plus que la route de
+ * FLUX des pièces jointes (versionnée ou legacy), dont la clé — souvent
+ * percent-encodée, `apiPath('/attachments/file/<encodeURIComponent(clé)>')`
+ * l'a gravée ainsi jusqu'au 2026-09-16 — suit la loi du chemin de stockage
+ * une fois décodée.
+ */
+describe('isProfileImageReference — la branche /api/ (#16810)', () => {
+  it('admet la route de flux des pièces jointes, versionnée, legacy ou à clé encodée', () => {
+    expect(isProfileImageReference('/api/v1/attachments/file/2026/09/a.png')).toBe(true);
+    expect(isProfileImageReference('/api/attachments/file/2026/09/a.png')).toBe(true);
+    expect(isProfileImageReference(`/api/v1/attachments/file/${encodeURIComponent(TELEVERSE)}`)).toBe(true);
+  });
+
+  it('refuse la remontée de dossier, en clair comme encodée', () => {
+    expect(isProfileImageReference('/api/../../etc/passwd')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/../../etc/passwd')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/2026%2F..%2F..%2Fetc%2Fpasswd')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/%2e%2e/secret')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/%252e%252e/secret')).toBe(false);
+  });
+
+  it('refuse toute autre route de la passerelle', () => {
+    expect(isProfileImageReference('/api/v1/users/me')).toBe(false);
+    expect(isProfileImageReference('/api/v1/auth/logout')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/6ab8a0386ca26324f11c92c5')).toBe(false);
+    expect(isProfileImageReference('/api/v1/admin/users/x/profile-images/avatar')).toBe(false);
+  });
+
+  it('refuse une clé vide, une requête, un fragment ou un encodage illisible', () => {
+    expect(isProfileImageReference('/api/v1/attachments/file/')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/a.png?next=/api/v1/auth/logout')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/a.png#x')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file/%E0%A4%A')).toBe(false);
+    expect(isProfileImageReference('/api/v1/attachments/file//etc/passwd')).toBe(false);
   });
 });
