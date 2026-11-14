@@ -203,7 +203,7 @@ enum ShareLocationWording {
             return String(localized: "sharedLocation.share.denied", defaultValue: "Autorise la localisation dans Réglages pour partager ta position", bundle: .main)
         case .locationUnavailable:
             return String(localized: "sharedLocation.share.unavailable", defaultValue: "Position introuvable pour le moment, réessaie", bundle: .main)
-        case .refused(.offline):
+        case .refused(.offline), .refused(.unconfirmed):
             return String(localized: "sharedLocation.share.offline", defaultValue: "Le partage de position a besoin du réseau", bundle: .main)
         case .refused(.rateLimited):
             return String(localized: "sharedLocation.share.rateLimited", defaultValue: "Trop d'envois, réessaie dans un instant", bundle: .main)

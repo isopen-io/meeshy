@@ -99,8 +99,8 @@ struct SharedLocationSendingTests {
         #expect(verdict(["success": false, "error": "x", "code": "INCONNU"]) == .refused(.failed))
     }
 
-    @Test func unAccuséQuiNeVientPas_ditHorsLigne() {
-        #expect(verdict(nil) == .refused(.offline))
+    @Test func unAccuséQuiNeVientPas_neDitJamaisQueRienNEstParti() {
+        #expect(verdict(nil) == .refused(.unconfirmed))
     }
 
     // MARK: - La cadence des mises à jour
