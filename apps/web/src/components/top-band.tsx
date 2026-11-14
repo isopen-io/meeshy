@@ -11,9 +11,11 @@ import {
   PLAYER_BANNER_EXIT_MS,
   PLAYER_BANNER_EXIT_REDUCED_MS,
   PLAYER_BANNER_HOLD_MS,
+  PLAYER_BANNER_RECALL_MS,
   playerBannerVisitStore,
   watchPlayerBannerAbsence,
 } from '@/lib/view/player-banner-visit';
+import { useBannerRecall } from '@/lib/view/use-banner-recall';
 import {
   BANNER_EXIT_MS,
   callResumeShownStore,
@@ -59,7 +61,9 @@ const occupants = (slots: TopBandSlots): string =>
  *
  * La bannière du joueur ne paraît qu'à l'OUVERTURE de l'application, 30 s,
  * puis remonte et s'efface (#9536, `lib/view/player-banner-visit.ts`) : cela
- * supplante le « toujours visible » de #9494.
+ * supplante le « toujours visible » de #9494. Elle REVIENT quelques secondes
+ * quand un acte est réalisé, l'Offrande prête ou la Flamme à risque, ou quand
+ * on tire la liste (#17366, `useBannerRecall`, `recallPlayerBanner`).
  *
  * Sur les routes qui portent la bannière, le bandeau RÉSERVE sa hauteur
  * (`onInset`) : la coquille la reporte dans `--safe-top` de l'arbre des
@@ -67,9 +71,14 @@ const occupants = (slots: TopBandSlots): string =>
  * comme iOS, où « seul le viewport bouge ». Ailleurs, la pile se pose
  * par-dessus, comme avant.
  */
-export type VisitTiming = { readonly holdMs: number; readonly exitMs: number };
+export type VisitTiming = {
+  readonly holdMs: number;
+  readonly exitMs: number;
+  /** Le temps d'un rappel (#17366) ; à défaut, `PLAYER_BANNER_RECALL_MS`. */
+  readonly recallMs?: number;
+};
 
-const DEFAULT_TIMING: VisitTiming = { holdMs: PLAYER_BANNER_HOLD_MS, exitMs: PLAYER_BANNER_EXIT_MS };
+const DEFAULT_TIMING: VisitTiming = { holdMs: PLAYER_BANNER_HOLD_MS, exitMs: PLAYER_BANNER_EXIT_MS, recallMs: PLAYER_BANNER_RECALL_MS };
 
 export function TopBand({
   routeKey,
@@ -91,6 +100,7 @@ export function TopBand({
   const reserves = showsPlayerBanner(routeKey);
   const visit = useStore(playerBannerVisitStore, (state) => state.phase);
   useBannerVisitClock(timing, signedIn);
+  useBannerRecall(signedIn);
   const eligible = signedIn && !prefs.hidden && reserves && visit !== 'gone';
   const slots = topBandSlots({ call: localCall || resumeShown, audio, player: eligible });
   const column = useRef<HTMLDivElement | null>(null);
@@ -145,9 +155,10 @@ export function TopBand({
  * `lib/view/player-banner-visit.ts` ; l'horloge, ici, parce qu'elle suit la
  * vie du bandeau.
  */
-function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean): void {
+function useBannerVisitClock({ holdMs, exitMs, recallMs = PLAYER_BANNER_RECALL_MS }: VisitTiming, signedIn: boolean): void {
   const phase = useStore(playerBannerVisitStore, (state) => state.phase);
   const visit = useStore(playerBannerVisitStore, (state) => state.visit);
+  const recall = useStore(playerBannerVisitStore, (state) => state.recall);
   useEffect(() => watchPlayerBannerAbsence(), []);
   useEffect(() => {
     const { send } = playerBannerVisitStore.getState();
@@ -156,7 +167,7 @@ function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean)
       return () => clearTimeout(id);
     }
     if (phase === 'shown') {
-      const id = setTimeout(() => send('expired'), holdMs);
+      const id = setTimeout(() => send('expired'), recall ? recallMs : holdMs);
       return () => clearTimeout(id);
     }
     if (phase === 'leaving') {
@@ -164,7 +175,7 @@ function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean)
       return () => clearTimeout(id);
     }
     return undefined;
-  }, [phase, visit, signedIn, holdMs, exitMs]);
+  }, [phase, visit, recall, signedIn, holdMs, exitMs, recallMs]);
 }
 
 /**

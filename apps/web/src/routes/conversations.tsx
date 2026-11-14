@@ -9,6 +9,7 @@ import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { useRowActionNotice } from '@/lib/view/row-action-notice';
+import { withBannerRecall } from '@/lib/view/player-banner-visit';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT, type RowPlace } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -127,6 +128,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+const pullTheList = withBannerRecall(refreshListAction);
 
 /* Renommer et confirmer un blocage (#10593) : chargés au geste. */
 const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));
@@ -381,9 +383,9 @@ export default function ConversationsScreen() {
   /**
    * TIRER-POUR-RAFRAÎCHIR (#6195) — le MÊME scrollport que la sentinelle et
    * `useScene` : `refreshListAction` (conversations page 1 + stories/humeurs
-   * en parallèle, `lib/api/query.ts`).
+   * en parallèle, `lib/api/query.ts`) ; le geste rappelle aussi le bandeau du joueur (#17366).
    */
-  const pull = usePullToRefresh({ root: frame, onRefresh: refreshListAction, threshold: PULL_THRESHOLD });
+  const pull = usePullToRefresh({ root: frame, onRefresh: pullTheList, threshold: PULL_THRESHOLD });
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
