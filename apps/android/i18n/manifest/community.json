@@ -407,6 +407,12 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "community.online",
+          "androidName": "community_online",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "community.privacy.private",
           "androidName": "community_privacy_private",
           "status": "adopted"
