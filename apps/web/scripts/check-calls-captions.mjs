@@ -323,9 +323,23 @@ try {
       const unfoldOut = await page.$eval('[data-call-journal-original]', (element) => getComputedStyle(element).animationName).catch(() => 'parti sans fondu');
       check(unfoldOut === 'call-unfold-out', `${label} : le second toucher le fait REMONTER en fondu (${unfoldOut})`);
       check(await page.waitForFunction(() => document.querySelector('[data-call-journal-original]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : replié, l'original ne laisse rien`);
-      await page.click('[data-panel-back]');
-      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ revient aux rails`);
-      check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
+      // P6.3, P9b.4 (#17928) : la tête d'iOS — « Journal » au bord de tête, la bascule au bord de fin, ni ‹ ni ✕.
+      const head = await page.$eval('[data-call-control-pill] [data-call-journal-panel]', (panel) => {
+        const title = panel.querySelector('h2')?.getBoundingClientRect();
+        const views = panel.querySelector('[data-call-journal-view]')?.getBoundingClientRect();
+        const box = panel.getBoundingClientRect();
+        return { chrome: panel.querySelectorAll('[data-panel-back], [data-panel-close]').length, titleAtStart: title !== undefined && title.left - box.left < 24, viewsAtEnd: views !== undefined && box.right - views.right < 24, ordered: title !== undefined && views !== undefined && title.right <= views.left };
+      });
+      check(head.chrome === 0 && head.titleAtStart && head.viewsAtEnd && head.ordered, `${label} : tête du journal « Journal » à gauche, bascule à droite, sans ‹ ni ✕ (${JSON.stringify(head)})`);
+      // P9b.3 (#17964) : (…) reste au repos sous le journal ; « Journal » en disque blanc pressé, au pied, le referme.
+      const moreAtRest = await page.$eval('[data-call-control-pill] [data-call-more]', (more) => ({ expanded: more.getAttribute('aria-expanded'), white: getComputedStyle(more).backgroundColor === 'rgb(255, 255, 255)' }));
+      check(moreAtRest.expanded === 'false' && !moreAtRest.white, `${label} : (…) n'est pas ouvert sous le journal (${JSON.stringify(moreAtRest)})`);
+      const closer = page.locator('[data-call-control-pill] [data-call-journal-panel] [data-call-journal-toggle]');
+      const closerSize = await tapSize(closer);
+      check((await closer.getAttribute('aria-pressed')) === 'true' && closerSize.ok, `${label} : « Journal » au pied du journal, pressé, d'au moins ${TAP_FLOOR} (${JSON.stringify(closerSize.size)})`);
+      await closer.click();
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : retoucher « Journal » referme le journal`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle', undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : et rend la pilule au repos`);
 
       // ---- 4 bis. le journal DANS la pilule, depuis le pied des sous-titres (#17343, #17346)
       await closeActions(page);
@@ -341,8 +355,9 @@ try {
       check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : les rails sortent`);
       await page.click('[data-call-control-pill] [data-call-more]');
       check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : refermer les actions rend le journal`);
-      await page.click('[data-panel-close]');
-      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : ✕ rend les sous-titres`);
+      await page.click('[data-call-control-pill] [data-call-journal-toggle]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : « Journal » en disque blanc rend les sous-titres (#17964)`);
+      check(await page.waitForFunction(() => document.activeElement?.hasAttribute('data-call-captions-journal') === true, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le focus revient au « Journal » des sous-titres`);
 
       // ---- 4 ter. sous « Réduire les animations », (…) ne les coupe pas net (#17700) :
       // la règle générale de la feuille éteint leur fondu CSS, le moteur le rejoue court.
@@ -384,8 +399,8 @@ try {
       check(await appears(page, '[data-call-screen="connected"]'), `${label} : l'appel revient`);
       check(await openJournal(), `${label} : le journal s'ouvre, l'appel revenu`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, réduit puis rouvert (${JSON.stringify(await journalEntries())})`);
-      await page.click('[data-panel-close]');
-      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : ✕ ferme le journal`);
+      await page.click('[data-call-control-pill] [data-call-journal-toggle]');
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : « Journal » en disque blanc ferme le journal (#17964)`);
 
       if (withSpeech) {
         // ------------------------------------------------ 5. le raccroché
