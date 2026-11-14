@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  EPHEMERAL_BURN_FULL_MS,
+  ephemeralBurnDurationMs,
+  ephemeralBurnFrontDirection,
+  ephemeralBurnWind,
+} from '@meeshy/shared/utils/ephemeral-burn';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
+import { prefersReducedMotion } from './reduced-motion';
 
 /**
  * **LA DESTRUCTION SE VOIT** (#7468, travail 2) — précision du porteur,
@@ -15,12 +23,34 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
  */
 
 /**
- * La durée de l'effet, partagée par le CSS (`--ephemeral-destruction-ms`,
- * `thread-protection.css`) et par la fenêtre de la loi. **Une seule valeur**
- * : une animation plus longue que la fenêtre se ferait couper au milieu, une
- * fenêtre plus longue que l'animation laisserait une rangée vide à l'écran.
+ * La fenêtre de la LOI (#17938, #18556) — `EPHEMERAL_BURN_FULL_MS`, partagée
+ * avec iOS et Android. La phase pure la lit telle quelle : c'est la borne
+ * haute, celle d'une combustion complète.
  */
-export const DESTRUCTION_MS = 700;
+export const DESTRUCTION_MS = EPHEMERAL_BURN_FULL_MS;
+
+/**
+ * Ce que dure VRAIMENT la combustion à l'écran : la combustion pleine, ou le
+ * fondu de « Réduire les animations ». Les minuteries de retrait la lisent,
+ * sans quoi une rangée fondue resterait vide jusqu'à la fin de la fenêtre pleine.
+ */
+export function destructionWindowMs(reduceMotion: boolean = prefersReducedMotion()): number {
+  return ephemeralBurnDurationMs(reduceMotion);
+}
+
+/** Le sens où file le front, à l'écran : le feu part du bord d'où vient le vent par défaut. */
+export type BurnFront = 'left' | 'right';
+
+/**
+ * Le web ne lit aucun capteur (aucune demande d'autorisation au moment d'une
+ * destruction) : le vent est celui que la loi donne au CÔTÉ de la bulle. Le
+ * côté est celui de l'ÉCRAN, si bien qu'une interface de droite à gauche
+ * l'inverse.
+ */
+export function burnFrontOf(input: { readonly isMine: boolean; readonly rtl: boolean }): BurnFront {
+  const onTheRight = input.isMine !== input.rtl;
+  return ephemeralBurnFrontDirection(ephemeralBurnWind(null, onTheRight ? 'mine' : 'theirs')) === 1 ? 'right' : 'left';
+}
 
 export type DestructionPhase = 'visible' | 'destroying' | 'gone';
 
@@ -124,7 +154,7 @@ export function useEphemeralDestruction(): EphemeralDestruction {
           next.delete(messageId);
           return next;
         });
-      }, DESTRUCTION_MS),
+      }, destructionWindowMs()),
     );
   }, []);
 
