@@ -381,13 +381,23 @@ struct SignupView: View {
                 }
                 return .handled
             })
+            .accessibilityAction(named: Text(legalTerms)) { isShowingTerms = true }
+            .accessibilityAction(named: Text(legalPrivacy)) { isShowingPrivacy = true }
+    }
+
+    private var legalTerms: String {
+        String(localized: "auth.signup.legal.terms", defaultValue: "conditions d'utilisation", bundle: .main)
+    }
+
+    private var legalPrivacy: String {
+        String(localized: "auth.signup.legal.privacy", defaultValue: "politique de confidentialité", bundle: .main)
     }
 
     private var legalSentence: AttributedString {
         SignupLegalNotice.attributed(
             format: String(localized: "auth.signup.legal.consent", defaultValue: "En continuant, vous acceptez les %1$@ et la %2$@.", bundle: .main),
-            terms: String(localized: "auth.signup.legal.terms", defaultValue: "conditions d'utilisation", bundle: .main),
-            privacy: String(localized: "auth.signup.legal.privacy", defaultValue: "politique de confidentialité", bundle: .main)
+            terms: legalTerms,
+            privacy: legalPrivacy
         )
     }
 
