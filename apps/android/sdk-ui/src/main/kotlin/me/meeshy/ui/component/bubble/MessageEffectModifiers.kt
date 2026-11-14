@@ -34,6 +34,7 @@ import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.PersistentEffect
 import me.meeshy.sdk.model.SparkleFields
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -61,8 +62,9 @@ public fun Modifier.messageEffects(
     shape: Shape = RoundedCornerShape(18.dp),
     appearanceSeed: Long = 0L,
 ): Modifier {
-    val plan = remember(effects, hasPlayedAppearance) {
-        MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance)
+    val reduceMotion = LocalReduceMotion.current
+    val plan = remember(effects, hasPlayedAppearance, reduceMotion) {
+        MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance, reduceMotion)
     }
     return this
         .appearanceTransforms(plan, appearanceSeed)
@@ -121,29 +123,34 @@ private fun Modifier.appearanceTransforms(
         }
 }
 
-/** The continuous glow / pulse / rainbow treatments (iOS `GlowEffect`/`PulseEffect`/`RainbowEffect`). */
+/**
+ * The continuous glow / pulse / rainbow treatments (iOS `GlowEffect`/`PulseEffect`/`RainbowEffect`). When the plan
+ * does not animate them (« Reduire les animations », iOS `animatesPersistent == false`), the surviving glow is drawn
+ * STILL at its full intensity and no infinite transition is created.
+ */
 @Composable
 private fun Modifier.persistentEffects(plan: MessageEffectRenderPlan, shape: Shape): Modifier {
     if (plan.persistent.isEmpty()) return this
+    if (!plan.animatesPersistent) return stillGlow(plan, shape)
 
     val transition = rememberInfiniteTransition(label = "message-effects")
     val pulseScale by transition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.02f,
-        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+        targetValue = PULSE_PEAK_SCALE,
+        animationSpec = infiniteRepeatable(tween(PULSE_PERIOD_MS), RepeatMode.Reverse),
         label = "pulse",
     )
     val intensity = plan.glowIntensity.toFloat()
     val glowAlpha by transition.animateFloat(
-        initialValue = (intensity * 0.3f).coerceIn(0f, 1f),
+        initialValue = (intensity * GLOW_LOW_SHARE).coerceIn(0f, 1f),
         targetValue = intensity.coerceIn(0f, 1f),
-        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(GLOW_PERIOD_MS), RepeatMode.Reverse),
         label = "glow-alpha",
     )
     val glowRadius by transition.animateFloat(
-        initialValue = 4f,
-        targetValue = 12f,
-        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+        initialValue = GLOW_MIN_RADIUS_DP,
+        targetValue = GLOW_MAX_RADIUS_DP,
+        animationSpec = infiniteRepeatable(tween(GLOW_PERIOD_MS), RepeatMode.Reverse),
         label = "glow-radius",
     )
 
@@ -164,6 +171,13 @@ private fun Modifier.persistentEffects(plan: MessageEffectRenderPlan, shape: Sha
         }
     }
     return result
+}
+
+/** The still glow of a reduced-motion plan: the halo keeps its meaning, never its breathing. */
+private fun Modifier.stillGlow(plan: MessageEffectRenderPlan, shape: Shape): Modifier {
+    if (PersistentEffect.GLOW !in plan.persistent) return this
+    val glowColor = MeeshyPalette.Indigo500.copy(alpha = plan.glowIntensity.toFloat().coerceIn(0f, 1f))
+    return shadow(elevation = GLOW_MAX_RADIUS_DP.dp, shape = shape, ambientColor = glowColor, spotColor = glowColor)
 }
 
 /**
@@ -257,6 +271,13 @@ private fun Modifier.sparkleCanvas(plan: MessageEffectRenderPlan): Modifier {
             }
     }
 }
+
+private const val PULSE_PEAK_SCALE: Float = 1.02f
+private const val PULSE_PERIOD_MS: Int = 1000
+private const val GLOW_PERIOD_MS: Int = 1500
+private const val GLOW_LOW_SHARE: Float = 0.3f
+private const val GLOW_MIN_RADIUS_DP: Float = 4f
+private const val GLOW_MAX_RADIUS_DP: Float = 12f
 
 /** One-shot appearance-transform run length in ms — covers the longest effect (waoo ≈ 0.7s). */
 private const val TRANSFORM_DURATION_MS: Int = 700

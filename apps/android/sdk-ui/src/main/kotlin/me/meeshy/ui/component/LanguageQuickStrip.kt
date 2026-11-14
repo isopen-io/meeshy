@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.R
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -137,6 +140,9 @@ fun LanguageQuickStrip(
 /** Au-delà de ce nombre de drapeaux la rangée défile ; en deçà, la pilule épouse son contenu (iOS `inlineCap`). */
 internal const val LANGUAGE_STRIP_INLINE_CAP: Int = 5
 
+/** L'échelle d'un drapeau survolé par le geste glissé (aucune sous « Réduire les animations »). */
+private const val LANGUAGE_HOVER_SCALE = 1.35f
+
 /** Largeur de la fenêtre défilante : ~5 drapeaux, comme la barre de réactions. */
 private val LanguageStripScrollWidth = 180.dp
 
@@ -149,9 +155,10 @@ internal fun plusTileIndex(count: Int): Int = count
 @Composable
 private fun MoreLanguagesTile(isHighlighted: Boolean, onClick: () -> Unit, onBounds: ((Rect) -> Unit)?) {
     val label = stringResource(R.string.language_strip_more)
+    val reduceMotion = LocalReduceMotion.current
     val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.35f else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(isHighlighted, LANGUAGE_HOVER_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "languagePlusScale",
     )
     Box(
@@ -187,9 +194,10 @@ private fun LanguageChipTile(
     onBounds: ((Rect) -> Unit)?,
 ) {
     val selectLabel = stringResource(R.string.language_strip_select, option.label)
+    val reduceMotion = LocalReduceMotion.current
     val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.35f else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(isHighlighted, LANGUAGE_HOVER_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "languageChipScale",
     )
     Box(

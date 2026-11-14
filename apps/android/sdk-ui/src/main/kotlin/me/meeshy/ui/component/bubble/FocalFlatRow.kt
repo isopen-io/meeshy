@@ -57,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.ui.component.focal.ElectedMetrics
 import me.meeshy.ui.component.focal.FocalElectedFrame
@@ -116,11 +118,12 @@ public fun FocalFlatRow(
         isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
+    val reduceMotion = LocalReduceMotion.current
     AnimatedVisibility(
         visible = !renderKind.isEphemeralExpired,
         modifier = modifier,
         enter = EnterTransition.None,
-        exit = fadeOut() + shrinkVertically(),
+        exit = meeshyExit(reduceMotion, fadeOut() + shrinkVertically()),
     ) {
         Box(
             modifier = Modifier

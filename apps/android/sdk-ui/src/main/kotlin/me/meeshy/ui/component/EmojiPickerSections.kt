@@ -1,6 +1,8 @@
 package me.meeshy.ui.component
 
-import android.provider.Settings
+import me.meeshy.ui.motion.meeshySpec
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,7 +53,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -74,6 +75,7 @@ private val CellMinSize = 48.dp
 private val GridEmojiSize = 26.sp
 private val QuickEmojiSize = 32.sp
 private const val PressedScale = 1.3f
+private const val PressedReducedAlpha = 0.6f
 private const val SkeletonCells = 32
 
 /** Tab glyph per category — the Material counterpart of the iOS SF Symbols (clock, face.smiling, …). */
@@ -178,7 +180,7 @@ internal fun EmojiPickerBody(
 ) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(scrollKey) { gridState.scrollToItem(0) }
-    val reduceMotion = rememberReducedMotion()
+    val reduceMotion = LocalReduceMotion.current
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = CellMinSize),
         state = gridState,
@@ -256,8 +258,8 @@ private fun LazyGridScope.emojiCells(
 }
 
 /**
- * One tappable emoji: at least 48 dp, a brief spring scale-up while pressed (held still when
- * the system asks to reduce motion) and a light haptic tick on selection.
+ * One tappable emoji: at least 48 dp, a brief spring scale-up while pressed (under « Reduire les
+ * animations », no scale but a dimming veil, K02 § 4) and a light haptic tick on selection.
  */
 @Composable
 private fun EmojiCell(
@@ -269,16 +271,17 @@ private fun EmojiCell(
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed && !reduceMotion) PressedScale else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(pressed, PressedScale, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "emojiCellScale",
     )
+    val veil = if (pressed && reduceMotion) PressedReducedAlpha else 1f
     val haptic = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = CellMinSize)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer { scaleX = scale; scaleY = scale; alpha = veil }
             .clickable(interactionSource = interactions, indication = null, role = Role.Button) {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onSelect(emoji)
@@ -308,14 +311,5 @@ private fun NoResults() {
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-/** True when the user turned system animations off (animator scale 0) — the picker then skips its tap pulse. */
-@Composable
-private fun rememberReducedMotion(): Boolean {
-    val resolver = LocalContext.current.contentResolver
-    return remember(resolver) {
-        Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
 }

@@ -1,6 +1,12 @@
 package me.meeshy.ui.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -50,13 +56,21 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.motion.meeshySpec
+import me.meeshy.ui.motion.motionSpec
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshyMotion
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -104,8 +118,10 @@ public fun CollapsibleSection(
         if (expanded == null) ownExpanded = next
         onExpandedChange?.invoke(next)
     }
+    val reduceMotion = LocalReduceMotion.current
     val chevronRotation by animateFloatAsState(
         targetValue = if (isExpanded) 0f else -90f,
+        animationSpec = meeshySpec(reduceMotion, spring()),
         label = "collapsible-chevron",
     )
     val tokens = MeeshyTheme.tokens
@@ -136,21 +152,23 @@ public fun CollapsibleSection(
                 color = tokens.textPrimary,
                 modifier = Modifier.weight(1f),
             )
-            if (!isExpanded && foldedUnread > 0) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(MeeshyRadius.pill))
-                        .background(iconContainerColor)
-                        .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp)
-                        .semantics { foldedUnreadDescription?.let { contentDescription = it } },
-                ) {
-                    Text(
-                        text = foldedUnread.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MeeshyPalette.White,
-                    )
+            FoldedUnreadPresence(foldedUnread.takeIf { !isExpanded && it > 0 }) { unread ->
+                Row {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(MeeshyRadius.pill))
+                            .background(iconContainerColor)
+                            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp)
+                            .semantics { foldedUnreadDescription?.let { contentDescription = it } },
+                    ) {
+                        Text(
+                            text = unread.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MeeshyPalette.White,
+                        )
+                    }
+                    Spacer(Modifier.width(MeeshySpacing.sm))
                 }
-                Spacer(Modifier.width(MeeshySpacing.sm))
             }
             if (count > 0) {
                 Box(
@@ -174,7 +192,11 @@ public fun CollapsibleSection(
                 modifier = Modifier.rotate(chevronRotation),
             )
         }
-        AnimatedVisibility(visible = isExpanded) {
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = meeshyEnter(reduceMotion, fadeIn() + expandVertically()),
+            exit = meeshyExit(reduceMotion, fadeOut() + shrinkVertically()),
+        ) {
             Column(content = content)
         }
     }
@@ -211,12 +233,34 @@ private fun Modifier.foldsOnShortTap(stateDescription: String?, onFold: () -> Un
         }
 }
 
+/**
+ * La pastille des non-lus plies entre et sort en fondu avec une echelle (ressort rapide), en fondu seul sous « Reduire
+ * les animations » ; pendant sa sortie elle peint encore le dernier compte.
+ */
+@Composable
+private fun FoldedUnreadPresence(unread: Int?, content: @Composable (Int) -> Unit) {
+    MeeshyAnimatedVisibility(
+        value = unread,
+        enter = fadeIn() + scaleIn(MeeshyMotion.springFast(), initialScale = FOLDED_UNREAD_FROM_SCALE),
+        exit = fadeOut() + scaleOut(MeeshyMotion.springFast(), targetScale = FOLDED_UNREAD_FROM_SCALE),
+        label = "folded-unread",
+    ) { content(it) }
+}
+
+/** L'etiquette de test de la pastille des non-lus plies de [CollapsibleSectionHeader]. */
+internal const val COLLAPSIBLE_FOLDED_UNREAD_TAG: String = "collapsible-folded-unread"
+
 private const val PRESS_HOLD_MILLIS = 150L
 private const val PRESS_DISC_SCALE = 1.2f
 private const val PRESS_ICON_SCALE = 1.15f
 private const val PRESS_CAPSULE_SCALE = 1.1f
 private const val HALO_ALPHA = 0.15f
 private const val CHEVRON_QUARTER_TURN = 90f
+private const val HALO_FADE_MILLIS = 400
+private const val CHEVRON_TURN_MILLIS = 200
+private const val FOLDED_UNREAD_FROM_SCALE = 0.6f
+private const val SECTION_PRESS_RESPONSE = 0.25f
+private const val SECTION_PRESS_DAMPING = 0.6f
 
 /**
  * L'en-tête classique d'une section (iOS `SectionHeaderView`) — SEUL, sans ses rangs : la liste virtualisée
@@ -240,15 +284,20 @@ public fun CollapsibleSectionHeader(
     val tokens = MeeshyTheme.tokens
     val haptics = rememberMeeshyHaptics()
     val scope = rememberCoroutineScope()
+    val reduceMotion = LocalReduceMotion.current
     var tapped by remember { mutableStateOf(false) }
-    val press = remember { spring<Float>(dampingRatio = 0.6f, stiffness = MeeshyMotion.stiffnessForResponse(0.25f)) }
-    val discScale by animateFloatAsState(if (tapped) PRESS_DISC_SCALE else 1f, press, label = "section-disc")
-    val iconScale by animateFloatAsState(if (tapped) PRESS_ICON_SCALE else 1f, press, label = "section-icon")
-    val capsuleScale by animateFloatAsState(if (tapped) PRESS_CAPSULE_SCALE else 1f, press, label = "section-capsule")
-    val halo by animateFloatAsState(if (expanded) HALO_ALPHA else 0f, tween(400), label = "section-halo")
+    val press = motionSpec(reduceMotion, SECTION_PRESS_RESPONSE, SECTION_PRESS_DAMPING)
+    val discScale by animateFloatAsState(MotionSpecs.pressScale(tapped, PRESS_DISC_SCALE, reduceMotion), press, label = "section-disc")
+    val iconScale by animateFloatAsState(MotionSpecs.pressScale(tapped, PRESS_ICON_SCALE, reduceMotion), press, label = "section-icon")
+    val capsuleScale by animateFloatAsState(MotionSpecs.pressScale(tapped, PRESS_CAPSULE_SCALE, reduceMotion), press, label = "section-capsule")
+    val halo by animateFloatAsState(if (expanded) HALO_ALPHA else 0f, meeshySpec(reduceMotion, tween(HALO_FADE_MILLIS)), label = "section-halo")
     val reading = LocalLayoutDirection.current
     val quarterTurn = if (reading == LayoutDirection.Rtl) -CHEVRON_QUARTER_TURN else CHEVRON_QUARTER_TURN
-    val chevron by animateFloatAsState(if (expanded) quarterTurn else 0f, tween(200), label = "section-chevron")
+    val chevron by animateFloatAsState(
+        if (expanded) quarterTurn else 0f,
+        meeshySpec(reduceMotion, tween(CHEVRON_TURN_MILLIS)),
+        label = "section-chevron",
+    )
     val fold: () -> Unit = {
         haptics.light()
         tapped = true
@@ -299,9 +348,11 @@ public fun CollapsibleSectionHeader(
             }
         }
         Spacer(Modifier.weight(1f))
-        if (!expanded && foldedUnread > 0) {
-            Box(Modifier.clearAndSetSemantics {}) { MeeshyUnreadBadge(count = foldedUnread) }
-            Spacer(Modifier.width(MeeshySpacing.sm))
+        FoldedUnreadPresence(foldedUnread.takeIf { !expanded && it > 0 }) { unread ->
+            Row {
+                Box(Modifier.clearAndSetSemantics { testTag = COLLAPSIBLE_FOLDED_UNREAD_TAG }) { MeeshyUnreadBadge(count = unread) }
+                Spacer(Modifier.width(MeeshySpacing.sm))
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,

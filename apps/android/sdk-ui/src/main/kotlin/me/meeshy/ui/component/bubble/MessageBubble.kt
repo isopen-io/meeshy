@@ -8,6 +8,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.sdk.model.BubbleRenderKind
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.theme.MeeshyPalette
@@ -68,7 +70,7 @@ public fun MessageBubble(
         visible = !renderKind.isEphemeralExpired,
         modifier = modifier,
         enter = EnterTransition.None,
-        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+        exit = meeshyExit(LocalReduceMotion.current, fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically()),
     ) {
         when {
             // A conversation notice (join/leave/legacy summary) renders as a centered,

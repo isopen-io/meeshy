@@ -38,6 +38,7 @@ import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.LiveLocationCountdown
 import me.meeshy.sdk.model.LiveLocationDuration
 import me.meeshy.ui.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -80,13 +81,17 @@ public fun LiveLocationBadge(
     val remainingText = stringResource(R.string.live_location_remaining, clockLabel)
     val accent = resolveAccent(accentColor)
 
-    val pulse = rememberInfiniteTransition(label = "live-location-pulse")
-    val dotScale by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 1_000), RepeatMode.Reverse),
-        label = "live-location-dot",
-    )
+    val dotScale = if (LocalReduceMotion.current) {
+        1f
+    } else {
+        val pulsing by rememberInfiniteTransition(label = "live-location-pulse").animateFloat(
+            initialValue = 1f,
+            targetValue = LIVE_DOT_PULSE_SCALE,
+            animationSpec = infiniteRepeatable(tween(durationMillis = LIVE_DOT_PULSE_MILLIS), RepeatMode.Reverse),
+            label = "live-location-dot",
+        )
+        pulsing
+    }
 
     Row(
         modifier = modifier
@@ -201,6 +206,9 @@ public fun LiveLocationDurationPicker(
         }
     }
 }
+
+private const val LIVE_DOT_PULSE_SCALE = 1.3f
+private const val LIVE_DOT_PULSE_MILLIS = 1_000
 
 @Composable
 private fun resolveAccent(accentColor: String?): Color {
