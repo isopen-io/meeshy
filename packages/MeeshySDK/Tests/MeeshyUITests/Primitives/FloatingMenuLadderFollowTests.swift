@@ -29,9 +29,20 @@ final class FloatingMenuLadderFollowTests: XCTestCase {
         XCTAssertEqual((r5 - r1) / 4, r1 - r0, accuracy: 1e-9, "la chaîne est régulière : même pas entre deux rangs voisins")
     }
 
-    func test_response_firstRung_isBrisk_lastRung_staysUnderHalfASecond() {
+    /// **L'élastique se mesure au bout de l'échelle** (retour porteur du
+    /// 2026-11-14) : le premier barreau colle au disque, le dernier traîne
+    /// franchement — entre une demi-seconde et une seconde de réponse sur huit
+    /// barreaux. Une chaîne trop serrée (0,22 + 0,03 : 0,43 s au bout) se
+    /// lisait comme un bloc qui suit, pas comme une échelle qu'on tire.
+    func test_response_firstRung_isBrisk_lastRung_lagsLikeTheEndOfALadder() {
         XCTAssertLessThanOrEqual(decorated.response(rung: 0), 0.3, "le premier barreau colle presque au disque")
-        XCTAssertLessThan(decorated.response(rung: 7), 0.45, "huit barreaux : le dernier ne traîne pas une demi-seconde derrière — mesuré à 0,54 s, la chaîne s'étirait trop sur un glisser vif (recette du 2026-11-14)")
+        XCTAssertGreaterThanOrEqual(decorated.response(rung: 7), 0.5, "huit barreaux : le bout de l'échelle traîne visiblement (élastique)")
+        XCTAssertLessThan(decorated.response(rung: 7), 1.0, "mais il ne reste pas une seconde derrière")
+    }
+
+    func test_spring_isUnderdamped_soEachRungOvershootsAndSettles() {
+        XCTAssertLessThan(FloatingMenuLadderFollow.dampingFraction, 0.7, "un ressort sous-amorti : le barreau dépasse sa place puis revient — c'est le rebond élastique")
+        XCTAssertGreaterThanOrEqual(FloatingMenuLadderFollow.dampingFraction, 0.5, "sans tourner à la gélatine")
     }
 
     func test_animation_decorated_isASpring_perRung() {
