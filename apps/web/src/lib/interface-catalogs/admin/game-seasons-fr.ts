@@ -9,7 +9,7 @@
  */
 const f = {
   'admin.gameSeasons.title': 'Jeu — saisons',
-  'admin.gameSeasons.subtitle': 'Une saison ouverte ou passée ne se réécrit pas.',
+  'admin.gameSeasons.subtitle': 'Programmer, décaler ou mettre en pause une saison à venir ; une saison ouverte ou passée ne se réécrit pas.',
   'admin.gameSeasons.loadFailed': 'Le calendrier des saisons n’a pas pu être chargé.',
   'admin.gameSeasons.revision': 'Révision {revision}',
   'admin.gameSeasons.today': 'Aujourd’hui : {date}',

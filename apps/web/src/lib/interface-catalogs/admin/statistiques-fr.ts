@@ -160,6 +160,7 @@ const f = {
   'admin.analytics.calls.issue.sync': 'Son et image décalés',
   'admin.analytics.calls.issue.other': 'Autre problème',
 
+  'admin.lang.subtitle': 'Quelles langues s’écrivent sur Meeshy, lesquelles se traduisent, et avec quelle fiabilité.',
   'admin.lang.overview.title': 'Vue d’ensemble',
   'admin.lang.messages': 'Messages analysés',
   'admin.lang.messages.caption': 'Somme des {count} langues affichées',

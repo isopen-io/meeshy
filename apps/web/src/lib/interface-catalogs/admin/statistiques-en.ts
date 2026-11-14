@@ -154,6 +154,7 @@ const f = {
   'admin.analytics.calls.issue.sync': 'Sound and picture out of sync',
   'admin.analytics.calls.issue.other': 'Other problem',
 
+  'admin.lang.subtitle': 'Which languages are written on Meeshy, which get translated, and how reliably.',
   'admin.lang.overview.title': 'Overview',
   'admin.lang.messages': 'Messages analysed',
   'admin.lang.messages.caption': 'Sum of the {count} languages shown',

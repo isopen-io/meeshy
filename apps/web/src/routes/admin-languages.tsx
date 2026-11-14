@@ -177,7 +177,7 @@ export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly lan
 
   return (
     <div className="grid gap-6" data-admin-languages>
-      <AdminPageHeader language={language} title={translateAdmin(language, 'admin.nav.languages')} />
+      <AdminPageHeader language={language} title={translateAdmin(language, 'admin.nav.languages')} subtitle={translateAdmin(language, 'admin.lang.subtitle')} />
       <AdminOfflineNotice language={language} />
       <StaleDataNotice language={language} queries={[stats, timeline, accuracy]} />
       <AdminFilterChips

@@ -3,7 +3,7 @@ import type fr from './game-seasons-fr';
 
 const f = {
   'admin.gameSeasons.title': 'Jogo — temporadas',
-  'admin.gameSeasons.subtitle': 'Uma temporada aberta ou encerrada não se reescreve.',
+  'admin.gameSeasons.subtitle': 'Programar, adiar ou pausar uma temporada futura; uma temporada aberta ou encerrada não se reescreve.',
   'admin.gameSeasons.loadFailed': 'Não foi possível carregar o calendário de temporadas.',
   'admin.gameSeasons.revision': 'Revisão {revision}',
   'admin.gameSeasons.today': 'Hoje: {date}',

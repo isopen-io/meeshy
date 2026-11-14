@@ -3,7 +3,7 @@ import type fr from './game-seasons-fr';
 
 const f = {
   'admin.gameSeasons.title': 'Game — seasons',
-  'admin.gameSeasons.subtitle': 'A season that is open or over cannot be rewritten.',
+  'admin.gameSeasons.subtitle': 'Schedule, shift or pause an upcoming season; a season that is open or over cannot be rewritten.',
   'admin.gameSeasons.loadFailed': 'The season calendar could not be loaded.',
   'admin.gameSeasons.revision': 'Revision {revision}',
   'admin.gameSeasons.today': 'Today: {date}',
