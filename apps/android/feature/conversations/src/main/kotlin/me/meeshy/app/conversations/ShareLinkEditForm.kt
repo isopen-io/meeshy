@@ -125,6 +125,7 @@ internal fun ShareLinkEditForm(
         }
 
         ShareLinkSectionTitle(stringResource(R.string.share_link_section_access))
+        ShareLinkSectionHint(stringResource(R.string.share_link_section_access_subtitle))
         FormGroup {
             SwitchRow(stringResource(R.string.shareLink_detail_requireAccount), draft.requireAccount) {
                 onDraftChange(draft.copy(requireAccount = it))
@@ -167,6 +168,7 @@ internal fun ShareLinkEditForm(
         }
 
         ShareLinkSectionTitle(stringResource(R.string.share_link_section_permissions))
+        ShareLinkSectionHint(stringResource(R.string.share_link_section_permissions_subtitle))
         FormGroup {
             SwitchRow(stringResource(R.string.share_link_permission_messages), draft.allowMessages) {
                 onDraftChange(draft.copy(allowMessages = it))

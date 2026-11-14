@@ -63,12 +63,14 @@ internal fun ShareLinkConfigurationCard(link: MyShareLink, onEdit: () -> Unit) {
             }
 
             Subtitle(stringResource(R.string.share_link_section_permissions))
+            ShareLinkSectionHint(stringResource(R.string.share_link_section_permissions_subtitle))
             RightRow(stringResource(R.string.share_link_permission_messages), settings.allowMessages)
             RightRow(stringResource(R.string.shareLink_detail_historyRight), settings.allowHistory)
             RightRow(stringResource(R.string.share_link_permission_images), settings.allowImages)
             RightRow(stringResource(R.string.share_link_permission_files), settings.allowFiles)
 
             Subtitle(stringResource(R.string.share_link_section_access))
+            ShareLinkSectionHint(stringResource(R.string.share_link_section_access_subtitle))
             ValueRow(
                 stringResource(R.string.shareLink_detail_meeshyAccount),
                 stringResource(
@@ -118,6 +120,16 @@ internal fun ShareLinkSectionTitle(text: String) {
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.ExtraBold,
         color = MeeshyPalette.Indigo400,
+    )
+}
+
+/** La phrase qui dit À QUI s'applique un bloc du lien, sous son titre court (règle 7 de l'épure). */
+@Composable
+internal fun ShareLinkSectionHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MeeshyTheme.tokens.textSecondary,
     )
 }
 
