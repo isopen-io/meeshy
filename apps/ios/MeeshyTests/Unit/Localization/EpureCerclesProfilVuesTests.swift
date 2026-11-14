@@ -184,8 +184,23 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
     }
 
     func test_phonePrompt_header_showsTheBenefitAtRest_withoutExplainingSignIn() throws {
-        let sheet = try appCode("Features/Contacts/PhonePromptSheet.swift")
-        XCTAssertTrue(sheet.contains("contacts.phonePrompt.benefit"))
-        XCTAssertFalse(sheet.contains("te connecter"))
+        XCTAssertEqual(PhonePromptSheet.benefit, "Tes proches te retrouvent grâce à ton numéro.")
+        XCTAssertFalse(PhonePromptSheet.benefit.contains("connecter"))
+    }
+
+    /// La connexion par numéro n'est dite nulle part ailleurs dans l'app : elle ne quitte pas l'écran, elle passe
+    /// derrière un (i) dont le nom est la question (revue #18088, « aucun texte n'est perdu »).
+    func test_phonePrompt_signIn_isBehindAnInfoNamedByItsQuestion_inSevenLanguages() throws {
+        let note = PhonePromptSheet.signInNote
+        XCTAssertTrue(note.question.hasSuffix("?"))
+        XCTAssertTrue(note.text.contains("te connecter"))
+        let catalog = try app()
+        for key in ["contacts.phonePrompt.signIn.question", "contacts.phonePrompt.signIn.note"] {
+            let values = try XCTUnwrap(catalog[key], key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(values[language], "[\(language)] \(key)")
+                XCTAssertNotEqual(value, values["fr"], "[\(language)] \(key) traduit, pas copié")
+            }
+        }
     }
 }

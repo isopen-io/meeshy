@@ -16,6 +16,7 @@ struct PhonePromptSheet: View {
     @StateObject private var flow = PhoneChangeFlowModel()
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: Field?
+    @State private var openNoteID: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     private enum Field: Hashable {
@@ -54,6 +55,20 @@ struct PhonePromptSheet: View {
 
     // MARK: - En-tête : ce que le numéro ouvre
 
+    /// Le bénéfice nominal, dit au repos : les proches retrouvent le compte grâce au numéro.
+    static var benefit: String {
+        String(localized: "contacts.phonePrompt.benefit", defaultValue: "Tes proches te retrouvent grâce à ton numéro.", bundle: .main)
+    }
+
+    /// Le second usage du numéro, derrière un (i) : la passerelle accepte le numéro comme identifiant de connexion
+    /// (`AuthService.authenticate`), et aucun autre écran de l'app ne le dit (revue #18088).
+    static var signInNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "contacts.phonePrompt.signIn.question", defaultValue: "À quoi d'autre sert mon numéro ?", bundle: .main),
+            text: String(localized: "contacts.phonePrompt.signIn.note", defaultValue: "Tu peux aussi t'en servir pour te connecter, avec ton mot de passe.", bundle: .main)
+        )
+    }
+
     private var header: some View {
         VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "person.crop.circle.badge.plus")
@@ -67,11 +82,13 @@ struct PhonePromptSheet: View {
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
-            Text(String(localized: "contacts.phonePrompt.benefit", defaultValue: "Tes proches te retrouvent grâce à ton numéro.", bundle: .main))
-                .font(.subheadline)
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            MeeshyInfoNoted(note: Self.signInNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                Text(Self.benefit)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity)
     }
