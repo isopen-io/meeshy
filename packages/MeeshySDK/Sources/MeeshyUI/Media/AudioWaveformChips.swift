@@ -23,9 +23,10 @@ nonisolated public enum AudioWaveformChipLaw {
         return MediaFormat.duration(elapsed, locale: locale) + separator + formatted
     }
 
-    /// Le pourcentage entier que la puce affiche et que le lecteur d'écran dit.
+    /// Le pourcentage entier que la puce affiche et que le lecteur d'écran dit :
+    /// borné à 0…100 (un infini se borne comme le reste), NaN vaut zéro.
     public static func percentage(_ fraction: Double) -> Int {
-        guard fraction.isFinite else { return 0 }
+        guard !fraction.isNaN else { return 0 }
         return Int((max(0, min(1, fraction)) * 100).rounded(.down))
     }
 }
