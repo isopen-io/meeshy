@@ -338,7 +338,7 @@
     },
     "ios:Meeshy/contacts": {
       "labels": 91,
-      "words": 310,
+      "words": 301,
       "long": 1,
       "explanations": 0
     },
@@ -1093,8 +1093,8 @@
       "explanations": 0
     },
     "ios:Meeshy/voice": {
-      "labels": 59,
-      "words": 266,
+      "labels": 58,
+      "words": 257,
       "long": 1,
       "explanations": 9
     },

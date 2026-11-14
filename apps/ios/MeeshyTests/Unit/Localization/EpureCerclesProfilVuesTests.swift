@@ -158,4 +158,34 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
         XCTAssertTrue(create.contains("community.privacy.private"))
         XCTAssertNotNil(try ui()["community.settings.privacy.confirm.title"]?["fr"])
     }
+
+    // MARK: - 4. Fin de l'assistant vocal : le titre porte le résultat, rien ne le répète (règle 2)
+
+    func test_voiceWizard_successScreen_doesNotRepeatWhatTheRestingScreensAlreadySay() throws {
+        let wizard = try appCode("Features/Settings/Views/VoiceProfileWizardView.swift")
+        XCTAssertFalse(wizard.contains("voice.profile.wizard.success.message"))
+    }
+
+    func test_voiceCatalog_successMessage_isDeletedFromAllLanguages() throws {
+        XCTAssertNil(try app()["voice.profile.wizard.success.message"])
+    }
+
+    // MARK: - 5. Ajoute ton numéro : la phrase de bénéfice reste, courte (règles 1 et 7)
+
+    func test_phonePrompt_benefit_isOneShortSentenceInSevenLanguages() throws {
+        let benefit = try XCTUnwrap(try app()["contacts.phonePrompt.benefit"])
+        XCTAssertEqual(benefit["fr"], "Tes proches te retrouvent grâce à ton numéro.")
+        for language in ["fr"] + Self.otherLanguages {
+            let value = try XCTUnwrap(benefit[language], "[\(language)]")
+            XCTAssertLessThanOrEqual(value.split(separator: " ").count, 12, "[\(language)] une phrase de bénéfice, pas deux")
+            XCTAssertFalse(value.contains("Meeshy") && language == "fr")
+        }
+        for language in Self.otherLanguages { XCTAssertNotEqual(benefit[language], benefit["fr"]) }
+    }
+
+    func test_phonePrompt_header_showsTheBenefitAtRest_withoutExplainingSignIn() throws {
+        let sheet = try appCode("Features/Contacts/PhonePromptSheet.swift")
+        XCTAssertTrue(sheet.contains("contacts.phonePrompt.benefit"))
+        XCTAssertFalse(sheet.contains("te connecter"))
+    }
 }
