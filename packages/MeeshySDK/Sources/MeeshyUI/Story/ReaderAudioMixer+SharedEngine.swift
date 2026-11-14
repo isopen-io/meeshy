@@ -22,6 +22,7 @@ extension ReaderAudioMixer: ReaderAudioEngineClient {
     }
 
     func engineWasRebuilt() {
+        nodeRetirement.settle()
         let format = Self.resolveCanonicalFormat(mixer: engine.mainMixerNode)
         entries = entries.mapValues { entry in
             var rebuilt = entry

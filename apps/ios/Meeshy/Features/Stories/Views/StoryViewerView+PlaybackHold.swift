@@ -43,8 +43,12 @@ nonisolated enum StoryPlaybackHold: Equatable {
 ///
 /// - `explicitPause` : l'appui long de l'utilisateur.
 /// - `reacting` : barre ou sélecteur de réactions ouvert, réaction en vol.
-/// - `gestureInFlight` : glissé du lecteur, parcours du rail, transition,
-///   fermeture, interlude d'identité — l'horloge attend la fin du geste.
+/// - `gestureInFlight` : glissé du lecteur, parcours du rail, cube entre deux
+///   auteurs, fermeture — l'horloge attend la fin du geste.
+/// - `entering` : la story ENTRE — sous son fondu, ou sous l'interlude
+///   d'identité de son auteur. Elle joue déjà (#18509) ; sous l'interlude, elle
+///   joue muette (`StoryIdentityVeilSound`, décision #18516). Ce n'est jamais
+///   une cause de pause.
 /// - `coveredByScreen` : un écran plein recouvre la story (composeur, citer ou
 ///   republier en post, lieu plein écran) — elle ne joue pas son son derrière.
 /// - `interrupted` : un appel direct (qui sonne ou se tient), une interruption
@@ -56,6 +60,7 @@ nonisolated struct StoryPlaybackCauses: Equatable {
     var explicitPause = false
     var reacting = false
     var gestureInFlight = false
+    var entering = false
     var coveredByScreen = false
     var interrupted = false
     var engaged = false
@@ -70,8 +75,8 @@ extension StoryViewerView {
         StoryPlaybackCauses(
             explicitPause: isLongPressPaused,
             reacting: showEmojiStrip || showFullEmojiPicker || reactionFlight != nil,
-            gestureInFlight: drag.isInFlight || isScrubbingRail || isTransitioning
-                || isDismissing || showGroupIntro,
+            gestureInFlight: drag.isInFlight || isScrubbingRail || transitionLatch.isTurningCube || isDismissing,
+            entering: isTransitioning || showGroupIntro,
             coveredByScreen: isPaused,
             interrupted: isCallInterrupting || isGameMomentShown,
             engaged: isComposerEngaged || hasComposerContent || showTextEmojiPicker

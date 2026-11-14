@@ -42,6 +42,8 @@ final class EpureReglagesReperesTests: XCTestCase {
         }.joined(separator: "\n")
     }
 
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+
     private static let views = "Features/Settings/Views/"
     private static let otherLanguages = ["en", "es", "pt-BR", "de", "it", "ar"]
 
@@ -111,10 +113,13 @@ final class EpureReglagesReperesTests: XCTestCase {
 
     // MARK: - Règle 1 : le Bring garde sa phrase, la conséquence passe derrière un (i)
 
-    func test_bring_consequenceIsBehindAnInfoNote_namedByItsQuestion() {
+    func test_bring_consequenceIsBehindAnInfoNote_namedByItsQuestion() throws {
+        let app = try app()
         let note = SettingsInfoNotes.bringOff
-        XCTAssertEqual(note.question, "Que se passe-t-il si je le coupe ?")
-        XCTAssertTrue(note.text.contains("personne ne peut plus faire sonner"))
+        XCTAssertEqual(note.question, served("settings.notifications.bring.question"))
+        XCTAssertEqual(note.text, served("settings.notifications.bring.note"))
+        XCTAssertEqual(app["settings.notifications.bring.question"]?["fr"], "Que se passe-t-il si je le coupe ?")
+        XCTAssertTrue(try XCTUnwrap(app["settings.notifications.bring.note"]?["fr"]).contains("personne ne peut plus faire sonner"))
         XCTAssertTrue(SettingsInfoNotes.all.map(\.question).contains(note.question), "le témoin des notes le parcourt")
     }
 
@@ -137,7 +142,8 @@ final class EpureReglagesReperesTests: XCTestCase {
         let view = try code(Self.views + "PrivacySettingsView.swift")
         XCTAssertTrue(view.contains("settings.privacy.last_seen.summary"))
         XCTAssertFalse(SettingsInfoNotes.onlineStatus.text.isEmpty, "le (i) « Qui voit que je suis en ligne ? » garde le détail")
-        XCTAssertEqual(SettingsInfoNotes.onlineStatus.question, "Qui voit que je suis en ligne ?")
+        XCTAssertEqual(SettingsInfoNotes.onlineStatus.question, served("settings.privacy.online_status.question"))
+        XCTAssertEqual(try app()["settings.privacy.online_status.question"]?["fr"], "Qui voit que je suis en ligne ?")
     }
 
     /// Choisir un cercle prévient aussi les cercles plus proches : la phrase nomme, dans l'ordre, chaque cercle prévenu,
@@ -174,10 +180,14 @@ final class EpureReglagesReperesTests: XCTestCase {
         XCTAssertTrue(view.contains("note: SettingsInfoNotes.contactSearch"), "le (i) reste pour le détail secondaire")
     }
 
-    func test_contactSearchNote_keepsItsQuestion_andOnlyTheSecondaryDetail() {
+    func test_contactSearchNote_keepsItsQuestion_andOnlyTheSecondaryDetail() throws {
+        let app = try app()
         let note = SettingsInfoNotes.contactSearch
-        XCTAssertEqual(note.question, "Qui peut me trouver par mon numéro ?")
-        XCTAssertFalse(note.text.contains("recherche par numéro"), "la phrase visible le dit déjà : le (i) ne la répète pas")
-        XCTAssertTrue(note.text.contains("pas non plus prévenus"), "le détail secondaire : les contacts ne sont pas prévenus")
+        XCTAssertEqual(note.question, served("settings.privacy.hide_from_contact_search.question"))
+        XCTAssertEqual(note.text, served("settings.privacy.hide_from_contact_search.info"))
+        XCTAssertEqual(app["settings.privacy.hide_from_contact_search.question"]?["fr"], "Qui peut me trouver par mon numéro ?")
+        let detail = try XCTUnwrap(app["settings.privacy.hide_from_contact_search.info"]?["fr"])
+        XCTAssertFalse(detail.contains("recherche par numéro"), "la phrase visible le dit déjà : le (i) ne la répète pas")
+        XCTAssertTrue(detail.contains("pas non plus prévenus"), "le détail secondaire : les contacts ne sont pas prévenus")
     }
 }

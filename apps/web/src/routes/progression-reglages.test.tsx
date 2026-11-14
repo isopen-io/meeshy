@@ -213,13 +213,13 @@ describe('Mon atmosphère', () => {
     defer: () => undefined,
   });
 
-  test('sans atmosphère : la carte le dit et propose de choisir ; avec : le nom et « Changer d’atmosphère »', async () => {
+  test('sans atmosphère : la valeur nomme l’Afrique éternelle et propose « Choisir » ; avec : le nom et « Changer »', async () => {
     const none = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} atmosphere={gate(null, { status: 'saved', packInstalled: true }, [])} />);
     expect(none.querySelector('[data-game-setting-atmosphere-current]')?.textContent).toContain('Afrique éternelle');
-    expect(none.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Choisir mon atmosphère');
+    expect(none.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Choisir');
     const some = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} atmosphere={gate('olympe', { status: 'saved', packInstalled: true }, [])} />);
     expect(some.querySelector('[data-game-setting-atmosphere-current]')?.textContent).toBe('Olympe');
-    expect(some.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Changer d’atmosphère');
+    expect(some.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Changer');
   });
 
   test('le geste ouvre l’écran de choix sans « plus tard » ; choisir appelle la porte, ferme l’écran, et une file hors ligne se dit', async () => {

@@ -304,9 +304,13 @@ final class ProgressionConceptGuardTests: XCTestCase {
     @MainActor
     func test_theRulesNotebook_explainsEveryConcept_inTheSevenLanguages() throws {
         let table = try catalog(prefix: "game.rules.")
+        let sheets = try catalog()
+        let readsTheSheet: Set<String> = ["points", "meesh", "league", "showcase"]
         for key in concepts + glossaryExtras {
-            let entry = try XCTUnwrap(table["game.rules.concept.\(key).body"], "\(key) : le carnet ne l'explique pas")
-            for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "game.rules.concept.\(key).body : pas de \(locale)") }
+            let source = readsTheSheet.contains(key) ? "game.concept.\(key).what" : "game.rules.concept.\(key).body"
+            let entry = try XCTUnwrap(readsTheSheet.contains(key) ? sheets[source] : table[source], "\(key) : le carnet ne l'explique pas")
+            XCTAssertEqual(table["game.rules.concept.\(key).body"] == nil, readsTheSheet.contains(key), "\(key) : une seule phrase, celle de la fiche ou celle du carnet")
+            for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "\(source) : pas de \(locale)") }
         }
         for key in glossaryExtras.map({ "game.rules.concept.\($0).name" }) + ["game.rules.section_concepts"] {
             let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")

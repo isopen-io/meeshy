@@ -20,6 +20,6 @@ extension StoryExporter {
     /// Un fond muet n'a pas de son à porter — sauf si une automation de volume
     /// le fait remonter quelque part dans la scène.
     nonisolated static func backgroundCarriesSound(_ background: StoryMediaObject) -> Bool {
-        !background.isMuted || (background.keyframes ?? []).contains { ($0.volume ?? 0) > 0 }
+        StoryExportClipPlacement.carriesSound(volume: background.volume, keyframes: background.keyframes)
     }
 }

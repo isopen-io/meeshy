@@ -134,7 +134,7 @@ describe('les réglages du jeu : un libellé nomme, le détail est derrière un 
   test('« Qui voit quoi » dit ce qui se règle ; la présence est derrière « Qui voit si je suis en ligne ? »', async () => {
     const host = await mount(<GameSettings {...settings()} />);
     const shown = visibleText(host.querySelector('#game-settings-visibility') as Element);
-    expect(shown).toContain('Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas.');
+    expect(shown).toContain('Pour chaque élément du jeu, choisis qui peut le voir.');
     expect(shown).not.toContain('personne ne voit si tu es en ligne');
     expect(noteOf(host, infoButton(host, 'Qui voit si je suis en ligne ?')).textContent).toContain('personne ne voit si tu es en ligne');
   });

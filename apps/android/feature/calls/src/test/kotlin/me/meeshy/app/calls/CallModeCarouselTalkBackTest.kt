@@ -63,7 +63,7 @@ class CallModeCarouselTalkBackTest {
                     onConfirm = { spy.confirmed++ },
                     variants = CallModeVariants(
                         of = { declinations[it].orEmpty() },
-                        current = { if (it == "b") posed else it },
+                        current = { if (it == selection) posed else it },
                         next = "Next version",
                         previous = "Previous version",
                         pose = { spy.applied += it },
