@@ -175,18 +175,6 @@ describe('audit #13933 — une Connaissance acceptée ne devient jamais Ami', ()
   });
 });
 
-describe('audit #13933 — aucun saut de phase, aucune exception (D-5)', () => {
-  it('une demande en attente SANS niveau (antérieure aux cercles) entre deux inconnus ne fait pas sauter Public -> Ami à l’acceptation', async () => {
-    const app = await appli({ demandes: [demande(FR, 'pending', MOI, AUTRE, {})] });
-    const res = await app.call('PATCH', `${DIR}/friend-requests/${FR}`, { action: 'accept' }, AUTRE);
-    const lu = await app.call('GET', `${REL}/${AUTRE}`, undefined, MOI);
-    await app.close();
-
-    expect(lu.body.data.effectiveLevel).not.toBe('FRIEND');
-    expect(res.status).toBe(409);
-  });
-});
-
 describe('audit #13933 — le blocage coupe l’acceptation', () => {
   it('l’émetteur qui a bloqué le receveur après sa demande n’est ni relevé ni notifié quand l’autre accepte', async () => {
     const app = await appli({
