@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -315,6 +316,7 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
         CallEffectsCategory.Color -> CallModeCarousel(
             items = CallEffectsModeRule.colors,
@@ -326,17 +328,28 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
     }
 }
 
 /**
- * Le panneau Réglages (iOS `settingsPanel`) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
+ * Le panneau Réglages (iOS `settingsPanel`), UN groupe que TalkBack nomme « Réglages de mon image » (P8b.1) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
  * est choisi, Luminosité (un titre et son curseur), puis Flou du fond (une ligne titrée à interrupteur).
  */
 @Composable
 internal fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
-    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+    val name = stringResource(R.string.call_effects_settings_panel)
+    CallControlsGlass(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg)
+            .semantics {
+                paneTitle = name
+                contentDescription = name
+                isTraversalGroup = true
+            },
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),

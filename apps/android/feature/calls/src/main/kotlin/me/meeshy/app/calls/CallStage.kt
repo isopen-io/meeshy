@@ -29,18 +29,18 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
-import me.meeshy.sdk.model.call.CallSelfTileCorner
+import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.webrtc.EglBase
@@ -170,17 +170,17 @@ internal fun CallDuoVideoStage(
                     onReveal = onRevive,
                     controlsVisible = controlsVisible,
                     rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
-                    modifier = Modifier.fillMaxSize(),
-                    overlay = { stowFactor ->
-                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
+                    // #17982 : la plaque dit qui la vignette montre ; permutée, le micro coupé de l'autre y précède son nom,
+                    // comme sur une tuile de groupe (P11.6).
+                    plate = CallSelfTileLaw.plate(showsPeer = featuresLocal, peerName = state.peerName),
+                    plateLeading = {
                         if (state.isPeerMuted && featuresLocal) {
-                            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-                            CallPeerMutedBadge(
-                                compact = true,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs)
-                                    .callKeepsSmallTileSize(stowFactor, CallSelfTileCorner.BottomStart, rtl),
-                            )
+                            Icon(MeeshyIcons.MicOff, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(CALL_TILE_PLATE_ICON))
                         }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    overlay = { _ ->
+                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                     },
                 ) {
                     when {

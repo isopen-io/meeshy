@@ -363,7 +363,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 .fill(MeeshyColors.brandPrimary)
                 .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
-            Text(String(format: String(localized: "community.detail.online", defaultValue: "%lld online", bundle: .module), count))
+            Text(String(format: String(localized: "community.online", defaultValue: "%lld online", bundle: .module), count))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
         }

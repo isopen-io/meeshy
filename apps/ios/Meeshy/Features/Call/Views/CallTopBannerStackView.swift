@@ -15,22 +15,30 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
     let chrome: CallChromeVisibility
     let hasLiveFrameStatus: Bool
     let topInset: CGFloat
+    /// #17965 (L1.8) — le retrait de la zone sûre des bords, et ma vignette quand elle tient un coin du haut.
+    var safeHorizontal: CGFloat = 0
+    var selfTile: CallTopBannerTileNeighbor? = nil
     @ViewBuilder let liveFrameStatus: () -> LiveFrameStatus
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
-                content(banner)
-                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        GeometryReader { geo in
+            let span = CallTopBannerStack.span(window: geo.size, safeHorizontal: safeHorizontal, selfTile: selfTile)
+            VStack(spacing: MeeshySpacing.sm) {
+                ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
+                    content(banner)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallRecordingBannerStage.of(phase: recording.phase, notice: recording.notice))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
+            .frame(maxWidth: span.stackMaxWidth)
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: span)
+            .padding(.top, topInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
-        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallRecordingBannerStage.of(phase: recording.phase, notice: recording.notice))
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
-        .padding(.top, topInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var present: Set<CallTopBanner> {
