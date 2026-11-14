@@ -91,17 +91,13 @@ describe('seulement ce qui existe', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  test('la jauge garde la valeur et la barre, sans légende tronquée : ni « étincelles » ni « jusqu’au » (le nom accessible les dit)', () => {
-    const model = newcomer();
-    const html = markup(model);
-    expect(html).toContain('data-player-banner-gauge=');
-    expect(html).not.toContain('data-player-banner-missing=');
-    expect(html).toContain('jusqu’au');
-    const at = (host: ParentNode): string => host.querySelector('[data-player-banner-gauge]')?.textContent ?? '';
-    const gauge = document.createElement('div');
-    gauge.innerHTML = html;
-    expect(at(gauge)).not.toContain('étincelles');
-    expect(at(gauge)).not.toContain('jusqu’au');
+  test('la jauge garde la valeur et la barre, sans légende tronquée ; le nom accessible dit les étincelles et le niveau visé', () => {
+    const host = document.createElement('div');
+    host.innerHTML = markup(newcomer());
+    const gauge = host.querySelector('[data-player-banner-gauge]');
+    expect(gauge?.textContent?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('✦ 1 000');
+    expect(host.querySelector('[data-player-banner-missing]')).toBeNull();
+    expect(host.querySelector('a[data-player-banner-link="points"]')?.getAttribute('aria-label')?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('Étincelles : 1 000, 14 % vers le 4');
   });
 });
 

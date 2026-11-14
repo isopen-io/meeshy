@@ -64,8 +64,6 @@ const de = {
   'game.banner.link.meesh': '{count} Meeshes in deinem Erbe',
   'game.banner.glory': 'Ruhm {glory}',
   'game.banner.glory_missing': '{glory} Ruhm bis {rank}',
-  'game.banner.level_short': '{n} bis Level {level}',
-  'game.banner.glory_short': '{n} bis {rank}',
   'game.banner.glory_top': 'Ruhm {n}',
   'game.league.name.quartz': 'Quarz',
   'game.league.name.ambre': 'Bernstein',
