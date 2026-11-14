@@ -1,4 +1,5 @@
 ## Un `catch` ATTRAPE une levée ; il ne la CONFINE pas
+## Un `catch` ATTRAPE une levée ; il ne la CONFINE pas (cycle 159)
 
 *2026-11-14, cycle 159. Mesuré sur #18380 — le fan-out de `conversation:updated`.*
 
