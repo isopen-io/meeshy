@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "sharedLocation.share.action", "androidName": "shared_location_share_action", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.actionAccessibility", "androidName": "shared_location_share_action_a11y", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.sheetTitle", "androidName": "shared_location_share_sheet_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.durationTitle", "androidName": "shared_location_share_duration_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.oneHour", "androidName": "shared_location_share_one_hour", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.eightHours", "androidName": "shared_location_share_eight_hours", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.precisionTitle", "androidName": "shared_location_share_precision_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.explain", "androidName": "shared_location_share_explain", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.confirm", "androidName": "shared_location_share_confirm", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.active", "androidName": "shared_location_share_active", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.stop", "androidName": "shared_location_share_stop", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.stopAccessibility", "androidName": "shared_location_share_stop_a11y", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.denied", "androidName": "shared_location_share_denied", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.unavailable", "androidName": "shared_location_share_unavailable", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.offline", "androidName": "shared_location_share_offline", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.rateLimited", "androidName": "shared_location_share_rate_limited", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.failed", "androidName": "shared_location_share_failed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.exact", "androidName": "shared_location_precision_exact", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.neighborhood", "androidName": "shared_location_precision_neighborhood", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.city", "androidName": "shared_location_precision_city", "status": "adopted" }
+      ]
+    }
+  }
+}
