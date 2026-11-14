@@ -50,7 +50,7 @@ export function chosenCreationMode(offer: CreationEncryptionOffer, picked: Creat
 
 /** Les mots du choix (`catalog-conversation-encryption-*.ts`, le français porte ceux de la décision). */
 export const CREATION_ENCRYPTION_KEY = {
-  server: { title: 'conversationEncryption.creation.server.title', detail: 'conversationEncryption.creation.server.detail', more: 'conversationEncryption.creation.server.more' },
+  server: { title: 'conversationEncryption.creation.server.title', detail: 'conversationEncryption.creation.server.detail', more: null },
   hybrid: { title: 'conversationEncryption.creation.hybrid.title', detail: 'conversationEncryption.creation.hybrid.detail', more: 'conversationEncryption.creation.hybrid.more' },
   e2ee: { title: 'conversationEncryption.creation.endToEnd.title', detail: null, more: null },
 } as const satisfies Record<
@@ -60,7 +60,9 @@ export const CREATION_ENCRYPTION_KEY = {
 
 /**
  * Chaque mode tient en UNE ligne (`detail`) ; ce que le mode change VRAIMENT (`more`) est derrière un (i) dont le nom est
- * cette question (épure #18361, règle 1). Le bout en bout n'a pas de `more` : sa ligne est déjà sa raison d'être grisé.
+ * cette question (épure #18361, règle 1). Le Serveur n'a pas de `more` : sa ligne dit déjà ce qu'il garde (traduction,
+ * transcription, recherche — règle 7, c'est ce qui le distingue du bout en bout) ; le bout en bout non plus : sa ligne est
+ * déjà sa raison d'être grisé.
  */
 export const CREATION_INFO_KEY = 'conversationEncryption.creation.info' as const satisfies ConversationEncryptionCatalogKey;
 

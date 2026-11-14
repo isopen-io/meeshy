@@ -89,18 +89,23 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
 
   test('chaque mode tient en UNE ligne, en description', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
-    expect(describedText(radio('server'))).toBe('Chiffré sur nos serveurs.');
+    expect(describedText(radio('server'))).toBe('Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.');
     expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.');
     expect(describedText(radio('hybrid'))).not.toMatch(/bout en bout|chaque message/u);
   });
 
   test('le détail du mode retenu est derrière un (i) « Que change ce mode ? », lu même replié', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
+    await act(async () => {
+      radio('hybrid')?.click();
+    });
     const info = document.querySelector<HTMLButtonElement>('button[aria-label="Que change ce mode ?"]');
     expect(info).not.toBeNull();
     expect(info?.closest('details')).toBeNull();
     const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
-    expect(note?.textContent).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
+    expect(note?.textContent).toBe(
+      'Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin. Cet appareil ne la porte pas encore.',
+    );
     expect(note?.className).toContain('sr-only');
   });
 
@@ -117,10 +122,16 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
 });
 
 describe('la ligne du mode retenu se lit au repos (règle 7, #18361)', () => {
+  test('le mode Serveur dit au repos ce qu’il garde — traduction, transcription, recherche — sans (i) qui le redise', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    expect(document.querySelector('[data-creation-encryption-current]')?.textContent).toContain('traduction, transcription et recherche');
+    expect(document.querySelector('[data-creation-encryption-block] button[aria-label="Que change ce mode ?"]')).toBeNull();
+  });
+
   test('sous le résumé, avant la phrase d’irréversibilité, hors du <details>', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
     const line = document.querySelector('[data-creation-encryption-current]');
-    expect(line?.textContent).toBe('Chiffré sur nos serveurs.');
+    expect(line?.textContent).toBe('Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.');
     expect(line?.closest('details')).toBeNull();
     expect(line?.className).not.toContain('sr-only');
     const footer = document.querySelector('[data-creation-encryption-footer]');

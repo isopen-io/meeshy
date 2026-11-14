@@ -77,10 +77,10 @@ describe('chaque langue porte toutes les clés conversationEncryption.* du fran�
 
   test('le choix à la création porte les mots de la décision', async () => {
     await loadConversationEncryptionCatalog('fr');
-    expect(translateConversationEncryption('fr', CREATION_ENCRYPTION_KEY.server.detail)).toBe('Chiffré sur nos serveurs.');
-    expect(translateConversationEncryption('fr', CREATION_ENCRYPTION_KEY.server.more)).toBe(
-      'Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.',
+    expect(translateConversationEncryption('fr', CREATION_ENCRYPTION_KEY.server.detail)).toBe(
+      'Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.',
     );
+    expect(CREATION_ENCRYPTION_KEY.server.more).toBeNull();
     expect(translateConversationEncryption('fr', CREATION_UNAVAILABILITY_KEY['client-not-yet'])).toBe('Bientôt disponible sur le web');
     expect(translateConversationEncryption('fr', CREATION_UNAVAILABILITY_KEY['groups-not-yet'])).toBe('Bientôt disponible pour les groupes');
   });
