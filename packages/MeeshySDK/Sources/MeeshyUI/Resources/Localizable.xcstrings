@@ -15967,19 +15967,19 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderator"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderator"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderador"
           }
         },
@@ -15997,7 +15997,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderador"
           }
         }
@@ -17095,25 +17095,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Mitglied herabstufen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Demote to Member"
+            "state": "translated",
+            "value": "Demote to member"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Degradar a Miembro"
+            "state": "translated",
+            "value": "Degradar a miembro"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Rétrograder en membre"
           }
         },
@@ -17125,8 +17125,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Rebaixar a Membro"
+            "state": "translated",
+            "value": "Rebaixar a membro"
           }
         }
       }
@@ -17189,25 +17189,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Admin befördern"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promote to Admin"
+            "state": "translated",
+            "value": "Promote to admin"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Admin"
+            "state": "translated",
+            "value": "Promover a admin"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Promouvoir admin"
           }
         },
@@ -17219,8 +17219,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Admin"
+            "state": "translated",
+            "value": "Promover a admin"
           }
         }
       }
@@ -17236,25 +17236,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Moderator befördern"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promote to Moderator"
+            "state": "translated",
+            "value": "Promote to moderator"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Moderador"
+            "state": "translated",
+            "value": "Promover a moderador"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Promouvoir modérateur"
           }
         },
@@ -17266,8 +17266,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Moderador"
+            "state": "translated",
+            "value": "Promover a moderador"
           }
         }
       }
@@ -18505,25 +18505,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Mitglied entfernt"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Member removed"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Miembro expulsado"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Membre expulsé"
           }
         },
@@ -18535,7 +18535,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Membro removido"
           }
         }
