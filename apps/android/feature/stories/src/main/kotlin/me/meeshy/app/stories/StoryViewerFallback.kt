@@ -68,12 +68,6 @@ internal fun StoryViewerNotFound(onRetry: () -> Unit, onClose: () -> Unit) {
                 color = MeeshyPalette.White,
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text(
-                text = stringResource(R.string.stories_viewer_not_found_description),
-                color = MeeshyPalette.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-            )
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 Button(onClick = onRetry) { Text(stringResource(R.string.stories_viewer_retry)) }
                 OutlinedButton(onClick = onClose) {

@@ -21,10 +21,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "new_conversation_error_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "new_conversation_ok",
           "status": "android-only"
         }

@@ -62,7 +62,6 @@ internal object NewConversationTags {
     const val SEARCH = "new-conversation-search"
     const val SEARCH_RETRY = "new-conversation-search-retry"
     const val GROUP_TOGGLE = "new-conversation-group-toggle"
-    const val SOLO_HINT = "new-conversation-group-solo-hint"
     const val GROUP_TITLE = "new-conversation-group-title"
     const val ENCRYPTION_ROW = "new-conversation-encryption-toggle"
     const val ENCRYPTION_OPTIONS = "new-conversation-encryption"
@@ -218,14 +217,6 @@ private fun GroupToggleRow(state: NewConversationUiState, onToggle: () -> Unit) 
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
             )
-            if (state.showsSoloHint) {
-                Text(
-                    text = stringResource(R.string.new_conversation_group_solo_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.testTag(NewConversationTags.SOLO_HINT),
-                )
-            }
         }
         Icon(
             if (state.isGroup) MeeshyIcons.CheckCircleFilled else MeeshyIcons.RadioUnchecked,

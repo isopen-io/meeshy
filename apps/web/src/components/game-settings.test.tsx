@@ -102,8 +102,8 @@ describe('les notifications du jeu', () => {
 
   test('le texte dit « au plus une par jour »', () => {
     const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
-    expect(text(html)).toContain('Notifications du jeu');
-    expect(text(html)).toContain('au plus une par jour');
+    expect(text(html)).not.toContain('Notifications du jeu');
+    expect(text(html)).toContain('Au plus une par jour');
   });
 
   test('réglage du compte éteint : l’interrupteur est décoché', () => {

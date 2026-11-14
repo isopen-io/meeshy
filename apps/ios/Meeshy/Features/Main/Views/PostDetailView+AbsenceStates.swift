@@ -53,10 +53,7 @@ extension PostDetailView {
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
-            Text(cause.message)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
+            ContentFetchFailureMessage(message: cause.message, tint: theme.textSecondary)
             Button {
                 HapticFeedback.light()
                 Task { await viewModel.loadPost(postId) }

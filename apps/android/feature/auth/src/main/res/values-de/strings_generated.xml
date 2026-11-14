@@ -22,9 +22,9 @@
     <string name="auth_forgot_never_had_text">Mit demselben Link kannst du eines erstellen.</string>
     <string name="auth_forgot_subtitle">Erhalte per E-Mail einen Link, um ein neues Passwort festzulegen.</string>
     <string name="auth_forgot_title">Passwort vergessen</string>
-    <string name="auth_login_two_factor_label">Bestätigungscode für Zwei-Faktor-Authentifizierung</string>
+    <string name="auth_login_two_factor_label">Bestätigungscode</string>
     <string name="auth_login_two_factor_placeholder">Bestätigungscode</string>
-    <string name="auth_login_two_factor_title">Zwei-Faktor</string>
+    <string name="auth_login_two_factor_title">Zwei-Faktor-Authentifizierung</string>
     <string name="auth_magic_cancel">Abbrechen</string>
     <string name="auth_magic_countdown_a11y">Der Link läuft ab in</string>
     <string name="auth_magic_expired">Link abgelaufen, sende einen neuen</string>

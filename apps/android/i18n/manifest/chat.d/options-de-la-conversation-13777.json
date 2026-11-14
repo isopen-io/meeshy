@@ -82,12 +82,7 @@
           "androidName": "conversation_options_mentions_only",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.prefs.section.actions",
-          "androidName": "conversation_options_section_actions",
-          "status": "adopted"
-        },
+        { "androidName": "conversation_options_section_actions", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "conversation.prefs.archive",
@@ -110,30 +105,6 @@
           "catalog": "app",
           "iosKey": "conversation.prefs.unarchive.title",
           "androidName": "conversation_options_unarchive_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.prefs.leave-group",
-          "androidName": "conversation_options_leave_group",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.prefs.leave.title",
-          "androidName": "conversation_options_leave_group_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.prefs.leave",
-          "androidName": "conversation_options_leave_group_confirm",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.prefs.leave.message",
-          "androidName": "conversation_options_leave_group_message",
           "status": "adopted"
         },
         {
@@ -206,12 +177,6 @@
           "catalog": "app",
           "iosKey": "conversation.info.block.message",
           "androidName": "conversation_options_block_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.info.block.a11y",
-          "androidName": "conversation_options_block_a11y",
           "status": "adopted"
         },
         {

@@ -177,7 +177,7 @@ function league(view: EngagementWithGame): ConceptState | null {
   const served = game?.league;
   if (game === undefined || served === undefined) return null;
   if (served.access === 'locked') {
-    return said(gameText('game.league.locked', { level: count(LEAGUE_MIN_LEVEL), current: count(shownLevelOf(game.level).level) }), 'league_unlock_level', 'level');
+    return said(gameText('game.league.locked', { level: count(LEAGUE_MIN_LEVEL) }), 'league_unlock_level', 'level');
   }
   const current = served.current;
   if (served.access !== 'open' || current === null) return said(gameText('game.state.league.unplaced'), 'league');
@@ -211,7 +211,7 @@ function prestige(view: EngagementWithGame): ConceptState | null {
   if (game === undefined || served === undefined) return null;
   if (served.canPrestige) return said(gameText('game.prestige.mee'), 'prestige_door', 'level');
   if (served.stars >= served.max) return said(gameText('game.prestige.max'), 'prestige_door');
-  return said(gameText('game.prestige.locked', { level: count(shownLevelOf(game.level).level) }), 'prestige_door', 'level');
+  return said(gameText('game.prestige.locked'), 'prestige_door', 'level');
 }
 
 function elans(view: EngagementWithGame): ConceptState | null {

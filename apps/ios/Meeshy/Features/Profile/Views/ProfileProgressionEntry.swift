@@ -32,7 +32,7 @@ struct ProfileProgressionEntry: View {
                     Text(String(localized: "profile.progression.title", defaultValue: "Ma Légende", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "profile.progression.subtitle", defaultValue: "Badges, niveau et série", bundle: .main))
+                    Text(String(localized: "profile.progression.subtitle", defaultValue: "Médailles, niveau et Flamme", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                 }

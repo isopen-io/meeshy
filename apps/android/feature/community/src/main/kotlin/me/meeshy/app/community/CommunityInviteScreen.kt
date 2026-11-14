@@ -116,7 +116,7 @@ fun CommunityInviteScreen(
                     1 -> MeeshyEmptyState(
                         MeeshyIcons.Search,
                         stringResource(R.string.community_invite_empty_title),
-                        stringResource(R.string.community_invite_empty_subtitle),
+                        "",
                     )
                     else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
                         if (state.recentlyInvited.isNotEmpty()) {

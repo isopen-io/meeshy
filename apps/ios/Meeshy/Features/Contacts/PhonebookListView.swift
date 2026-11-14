@@ -202,9 +202,10 @@ struct PhonebookListView: View {
             title: viewModel.isEmpty
                 ? String(localized: "contacts.phonebook.empty", defaultValue: "Répertoire vide", bundle: .main)
                 : String(localized: "contacts.phonebook.no-results", defaultValue: "Aucun résultat", bundle: .main),
-            subtitle: viewModel.isEmpty
-                ? String(localized: "contacts.phonebook.empty-hint", defaultValue: "Synchronise ton carnet d'adresses pour retrouver tes contacts sur Meeshy", bundle: .main)
-                : ""
+            actionLabel: viewModel.isEmpty
+                ? String(localized: "contacts.phonebook.empty.action", defaultValue: "Synchroniser", bundle: .main)
+                : nil,
+            onAction: viewModel.isEmpty ? { offerPhoneThenSearch() } : nil
         )
     }
 

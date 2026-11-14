@@ -108,7 +108,7 @@ internal fun IconBadge(icon: ImageVector, color: Color) {
 @Composable
 internal fun RuleToggleRow(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     icon: ImageVector,
     iconColor: Color,
     accent: Color,
@@ -127,7 +127,7 @@ internal fun RuleToggleRow(
                 role = Role.Switch,
                 onValueChange = onCheckedChange,
             )
-            .semantics { contentDescription = "$title. $subtitle" }
+            .semantics { contentDescription = listOfNotNull(title, subtitle).joinToString(". ") }
             .padding(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -146,7 +146,7 @@ internal fun RuleToggleRow(
 @Composable
 internal fun RowTexts(
     title: String,
-    subtitle: String,
+    subtitle: String?,
     subtitleColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -157,7 +157,7 @@ internal fun RowTexts(
             fontWeight = FontWeight.Medium,
             color = MeeshyTheme.tokens.textPrimary,
         )
-        Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+        if (subtitle != null) Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
     }
 }
 

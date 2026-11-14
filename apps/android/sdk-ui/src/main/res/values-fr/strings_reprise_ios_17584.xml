@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="talkie_info_a11y">Quand utiliser le talkie ?</string>
+    <string name="talkie_send_e2ee">Indisponible dans une conversation chiffrée.</string>
+    <string name="voiceProfile_age_birthDate">Date de naissance</string>
+    <string name="voiceProfile_age_description">Le clonage vocal est réservé aux personnes de 18 ans et plus.</string>
+    <string name="voiceProfile_age_title">Vérification d\'âge</string>
+    <string name="voiceProfile_age_tooYoungError">Vous devez avoir 18 ans ou plus pour utiliser le clonage vocal.</string>
+    <string name="voiceProfile_age_verify">Vérifier</string>
+    <string name="voiceProfile_complete_description">Vos traductions audio utiliseront désormais votre voix clonée.</string>
+    <string name="voiceProfile_complete_finish">Terminer</string>
+    <string name="voiceProfile_complete_title">Profil vocal créé !</string>
+    <string name="voiceProfile_consent_continue">Continuer</string>
+    <string name="voiceProfile_consent_description">Meeshy peut cloner votre voix pour traduire vos messages audio dans d\'autres langues avec votre propre voix.</string>
+    <string name="voiceProfile_consent_point1">Enregistrez quelques échantillons de votre voix</string>
+    <string name="voiceProfile_consent_point2">Un modèle vocal unique est créé à partir de vos échantillons</string>
+    <string name="voiceProfile_consent_point3">Vos traductions audio utiliseront votre voix clonée</string>
+    <string name="voiceProfile_consent_point4">Vous pouvez supprimer vos données vocales à tout moment (RGPD)</string>
+    <string name="voiceProfile_consent_point5">Vos échantillons sont chiffrés et ne sont jamais partagés</string>
+    <string name="voiceProfile_consent_title">Clonage vocal</string>
+    <string name="voiceProfile_consent_toggle">J\'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal</string>
+    <string name="voiceProfile_processing_title">Création du profil vocal...</string>
+    <string name="voiceProfile_recording_title">Enregistrez votre voix</string>
+    <string name="voiceProfile_wizard_close">Fermer</string>
+    <string name="voiceProfile_wizard_errorTitle">Erreur</string>
+    <string name="voiceProfile_wizard_ok">OK</string>
+    <string name="voiceProfile_wizard_title">Profil vocal</string>
+    <string name="talkie_send_explain">Maintenez et parlez : votre voix sort directement chez %1$s, sans décrocher.</string>
+</resources>

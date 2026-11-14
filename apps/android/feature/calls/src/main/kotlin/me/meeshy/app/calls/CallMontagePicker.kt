@@ -3,6 +3,11 @@ package me.meeshy.app.calls
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -77,6 +82,7 @@ import me.meeshy.sdk.model.call.effects.CallEffectLayers
 import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
 import me.meeshy.sdk.model.call.effects.CallEffectsBarRule
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsSettingsMotion
 import me.meeshy.sdk.model.call.effects.CallEffectsGenreRule
 import me.meeshy.sdk.model.call.effects.category
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
@@ -110,10 +116,13 @@ private val SIDE_DIAMETER = 48.dp
  * au-dessus d'elle, la rangée de genres de la famille (Visage · Couleur · Cadres, [CallEffectsGenreRule.row], la même
  * qu'en Effets) dont « Cadres » est pressée, puis la bande des cadres — l'option « Cadre » (garder le cadre pour les deux
  * et le proposer), les ambiances, le carrousel aimanté dont l'élément centré est choisi et SE déclenche (deux tapes :
- * photo ; appui long : film). Ni Quitter ni Valider : ce qui est touché s'applique aussitôt, ‹ revient à l'appel, et après
- * chaque choix la barre revient à son menu de base. « Réglages » porte « Chaque visage » ; Visage ou Couleur touchés, comme
- * (+), ouvrent Effets sur ce genre (un genre absent de la pile, trois couches au plus) ; l'appui long de (+) liste les
- * effets appliqués pour en annuler un. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
+ * photo ; appui long : film). Ni Quitter ni Valider : ce qui est touché s'applique aussitôt, et après chaque choix (un
+ * cadre, un classique, une déclinaison, l'option « Cadre », « Chaque visage ») le carrousel se referme et la barre revient à son menu de base
+ * (C1 généralisée, #18185) — l'option « Cadre » du cadre choisi y reste, « Cadres » rouvre le carrousel et, retouchée, le
+ * referme. ‹ et le retour système referment d'abord le panneau des réglages (#17947), sinon reviennent à l'appel. « Réglages » porte « Chaque visage » ; Visage ou
+ * Couleur touchés, comme (+), ouvrent Effets sur ce genre (un genre absent de la pile, trois couches au plus) ; l'appui
+ * long de (+) liste les effets appliqués pour en annuler un. Choisir un cadre ne sert que la capture : rien ne part vers
+ * l'appel sans « Cadre ».
  */
 @Composable
 internal fun CallMontagePicker(
@@ -137,12 +146,16 @@ internal fun CallMontagePicker(
     val captureState by capture.state.collectAsStateWithLifecycle()
     val hints = rememberCaptureHint()
     val shooter = rememberCallCaptureShooter(capture, scene, hints)
-    var bar by remember { mutableStateOf(CallEffectsBarMode.Base) }
+    var bar by remember { mutableStateOf(CallEffectsBarRule.entering) }
     val shownBar = CallEffectsBarRule.reconciled(bar, hasLayers = !layers.isEmpty)
     LaunchedEffect(shownBar) { bar = shownBar }
+    val goBack: () -> Unit = { CallEffectsBarRule.afterBack(shownBar)?.let { bar = it } ?: onClose() }
+    BackHandler(enabled = CallEffectsBarRule.afterBack(shownBar) != null) { goBack() }
     val chosenFrame = CallFrameLayer.chosen(pick, people.size)
+    val hold = CallMontagePickRule.hold(pick, people.size, held.frameId, isLiveOffered)
     val row = CallEffectsGenreRule.row(offersEffects = effectsOffered, offersFrames = true)
     val added = CallEffectsGenreRule.adding(CallEffectKind.Frame, layers, row)
+    val chosen: () -> Unit = { bar = CallEffectsBarRule.afterChoice }
     val faces: () -> Unit = {
         shooter.faces()
         bar = CallEffectsBarRule.afterChoice
@@ -160,24 +173,33 @@ internal fun CallMontagePicker(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         captions()
+        MontageHoldOption(
+            live, hold, visible = hold != null && CallEffectsBarRule.showsLooks(shownBar),
+            enabled = CallMontagePickRule.holdEnabled(captureState.isRecording), reduceMotion = reduceMotion,
+            onToggled = chosen,
+        )
         EffectsBand(shownBar, reduceMotion) { shown ->
             when (shown) {
-                CallEffectsBarMode.Base -> MontageLooksBand(live, capture, people, isLiveOffered, reduceMotion, layers, shooter, hints)
+                CallEffectsBarMode.Base -> Unit
+                CallEffectsBarMode.Looks -> MontageLooksBand(capture, people, reduceMotion, layers, shooter, hints, onChosen = chosen)
                 CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = faces)
                 CallEffectsBarMode.Applied -> EffectsAppliedPanel(layers, removeLayer)
             }
         }
         EffectsBar(
             chips = row,
-            selected = CallEffectKind.Frame,
+            selected = CallEffectsBarRule.pressed(CallEffectKind.Frame, shownBar),
             bar = shownBar,
             layers = layers,
             reduceMotion = reduceMotion,
-            onBack = onClose,
+            onBack = goBack,
             onSettings = { bar = CallEffectsBarRule.afterSettings(shownBar) },
             onAddLook = { added?.category?.let(onOpenEffects) },
             onShowApplied = { bar = CallEffectsBarRule.afterShowingApplied(shownBar, hasLayers = !layers.isEmpty) },
-            onChip = { kind -> kind.category?.let(onOpenEffects) },
+            onChip = { kind ->
+                kind.category?.let(onOpenEffects)
+                    ?: run { bar = CallEffectsBarRule.afterGenre(shownBar, isOpen = CallEffectsBarRule.pressed(kind, shownBar) == kind) }
+            },
             addsLook = added != null,
             settingsHint = stringResource(R.string.call_montage_settings_hint),
         )
@@ -185,36 +207,57 @@ internal fun CallMontagePicker(
 }
 
 /**
- * La bande des cadres, sur le menu de base : l'option « Cadre » (pressée en blanc quand le cadre est gardé), les puces
- * (« Classiques », les ambiances mises en avant, puis « Plus d'ambiances »), puis le carrousel, chaque vignette peinte sur
- * les visages de l'appel. Trois couches déjà posées sans cadre : un cadre n'est pas choisi (un classique, si).
+ * L'option « Cadre » (C1) du cadre choisi, pressée en blanc quand il est gardé pendant l'appel : sur le menu de base comme
+ * au-dessus du carrousel (elle n'en fait pas partie), pour garder d'un toucher le cadre qu'on vient de choisir. Rien sur
+ * un classique ni hors d'un duo vidéo ([CallMontagePickRule.hold]) ; réglages ou liste ouverts, elle part en fondu. La
+ * toucher est un choix ([onToggled]) : le carrousel se referme, elle reste.
+ */
+@Composable
+private fun MontageHoldOption(
+    live: CallLiveFrameController,
+    option: CallMontageHold?,
+    visible: Boolean,
+    enabled: Boolean,
+    reduceMotion: Boolean,
+    onToggled: () -> Unit,
+) {
+    val held by live.state.collectAsState()
+    val haptics = LocalHapticFeedback.current
+    val fade = CallEffectsSettingsMotion.durationMillis(reduceMotion)
+    AnimatedVisibility(visible = visible, enter = fadeIn(tween(fade)), exit = fadeOut(tween(fade))) {
+        option?.let {
+            FrameHoldChip(it, enabled = enabled) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                live.apply(CallLiveFrameRule.toggledHold(held.frameId, it.frameId))
+                onToggled()
+            }
+        }
+    }
+}
+
+/**
+ * La bande des cadres, carrousel ouvert (sous l'option « Cadre ») : les puces (« Classiques », les ambiances mises en
+ * avant, puis « Plus d'ambiances ») qui trient sans refermer, puis le carrousel, chaque vignette peinte sur les visages de
+ * l'appel. Un cadre, un classique ou une déclinaison choisis appellent [onChosen] : la barre revient à son menu de base.
+ * Trois couches déjà posées sans cadre : un cadre n'est pas choisi (un classique, si).
  */
 @Composable
 private fun MontageLooksBand(
-    live: CallLiveFrameController,
     capture: CallCaptureController,
     people: List<CallFramePerson>,
-    isLiveOffered: Boolean,
     reduceMotion: Boolean,
     layers: CallEffectLayers,
     shooter: CallCaptureShooter,
     hints: CaptureHintMemory,
+    onChosen: () -> Unit,
 ) {
-    val held by live.state.collectAsState()
     val pick by capture.pick.collectAsStateWithLifecycle()
     val captureState by capture.state.collectAsStateWithLifecycle()
     val count = people.size
     val chip = CallMontagePickRule.shownChip(pick, count)
-    val hold = CallMontagePickRule.hold(pick, count, held.frameId, isLiveOffered)
     val haptics = LocalHapticFeedback.current
     val mayPickFrame = layers.allows(CallEffectKind.Frame)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
-        hold?.let { option ->
-            FrameHoldChip(option, enabled = CallMontagePickRule.holdEnabled(captureState.isRecording)) {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                live.apply(CallLiveFrameRule.toggledHold(held.frameId, option.frameId))
-            }
-        }
         MoodChips(
             chips = CallMontagePickRule.chips(pick, count),
             selected = chip,
@@ -227,13 +270,14 @@ private fun MontageLooksBand(
                 capture.show(tapped, count)
             }
         }
-        MontageFramesCarousel(capture, people, layers, shooter, hints, reduceMotion)
+        MontageFramesCarousel(capture, people, layers, shooter, hints, reduceMotion, onChosen)
     }
 }
 
 /**
  * Le carrousel aimanté des cadres : l'élément centré est choisi et SE déclenche (deux tapes : photo ; appui long : film),
- * chaque vignette peinte sur les visages de l'appel. Un cadre refusé par la pile pleine n'est pas choisi.
+ * chaque vignette peinte sur les visages de l'appel. Un cadre refusé par la pile pleine n'est pas choisi ; un choix qui
+ * change le montage (élément, déclinaison) appelle [onChosen], l'élément déjà choisi ne referme rien.
  */
 @Composable
 private fun MontageFramesCarousel(
@@ -243,6 +287,7 @@ private fun MontageFramesCarousel(
     shooter: CallCaptureShooter,
     hints: CaptureHintMemory,
     reduceMotion: Boolean,
+    onChosen: () -> Unit,
 ) {
     val pick by capture.pick.collectAsStateWithLifecycle()
     val captureState by capture.state.collectAsStateWithLifecycle()
@@ -256,10 +301,14 @@ private fun MontageFramesCarousel(
     val nextDeclination = stringResource(R.string.call_live_frame_declination_next)
     val previousDeclination = stringResource(R.string.call_live_frame_declination_previous)
     val mayPickFrame = layers.allows(CallEffectKind.Frame)
+    fun choose(item: CallMontageChoice) {
+        capture.select(item)
+        onChosen()
+    }
     fun stepDeclination(offset: Int): Boolean {
         val current = CallMontagePickRule.choice(pick, count) as? CallMontageChoice.Frame ?: return false
         val next = CallFrameStyleRule.neighbour(current.id, offset) ?: return false
-        capture.select(CallMontageChoice.Frame(next.id))
+        choose(CallMontageChoice.Frame(next.id))
         return true
     }
     key(chip, scope) {
@@ -269,7 +318,7 @@ private fun MontageFramesCarousel(
             title = stringResource(R.string.call_mode_montage_title),
             name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames, language) },
             reduceMotion = reduceMotion,
-            onSelect = { item -> if (item != selection && (item !is CallMontageChoice.Frame || mayPickFrame)) capture.select(item) },
+            onSelect = { item -> if (item != selection && (item !is CallMontageChoice.Frame || mayPickFrame)) choose(item) },
             nextLabel = stringResource(R.string.call_montage_next),
             previousLabel = stringResource(R.string.call_montage_previous),
             itemWidth = THUMB_WIDTH,
@@ -293,7 +342,7 @@ private fun MontageFramesCarousel(
                 isSelected = isShown && item == selection,
                 previews = previews,
                 people = people,
-                onDecline = { id -> capture.select(CallMontageChoice.Frame(id)) },
+                onDecline = { id -> if (CallMontageChoice.Frame(id) != CallMontagePickRule.choice(pick, count)) choose(CallMontageChoice.Frame(id)) },
             )
         }
     }

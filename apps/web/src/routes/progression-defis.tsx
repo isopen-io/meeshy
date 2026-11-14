@@ -1,5 +1,6 @@
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { gameText } from '@/lib/view/game-copy';
 import { ProgressionPage } from '@/routes/progression-page';
 import { GeneratedAchievements, STREAK_TINT } from '@/routes/progression-parts';
 
@@ -19,7 +20,7 @@ export default function ProgressionDefisScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      titre="Défis"
+      titre={gameText('game.concept.defis.name')}
       teinte={STREAK_TINT}
       compte={(p) => {
         const sections = p.achievementSections ?? [];
@@ -32,7 +33,7 @@ export default function ProgressionDefisScreen() {
       {(progress) =>
         progress.achievementSections === undefined ? (
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            Les défis ne sont pas encore mesurés sur ce compte.
+            {gameText('game.defis.unmeasured')}
           </p>
         ) : (
           <GeneratedAchievements sections={progress.achievementSections} />

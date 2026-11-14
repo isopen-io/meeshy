@@ -26,7 +26,7 @@ class ConversationEncryptionExplanationTest {
         assertThat(explain("server").facts(Topic.WHO_READS))
             .containsExactly(Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS).inOrder()
         assertThat(explain("hybrid").facts(Topic.WHO_READS))
-            .containsExactly(Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS, Fact.HYBRID_IS_SERVER_TODAY).inOrder()
+            .containsExactly(Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS, Fact.HYBRID_IS_SERVER_TODAY, Fact.HYBRID_SECOND_LAYER).inOrder()
     }
 
     @Test

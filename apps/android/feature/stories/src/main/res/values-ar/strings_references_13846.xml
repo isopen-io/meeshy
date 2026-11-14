@@ -13,7 +13,7 @@
     <string name="story_place_search">البحث عن مكان</string>
     <string name="story_place_around">بالقرب مني</string>
     <string name="story_place_here">موقعي</string>
-    <string name="story_place_denied">لا يملك Meeshy إذن الوصول إلى موقعك، لذا لا تُقترح أماكن قريبة. يمكنك البحث عن مكان باسمه.</string>
+    <string name="story_place_denied">الموقع معطّل. ابحث عن مكان باسمه.</string>
     <string name="story_place_pastille_a11y">المكان: %1$s</string>
     <string name="story_references_with">مع %1$s</string>
     <string name="story_mention_already">مذكورون بالفعل</string>

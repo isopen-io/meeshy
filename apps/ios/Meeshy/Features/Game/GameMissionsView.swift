@@ -52,6 +52,7 @@ struct GameMissionsView: View {
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Le rêve de cette nuit", bundle: .main)) {
             if !missions.unlocked {
+                GameNote(text: GameCopy.missionsLockedWhat)
                 GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
                     concept: .missions,

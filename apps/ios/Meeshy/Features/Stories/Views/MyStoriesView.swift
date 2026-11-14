@@ -340,9 +340,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "rectangle.stack.badge.xmark",
-                title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée"),
-                subtitle: String(localized: "story.mine.empty.subtitle",
-                                 defaultValue: "Vos stories publiées apparaîtront ici tant qu'elles sont actives.")
+                title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée")
             )
         } else {
             publishedGrid
@@ -411,9 +409,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "arrow.triangle.2.circlepath",
-                title: String(localized: "story.mine.queue.empty.title", defaultValue: "Rien en file"),
-                subtitle: String(localized: "story.mine.queue.empty.subtitle",
-                                 defaultValue: "Vos publications en cours ou en échec apparaîtront ici.")
+                title: String(localized: "story.mine.queue.empty.title", defaultValue: "Rien en file")
             )
         } else {
             queueContent
@@ -488,9 +484,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "square.and.pencil",
-                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon"),
-                subtitle: String(localized: "story.mine.drafts.empty.subtitle",
-                                 defaultValue: "Une story fermée sans être publiée vous attend ici.")
+                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon")
             )
         } else {
             draftsContent
@@ -536,9 +530,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "clock.arrow.circlepath",
-                title: String(localized: "story.mine.archive.empty.title", defaultValue: "Aucune archive"),
-                subtitle: String(localized: "story.mine.archive.empty.subtitle",
-                                 defaultValue: "Vos stories expirées rejoindront cette archive.")
+                title: String(localized: "story.mine.archive.empty.title", defaultValue: "Aucune archive")
             )
         } else {
             archiveGrid
@@ -763,13 +755,13 @@ struct MyStoriesView: View {
                     isReposting = false
                     viewModel.applyRepublishedStory(post)
                     FeedbackToastManager.shared.showSuccess(
-                        String(localized: "story.mine.repost.success", defaultValue: "Story republiée"))
+                        String(localized: "story.mine.repost.success", defaultValue: "Story repartagée"))
                 }
             } catch {
                 await MainActor.run {
                     isReposting = false
                     FeedbackToastManager.shared.showError(
-                        String(localized: "story.mine.repost.error", defaultValue: "Échec de la republication"))
+                        String(localized: "story.mine.repost.error", defaultValue: "Échec du repartage"))
                 }
             }
         }

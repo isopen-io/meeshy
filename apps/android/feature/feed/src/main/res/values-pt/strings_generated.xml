@@ -13,7 +13,6 @@
     <string name="feed_action_send">Enviar</string>
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_view_profile">Ver o perfil</string>
-    <string name="feed_bookmark_success">Adicionado aos favoritos</string>
     <string name="feed_caption_collapse">menos</string>
     <string name="feed_caption_expand">mais…</string>
     <string name="feed_carousel_a11y_position">Mídia %1$d de %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">Cancelar</string>
     <string name="feed_delete_confirm">Excluir</string>
     <string name="feed_draft_recovered">Rascunho offline restaurado</string>
-    <string name="feed_empty">Nenhuma publicação</string>
-    <string name="feed_empty_subtitle">As publicações dos seus contatos aparecerão aqui</string>
+    <string name="feed_empty">Nenhuma publicação dos seus contatos</string>
     <string name="feed_header_nearby">Publicações por perto</string>
     <string name="feed_like">Curtir</string>
     <string name="feed_link_copied">Link copiado</string>
@@ -41,7 +39,6 @@
         <item quantity="many">%1$d novas publicações</item>
         <item quantity="other">%1$d novas publicações</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">Erro ao salvar o favorito</string>
     <string name="feed_notice_delete_failed">Erro ao excluir a publicação</string>
     <string name="feed_notice_like_failed">Erro ao curtir a publicação</string>
     <string name="feed_notice_pin_failed">Erro ao fixar a publicação</string>
@@ -82,11 +79,6 @@
         <item quantity="many">%1$d respostas</item>
         <item quantity="other">%1$d respostas</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="one">%1$d repostagem</item>
-        <item quantity="many">%1$d repostagens</item>
-        <item quantity="other">%1$d repostagens</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d salvamentos</string>
     <string name="feed_post_stat_shares">%1$d compartilhamentos</string>
     <string name="feed_quote_cancel">Cancelar</string>
@@ -119,7 +111,7 @@
     <string name="feed_scene_previous">Cena anterior</string>
     <string name="feed_scene_resume">Retoma a reprodução da cena</string>
     <string name="feed_scene_sound_mute">Silenciar o som</string>
-    <string name="feed_scene_sound_muted">Som desativado — abra em tela cheia para ouvir</string>
+    <string name="feed_scene_sound_muted">Som desativado</string>
     <string name="feed_scene_sound_track">Som de fundo</string>
     <string name="feed_scene_sound_unmute">Reativar o som</string>
     <string name="feed_scene_tile">Cena %1$d</string>
@@ -156,8 +148,6 @@
     <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
     <string name="nearby_back">Voltar</string>
     <string name="nearby_denied_action">Abrir Ajustes</string>
-    <string name="nearby_denied_detail">O Meeshy não tem acesso à sua localização. Permita nos Ajustes ou mova o mapa manualmente.</string>
-    <string name="nearby_denied_title">Localização não autorizada</string>
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>
     <string name="post_bookmark_removed">Removido dos favoritos</string>
@@ -205,11 +195,8 @@
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
     <string name="profile_posts_empty">Nenhuma publicação</string>
-    <string name="profile_posts_empty_filter_subtitle">Toque no bloco novamente para ver tudo</string>
     <string name="profile_posts_empty_posts">Nenhuma publicação</string>
     <string name="profile_posts_empty_reels">Nenhum reel</string>
-    <string name="profile_posts_empty_subtitle">As publicações aparecerão aqui</string>
-    <string name="profile_posts_end_of_content">Você já viu tudo</string>
     <string name="profile_posts_first_published_at">Primeiro conteúdo publicado em %1$s</string>
     <string name="profile_posts_load_error">Erro ao carregar as publicações</string>
     <string name="profile_posts_stat_posts">Publicações</string>

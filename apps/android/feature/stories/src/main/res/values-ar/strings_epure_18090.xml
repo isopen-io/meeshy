@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_queue_empty_title">لا توجد منشورات قيد التنفيذ أو فاشلة</string>
+    <string name="stories_comments_empty_title">لا توجد تعليقات</string>
+    <string name="stories_viewers_empty_title">لا توجد مشاهدات</string>
+    <string name="story_sentinel_body">حدّث التطبيق لعرضها.</string>
+</resources>

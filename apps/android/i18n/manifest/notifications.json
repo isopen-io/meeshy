@@ -115,10 +115,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "notifications_empty_category",
-          "status": "android-only"
-        },
-        {
           "androidName": "notifications_mark_all_read",
           "status": "android-only"
         },
