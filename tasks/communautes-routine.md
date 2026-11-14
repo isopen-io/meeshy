@@ -302,3 +302,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : quatre dans `community-salon-exit.test.ts`, deux rouges avant le correctif. Gates : gateway `src/__tests__/unit` + `src/__tests__/security`, `route-manifest`, `src/socketio`, `src/routes/__tests__`, `src/utils` et les suites racine — vertes ; `tsc --noEmit` vert.
 - Revue adversariale : aucun bloquant. Suivi ouvert #18104 (une fermeture de liens qui lève n'est reprise par rien ; mesurer les invités sans lien en staging).
 - Prochain lot recommandé : #18104, puis #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 34 (01:40 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne »), retenue par le porteur pour décision : non touchée. #18105 (#16712) fusionnée.
+- Lot : #18104 (passerelle, sécurité) — en cours.
