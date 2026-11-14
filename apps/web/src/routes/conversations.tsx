@@ -9,7 +9,7 @@ import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { useRowActionNotice } from '@/lib/view/row-action-notice';
-import { withBannerRecall } from '@/lib/view/player-banner-visit';
+import { withBannerRecall } from '@/lib/view/player-banner-recall';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT, type RowPlace } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';

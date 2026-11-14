@@ -10,7 +10,9 @@ import { callStore } from '@/lib/calls/call-store';
 import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
-import { playerBannerVisitStore, recallPlayerBanner } from '@/lib/view/player-banner-visit';
+import { playerBannerVisitStore } from '@/lib/view/player-banner-visit';
+import { isRecallingPlayerBanner, recallPlayerBanner } from '@/lib/view/player-banner-recall';
+import { BannerRecallMount } from '@/lib/view/use-banner-recall';
 import { reportCallResumeShown } from '@/lib/view/top-band';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -29,7 +31,6 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadGameCatalog('fr');
-  await import('@/lib/view/use-banner-recall');
   const cached = await loadEngagementProgress({ source: 'fixtures', transport: httpTransport });
   if (!cached.ok) throw new Error('progression de démonstration attendue');
   appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, cached.data);
@@ -43,7 +44,7 @@ afterEach(() => {
   reportCallResumeShown(false);
   callStore.setState({ call: null, waiting: null });
   gamePrefs.set({ hidden: false });
-  playerBannerVisitStore.setState({ phase: 'armed', visit: 1, recall: false });
+  playerBannerVisitStore.setState({ phase: 'armed', visit: 1 });
 });
 afterAll(async () => {
   appQueryClient.removeQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
@@ -212,7 +213,7 @@ const sleep = async (ms: number): Promise<void> => {
  * l'Offrande est prête ou la Flamme à risque, ou quand on tire la liste ; puis elle repart seule.
  */
 describe('la bannière rappelée', () => {
-  const RECALL = { holdMs: 40, exitMs: 40, recallMs: 70 } as const;
+  const RECALL = { holdMs: 40, exitMs: 40 } as const;
   type Cached = { game: { missions: { unlocked: boolean; items: { completedAt: string | null }[] } } };
 
   test('tirer la liste la rappelle : elle revient le temps du rappel, puis repart', async () => {
@@ -220,9 +221,9 @@ describe('la bannière rappelée', () => {
     expect(await waitForBanner(host)).not.toBeNull();
     await sleep(160);
     expect(host.querySelector('[data-player-slot]')).toBeNull();
-    await act(async () => recallPlayerBanner());
+    await act(async () => recallPlayerBanner({ ms: 60 }));
     expect(await waitForBanner(host)).not.toBeNull();
-    expect(playerBannerVisitStore.getState()).toMatchObject({ phase: 'shown', recall: true });
+    expect(isRecallingPlayerBanner()).toBe(true);
     await sleep(200);
     expect(host.querySelector('[data-player-slot]')).toBeNull();
     expect(playerBannerVisitStore.getState().phase).toBe('gone');
@@ -237,13 +238,18 @@ describe('la bannière rappelée', () => {
     });
     try {
       appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, day(1));
-      const host = await mount(<TopBand routeKey="list" signedIn timing={RECALL} />);
+      const host = await mount(
+        <>
+          <TopBand routeKey="list" signedIn timing={RECALL} />
+          <BannerRecallMount signedIn />
+        </>,
+      );
       expect(await waitForBanner(host)).not.toBeNull();
       await sleep(160);
       expect(host.querySelector('[data-player-slot]')).toBeNull();
       await act(async () => appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, day(2)));
       expect(await waitForBanner(host)).not.toBeNull();
-      expect(playerBannerVisitStore.getState().recall).toBe(true);
+      expect(isRecallingPlayerBanner()).toBe(true);
     } finally {
       appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, before);
     }
@@ -252,7 +258,7 @@ describe('la bannière rappelée', () => {
   test('« Jeu masqué » : ni le geste ni un acte ne la rappellent', async () => {
     gamePrefs.set({ hidden: true });
     const host = await mount(<TopBand routeKey="list" signedIn timing={RECALL} />);
-    await act(async () => recallPlayerBanner());
+    await act(async () => recallPlayerBanner({ ms: 60 }));
     await settle();
     expect(host.querySelector('[data-player-banner]')).toBeNull();
   });

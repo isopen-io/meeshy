@@ -1,9 +1,12 @@
+import { useEffect, useRef } from 'react';
+
 import { bannerMoment, bannerRecall, type BannerMomentSource, type BannerRecallReason } from '@meeshy/shared/utils/game/banner-recall';
 
 import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/game-state-order';
 import { appQueryClient } from '@/lib/api/query-client';
+import { useGamePrefs } from '@/lib/game/preferences';
 
-import { recallPlayerBanner } from './player-banner-visit';
+import { recallPlayerBanner } from './player-banner-recall';
 
 /**
  * **LE GUET DU RAPPEL** (#17366, retouche 3) — le bandeau du joueur revient quelques secondes quand le bloc `game` en
@@ -30,8 +33,9 @@ export function watchBannerRecall(options: {
 }
 
 /**
- * Le guet de l'application, branché sur le cache de la progression. Chargé par le bandeau du haut APRÈS la première
- * peinture (`top-band.tsx`) : les lois du Jeu qu'il compare n'ont rien à faire avant le premier pixel.
+ * Le guet de l'application, branché sur le cache de la progression. Monté par le chrome différé
+ * (`components/deferred-chrome.tsx`), donc APRÈS la première peinture : les lois du Jeu qu'il compare n'ont rien à faire
+ * avant le premier pixel.
  */
 export function startBannerRecall(hidden: () => boolean): () => void {
   const cache = appQueryClient.getQueryCache();
@@ -39,8 +43,17 @@ export function startBannerRecall(hidden: () => boolean): () => void {
     read: () => appQueryClient.getQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY),
     subscribe: (listener) => cache.subscribe(listener),
     hidden,
-    onRecall: recallPlayerBanner,
+    onRecall: () => recallPlayerBanner(),
   });
+}
+
+/** Le guet, monté tant que la session est ouverte ; il ne peint rien. « Jeu masqué » : il se tait. */
+export function BannerRecallMount({ signedIn }: { readonly signedIn: boolean }): null {
+  const hidden = useGamePrefs().hidden;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  useEffect(() => (signedIn ? startBannerRecall(() => hiddenRef.current) : undefined), [signedIn]);
+  return null;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;

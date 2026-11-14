@@ -11,7 +11,6 @@ import {
   PLAYER_BANNER_EXIT_MS,
   PLAYER_BANNER_EXIT_REDUCED_MS,
   PLAYER_BANNER_HOLD_MS,
-  PLAYER_BANNER_RECALL_MS,
   playerBannerVisitStore,
   watchPlayerBannerAbsence,
 } from '@/lib/view/player-banner-visit';
@@ -60,9 +59,7 @@ const occupants = (slots: TopBandSlots): string =>
  *
  * La bannière du joueur ne paraît qu'à l'OUVERTURE de l'application, 30 s,
  * puis remonte et s'efface (#9536, `lib/view/player-banner-visit.ts`) : cela
- * supplante le « toujours visible » de #9494. Elle REVIENT quelques secondes
- * quand un acte est réalisé, l'Offrande prête ou la Flamme à risque, ou quand
- * on tire la liste (#17366, `useBannerRecall`, `recallPlayerBanner`).
+ * supplante le « toujours visible » de #9494.
  *
  * Sur les routes qui portent la bannière, le bandeau RÉSERVE sa hauteur
  * (`onInset`) : la coquille la reporte dans `--safe-top` de l'arbre des
@@ -70,14 +67,9 @@ const occupants = (slots: TopBandSlots): string =>
  * comme iOS, où « seul le viewport bouge ». Ailleurs, la pile se pose
  * par-dessus, comme avant.
  */
-export type VisitTiming = {
-  readonly holdMs: number;
-  readonly exitMs: number;
-  /** Le temps d'un rappel (#17366) ; à défaut, `PLAYER_BANNER_RECALL_MS`. */
-  readonly recallMs?: number;
-};
+export type VisitTiming = { readonly holdMs: number; readonly exitMs: number };
 
-const DEFAULT_TIMING: VisitTiming = { holdMs: PLAYER_BANNER_HOLD_MS, exitMs: PLAYER_BANNER_EXIT_MS, recallMs: PLAYER_BANNER_RECALL_MS };
+const DEFAULT_TIMING: VisitTiming = { holdMs: PLAYER_BANNER_HOLD_MS, exitMs: PLAYER_BANNER_EXIT_MS };
 
 export function TopBand({
   routeKey,
@@ -99,7 +91,6 @@ export function TopBand({
   const reserves = showsPlayerBanner(routeKey);
   const visit = useStore(playerBannerVisitStore, (state) => state.phase);
   useBannerVisitClock(timing, signedIn);
-  useBannerRecall(signedIn);
   const eligible = signedIn && !prefs.hidden && reserves && visit !== 'gone';
   const slots = topBandSlots({ call: localCall || resumeShown, audio, player: eligible });
   const column = useRef<HTMLDivElement | null>(null);
@@ -154,10 +145,9 @@ export function TopBand({
  * `lib/view/player-banner-visit.ts` ; l'horloge, ici, parce qu'elle suit la
  * vie du bandeau.
  */
-function useBannerVisitClock({ holdMs, exitMs, recallMs = PLAYER_BANNER_RECALL_MS }: VisitTiming, signedIn: boolean): void {
+function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean): void {
   const phase = useStore(playerBannerVisitStore, (state) => state.phase);
   const visit = useStore(playerBannerVisitStore, (state) => state.visit);
-  const recall = useStore(playerBannerVisitStore, (state) => state.recall);
   useEffect(() => watchPlayerBannerAbsence(), []);
   useEffect(() => {
     const { send } = playerBannerVisitStore.getState();
@@ -166,7 +156,7 @@ function useBannerVisitClock({ holdMs, exitMs, recallMs = PLAYER_BANNER_RECALL_M
       return () => clearTimeout(id);
     }
     if (phase === 'shown') {
-      const id = setTimeout(() => send('expired'), recall ? recallMs : holdMs);
+      const id = setTimeout(() => send('expired'), holdMs);
       return () => clearTimeout(id);
     }
     if (phase === 'leaving') {
@@ -174,29 +164,7 @@ function useBannerVisitClock({ holdMs, exitMs, recallMs = PLAYER_BANNER_RECALL_M
       return () => clearTimeout(id);
     }
     return undefined;
-  }, [phase, visit, recall, signedIn, holdMs, exitMs, recallMs]);
-}
-
-/**
- * LE GUET DU RAPPEL (#17366) — chargé après la première peinture (`lib/view/use-banner-recall.ts`) : il s'abonne au
- * cache de la progression et rappelle le bandeau quand un acte, l'Offrande prête ou la Flamme à risque vient de naître.
- */
-function useBannerRecall(signedIn: boolean): void {
-  const hidden = useGamePrefs().hidden;
-  const hiddenRef = useRef(hidden);
-  hiddenRef.current = hidden;
-  useEffect(() => {
-    if (!signedIn) return undefined;
-    let stop: (() => void) | null = null;
-    let cancelled = false;
-    void import('@/lib/view/use-banner-recall').then((module) => {
-      if (!cancelled) stop = module.startBannerRecall(() => hiddenRef.current);
-    });
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [signedIn]);
+  }, [phase, visit, signedIn, holdMs, exitMs]);
 }
 
 /**
