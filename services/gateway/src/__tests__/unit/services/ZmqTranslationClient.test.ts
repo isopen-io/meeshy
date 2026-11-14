@@ -54,6 +54,7 @@ jest.mock('crypto', () => ({
 
 // Mock zmq-helpers for loadAudioAsBinary
 jest.mock('../../../services/zmq-translation/utils/zmq-helpers', () => ({
+  ...jest.requireActual<typeof import('../../../services/zmq-translation/utils/zmq-helpers')>('../../../services/zmq-translation/utils/zmq-helpers'),
   loadAudioAsBinary: jest.fn().mockResolvedValue({
     buffer: Buffer.from('fake-audio-data'),
     mimeType: 'audio/mp3',

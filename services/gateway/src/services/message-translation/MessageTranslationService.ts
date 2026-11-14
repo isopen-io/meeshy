@@ -11,7 +11,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult, type TranslationErrorPayload } from '../zmq-translation';
-import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
+import { isMessageTranslationTarget, isTransientPoolRefusal } from '../zmq-translation/utils/zmq-helpers';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -988,7 +988,7 @@ export class MessageTranslationService extends EventEmitter {
 
     logger.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
 
-    if (data.error === 'translation pool full') {
+    if (isTransientPoolRefusal(data)) {
       this.stats.incrementPoolFullRejections();
     }
 
