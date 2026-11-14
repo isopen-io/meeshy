@@ -152,7 +152,7 @@ export function DiscoverTabBar({
     <div
       role="tablist"
       aria-label={translate(language, 'discover.tabs')}
-      className="flex shrink-0 px-2"
+      className="scrollbar-none flex shrink-0 overflow-x-auto px-1"
       style={{ height: DISCOVER_TABS_HEIGHT, borderBottom: EDGE }}
     >
       {DISCOVER_TABS.map((tab, index) => {
@@ -174,14 +174,15 @@ export function DiscoverTabBar({
             data-discover-tab={tab}
             onClick={() => onSelect(tab)}
             onKeyDown={(event) => tabBarKeyDown(event, index, rtl, moveTo)}
-            className="relative flex min-w-0 flex-1 items-center justify-center focus-visible:outline-2 focus-visible:-outline-offset-2"
+            className="relative flex flex-auto shrink-0 items-center justify-center px-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
             style={{ minHeight: 44, outlineColor: BRAND }}
           >
             <span
               className={`flex min-w-0 items-center gap-1 text-caption font-semibold ${active ? BRAND_INK : ''}`}
               style={active ? undefined : { color: INK_2 }}
             >
-              {/* Le NOM entier, jamais tronqué (règle 5) : les glyphes d'onglet ont quitté la barre pour lui rendre sa largeur. */}
+              {/* Le NOM entier, jamais tronqué (règle 5) : l'onglet prend la largeur de son nom et de sa pastille ; à 320, dans
+                  les langues longues, la barre défile plutôt que de les faire déborder sur l'onglet voisin. */}
               <span data-discover-tab-title className="whitespace-nowrap">
                 {translate(language, TAB_LABEL[tab])}
               </span>

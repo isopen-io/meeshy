@@ -442,6 +442,31 @@ try {
       await cold.close();
     }
   }
+
+  /* LES NOMS D'ONGLET ENTIERS NE SE CHEVAUCHENT PAS (#18196) — l'épure a ôté la
+     troncature (règle 5) : à 320, « Solicitudes » et sa pastille, « Bloqueados »
+     débordaient sur l'onglet voisin. Chaque nom et sa pastille restent DANS leur
+     onglet, sans défilement horizontal de la page, dans les langues les plus longues. */
+  for (const locale of ['es', 'pt', 'de', 'it', 'ar', 'fr']) {
+    const context = await browser.newContext({ viewport: { width: 320, height: 568 }, locale });
+    const page = await context.newPage();
+    await page.goto(`${BASE}/discover`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-discover-tab-count]');
+    await page.waitForTimeout(300);
+    const spill = await page.$$eval('[data-discover-tab]', (tabs) =>
+      tabs.flatMap((tab) => {
+        const box = tab.getBoundingClientRect();
+        return [...tab.querySelectorAll('[data-discover-tab-title], [data-discover-tab-count]')]
+          .map((part) => ({ part, rect: part.getBoundingClientRect() }))
+          .filter(({ rect }) => rect.left < box.left - 0.5 || rect.right > box.right + 0.5)
+          .map(({ part }) => part.textContent.trim());
+      }),
+    );
+    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    check(spill.length === 0, `${locale} 320×568 : chaque nom d'onglet et sa pastille tiennent dans leur onglet (${JSON.stringify(spill)})`);
+    check(pageWidth <= 320, `${locale} 320×568 : aucun défilement horizontal de la page (${pageWidth})`);
+    await context.close();
+  }
 } finally {
   await browser.close();
   served.close();
