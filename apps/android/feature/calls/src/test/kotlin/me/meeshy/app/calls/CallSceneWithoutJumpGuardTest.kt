@@ -45,13 +45,15 @@ class CallSceneWithoutJumpGuardTest {
     fun `loi 17_1 - ma vignette parait et repart en fondu, son image sous un voile qui se leve`() {
         val stage = code("CallStage.kt")
         assertThat(stage).doesNotContain("if (layout.showsSelfTile) {")
-        assertThat(stage).contains("MutableTransitionState(false)")
-        assertThat(stage).contains("targetState = layout.showsSelfTile")
+        assertThat(stage).contains("visible = showsSelfTile")
+        assertThat(stage).contains("showsSelfTile = layout.showsSelfTile")
         val presence = block(stage, "private fun CallSelfTilePresence(", "\n}")
+        assertThat(presence).contains("MutableTransitionState(false)")
+        assertThat(presence).contains("presence.targetState = visible")
         assertThat(presence).contains("CallRemoteVideoFade.presenceFrameDelayMillis(")
         assertThat(presence).contains("CallRemoteVideoFade.presenceVeilDelayMillis(")
         assertThat(presence).contains("CallRemoteVideoFade.mountsTileContent(")
-        assertThat(presence).contains("transition.animateFloat(")
+        assertThat(presence).contains("LaunchedEffect(visible, millis)")
         assertThat(presence).contains("graphicsLayer { alpha = veil.value }")
     }
 

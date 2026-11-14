@@ -253,7 +253,9 @@ private fun CallGroupFeaturedTile(
                 },
         )
         if (title != null) {
-            CallFeaturedScreenChip(title, screenZoom, chip, Modifier.align(Alignment.TopStart).padding(MeeshySpacing.sm))
+            // P11.1 · U2 : sous l'en-tête qui flotte sur la scène, à côté de ses boutons et jamais dessous.
+            val belowHeader = LocalCallGroupGridClearance.current
+            CallFeaturedScreenChip(title, screenZoom, chip, Modifier.align(Alignment.TopStart).callBelowTheFloatingHeader(belowHeader).padding(MeeshySpacing.sm))
         }
         if (selfZoom != null) {
             Box(Modifier.matchParentSize().callCameraZoomAdjustable(selfZoom))
