@@ -63,6 +63,8 @@ jest.mock('../../../../routes/auth/types', () => ({
 import { updateUserProfile, updateUserAvatar } from '../../../../routes/users/profile';
 
 const USER_ID = '507f1f77bcf86cd799439011';
+const OWN_AVATAR_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/avatar.jpg`)}`;
+const OWN_BANNER_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/banner.jpg`)}`;
 
 // displayName + bio (11 car., > 10) + phoneNumber + email présents, avatar
 // absent ⇒ 4/5 = 80 au départ ; chaque test change un seul champ de la formule
@@ -91,6 +93,7 @@ function makePrisma() {
       update: jest.fn<any>().mockResolvedValue(mockUser),
     },
     userVoiceModel: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }) },
   };
 }
 
@@ -171,14 +174,14 @@ describe('PATCH /users/me/avatar — recalcule profileCompletionRate (#3688)', (
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     // displayName + bio (11 car.) + phoneNumber + email + avatar (nouveau) ⇒ 5/5 = 100.
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          avatar: 'https://example.com/avatar.jpg',
+          avatar: OWN_AVATAR_URL,
           profileCompletionRate: 100,
         }),
       })

@@ -2,7 +2,11 @@
   "lot": "K24",
   "nom": "MeeshyContextLines",
   "ecrit_par": "lot iOS",
-  "lues_par": ["iOS (MeeshyContextLinesRuleTests)", "Android (a venir)", "web (a venir)"],
+  "lues_par": [
+    "iOS (MeeshyContextLinesTests)",
+    "Android (a venir)",
+    "web (a venir)"
+  ],
   "recette": {
     "barCount": 18,
     "waveFloor": 0.16666666666666666,
@@ -12,36 +16,221 @@
     "fadeWidth": 44,
     "maxTextScale": 1.5,
     "chipHeight": 36,
-    "minimumTarget": 44
+    "minimumTarget": 44,
+    "waveBarWidth": 2,
+    "waveBarPitch": 4,
+    "waveHeight": 12,
+    "textOpacity": 0.85,
+    "waveOpacity": 0.7,
+    "fadeDuration": 0.2
   },
   "loi13": {
     "soundLineHasContent": [
-      { "title": "", "levels": null, "detail": null, "attendu": false },
-      { "title": "Afro Sunset", "levels": null, "detail": null, "attendu": true },
-      { "title": "", "levels": null, "detail": "", "attendu": false },
-      { "title": "", "levels": [], "detail": null, "attendu": true }
+      {
+        "title": "",
+        "levels": null,
+        "detail": null,
+        "attendu": false
+      },
+      {
+        "title": "Afro Sunset",
+        "levels": null,
+        "detail": null,
+        "attendu": true
+      },
+      {
+        "title": "",
+        "levels": null,
+        "detail": "",
+        "attendu": false
+      },
+      {
+        "title": "",
+        "levels": [],
+        "detail": null,
+        "attendu": true
+      }
     ],
     "visibleReferences": [
-      { "entree": ["", "  ", "#dakar"], "attendu": ["#dakar"] }
+      {
+        "entree": [
+          "",
+          "  ",
+          "#dakar"
+        ],
+        "attendu": [
+          "#dakar"
+        ]
+      }
     ],
     "separatorCount": [
-      { "visible": 0, "attendu": 0 },
-      { "visible": 1, "attendu": 0 },
-      { "visible": 2, "attendu": 1 }
+      {
+        "visible": 0,
+        "attendu": 0
+      },
+      {
+        "visible": 1,
+        "attendu": 0
+      },
+      {
+        "visible": 2,
+        "attendu": 1
+      }
     ],
     "showsChevron": [
-      { "hasAction": false, "requested": true, "attendu": false },
-      { "hasAction": true, "requested": null, "attendu": true },
-      { "hasAction": true, "requested": false, "attendu": false }
+      {
+        "hasAction": false,
+        "requested": true,
+        "attendu": false
+      },
+      {
+        "hasAction": true,
+        "requested": null,
+        "attendu": true
+      },
+      {
+        "hasAction": true,
+        "requested": false,
+        "attendu": false
+      }
     ],
     "firesHaptic": [
-      { "hasAction": false, "haptic": "light", "attendu": false },
-      { "hasAction": true, "haptic": "none", "attendu": false },
-      { "hasAction": true, "haptic": "light", "attendu": true }
+      {
+        "hasAction": false,
+        "haptic": "light",
+        "attendu": false
+      },
+      {
+        "hasAction": true,
+        "haptic": "none",
+        "attendu": false
+      },
+      {
+        "hasAction": true,
+        "haptic": "light",
+        "attendu": true
+      }
     ],
     "showsChip": [
-      { "title": "", "glyph": null, "attendu": false },
-      { "title": "", "glyph": "globe", "attendu": true }
+      {
+        "title": "",
+        "glyph": null,
+        "attendu": false
+      },
+      {
+        "title": "",
+        "glyph": "globe",
+        "attendu": true
+      }
+    ],
+    "chipValue": [
+      {
+        "title": "Amis",
+        "detail": null,
+        "attendu": "Amis"
+      },
+      {
+        "title": "Amis",
+        "detail": "3 prises",
+        "attendu": "Amis, 3 prises"
+      },
+      {
+        "title": "",
+        "detail": "0:04",
+        "attendu": "0:04"
+      },
+      {
+        "title": "  ",
+        "detail": "  ",
+        "attendu": ""
+      }
+    ],
+    "chipDetailOpacity": [
+      {
+        "tone": "onLight",
+        "attendu": 1
+      },
+      {
+        "tone": "deep",
+        "attendu": 0.85
+      },
+      {
+        "tone": "plain",
+        "attendu": 0.85
+      },
+      {
+        "tone": "theme",
+        "attendu": 0.85
+      }
+    ],
+    "lineOpacity": [
+      {
+        "isPressed": false,
+        "isHovered": false,
+        "attendu": 1
+      },
+      {
+        "isPressed": false,
+        "isHovered": true,
+        "attendu": 0.85
+      },
+      {
+        "isPressed": true,
+        "isHovered": true,
+        "attendu": 0.7
+      }
+    ]
+  },
+  "cible": [
+    {
+      "edge": "top",
+      "height": 16,
+      "attendu": {
+        "y": -28,
+        "height": 44
+      }
+    },
+    {
+      "edge": "bottom",
+      "height": 18,
+      "attendu": {
+        "y": 0,
+        "height": 44
+      }
+    },
+    {
+      "edge": "vertical",
+      "height": 36,
+      "attendu": {
+        "y": -4,
+        "height": 44
+      }
+    },
+    {
+      "edge": "vertical",
+      "height": 50,
+      "attendu": {
+        "y": 0,
+        "height": 50
+      }
+    }
+  ],
+  "contraste": {
+    "plateau": [
+      10,
+      11,
+      15
+    ],
+    "plancher": 4.5,
+    "lignes": [
+      {
+        "opacite": 0.85,
+        "attendu": 14.1
+      },
+      {
+        "opacite": 0.7,
+        "attendu": 9.7
+      }
     ]
   }
 }

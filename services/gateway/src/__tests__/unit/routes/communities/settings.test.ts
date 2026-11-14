@@ -371,14 +371,29 @@ describe("PUT /communities/:id — l'image désigne un fichier du créateur (#16
     await app.close();
   });
 
-  it("laisse une adresse d'un hôte tiers à #16809, sans lecture", async () => {
-    const prisma = creatorPrisma();
+  it.each([
+    ['un hôte tiers', 'https://cdn.example.com/a.png'],
+    ['son propre fichier servi par un hôte tiers', `https://evil.test/api/v1/attachments/file/${encodeURIComponent(OWN)}`],
+  ])("refuse %s (#16809) en 400 IDENTITY_IMAGE_NOT_OWNED sans rien écrire", async (_label, url) => {
+    for (const field of ['avatar', 'banner'] as const) {
+      const prisma = creatorPrisma();
+      const { app } = await buildApp({ prisma });
+      const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { [field]: url } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+      expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
+      expect(prisma.community.update).not.toHaveBeenCalled();
+      await app.close();
+    }
+  });
+
+  it("garde une bannière tierce DÉJÀ posée quand on change le nom (lecture tolérante, #16809)", async () => {
+    const prisma = creatorPrisma({ banner: 'https://cdn.example.com/b.png' });
     const { app } = await buildApp({ prisma });
     const res = await app.inject({
-      method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { avatar: 'https://cdn.example.com/a.png' },
+      method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { name: 'Nouveau nom', banner: 'https://cdn.example.com/b.png' },
     });
     expect(res.statusCode).toBe(200);
-    expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
     await app.close();
   });
 

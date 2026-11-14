@@ -72,7 +72,8 @@ export function isProfileImageReference(value: string): boolean {
  * relatif lui-même, la route de flux (`/api/(v1/)attachments/file/<clé>`), ou
  * une adresse ABSOLUE dont le chemin est cette route (`publicMediaUrl`
  * l'écrit ainsi). `null` quand la référence ne désigne aucun fichier du volume
- * (un hôte tiers — l'affaire de #16809 — ou une forme refusée).
+ * (un hôte tiers, que la passerelle refuse à l'écriture — #16809 — ou une forme
+ * refusée).
  *
  * C'est la question que pose la passerelle avant d'accepter une image
  * d'identité : ce fichier, l'appelant l'a-t-il téléversé ? `/attachments/file/*`
