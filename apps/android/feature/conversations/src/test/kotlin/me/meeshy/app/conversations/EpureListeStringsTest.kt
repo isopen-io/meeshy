@@ -42,7 +42,7 @@ class EpureListeStringsTest {
         "share_link_access_email_subtitle", "share_link_access_birthday_subtitle",
         "new_conversation_contacts_empty_subtitle", "share_link_picker_empty_body",
         "share_link_created_subtitle",
-        "conversations_action_more",
+        "conversations_action_more", "links_hub_banner_subtitle",
     )
 
     /** Mots que le lexique écrit pareil en français et en anglais : ce n'est pas une recopie. */
@@ -120,7 +120,6 @@ class EpureListeStringsTest {
     @Test
     fun `the link rows and the empty states keep the sentences the rule 7 keeps visible`() {
         val en = all("values")
-        assertThat(en["links_hub_banner_subtitle"]).isNotEmpty()
         assertThat(en["shareLink_detail_createdOn"]).contains("%1\$s")
         assertThat(en["conversations_error_subtitle"]).isEqualTo("Couldn't load your conversations.")
         assertThat(en["conversations_empty"]).isEqualTo("No conversations yet")
