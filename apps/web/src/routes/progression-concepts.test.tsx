@@ -172,10 +172,12 @@ describe('un ancien serveur, sans bloc `game`', () => {
     for (const concept of ['points', 'glory', 'missions', 'league', 'season', 'prestige', 'showcase', 'atlas']) expect(cards(page())).not.toContain(concept);
   });
 
-  test('chaque carte restante dit une valeur et une ligne', () => {
+  test('chaque carte restante dit une valeur ; sa ligne manque seulement pour les compteurs, dont la jauge dit le reste (épure #18148)', () => {
+    const counters = ['badges', 'succes', 'defis', 'atlas'];
     for (const concept of progressionConcepts(before)) {
       const card = page().querySelector(`[data-concept-card="${concept}"]`);
       expect({ concept, value: card?.querySelector('[data-concept-value]')?.textContent === '' }).toEqual({ concept, value: false });
+      if (counters.includes(concept)) continue;
       expect({ concept, line: card?.querySelector('[data-concept-line]') !== null }).toEqual({ concept, line: true });
     }
   });

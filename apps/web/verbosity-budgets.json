@@ -213,56 +213,56 @@
       "firstScreen": 39
     },
     "me-progression": {
-      "total": 178,
+      "total": 162,
       "firstScreen": 108
     },
     "me-progression-atlas": {
-      "total": 136,
-      "firstScreen": 78
+      "total": 75,
+      "firstScreen": 72
     },
     "me-progression-badges": {
-      "total": 475,
-      "firstScreen": 122
+      "total": 162,
+      "firstScreen": 67
     },
     "me-progression-carnet": {
-      "total": 45,
-      "firstScreen": 45
+      "total": 43,
+      "firstScreen": 43
     },
     "me-progression-defis": {
-      "total": 189,
-      "firstScreen": 86
+      "total": 186,
+      "firstScreen": 82
     },
     "me-progression-ligue": {
-      "total": 222,
-      "firstScreen": 71
+      "total": 199,
+      "firstScreen": 66
     },
     "me-progression-prestige": {
-      "total": 33,
-      "firstScreen": 33
+      "total": 30,
+      "firstScreen": 30
     },
     "me-progression-reglages": {
-      "total": 304,
-      "firstScreen": 119
+      "total": 153,
+      "firstScreen": 69
     },
     "me-progression-regles": {
-      "total": 2917,
-      "firstScreen": 167
+      "total": 389,
+      "firstScreen": 129
     },
     "me-progression-saison": {
-      "total": 169,
-      "firstScreen": 110
+      "total": 139,
+      "firstScreen": 98
     },
     "me-progression-succes": {
-      "total": 50,
-      "firstScreen": 50
+      "total": 48,
+      "firstScreen": 48
     },
     "me-progression-tableau-de-bord": {
-      "total": 170,
+      "total": 154,
       "firstScreen": 100
     },
     "me-progression-vitrine": {
-      "total": 105,
-      "firstScreen": 105
+      "total": 76,
+      "firstScreen": 76
     },
     "me-sounds": {
       "total": 21,

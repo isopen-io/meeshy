@@ -101,8 +101,9 @@ describe('les neuf familles sont dessinées', () => {
 });
 
 describe('une page qui explique', () => {
-  test('aucun bouton, aucune image bitmap : seulement du dessin vectoriel', () => {
-    expect(atlas).not.toContain('<button');
+  test('aucun bouton hors les neuf rangées qui se déplient, aucune image bitmap : seulement du dessin vectoriel', () => {
+    expect(count(/<button/g)).toBe(9);
+    expect(count(/<button[^>]*aria-expanded/g)).toBe(9);
     expect(atlas).not.toContain('<img');
   });
 
