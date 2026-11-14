@@ -113,9 +113,50 @@ class GameEpureResourcesTest {
     }
 
     @Test
-    fun `les reglages de visibilite gardent la phrase de principe seulement`() {
+    fun `les reglages de visibilite disent au repos ce qui se regle et rangent la presence derriere un i`() {
         assertThat(text(R.string.game2_settings_visibility_body))
+            .isEqualTo("Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas.")
+        assertThat(text(R.string.game2_settings_visibility_question)).isEqualTo("Qui voit quand je joue ?")
+        assertThat(text(R.string.game2_settings_visibility_presence))
             .isEqualTo("Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.")
+    }
+
+    @Test
+    fun `le masquage dit en une phrase ce qu il fait et range la liste des effets derriere un i`() {
+        assertThat(text(R.string.game2_settings_hidden_body)).isEqualTo("Le jeu disparaît de cet appareil et se ferme aux autres.")
+        assertThat(text(R.string.game2_settings_hidden_question)).isEqualTo("Que ferme le masquage ?")
+        assertThat(text(R.string.game2_settings_hidden_effects))
+            .isEqualTo("Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.")
+    }
+
+    @Test
+    fun `la revelation d un palier ne dit plus la seconde phrase`() {
+        assertThat(text(R.string.reveal_badge_axis_subtitle)).isEqualTo("Un palier de plus sur cet axe.")
+    }
+
+    @Test
+    fun `les notes rangees derriere un i sont traduites dans les sept langues et jamais copiees du francais`() {
+        listOf(
+            "game2_settings_hidden_body", "game2_settings_hidden_question", "game2_settings_hidden_effects",
+            "game2_settings_visibility_body", "game2_settings_visibility_question", "game2_settings_visibility_presence",
+            "game2_settings_friends_league_body", "game2_settings_friends_league_question", "game2_settings_friends_league_effects",
+            "reveal_badge_axis_subtitle",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+    }
+
+    @Test
+    fun `chaque nom de i est une question`() {
+        listOf(
+            "game2_settings_hidden_question", "game2_settings_visibility_question", "game2_settings_friends_league_question",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder -> assertThat(valueIn(folder, name)).containsMatch("[?؟]") }
+        }
     }
 
     @Test
@@ -153,7 +194,10 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game2_settings_notifications_body)).isEqualTo("Une par jour au plus, sur tous tes appareils.")
         assertThat(text(R.string.game2_settings_notifications_switch)).isEqualTo("Notifications")
         assertThat(text(R.string.game2_settings_friends_league_body))
-            .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine ; l’interrupteur retire les deux sens.")
+            .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine.")
+        assertThat(text(R.string.game2_settings_friends_league_question)).isEqualTo("Que retire « Me retirer » ?")
+        assertThat(text(R.string.game2_settings_friends_league_effects))
+            .isEqualTo("L’interrupteur te retire de leur classement et les retire du tien : les deux sens.")
     }
 
     @Test
