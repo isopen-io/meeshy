@@ -81,6 +81,8 @@ const it = {
   'callControls.selfTile.corner.bottom-left': 'La mia miniatura: in basso a sinistra',
   'callControls.selfTile.corner.bottom-right': 'La mia miniatura: in basso a destra',
   'callControls.spotlight.self': 'Metti in evidenza la mia immagine',
+  'callControls.fullscreen.total.enter': 'Schermo intero totale',
+  'callControls.fullscreen.total.exit': 'Esci dallo schermo intero totale',
   'callControls.screenZoom.hint': 'Schermo condiviso: pizzica o Ctrl + rotellina per ingrandire, tocca due volte per vederlo intero',
   'callControls.liveFrame.proposal': '{name} ti propone la cornice «{frame}»',
   'callControls.liveFrame.proposal.anonymous': 'L\'altra persona ti propone la cornice «{frame}»',
