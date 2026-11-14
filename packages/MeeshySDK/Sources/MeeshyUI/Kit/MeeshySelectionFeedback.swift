@@ -28,9 +28,10 @@ public nonisolated enum MeeshySelectionFeedbackAccessibility {
     }
 }
 
-/// La structure de l'arbre ne dépend jamais de la sélection : choisir ou lâcher
+/// La structure du CONTENU ne dépend jamais de la sélection : choisir ou lâcher
 /// un objet ne change que l'opacité des lueurs (un `if` autour du contenu
-/// referait l'objet, et son état avec). Seule cette opacité s'anime ; elle est
+/// referait l'objet, et son état avec). Seule la boîte d'un média, posée en
+/// arrière-plan, entre et sort de l'arbre. L'opacité est seule à s'animer ; elle est
 /// tenue par un état LOCAL, de sorte que l'animation ne touche pas aux autres
 /// changements de l'hôte.
 private struct MeeshySelectionHaloModifier: ViewModifier {
@@ -57,11 +58,12 @@ private struct MeeshySelectionHaloModifier: ViewModifier {
         let recipe = MeeshySelectionFeedbackRecipe.halo(
             tone: tone ?? hostTone, isIncreasedContrast: contrast == .increased, scale: scale
         )
-        let silhouette = silhouetteOpacity(recipe)
+        let paint = MeeshySelectionFeedbackRecipe.paint(recipe, shape: shape, glow: glow)
+        let ink = recipe.ink.color
         content
-            .shadow(color: recipe.ink.color.opacity(silhouette[0]), radius: recipe.layers[0].radius)
-            .shadow(color: recipe.ink.color.opacity(silhouette[1]), radius: recipe.layers[1].radius)
-            .background { box(recipe) }
+            .shadow(color: ink.opacity(paint.silhouette[0]), radius: recipe.layers[0].radius)
+            .shadow(color: ink.opacity(paint.silhouette[1]), radius: recipe.layers[1].radius)
+            .background { box(paint.box, ink: ink) }
             .accessibilityAddTraits(MeeshySelectionFeedbackAccessibility.traits(isSelected: isSelected))
             .adaptiveOnChange(of: isSelected) { _, selected in
                 let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userReduceMotion)
@@ -71,22 +73,17 @@ private struct MeeshySelectionHaloModifier: ViewModifier {
             }
     }
 
-    /// Les opacités des deux lueurs de la silhouette : nulles pour une boîte arrondie.
-    private func silhouetteOpacity(_ recipe: MeeshySelectionHaloRecipe) -> [Double] {
-        guard case .content = shape else { return [0, 0] }
-        return recipe.layers.map { $0.opacity * glow }
-    }
-
-    /// La boîte d'un média opaque : l'ombre d'un rectangle arrondi, jamais le flou de la silhouette.
+    /// La boîte d'un média opaque : l'ombre d'un rectangle arrondi, jamais le
+    /// flou de la silhouette. Éteinte, elle n'existe pas dans l'arbre ; son
+    /// entrée et sa sortie suivent la transaction du fondu.
     @ViewBuilder
-    private func box(_ recipe: MeeshySelectionHaloRecipe) -> some View {
-        if case .rounded(let radius) = shape {
+    private func box(_ layers: [MeeshySelectionHaloLayer], ink: Color) -> some View {
+        if case .rounded(let radius) = shape, !layers.isEmpty {
             ZStack {
-                ForEach(recipe.layers.indices, id: \.self) { index in
-                    let layer = recipe.layers[index]
+                ForEach(layers.indices, id: \.self) { index in
                     RoundedRectangle(cornerRadius: radius)
-                        .fill(recipe.ink.color.opacity(layer.opacity * glow))
-                        .shadow(color: recipe.ink.color.opacity(layer.opacity * glow), radius: layer.radius)
+                        .fill(ink.opacity(layers[index].opacity))
+                        .shadow(color: ink.opacity(layers[index].opacity), radius: layers[index].radius)
                 }
             }
             .allowsHitTesting(false)

@@ -32,7 +32,7 @@ const de = {
   'onboarding.email.failed': 'Der Link wurde nicht gesendet. Versuch es noch einmal.',
 
   'onboarding.age.title': 'Dein Geburtsdatum',
-  'onboarding.age.body': 'Damit wir dir die passenden Räume vorschlagen. Du kannst das überspringen.',
+  'onboarding.age.body': 'Damit wir dir die passenden Räume vorschlagen.',
   'onboarding.age.skip': 'Überspringen',
   'onboarding.age.check': 'Prüfe dein Geburtsdatum.',
   'onboarding.age.failed': 'Dein Datum wurde nicht gespeichert. Versuch es noch einmal.',
@@ -68,7 +68,7 @@ const de = {
   'onboarding.story.verify': 'Bestätige zuerst deine E-Mail-Adresse, um deine Story zu posten.',
 
   'onboarding.friends.title': 'Finde deine Leute',
-  'onboarding.friends.body': 'Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide mindestens\u00A0+{points}.',
+  'onboarding.friends.body': 'Füge 3 Leute hinzu, die zu dir passen.',
   'onboarding.friends.add': 'Hinzufügen',
   'onboarding.friends.addNamed': '{name} hinzufügen',
   'onboarding.friends.added': 'Gesendet',

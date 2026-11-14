@@ -53,6 +53,28 @@ struct MeeshySelectionFeedbackTests {
         #expect(MeeshySelectionFeedbackRecipe.fade(appearing: false, reduceMotion: true) == nil)
     }
 
+    @Test("non choisi, rien ne se peint : aucune lueur, et aucune couche de boîte dans l'arbre")
+    func paint_unselected_paintsNothing() {
+        let recipe = MeeshySelectionFeedbackRecipe.halo(tone: .deep, isIncreasedContrast: false, scale: 1)
+        for shape in [MeeshySelectionHaloShape.content, .rounded(12)] {
+            let paint = MeeshySelectionFeedbackRecipe.paint(recipe, shape: shape, glow: 0)
+            #expect(paint.silhouette.allSatisfy { $0 == 0 }, "\(shape)")
+            #expect(paint.box.isEmpty, "\(shape)")
+        }
+        #expect(MeeshySelectionFeedbackRecipe.paint(recipe, shape: .rounded(12), glow: .nan).box.isEmpty)
+    }
+
+    @Test("choisi : la silhouette porte les deux lueurs, la boîte arrondie les porte seule, jamais les deux")
+    func paint_selected_followsTheShape() {
+        let recipe = MeeshySelectionFeedbackRecipe.halo(tone: .deep, isIncreasedContrast: false, scale: 2)
+        let silhouette = MeeshySelectionFeedbackRecipe.paint(recipe, shape: .content, glow: 1)
+        #expect(silhouette.silhouette == recipe.layers.map(\.opacity))
+        #expect(silhouette.box.isEmpty)
+        let box = MeeshySelectionFeedbackRecipe.paint(recipe, shape: .rounded(12), glow: 1)
+        #expect(box.silhouette.allSatisfy { $0 == 0 })
+        #expect(box.box == recipe.layers)
+    }
+
     @Test("le modificateur pose l'état « sélectionné » et le retire, sans rien ajouter d'autre")
     func accessibility_traits_follow_selection() {
         #expect(MeeshySelectionFeedbackAccessibility.traits(isSelected: true) == .isSelected)
@@ -120,6 +142,15 @@ struct MeeshySelectionFeedbackTests {
         #expect(taps == 0)
         #expect(first != MeeshySnapGuides(isActive: true, engaged: MeeshySnapLines(vertical: [0.75])))
         #expect(first != MeeshySnapGuides(isActive: false, engaged: lines))
+    }
+
+    @Test("le contour de la scène ne se trace que si l'hôte le demande")
+    @MainActor
+    func guides_bounds_areOptIn() {
+        let lines = MeeshySnapLines(vertical: [0.5])
+        #expect(MeeshySnapGuides(isActive: true, engaged: lines) == MeeshySnapGuides(isActive: true, engaged: lines, showsBounds: false))
+        #expect(MeeshySnapGuides(isActive: true, engaged: lines) != MeeshySnapGuides(isActive: true, engaged: lines, showsBounds: true))
+        #expect(MeeshySnapGuides(isActive: true, engaged: lines) == MeeshySnapGuides(isActive: true, engaged: lines, candidates: .none))
     }
 
     @Test("la recette des repères : les mesures du canvas UIKit, reprises telles quelles")
@@ -217,11 +248,11 @@ struct MeeshySelectionFeedbackTests {
         }
     }
 
-    @Test("rien d'animé que l'opacité du halo : ni minuteur, ni mise en page, ni flou recalculé")
+    @Test("rien d'animé que l'opacité du halo : ni minuteur, ni mise en page, ni flou recalculé, ni tic à la sélection")
     func source_animatesOnlyTheGlow() throws {
         let code = try Self.code("MeeshySelectionFeedback.swift")
         #expect(code.components(separatedBy: "withAnimation(").count == 2)
-        for word in ["Timer", "TimelineView", "GeometryReader", ".animation(", ".blur(", "scaleEffect", ".frame("] {
+        for word in ["Timer", "TimelineView", "GeometryReader", ".animation(", ".blur(", "scaleEffect", ".frame(", "HapticFeedback"] {
             #expect(!code.contains(word), "MeeshySelectionFeedback.swift contient \(word)")
         }
     }

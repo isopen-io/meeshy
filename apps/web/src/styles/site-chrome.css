@@ -229,6 +229,21 @@
   align-items: center;
   min-height: 44px;
 }
+.ld-footer-more > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  list-style: none;
+  cursor: pointer;
+}
+.ld-footer-more > summary::-webkit-details-marker {
+  display: none;
+}
+.ld-footer-more-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
 .ld-footer-signature {
   margin-top: -20px;
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
