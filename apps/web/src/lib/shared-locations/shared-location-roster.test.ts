@@ -165,4 +165,14 @@ describe('l’échéance de chacun, telle que la passerelle la tient (#18205)', 
     const roster = rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T });
     expect(rosterOps.deadlinedRecipients(roster, T)).toEqual([{ userId: AMI, precision: 'city' }]);
   });
+
+  test('une personne échue pendant l’attente d’un relevé ne part pas, même pour une seconde', () => {
+    const roster = rosterOps.adding(rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T }), {
+      userId: AUTRE,
+      precision: 'exact',
+      durationMinutes: 480,
+      now: T,
+    });
+    expect(rosterOps.deadlinedRecipients(roster, T + 3_600_000)).toEqual([{ userId: AUTRE, precision: 'exact', expiresInSeconds: 7 * 3600 }]);
+  });
 });

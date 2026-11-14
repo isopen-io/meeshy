@@ -95,11 +95,12 @@ export const rosterOps = {
   },
   /**
    * La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
-   * la passerelle la tient, même onglet fermé (#18205). Arrondie à la seconde au-dessus, jamais nulle.
+   * la passerelle la tient, même onglet fermé (#18205). Arrondie à la seconde au-dessus, jamais nulle ; une personne
+   * échue pendant l'attente d'un relevé ne part plus du tout.
    */
   deadlinedRecipients: (roster: SharedLocationRoster, now: number): readonly SharedLocationRecipient[] => {
     const term = now + rosterOps.serverDurationMinutes(roster, now) * MINUTE;
-    return rosterOps.recipients(roster).map((recipient) => {
+    return rosterOps.recipients(rosterOps.pruned(roster, now)).map((recipient) => {
       const until = roster.entries[recipient.userId]!.until;
       return until < term ? { ...recipient, expiresInSeconds: Math.max(1, Math.ceil((until - now) / SECOND)) } : recipient;
     });

@@ -79,7 +79,8 @@ function parseRecipient(value: unknown): SharedLocationRecipient | null {
   const row = value as Record<string, unknown>;
   if (typeof row.userId !== 'string' || !isPrecision(row.precision)) return null;
   const cell = parseCell(row.cell);
-  const expiresAt = typeof row.expiresAt === 'string' && !Number.isNaN(Date.parse(row.expiresAt)) ? { expiresAt: row.expiresAt } : {};
+  if (row.expiresAt !== undefined && (typeof row.expiresAt !== 'string' || Number.isNaN(Date.parse(row.expiresAt)))) return null;
+  const expiresAt = typeof row.expiresAt === 'string' ? { expiresAt: row.expiresAt } : {};
   return { userId: row.userId, precision: row.precision, ...(cell ? { cell } : {}), ...expiresAt };
 }
 

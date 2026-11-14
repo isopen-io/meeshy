@@ -128,3 +128,17 @@ describe('passé son échéance, un lecteur ne reçoit plus rien, sans action de
     expect(m.vers(AMI).map((e) => e.data.expiresAt)).toEqual([iso(T0 + HEURE)]);
   });
 });
+
+describe('une échéance rangée illisible ferme, elle ne retombe pas sur le terme', () => {
+  it('l\'état dont une échéance est corrompue n\'est plus servi à personne', async () => {
+    const m = monde();
+    await demarrerAvecEcheances(m);
+    const session = m.cache.pointeurDe(EMETTEUR)!;
+    const key = `shared-location:{${EMETTEUR}}:${session}`;
+    const entry = m.cache.entries.get(key)!;
+    m.cache.entries.set(key, { ...entry, value: entry.value.replace(iso(T0 + HEURE), 'pas-une-date') });
+
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items).toEqual([]);
+  });
+});
