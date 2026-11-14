@@ -206,20 +206,15 @@ function PeerMuted() {
 const ScreenButton = (props: Omit<Parameters<typeof CallButton>[0], 'tone' | 'prominent'>) => <CallButton {...props} tone="glass" prominent />;
 
 /**
- * L'écran reçu en duo (P15) vit avec sa surface de zoom, dans son chunk préchargé avec l'appel ; tant qu'il n'est pas
- * là, l'écran reçu se montre entier.
+ * L'écran reçu en duo (P15) vit avec sa surface de zoom, dans son chunk chargé avec la vignette du coin dès que le duo
+ * sonne (`duoCornerView`) : il est là bien avant qu'un écran ne soit partagé.
  */
 function DuoScreen({ call, language, fullScreen, onFullScreen }: Pick<StageProps, 'call' | 'language' | 'fullScreen' | 'onFullScreen'>) {
   const sharer = screenSharer(call.members);
   if (sharer === null) return null;
   const immersive = fullScreen !== 'off';
-  const fallback = (
-    <div className="absolute inset-0" data-call-shared-screen="">
-      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" member={sharer.userId} />
-    </div>
-  );
   return (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={null}>
       <DuoScreenView call={call} sharer={sharer} language={language} immersive={immersive} onToggleImmersive={() => onFullScreen(immersive ? 'off' : 'full')} mirrored={selfPreviewMirrored(call)} corner={screenCorner} Button={ScreenButton} isDrag={isTileDrag} />
     </Suspense>
   );

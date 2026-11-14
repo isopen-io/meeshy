@@ -369,7 +369,7 @@
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE PAR #17961, NON ARBITREE",
-        "source": "Mesure du 2026-11-14 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,07 Ko -- l ecran partage a la une d un groupe (`components/call-grid-screen.tsx`, U2) : le calque GPU qui zoome et deplace l ecran (U2.7, #17754), le medaillon a la couleur de qui partage (loi 18.2) et la puce « Ecran de X · 2× » rangee au toucher (U2.5). Sorti de la grille pour la garder sous son plafond (3,81 Ko) ; charge AVEC elle (`call-stage.tsx` › `callGridView`), donc deja la quand un partage monte. Arrondi au Ko superieur (2), meme discipline que les autres chunks d appel."
+        "source": "Mesure du 2026-11-14 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,07 Ko -- l ecran partage a la une d un groupe (`components/call-grid-screen.tsx`, U2) : le calque GPU qui zoome et deplace l ecran (U2.7, #17754), le medaillon a la couleur de qui partage (loi 18.2) et la puce « Ecran de X · 2× » rangee au toucher (U2.5). Sorti de la grille pour la garder sous son plafond (3,94 Ko ; la puce, qui porte le verre, reste dans la grille) ; charge AVEC elle (`call-stage.tsx` › `callGridView`), donc deja la quand un partage monte. Arrondi au Ko superieur (2), meme discipline que les autres chunks d appel."
       }
     },
     "call_screen_zoom": {
