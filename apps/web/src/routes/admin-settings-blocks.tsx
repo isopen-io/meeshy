@@ -5,7 +5,7 @@ import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminNoted } from '@/components/admin/info-note';
 import { AdminSwitch } from '@/components/admin/form';
 import { AdminInlineNotice } from '@/components/admin/states';
-import { BRAND, INK2 } from '@/components/admin/tone';
+import { BRAND } from '@/components/admin/tone';
 import { readSidebarFolded, writeSidebarFolded } from '@/lib/admin/admin-space';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';

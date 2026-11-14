@@ -176,7 +176,7 @@ describe('les repères restent visibles (règle 7)', () => {
       es: /dispositivo.*nunca se retira/,
       pt: /dispositivo.*nunca é removida/,
     };
-    for (const language of ADMIN_LANGUAGES) expect({ language, text: entry(language, 'admin.enum.encryption.e2ee.explain') ?? '' }).toEqual({ language, text: expect.stringMatching(said[language]) });
+    for (const language of ADMIN_LANGUAGES) expect({ language, said: said[language].test(entry(language, 'admin.enum.encryption.e2ee.explain') ?? '') }).toEqual({ language, said: true });
   });
 
   test('Lien de partage : les permissions disent ce qu’un invité peut faire', () => {
