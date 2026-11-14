@@ -54,7 +54,9 @@ export async function checkRowMenuMore({ browser, base, check }) {
   await awaitCondition(page, (row) => document.querySelector(`[data-row="${row}"] [data-favorite]`) !== null, GROUP);
   const favorite = await page.$eval(`[data-row="${GROUP}"]`, (row) => row.querySelector('[data-favorite]')?.textContent ?? null);
   check(favorite === '🔥', `« Favori › 🔥 » pose l'emoji à côté du nom (${JSON.stringify(favorite)})`);
-  await page.click('button:text-is("Favoris")');
+  /* « Favoris » est rangé derrière « Plus » (épure #18361) : on l'ouvre comme la personne, si la puce n'est pas là. */
+  if ((await page.locator('nav[data-list-filters] button[data-list-filter="favorites"]').count()) === 0) await page.click('nav[data-list-filters] [data-list-filters-more]');
+  await page.click('nav[data-list-filters] button[data-list-filter="favorites"]');
   await awaitCondition(page, () => document.querySelectorAll('[data-row]').length === 1);
   const favorites = await rowIds(page);
   check(JSON.stringify(favorites) === JSON.stringify([GROUP]), `la puce « Favoris » ne rend que la conversation au favori (${JSON.stringify(favorites)})`);

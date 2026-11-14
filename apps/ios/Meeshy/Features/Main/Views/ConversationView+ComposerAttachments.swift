@@ -1,7 +1,7 @@
 // MARK: - Extracted from ConversationView+Composer.swift (#4105)
 //
-// Aperçu des pièces jointes en attente d'envoi dans le composer : tuiles,
-// replis visuels par type, et leurs actions (suppression, tap).
+// Aperçu des pièces jointes en attente d'envoi dans le composer : la zone,
+// ses tuiles et leurs actions (suppression, tap, lecture d'un vocal).
 import SwiftUI
 import Combine
 import PhotosUI
@@ -33,42 +33,23 @@ extension ConversationView {
     }
 
     // MARK: - Attachment Preview Tile
+    //
+    // La tuile vit chez elle (`ConversationPendingAttachmentTile`) ; la racine
+    // ne lui remet que son plateau, son lecteur et ses gestes. Un vocal se lit
+    // depuis sa tuile sans ouvrir l'éditeur (#7171).
     func attachmentPreviewTile(_ attachment: MessageAttachment) -> some View {
-        ComposerAttachmentTile(
+        ConversationPendingAttachmentTile(
+            attachment: attachment,
             thumbnail: composerState.pendingThumbnails[attachment.id],
-            art: pendingTileArt(attachment),
-            tint: attachment.thumbnailColor,
-            typeGlyph: attachment.type.composerGlyph,
-            centerGlyph: ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType),
-            label: labelForAttachment(attachment),
-            tapAccessibilityLabel: pendingTileAccessibilityLabel(attachment),
-            removeAccessibilityLabel: String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main),
+            fileURL: composerState.pendingMediaFiles[attachment.id],
+            player: pendingAudioPlayer,
             onTap: { handleAttachmentPreviewTap(attachment) },
-            onRemove: { removePendingAttachment(attachment) }
+            onRemove: { removePendingAttachment(attachment) },
+            onToggleAudio: {
+                PendingAudioPlayback(player: pendingAudioPlayer)
+                    .toggle(attachmentId: attachment.id, fileURL: composerState.pendingMediaFiles[attachment.id])
+            }
         )
-        // Long-press → full-screen quick-look (image enlarged / video playing),
-        // mirroring the recent-media strip's context-menu preview pattern
-        // (RecentMediaStrip.swift). Staged attachments already have their
-        // media locally (pendingMediaFiles), so this needs no PHAsset
-        // resolution — it's a much lighter version of the same idea.
-        .contextMenu {
-            Button(role: .destructive) {
-                removePendingAttachment(attachment)
-            } label: {
-                Label(
-                    String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main),
-                    systemImage: "trash"
-                )
-            }
-        } preview: {
-            if attachment.type == .image || attachment.type == .video {
-                AttachmentQuickLookPreview(
-                    kind: attachment.type == .video ? .video : .image,
-                    fileURL: composerState.pendingMediaFiles[attachment.id],
-                    thumbnail: composerState.pendingThumbnails[attachment.id]
-                )
-            }
-        }
     }
 
     /// Removes a staged attachment: drops it from the tray, deletes its temp
@@ -121,18 +102,6 @@ extension ConversationView {
         }
     }
 
-    // MARK: - Rich Tile Fallbacks
-
-    /// Le dessin d'une pièce sans vignette : l'onde d'un son (qui suit le
-    /// lecteur du composeur), l'épingle d'un lieu.
-    private func pendingTileArt(_ attachment: MessageAttachment) -> AnyView? {
-        switch attachment.type {
-        case .audio: return AnyView(PendingAudioTile(attachment: attachment, player: pendingAudioPlayer))
-        case .location: return AnyView(ComposerLocationTileArt())
-        default: return nil
-        }
-    }
-
     private func removePendingPlace() {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -140,37 +109,9 @@ extension ConversationView {
         }
     }
 
-    private func pendingTileAccessibilityLabel(_ attachment: MessageAttachment) -> String {
-        let label = labelForAttachment(attachment)
-        guard ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) != nil else {
-            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(label)", bundle: .main)
-        }
-        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(label)", bundle: .main)
-    }
-
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         MediaKindLabel.attachmentLabel(for: attachment)
     }
 
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, getFileSize, handleCameraCapture, sendMessage
-}
-
-// MARK: - Tuile d'un audio en attente
-
-/// Seul abonné du lecteur du composeur : cette tuile DESSINE « lecture »
-/// ou « pause », elle a donc besoin de se re-rendre à chaque bascule. La
-/// racine, elle, POSSÈDE le lecteur sans l'observer — il publie sa
-/// progression toutes les 100 ms, et 2 911 lignes n'ont pas à se
-/// réévaluer pour une icône (#6226).
-///
-/// Même dispositif que `ComposerAudioHost` pour le vumètre, et que
-/// `ComposerTextHost` pour le texte (#4105) : la racine possède, l'hôte
-/// observe.
-struct PendingAudioTile: View {
-    let attachment: MessageAttachment
-    @ObservedObject var player: AudioPlaybackManager
-
-    var body: some View {
-        ComposerAudioTileArt(tint: attachment.thumbnailColor, isPlaying: player.isPlaying)
-    }
 }

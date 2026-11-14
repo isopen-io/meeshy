@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
@@ -260,76 +260,129 @@ export function GroupCard({
             {group.description}
           </p>
         )}
-        <div className="grid gap-2.5 md:flex md:items-center">
-          <p
-            data-invite-url
-            className={`flex min-w-0 items-center gap-2.5 rounded-field px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
-            style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))' }}
-          >
-            <span aria-hidden="true" className="shrink-0">
-              <Glyph name="linkSimple" size={18} />
-            </span>
-            <span className="sr-only">{translateInvite(language, 'invite.link.label')}</span>
-            <span dir="ltr" className="min-w-0 truncate font-mono text-body" style={{ color: INK }}>
-              {displayUrlOf(url)}
-            </span>
-          </p>
-          <div className="grid grid-cols-2 gap-2.5 md:flex">
-            <button type="button" data-invite-copy onClick={onCopy} className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
-              <span aria-hidden="true">{copied ? <Glyph name="check" size={17} /> : <GlyphSvg glyph={LINKS_GLYPHS.copy} size={17} />}</span>
-              {translateInvite(language, copied ? 'invite.link.copied' : 'invite.link.copy')}
-            </button>
-            <button type="button" data-invite-reshare onClick={onReshare} className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
-              <span aria-hidden="true">
-                <GlyphSvg glyph={LINKS_GLYPHS.export} size={17} />
-              </span>
-              {translateInvite(language, 'invite.link.reshare')}
-            </button>
-          </div>
-        </div>
+        <LinkRow language={language} url={url} copied={copied} onCopy={onCopy} onReshare={onReshare} />
       </div>
     </section>
   );
 }
 
-function FigureTile({ figure, value, label }: { readonly figure: string; readonly value: string; readonly label: string }) {
+/**
+ * LE LIEN ET SES DEUX GESTES, RANGÉS DERRIÈRE « PLUS » (épure #18361, règle 6) : l'invité vient d'ouvrir ce lien, il ne
+ * lui sert pas à l'arrivée — mais il reste atteignable (Copier, Repartager), d'un toucher.
+ */
+function LinkRow({
+  language,
+  url,
+  copied,
+  onCopy,
+  onReshare,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly url: string;
+  readonly copied: boolean;
+  readonly onCopy: () => void;
+  readonly onReshare: () => void;
+}) {
+  const [opened, setOpened] = useState(false);
+  const rowId = useId();
   return (
-    <li data-invite-figure={figure} className="grid gap-0.5 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
-      <strong className="text-screen font-extrabold tracking-tight" style={{ color: INK }}>
-        {value}
-      </strong>
-      <span className="text-body font-semibold" style={{ color: INK_2 }}>
-        {label}
-      </span>
-    </li>
+    <div className="grid gap-2.5">
+      <button
+        type="button"
+        data-invite-more
+        aria-expanded={opened}
+        aria-controls={rowId}
+        onClick={() => setOpened((v) => !v)}
+        className={`${INVITE_OUTLINE_BUTTON} justify-self-start`}
+        style={{ ...INVITE_OUTLINE_STYLE, minHeight: 44 }}
+      >
+        <MoreLabel language={language} context={translateInvite(language, 'invite.link.label')} />
+      </button>
+      {opened ? (
+        <div id={rowId} className="grid gap-2.5 md:flex md:items-center">
+            <p
+              data-invite-url
+              className={`flex min-w-0 items-center gap-2.5 rounded-field px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
+              style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))' }}
+            >
+              <span aria-hidden="true" className="shrink-0">
+                <Glyph name="linkSimple" size={18} />
+              </span>
+              <span className="sr-only">{translateInvite(language, 'invite.link.label')}</span>
+              <span dir="ltr" className="min-w-0 truncate font-mono text-body" style={{ color: INK }}>
+                {displayUrlOf(url)}
+              </span>
+            </p>
+            <div className="grid grid-cols-2 gap-2.5 md:flex">
+              <button type="button" data-invite-copy onClick={onCopy} className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
+                <span aria-hidden="true">{copied ? <Glyph name="check" size={17} /> : <GlyphSvg glyph={LINKS_GLYPHS.copy} size={17} />}</span>
+                {translateInvite(language, copied ? 'invite.link.copied' : 'invite.link.copy')}
+              </button>
+              <button type="button" data-invite-reshare onClick={onReshare} className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
+                <span aria-hidden="true">
+                  <GlyphSvg glyph={LINKS_GLYPHS.export} size={17} />
+                </span>
+                {translateInvite(language, 'invite.link.reshare')}
+              </button>
+            </div>
+          </div>
+      ) : null}
+    </div>
   );
 }
 
-/** c. Les chiffres sans identité — personnes, langues parlées, et leur barre. */
+/**
+ * « Plus » VU, et ce qu'il ouvre ENTENDU : la page en porte deux, que le lecteur d'écran doit distinguer sans
+ * contredire le libellé visible (le nom commence par « Plus », WCAG 2.5.3).
+ */
+function MoreLabel({ language, context }: { readonly language: InterfaceLanguage; readonly context: string }) {
+  return (
+    <>
+      <span>{translateInvite(language, 'invite.more')}</span>
+      <span className="sr-only"> — {context}</span>
+    </>
+  );
+}
+
+/**
+ * c. Les chiffres sans identité — UNE ligne (« 248 personnes · 6 langues parlées »), et la ventilation par langue
+ * derrière « Plus » (épure #18361, règles 5 et 6) : la barre n'est pas à l'arrivée, elle reste atteignable.
+ */
 export function InvitationFigures({ language, invitation }: { readonly language: InterfaceLanguage; readonly invitation: LinkInvitation }) {
+  const [opened, setOpened] = useState(false);
+  const sharesId = useId();
   const { people, languages } = invitation.stats;
   if (people === null && languages.length === 0) return null;
   const format = new Intl.NumberFormat(language);
   const shares = languageSharesOf(languages);
+  const line = [
+    people === null ? null : `${format.format(people)} ${translateInvite(language, plural(people, 'invite.stats.people.one', 'invite.stats.people.other'))}`,
+    languages.length === 0 ? null : `${format.format(languages.length)} ${translateInvite(language, plural(languages.length, 'invite.stats.languages.one', 'invite.stats.languages.other'))}`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
   return (
     <section aria-label={translateInvite(language, 'invite.stats.spoken')} data-invite-figures className="grid gap-2.5">
-      <ul className="grid grid-cols-2 gap-2.5">
-        {people === null ? null : (
-          <FigureTile figure="people" value={format.format(people)} label={translateInvite(language, plural(people, 'invite.stats.people.one', 'invite.stats.people.other'))} />
+      <div className="flex items-center justify-between gap-2">
+        <p data-invite-figures-line className="text-body font-semibold" style={{ color: INK_2 }}>
+          {line}
+        </p>
+        {shares.length === 0 ? null : (
+          <button
+            type="button"
+            data-invite-figures-more
+            aria-expanded={opened}
+            aria-controls={sharesId}
+            onClick={() => setOpened((v) => !v)}
+            className="min-h-11 shrink-0 rounded-chip px-3 text-title font-semibold"
+            style={{ color: 'var(--color-ios-brand)' }}
+          >
+            <MoreLabel language={language} context={translateInvite(language, 'invite.stats.spoken')} />
+          </button>
         )}
-        {languages.length === 0 ? null : (
-          <FigureTile
-            figure="languages"
-            value={format.format(languages.length)}
-            label={translateInvite(language, plural(languages.length, 'invite.stats.languages.one', 'invite.stats.languages.other'))}
-          />
-        )}
-      </ul>
-      {shares.length === 0 ? null : (
-        <div className="grid gap-3 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
-          <h2 className={`${SECTION_TITLE} ${SECTION_BRAND_INK}`}>
-            {translateInvite(language, 'invite.stats.spoken')}
-          </h2>
+      </div>
+      {shares.length === 0 || !opened ? null : (
+        <div id={sharesId} className="grid gap-3 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
           <LanguageShareBar language={language} shares={shares} compose={(name, percent) => translateInvite(language, 'invite.stats.share', { language: name, percent })} />
         </div>
       )}

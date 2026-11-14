@@ -5,7 +5,6 @@
  */
 const arMediaHub = {
   'conversation.details.media.section': 'الوسائط والروابط والمستندات',
-  'conversation.details.media.open': 'الوسائط والروابط والمستندات',
   'conversation.details.media.more': 'عرض الكل',
   'media_hub.title': 'الوسائط والروابط والمستندات',
   'media_hub.search.label': 'البحث في {segment}',

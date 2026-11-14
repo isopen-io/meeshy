@@ -25,7 +25,7 @@ const pt = {
   'conversationStats.loading': 'Carregando estatísticas',
   'conversationStats.error': 'Não foi possível carregar as estatísticas.',
   'conversationStats.retry': 'Tentar novamente',
-  'conversationStats.empty': 'Ainda não há mensagens — as estatísticas virão com a conversa.',
+  'conversationStats.empty': 'Nenhuma mensagem',
   'conversationStats.offline': 'Offline — últimas estatísticas conhecidas.',
   'conversationStats.offline_empty': 'Offline — as estatísticas ainda não foram carregadas.',
 } satisfies ConversationStatsCatalog;
