@@ -22,7 +22,7 @@ TOKEN = re.compile(r'//|/\*|#*"')
 class Rule:
     id: str
     pattern: re.Pattern
-    kind: Literal["pattern", "unchecked", "floor", "comment", "glass"] = "pattern"
+    kind: Literal["pattern", "unchecked", "floor", "comment", "glass", "motion", "flat"] = "pattern"
     excluded: tuple = ()
     file_name: re.Pattern | None = None
 
@@ -39,6 +39,29 @@ GLASS_CALL = re.compile(r"\.(?:adaptiveGlassProminent|adaptiveGlass|adaptiveLiqu
 GLASS_OUTSIDE_KIT = re.compile(r"^(?!packages/MeeshySDK/Sources/MeeshyUI/(?:Compatibility|Kit)/)")
 GLASS_ROUND = re.compile(r"\bin:\s*(?:Circle\(\)|\.circle\b)")
 GLASS_TOUCH = re.compile(r"\binteractive:\s*true\b|\.interactive\(\s*\)")
+
+RAW_ANIMATION = re.compile(r"\.animation\(")
+ANIMATION_OUTSIDE_MOTION = re.compile(
+    r"^(?!packages/MeeshySDK/Sources/MeeshyUI/(?:Kit/|Theme/Accessibility\.swift$))"
+)
+ANIMATION_DECIDES = re.compile(r"\bnil\b|\.none\b|reduce|Reduce|MeeshyMotion")
+ROOT_FILES = re.compile(
+    r"Main/Views/RootLayers/|Main/Views/Root[A-Za-z]*\.swift|RetainedFeedHost|App/SessionContent|Focal/Chrome/"
+)
+LITERAL_SPRING = re.compile(
+    r"\.spring\(\s*(?:response|duration|bounce|dampingFraction)\s*:|\.spring\(\s*\)|\.interpolatingSpring\("
+)
+SPRING_OUTSIDE_TOKENS = re.compile(
+    r"^(?!packages/MeeshySDK/Sources/MeeshyUI/(?:Theme/DesignTokens\.swift$|Kit/(?:.*/)?[^/]*Recipe[^/]*\.swift$))"
+)
+RAW_WITH_ANIMATION = re.compile(r"(?<![\w.])withAnimation\(")
+REDUCE_WORD = re.compile(r"reduce|Reduce")
+REDUCE_RESOLVED = re.compile(r"\?\s*nil\b|\?\s*\.none\b|MeeshyMotion\.animation")
+MATERIAL_DISC = re.compile(
+    r"Circle\(\)\.fill\(\.\w*Material\b"
+    r"|\.background\(\.\w*Material,in:(?:Circle\(\)|\.circle\b)"
+    r"|\.\w*Material\)\.clipShape\(Circle\(\)\)"
+)
 
 RULES = (
     _pattern("uiscreen-main", r"UIScreen\.main\b"),
@@ -111,6 +134,11 @@ RULES = (
     Rule("kit-glass-call", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
     Rule("kit-glass-round", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
     Rule("kit-glass-no-touch", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
+    Rule("motion-raw-animation", RAW_ANIMATION, "motion", (), ANIMATION_OUTSIDE_MOTION),
+    Rule("motion-raw-animation-root", RAW_ANIMATION, "motion", (), ROOT_FILES),
+    Rule("motion-literal-spring", LITERAL_SPRING, "pattern", (), SPRING_OUTSIDE_TOKENS),
+    Rule("motion-reduced-raw-with-animation", RAW_WITH_ANIMATION, "motion"),
+    Rule("kit-glass-material-disc", MATERIAL_DISC, "flat", (), GLASS_OUTSIDE_KIT),
     Rule(
         "narrative-comment",
         re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
@@ -274,6 +302,21 @@ def _count_glass(rule, stripped):
     return len(calls)
 
 
+def _decides_reduction(rule, args):
+    if rule.id == "motion-reduced-raw-with-animation":
+        return not REDUCE_WORD.search(args) or bool(REDUCE_RESOLVED.search(args))
+    return bool(ANIMATION_DECIDES.search(args))
+
+
+def _count_motion(rule, stripped):
+    calls = [_balanced_arguments(stripped, m.end() - 1) for m in rule.pattern.finditer(stripped)]
+    return sum(1 for args in calls if not _decides_reduction(rule, args))
+
+
+def _count_flat(rule, stripped):
+    return len(rule.pattern.findall(re.sub(r"\s+", "", stripped)))
+
+
 def count_stripped(rule, rel, src, stripped):
     if rel in rule.excluded:
         return 0
@@ -287,6 +330,10 @@ def count_stripped(rule, rel, src, stripped):
         return _count_comment(rule, src, stripped)
     if rule.kind == "glass":
         return _count_glass(rule, stripped)
+    if rule.kind == "motion":
+        return _count_motion(rule, stripped)
+    if rule.kind == "flat":
+        return _count_flat(rule, stripped)
     return len(rule.pattern.findall(stripped))
 
 

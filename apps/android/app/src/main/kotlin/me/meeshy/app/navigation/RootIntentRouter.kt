@@ -142,9 +142,9 @@ class RootIntentOverlay @Inject constructor(
                             DirectOpenResult.Failed -> opener.reportOpenFailure()
                         }
                     }
-                    is RootIntentAction.ShowProfileSheet -> navController.navigate(Routes.profile(action.userId))
-                    RootIntentAction.ShowStoryComposer -> navController.navigate(storyDoor)
-                    is RootIntentAction.NavigateToRoute -> navController.navigate(action.route)
+                    is RootIntentAction.ShowProfileSheet -> navController.navigateSingleTop(Routes.profile(action.userId))
+                    RootIntentAction.ShowStoryComposer -> navController.navigateSingleTop(storyDoor)
+                    is RootIntentAction.NavigateToRoute -> navController.navigateSingleTop(action.route)
                     RootIntentAction.Ignore -> Unit
                 }
             }

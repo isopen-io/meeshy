@@ -1,10 +1,16 @@
 package me.meeshy.sdk.model.call
 
-/** Les bandeaux du haut de l'appel établi, dans l'ordre où la pile les pose (miroir de iOS `CallTopBanner`). */
+/**
+ * Les bandeaux du haut de l'appel établi, dans l'ordre où la pile les pose (miroir de iOS `CallTopBanner`). Les pastilles de
+ * service ([Hold], [VideoNotice], #18227, planche E3 · E4) viennent après la capture et AVANT le cadre en direct : ma vignette
+ * descend sous elles ([countedForSelfTile]) et ignore le cadre, qui ne doit donc jamais se poser au-dessus d'elles.
+ */
 enum class CallTopBanner {
     ScreenShare,
     Recording,
     Capture,
+    Hold,
+    VideoNotice,
     LiveFrame,
 }
 
@@ -49,6 +55,9 @@ object CallTopBannerStack {
 
     private const val PRIORITY_STEP = 10
 
+    /** Les maillons des pastilles de service (#18227) : seuls ceux-là passent par le paramètre `service`. */
+    private val SERVICE = setOf(CallTopBanner.Hold, CallTopBanner.VideoNotice)
+
     private val Portrait = CallTopBannerSpan(maxWidthDp = null, pushesSelfTile = true)
 
     /**
@@ -75,14 +84,21 @@ object CallTopBannerStack {
     fun priority(banner: CallTopBanner): Int = (CallTopBanner.entries.size - banner.ordinal) * PRIORITY_STEP
 
     /**
-     * R1.6 · R3.10 — les bandeaux dont la place revient à ma vignette : mon partage, l'enregistrement (carte, capsule ou avis) et
-     * la capsule de capture. Un partage REÇU n'y est pas : sa place est en décision porteur (#17730).
+     * R1.6 · R3.10 — les bandeaux dont la place revient à ma vignette : mon partage, l'enregistrement (carte, capsule ou avis),
+     * la capsule de capture et les pastilles de service montrées ([service], `CallServicePills.banners`, E3 · E4 : ma vignette
+     * n'est jamais couverte). Un partage REÇU n'y est pas : sa place est en décision porteur (#17730).
      */
-    fun countedForSelfTile(isLocalScreenShareShown: Boolean, isRecordingShown: Boolean, isCaptureAlertShown: Boolean): Set<CallTopBanner> =
+    fun countedForSelfTile(
+        isLocalScreenShareShown: Boolean,
+        isRecordingShown: Boolean,
+        isCaptureAlertShown: Boolean,
+        service: Set<CallTopBanner> = emptySet(),
+    ): Set<CallTopBanner> =
         buildSet {
             if (isLocalScreenShareShown) add(CallTopBanner.ScreenShare)
             if (isRecordingShown) add(CallTopBanner.Recording)
             if (isCaptureAlertShown) add(CallTopBanner.Capture)
+            addAll(service intersect SERVICE)
         }
 
     /**
@@ -95,14 +111,16 @@ object CallTopBannerStack {
 
     /**
      * #17845 (L4.11) — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la capture, le cadre en
-     * direct. Le site UNIQUE de la présence que la grille de groupe lit, miroir de iOS `CallTopBannerStack.present`.
+     * direct, les pastilles de service ([service]). Le site UNIQUE de la présence que la grille de groupe lit, miroir de iOS
+     * `CallTopBannerStack.present`.
      */
     fun present(
         isScreenShareShown: Boolean,
         isRecordingShown: Boolean,
         isCaptureAlertShown: Boolean,
         isLiveFrameShown: Boolean,
-    ): Set<CallTopBanner> = countedForSelfTile(isScreenShareShown, isRecordingShown, isCaptureAlertShown) +
+        service: Set<CallTopBanner> = emptySet(),
+    ): Set<CallTopBanner> = countedForSelfTile(isScreenShareShown, isRecordingShown, isCaptureAlertShown, service) +
         if (isLiveFrameShown) setOf(CallTopBanner.LiveFrame) else emptySet()
 
     /**
