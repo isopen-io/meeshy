@@ -88,6 +88,19 @@ const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectEl
 const DEFAULT_PATH = `${adminEndpoints.routeUsage}?scope=watched&limit=100`;
 
 describe('l’usage des routes — ouverture', () => {
+  test('« Quand peut-on retirer une adresse ? » : la règle du retrait est derrière un (i), lue du lecteur d’écran, et ne s’étale plus sous le titre', async () => {
+    const { deps } = scripted(routeReply);
+    const host = await open(deps);
+
+    const section = host.querySelector('[data-admin-monitoring-section="watched"]');
+    const info = section?.querySelector<HTMLButtonElement>('button[aria-label="Quand peut-on retirer une adresse ?"]');
+    expect(info).not.toBeNull();
+    const note = section?.querySelector(`#${info?.getAttribute('aria-controls')}`);
+    expect(note?.textContent).toContain('zéro appel observé autorise le retrait');
+    expect(note?.className).toContain('sr-only');
+    expect(section?.querySelector('h2 ~ p:not(.sr-only)')).toBeNull();
+  });
+
   test('l’onglet s’ouvre par l’adresse : seule SA lecture part — la santé n’est pas montée', async () => {
     const { deps, paths } = scripted(routeReply);
     const host = await open(deps);
