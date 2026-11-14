@@ -36,7 +36,7 @@ const OWNER = 'c'.repeat(24);
 const PARIS = { latitude: 48.8566, longitude: 2.3522 };
 const noop = () => undefined;
 
-function makeCenter(): { center: SharedLocationSharingCenter; starts: unknown[]; stops: () => number } {
+function makeCenter({ online = true }: { readonly online?: boolean } = {}): { center: SharedLocationSharingCenter; starts: unknown[]; stops: () => number } {
   const starts: unknown[] = [];
   let stops = 0;
   const memory = new Map<string, string>();
@@ -49,7 +49,7 @@ function makeCenter(): { center: SharedLocationSharingCenter; starts: unknown[];
       update: async () => ({ kind: 'started', expiresAt: Date.now() + 3_600_000 }),
       stop: async () => {
         stops += 1;
-        return true;
+        return online;
       },
     },
     fixes: { isGranted: async () => true, currentFix: async () => ({ kind: 'fix', fix: PARIS }), follow: () => () => undefined },
@@ -126,5 +126,19 @@ describe('la ligne branchée', () => {
     await click(document.querySelector<HTMLButtonElement>('[data-share-location-confirm]'));
     await settle();
     expect(notices).toEqual(['Autorisez la localisation pour Meeshy dans votre navigateur pour partager votre position.']);
+  });
+
+  test('un « Arrêter » hors ligne se dit, la personne sort, et le partage s’arrêtera au retour du réseau (#18388)', async () => {
+    const { center, stops } = makeCenter({ online: false });
+    await center.share({ userId: ADA_ID, precision: 'city', durationMinutes: 60 });
+    const notices: string[] = [];
+    const host = await mount(<ProfileShareLocationRow language="fr" person={ADA} offered onNotice={(m) => notices.push(m)} center={center} />);
+    await settle();
+    await click(host.querySelector<HTMLButtonElement>('[data-share-location-stop]'));
+    await settle();
+    expect(stops()).toBe(1);
+    expect(notices).toEqual(['Le partage s’arrêtera dès le retour du réseau.']);
+    expect(host.querySelector('[data-share-location-stop]')).toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('[data-share-location]')).not.toBeNull();
   });
 });

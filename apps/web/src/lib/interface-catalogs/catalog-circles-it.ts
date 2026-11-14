@@ -196,6 +196,7 @@ const it = {
   'shareLocation.offline': 'La condivisione della posizione richiede la rete.',
   'shareLocation.rateLimited': 'Troppi invii, riprova tra un attimo.',
   'shareLocation.failed': 'La condivisione della posizione non è partita, riprova.',
+  'shareLocation.stopPending': 'La condivisione si fermerà appena torna la rete.',
 } as const satisfies CirclesCatalog;
 
 export default it;
