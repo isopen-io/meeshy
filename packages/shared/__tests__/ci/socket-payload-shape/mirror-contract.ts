@@ -233,7 +233,12 @@ type TsSymbol = {
   readonly valueDeclaration: unknown;
   getName(): string;
 };
-type TsType = { getCallSignatures(): readonly { getParameters(): readonly TsSymbol[] }[] };
+type TsType = {
+  getCallSignatures(): readonly { getParameters(): readonly TsSymbol[] }[];
+  /** Une charge peut être une UNION de portées — `user:preferences-updated` en a trois. */
+  isUnion?(): boolean;
+  readonly types?: readonly TsType[];
+};
 type TsChecker = {
   getPropertiesOfType(type: TsType): readonly TsSymbol[];
   getTypeAtLocation(node: unknown): TsType;
@@ -275,7 +280,33 @@ const loadTypeScript = (): TsApi => {
 
 export type ContractField = { readonly name: string; readonly optional: boolean };
 
-export const readContract = (): Map<string, readonly ContractField[]> => {
+/**
+ * Ce que le contrat dit d'UN événement : les clés que sa charge porte à coup sûr, et le nombre de
+ * PORTÉES qu'elle peut prendre.
+ *
+ * `variantCount` existe pour une panne que les clés seules ne peuvent pas décrire : une charge à
+ * plusieurs portées (`user:preferences-updated` en a trois — conversation, communauté, catégorie)
+ * se discrimine côté client, et un aiguillage qui n'implémente QUE la moitié de son discriminant
+ * envoie une portée entière au mauvais décodeur. Les clés communes, elles, restent justes — c'est
+ * exactement pourquoi #18120 a survécu à une confrontation champ par champ.
+ */
+export type ContractPayload = {
+  readonly fields: readonly ContractField[];
+  readonly variantCount: number;
+};
+
+/**
+ * Le programme TypeScript coûte quelques secondes ; les deux gardes et leurs invariants le
+ * demandent plusieurs fois. Il est construit UNE fois par processus, et les deux lectures ci-dessous
+ * en sont des projections.
+ */
+let contractCache: Map<string, ContractPayload> | undefined;
+
+export const readContract = (): Map<string, readonly ContractField[]> =>
+  new Map([...readContractPayloads()].map(([event, payload]) => [event, payload.fields] as const));
+
+export const readContractPayloads = (): Map<string, ContractPayload> => {
+  if (contractCache) return contractCache;
   const ts = loadTypeScript();
   const sharedDir = join(REPO, 'packages/shared');
   const system = ts.sys as { readFile(path: string): string | undefined };
@@ -293,25 +324,26 @@ export const readContract = (): Map<string, readonly ContractField[]> => {
   });
   if (!declaration) throw new Error('`ServerToClientEvents` est introuvable dans le contrat.');
 
-  const contract = new Map<string, readonly ContractField[]>();
+  const contract = new Map<string, ContractPayload>();
   for (const event of checker.getPropertiesOfType(checker.getTypeAtLocation(declaration.name))) {
     const handler = checker.getTypeOfSymbolAtLocation(event, event.valueDeclaration);
     const signature = handler.getCallSignatures()[0];
     if (!signature) continue;
     const parameter = signature.getParameters()[0];
     if (!parameter) {
-      contract.set(event.getName(), []);
+      contract.set(event.getName(), { fields: [], variantCount: 1 });
       continue;
     }
     const payload = checker.getTypeOfSymbolAtLocation(parameter, parameter.valueDeclaration);
-    contract.set(
-      event.getName(),
-      checker.getPropertiesOfType(payload).map((field) => ({
+    contract.set(event.getName(), {
+      fields: checker.getPropertiesOfType(payload).map((field) => ({
         name: field.getName(),
         optional: Boolean(field.flags & ts.SymbolFlags.Optional),
       })),
-    );
+      variantCount: payload.isUnion?.() ? (payload.types?.length ?? 1) : 1,
+    });
   }
+  contractCache = contract;
   return contract;
 };
 
