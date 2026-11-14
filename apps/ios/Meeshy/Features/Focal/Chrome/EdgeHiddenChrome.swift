@@ -10,7 +10,7 @@ struct EdgeHiddenChrome: ViewModifier {
     let isHidden: Bool
     let edge: VerticalEdge
 
-    nonisolated static func offset(isHidden: Bool, edge: VerticalEdge) -> CGFloat {
+    nonisolated static func offset(isHidden: Bool, edge: VerticalEdge, reduceMotion: Bool = false) -> CGFloat {
         guard isHidden else { return 0 }
         return edge == .top ? -FocalMetrics.HiddenChrome.edgeTravel : FocalMetrics.HiddenChrome.edgeTravel
     }

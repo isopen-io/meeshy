@@ -35,6 +35,33 @@ final class FeedPositionRetentionTests: XCTestCase {
         XCTAssertTrue(hidden)
     }
 
+    func test_hiddenFeed_underReduceMotion_onlyFades_withoutScaleNorDrop() {
+        let hidden = FeedRetention.presentation(isShown: false, reduceMotion: true)
+
+        XCTAssertEqual(hidden.scale, 1, "sous Réduire les animations, aucune échelle")
+        XCTAssertEqual(hidden.drop, 0, "sous Réduire les animations, aucun déplacement")
+        XCTAssertEqual(hidden.opacity, 0, "le fil caché reste invisible : il s'efface en fondu")
+        XCTAssertFalse(hidden.slides, "la transition se réduit à un fondu")
+    }
+
+    func test_hiddenFeed_withMotion_recedesDownwards() {
+        let hidden = FeedRetention.presentation(isShown: false, reduceMotion: false)
+
+        XCTAssertEqual(hidden.scale, 0.95)
+        XCTAssertEqual(hidden.drop, 48)
+        XCTAssertEqual(hidden.opacity, 0)
+        XCTAssertTrue(hidden.slides)
+    }
+
+    func test_shownFeed_sitsInPlace_whateverTheMotion() {
+        for reduce in [true, false] {
+            let shown = FeedRetention.presentation(isShown: true, reduceMotion: reduce)
+            XCTAssertEqual(shown.scale, 1)
+            XCTAssertEqual(shown.drop, 0)
+            XCTAssertEqual(shown.opacity, 1)
+        }
+    }
+
     func test_memoryWarning_releasesOnlyAHiddenFeed() {
         XCTAssertFalse(FeedRetention.retainsAfterMemoryWarning(isShown: false))
         XCTAssertTrue(FeedRetention.retainsAfterMemoryWarning(isShown: true))
