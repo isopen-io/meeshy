@@ -9,7 +9,7 @@ const en = {
   'game.rules.3.title': 'We mint Meeshes',
   'game.rules.3.body': 'A Meesh is minted by hand: part of your light is bound into it.',
   'game.rules.4.title': 'Minting binds your light',
-  'game.rules.4.body': 'The bound part leaves your light, and only that part: your level drops by as much. Your rank and your medals don’t drop. What you received stays received.',
+  'game.rules.4.body': 'The bound part leaves your light, and only that part: your level follows the light you still hold. Your rank and your medals don’t drop. What you received stays received.',
   'game.rules.5.title': 'Your rank never goes back',
   'game.rules.5.body': 'Every mint, every level reached for the first time, every great deed makes your glory grow. Glory gives you your rank.',
   'game.rules.6.title': 'The Legacy is kept or spent',

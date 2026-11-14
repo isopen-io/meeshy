@@ -308,7 +308,7 @@ class GameEpureResourcesTest {
     @Test
     fun `la phrase de la frappe n est dite qu en regle quatre`() {
         assertThat(text(R.string.game_rules_2_body)).doesNotContain("donc le fait baisser")
-        assertThat(text(R.string.game_rules_4_body)).contains("niveau baisse d’autant")
+        assertThat(text(R.string.game_rules_4_body)).contains("niveau suit la lumière qui te reste")
     }
 
     @Test

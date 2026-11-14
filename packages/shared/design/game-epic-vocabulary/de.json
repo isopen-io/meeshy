@@ -222,7 +222,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])verlier\\p{L}*\\s+(?:ein\\s+|einen\\s+)?levels?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "„ohne dein Level anzutasten“ (#17394)"
+      "instead": "„ohne dein Level zu ändern“ (#17394)"
     }
   ],
   "names": {

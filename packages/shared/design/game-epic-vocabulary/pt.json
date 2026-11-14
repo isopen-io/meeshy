@@ -235,7 +235,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:um\\s+)?níve(?:l|is)(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "“sem mexer no seu nível” (#17394)"
+      "instead": "“sem mudar seu nível” (#17394)"
     }
   ],
   "names": {

@@ -233,7 +233,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])los(?:e|es|ing|t)\\s+(?:a\\s+|one\\s+)?levels?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "“without touching your level” (#17394)"
+      "instead": "“without changing your level” (#17394)"
     }
   ],
   "names": {

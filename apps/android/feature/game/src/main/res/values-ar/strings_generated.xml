@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">الشرارات</string>
     <string name="game_concept_points_tip_1">عُد كل يوم: لهب مشتعل يغذّي شراراتك.</string>
     <string name="game_concept_points_tip_2">ابنِ زخمًا لتضاعف شراراتك.</string>
-    <string name="game_concept_points_use">وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره.</string>
+    <string name="game_concept_points_use">وسكّ Meesh يصوغ جزءًا منه في القطعة، محفوظةً إلى الأبد في إرثك؛ ومستواك يتبع النور الباقي لك.</string>
     <string name="game_concept_prestige_name">الانبعاث</string>
     <string name="game_concept_prestige_tip_1">احمل نورك حتى المستوى ⁦100⁩.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s حتى المستوى %2$s.</string>
     <string name="game_guide_moment_first_level_short">المستوى %1$s · %2$s حتى التالي.</string>
     <string name="game_guide_moment_first_level_what">نورك ينمو: اجتزت المستوى الأول.</string>
-    <string name="game_guide_moment_first_mint_means">جزء من نورك صِيغ في القطعة: فانخفض مستواك بقدره، أما رتبتك فلا تنخفض أبدًا.</string>
+    <string name="game_guide_moment_first_mint_means">جزء من نورك صِيغ في القطعة، محفوظًا إلى الأبد؛ وقد نما مجدك، ومستواك يتبع النور الباقي لك.</string>
     <string name="game_guide_moment_first_mint_next">ما تلقّيته يبقى لك: كل شرارة جديدة تُنمّي نورك من جديد.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">السكّ يصوغ %1$s من نورك في قطعة: فينخفض مستواك بقدره، وتكسب ⁦+%2$s⁩ من المجد.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">السكّ يصوغ %1$s من نورك في قطعة، دون أن تفقد مستوى، وتكسب ⁦+%2$s⁩ من المجد.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">السكّ يصوغ %1$s من نورك في قطعة محفوظة إلى الأبد، وتكسب ⁦+%2$s⁩ من المجد؛ ومستواك يتبع النور الباقي لك.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">السكّ يصوغ %1$s من نورك في قطعة، دون أن يتغيّر مستواك، وتكسب ⁦+%2$s⁩ من المجد.</string>
     <string name="game_guide_moment_first_mint_possible_next">سُكّ الآن، أو دع نورك ينمو أولًا.</string>
     <string name="game_guide_moment_first_mint_possible_short">Meesh تصوغ %1$s من نورك.</string>
     <string name="game_guide_moment_first_mint_possible_what">يمكنك الآن سك أول Meesh لك.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">يتطلّب كل مستوى شرارات أكثر قليلًا من الذي قبله.</string>
     <string name="game_guide_step_levels_next">عند المستوى 5، يرسل إليك أجدادك حلمك الأول.</string>
     <string name="game_guide_step_levels_what">عشرون حالة لنورك، ومستويات تفتحها رتبتك.</string>
-    <string name="game_guide_step_mint_means">السكّ يصوغ جزءًا من نورك في القطعة: فينخفض مستواك بقدره، ولا تنخفض رتبتك أبدًا، وكل سكّ يمنحك مجدًا.</string>
+    <string name="game_guide_step_mint_means">السكّ يصوغ جزءًا من نورك في القطعة، محفوظًا إلى الأبد، وكل سكّ يمنحك مجدًا يدفع رتبتك إلى الأمام؛ ومستواك يتبع النور الباقي لك.</string>
     <string name="game_guide_step_mint_next">مجدك يمنحك اسمك: رتبتك.</string>
     <string name="game_guide_step_mint_what">حين يكبر نورك بما يكفي، نسكّ Meesh.</string>
     <string name="game_guide_step_missions_means">حقّقها لتظهر العطيّة ولتغذّي لهبك.</string>

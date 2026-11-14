@@ -9,7 +9,7 @@ const it = {
   'game.rules.3.title': 'Si coniano Meesh',
   'game.rules.3.body': 'Una Meesh si conia a mano: una parte della tua luce vi si fissa.',
   'game.rules.4.title': 'Coniare fissa la tua luce',
-  'game.rules.4.body': 'La parte fissata lascia la tua luce, e solo lei: il tuo livello scende di altrettanto. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto.',
+  'game.rules.4.body': 'La parte fissata lascia la tua luce, e solo lei: il tuo livello segue la luce che ti resta. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto.',
   'game.rules.5.title': 'Il rango non arretra mai',
   'game.rules.5.body': 'Ogni conio, ogni livello raggiunto per la prima volta, ogni impresa fa crescere la tua gloria. La gloria ti dà il tuo rango.',
   'game.rules.6.title': 'L’Eredità si custodisce o si spende',

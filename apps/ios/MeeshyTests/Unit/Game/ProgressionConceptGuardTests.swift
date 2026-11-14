@@ -379,7 +379,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         }
         XCTAssertEqual(table["game.concept.points.why"]?["fr"], "Tes étincelles forment ta lumière ; son éclat, c’est ton niveau.")
         XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("il se lit sur ta lumière"))
-        XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau baisse d’autant"))
+        XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau suit la lumière qui te reste"))
         for key in ["game.rules.2.body", "game.rules.4.body", "game.concept.level.what", "game.concept.points.why",
                     "game.guide.moment.first_mint.means", "game.mint.chip.level_a11y",
                     "game.guide.moment.first_mint_possible.means_drop"] {

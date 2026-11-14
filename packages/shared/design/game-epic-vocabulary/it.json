@@ -230,7 +230,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:un\\s+)?livell[oi](?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "«senza toccare il tuo livello» (#17394)"
+      "instead": "«senza cambiare il tuo livello» (#17394)"
     }
   ],
   "names": {

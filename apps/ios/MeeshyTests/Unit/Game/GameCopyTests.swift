@@ -248,8 +248,8 @@ final class GameCopyTests: XCTestCase {
         XCTAssertEqual(dropping.means, GameGuideCopy.firstMintPossibleDrop(cost: GameCopy.points(1221), glory: GameCopy.formatCount(100)))
     }
 
-    /// La première frappe (#10892) : la carte dit que le niveau baisse d'autant et le rang jamais — sans citer de
-    /// niveaux — et mène à la progression.
+    /// La première frappe (#10892, #17394) : la carte dit la pièce gardée, la gloire qui grandit et le niveau qui suit
+    /// la lumière — sans citer de niveaux — et mène à la progression.
     func test_theFirstMintCard_saysTheLevelDrops_andLeadsToProgress() {
         let moment = GameGuide.moment(for: .firstMint, seen: [])
         XCTAssertEqual(moment.action, .seeProgress)

@@ -227,7 +227,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])(?:perd|baiss)\\p{L}*\\s+(?:un\\s+|des\\s+|de\\s+|d’un\\s+)?niveaux?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "« sans toucher à ton niveau » (#17394)"
+      "instead": "« sans changer ton niveau » (#17394)"
     }
   ],
   "names": {

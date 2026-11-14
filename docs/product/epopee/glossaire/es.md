@@ -106,7 +106,7 @@ El tono: se tutea (nunca «usted», nunca «vuestro»), se escribe para un chico
 
 ### El Legado (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **Qué es**: las monedas guardadas para el linaje. **Acuñar una Meesh fija una parte de tu luz en una moneda numerada**: tu luz, y con ella tu nivel, baja otro tanto; lo recibido sigue recibido.
+- **Qué es**: las monedas guardadas para el linaje. **Acuñar una Meesh fija una parte de tu luz en una moneda numerada**, guardada para siempre; tu nivel sigue la luz que te queda, y **ningún texto presenta esa bajada como una pérdida** (#17394); lo recibido sigue recibido.
 - **La ficha de las Meeshes** se llama «El Legado».
 - **Los recipientes** (sin cambios): Monedero (1), Escarcela (10), Cofrecillo (50), Cofre (100, rango Voz I), Tesoro (500, Políglota III), Reserva (1000, Embajador III). La palabra genérica es **recipiente**, nunca «cofre» ni «tramo».
 - **Las ediciones**: plata; oro (cada centésima); prisma (cada milésima).

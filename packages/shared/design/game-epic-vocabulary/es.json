@@ -267,7 +267,7 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])perd\\p{L}*\\s+(?:un\\s+)?nivel(?:es)?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "«sin tocar tu nivel» (#17394)"
+      "instead": "«sin cambiar tu nivel» (#17394)"
     }
   ],
   "names": {

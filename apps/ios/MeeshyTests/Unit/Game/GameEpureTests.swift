@@ -955,8 +955,8 @@ final class GameEpureTests: XCTestCase {
 
     func test_thirdPass_theLevelConsequence_isSaidByTheSparksSheetAndRule4_notByTheLevelSheet() throws {
         let catalog = try Self.catalog()
-        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.points.use"]?["fr"]).contains("ton niveau, baisse d’autant"))
-        XCTAssertTrue(try XCTUnwrap(catalog["game.rules.4.body"]?["fr"]).contains("ton niveau baisse d’autant"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.points.use"]?["fr"]).contains("ton niveau suit la lumière qui te reste"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.rules.4.body"]?["fr"]).contains("ton niveau suit la lumière qui te reste"))
         for key in ["game.concept.level.what", "game.rules.2.body"] {
             XCTAssertFalse(try XCTUnwrap(catalog[key]?["fr"]).contains("baisser"), key)
         }
@@ -1115,9 +1115,9 @@ final class GameEpureTests: XCTestCase {
         "game.concept.flame.what": "Le feu que tes aïeux te confient : de la Braise au Soleil, elle change de forme en grandissant.",
         "game.concept.prestige.what": "Un nouvel Âge de ta légende, quand ta lumière est devenue Galaxie.",
         "game.concept.meesh.use": "Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
-        "game.concept.points.use": "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.",
+        "game.concept.points.use": "Frapper une Meesh en fige une part dans la pièce, gardée pour toujours dans ton Héritage ; ton niveau suit la lumière qui te reste.",
         "game.concept.level.use": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100.",
-        "game.concept.level.use_cases": "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.",
+        "game.concept.level.use_cases": "Une fois ouvertes, la joute et l’alliance le restent, quoi que tu frappes. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.",
         "game.concept.league.use": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.",
         "game.concept.league.use_cases": "Tout repart de zéro chaque lundi.",
     ]
@@ -1170,7 +1170,7 @@ final class GameEpureTests: XCTestCase {
     func test_sheets_useCases_carryTheSecondarySentences_theLandmarksStayAtRest() throws {
         let level = try XCTUnwrap(ConceptText.useNote(.level))
         XCTAssertEqual(level.question, "Quels cas particuliers ?")
-        XCTAssertTrue(level.text.contains("épreuve") && level.text.contains("même quand ton niveau baisse"))
+        XCTAssertTrue(level.text.contains("épreuve") && level.text.contains("quoi que tu frappes"))
         XCTAssertFalse(ConceptText.use(.level).contains("épreuve"))
         XCTAssertTrue(ConceptText.use(.level).contains("la renaissance au 100"), "les seuils d’ouverture restent visibles")
         let league = try XCTUnwrap(ConceptText.useNote(.league))
@@ -1178,7 +1178,7 @@ final class GameEpureTests: XCTestCase {
         XCTAssertFalse(ConceptText.use(.league).contains("accord"))
         XCTAssertTrue(ConceptText.use(.league).contains("redescendent"), "promotion et relégation restent visibles")
         XCTAssertFalse(ConceptText.use(.points).contains("Ta lumière frappe"), "la première phrase redisait la seconde")
-        XCTAssertTrue(ConceptText.use(.points).contains("baisse d’autant"), "la conséquence qui baisse le niveau reste visible")
+        XCTAssertTrue(ConceptText.use(.points).contains("ton niveau suit la lumière qui te reste"), "la conséquence sur le niveau reste visible, sans se dire perte (#17394)")
         XCTAssertFalse(ConceptText.use(.meesh).contains("Garde"), "Garde / Dépense n’est plus dit en triple")
     }
 }

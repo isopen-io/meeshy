@@ -263215,43 +263215,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السكّ يصوغ %@ من نورك في قطعة، دون أن تفقد مستوى، وتكسب ⁦+%@⁩ من المجد."
+            "value": "السكّ يصوغ %@ من نورك في قطعة، دون أن يتغيّر مستواك، وتكسب ⁦+%@⁩ من المجد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prägen bannt %@ deines Lichts in eine Münze, ohne dass du ein Level verlierst, und du gewinnst +%@ Ruhm."
+            "value": "Prägen bannt %@ deines Lichts in eine Münze, ohne dein Level zu ändern, und du gewinnst +%@ Ruhm."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting binds %@ of your light into a coin, without making you lose a level, and you gain +%@ glory."
+            "value": "Minting binds %@ of your light into a coin, without changing your level, and you gain +%@ glory."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar fija %@ de tu luz en una moneda, sin hacerte perder un nivel, y ganas +%@ de gloria."
+            "value": "Acuñar fija %@ de tu luz en una moneda, sin cambiar tu nivel, y ganas +%@ de gloria."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper fige %@ de ta lumière dans une pièce, sans te faire perdre un niveau, et tu gagnes +%@ de gloire."
+            "value": "Frapper fige %@ de ta lumière dans une pièce, sans changer ton niveau, et tu gagnes +%@ de gloire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare fissa %@ della tua luce in una moneta, senza farti perdere un livello, e guadagni +%@ di gloria."
+            "value": "Coniare fissa %@ della tua luce in una moneta, senza cambiare il tuo livello, e guadagni +%@ di gloria."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar cristaliza %@ da sua luz numa moeda, sem fazer você perder um nível, e você ganha +%@ de glória."
+            "value": "Cunhar cristaliza %@ da sua luz numa moeda, sem mudar seu nível, e você ganha +%@ de glória."
           }
         }
       }
@@ -263450,43 +263450,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جزء من نورك صِيغ في القطعة: فانخفض مستواك بقدره، أما رتبتك فلا تنخفض أبدًا."
+            "value": "جزء من نورك صِيغ في القطعة، محفوظًا إلى الأبد؛ وقد نما مجدك، ومستواك يتبع النور الباقي لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Teil deines Lichts ist in der Münze gebannt: Dein Level ist um ebenso viel gesunken, dein Rang nie."
+            "value": "Ein Teil deines Lichts ist in der Münze gebannt, für immer bewahrt; dein Ruhm ist gewachsen, und dein Level folgt dem Licht, das dir bleibt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Part of your light is now bound in the coin: your level dropped by as much, your rank never does."
+            "value": "Part of your light is now bound in the coin, kept forever; your glory has grown, and your level follows the light you still hold."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una parte de tu luz se ha fijado en la moneda: tu nivel bajó otro tanto, tu rango nunca."
+            "value": "Una parte de tu luz se ha fijado en la moneda, guardada para siempre; tu gloria ha crecido, y tu nivel sigue la luz que te queda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une part de ta lumière s’est figée dans la pièce : ton niveau a baissé d’autant, ton rang jamais."
+            "value": "Une part de ta lumière s’est figée dans la pièce, gardée pour toujours ; ta gloire a grandi, et ton niveau suit la lumière qui te reste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una parte della tua luce si è fissata nella moneta: il tuo livello è sceso di altrettanto, il tuo rango mai."
+            "value": "Una parte della tua luce si è fissata nella moneta, custodita per sempre; la tua gloria è cresciuta, e il tuo livello segue la luce che ti resta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma parte da sua luz se cristalizou na moeda: seu nível baixou na mesma medida, seu título nunca."
+            "value": "Uma parte da sua luz se cristalizou na moeda, guardada para sempre; sua glória cresceu, e seu nível acompanha a luz que lhe resta."
           }
         }
       }
@@ -265894,43 +265894,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السكّ يصوغ جزءًا من نورك في القطعة: فينخفض مستواك بقدره، ولا تنخفض رتبتك أبدًا، وكل سكّ يمنحك مجدًا."
+            "value": "السكّ يصوغ جزءًا من نورك في القطعة، محفوظًا إلى الأبد، وكل سكّ يمنحك مجدًا يدفع رتبتك إلى الأمام؛ ومستواك يتبع النور الباقي لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prägen bannt einen Teil deines Lichts in die Münze: Dein Level sinkt um ebenso viel, dein Rang nie, und jede Prägung bringt dir Ruhm."
+            "value": "Prägen bannt einen Teil deines Lichts in die Münze, für immer bewahrt, und jede Prägung bringt dir Ruhm, der deinen Rang voranbringt; dein Level folgt dem Licht, das dir bleibt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting binds part of your light into the coin: your level drops by as much, your rank never does, and every mint brings you glory."
+            "value": "Minting binds part of your light into the coin, kept forever, and every mint brings you glory that moves your rank forward; your level follows the light you still hold."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar fija una parte de tu luz en la moneda: tu nivel baja otro tanto, tu rango nunca, y cada acuñación te trae gloria."
+            "value": "Acuñar fija una parte de tu luz en la moneda, guardada para siempre, y cada acuñación te trae gloria que hace avanzar tu rango; tu nivel sigue la luz que te queda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper fige une part de ta lumière dans la pièce : ton niveau baisse d’autant, ton rang jamais, et chaque frappe t’apporte de la gloire."
+            "value": "Frapper fige une part de ta lumière dans la pièce, gardée pour toujours, et chaque frappe t’apporte de la gloire qui fait avancer ton rang ; ton niveau suit la lumière qui te reste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare fissa una parte della tua luce nella moneta: il tuo livello scende di altrettanto, il tuo rango mai, e ogni conio ti porta gloria."
+            "value": "Coniare fissa una parte della tua luce nella moneta, custodita per sempre, e ogni conio ti porta gloria che fa avanzare il tuo rango; il tuo livello segue la luce che ti resta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar cristaliza uma parte da sua luz na moeda: seu nível baixa na mesma medida, seu título nunca, e cada cunhagem traz glória."
+            "value": "Cunhar cristaliza uma parte da sua luz na moeda, guardada para sempre, e cada cunhagem traz glória que faz seu título avançar; seu nível acompanha a luz que lhe resta."
           }
         }
       }
@@ -266646,43 +266646,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجزء المصوغ يخرج من نورك، ومنه وحده: فينخفض مستواك بقدره. أما رتبتك وأوسمتك فلا تنخفض. وما تلقّيته يبقى لك."
+            "value": "الجزء المصوغ يخرج من نورك، ومنه وحده: فمستواك يتبع النور الباقي لك. أما رتبتك وأوسمتك فلا تنخفض. وما تلقّيته يبقى لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level sinkt um ebenso viel. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen."
+            "value": "Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level folgt dem Licht, das dir bleibt. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The bound part leaves your light, and only that part: your level drops by as much. Your rank and your medals don’t drop. What you received stays received."
+            "value": "The bound part leaves your light, and only that part: your level follows the light you still hold. Your rank and your medals don’t drop. What you received stays received."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La parte fijada sale de tu luz, y solo de ella: tu nivel baja otro tanto. Tu rango y tus medallas no bajan. Lo recibido sigue recibido."
+            "value": "La parte fijada sale de tu luz, y solo de ella: tu nivel sigue la luz que te queda. Tu rango y tus medallas no bajan. Lo recibido sigue recibido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu."
+            "value": "La part figée quitte ta lumière, et seulement elle : ton niveau suit la lumière qui te reste. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La parte fissata lascia la tua luce, e solo lei: il tuo livello scende di altrettanto. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto."
+            "value": "La parte fissata lascia la tua luce, e solo lei: il tuo livello segue la luce che ti resta. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A parte cristalizada sai da sua luz, e só ela: seu nível baixa na mesma medida. Seu título e suas medalhas não baixam. O que você recebeu continua recebido."
+            "value": "A parte cristalizada sai da sua luz, e só ela: seu nível acompanha a luz que lhe resta. Seu título e suas medalhas não baixam. O que você recebeu continua recebido."
           }
         }
       }
@@ -312109,43 +312109,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره."
+            "value": "وسكّ Meesh يصوغ جزءًا منه في القطعة، محفوظةً إلى الأبد في إرثك؛ ومستواك يتبع النور الباقي لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel."
+            "value": "Eine Meesh zu prägen bannt einen Teil davon in die Münze, für immer in deinem Erbe bewahrt; dein Level folgt dem Licht, das dir bleibt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much."
+            "value": "Minting a Meesh binds part of it into the coin, kept forever in your Legacy; your level follows the light you still hold."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto."
+            "value": "Acuñar una Meesh fija una parte en la moneda, guardada para siempre en tu Legado; tu nivel sigue la luz que te queda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant."
+            "value": "Frapper une Meesh en fige une part dans la pièce, gardée pour toujours dans ton Héritage ; ton niveau suit la lumière qui te reste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto."
+            "value": "Coniare una Meesh ne fissa una parte nella moneta, custodita per sempre nella tua Eredità; il tuo livello segue la luce che ti resta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida."
+            "value": "Cunhar uma Meesh cristaliza uma parte dela na moeda, guardada para sempre na sua Herança; seu nível acompanha a luz que lhe resta."
           }
         }
       }
@@ -315963,43 +315963,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper fige %@ de ta lumière dans une pièce : ton niveau baisse d’autant, et tu gagnes +%@ de gloire."
+            "value": "Frapper fige %@ de ta lumière dans une pièce gardée pour toujours, et tu gagnes +%@ de gloire ; ton niveau suit la lumière qui te reste."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting binds %@ of your light into a coin: your level drops by as much, and you gain +%@ glory."
+            "value": "Minting binds %@ of your light into a coin kept forever, and you gain +%@ glory; your level follows the light you still hold."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar fija %@ de tu luz en una moneda: tu nivel baja otro tanto, y ganas +%@ de gloria."
+            "value": "Acuñar fija %@ de tu luz en una moneda guardada para siempre, y ganas +%@ de gloria; tu nivel sigue la luz que te queda."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prägen bannt %@ deines Lichts in eine Münze: Dein Level sinkt um ebenso viel, und du gewinnst +%@ Ruhm."
+            "value": "Prägen bannt %@ deines Lichts in eine Münze für die Ewigkeit, und du gewinnst +%@ Ruhm; dein Level folgt dem Licht, das dir bleibt."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare fissa %@ della tua luce in una moneta: il tuo livello scende di altrettanto, e guadagni +%@ di gloria."
+            "value": "Coniare fissa %@ della tua luce in una moneta custodita per sempre, e guadagni +%@ di gloria; il tuo livello segue la luce che ti resta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar cristaliza %@ da sua luz numa moeda: seu nível baixa na mesma medida, e você ganha +%@ de glória."
+            "value": "Cunhar cristaliza %@ da sua luz numa moeda guardada para sempre, e você ganha +%@ de glória; seu nível acompanha a luz que lhe resta."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السكّ يصوغ %@ من نورك في قطعة: فينخفض مستواك بقدره، وتكسب ⁦+%@⁩ من المجد."
+            "value": "السكّ يصوغ %@ من نورك في قطعة محفوظة إلى الأبد، وتكسب ⁦+%@⁩ من المجد؛ ومستواك يتبع النور الباقي لك."
           }
         }
       }
@@ -337354,43 +337354,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متى فُتحت المبارزة والتحالف بقيا مفتوحين، حتى إن انخفض مستواك. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
+            "value": "متى فُتحت المبارزة والتحالف بقيا مفتوحين، مهما سككت. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einmal geöffnet, bleiben Turnier und Bündnis offen, auch wenn dein Level sinkt. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
+            "value": "Einmal geöffnet, bleiben Turnier und Bündnis offen, was immer du prägst. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Once open, the joust and the alliance stay open, even when your level drops. Every ten levels, from 10 to 100, your ancestors ask for a trial."
+            "value": "Once open, the joust and the alliance stay open, whatever you mint. Every ten levels, from 10 to 100, your ancestors ask for a trial."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una vez abiertas, la justa y la alianza siguen abiertas, aunque tu nivel baje. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
+            "value": "Una vez abiertas, la justa y la alianza siguen abiertas, acuñes lo que acuñes. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
+            "value": "Une fois ouvertes, la joute et l’alliance le restent, quoi que tu frappes. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una volta aperti, il torneo e l’alleanza restano aperti, anche quando il tuo livello scende. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
+            "value": "Una volta aperti, il torneo e l’alleanza restano aperti, qualunque cosa tu conii. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma vez abertos, o torneio e a aliança continuam abertos, mesmo quando seu nível baixa. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
+            "value": "Uma vez abertos, o torneio e a aliança continuam abertos, cunhe você o que cunhar. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
           }
         }
       }

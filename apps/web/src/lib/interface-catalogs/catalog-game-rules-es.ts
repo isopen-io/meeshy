@@ -9,7 +9,7 @@ const es = {
   'game.rules.3.title': 'Se acuñan Meeshes',
   'game.rules.3.body': 'Una Meesh se acuña a mano: una parte de tu luz se fija en ella.',
   'game.rules.4.title': 'Acuñar fija tu luz',
-  'game.rules.4.body': 'La parte fijada sale de tu luz, y solo de ella: tu nivel baja otro tanto. Tu rango y tus medallas no bajan. Lo recibido sigue recibido.',
+  'game.rules.4.body': 'La parte fijada sale de tu luz, y solo de ella: tu nivel sigue la luz que te queda. Tu rango y tus medallas no bajan. Lo recibido sigue recibido.',
   'game.rules.5.title': 'El rango nunca retrocede',
   'game.rules.5.body': 'Cada acuñación, cada nivel alcanzado por primera vez, cada hazaña hace crecer tu gloria. La gloria te da tu rango.',
   'game.rules.6.title': 'El Legado se guarda o se gasta',

@@ -106,7 +106,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. La
 
 ### L'Héritage — الإرث (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **Ce que c'est** : les pièces gardées pour la lignée (لسلالتك). **Frapper (سكّ) une Meesh façonne (يصوغ) une part de ta lumière dans une pièce numérotée** : ta lumière, donc ton niveau, baisse d'autant (« بقدره ») ; ce qui a été reçu reste reçu (« ما تلقّيته يبقى لك »).
+- **Ce que c'est** : les pièces gardées pour la lignée (لسلالتك). **Frapper (سكّ) une Meesh façonne (يصوغ) une part de ta lumière dans une pièce numérotée**, gardée pour toujours (« محفوظة إلى الأبد ») ; ton niveau suit la lumière qui te reste (« مستواك يتبع النور الباقي لك »), et **aucun texte ne présente cette baisse comme une perte** (#17394) ; ce qui a été reçu reste reçu (« ما تلقّيته يبقى لك »).
 - **La fiche des Meeshes** s'appelle « الإرث ». Le carnet des règles garde « Meesh » pour la pièce (`game.rules.concept.meesh.name`).
 - **Les contenants** (أوعية, inchangés) : كيس (1)، جراب (10)، صندوق صغير (50)، صندوق (100)، كنز (500)، احتياطي (1 000).
 - **Les éditions** : فضّية ; ذهبية (chaque centième) ; منشورية (chaque millième).

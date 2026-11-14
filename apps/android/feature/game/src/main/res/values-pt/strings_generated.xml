@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Faíscas</string>
     <string name="game_concept_points_tip_1">Volte todo dia: uma Chama acesa alimenta suas faíscas.</string>
     <string name="game_concept_points_tip_2">Ative um impulso para multiplicar suas faíscas.</string>
-    <string name="game_concept_points_use">Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida.</string>
+    <string name="game_concept_points_use">Cunhar uma Meesh cristaliza uma parte dela na moeda, guardada para sempre na sua Herança; seu nível acompanha a luz que lhe resta.</string>
     <string name="game_concept_prestige_name">O Renascimento</string>
     <string name="game_concept_prestige_tip_1">Leve sua luz até o nível 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s até o nível %2$s.</string>
     <string name="game_guide_moment_first_level_short">Nível %1$s · %2$s até o próximo.</string>
     <string name="game_guide_moment_first_level_what">Sua luz cresce: primeiro nível alcançado.</string>
-    <string name="game_guide_moment_first_mint_means">Uma parte da sua luz se cristalizou na moeda: seu nível baixou na mesma medida, seu título nunca.</string>
+    <string name="game_guide_moment_first_mint_means">Uma parte da sua luz se cristalizou na moeda, guardada para sempre; sua glória cresceu, e seu nível acompanha a luz que lhe resta.</string>
     <string name="game_guide_moment_first_mint_next">O que você recebeu continua recebido: cada nova faísca faz a sua luz crescer de novo.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Cunhar cristaliza %1$s da sua luz numa moeda: seu nível baixa na mesma medida, e você ganha +%2$s de glória.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Cunhar cristaliza %1$s da sua luz numa moeda, sem fazer você perder um nível, e você ganha +%2$s de glória.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Cunhar cristaliza %1$s da sua luz numa moeda guardada para sempre, e você ganha +%2$s de glória; seu nível acompanha a luz que lhe resta.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Cunhar cristaliza %1$s da sua luz numa moeda, sem mudar seu nível, e você ganha +%2$s de glória.</string>
     <string name="game_guide_moment_first_mint_possible_next">Cunhe agora, ou deixe primeiro a sua luz crescer.</string>
     <string name="game_guide_moment_first_mint_possible_short">Uma Meesh cristaliza %1$s da sua luz.</string>
     <string name="game_guide_moment_first_mint_possible_what">Você pode cunhar a sua primeira Meesh.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Cada nível pede um pouco mais de faíscas do que o anterior.</string>
     <string name="game_guide_step_levels_next">No nível 5, seus ancestrais enviam o seu primeiro sonho.</string>
     <string name="game_guide_step_levels_what">Vinte estados da sua luz, e níveis que seu título abre.</string>
-    <string name="game_guide_step_mint_means">Cunhar cristaliza uma parte da sua luz na moeda: seu nível baixa na mesma medida, seu título nunca, e cada cunhagem traz glória.</string>
+    <string name="game_guide_step_mint_means">Cunhar cristaliza uma parte da sua luz na moeda, guardada para sempre, e cada cunhagem traz glória que faz seu título avançar; seu nível acompanha a luz que lhe resta.</string>
     <string name="game_guide_step_mint_next">Sua glória dá o seu nome: o seu título.</string>
     <string name="game_guide_step_mint_what">Quando sua luz está grande o bastante, cunha-se uma Meesh.</string>
     <string name="game_guide_step_missions_means">Realize-os para fazer aparecer a Oferenda e alimentar a sua Chama.</string>

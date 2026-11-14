@@ -46,7 +46,7 @@ describe('la première fois : la version complète', () => {
   const page = text(renderToStaticMarkup(<GameGuideCard card={full(firstMint)} {...handlers} />));
 
   test('les trois parties, dans l’ordre', () => {
-    const order = ['Ta première Meesh est frappée', 'ton niveau a baissé d’autant', 'Ce que tu as reçu reste reçu'].map((part) => page.indexOf(part));
+    const order = ['Ta première Meesh est frappée', 'ta gloire a grandi', 'Ce que tu as reçu reste reçu'].map((part) => page.indexOf(part));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });

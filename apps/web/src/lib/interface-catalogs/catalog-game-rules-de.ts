@@ -9,7 +9,7 @@ const de = {
   'game.rules.3.title': 'Man prägt Meeshes',
   'game.rules.3.body': 'Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt.',
   'game.rules.4.title': 'Prägen bannt dein Licht',
-  'game.rules.4.body': 'Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level sinkt um ebenso viel. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen.',
+  'game.rules.4.body': 'Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level folgt dem Licht, das dir bleibt. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen.',
   'game.rules.5.title': 'Der Rang weicht nie zurück',
   'game.rules.5.body': 'Jede Prägung, jedes zum ersten Mal erreichte Level, jede Heldentat lässt deinen Ruhm wachsen. Der Ruhm gibt dir deinen Rang.',
   'game.rules.6.title': 'Das Erbe wird bewahrt oder ausgegeben',

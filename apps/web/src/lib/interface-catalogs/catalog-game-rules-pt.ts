@@ -9,7 +9,7 @@ const pt = {
   'game.rules.3.title': 'Cunham-se Meeshes',
   'game.rules.3.body': 'Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela.',
   'game.rules.4.title': 'Cunhar cristaliza a sua luz',
-  'game.rules.4.body': 'A parte cristalizada sai da sua luz, e só ela: seu nível baixa na mesma medida. Seu título e suas medalhas não baixam. O que você recebeu continua recebido.',
+  'game.rules.4.body': 'A parte cristalizada sai da sua luz, e só ela: seu nível acompanha a luz que lhe resta. Seu título e suas medalhas não baixam. O que você recebeu continua recebido.',
   'game.rules.5.title': 'O título nunca recua',
   'game.rules.5.body': 'Cada cunhagem, cada nível alcançado pela primeira vez, cada façanha faz a sua glória crescer. A glória dá o seu título.',
   'game.rules.6.title': 'A Herança se guarda ou se gasta',

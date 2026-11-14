@@ -98,7 +98,7 @@ enum GameGuideCopy {
             // La poche fait le niveau (#10892) : une frappe qui coûte des niveaux le dit avant le geste.
             let means = levelsLost > 0
                 ? firstMintPossibleDrop(cost: cost, glory: glory)
-                : String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper fige \(cost) de ta lumière dans une pièce, sans te faire perdre un niveau, et tu gagnes +\(glory) de gloire.", bundle: .main)
+                : String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper fige \(cost) de ta lumière dans une pièce, sans changer ton niveau, et tu gagnes +\(glory) de gloire.", bundle: .main)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint_possible.what", defaultValue: "Tu peux frapper ta première Meesh.", bundle: .main),
                 means: means,
@@ -111,7 +111,7 @@ enum GameGuideCopy {
         case .firstMint:
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint.what", defaultValue: "Tchak ! Ta première Meesh est frappée.", bundle: .main),
-                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "Une part de ta lumière s’est figée dans la pièce : ton niveau a baissé d’autant, ton rang jamais.", bundle: .main),
+                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "Une part de ta lumière s’est figée dans la pièce, gardée pour toujours ; ta gloire a grandi, et ton niveau suit la lumière qui te reste.", bundle: .main),
                 next: String(localized: "game.guide.moment.first_mint.next", defaultValue: "Ce que tu as reçu reste reçu : chaque nouvelle étincelle fait regrandir ta lumière.", bundle: .main),
                 short: String(localized: "game.guide.moment.first_mint.short", defaultValue: "Meesh frappée : ton rang reste, ta lumière regrandira.", bundle: .main),
                 action: action
@@ -193,10 +193,11 @@ enum GameGuideCopy {
 
     // MARK: - Intégration
 
-    /// « Frapper coûte 1 221 étincelles : ton niveau baisse d’autant, et tu gagnes +100 de Gloire. » (#10892)
+    /// « Frapper fige 1 221 étincelles de ta lumière dans une pièce gardée pour toujours, et tu gagnes +100 de gloire ;
+    /// ton niveau suit la lumière qui te reste. » (#10892, #17394)
     static func firstMintPossibleDrop(cost: String, glory: String) -> String {
         String(localized: "game.guide.moment.first_mint_possible.means_drop",
-               defaultValue: "Frapper fige \(cost) de ta lumière dans une pièce : ton niveau baisse d’autant, et tu gagnes +\(glory) de gloire.", bundle: .main)
+               defaultValue: "Frapper fige \(cost) de ta lumière dans une pièce gardée pour toujours, et tu gagnes +\(glory) de gloire ; ton niveau suit la lumière qui te reste.", bundle: .main)
     }
 
     static func step(_ step: OnboardingStep) -> GuideCopy {
@@ -251,7 +252,7 @@ enum GameGuideCopy {
             let what = String(localized: "game.guide.step.mint.what", defaultValue: "Quand ta lumière est assez grande, on frappe une Meesh.", bundle: .main)
             return GuideCopy(
                 what: what,
-                means: String(localized: "game.guide.step.mint.means", defaultValue: "Frapper fige une part de ta lumière dans la pièce : ton niveau baisse d’autant, ton rang jamais, et chaque frappe t’apporte de la gloire.", bundle: .main),
+                means: String(localized: "game.guide.step.mint.means", defaultValue: "Frapper fige une part de ta lumière dans la pièce, gardée pour toujours, et chaque frappe t’apporte de la gloire qui fait avancer ton rang ; ton niveau suit la lumière qui te reste.", bundle: .main),
                 next: String(localized: "game.guide.step.mint.next", defaultValue: "Ta gloire te donne ton nom : ton rang.", bundle: .main),
                 short: what,
                 action: action
@@ -298,7 +299,7 @@ enum GameGuideCopy {
                     text: String(localized: "game.rules.3.share", defaultValue: "Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.", bundle: .main))),
             Rule(index: 4,
                  title: String(localized: "game.rules.4.title", defaultValue: "Frapper fige ta lumière", bundle: .main),
-                 body: String(localized: "game.rules.4.body", defaultValue: "La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.", bundle: .main)),
+                 body: String(localized: "game.rules.4.body", defaultValue: "La part figée quitte ta lumière, et seulement elle : ton niveau suit la lumière qui te reste. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.", bundle: .main)),
             Rule(index: 5,
                  title: String(localized: "game.rules.5.title", defaultValue: "Le rang ne recule jamais", bundle: .main),
                  body: String(localized: "game.rules.5.body", defaultValue: "Chaque frappe, chaque niveau atteint pour la première fois, chaque haut fait fait grandir ta gloire. La gloire te donne ton rang.", bundle: .main)),

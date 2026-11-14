@@ -67,25 +67,26 @@ describe('les chiffres du moment se disent', () => {
     expect(copyOf('first-level').next).toContain('50 étincelles');
     expect(copyOf('first-level').next).toContain('niveau 3');
   });
-  test('première frappe possible : le prix, la baisse du niveau, la Gloire (#10892)', () => {
+  test('première frappe possible : le prix, la pièce gardée, la Gloire, et le niveau qui suit la lumière (#10892, #17394)', () => {
     const copy = copyOf('first-mint-possible');
     expect(copy.means).toContain('1 221 étincelles');
-    expect(copy.means).toContain('ton niveau baisse d’autant');
+    expect(copy.means).toContain('ton niveau suit la lumière qui te reste');
+    expect(copy.means).not.toContain('baisse');
     expect(copy.means).toContain('+100 de gloire');
   });
-  test('une frappe qui ne coûte aucun niveau le dit, comme sur iOS : « sans te faire perdre un niveau »', () => {
+  test('une frappe qui ne coûte aucun niveau le dit, comme sur iOS : « sans changer ton niveau » (#17394)', () => {
     const free = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 0, gloryGain: 100 }, []);
     const means = momentCopy(free, 'fr').means.replace(/\s/g, ' ');
-    expect(means).toContain('sans te faire perdre un niveau');
-    expect(means).not.toContain('ton niveau baisse');
+    expect(means).toContain('sans changer ton niveau');
+    expect(means).not.toContain('ton niveau suit');
   });
   test('la phrase ne promet plus que le niveau tient : la frappe le fait baisser', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
     expect(momentCopy(moment, 'fr').means).not.toContain('sans baisser ton niveau');
   });
-  test('première frappe : la poche paie, le niveau baisse d’autant, le rang non, plus de Vent arrière', () => {
+  test('première frappe : la pièce est gardée, la gloire grandit, le niveau suit la lumière, plus de Vent arrière (#17394)', () => {
     const copy = copyOf('first-mint');
-    expect(copy.means).toContain('ton niveau a baissé d’autant, ton rang jamais');
+    expect(copy.means).toContain('ta gloire a grandi, et ton niveau suit la lumière qui te reste');
     expect(copy.means).not.toContain('Vent arrière');
     expect(copy.means).not.toContain('de 14 à 9');
   });
