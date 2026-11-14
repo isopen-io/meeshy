@@ -423,9 +423,12 @@ public struct AudioPlayerView: View {
 
             HStack(alignment: .center, spacing: context.isCompact ? 8 : 10) {
                 playButton
-                waveformProgress
+                VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
+                    waveformProgress
+                    timeRow
+                }
                 if chromePlan.showsRightChips {
-                    speedChip
+                    rightChipsColumn
                 }
                 contextActions
             }
@@ -472,23 +475,36 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Play Button
-    /// La commande du kit (K02 + K09, `AudioPlayerPlayControl`, #18421) ; l'ancre
-    /// de l'aperçu d'appui long reste sur elle seule (#11339).
     private var playButton: some View {
-        AudioPlayerPlayControl(
-            availability: availability,
-            isCompact: context.isCompact,
-            isDark: isDark,
-            accent: accent,
-            isPlaying: player.isPlaying,
-            isLoading: player.isLoading,
-            fileSize: attachment.fileSize,
-            onPlay: { handlePlayTap() },
-            onDownload: onDownload.map { download in
-                { download(); HapticFeedback.light() }
+        Button {
+            switch availability {
+            case .ready:
+                handlePlayTap()
+            case .needsDownload:
+                onDownload?()
+                HapticFeedback.light()
+            case .downloading:
+                break
             }
-        )
+        } label: {
+            AudioPlayerPlayButtonLabel(
+                availability: availability,
+                isCompact: context.isCompact,
+                isDark: isDark,
+                accent: accent,
+                isPlaying: player.isPlaying,
+                isLoading: player.isLoading,
+                fileSize: attachment.fileSize
+            )
+        }
+        .disabled(isDownloading)
+        .accessibilityLabel(String(localized: "media.audio.play", defaultValue: "Lire l'audio", bundle: .module))
         .mediaPlayControlAnchor(attachmentId: attachment.id)
+    }
+
+    private var isDownloading: Bool {
+        if case .downloading = availability { return true }
+        return false
     }
 
     private func handlePlayTap() {
@@ -646,35 +662,34 @@ public struct AudioPlayerView: View {
         // le conteneur de swipe de la bulle désengage reply/forward tant que le
         // doigt manipule la waveform.
         .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
-        // Les deux puces SUR l'onde (#18421), au-dessus de la nappe de scrub :
-        // la durée au début ne prend aucun doigt, l'avancement à la fin ouvre
-        // le plein écran. Elles lisent la MÊME progression que les barres.
-        .overlay { waveformChips }
     }
 
-    // MARK: - Waveform Chips
-    private var waveformChips: some View {
-        AudioWaveformChipsOverlay(
-            total: estimatedDuration,
-            elapsed: displayedProgress.elapsed,
-            fraction: displayedProgress.fraction,
-            isLive: displayedProgress.isLive,
-            isCompact: context.isCompact,
-            accent: accent,
-            onProgressTap: onFullscreen.map { open in
-                { HapticFeedback.light(); open() }
-            }
-        )
+    // MARK: - Time Row
+    /// Timecodes seuls : `currentTime` à gauche, `estimatedDuration` à droite.
+    /// La vitesse de lecture et l'affordance plein écran ont migré vers
+    /// `rightChipsColumn` (capsules empilées à droite du widget).
+    private var timeRow: some View {
+        HStack(spacing: 0) {
+            Text(MediaFormat.duration(displayedProgress.elapsed))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
+                .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
+            Spacer()
+            Text(MediaFormat.duration(estimatedDuration))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
+                .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
+        }
     }
 
-    // MARK: - Speed Chip
-    private var speedChip: some View {
-        AudioPlayerSpeedChip(
+    // MARK: - Right Chips Column (speed + progress, stacked vertically)
+    private var rightChipsColumn: some View {
+        AudioPlayerChipsColumn(
             speed: player.speed,
+            progressFraction: displayedProgress.fraction,
             isCompact: context.isCompact,
             isDark: isDark,
             accent: accent,
-            onCycleSpeed: { player.cycleSpeed() }
+            onCycleSpeed: { player.cycleSpeed() },
+            onFullscreen: onFullscreen
         )
     }
 
