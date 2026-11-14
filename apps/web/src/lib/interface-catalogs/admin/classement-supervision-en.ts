@@ -163,7 +163,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Detail rows',
   'admin.monitoring.routes.limit.option': '{count} rows',
   'admin.monitoring.routes.notInstrumented': 'Measurement is not installed on this instance: the zeros below prove nothing.',
-  'admin.monitoring.routes.saturated': 'Measurement is saturated: {count} samples not broken down by platform and version.',
+  'admin.monitoring.routes.saturated': 'Measurement is saturated: {count} samples not broken down by platform and version; totals of the watched routes stay exact.',
   'admin.monitoring.routes.truncated': '{shown} rows shown out of {total}. Narrow the filter to see the others.',
   'admin.monitoring.routes.observingSince': 'Observing since',
   'admin.monitoring.routes.observedFor': 'Time observed',
@@ -172,7 +172,6 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Watched routes',
   'admin.monitoring.routes.watched.intro': 'Addresses being retired: zero observed calls allows removal, provided you read the blind spots below.',
-  'admin.monitoring.routes.watched.question': 'When can an address be retired?',
   'admin.monitoring.routes.watched.caption': 'Watched routes and their traffic',
   'admin.monitoring.routes.watched.empty': 'No watched route matches',
   'admin.monitoring.routes.col.method': 'Method',

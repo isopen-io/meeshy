@@ -74,7 +74,7 @@ const SHORTENED_FR: Readonly<Record<string, string>> = {
   "admin.settings.access.intro": "Ce que votre rôle vous permet de faire.",
   "admin.analytics.subtitle": "Aucun contenu de message n’est lu ici.",
   "admin.analytics.calls.transitions.caption": "En moyenne par appel",
-  "admin.monitoring.routes.saturated": "La mesure est saturée : {count} échantillons non ventilés par plateforme et version.",
+  "admin.monitoring.routes.saturated": "La mesure est saturée : {count} échantillons non ventilés par plateforme et version ; les totaux des routes surveillées restent exacts.",
   "admin.ops.containers.subtitle": "Relevés chaque minute ; touchez-en un pour le détail.",
   "admin.ops.shared": "Hôte partagé : staging et production tournent sur cette machine.",
   "admin.scale.abuse.intro": "Une opération au-dessus du seuil ne crédite qu’une fois par contenu.",

@@ -163,7 +163,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Filas de detalle',
   'admin.monitoring.routes.limit.option': '{count} filas',
   'admin.monitoring.routes.notInstrumented': 'La medición no está instalada en esta instancia: los ceros de abajo no demuestran nada.',
-  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras sin desglosar por plataforma ni versión.',
+  'admin.monitoring.routes.saturated': 'La medición está saturada: {count} muestras sin desglosar por plataforma ni versión; los totales de las rutas vigiladas siguen siendo exactos.',
   'admin.monitoring.routes.truncated': '{shown} filas mostradas de {total}. Acota el filtro para ver las demás.',
   'admin.monitoring.routes.observingSince': 'Observando desde',
   'admin.monitoring.routes.observedFor': 'Tiempo observado',
@@ -172,7 +172,6 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Rutas vigiladas',
   'admin.monitoring.routes.watched.intro': 'Direcciones en proceso de retirada: cero llamadas observadas permite eliminarlas, siempre que leas los puntos ciegos de abajo.',
-  'admin.monitoring.routes.watched.question': '¿Cuándo se puede retirar una dirección?',
   'admin.monitoring.routes.watched.caption': 'Rutas vigiladas y su tráfico',
   'admin.monitoring.routes.watched.empty': 'Ninguna ruta vigilada coincide',
   'admin.monitoring.routes.col.method': 'Método',

@@ -88,17 +88,14 @@ const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectEl
 const DEFAULT_PATH = `${adminEndpoints.routeUsage}?scope=watched&limit=100`;
 
 describe('l’usage des routes — ouverture', () => {
-  test('« Quand peut-on retirer une adresse ? » : la règle du retrait est derrière un (i), lue du lecteur d’écran, et ne s’étale plus sous le titre', async () => {
+  test('les routes surveillées disent, visibles au repos, quand une adresse se retire : zéro appel, angles morts lus', async () => {
     const { deps } = scripted(routeReply);
     const host = await open(deps);
 
     const section = host.querySelector('[data-admin-monitoring-section="watched"]');
-    const info = section?.querySelector<HTMLButtonElement>('button[aria-label="Quand peut-on retirer une adresse ?"]');
-    expect(info).not.toBeNull();
-    const note = section?.querySelector(`#${info?.getAttribute('aria-controls')}`);
-    expect(note?.textContent).toContain('zéro appel observé autorise le retrait');
-    expect(note?.className).toContain('sr-only');
-    expect(section?.querySelector('h2 ~ p:not(.sr-only)')).toBeNull();
+    const intro = section?.querySelector('h2 ~ p:not(.sr-only)');
+    expect(intro?.textContent).toContain('zéro appel observé autorise le retrait');
+    expect(intro?.textContent).toContain('angles morts');
   });
 
   test('l’onglet s’ouvre par l’adresse : seule SA lecture part — la santé n’est pas montée', async () => {
@@ -247,6 +244,7 @@ describe('les avis — avant tout chiffre', () => {
     const notice = normalized(host.querySelector('[data-admin-notice="warning"]')?.textContent ?? '');
     expect(notice).toContain('1 234 échantillons');
     expect(notice).toContain('non ventilés par plateforme et version');
+    expect(notice).toContain('les totaux des routes surveillées restent exacts');
   });
 
   test('un détail tronqué : combien de lignes sur combien', async () => {

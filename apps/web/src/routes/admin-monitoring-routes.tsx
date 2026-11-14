@@ -233,7 +233,7 @@ export function MonitoringRoutes({ language, deps, now = defaultNow }: Monitorin
           />
         </AdminStatGrid>
 
-        <MonitoringSection id="watched" title={translateAdmin(language, 'admin.monitoring.routes.watched.title')} info={{ question: translateAdmin(language, 'admin.monitoring.routes.watched.question'), text: translateAdmin(language, 'admin.monitoring.routes.watched.intro') }}>
+        <MonitoringSection id="watched" title={translateAdmin(language, 'admin.monitoring.routes.watched.title')} hint={translateAdmin(language, 'admin.monitoring.routes.watched.intro')}>
           {watched.length === 0 ? (
             <AdminEmptyState title={translateAdmin(language, 'admin.monitoring.routes.watched.empty')} glyph="funnel" />
           ) : (

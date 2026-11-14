@@ -167,7 +167,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Lignes du détail',
   'admin.monitoring.routes.limit.option': '{count} lignes',
   'admin.monitoring.routes.notInstrumented': 'La mesure n’est pas installée sur cette instance : les zéros ci-dessous ne prouvent rien.',
-  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons non ventilés par plateforme et version.',
+  'admin.monitoring.routes.saturated': 'La mesure est saturée : {count} échantillons non ventilés par plateforme et version ; les totaux des routes surveillées restent exacts.',
   'admin.monitoring.routes.truncated': '{shown} lignes affichées sur {total}. Affinez le filtre pour voir les autres.',
   'admin.monitoring.routes.observingSince': 'Observation depuis',
   'admin.monitoring.routes.observedFor': 'Durée observée',
@@ -176,7 +176,6 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Routes surveillées',
   'admin.monitoring.routes.watched.intro': 'Adresses en voie de retrait : zéro appel observé autorise le retrait, à condition de lire les angles morts plus bas.',
-  'admin.monitoring.routes.watched.question': 'Quand peut-on retirer une adresse ?',
   'admin.monitoring.routes.watched.caption': 'Routes surveillées et leur trafic',
   'admin.monitoring.routes.watched.empty': 'Aucune route surveillée ne correspond',
   'admin.monitoring.routes.col.method': 'Méthode',

@@ -163,7 +163,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Linhas de detalhe',
   'admin.monitoring.routes.limit.option': '{count} linhas',
   'admin.monitoring.routes.notInstrumented': 'A medição não está instalada nesta instância: os zeros abaixo não provam nada.',
-  'admin.monitoring.routes.saturated': 'A medição está saturada: {count} amostras não discriminadas por plataforma e versão.',
+  'admin.monitoring.routes.saturated': 'A medição está saturada: {count} amostras não discriminadas por plataforma e versão; os totais das rotas monitoradas continuam exatos.',
   'admin.monitoring.routes.truncated': '{shown} linhas mostradas de {total}. Restrinja o filtro para ver as outras.',
   'admin.monitoring.routes.observingSince': 'Observando desde',
   'admin.monitoring.routes.observedFor': 'Tempo observado',
@@ -172,7 +172,6 @@ const f = {
 
   'admin.monitoring.routes.watched.title': 'Rotas monitoradas',
   'admin.monitoring.routes.watched.intro': 'Endereços em processo de retirada: zero chamadas observadas permite a remoção, desde que você leia os pontos cegos abaixo.',
-  'admin.monitoring.routes.watched.question': 'Quando é possível retirar um endereço?',
   'admin.monitoring.routes.watched.caption': 'Rotas monitoradas e o seu tráfego',
   'admin.monitoring.routes.watched.empty': 'Nenhuma rota monitorada corresponde',
   'admin.monitoring.routes.col.method': 'Método',
