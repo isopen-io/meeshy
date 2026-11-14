@@ -1,191 +1,145 @@
-# Cycle 162 — un état DESSINÉ que personne n'alimentait, et une jumelle que personne ne lisait
+# Cycle 162 — cinq cliquets, une seule direction
 
-*2026-11-14. Branche `claude/exciting-planck-makf15`, partie de `dev` à
-`e217ec868` (identique, 0/0).*
+*2026-11-14. Branche `claude/exciting-planck-h1yyyt`, repartie de la tête de
+`dev` (`6504055f3c`).*
 
-**Livré** : #18537 (neuf — le lecteur audio web apprend enfin par le temps réel
-qu'un travail mis en file a échoué) et #18115 (le dernier suivi ouvert du
-cycle 161 — la jumelle Kotlin morte de `message:attachment-updated`).
+**Livré** : #18499 — le cliquet de la direction MONTANTE du contrat socket, et
+`CALL_EVENTS` ramené dans la portée des gardes.
 
 ---
 
-## Lot A — la passerelle disait la panne en une seconde, le lecteur l'attendait 90 (#18537)
+## Le relevé qui a ouvert le cycle
 
-### Où la piste a été prise
+Le contrat socket est gardé par cinq cliquets. En les listant pour choisir où
+chercher, une chose se voit d'un coup :
 
-Dans l'inventaire d'asymétries que le cycle 161 venait de poser
-(`socket-event-platform-parity-gate`, #18342). Il range 29 événements sous
-« non portés par le web », avec la bonne raison de famille : `apps/web` est le
-chantier 2.0 et « iOS et Android le lisent, le web pas encore » y est l'état
-NORMAL d'une feature non portée.
-
-Deux de ces 29 n'étaient pas dans ce cas, et c'est exactement ce que le cliquet
-est fait pour permettre de découvrir : **`audio:transcription-failed` et
-`audio:translation-failed` ne manquaient pas à une feature non portée — ils
-manquaient à une feature DÉJÀ PORTÉE, dont l'état d'échec était dessiné et
-jamais alimenté.**
-
-> **Un inventaire d'asymétries ne dit pas « voici 29 portages à faire ». Il dit
-> « voici 29 questions à poser », et elles n'ont pas la même réponse.** Le
-> cycle 161 l'avait écrit en refusant d'ouvrir 32 issues de portage ; ce lot est
-> la première fois que l'inventaire sert à ce pour quoi il a été fait.
-
-### Le défaut
-
-Le lecteur audio plein écran avait les TROIS pièces, et l'une n'était jamais
-servie :
-
-| pièce | site | ce qu'elle fait |
+| cliquet | ce qu'il répond | direction |
 |---|---|---|
-| l'attente VISIBLE | `TranscribeAction busy` / `TranslateOffers pending` | « Transcription… » / « Traduction… » |
-| le plafond de SILENCE | `ON_DEMAND_STALL_MS = 90_000` | au bout de 90 s l'attente se lève |
-| la phrase du REFUS | `AudioOnDemandNotice` → `OnDemandNotice` | « Transcription impossible » |
+| `socket-event-name-gate` | un nom épelé par un client existe-t-il au contrat ? | ↓ |
+| `socket-event-emitter-gate` | tout `SERVER_EVENTS` a-t-il un émetteur ? | ↓ |
+| `socket-event-orphan-gate` | … au moins un lecteur client ? | ↓ |
+| `socket-event-platform-parity-gate` | lequel des trois ne le lit pas ? | ↓ |
+| `socket-payload-dead-field-gate` | un champ déclaré que le miroir ne lit pas | ↓ |
 
-Le `notice` n'était servi que par un refus de la REQUÊTE (`!result.ok`). Un
-travail MIS EN FILE qui échoue ensuite n'avait aucun chemin — alors que la
-passerelle le diffuse sur la room de la conversation en ~1 s
-(`_handleTranscriptionFailed` / `_handleAudioTranslationFailed`), et qu'iOS
-(`MessageSocketRoutes+Media`) comme Android (`TranslationFailureApplier` +
-`TranscriptionRequestTracker`) le lisent depuis toujours.
+**Les cinq regardent en bas.** Le `CLAUDE.md` de `packages/shared` nommait
+pourtant la garde manquante, et disait ce qui l'empêchait :
 
-Donc, sur le chemin nominal d'un Whisper qui tombe : la puce figée **90
-secondes**, puis rendue à « Transcrire » **sans un mot**, le `notice` dessiné
-pour cette phrase exacte restant nul.
+> « Une déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un
+> garde “tout `CLIENT_EVENTS` a un handler gateway” sans liste d'exemptions. »
 
-### Les deux faits sont DISJOINTS, et c'est la moitié du lot la plus fragile
+L'obstacle était `user:status`, déclaré des deux côtés alors que c'est un
+événement serveur pur — **retiré au cycle 60**. La garde était écrivable depuis,
+et personne ne l'avait écrite.
 
-Il est tentant de lire « le temps réel dit la panne » comme « le plafond de 90 s
-ne sert plus ». C'est l'inverse : le plafond garde le cas où **RIEN** n'arrive
-(socket coupée, traducteur muet), c'est-à-dire précisément le cas où le signal
-ne peut pas venir. Les retirer l'un pour l'autre figerait le bouton pour
-toujours là où il l'était déjà.
+## Pourquoi c'est une classe de défaut, pas une coquetterie
 
-L'attente se lève donc sur **une PREUVE de panne** ou sur **son ABSENCE
-prolongée**, et un témoin garde la seconde moitié en tombant sous la mutation
-qui la retire « puisque le temps réel existe ».
+Un nom de `CLIENT_EVENTS` sans `socket.on` est le défaut symétrique du cycle 75
+(`call:force-leave` : contrat écrit, récepteur iOS complet et testé, aucun
+émetteur serveur). Il est **pire en exploitation** : Socket.IO laisse tomber un
+événement non écouté **sans lever la moindre erreur**. Le contrat affirme que le
+canal existe, un client le croit et l'implémente, l'utilisateur appuie — et rien
+ne part : pas d'ACK, pas de journal, pas de rejet. Un bouton inerte.
 
-### Ce que le contrat a imposé, et qu'il ne faut pas deviner
+## La mesure, et le premier instrument qu'il a fallu jeter
 
-`audio:translation-failed` **ne nomme aucune langue cible**, et ce n'est pas un
-oubli de déclaration : son producteur n'en reçoit pas
-(`MessageTranslationService` § `audioTranslationError` — la tâche audio traite
-toutes les cibles d'un bloc, l'échec porte sur la PIÈCE). La panne s'écrit donc
-par ÉTAGE (`transcription`, `translations` au PLURIEL), jamais par langue, et une
-panne de traduction lève **toutes** les langues en attente de cette pièce.
+Premier balayage : **21 noms** sans mention passerelle, dont 20 en `call:*`.
+Vingt sur vingt-un dans la même famille ne ressemble pas à vingt lacunes — c'est
+la signature d'un idiome non reconnu (leçon du cycle 107 : *un balayage qui
+cherche UN idiome mesure sa popularité*). Vérification : la passerelle épelle
+`CALL_EVENTS.INITIATE`, jamais `CLIENT_EVENTS.CALL_INITIATE`, parce que
+**`CALL_EVENTS` est une seconde carte de noms de fil**, dans
+`types/video-call.ts`. L'instrument était faux, et il portait aussi
+`user:status` — capté par une capture de bloc trop large sur `SERVER_EVENTS`.
 
-Élargir le contrat pour nommer la langue aurait été la forme « naturelle ». Elle
-n'a pas été prise : la valeur n'existe pas en amont, et la fabriquer à l'émetteur
-serait inventer une attribution que le pipeline ne possède pas. Même arbitrage
-que le cycle 128 — on ne fait pas porter à un événement une précision que son
-producteur n'a jamais eue.
+Deuxième balayage, sur la résolution de jeton que `socket-event-emitter-gate`
+avait déjà écrite pour cette exacte raison : **66 noms de `CLIENT_EVENTS`,
+61 nommés par `services/gateway/src`, 5 jamais.**
 
-### La garde de forme n'exige PAS `error`, et le témoin le dit
+| nom | déclaré | émetteur client | `socket.on` |
+|---|---|---|---|
+| `call:audio-chunk` | `CLIENT_EVENTS` + `ClientToServerEvents` | aucun | aucun |
+| `call:transcription-capability` | idem (+ `CALL_EVENTS`) | aucun | aucun |
+| `call:transcription-role` | idem (+ `CALL_EVENTS`) | aucun | aucun |
+| `call:translation-request` | idem | aucun | aucun |
+| `call:translation-response` | idem | aucun | aucun |
 
-`error` est déclaré requis au contrat. La garde ne le réclame pas, parce que le
-lecteur rend **sa propre phrase, traduite** — refuser la trame pour un champ
-qu'on n'affiche pas ferait perdre la seule preuve de panne dont le lecteur
-dispose. Fail-closed sur ce qui ADRESSE (conversation, message, pièce),
-fail-open sur ce qui DÉCORE : c'est l'arbitrage du dépôt sur une LIVRAISON de
-signal, et il est écrit sur place pour qu'il se lise comme une décision.
+Vérifiés nom par nom sur `packages`, `services`, `apps`, `packages/MeeshySDK`,
+en TS, Swift et Kotlin : **zéro citation hors des déclarations de `shared`**.
+Ce sont les restes d'une conception abandonnée — morceaux audio poussés au
+serveur, négociation de capacité et de rôle, traduction en requête/réponse. Le
+chemin vivant est tout autre : le client émet `call:transcription-segment`, la
+passerelle relaie `call:translated-segment` **par destinataire**. Et sa moitié
+descendante, `call:translation-requested`, était **déjà inventoriée** par
+l'orphan gate comme « ni émis ni lu — dette de contrat » : ces cinq-ci sont la
+moitié montante de la même dette, et aucun cliquet ne la voyait.
 
-### Preuves
+## Le second trou, celui qui est structurel
+
+`CALL_EVENTS` n'est pas seulement une carte de plus : c'est **celle que la
+passerelle importe**. Les cinq cliquets énumèrent `SERVER_EVENTS` /
+`CLIENT_EVENTS`. Mesuré : **3 noms ne vivent que dans `CALL_EVENTS`** —
+`call:transcription`, `call:translation`, `call:mode-changed` — donc hors de
+portée de toutes les gardes. Les deux premiers ne sont cités nulle part, et
+aucun doc-comment ne le dit.
+
+> **Une garde qui énumère une carte garde cette carte, pas le fil.** Dès qu'un
+> second registre déclare les mêmes noms, un nom ajouté à l'un et pas à l'autre
+> échappe à tout — et c'est le registre que le CODE importe qui gagne, pas celui
+> que la garde lit.
+
+La quatrième assertion du cliquet neuf tient donc `CALL_EVENTS` dans la portée :
+tout nom qu'il déclare est aussi au contrat socketio, ou nommé à l'inventaire.
+
+## Le refactor qui porte la garde
+
+`isNamedByGateway` et son scan vivent désormais dans
+`socket-payload-shape/gateway-event-names.ts`, et `socket-event-emitter-gate`
+le CONSOMME. Sans cela, la direction montante aurait relevé une seconde fois le
+fait que la descendante relevait déjà — la forme que ce dépôt a payée plusieurs
+fois, et que le cycle 161 avait soldée en faisant de `eventsNamedByClients`
+l'union de `eventsNamedByPlatform`.
+
+## Ce que l'inventaire porte, et ce qu'il ne porte pas
+
+Il NOMME chacun des 5 + 3 et porte une raison par FAMILLE. Il ne porte **aucun
+verdict** : écrire l'écouteur, retirer la déclaration ou ressusciter la
+conception appartient au produit — même partage que #18342, et la même raison
+qu'au cycle 161 : 8 issues de nettoyage substitueraient mon verdict au sien sur
+8 décisions distinctes, dont `call:mode-changed` qui porte déjà sa condition de
+retrait (abandon FORMEL du mode SFU).
+
+## Deux dimensions mesurées MÛRES, et c'est un résultat
+
+Deux balayages lancés dans le même cycle n'ont rien trouvé, et il faut le dire
+plutôt que de les taire :
+
+- **limitation de débit des canaux montants** : 88 `socket.on` dans la
+  passerelle ; les seuls fichiers qui n'en mentionnent aucune sont
+  `guestLinkWatch.ts` et `tokenExpiryWatch.ts`, et ils n'écoutent que
+  `disconnect` — qui n'est pas déclenchable en rafale par un client. Aucune
+  surface de déni de service ouverte.
+- **frontière de typage** : 62 noms résolus en `socket.on`, **0** absent de
+  `ClientToServerEvents`. Aucune charge montante n'arrive non typée.
+
+## Preuves
 
 | preuve | résultat |
 |---|---|
-| magasin + puits, 19 témoins | verts ; charge recopiée clé par clé depuis `MeeshySocketIOManager` |
-| **surface** (« ces deux noms sont-ils ÉCOUTÉS ? »), 3 témoins | verts ; **2 tombent** quand on retire les `socket.on` |
-| lecteur, 5 témoins | verts ; **3 tombent** en figeant le verdict du temps réel |
-| la disjonction (le plafond survit au puits) | **tombe** sous SA mutation, celle qui retire le plafond |
-| `src/lib/api` + `src/lib/view` | 643 fichiers, **8 482 témoins** verts |
-| `packages/shared/__tests__/ci/` | 22 fichiers, 189 témoins |
-| `tsc --noEmit` web et shared | EXIT=0 |
-
-**Le témoin de surface n'est pas décoratif, et il faut dire pourquoi** : le
-magasin et le puits resteraient verts si personne ne les branchait — soit
-exactement la panne qu'on répare, une couche plus bas. C'est la forme du
-cycle 104 (une émission sous un nom `undefined` dont le témoin n'assertait que la
-room), et la réponse est la même : partir de la CONSTANTE de contrat, et
-traverser le site d'abonnement réel.
-
-### Une mesure à dire, parce qu'elle limite la portée du cliquet
-
-**`socket-event-platform-parity-gate` reste VERT si l'on retire le câblage de
-production.** Son balayage compte les CITATIONS, et les témoins neufs citent les
-deux constantes — un fichier de test est une source comme une autre sous la
-racine web. C'est la limite ÉCRITE de son doc-comment (« *cite* et non
-*écoute* ; un nom cité sans être branché resterait invisible ici — c'est une
-limite, pas un silence »), donc pas une découverte de ce lot ; mais elle devient
-PORTANTE dès qu'on se sert du cliquet pour arbitrer un portage. Ce qui prouve le
-branchement est le témoin de surface, pas le cliquet.
-
----
-
-## Lot B — la jumelle que personne ne collectait (#18115)
-
-Dernier suivi ouvert du cycle 161, et le dernier des quatre pièges du cliquet des
-champs morts.
-
-Deux classes Kotlin décodaient le MÊME `message:attachment-updated`, par deux
-routes installées en parallèle :
-
-| miroir | forme | consommateur |
-|---|---|---|
-| `MessageAttachmentUpdatedEvent` | indulgente — la pièce entière, sérialiseur tolérant | **vivant** (`MessageDeltaApplier`) |
-| `AttachmentUpdatedEvent` | plate — `status` / `url` / `thumbnailUrl` | **aucun** |
-
-La plate exposait un `SharedFlow` **public et nommé** — tous les signes d'un
-chemin vivant — que rien ne collectait. Un décodage par trame, pour personne, et
-une jumelle divergente que le dépôt interdit (dimension 11). **Les deux moitiés
-avaient déjà divergé** : c'est la plate qui portait le piège `attachmentId`
-requis réparé par #18070, pendant que l'autre le déclarait correctement nullable
-depuis #11264.
-
-### Ce qui aurait été perdu avec le code mort
-
-Le témoin de #18070 — « une trame qui ne nomme AUCUNE pièce décode » — ne vivait
-que sur la jumelle morte. Le miroir vivant couvrait « pas d'`attachmentId` mais
-une pièce jointe » (repli sur `attachment.id`), **pas** « ni l'un ni l'autre ».
-La garde est donc PORTÉE avant le retrait, avec sa raison écrite sur place.
-
-> **Retirer du code mort retire aussi les gardes qui ne vivaient que là.** La
-> question à poser n'est pas « qui lit ce code ? » mais « qu'est-ce que ses
-> TÉMOINS sont les seuls à tenir ? ».
-
-### Et le contrat partagé nommait ce consommateur
-
-`AttachmentUpdatedEventData.attachmentId` portait, comme raison d'être :
-« le décodeur Android natif (`AttachmentUpdatedEvent`) l'exige et rejetait
-l'événement entier sans lui ». Vrai quand c'était écrit ; faux depuis #18070, et
-sans objet depuis ce lot.
-
-> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation** (règle du
-> cycle 114), et celle-ci a survécu à la disparition de ce qu'elle décrivait —
-> deux fois : d'abord à la levée de l'exigence, puis au retrait du décodeur.
-> C'est la forme la plus discrète du genre, parce qu'elle justifie un champ qui
-> reste parfaitement légitime : il n'y a aucun symptôme à chercher.
-
-### Preuves
-
-| preuve | résultat |
-|---|---|
-| `DIVERGENCES_CONNUES` | **VIDE**, et son doc-comment dit que c'est un état à DÉFENDRE |
-| `socket-payload-shape-gate` | vert, ≥ 100 routes balayées |
-| `socket-payload-dead-field-gate` · `orphan-gate` · `platform-parity-gate` | verts |
-| `packages/shared/__tests__/ci/` | 22 fichiers, 189 témoins |
-| `jvm-check` / `assembleDebug` | **injoignables depuis ce conteneur** — Maven Central `429`, `build-artifacts.signal.org` `403` (deux tentatives). Prouvé par la CI `android.yml`. |
-
----
+| `socket-event-handler-gate` | 9/9 |
+| ROUGE, sens 1 — entrée retirée de l'inventaire | « names every declared client event, or inventories it » |
+| ROUGE, sens 2 — canal VIVANT (`message:send`) inventorié | « keeps the inventory free of channels the gateway now listens to » |
+| ROUGE, typo (`call:audio-chunkk`) | les DEUX témoins concernés |
+| ROUGE, `call:mode-changed` retiré de `HORS_CONTRAT` | « declares every call wire name in the socketio contract » |
+| ROUGE, `call:ended` inventorié hors contrat | « keeps the inventory free of names the contract has since adopted » |
+| `socket-event-emitter-gate` sous le refactor | 5/5, inchangé |
+| `packages/shared/__tests__/ci/` | 23 fichiers, 198 témoins (22 / 189 avant) |
+| `tsc --noEmit` shared | EXIT=0 |
 
 ## Suivi ouvert
 
 | # | ce que c'est | état |
 |---|---|---|
-| #18537 | la panne d'un traitement média, dite au lecteur web | **fermé** par le lot A |
-| #18115 | la jumelle Kotlin morte de `message:attachment-updated` | **fermé** par le lot B |
-| #18456 | le consommateur **iOS** du `userId` d'`AttachmentReactionUpdateEvent` | ouvert — demande Xcode |
-| — | les 27 asymétries `absents: ['web']` restantes | l'inventaire tient ; chacune est une question, pas un portage dû |
-
-**Les deux cliquets d'inventaire du dépôt sont désormais VIDES en même temps**
-(`DIVERGENCES_CONNUES` et, depuis le cycle 94, `FROZEN_INVENTORY`). C'est un état
-à défendre : quand l'un tombe, la réparation est le correctif, jamais une ligne
-d'inventaire.
+| #18499 | les 5 canaux montants sourds + les 3 noms hors contrat | **inventoriés** ; le verdict de produit reste à rendre |
+| #18342 | la jumelle descendante (6 événements qu'aucun client ne déclare) | ouverte |
+| #18115 | les trois champs morts de `AttachmentUpdatedEvent` | ouverte |
+| #18456 | le consommateur iOS de `AttachmentReactionUpdateEvent.userId` | ouverte — demande Xcode |

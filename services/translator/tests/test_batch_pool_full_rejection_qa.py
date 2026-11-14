@@ -191,7 +191,7 @@ async def test_handler_accepts_a_pool_without_set_rejection_handler():
 
 
 @pytest.mark.unit
-async def test_pool_full_error_json_is_byte_identical_to_the_previous_shape():
+async def test_pool_full_error_json_keeps_the_previous_shape_and_appends_its_code():
     pub_socket = AsyncMock()
     handler = _handler(object(), pub_socket)
     task = _task("t1", conv_id="conv-9")
@@ -202,6 +202,7 @@ async def test_pool_full_error_json_is_byte_identical_to_the_previous_shape():
         'messageId': task.message_id,
         'error': 'translation pool full',
         'conversationId': task.conversation_id,
+        'errorCode': 'TRANSLATION_POOL_FULL',
     }).encode('utf-8')
     assert pub_socket.send.call_args.args[0] == previous
 

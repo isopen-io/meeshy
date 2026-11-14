@@ -84,6 +84,7 @@ def _pool_full(task_id: str) -> dict:
         "messageId": "msg-1",
         "error": "translation pool full",
         "conversationId": "c1",
+        "errorCode": "TRANSLATION_POOL_FULL",
     }
 
 
