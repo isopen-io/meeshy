@@ -36,7 +36,7 @@ struct CirclesTab: View {
             } else if viewModel.visibleLinks.isEmpty, viewModel.isOffline {
                 emptyState(
                     icon: "wifi.slash",
-                    title: String(localized: "circles.offline.empty", defaultValue: "Hors ligne — tes cercles s'afficheront dès le retour du réseau", bundle: .main),
+                    title: String(localized: "circles.offline.banner", defaultValue: "Hors ligne", bundle: .main),
                     actionTitle: nil,
                     action: {}
                 )

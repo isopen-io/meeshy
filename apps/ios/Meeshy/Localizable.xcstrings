@@ -7664,53 +7664,6 @@
         }
       }
     },
-    "circles.offline.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "غير متصل — ستظهر دوائرك عند عودة الشبكة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Offline – deine Kreise erscheinen, sobald du wieder Netz hast"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Offline — your circles will appear when you're back online"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sin conexión: tus círculos aparecerán al volver la red"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hors ligne — tes cercles s'afficheront dès le retour du réseau"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Offline: i tuoi cerchi appariranno al ritorno della rete"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Offline — seus círculos aparecerão quando a rede voltar"
-          }
-        }
-      }
-    },
     "circles.pending": {
       "extractionState": "manual",
       "localizations": {
@@ -149359,53 +149312,6 @@
         }
       }
     },
-    "new_conversation.contacts.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ابحث عن مستخدم لبدء محادثة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suche nach einer Person, um eine Unterhaltung zu beginnen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search for a user to start a conversation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Busca un usuario para iniciar una conversación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherchez un utilisateur pour démarrer une conversation."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerca un utente per iniziare una conversazione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Busque um usuário para iniciar uma conversa."
-          }
-        }
-      }
-    },
     "new_conversation.contacts.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -188536,6 +188442,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mantenha uma mensagem pressionada e escolha “Adicionar aos favoritos”."
+          }
+        }
+      }
+    },
+    "starred.messages.empty.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف أضيف رسالة إلى المفضّلة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie füge ich eine Nachricht zu den Favoriten hinzu?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How do I add a message to favourites?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo añado un mensaje a favoritos?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment ajouter un message aux favoris ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come aggiungo un messaggio ai preferiti?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como adicionar uma mensagem aos favoritos?"
           }
         }
       }

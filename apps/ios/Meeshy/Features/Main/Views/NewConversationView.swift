@@ -543,11 +543,6 @@ struct NewConversationView: View {
             Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
-
-            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour démarrer une conversation.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, MeeshySpacing.xxxl)
