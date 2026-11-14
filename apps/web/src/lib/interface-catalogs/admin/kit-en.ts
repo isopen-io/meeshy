@@ -6,7 +6,6 @@ const f = {
   'admin.kit.info.setting': 'What does this setting change?',
   'admin.kit.info.capability': 'What does this capability allow?',
   'admin.kit.info.blindSpot': 'Why this blind spot?',
-  'admin.kit.info.action': 'What happened?',
   'admin.kit.info.table': 'How to read this table?',
   'admin.kit.info.stat': 'What does this figure measure?',
   'admin.kit.info.edit': 'How do I edit?',

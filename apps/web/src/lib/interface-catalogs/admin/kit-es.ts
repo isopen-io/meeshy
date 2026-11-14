@@ -6,7 +6,6 @@ const f = {
   'admin.kit.info.setting': '¿Qué cambia este ajuste?',
   'admin.kit.info.capability': '¿Qué permite esta capacidad?',
   'admin.kit.info.blindSpot': '¿Por qué este punto ciego?',
-  'admin.kit.info.action': '¿Qué ocurrió?',
   'admin.kit.info.table': '¿Cómo leer esta tabla?',
   'admin.kit.info.stat': '¿Qué mide esta cifra?',
   'admin.kit.info.edit': '¿Cómo editar?',

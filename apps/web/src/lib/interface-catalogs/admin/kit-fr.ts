@@ -9,7 +9,6 @@ const f = {
   'admin.kit.info.setting': 'Que change ce réglage ?',
   'admin.kit.info.capability': 'Que permet cette capacité ?',
   'admin.kit.info.blindSpot': 'Pourquoi cet angle mort ?',
-  'admin.kit.info.action': 'Que s’est-il passé ?',
   'admin.kit.info.table': 'Comment lire ce tableau ?',
   'admin.kit.info.stat': 'Que mesure ce chiffre ?',
   'admin.kit.info.edit': 'Comment modifier ?',
