@@ -40,10 +40,12 @@ const VECTORS: readonly Vector[] = [
 ];
 
 describe('la loi des pastilles de service (miroir de `CallServicePillLaw`, #18227)', () => {
-  test.each(VECTORS.map((vector) => [vector.name, vector] as const))('%s', (_name, vector) => {
-    const pills = callServicePills(vector.signals);
-    expect({ hold: pills.isHoldShown, notice: pills.videoNotice }).toEqual({ hold: vector.hold, notice: vector.notice });
-  });
+  VECTORS.forEach((vector) =>
+    test(vector.name, () => {
+      const pills = callServicePills(vector.signals);
+      expect({ hold: pills.isHoldShown, notice: pills.videoNotice }).toEqual({ hold: vector.hold, notice: vector.notice });
+    }),
+  );
 
   test('les douze vecteurs ont des noms uniques, ceux d’Android', () => {
     expect(VECTORS).toHaveLength(12);
