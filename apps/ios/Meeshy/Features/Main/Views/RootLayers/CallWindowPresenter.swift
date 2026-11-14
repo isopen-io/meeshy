@@ -357,8 +357,7 @@ struct CallReturnPointRoot: View {
     let frameSink: CallReturnPointFrameSink
 
     var body: some View {
-        CallBubbleView(
-            callManager: callManager,
+        CallBubbleView(callManager: callManager,
             isMainScreenCovered: coverage.isMainScreenCovered,
             isInCallConversation: CallReducedPresence.isInCallConversation(
                 visibleConversationId: coverage.visibleConversationId,

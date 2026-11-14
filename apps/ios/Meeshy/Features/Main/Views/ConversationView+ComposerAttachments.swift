@@ -109,9 +109,5 @@ extension ConversationView {
         }
     }
 
-    func labelForAttachment(_ attachment: MessageAttachment) -> String {
-        MediaKindLabel.attachmentLabel(for: attachment)
-    }
-
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, getFileSize, handleCameraCapture, sendMessage
 }
