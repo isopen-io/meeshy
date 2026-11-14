@@ -166,4 +166,13 @@ class FeedEpureStringsContractTest {
             assertWithMessage(folder).that(names(folder)["status_repost_audience_refused"]).doesNotContain("can'")
         }
     }
+
+    @Test
+    fun `the empty Posts filter of a profile says Aucune publication like the feed, never Aucun poste`() {
+        val french = names("values-fr")
+        assertThat(french["profile_posts_empty_posts"]).isEqualTo("Aucune publication")
+        assertThat(french["profile_posts_empty_posts"]).isEqualTo(french["profile_posts_empty"])
+        assertThat(french["profile_posts_empty_posts"]).isEqualTo(french["feed_empty"])
+        assertThat(names("values-it")["profile_posts_empty_posts"]).isEqualTo(names("values-it")["profile_posts_empty"])
+    }
 }
