@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">Atti del giorno: %1$d su %2$d</string>
     <string name="a11y_floating_menu_hint">Apre il menu di navigazione</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notifiche in sospeso</string>
+    <string name="a11y_floating_rung_game_both">La mia Leggenda, Offerta pronta, Fiamma in pericolo</string>
+    <string name="a11y_floating_rung_game_chest_ready">La mia Leggenda, Offerta pronta</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">La mia Leggenda, Fiamma in pericolo</string>
     <string name="a11y_menu_item_hint">Apri questa sezione</string>
     <string name="a11y_state_open">Apri</string>
     <string name="app_name">Meeshy</string>

@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">Today’s acts: %1$d of %2$d</string>
     <string name="a11y_floating_menu_hint">Opens the navigation menu</string>
     <string name="a11y_floating_menu_notifications_value">%1$d pending notifications</string>
+    <string name="a11y_floating_rung_game_both">My Legend, Offering ready, Flame in danger</string>
+    <string name="a11y_floating_rung_game_chest_ready">My Legend, Offering ready</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">My Legend, Flame in danger</string>
     <string name="a11y_menu_item_hint">Open this section</string>
     <string name="a11y_state_open">Open</string>
     <string name="app_name">Meeshy</string>
