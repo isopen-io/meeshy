@@ -35,8 +35,6 @@ struct ProgressionConceptPage: View {
     @State private var reveal: ProgressionRevealRequest?
     /// La section demandée a été atteinte : le regard ne se repose pas à chaque relecture.
     @State private var focused = false
-    /// Le (i) ouvert de « Comment ça marche ? » : un seul à la fois.
-    @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -142,6 +140,8 @@ struct ProgressionConceptContent: View {
 
     /// « Jeu masqué » (#9481) : la fiche se lit alors comme devant un serveur sans jeu.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
+    /// Le (i) ouvert de la fiche — détail chiffré, « Comment ça marche ? », cas particuliers : un seul à la fois.
+    @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var game: GameBlock? { prefs.prefs.hidden ? nil : viewModel.game }
