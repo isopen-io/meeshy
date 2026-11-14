@@ -240,3 +240,117 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileStroke.lineWidth, 2)
     }
 }
+
+/// #17982 (P1.4, G1.2, W1.18, S2.5, P16.8, L1.5) — ma vignette de duo porte la plaque « Vous »,
+/// le composant de plaque du groupe, qui suit la personne montrée, ma vignette rangée et le lecteur
+/// d'écran. #17965 (L2.8) — en paysage, (…) ouvert, elle cède le coin au rail de son bord.
+/// Loi 17.10 — Réduire les animations : un fondu court, jamais une bascule sèche.
+@MainActor
+final class CallSelfTilePlateTests: XCTestCase {
+
+    // MARK: - La plaque suit la personne montrée (loi 4)
+
+    func test_plateTitle_myImageInTheTile_saysYou() {
+        XCTAssertEqual(CallSelfTilePlate.title(showsLocal: true, you: "Vous", peer: "Awa"), "Vous")
+    }
+
+    func test_plateTitle_streamsSwapped_isThePeerName() {
+        XCTAssertEqual(CallSelfTilePlate.title(showsLocal: false, you: "Vous", peer: "Awa"), "Awa")
+    }
+
+    // MARK: - La plaque ne recouvre ni le liseré ni le badge, rangée comme dépliée
+
+    func test_plateInset_clearsTheStroke() {
+        XCTAssertGreaterThan(CallSelfTilePlate.sideInset, CallSelfTileStroke.lineWidth)
+    }
+
+    func test_plateMaxWidth_standardTile_isTheTileLessItsInsets() {
+        XCTAssertEqual(CallSelfTilePlate.maxWidth(tileWidth: 100, stowFactor: 1, reservesBadge: false), 100 - 2 * CallSelfTilePlate.sideInset, accuracy: 0.0001)
+    }
+
+    func test_plateMaxWidth_stowedTile_followsTheVisibleWidth() {
+        let factor = CallSelfTileScale.restingFactor(.x2, isChromeVisible: false)
+        XCTAssertEqual(CallSelfTilePlate.maxWidth(tileWidth: 100, stowFactor: factor, reservesBadge: false), 72 - 2 * CallSelfTilePlate.sideInset, accuracy: 0.0001)
+    }
+
+    func test_plateMaxWidth_peerMutedBadge_leavesItsCorner() {
+        XCTAssertEqual(CallSelfTilePlate.maxWidth(tileWidth: 100, stowFactor: 1, reservesBadge: true), 100 - 2 * CallSelfTilePlate.badgeReserve, accuracy: 0.0001)
+        XCTAssertGreaterThan(CallSelfTilePlate.badgeReserve, CallSelfTilePlate.sideInset)
+    }
+
+    func test_plateMaxWidth_neverNegative() {
+        XCTAssertEqual(CallSelfTilePlate.maxWidth(tileWidth: 20, stowFactor: 1, reservesBadge: true), 0)
+        XCTAssertEqual(CallSelfTilePlate.maxWidth(tileWidth: 100, stowFactor: .nan, reservesBadge: false), 100 - 2 * CallSelfTilePlate.sideInset, accuracy: 0.0001)
+    }
+
+    func test_accessibilityValue_saysWhoThenTheSize() {
+        XCTAssertEqual(CallSelfTilePlate.accessibilityValue(name: "Vous", size: "Vignette moyenne"), "Vous, Vignette moyenne")
+    }
+
+    // MARK: - Loi 17.10 — Réduire les animations : un fondu court
+
+    func test_motion_reduceMotion_isTheShortFadeOfTheChrome() {
+        XCTAssertEqual(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.75, reduceMotion: true), .easeInOut(duration: CallChromeStow.reducedFadeDuration))
+    }
+
+    func test_motion_default_keepsTheSpring() {
+        XCTAssertEqual(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.75, reduceMotion: false), .spring(response: 0.35, dampingFraction: 0.75))
+    }
+
+    // MARK: - #17965 (L2.8) — ma vignette cède le coin au rail
+
+    func test_yields_landscapeWithRails() {
+        XCTAssertTrue(CallRailsLayout.selfTileYieldsToRails(isLandscape: true, railsShown: true))
+    }
+
+    func test_yields_neverInPortrait_norWithoutRails() {
+        XCTAssertFalse(CallRailsLayout.selfTileYieldsToRails(isLandscape: false, railsShown: true))
+        XCTAssertFalse(CallRailsLayout.selfTileYieldsToRails(isLandscape: true, railsShown: false))
+    }
+
+    func test_edgeDistance_yielding_sitsAgainstTheRail_likeTheBoard() {
+        XCTAssertEqual(CallRailsLayout.selfTileEdgeDistance(ownInset: 16, safeHorizontal: 0, yieldsToRails: true), 76)
+        XCTAssertEqual(CallRailsLayout.selfTileEdgeDistance(ownInset: 16, safeHorizontal: 59, yieldsToRails: true), 135)
+    }
+
+    func test_edgeDistance_notYielding_keepsItsCorner() {
+        XCTAssertEqual(CallRailsLayout.selfTileEdgeDistance(ownInset: 16, safeHorizontal: 59, yieldsToRails: false), 16)
+    }
+
+    func test_edgeDistance_yielding_neverComesCloserThanItsOwnInset() {
+        XCTAssertEqual(CallRailsLayout.selfTileEdgeDistance(ownInset: 200, safeHorizontal: 0, yieldsToRails: true), 200)
+    }
+
+    // MARK: - Témoins de source
+
+    private func selfView() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift"))
+    }
+
+    func test_duoTile_wearsTheGroupNameplate_readByVoiceOver() throws {
+        let source = try selfView()
+        let pip = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var pipView: some View", in: source))
+        XCTAssertTrue(pip.contains(".overlay(alignment: .bottom) { selfTileNameplate(tileSize: size) }"), "la plaque au pied de la vignette, comme la planche")
+        XCTAssertTrue(pip.contains(".accessibilityValue(CallSelfTilePlate.accessibilityValue(name: selfTilePlateTitle, size: CallSelfTileCopy.sizeName(selfTileScale)))"), "le lecteur d'écran dit qui est dans la vignette")
+        let plate = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func selfTileNameplate(tileSize: CGSize)", in: source))
+        XCTAssertTrue(plate.contains("CallTileNameplate(title: selfTilePlateTitle)"), "le composant de plaque du groupe, pas un second")
+        XCTAssertTrue(plate.contains("scaleEffect(CallSelfTileScale.counterScaled(1, by: selfTileStowFactor), anchor: .bottom)"), "rangée, la vignette garde une plaque lisible (loi 11)")
+        XCTAssertTrue(plate.contains(".accessibilityHidden(true)"), "la vignette la dit déjà : pas de double lecture")
+        XCTAssertTrue(source.contains("String(localized: \"call.group.tile.you\", defaultValue: \"Vous\", bundle: .main)"), "la clé partagée du groupe, déjà dans les sept langues")
+        XCTAssertTrue(source.contains("CallSelfTilePlate.title(showsLocal: !effectiveSwapStreams"), "la plaque suit la personne montrée, comme le liseré")
+    }
+
+    func test_duoTile_reduceMotion_fadesInsteadOfCutting() throws {
+        let source = try selfView()
+        XCTAssertFalse(source.contains("reduceMotion ? nil"), "plus aucune bascule sèche dans ma vignette")
+        XCTAssertEqual(source.components(separatedBy: "withAnimation(CallSelfTileMotion.spring(").count - 1, 3, "glisser, palier, permutation")
+    }
+
+    func test_duoTile_yieldsToTheRail_inMotion() throws {
+        let source = try selfView()
+        let center = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func pipCenter(_ corner: PiPCorner", in: source))
+        XCTAssertTrue(center.contains("CallRailsLayout.selfTileEdgeDistance("), "les deux bords suivent la loi du rail")
+        XCTAssertTrue(source.contains("CallRailsLayout.selfTileYieldsToRails(isLandscape: CallSelfTileScale.isLandscape(container), railsShown: isChromeVisible && !controlsDisposition.railRows(currentActionSet, layer: layer).isEmpty)"))
+        XCTAssertTrue(source.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: selfTileYieldsToRails(in: geo.size))"), "elle se décale et revient en mouvement ; Réduire les animations : un fondu court")
+    }
+}
