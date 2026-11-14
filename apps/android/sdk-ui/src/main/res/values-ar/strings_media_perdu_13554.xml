@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_media_lost">لم يُرسَل: الوسائط غير موجودة. انقر لإزالتها.</string>
+    <string name="bubble_failed_media_lost">لم يُرسَل: الوسائط غير موجودة على هذا الجهاز. انقر لإزالتها، ثم اخترها من جديد.</string>
 </resources>

@@ -77,10 +77,11 @@ class EpureComposantsPartagesStringsTest {
     }
 
     @Test
-    fun `la bulle non envoyee dit pourquoi en une phrase courte`() {
-        assertThat(text("fr", "bubble_failed_media_lost")).isEqualTo("Non envoyé : média introuvable. Touchez pour le retirer.")
+    fun `la bulle non envoyee dit pourquoi en une phrase courte et ce qu on fait ensuite`() {
+        assertThat(text("fr", "bubble_failed_media_lost"))
+            .isEqualTo("Non envoyé : média introuvable. Touchez pour le retirer, puis rechoisissez-le.")
         assertThat(text("fr", "bubble_failed_location_refused"))
-            .isEqualTo("Non envoyé : lieu du fichier non retirable. Touchez pour retirer le fichier.")
+            .isEqualTo("Non envoyé : lieu du fichier non retirable. Retirez-le, puis prenez-en un autre.")
         assertThat(text("fr", "bubble_failed_attachment_right")).isEqualTo("Ce type de pièce jointe n'est pas autorisé ici.")
     }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_location_refused">Non envoyé : lieu du fichier non retirable. Touchez pour retirer le fichier.</string>
+    <string name="bubble_failed_location_refused">Non envoyé : lieu du fichier non retirable. Retirez-le, puis prenez-en un autre.</string>
     <string name="bubble_failed_location_remove">Retirer ce message non envoyé</string>
 </resources>

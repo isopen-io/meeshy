@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_media_lost">No enviado: archivo no encontrado. Toca para quitarlo.</string>
+    <string name="bubble_failed_media_lost">No enviado: archivo no encontrado en este dispositivo. Toca para quitarlo y vuelve a elegirlo.</string>
 </resources>

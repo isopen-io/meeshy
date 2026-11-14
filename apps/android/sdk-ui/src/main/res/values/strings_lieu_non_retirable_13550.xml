@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_location_refused">Not sent: file location can’t be removed. Tap to remove the file.</string>
+    <string name="bubble_failed_location_refused">Not sent: file location can’t be removed. Tap to remove it, choose another.</string>
     <string name="bubble_failed_location_remove">Remove this unsent message</string>
 </resources>

@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_media_lost">Nicht gesendet: Medium nicht gefunden. Tippe, um es zu entfernen.</string>
+    <string name="bubble_failed_media_lost">Nicht gesendet: Medium auf diesem Gerät nicht gefunden. Tippe zum Entfernen und wähle es erneut.</string>
 </resources>

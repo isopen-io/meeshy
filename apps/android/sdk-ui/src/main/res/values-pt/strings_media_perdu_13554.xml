@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_media_lost">Não enviado: mídia não encontrada. Toque para removê-la.</string>
+    <string name="bubble_failed_media_lost">Não enviado: mídia não encontrada neste aparelho. Toque para removê-la e escolha-a novamente.</string>
 </resources>

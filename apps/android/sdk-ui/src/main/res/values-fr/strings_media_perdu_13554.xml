@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_failed_media_lost">Non envoyé : média introuvable. Touchez pour le retirer.</string>
+    <string name="bubble_failed_media_lost">Non envoyé : média introuvable. Touchez pour le retirer, puis rechoisissez-le.</string>
 </resources>
