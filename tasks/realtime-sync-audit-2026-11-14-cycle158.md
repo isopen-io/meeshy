@@ -32,12 +32,14 @@ sans conflit dit que les TEXTES ne se contredisent pas ; l'absence de
 recouvrement dit que les SUJETS ne se touchent pas. Les deux ensemble valent
 mieux que l'un des deux.
 
-La compilation JVM nue a demandé de reconstruire le harnais du cycle 157 (resté
-hors dépôt) : un projet Gradle `kotlin("jvm")` qui pointe ses `srcDirs` sur
-`core/model`, applique `gradle/call-frames-catalogue.gradle.kts` et résout depuis
-`repo1.maven.org` — `repo.maven.apache.org` a rendu **429** trois fois, et
-`-Pkotlin.daemon.jvmargs=-Xmx6g` (propriété **Gradle**, pas système) évite l'ICE
-sur les 2 179 sources de test.
+Pour cette compilation, j'ai reconstruit à la main un harnais Gradle
+`kotlin("jvm")` — **et c'était une erreur : il existe**
+(`./apps/android/meeshy.sh jvm-check`, voir plus bas « Ce que ce cycle a appris
+sur son propre outillage »). Deux choses apprises en chemin restent vraies quel
+que soit le harnais : `repo.maven.apache.org` rend **429** sous ce proxy là où
+`repo1.maven.org` répond, et `kotlin.daemon.jvmargs` se passe en propriété
+**Gradle** (`-P`), pas système (`-D`), faute de quoi le compilateur tombe sur un
+ICE qui ressemble à un manque de mémoire.
 
 ---
 
@@ -277,6 +279,53 @@ Leçon : `tasks/lessons/2026-11-14-le-claude-md-du-repertoire-dit-l-outil-que-la
 
 ---
 
+## Lot H — #18159 : sept pièges armés retirés, et deux témoins qui attestaient une forme inexistante
+
+Sept champs déclarés par un miroir Kotlin et portés par **aucun** événement du
+contrat. Ils valaient toujours `null` ou `0` ; le jour où une branche s'y
+adosse, elle ne s'exécute jamais, et rien ne rougit — c'est mot pour mot
+l'histoire de #18124.
+
+Retirés : `ConversationDeletedSocketEvent.deletedAt`,
+`ConversationClosedSocketEvent.reason`, `SocketPostDeletedData.deletedAt`,
+`SocketStoryViewedData.viewedAt`, `UnreadUpdateEvent.totalUnread`,
+`ReactionUpdateEvent.count`, `FriendRequestRejectedEvent.senderId`. Leurs
+entrées **sortent** de l'inventaire de la garde — c'est son second sens qui
+l'exige.
+
+### Ce que le compilateur a trouvé et que le balayage ne pouvait pas voir
+
+Un `grep` sur « qui LIT ce champ ? » rend zéro. `./apps/android/meeshy.sh
+jvm-check` a rendu **trois sites** de plus, tous dans des TÉMOINS — et deux
+d'entre eux attestaient une forme que **personne n'émet** :
+
+| témoin | ce qu'il affirmait | ce que la passerelle sert |
+|---|---|---|
+| `une fermeture porte sa raison quand la passerelle la sert` | un `reason` sur `conversation:closed` | `{ conversationId, closedBy, closedAt }` — `announceConversationClosed.ts` |
+| `SocketPayloadWireContractTest` | un `count` sur `reaction:added` | `{ …, aggregation, timestamp }` — `ReactionService.createUpdateEvent` |
+
+Le second est le plus parlant : c'est le fichier dont le doc-comment EXIGE une
+charge « copiée clé par clé de l'émetteur », et dont le lot du cycle 157 disait
+qu'il tenait « la moitié que les témoins Android ne tenaient pas ».
+
+> **Un témoin de contrat de fil qui INVENTE sa charge atteste une forme que
+> personne ne sert.** La règle était écrite en tête du fichier ; la charge, dix
+> lignes plus bas, ne la suivait pas. Une charge de témoin se copie depuis
+> l'émetteur, elle ne se compose pas de mémoire.
+
+Les deux sont réécrits sur ce que le fil porte vraiment, et gardent ce qui
+comptait : la tolérance aux clés en trop.
+
+### Ce qui reste de #18159
+
+`MessageDeletedEvent.deletedAt` est **lu** (`MessageRealtimeApplier`, avec
+`?: now`), donc le retirer demande de toucher `sdk-core`, qu'aucun outil local
+ne compile — et la branche défendable est l'autre : une suppression a une heure
+SERVEUR, que le contrat ne sert à personne (iOS et le web ont le même trou).
+C'est un lot d'émetteur + contrat + trois miroirs, pas un retrait.
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
@@ -302,4 +351,5 @@ rougira le jour où on l'en sortira** — et il attend une session avec Xcode.
 | #18123 | les deux idiomes de routage Kotlin non vus | **fermée** par ce lot (110 → 125 des 176) |
 | #18269 | le miroir Swift gardé dans un seul sens | **fermée** par ce lot |
 | #18252 | les deux rouges Android de `dev` | **fermée** par ce lot |
-| #18159, #18124, #18115 | les pièges armés du cycle 157 | ouvertes |
+| #18159 | les neuf pièges armés | **sept retirés** ; reste `MessageDeletedEvent.deletedAt`, qui demande un lot d'émetteur |
+| #18124, #18115 | les pièges armés du cycle 157 | ouvertes |

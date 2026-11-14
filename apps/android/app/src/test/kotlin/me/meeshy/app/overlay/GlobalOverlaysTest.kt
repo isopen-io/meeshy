@@ -68,7 +68,9 @@ class GlobalOverlaysTest {
         compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithTag(MeeshyA11yId.TOAST_CONTAINER).assertIsDisplayed()
 
-        toasts.show("Annuler", FeedbackToastKind.INFO) { tapped += 1 }
+        /* `onTap` NOMMÉ : `show(message, kind, onTap, info)` a reçu un quatrième paramètre, et une
+           lambda en position finale se lie au DERNIER — ici `info: FeedbackToastInfo?`, pas l'action. */
+        toasts.show("Annuler", FeedbackToastKind.INFO, onTap = { tapped += 1 })
         compose.mainClock.advanceTimeBy(600)
 
         compose.onNodeWithTag(MeeshyA11yId.TOAST_CONTAINER).performClick()

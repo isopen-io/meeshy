@@ -80,7 +80,6 @@ data class ReactionUpdateEvent(
      */
     val userId: String? = null,
     val emoji: String,
-    val count: Int = 0,
     /** Le `Participant.id` de l'acteur (clé d'auteur d'un tiers) ; absent d'une vieille passerelle. */
     val participantId: String? = null,
     /** L'agrégat servi APRÈS l'action : borne autoritaire du nombre de lignes d'un emoji. */
@@ -106,7 +105,6 @@ data class ReactionEventAggregation(
 data class UnreadUpdateEvent(
     val conversationId: String,
     val unreadCount: Int,
-    val totalUnread: Int = 0,
     /** Le pont ✦ à trois états : absent = non calculé (on garde), `null` = effacer, objet = remplacer. */
     val bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
 )
@@ -499,7 +497,6 @@ data class PresenceSnapshotEvent(
 @Serializable
 data class ConversationDeletedSocketEvent(
     val conversationId: String,
-    val deletedAt: String? = null,
 )
 
 /**
@@ -533,7 +530,6 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
-    val reason: String? = null,
 )
 
 /**
@@ -667,7 +663,6 @@ data class SocketPostUnlikedData(
 @Serializable
 data class SocketPostDeletedData(
     val postId: String,
-    val deletedAt: String? = null,
 )
 
 /**
@@ -777,7 +772,6 @@ data class SocketStoryUpdatedData(
 data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
-    val viewedAt: String? = null,
     /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
     val viewCount: Int? = null,
 )
