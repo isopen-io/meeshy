@@ -100,7 +100,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
             aria-busy={busy}
             {...(action.kind === 'toggle' ? { 'aria-pressed': pack.installed } : {})}
             onClick={onAction}
-            className="min-h-11 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press min-h-11 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={
               primary
                 ? { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }
@@ -110,7 +110,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
             {action.label}
           </button>
         ) : action.kind === 'swap' ? (
-          <button type="button" data-pack-sheet-action="swap" onClick={action.run} className="min-h-11 rounded-full px-5 text-body font-semibold" style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}>
+          <button type="button" data-pack-sheet-action="swap" onClick={action.run} className="btn-press min-h-11 rounded-full px-5 text-body font-semibold" style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}>
             {action.label}
           </button>
         ) : (
@@ -134,7 +134,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
                     data-pack-sheet-item={item.key}
                     aria-label={`${decorItemName(names, item)}${isAnimatedDecor(item) ? ` · ${tp(language, 'packs.preview.animated')}` : ''}`}
                     onClick={() => onOpenItem(index)}
-                    className="grid w-full place-items-center gap-1 rounded-card p-2 text-caption focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className="btn-press grid w-full place-items-center gap-1 rounded-card p-2 text-caption focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{ minHeight: 44, backgroundColor: 'var(--color-ios-fill)', outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
                   >
                     <DecorThumb item={item} accent={accent} scheme={scheme} />
@@ -150,7 +150,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
               <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
                 {tp(language, 'packs.sheet.failed')}
               </p>
-              <button type="button" data-pack-sheet-retry onClick={() => void items.refetch()} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}>
+              <button type="button" data-pack-sheet-retry onClick={() => void items.refetch()} className="btn-press min-h-11 rounded-full px-4 text-body font-semibold" style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}>
                 {t(language, 'packs.retry')}
               </button>
             </div>
