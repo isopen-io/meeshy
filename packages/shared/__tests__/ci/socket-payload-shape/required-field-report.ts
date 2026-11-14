@@ -45,6 +45,18 @@ export const KOTLIN_MIRROR: MirrorIdentity = {
     "l'événement n'arrive jamais et rien ne rougit.",
 };
 
+/**
+ * Le parseur écrit à la main ne lève pas : il rend `null`, et l'appelant écarte l'événement. Même
+ * panne, autre mécanisme — et le DIRE compte, parce qu'un lecteur qui cherche un
+ * `MissingFieldException` dans un fichier qui n'en produit aucun conclut que la garde se trompe.
+ */
+export const KOTLIN_MANUAL_PARSER_MIRROR: MirrorIdentity = {
+  platform: 'Android',
+  symptom:
+    'Une charge sans cette clé fait rendre `null` au parseur, et la route écarte la trame : ' +
+    "l'événement n'arrive jamais et rien ne rougit.",
+};
+
 export const SWIFT_MIRROR: MirrorIdentity = {
   platform: 'iOS',
   symptom:
