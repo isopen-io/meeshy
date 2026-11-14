@@ -444,15 +444,17 @@ final class CallTopBannerSpanTests: XCTestCase {
     }
 
     /// R1.2 — la puce porte le verre teinté rouge du kit, celui du bandeau de partage : plus
-    /// d'aplat rouge. L'anneau blanc puis la phrase, aucun bouton, 44 pt de haut, une seule
-    /// annonce pour VoiceOver.
+    /// d'aplat rouge. L'atome du kit directement (`meeshyGlass`, ton `theme`), que le cliquet
+    /// `kit-glass-call` ne compte pas. L'anneau blanc puis la phrase, aucun bouton, 44 pt de
+    /// haut, une seule annonce pour VoiceOver.
     func test_captureChip_wearsTheKitRedTintedGlass_likeTheShareBanner() throws {
         let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
         let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func capsule(_ text: String) -> some View", in: views))
         XCTAssertTrue(
-            capsule.contains(".adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: false)"),
-            "le verre teinté rouge du kit, comme « Vous partagez votre écran »"
+            capsule.contains(".meeshyGlass(in: Capsule(), tone: .theme, tint: MeeshyColors.error.opacity(MeeshyOpacity.medium))"),
+            "le verre teinté rouge du kit, la recette même de « Vous partagez votre écran » (adaptiveLiquidGlass y renvoie)"
         )
+        XCTAssertFalse(capsule.contains("isInteractive: true"), "rien à toucher : un verre au repos")
         XCTAssertFalse(capsule.contains(".background(MeeshyColors.error"), "plus d'aplat rouge")
         XCTAssertFalse(capsule.contains("Button("), "la puce n'a aucun bouton")
         XCTAssertTrue(capsule.contains(".stroke(Color.white, lineWidth: MeeshyBorder.strong)"), "l'anneau blanc reste")
