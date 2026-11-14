@@ -1173,3 +1173,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   commit précédent, même code du lot).
 - Fusionnée dans `dev` (41ba0a2a5). #18467 et #18205 fermées.
 - Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée.
+
+## 2026-11-14 — réveil de fin de soirée : un retrait fait sur un appareil vaut pour tous les appareils du compte (#18389)
+
+- Reprise : aucune PR cercles ouverte ; #18520 fusionnée. Lot réservé (en cours).
