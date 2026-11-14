@@ -88,6 +88,12 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.together.minimumLevel
     }
 
+    /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
+    /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
+    var offersSharedLocation: Bool {
+        max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.locationTemporary.minimumLevel
+    }
+
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 
