@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -254,17 +255,23 @@ internal fun CallConnectedColumn(
         val stageMaxHeight = maxHeight
         val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
         val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
+        // P11.1 : en groupe, sur la grille, la scène part du haut de la zone sûre et l'en-tête flotte sur sa première rangée ;
+        // à la une, en hauteur compacte (L4.2) ou sous une pile (L4.11), elle reste sous la rangée de l'en-tête. En duo, rien
+        // ne change.
+        val columnTop = if (groupStage != null) 0.dp else MeeshySpacing.xl
         Column(
-            modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
+            modifier = Modifier.matchParentSize().padding(start = MeeshySpacing.xl, end = MeeshySpacing.xl, bottom = MeeshySpacing.xl, top = columnTop),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             val gridClearance = LocalCallGroupGridClearance.current.takeIf { groupStage != null }
-            CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = gridClearance)
+            // P11.1 : en groupe, la réserve est le haut entier de la scène (CallTopBannerStack.groupStageTopDp).
+            CallGroupStageTopReserve(base = if (gridClearance != null) 0.dp else MeeshySpacing.xl, clearance = gridClearance)
 
             if (groupStage != null && gridClearance != null) {
+                SideEffect { gridClearance.isCompactHeight = isCompactHeight }
                 groupStage(
-                    Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance),
+                    Modifier.weight(1f).fillMaxWidth().padding(bottom = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance),
                     isCompactHeight,
                 )
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
@@ -373,11 +380,12 @@ internal fun CallConnectedColumn(
 }
 
 /**
- * L4.11 — la réserve haute de la scène : la marge fixe d'avant, plus, en groupe, la place que la pile des bandeaux prend sous
- * l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que la grille lui cède sa place au
- * lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
- * qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne se recompose ni la colonne ne se remesure à
- * chaque image. En duo ([clearance] nul), la pile ne pousse rien.
+ * P11.1 · L4.11 — la réserve haute de la scène : en duo la marge fixe d'avant ; en groupe, le haut entier de la scène depuis la
+ * zone sûre ([CallTopBannerStack.groupStageTopDp] : rien quand l'en-tête flotte sur la grille, la rangée d'en-tête sinon), plus
+ * la place que la pile des bandeaux prend sous l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct
+ * compris), pour que la grille lui cède sa place au lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page
+ * ([CallGroupGridClearance.layout]), qui ne change qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne
+ * se recompose ni la colonne ne se remesure à chaque image. En duo ([clearance] nul), la pile ne pousse rien.
  */
 @Composable
 private fun CallGroupStageTopReserve(base: Dp, clearance: CallGroupGridClearance?) {
