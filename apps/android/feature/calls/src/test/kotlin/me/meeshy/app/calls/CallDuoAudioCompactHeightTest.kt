@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -18,7 +16,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
@@ -40,6 +38,7 @@ import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallTranscriptionActive
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -91,13 +90,13 @@ class CallDuoAudioCompactHeightTest {
         return CallCaptionsViewModel(controller)
     }
 
-    private fun showDuoAudio(journalOpen: Boolean) {
+    private fun showDuoAudio(journalOpen: Boolean, stageDp: Int? = null) {
         val layer = if (journalOpen) CallScreenLayer.Panel(CallScreenPanel.Journal) else CallScreenLayer.Idle
         val pillText = if (journalOpen) CallPillText.Journal else CallPillText.None
         val captions = captionsViewModel()
         rule.setContent {
             MeeshyTheme {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
+                BoxWithConstraints((if (stageDp == null) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(stageDp.dp)).testTag(STAGE_TAG)) {
                     val stageHeight = maxHeight
                     val isCompactHeight = CallGroupStageSizing.isCompactHeight(stageHeight.value)
                     Column(
@@ -132,7 +131,7 @@ class CallDuoAudioCompactHeightTest {
                                 disposition = CallControlsDisposition.Rails,
                                 rows = emptyList(),
                                 items = emptyMap(),
-                                outputIcon = Icons.Filled.VolumeUp,
+                                outputIcon = MeeshyIcons.VolumeUpFilled,
                                 onToggleMenu = {},
                                 onToggleMute = {},
                                 onOutput = {},
@@ -161,7 +160,7 @@ class CallDuoAudioCompactHeightTest {
 
     private fun assertWholeAndTouchable(button: SemanticsNodeInteraction) {
         button.assertExists()
-        val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+        val root = rule.onNodeWithTag(STAGE_TAG).fetchSemanticsNode().boundsInRoot
         val node = button.fetchSemanticsNode().boundsInRoot
         with(rule.density) {
             assertThat(node.height.toDp().value).isAtLeast(47.5f)
@@ -176,34 +175,34 @@ class CallDuoAudioCompactHeightTest {
     }
 
     @Test
-    @Config(qualifiers = "w568dp-h320dp-land")
+    @Config(qualifiers = WINDOW_568)
     fun `568 x 320, at rest - the pill and its (…) stay whole, the peer in its compact form`() {
-        showDuoAudio(journalOpen = false)
+        showDuoAudio(journalOpen = false, stageDp = 320)
         assertWholePill()
         rule.onNodeWithTag(CALL_COMPACT_AUDIO_HEADER_TAG).assertExists()
         rule.onNodeWithTag(CALL_AUDIO_STAGE_TAG).assertDoesNotExist()
     }
 
     @Test
-    @Config(qualifiers = "w640dp-h360dp-land")
+    @Config(qualifiers = WINDOW_640)
     fun `360 dp, at rest - the pill and its (…) stay whole, the peer in its compact form`() {
-        showDuoAudio(journalOpen = false)
+        showDuoAudio(journalOpen = false, stageDp = 360)
         assertWholePill()
         rule.onNodeWithTag(CALL_COMPACT_AUDIO_HEADER_TAG).assertExists()
     }
 
     @Test
-    @Config(qualifiers = "w568dp-h320dp-land")
+    @Config(qualifiers = WINDOW_568)
     fun `568 x 320, journal open - the whole pill stays in the window and touchable`() {
-        showDuoAudio(journalOpen = true)
+        showDuoAudio(journalOpen = true, stageDp = 320)
         assertWholePill()
         assertWholeAndTouchable(rule.onAllNodesWithText("Transcript").onLast())
     }
 
     @Test
-    @Config(qualifiers = "w640dp-h360dp-land")
+    @Config(qualifiers = WINDOW_640)
     fun `360 dp, journal open - the whole pill stays in the window and touchable`() {
-        showDuoAudio(journalOpen = true)
+        showDuoAudio(journalOpen = true, stageDp = 360)
         assertWholePill()
         assertWholeAndTouchable(rule.onAllNodesWithText("Transcript").onLast())
     }
@@ -215,5 +214,17 @@ class CallDuoAudioCompactHeightTest {
         assertWholePill()
         rule.onNodeWithTag(CALL_AUDIO_STAGE_TAG).assertExists()
         rule.onNodeWithTag(CALL_COMPACT_AUDIO_HEADER_TAG).assertDoesNotExist()
+    }
+
+    private companion object {
+        const val STAGE_TAG = "duo-stage"
+
+        /**
+         * The witness measures the STAGE at the heights of the law (`CallDuoAudioFit`, from 320 dp up, the 568 x 320 of
+         * the web witness): a window of that height under Robolectric loses its system bars (320 dp leaves a 272 dp
+         * stage), so the stage is set at its height inside a window tall enough to hold it.
+         */
+        const val WINDOW_568 = "w568dp-h420dp-land"
+        const val WINDOW_640 = "w640dp-h420dp-land"
     }
 }

@@ -1,22 +1,15 @@
 package me.meeshy.ui.component.bubble
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.sdk.model.BubbleRenderKind
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * One chat message. This is only the entry point and the decision by render kind:
- * - an ephemeral message whose timer elapsed collapses (fade + burn-away scale, iOS `EmptyView`);
+ * - an ephemeral message that dies on screen burns, then collapses ([EphemeralBurnVisibility], iOS `.ephemeralBurn`);
  * - a conversation notice renders centered ([BubbleSystemNoticeView]);
  * - a consumed view-once message shows its "Seen and deleted" tombstone ([BubbleBurnedView]);
  * - everything else (including the "Message deleted" tombstone) is the signed
@@ -58,7 +51,7 @@ public fun MessageBubble(
     // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
     // (visible → the standard layout renders it); a consumed view-once message
     // shows the "Seen and deleted" burned tombstone; an ephemeral message whose timer
-    // elapses collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
+    // dies burns under the reader's eyes, then collapses ([EphemeralBurnVisibility], #18556).
     val renderKind = rememberBubbleRenderKind(
         isDeleted = content.isDeleted,
         expiresAtIso = content.expiresAtIso,
@@ -66,11 +59,11 @@ public fun MessageBubble(
         isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
-    AnimatedVisibility(
+    EphemeralBurnVisibility(
         visible = !renderKind.isEphemeralExpired,
+        isOutgoing = content.isOutgoing,
+        seedKey = content.messageId,
         modifier = modifier,
-        enter = EnterTransition.None,
-        exit = meeshyExit(LocalReduceMotion.current, fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically()),
     ) {
         when {
             // A conversation notice (join/leave/legacy summary) renders as a centered,

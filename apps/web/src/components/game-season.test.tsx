@@ -134,7 +134,8 @@ describe('le Sceau', () => {
     const host = await mount(<GameSeason {...props({ onBuySeal: () => (bought += 1) })} />);
     await click(host.querySelector('[data-game-seal-buy]'));
     expect(bought).toBe(1);
-    expect(host.querySelector('[data-game-seal-buy]')?.textContent).toContain('10 Meeshes');
+    expect(host.querySelector('[data-game-seal-buy]')?.textContent?.trim()).toBe('Prendre le Sceau');
+    expect(text(host.innerHTML)).toContain('Il faut 10 Meeshes');
   });
 
   test('pas assez de Meeshes : le bouton se tait en disant combien il manque', async () => {

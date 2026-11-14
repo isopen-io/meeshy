@@ -48,9 +48,8 @@ extension StoryViewerView {
     /// l'affichage. Dismiss auto au bout de `groupIntroDuration` (500 ms
     /// nominales — le retrait, et l'apparition du slide qui l'accompagne,
     /// s'amorcent 200 ms plus tôt) ; le tap skippe. Le mode preview n'a pas
-    /// d'interstitiel. Le gel de lecture passe par `shouldPauseTimer ||
-    /// showGroupIntro` (timer + canvas + audio gelés en phase, reprise sans
-    /// saut).
+    /// d'interstitiel. Dessous, la story joue déjà, muette, minuteur et canvas
+    /// en phase ; son son entre au retrait du voile (#18509, #18516).
     func presentGroupIntroIfNeeded() {
         // AVANT la garde : l'interlude du groupe QUITTÉ n'a plus lieu d'être, que
         // le groupe atteint en mérite un ou non. Annulée seulement après le
@@ -73,8 +72,10 @@ extension StoryViewerView {
             // rejouer) et c'est l'appelant qui la marquera vue (`markCurrentViewed`
             // juste après ce chemin), jamais celle de l'auteur qu'on a quitté.
             if showGroupIntro { dismissGroupIntro(revealing: false) }
+            liftIdentitySoundVeil()
             return
         }
+        StoryIdentityVeilSound.post(userMuted: isGlobalMuted, changed: groupIntro.veilSound(), veiled: true)
         // Identité COMPLÈTE dès la première frame quand le groupe a été
         // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
         // immédiat (username/avatar du payload) enrichi pendant l'affichage.
@@ -157,5 +158,33 @@ extension StoryViewerView {
         // dans `withAnimation`, on ne dépend donc pas de l'instant où la
         // lecture de `showGroupIntro` se stabilise.
         if revealing { markCurrentViewed(isIntroVisible: false) }
+        liftIdentitySoundVeil()
+    }
+
+    /// Le son de la story entre au retrait du voile (#18516).
+    func liftIdentitySoundVeil() {
+        StoryNavigationTrace.shared?.phase = .lecture
+        StoryIdentityVeilSound.post(userMuted: isGlobalMuted, changed: groupIntro.liftSoundVeil(), veiled: false)
+    }
+}
+
+/// **La story du nouvel auteur joue sous l'interlude, muette** (#18509,
+/// décision du porteur #18516 : l'interlude reste). Le canvas naît muet sous
+/// le voile ; le son entre à son retrait, sauf si l'utilisateur a coupé le son.
+nonisolated enum StoryIdentityVeilSound {
+    static func canvasMuted(userMuted: Bool, veiled: Bool) -> Bool {
+        userMuted || veiled
+    }
+
+    /// La diffusion aux canvas montés quand le voile change ; `nil` : rien.
+    static func broadcast(userMuted: Bool, changed: Bool, veiled: Bool) -> Notification.Name? {
+        guard changed, !userMuted else { return nil }
+        return veiled ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas
+    }
+
+    @MainActor
+    static func post(userMuted: Bool, changed: Bool, veiled: Bool) {
+        guard let name = broadcast(userMuted: userMuted, changed: changed, veiled: veiled) else { return }
+        NotificationCenter.default.post(name: name, object: nil)
     }
 }

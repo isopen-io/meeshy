@@ -152,6 +152,7 @@ public extension MeeshyLog {
         case storyQueueMigrator = "story-queue-migrator"
         case storyTimelineExport = "story-timeline-export"
         case storyInteraction = "story.interaction"
+        case storyNav = "story.nav"
         case stuckPublicationRetry = "stuck-publication-retry"
         case sync
         case testNetworkSeal = "test-network-seal"
