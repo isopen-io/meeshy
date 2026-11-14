@@ -123,13 +123,17 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  EVENT_MAPS_TS,
   MINIMUM_ROUTES,
   SWEPT_EVENTS_AT_LAST_MEASURE,
   isRequired,
   readContract,
   readKotlin,
 } from './socket-payload-shape/mirror-contract';
+import {
+  KOTLIN_MIRROR,
+  describeRequiredFieldFinding,
+  describeUnresolvedRoute,
+} from './socket-payload-shape/required-field-report';
 
 const kotlin = readKotlin();
 const contract = readContract();
@@ -162,10 +166,13 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
   it('résout la constante et la classe de charge de CHAQUE site de routage', () => {
     const unresolved = kotlin.routes
       .filter((route) => route.event === undefined || kotlin.resolveClass(route.className) === undefined)
-      .map(
-        (route) =>
-          `${route.file.replace(`${REPO}/`, '')} — SocketEventNames.${route.constName} ⇒ ` +
-          `${route.event === undefined ? 'constante inconnue' : `classe « ${route.className ?? '?'} » non résolue`}`,
+      .map((route) =>
+        describeUnresolvedRoute({
+          file: route.file,
+          reference: `SocketEventNames.${route.constName}`,
+          reason:
+            route.event === undefined ? 'constante inconnue' : `classe « ${route.className ?? '?'} » non résolue`,
+        }),
       );
     expect(unresolved, unresolved.join('\n')).toEqual([]);
   });
@@ -195,11 +202,14 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
         if (counterpart && !counterpart.optional) continue;
         divergences.set(
           `${route.event}|${required.name}`,
-          `${route.event} — « ${required.name} » est REQUIS par ${route.className} ` +
-            `(${mirror.file.replace(`${REPO}/`, '')}) mais ` +
-            `${counterpart ? 'OPTIONNEL' : 'ABSENT'} au contrat (${EVENT_MAPS_TS}). ` +
-            'Une charge sans cette clé lève `MissingFieldException`, que `SocketInboundRoute.guarded` avale : ' +
-            "l'événement n'arrive jamais et rien ne rougit.",
+          describeRequiredFieldFinding({
+            event: route.event as string,
+            field: required.name,
+            typeName: route.className ?? '?',
+            mirrorFile: mirror.file,
+            presence: counterpart ? 'optional' : 'absent',
+            mirror: KOTLIN_MIRROR,
+          }),
         );
       }
     }
