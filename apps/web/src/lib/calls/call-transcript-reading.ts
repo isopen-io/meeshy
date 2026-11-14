@@ -29,3 +29,16 @@ export function transcriptReading(line: ReadableLine, inverted: boolean): Transc
   const translated: ReadingTrack = { kind: 'translated', text: line.text, language: languageOf(line.language) };
   return inverted ? { primary: original, secondary: translated } : { primary: translated, secondary: original };
 }
+
+/** Les mots qui disent ce que porte la ligne dessous (« Original », « Traduit »), dans la langue de l'interface. */
+export type ReadingWords = Readonly<Record<ReadingKind, string>>;
+
+/**
+ * A1.19 (#18225) — ce que le lecteur d'écran lit d'une phrase, d'un trait et dans l'ordre où l'œil la lit : « nom,
+ * heure : ligne en tête », puis, s'il y en a une, « . Original : … » ou « . Traduit : … ». Miroir d'iOS
+ * (`CallJournalAfterCall.spokenLabel`) et d'Android (`CallTranscriptRowAccessibility.label`), mêmes vecteurs.
+ */
+export function transcriptSpokenLabel({ name, clock, reading, words }: { readonly name: string; readonly clock: string; readonly reading: TranscriptReading; readonly words: ReadingWords }): string {
+  const spoken = `${name}, ${clock} : ${reading.primary.text}`;
+  return reading.secondary === null ? spoken : `${spoken}. ${words[reading.secondary.kind]} : ${reading.secondary.text}`;
+}
