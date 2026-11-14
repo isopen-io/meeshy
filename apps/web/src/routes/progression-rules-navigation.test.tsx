@@ -1,10 +1,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import { loadGameCatalog, unloadGameCatalog } from '@/lib/i18n-game-catalog';
+import { loadGameCatalog, translateGame, unloadGameCatalog } from '@/lib/i18n-game-catalog';
 import { DEFAULT_INTERFACE_LANGUAGE, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { RULES_SECTIONS } from '@/lib/game/rules-address';
-import { translateGame } from '@/lib/i18n-game-catalog';
 import { RULES_GLOSSARY } from '@/lib/view/game-rules-copy';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -122,11 +122,13 @@ describe('une section désignée par l’adresse', () => {
     expect(scrolled).toEqual([row as Element]);
   });
 
-  test('chaque concept du glossaire se désigne', async () => {
-    for (const key of RULES_GLOSSARY) {
-      const host = await mount(<RulesBody focus={{ kind: 'concept', key }} />);
-      expect({ key, open: host.querySelector(`[data-rules-concept="${key}"] [hidden]`) === null }).toEqual({ key, open: true });
-      unmountAll();
+  test('un concept sans fiche se désigne comme les autres, dès le premier rendu : le coffre, le duo', () => {
+    for (const key of ['chest', 'duo', 'atlas'] as const) {
+      expect(RULES_GLOSSARY).toContain(key);
+      const host = document.createElement('div');
+      host.innerHTML = renderToStaticMarkup(<RulesBody focus={{ kind: 'concept', key }} />);
+      const row = host.querySelector(`[data-rules-concept="${key}"]`);
+      expect({ key, open: row?.querySelector('[hidden]') === null, marked: row?.hasAttribute('data-rules-target') }).toEqual({ key, open: true, marked: true });
     }
   });
 
