@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -211,7 +210,7 @@ public fun MeeshyToggleRow(
     haptic: MeeshyToggleRowHaptic = MeeshyToggleRowHaptic.Light,
     icon: ImageVector? = null,
 ) {
-    val iconSlot: (@Composable () -> Unit)? = if (icon == null) null else @Composable { MeeshyToggleRowIcon(icon) }
+    val iconSlot = remember(icon) { icon?.let(::meeshyToggleRowIconSlot) }
     MeeshyToggleRow(
         content = MeeshyToggleRowContent(
             title = title,
@@ -229,6 +228,8 @@ public fun MeeshyToggleRow(
         leading = iconSlot,
     )
 }
+
+private fun meeshyToggleRowIconSlot(icon: ImageVector): @Composable () -> Unit = { MeeshyToggleRowIcon(icon) }
 
 @Composable
 private fun MeeshyToggleRowIcon(icon: ImageVector) {
