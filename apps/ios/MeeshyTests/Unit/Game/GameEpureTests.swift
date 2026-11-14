@@ -240,7 +240,6 @@ final class GameEpureTests: XCTestCase {
         }
         let views = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
         XCTAssertTrue(views.contains("GameNote(text: GameText.leaguePseudonymHintChange)"), "le formulaire de changement lit la règle")
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.league.pseudonym.hint"]?["fr"]).contains("Ni ton nom, ni ton identifiant"))
     }
 
     // MARK: - Le carnet des règles : le glossaire n'est plus une copie des fiches
@@ -794,9 +793,8 @@ final class GameEpureTests: XCTestCase {
 
     func test_lockedDoors_sayTheThresholdAndWhereYouAre_inOneLine_theWhyIsInTheSheet() throws {
         let catalog = try Self.catalog()
-        XCTAssertEqual(catalog["game2.league.locked"]?["fr"], "La joute s’ouvre au niveau %1$@ · tu es au niveau %2$@")
         XCTAssertEqual(catalog["game.missions.locked"]?["fr"], "Le rêve s’ouvre au niveau 5 · tu es au niveau %@.")
-        for key in ["game2.league.locked", "game.missions.locked"] {
+        for key in ["game.missions.locked"] {
             let french = try XCTUnwrap(catalog[key]?["fr"])
             XCTAssertLessThanOrEqual(french.count, 60, key)
             for language in Self.otherLanguages {
@@ -821,8 +819,8 @@ final class GameEpureTests: XCTestCase {
         }
         let league = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
         let what = try XCTUnwrap(league.range(of: "GameNote(text: GameText.leagueLockedWhat)"), "la joute fermée ne dit plus ce qu'est la joute")
-        let threshold = try XCTUnwrap(league.range(of: "GameNote(text: GameText.leagueLocked("))
-        XCTAssertLessThan(what.lowerBound, threshold.lowerBound, "ce qu'est la joute se lit avant son seuil")
+        let chips = try XCTUnwrap(league.range(of: "identifier: \"game.league.requirement\""))
+        XCTAssertLessThan(what.lowerBound, chips.lowerBound, "ce qu'est la joute se lit avant les pastilles de son seuil")
         let missions = try code("Meeshy/Features/Game/GameMissionsView.swift")
         let dream = try XCTUnwrap(missions.range(of: "GameNote(text: GameCopy.missionsLockedWhat)"), "le rêve fermé ne dit plus ce qu'est le rêve")
         let door = try XCTUnwrap(missions.range(of: "GameNote(text: GameCopy.missionsLocked("))
@@ -988,7 +986,11 @@ final class GameEpureTests: XCTestCase {
     private static let shortened: [String: String] = [
         "game2.settings.hidden.reopen_note": "Tes réglages de visibilité restent fermés : rouvre-les ici.",
         "game.constellation.how": "Dix fragments allument une étoile et offrent une parure de profil, sans avantage de jeu.",
-        "game.photo.camera.unsupported": "Caméra indisponible ici. Choisis une photo dans ta galerie, ou garde la carte seule.",
+        "game.photo.camera.unsupported": "Caméra indisponible : choisis une photo, ou garde la carte seule.",
+        "game.photo.camera.denied": "Caméra refusée : autorise-la dans les réglages, ou choisis une photo.",
+        "game2.duo.locked": "L’alliance s’ouvre au niveau %@, pour vous deux.",
+        "game2.prestige.locked": "La Renaissance s’ouvre au niveau 100.",
+        "game.guide.more": "Pourquoi cette carte ?",
         "game2.door.season.none": "Aucun voyage en cours",
     ]
 
@@ -1013,7 +1015,8 @@ final class GameEpureTests: XCTestCase {
 
     private static let formerLength: [String: Int] = [
         "game2.settings.hidden.reopen_note": 54, "game.constellation.how": 95,
-        "game.photo.camera.unsupported": 80, "game2.door.season.none": 30,
+        "game.photo.camera.unsupported": 80, "game2.door.season.none": 30, "game.photo.camera.denied": 98,
+        "game2.duo.locked": 63, "game2.prestige.locked": 59, "game.guide.more": 24,
     ]
 
     func test_cameraUnsupported_isAlignedOnCameraUnavailable_inEveryLanguage() throws {
@@ -1021,12 +1024,64 @@ final class GameEpureTests: XCTestCase {
         let unsupported = try XCTUnwrap(catalog["game.photo.camera.unsupported"])
         let unavailable = try XCTUnwrap(catalog["game.photo.camera.unavailable"])
         XCTAssertTrue(try XCTUnwrap(unsupported["fr"]).hasPrefix("Caméra indisponible"))
-        XCTAssertEqual(try XCTUnwrap(unsupported["fr"]).components(separatedBy: ". ").dropFirst(), try XCTUnwrap(unavailable["fr"]).components(separatedBy: ". ").dropFirst())
+        XCTAssertTrue(try XCTUnwrap(unavailable["fr"]).hasPrefix("Caméra indisponible"))
+        for language in Self.otherLanguages {
+            XCTAssertFalse(try XCTUnwrap(unsupported[language]).isEmpty, language)
+        }
     }
 
     func test_seasonNone_isOneLine_andTheDoorRowStillSaysItsEmptyState() throws {
         let value = try XCTUnwrap(try Self.catalog()["game2.door.season.none"]?["fr"])
         XCTAssertFalse(value.contains("pour le moment"))
         XCTAssertEqual(GameText.doorSeasonNone, "Aucun voyage en cours")
+    }
+
+    // MARK: - Lot 2/3 : les portes fermées ne redisent pas ce que les pastilles disent déjà
+
+    func test_leagueLockedDoor_noLongerRepeatsTheLevelsTheChipsSay_andKeepsWhatTheLeagueIs() throws {
+        let catalog = try Self.catalog()
+        XCTAssertNil(catalog["game2.league.locked"], "supprimée de toutes les langues")
+        XCTAssertNotNil(catalog["game2.league.locked.what"]?["fr"], "le repère de la joute reste au repos")
+        let league = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
+        XCTAssertFalse(league.contains("GameText.leagueLocked("))
+        XCTAssertTrue(league.contains("GameText.leagueLockedWhat"))
+        XCTAssertTrue(league.contains("game.league.requirement"), "les pastilles disent les deux niveaux")
+        XCTAssertFalse(try code("Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift").contains("game2.league.locked\""))
+    }
+
+    func test_duoAndPrestigeLockedDoors_saySingleThreshold_inEveryLanguage_withoutTheCurrentLevel() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(GameText.duoLocked(level: "20"), "L’alliance s’ouvre au niveau 20, pour vous deux.")
+        XCTAssertEqual(GameText.prestigeLocked, "La Renaissance s’ouvre au niveau 100.")
+        for language in Self.otherLanguages {
+            XCTAssertEqual(specifiers(in: try XCTUnwrap(catalog["game2.duo.locked"]?[language], language)).count, 1, "\(language) : un seul niveau")
+            XCTAssertTrue(specifiers(in: try XCTUnwrap(catalog["game2.prestige.locked"]?[language], language)).isEmpty, language)
+        }
+        XCTAssertEqual(specifiers(in: try XCTUnwrap(catalog["game2.duo.locked"]?["fr"])), ["%@"])
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.duo.locked"]?["fr"]).contains("pour vous deux"), "le repère de l'alliance reste")
+        let duo = try code("Meeshy/Features/Game/Wave2/GameDuoViews.swift")
+        XCTAssertFalse(duo.contains("current:"))
+        XCTAssertTrue(duo.contains("game.duo.requirement"))
+    }
+
+    func test_leaguePseudonymHint_deadKeyAndAccessor_areGoneFromEveryLanguage() throws {
+        XCTAssertNil(try Self.catalog()["game2.league.pseudonym.hint"])
+        XCTAssertFalse(try code("Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift").contains("leaguePseudonymHint:"))
+        XCTAssertFalse(try code("Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift").contains("game2.league.pseudonym.hint\""))
+    }
+
+    func test_guideCardInfoButton_isNamedByTheQuestionItAnswers_notByAGenericMore() throws {
+        let catalog = try Self.catalog()
+        XCTAssertEqual(catalog["game.guide.more"]?["fr"], "Pourquoi cette carte ?")
+        let card = try code("Meeshy/Features/Game/GameGuideCardView.swift")
+        XCTAssertTrue(card.contains("\"game.guide.more\", defaultValue: \"Pourquoi cette carte ?\""))
+        XCTAssertTrue(card.contains(".accessibilityIdentifier(\"game.guide.more\")"))
+        XCTAssertTrue(try code("Meeshy/Features/Game/GameHeroView.swift").contains("\"game.guide.more\", defaultValue: \"Pourquoi cette carte ?\""))
+    }
+
+    func test_cameraRefused_isOneLineWithItsTwoExits() throws {
+        let value = try XCTUnwrap(try Self.catalog()["game.photo.camera.denied"]?["fr"])
+        XCTAssertEqual(value, "Caméra refusée : autorise-la dans les réglages, ou choisis une photo.")
+        XCTAssertTrue(value.contains("réglages") && value.contains("choisis une photo"))
     }
 }
