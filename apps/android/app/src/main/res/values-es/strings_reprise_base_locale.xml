@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">Modo degradado</string>
-    <string name="degraded_mode_body">Almacenamiento local no disponible: tus datos están en el servidor, algunos pueden faltar.</string>
+    <string name="degraded_mode_body">Almacenamiento local no disponible: tus datos están a salvo en el servidor; aquí pueden faltar algunos.</string>
     <string name="degraded_mode_retry">Reintentar</string>
     <string name="degraded_mode_export">Exportar informe</string>
 </resources>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">Mode dégradé</string>
-    <string name="degraded_mode_body">Stockage local indisponible : vos données sont sur le serveur, certaines peuvent manquer.</string>
+    <string name="degraded_mode_body">Stockage local indisponible : vos données sont sûres sur le serveur ; certaines peuvent manquer ici.</string>
     <string name="degraded_mode_retry">Réessayer</string>
     <string name="degraded_mode_export">Exporter le rapport</string>
 </resources>

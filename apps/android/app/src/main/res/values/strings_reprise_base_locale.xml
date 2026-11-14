@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">Degraded mode</string>
-    <string name="degraded_mode_body">Local storage unavailable: your data is on the server, some may be missing.</string>
+    <string name="degraded_mode_body">Local storage unavailable: your data is safe on the server; some may be missing on this device.</string>
     <string name="degraded_mode_retry">Retry</string>
     <string name="degraded_mode_export">Export report</string>
 </resources>

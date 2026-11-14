@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">Eingeschränkter Modus</string>
-    <string name="degraded_mode_body">Lokaler Speicher nicht verfügbar: Deine Daten liegen auf dem Server, einige können fehlen.</string>
+    <string name="degraded_mode_body">Lokaler Speicher nicht verfügbar: Deine Daten sind auf dem Server sicher; hier können einige fehlen.</string>
     <string name="degraded_mode_retry">Erneut versuchen</string>
     <string name="degraded_mode_export">Bericht exportieren</string>
 </resources>

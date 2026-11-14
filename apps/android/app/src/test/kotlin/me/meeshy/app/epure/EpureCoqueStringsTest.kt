@@ -65,13 +65,15 @@ class EpureCoqueStringsTest {
         assertThat(text("fr", "gesture_refusal_slow_mode")).isEqualTo("Nouveaux comptes : un message toutes les 30 s. Réessayez dans %1\$d s.")
         assertThat(text("fr", "share_sheet_sign_in_body_reshare")).isEqualTo("Rien n’a été copié : connectez-vous, puis repartagez.")
         assertThat(text("fr", "degraded_mode_body"))
-            .isEqualTo("Stockage local indisponible : vos données sont sur le serveur, certaines peuvent manquer.")
+            .isEqualTo("Stockage local indisponible : vos données sont sûres sur le serveur ; certaines peuvent manquer ici.")
     }
 
     @Test
     fun `la reprise de la base locale garde sa rassurance dans toutes les langues`() {
-        assertThat(text("en", "degraded_mode_body")).contains("server")
-        assertThat(text("fr", "degraded_mode_body")).contains("serveur")
+        assertThat(text("en", "degraded_mode_body")).contains("safe on the server")
+        assertThat(text("en", "degraded_mode_body")).contains("on this device")
+        assertThat(text("fr", "degraded_mode_body")).contains("sûres sur le serveur")
+        assertThat(text("fr", "degraded_mode_body")).contains("manquer ici")
     }
 
     @Test

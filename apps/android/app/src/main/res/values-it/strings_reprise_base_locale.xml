@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">Modalità ridotta</string>
-    <string name="degraded_mode_body">Archivio locale non disponibile: i tuoi dati sono sul server, alcuni potrebbero mancare.</string>
+    <string name="degraded_mode_body">Archivio locale non disponibile: i tuoi dati sono al sicuro sul server; qui alcuni potrebbero mancare.</string>
     <string name="degraded_mode_retry">Riprova</string>
     <string name="degraded_mode_export">Esporta rapporto</string>
 </resources>
