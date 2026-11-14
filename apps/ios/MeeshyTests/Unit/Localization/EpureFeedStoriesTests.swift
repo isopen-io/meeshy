@@ -216,6 +216,7 @@ final class EpureFeedStoriesTests: XCTestCase {
         XCTAssertNotEqual(note.question, note.text)
         let sheet = try code(Self.stories + "StoryExportShareSheet.swift")
         XCTAssertTrue(sheet.contains("MeeshyInfoNoted"))
+        XCTAssertFalse(sheet.contains("EmptyView()"), "le (i) se pose à côté du glyphe, jamais seul dans un bloc vide")
         XCTAssertFalse(sheet.contains("\"story.export.share.subtitle\""), "la vue ne rend plus la phrase au repos : elle passe par la note")
     }
 
