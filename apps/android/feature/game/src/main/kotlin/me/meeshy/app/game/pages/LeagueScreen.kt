@@ -212,12 +212,15 @@ private fun LazyListScope.mineSection(
 }
 
 @Composable
-private fun ConsentCard(state: LeagueUiState, offline: Boolean, onAccept: () -> Unit) {
+internal fun ConsentCard(state: LeagueUiState, offline: Boolean, onAccept: () -> Unit) {
     GameCard(title = stringResource(R.string.game2_league_consent_title)) {
+        GameNoteWithInfo(
+            text = stringResource(R.string.game2_league_consent_shown),
+            question = stringResource(R.string.game2_league_consent_how_question),
+            detail = stringResource(R.string.game2_league_consent_how),
+        )
         listOf(
-            R.string.game2_league_consent_shown,
             R.string.game2_league_consent_who,
-            R.string.game2_league_consent_how,
             R.string.game2_league_consent_risk,
             R.string.game2_league_consent_withdraw_info,
         ).forEach { GameNote(stringResource(it)) }

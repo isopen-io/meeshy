@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">المبارزة</string>
     <string name="game_concept_league_tip_1">العب قليلًا كل يوم: شرارات الأسبوع تتراكم.</string>
     <string name="game_concept_league_tip_2">استهدف المراكز الأولى قبل مساء الأحد.</string>
-    <string name="game_concept_league_use">انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون. كل شيء يبدأ من الصفر كل اثنين. المبارزة العامة تطلب موافقتك؛ أما مبارزة الأصدقاء فتبقى مفتوحة دائمًا.</string>
     <string name="game_concept_league_what">المبارزة ترتيب الأسبوع: ثلاثون بطلًا بنور متقارب يتبارزون فيها بأسماء المبارزة. وهناك ثماني حلقات، من الكوارتز إلى المنشور.</string>
     <string name="game_concept_level_name">النور</string>
     <string name="game_concept_level_tip_1">حقّق حلم كل ليلة: فصوله تُطلق شرارات كثيرة.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">جسّار</string>
     <string name="game_rank_polyglotte">متعدّد اللغات</string>
     <string name="game_rank_voix">صوت</string>
-    <string name="game_rules_1_body">الكتابة والكلام والنشر والتفاعل والدعوة: كل تبادل حقيقي يُطلق شرارات. ويُطلق المنشور شراراته بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تخصّ إجراءاتك، لا شراراتك أبدًا: الزخم واللهب والفعاليات تُطلق المزيد منها مع كل إجراء.</string>
     <string name="game_rules_1_title">كل إجراء يُطلق شرارات</string>
     <string name="game_rules_2_title">الشرارات تصنع نورك</string>
-    <string name="game_rules_3_body" formatted="false">تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك. ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ.</string>
     <string name="game_rules_3_title">نسكّ Meesh</string>
     <string name="game_rules_4_title">السكّ يصوغ من نورك</string>
     <string name="game_rules_5_title">الرتبة لا تتراجع أبدًا</string>

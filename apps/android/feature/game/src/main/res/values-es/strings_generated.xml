@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">La Justa</string>
     <string name="game_concept_league_tip_1">Juega un poco cada día: las chispas de la semana se suman.</string>
     <string name="game_concept_league_tip_2">Apunta a los primeros puestos antes del domingo por la noche.</string>
-    <string name="game_concept_league_use">Mira tu puesto y tu zona: los 7 primeros suben al círculo siguiente, los 5 últimos bajan. Todo vuelve a cero cada lunes. La justa pública pide tu consentimiento; la Justa de los amigos siempre está abierta.</string>
     <string name="game_concept_league_what">La justa es la clasificación de la semana: treinta héroes de luz parecida se miden en ella con su nombre de justa. Hay ocho círculos, del Cuarzo al Prisma.</string>
     <string name="game_concept_level_name">La Luz</string>
     <string name="game_concept_level_tip_1">Haz realidad el sueño de cada noche: sus actos hacen brotar muchas chispas.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Barquero</string>
     <string name="game_rank_polyglotte">Políglota</string>
     <string name="game_rank_voix">Voz</string>
-    <string name="game_rules_1_body">Escribir, hablar, publicar, reaccionar, invitar: cada intercambio de verdad hace brotar chispas. Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto.</string>
     <string name="game_rules_1_title">Cada gesto hace brotar chispas</string>
     <string name="game_rules_2_title">Las chispas forman tu luz</string>
-    <string name="game_rules_3_body" formatted="false">Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.</string>
     <string name="game_rules_3_title">Se acuñan Meeshes</string>
     <string name="game_rules_4_title">Acuñar fija tu luz</string>
     <string name="game_rules_5_title">El rango nunca retrocede</string>

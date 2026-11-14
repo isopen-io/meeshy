@@ -49,4 +49,12 @@
     <string name="game2_settings_friends_league_question">¿Qué quita «Retirarme»?</string>
     <string name="game2_settings_friends_league_effects">El interruptor te quita de su clasificación y los quita de la tuya: ambos sentidos.</string>
     <string name="reveal_badge_axis_subtitle">Un nivel más en este eje.</string>
+    <string name="game_rules_1_body">Cada intercambio de verdad hace brotar chispas: escribir, hablar, publicar, reaccionar, invitar.</string>
+    <string name="game_rules_1_question">¿Qué hace brotar más chispas?</string>
+    <string name="game_rules_1_more">Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto.</string>
+    <string name="game_rules_3_body" formatted="false">Una Meesh se acuña a mano: fija una parte de tu luz.</string>
+    <string name="game_rules_3_question">¿Cuánta luz toma una acuñación?</string>
+    <string name="game_rules_3_more" formatted="false">Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.</string>
+    <string name="game2_league_consent_how_question">¿Cómo me colocan?</string>
+    <string name="game_concept_league_use">Mira tu puesto y tu zona: los 7 primeros suben, los 5 últimos bajan.</string>
 </resources>

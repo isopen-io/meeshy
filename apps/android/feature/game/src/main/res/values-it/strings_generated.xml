@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">Il Torneo</string>
     <string name="game_concept_league_tip_1">Gioca un po’ ogni giorno: le scintille della settimana si sommano.</string>
     <string name="game_concept_league_tip_2">Punta ai primi posti prima di domenica sera.</string>
-    <string name="game_concept_league_use">Guarda il tuo posto e la tua zona: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono. Tutto riparte da zero ogni lunedì. Il torneo pubblico chiede il tuo consenso; il Torneo degli amici resta sempre aperto.</string>
     <string name="game_concept_league_what">Il torneo è la sfida della settimana: trenta eroi di luce simile vi si misurano con il loro nome di torneo. Ci sono otto cerchi, dal Quarzo al Prisma.</string>
     <string name="game_concept_level_name">La Luce</string>
     <string name="game_concept_level_tip_1">Compi il sogno di ogni notte: i suoi atti fanno scaturire molte scintille.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Traghettatore</string>
     <string name="game_rank_polyglotte">Poliglotta</string>
     <string name="game_rank_voix">Voce</string>
-    <string name="game_rules_1_body">Scrivere, parlare, pubblicare, reagire, invitare: ogni vero scambio fa scaturire scintille. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici. I limiti riguardano i tuoi gesti, mai le tue scintille: slanci, Fiamma ed eventi ne fanno scaturire di più a ogni gesto.</string>
     <string name="game_rules_1_title">Ogni gesto fa scaturire scintille</string>
     <string name="game_rules_2_title">Le scintille formano la tua luce</string>
-    <string name="game_rules_3_body" formatted="false">Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni.</string>
     <string name="game_rules_3_title">Si coniano Meesh</string>
     <string name="game_rules_4_title">Coniare fissa la tua luce</string>
     <string name="game_rules_5_title">Il rango non arretra mai</string>

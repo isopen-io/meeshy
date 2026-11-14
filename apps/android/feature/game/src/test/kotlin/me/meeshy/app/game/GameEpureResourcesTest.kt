@@ -392,7 +392,7 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game_rules_3_more)).contains("30 %").contains("niveau 100")
         assertThat(text(R.string.game2_league_consent_how_question)).isEqualTo("Comment suis-je placé ?")
         assertThat(text(R.string.game_concept_league_use))
-            .isEqualTo("Regarde ta place et ta zone : les 7 premiers gravissent, les 5 derniers redescendent.")
+            .isEqualTo("Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.")
     }
 
     @Test

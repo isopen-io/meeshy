@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">La Joute</string>
     <string name="game_concept_league_tip_1">Joue un peu chaque jour : les étincelles de la semaine s’additionnent.</string>
     <string name="game_concept_league_tip_2">Vise les premières places avant dimanche soir.</string>
-    <string name="game_concept_league_use">Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.</string>
     <string name="game_concept_league_what">La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme.</string>
     <string name="game_concept_level_name">La Lumière</string>
     <string name="game_concept_level_tip_1">Réalise le rêve de chaque nuit : ses actes font jaillir beaucoup d’étincelles.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Passeur</string>
     <string name="game_rank_polyglotte">Polyglotte</string>
     <string name="game_rank_voix">Voix</string>
-    <string name="game_rules_1_body">Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.</string>
     <string name="game_rules_1_title">Chaque geste fait jaillir des étincelles</string>
     <string name="game_rules_2_title">Les étincelles forment ta lumière</string>
-    <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
     <string name="game_rules_3_title">On frappe des Meeshes</string>
     <string name="game_rules_4_title">Frapper fige ta lumière</string>
     <string name="game_rules_5_title">Le rang ne recule jamais</string>

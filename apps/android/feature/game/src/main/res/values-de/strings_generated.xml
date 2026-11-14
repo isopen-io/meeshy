@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">Das Turnier</string>
     <string name="game_concept_league_tip_1">Spiel jeden Tag ein wenig: Die Funken der Woche summieren sich.</string>
     <string name="game_concept_league_tip_2">Ziele vor Sonntagabend auf die ersten Plätze.</string>
-    <string name="game_concept_league_use">Achte auf deinen Platz und deine Zone: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab. Jeden Montag beginnt alles bei null. Das öffentliche Turnier braucht deine Zustimmung; das Turnier der Freunde ist immer offen.</string>
     <string name="game_concept_league_what">Das Turnier ist die Wertung der Woche: Dreißig Helden von ähnlichem Licht messen sich dort unter ihrem Turniernamen. Es gibt acht Kreise, von Quarz bis Prisma.</string>
     <string name="game_concept_level_name">Das Licht</string>
     <string name="game_concept_level_tip_1">Erfülle den Traum jeder Nacht: Seine Akte lassen viele Funken sprühen.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Brückenbauer</string>
     <string name="game_rank_polyglotte">Polyglott</string>
     <string name="game_rank_voix">Stimme</string>
-    <string name="game_rules_1_body">Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch lässt Funken sprühen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen.</string>
     <string name="game_rules_1_title">Jede Aktion lässt Funken sprühen</string>
     <string name="game_rules_2_title">Die Funken bilden dein Licht</string>
-    <string name="game_rules_3_body" formatted="false">Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
     <string name="game_rules_3_title">Man prägt Meeshes</string>
     <string name="game_rules_4_title">Prägen bannt dein Licht</string>
     <string name="game_rules_5_title">Der Rang weicht nie zurück</string>

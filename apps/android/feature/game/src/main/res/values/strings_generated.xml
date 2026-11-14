@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">The Joust</string>
     <string name="game_concept_league_tip_1">Play a little every day: the week’s sparks add up.</string>
     <string name="game_concept_league_tip_2">Aim for the top spots before Sunday evening.</string>
-    <string name="game_concept_league_use">Look at your place and your zone: the top 7 climb to the next circle, the bottom 5 go back down. Everything starts again from zero each Monday. The public joust needs your consent; the Friends’ Joust is always open.</string>
     <string name="game_concept_league_what">The joust is the week’s contest: thirty heroes of similar light measure themselves there under their joust names. There are eight circles, from Quartz to Prism.</string>
     <string name="game_concept_level_name">The Light</string>
     <string name="game_concept_level_tip_1">Fulfill each night’s dream: its acts make lots of sparks fly.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Bridge-builder</string>
     <string name="game_rank_polyglotte">Polyglot</string>
     <string name="game_rank_voix">Voice</string>
-    <string name="game_rules_1_body">Writing, talking, posting, reacting, inviting: every real exchange makes sparks fly. A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move.</string>
     <string name="game_rules_1_title">Every move makes sparks fly</string>
     <string name="game_rules_2_title">Sparks form your light</string>
-    <string name="game_rules_3_body" formatted="false">A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.</string>
     <string name="game_rules_3_title">We mint Meeshes</string>
     <string name="game_rules_4_title">Minting binds your light</string>
     <string name="game_rules_5_title">Your rank never goes back</string>

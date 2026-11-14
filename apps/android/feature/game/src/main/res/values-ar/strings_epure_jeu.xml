@@ -49,4 +49,12 @@
     <string name="game2_settings_friends_league_question">ماذا يزيل «الانسحاب»؟</string>
     <string name="game2_settings_friends_league_effects">يزيلك المفتاح من ترتيبهم ويزيلهم من ترتيبك: الاتجاهان.</string>
     <string name="reveal_badge_axis_subtitle">مستوى إضافي على هذا المحور.</string>
+    <string name="game_rules_1_body">كل تبادل حقيقي يُطلق شرارات: الكتابة والكلام والنشر والتفاعل والدعوة.</string>
+    <string name="game_rules_1_question">ما الذي يُطلق شرارات أكثر؟</string>
+    <string name="game_rules_1_more">ويُطلق المنشور شراراته بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تخصّ إجراءاتك، لا شراراتك أبدًا: الزخم واللهب والفعاليات تُطلق المزيد منها مع كل إجراء.</string>
+    <string name="game_rules_3_body" formatted="false">تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك.</string>
+    <string name="game_rules_3_question">كم من النور يأخذ السكّ؟</string>
+    <string name="game_rules_3_more" formatted="false">ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ.</string>
+    <string name="game2_league_consent_how_question">كيف يُحدَّد مكاني؟</string>
+    <string name="game_concept_league_use">انظر إلى مركزك ومنطقتك: الأوائل السبعة يرتقون، والخمسة الأخيرون يهبطون.</string>
 </resources>

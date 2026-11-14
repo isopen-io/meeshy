@@ -24,12 +24,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.1.body",
-          "androidName": "game_rules_1_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.2.title",
           "androidName": "game_rules_2_title",
           "status": "adopted"
@@ -38,12 +32,6 @@
           "catalog": "app",
           "iosKey": "game.rules.3.title",
           "androidName": "game_rules_3_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.3.body",
-          "androidName": "game_rules_3_body",
           "status": "adopted"
         },
         {

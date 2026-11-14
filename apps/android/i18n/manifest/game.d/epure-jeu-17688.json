@@ -13,6 +13,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_league_consent_how_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_league_pseudonym_drawn",
           "status": "android-only"
         },
@@ -97,6 +101,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_concept_league_use",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_concept_level_what",
           "status": "android-only"
         },
@@ -157,7 +165,31 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_rules_1_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_1_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_1_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_2_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_question",
           "status": "android-only"
         },
         {

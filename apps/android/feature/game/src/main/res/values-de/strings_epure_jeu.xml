@@ -49,4 +49,12 @@
     <string name="game2_settings_friends_league_question">Was entfernt „Mich zurückziehen“?</string>
     <string name="game2_settings_friends_league_effects">Der Schalter nimmt dich aus ihrer Wertung und sie aus deiner: beide Richtungen.</string>
     <string name="reveal_badge_axis_subtitle">Eine Stufe mehr auf dieser Achse.</string>
+    <string name="game_rules_1_body">Jeder echte Austausch lässt Funken sprühen: schreiben, sprechen, veröffentlichen, reagieren, einladen.</string>
+    <string name="game_rules_1_question">Was lässt mehr Funken sprühen?</string>
+    <string name="game_rules_1_more">Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen.</string>
+    <string name="game_rules_3_body" formatted="false">Eine Meesh prägst du von Hand: Sie bannt einen Teil deines Lichts.</string>
+    <string name="game_rules_3_question">Wie viel Licht kostet eine Prägung?</string>
+    <string name="game_rules_3_more" formatted="false">Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
+    <string name="game2_league_consent_how_question">Wie werde ich eingeteilt?</string>
+    <string name="game_concept_league_use">Achte auf deinen Platz und deine Zone: Die ersten 7 steigen auf, die letzten 5 steigen ab.</string>
 </resources>

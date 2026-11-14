@@ -415,7 +415,6 @@
     <string name="game_concept_league_name">O Torneio</string>
     <string name="game_concept_league_tip_1">Jogue um pouco todo dia: as faíscas da semana se somam.</string>
     <string name="game_concept_league_tip_2">Mire nas primeiras posições antes de domingo à noite.</string>
-    <string name="game_concept_league_use">Olhe o seu lugar e a sua zona: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer. Tudo recomeça do zero toda segunda-feira. O torneio público pede o seu acordo; o Torneio dos amigos continua sempre aberto.</string>
     <string name="game_concept_league_what">O torneio é a classificação da semana: trinta heróis de luz parecida se medem nele sob o seu nome de torneio. Há oito círculos, do Quartzo ao Prisma.</string>
     <string name="game_concept_level_name">A Luz</string>
     <string name="game_concept_level_tip_1">Realize o sonho de cada noite: seus atos fazem saltar muitas faíscas.</string>
@@ -958,10 +957,8 @@
     <string name="game_rank_passeur">Intérprete</string>
     <string name="game_rank_polyglotte">Poliglota</string>
     <string name="game_rank_voix">Voz</string>
-    <string name="game_rules_1_body">Escrever, falar, publicar, reagir, convidar: cada troca de verdade faz saltar faíscas. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto.</string>
     <string name="game_rules_1_title">Cada gesto faz saltar faíscas</string>
     <string name="game_rules_2_title">As faíscas formam a sua luz</string>
-    <string name="game_rules_3_body" formatted="false">Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens.</string>
     <string name="game_rules_3_title">Cunham-se Meeshes</string>
     <string name="game_rules_4_title">Cunhar cristaliza a sua luz</string>
     <string name="game_rules_5_title">O título nunca recua</string>
