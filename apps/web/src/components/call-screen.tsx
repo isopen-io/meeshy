@@ -656,9 +656,14 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
      éteints, ou laissés seuls quand un mode a pris l'écran. Seuls, ils n'ont pas
      de « Journal » : sans pilule, il n'aurait nulle part où s'ouvrir (#17946,
      `opensJournal: false` d'iOS) ; leur pied garde la paire et le geste. */
+  /* G1 (#18357) : « Journal » touché dans le verre d'une pilule rangée rend les contrôles, et le journal avec eux (`togglePanel` d'iOS : `opening(.journal)`, puis `showControls`). */
+  const openJournalFromCaptions = () => {
+    revealChrome();
+    panels.toggle('journal');
+  };
   const captionsOf = (slot: 'captions' | 'captionsAlone', visible: boolean): ReactNode => (
     <Suspense fallback={null}>
-      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined && slot === 'captions' ? () => panels.toggle('journal') : undefined} />
+      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined && slot === 'captions' ? openJournalFromCaptions : undefined} />
     </Suspense>
   );
   const standaloneCaptions = (): ReactNode => (
