@@ -91,12 +91,12 @@ describe('Analytique > Langues : la note du tableau passe derrière un (i)', () 
 });
 
 describe('Diffusions : l’état vide tient en une ligne et une action', () => {
-  test('« Aucune diffusion. » et « Écrire une diffusion » dans les quatre langues', () => {
+  test('« Aucune diffusion » et « Écrire une diffusion » dans les quatre langues', () => {
     const expected: Record<AdminLanguage, readonly [string, string]> = {
-      fr: ['Aucune diffusion.', 'Écrire une diffusion'],
-      en: ['No broadcast.', 'Write a broadcast'],
-      es: ['Ninguna difusión.', 'Escribir una difusión'],
-      pt: ['Nenhuma transmissão.', 'Escrever uma transmissão'],
+      fr: ['Aucune diffusion', 'Écrire une diffusion'],
+      en: ['No broadcasts', 'Write a broadcast'],
+      es: ['Ninguna difusión', 'Escribir una difusión'],
+      pt: ['Nenhuma difusão', 'Escrever uma difusão'],
     };
     for (const language of ADMIN_LANGUAGES) {
       expect(entry(language, 'admin.broadcast.list.empty')).toBe(expected[language][0]);

@@ -7,7 +7,7 @@ const f = {
   'admin.broadcast.list.search': 'Search by name or subject',
   'admin.broadcast.list.count': '{count} broadcasts',
   'admin.broadcast.list.countOne': '1 broadcast',
-  'admin.broadcast.list.empty': 'No broadcast.',
+  'admin.broadcast.list.empty': 'No broadcasts',
   'admin.broadcast.list.emptyAction': 'Write a broadcast',
   'admin.broadcast.list.filteredEmpty': 'No broadcast for these filters',
   'admin.broadcast.filter.status': 'Status',

@@ -241,7 +241,7 @@ describe('les états', () => {
     const host = await open(deps);
 
     const empty = host.querySelector('[data-admin-empty]');
-    expect(empty?.querySelector('p')?.textContent).toBe('Aucune diffusion.');
+    expect(empty?.querySelector('p')?.textContent).toBe('Aucune diffusion');
     expect(empty?.querySelector('[data-admin-action="new-empty"]')?.textContent).toContain('Écrire une diffusion');
   });
 

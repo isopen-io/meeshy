@@ -12,7 +12,7 @@ const f = {
   'admin.broadcast.list.search': 'Rechercher par nom ou objet',
   'admin.broadcast.list.count': '{count} diffusions',
   'admin.broadcast.list.countOne': '1 diffusion',
-  'admin.broadcast.list.empty': 'Aucune diffusion.',
+  'admin.broadcast.list.empty': 'Aucune diffusion',
   'admin.broadcast.list.emptyAction': 'Écrire une diffusion',
   'admin.broadcast.list.filteredEmpty': 'Aucune diffusion pour ces filtres',
   'admin.broadcast.filter.status': 'Statut',

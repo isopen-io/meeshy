@@ -7,7 +7,7 @@ const f = {
   'admin.broadcast.list.search': 'Buscar por nombre o asunto',
   'admin.broadcast.list.count': '{count} difusiones',
   'admin.broadcast.list.countOne': '1 difusión',
-  'admin.broadcast.list.empty': 'Ninguna difusión.',
+  'admin.broadcast.list.empty': 'Ninguna difusión',
   'admin.broadcast.list.emptyAction': 'Escribir una difusión',
   'admin.broadcast.list.filteredEmpty': 'Ninguna difusión con estos filtros',
   'admin.broadcast.filter.status': 'Estado',
