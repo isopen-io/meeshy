@@ -139,6 +139,58 @@ confronte à une charge LITTÉRALE, pour ceux qui ont déjà coûté.
 
 ---
 
+## Ce que l'audit adversarial a corrigé dans ce lot
+
+Le lot est passé par l'agent `auditeur-adversarial` — un changement de décodage
+de protocole en relève. **Verdict : non bloquant, aucune erreur de compilation,
+aucune régression.** Mais il a trouvé trois choses que ce journal aurait
+autrement affirmées à tort, et deux d'entre elles sont de la prose — ce qui est
+exactement le sujet du cycle.
+
+### 1. La garde surévaluait sa propre couverture
+
+Elle balaie **110 des 176** événements du contrat, pas tous : elle déduit ses
+couples de TROIS idiomes de routage, et le dépôt en a CINQ
+(`SocketInboundRoute.raw(…)` et `socketManager.on(…)` + `decode<T>` lui sont
+invisibles, emportant toute la famille `call:*`, les quatre `viewing:*` et
+`user:preferences-updated`). **Les quatre invariants ne pouvaient pas le voir** :
+ils vérifient que ce qui est balayé se résout, jamais que le balayage atteint
+tout.
+
+> Une garde qui réclame plus qu'elle ne tient est précisément le défaut que ce
+> cycle corrige ailleurs. L'écrire dans un doc-comment ne suffisait pas : la
+> couverture est désormais un **cliquet chiffré** (`SWEPT_EVENTS_AT_LAST_MEASURE`),
+> qui rougit à la baisse ET à la hausse — pour qu'une extension vienne relever le
+> nombre au lieu de laisser la prose vieillir. Suivi : #18123.
+
+### 2. Deux « pièges armés » étaient racontés comme des pannes
+
+Le dépôt a une règle pour ça (cycle 103) : *annoncer une panne qu'on n'a pas
+mesurée coûte la confiance dans les cycles où il y en a une.* Les commentaires
+disaient « il faisait lever » ; aucun émetteur n'omet `userId` aujourd'hui, et le
+miroir d'`attachmentId` corrigé **n'a aucun consommateur**. Les deux correctifs
+restent justes ; c'est la prose qui a été remise au conditionnel.
+
+### 3. `usable` confondait « trame malformée » et « traduction vide »
+
+Défaut que le lot INTRODUISAIT. Une trame dont l'unique entrée porte un texte
+vide ne soldait plus rien — ni la ligne d'échec, ni l'état « traduction en
+cours » — qui serait donc resté allumé **pour toujours**, aucun autre événement
+ne venant l'éteindre.
+
+> **Ce qui solde une attente est l'ARRIVÉE d'une réponse, pas sa qualité.**
+> D'où `answeredLanguages` à côté d'`usable` : le premier éteint, le second
+> fusionne. Deux témoins de fil les séparent.
+
+### Ce que l'audit a aussi rendu possible
+
+**`:core:model` SE COMPILE dans ce conteneur** — `gradle -p apps/android/scripts/jvm-check
+test -PjvmCheckModelOnly` passe par Maven Central seul. Mon premier essai avait
+lancé `meeshy.sh jvm-check`, qui tire `libsignal-client` depuis
+`build-artifacts.signal.org` (403 par le proxy), et j'en avais conclu « pas de
+Kotlin ici ». **Deuxième fois dans ce cycle qu'un empêchement est déduit au lieu
+d'être mesuré** — et cette fois c'est le mien, pas celui du cycle 155.
+
 ## Ce que ce cycle a trouvé et n'a pas réparé
 
 **`message:attachment-updated` a DEUX miroirs Kotlin routés en parallèle** :

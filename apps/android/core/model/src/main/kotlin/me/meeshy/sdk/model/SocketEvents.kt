@@ -70,8 +70,13 @@ data class ReactionUpdateEvent(
     /**
      * Le `User.id` de l'acteur. **Optionnel au contrat** (`types/reaction.ts`), et c'est délibéré :
      * la passerelle le pose toujours, mais une charge PERSISTÉE puis rejouée hors ligne peut dater
-     * d'avant son ajout. Exigé ici, il faisait lever `MissingFieldException` sur ce rejeu — avalée
-     * par `SocketInboundRoute.guarded`, donc la réaction n'arrivait jamais et rien ne rougissait (#18070).
+     * d'avant son ajout.
+     *
+     * **Piège ARMÉ, pas panne mesurée** (#18070) : aucun émetteur ne l'omet aujourd'hui — les trois
+     * sites passent une chaîne — donc rien ne tombe. Exigé ici, il FERAIT lever
+     * `MissingFieldException` sur ce rejeu, avalée par `SocketInboundRoute.guarded`, et la réaction
+     * n'arriverait jamais sans que rien ne rougisse. On ne laisse pas un piège armé au motif que
+     * personne n'a marché dessus.
      */
     val userId: String? = null,
     val emoji: String,
@@ -164,9 +169,20 @@ data class TranslationEvent(
     val messageId: String,
     val translations: List<TranslationEntry> = emptyList(),
 ) {
-    /** Les traductions EXPLOITABLES : une entrée sans langue ou sans texte ne fusionne rien. */
+    /** Les traductions à FUSIONNER : sans langue ni texte, il n'y a rien à écrire dans la bulle. */
     val usable: List<TranslationEntry>
         get() = translations.filter { it.targetLanguage.isNotBlank() && it.translatedContent.isNotBlank() }
+
+    /**
+     * Les langues dont la passerelle a RÉPONDU, texte vide compris.
+     *
+     * Distinct de [usable], et la distinction n'est pas cosmétique : ce qui efface un état
+     * « traduction en cours » est l'ARRIVÉE d'une réponse, pas sa qualité. Confondre les deux
+     * laisserait l'attente allumée POUR TOUJOURS sur une trame à texte vide — l'écran promet une
+     * traduction que plus aucun événement ne viendra solder.
+     */
+    val answeredLanguages: List<String>
+        get() = translations.map { it.targetLanguage }.filter { it.isNotBlank() }.distinct()
 }
 
 /**
@@ -248,7 +264,13 @@ data class AttachmentUpdatedEvent(
     /**
      * **Posé CONDITIONNELLEMENT par l'émetteur** (`emitAttachmentUpdated.ts`), donc optionnel au
      * contrat : un enrichissement qui porte sur le message entier n'en nomme aucune pièce. Exigé
-     * ici, il faisait lever le décodage sur ces trames-là (#18070).
+     * ici, le décodage de ces trames-là échouait pour de bon (#18070).
+     *
+     * **Sans effet OBSERVABLE pour autant, et il faut le dire** : le flux que ce miroir alimente
+     * (`MessageSocketManager.attachmentUpdated`) n'a aucun collecteur — le miroir VIVANT de
+     * `message:attachment-updated` est `MessageAttachmentUpdatedEvent`, qui portait déjà la clé en
+     * optionnel. Ce correctif retire donc du bruit de journal, pas une panne. La jumelle morte est
+     * suivie par #18115.
      */
     val attachmentId: String? = null,
     val status: String? = null,

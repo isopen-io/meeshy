@@ -117,10 +117,12 @@ internal class ChatTranslationController(
                est un no-op sur un message absent du cache de ce fil, exactement comme le web
                (`realtime-apply.ts`, `applyMessageTranslation`). */
             messageSocketManager.translationReceived.collectArrived { event ->
+                /* L'attente se solde sur TOUTE langue répondue — texte vide compris : sinon la ligne
+                   « traduction en cours » resterait allumée sans qu'aucun événement vienne la solder. */
+                event.answeredLanguages.forEach { language ->
+                    mutableFailures.update { it - TranslationRequestFailure.rowKey(event.messageId, language) }
+                }
                 event.usable.forEach { translation ->
-                    mutableFailures.update {
-                        it - TranslationRequestFailure.rowKey(event.messageId, translation.targetLanguage)
-                    }
                     messageRepository.applyTranslation(
                         event.messageId,
                         translation.targetLanguage,

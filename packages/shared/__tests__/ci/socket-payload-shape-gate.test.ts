@@ -77,6 +77,26 @@
 //
 // ─── Ce que la garde ne couvre PAS (dit à voix haute) ──────────────────────
 //
+// **Un tiers des événements du contrat, et c'est le trou le plus coûteux.**
+// Mesuré le 2026-11-14 : la garde balaie **110 des 176** événements de
+// `ServerToClientEvents`. Elle déduit ses couples de TROIS idiomes de routage ;
+// le dépôt en a CINQ. Les deux autres — `SocketInboundRoute.raw(…)` et
+// `socketManager.on(…)` suivi d'un `decode<T>` réifié — lui sont invisibles, et
+// avec eux toute la famille `call:*`, les quatre `viewing:*`,
+// `user:preferences-updated`, `talkie:chunk` et `message:starred`.
+//
+// Les quatre invariants ci-dessous NE PEUVENT PAS voir ce trou : ils vérifient
+// que ce qui est balayé se résout, jamais que le balayage atteint tout. Un
+// `MINIMUM_ROUTES` ne compte que les routes reconnues. L'extension est #18123.
+//
+//   Remesurer : comparer les noms rendus par les trois idiomes aux propriétés de
+//   `ServerToClientEvents` — c'est ce que fait le script de l'issue.
+//
+// Que ce trou soit un PIÈGE ARMÉ et non une panne est, lui aussi, mesuré : les
+// miroirs des cinq événements les plus exposés (`viewing:*`,
+// `conversation:join-error`) ont été relus à la main le 2026-11-14, sans
+// divergence vivante. Les ~35 `call:*` n'ont PAS été confrontés.
+//
 // Les champs IMBRIQUÉS. `SocketPostCreatedData.post`, `SocketCommentAddedData.
 // comment` portent des objets entiers dont un seul champ requis tue le document
 // de la même façon. Le critère retenu est celui de #18070 — le PREMIER niveau —
@@ -129,6 +149,13 @@ const EVENT_MAPS_TS = 'packages/shared/types/socketio-events/event-maps.ts';
  * déduit sa table.
  */
 const MINIMUM_ROUTES = 100;
+
+/**
+ * Les événements du contrat réellement confrontés, mesurés le 2026-11-14 — à comparer aux 176 que
+ * `ServerToClientEvents` déclare. Le chiffre vit ICI, et pas seulement dans une prose, pour qu'une
+ * extension de l'extracteur (#18123) ait un endroit où se voir monter.
+ */
+const SWEPT_EVENTS_AT_LAST_MEASURE = 110;
 
 type KotlinField = {
   readonly name: string;
@@ -395,6 +422,26 @@ describe("la FORME des charges socket — ce qu'Android EXIGE, ce que le contrat
   it('balaie un nombre plausible de routes — une table déduite qui se vide ne rougit jamais toute seule', () => {
     expect(kotlin.classCount).toBeGreaterThan(0);
     expect(kotlin.routes.length).toBeGreaterThanOrEqual(MINIMUM_ROUTES);
+  });
+
+  /**
+   * Un CLIQUET de couverture, pas un plafond : la garde ne voit que trois des cinq idiomes de
+   * routage du dépôt (#18123), et ce test est le seul endroit où ce manque est CHIFFRÉ plutôt que
+   * raconté. Il rougit si la couverture BAISSE — un idiome renommé, une famille déplacée — et il
+   * rougit aussi quand elle MONTE, pour qu'une extension vienne relever le chiffre ici au lieu de
+   * laisser la prose vieillir.
+   */
+  it('confronte toujours autant d\'événements du contrat qu\'à la dernière mesure', () => {
+    const sweptEvents = new Set(
+      kotlin.routes.map((route) => route.event).filter((event): event is string => event !== undefined && contract.has(event)),
+    );
+    expect(
+      sweptEvents.size,
+      `couverture mesurée : ${sweptEvents.size} des ${contract.size} événements du contrat ` +
+        `(dernière mesure : ${SWEPT_EVENTS_AT_LAST_MEASURE}). ` +
+        'En baisse ⇒ un idiome de routage a changé de forme. ' +
+        'En hausse ⇒ relever SWEPT_EVENTS_AT_LAST_MEASURE et le chiffre du doc-comment.',
+    ).toBe(SWEPT_EVENTS_AT_LAST_MEASURE);
   });
 
   it('résout la constante et la classe de charge de CHAQUE site de routage', () => {

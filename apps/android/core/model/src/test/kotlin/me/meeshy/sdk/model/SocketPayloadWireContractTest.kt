@@ -14,9 +14,10 @@ import org.junit.Test
  * même silence que [TranscriptionReadyEventTest] et que `participant:role-updated` avant lui.
  *
  * La seconde moitié — « le miroir n'exige rien que le contrat ne déclare » — est tenue
- * mécaniquement, et pour TOUS les événements d'un coup, par
- * `packages/shared/__tests__/ci/socket-payload-shape-gate.test.ts` (#18070). Les deux se complètent :
- * la garde compare le miroir au CONTRAT, ce fichier le confronte à une charge LITTÉRALE.
+ * mécaniquement par `packages/shared/__tests__/ci/socket-payload-shape-gate.test.ts` (#18070), sur
+ * **110 des 176 événements du contrat** (mesuré le 2026-11-14 ; elle ne reconnaît que trois des cinq
+ * idiomes de routage du dépôt — #18123). Les deux se complètent : la garde compare le miroir au
+ * CONTRAT, ce fichier le confronte à une charge LITTÉRALE.
  */
 class SocketPayloadWireContractTest {
 
@@ -105,6 +106,45 @@ class SocketPayloadWireContractTest {
 
         assertThat(event.translations).hasSize(3)
         assertThat(event.usable.map { it.targetLanguage }).containsExactly("it")
+    }
+
+    /**
+     * Ce qui SOLDE une attente est l'arrivée d'une réponse, pas sa qualité : une trame à texte vide
+     * ne fusionne rien ET solde quand même la langue. Les confondre laisserait l'état « traduction
+     * en cours » allumé pour toujours, sans qu'aucun événement vienne l'éteindre.
+     */
+    @Test
+    fun `an empty translation answers its language without merging`() {
+        val raw = """
+            {
+              "messageId": "m5",
+              "translations": [ { "targetLanguage": "pt", "translatedContent": "" } ]
+            }
+        """.trimIndent()
+
+        val event = json.decodeFromString(TranslationEvent.serializer(), raw)
+
+        assertThat(event.usable).isEmpty()
+        assertThat(event.answeredLanguages).containsExactly("pt")
+    }
+
+    /** Une langue répondue deux fois dans la même trame ne solde qu'une fois. */
+    @Test
+    fun `answered languages are distinct and skip blank ones`() {
+        val raw = """
+            {
+              "messageId": "m6",
+              "translations": [
+                { "targetLanguage": "de", "translatedContent": "Hallo" },
+                { "targetLanguage": "de", "translatedContent": "Hallo nochmal" },
+                { "targetLanguage": "", "translatedContent": "orpheline" }
+              ]
+            }
+        """.trimIndent()
+
+        val event = json.decodeFromString(TranslationEvent.serializer(), raw)
+
+        assertThat(event.answeredLanguages).containsExactly("de")
     }
 
     /** Une trame sans aucune traduction se décode et ne fusionne rien. */
