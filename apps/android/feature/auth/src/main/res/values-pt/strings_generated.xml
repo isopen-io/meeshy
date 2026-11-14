@@ -22,8 +22,8 @@
     <string name="auth_forgot_never_had_text">O mesmo link permite criar uma.</string>
     <string name="auth_forgot_subtitle">Receba por e-mail um link para escolher uma nova senha.</string>
     <string name="auth_forgot_title">Esqueceu a senha</string>
-    <string name="auth_login_two_factor_label">Código de 6 dígitos</string>
-    <string name="auth_login_two_factor_placeholder">Código de 6 dígitos</string>
+    <string name="auth_login_two_factor_label">Código de verificação</string>
+    <string name="auth_login_two_factor_placeholder">Código de verificação</string>
     <string name="auth_login_two_factor_title">Autenticação de dois fatores</string>
     <string name="auth_magic_cancel">Cancelar</string>
     <string name="auth_magic_countdown_a11y">O link expira em</string>

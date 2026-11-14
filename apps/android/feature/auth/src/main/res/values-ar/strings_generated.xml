@@ -22,8 +22,8 @@
     <string name="auth_forgot_never_had_text">يتيح لك الرابط نفسه إنشاء واحدة.</string>
     <string name="auth_forgot_subtitle">استلم عبر البريد الإلكتروني رابطًا لاختيار كلمة مرور جديدة.</string>
     <string name="auth_forgot_title">نسيت كلمة المرور</string>
-    <string name="auth_login_two_factor_label">رمز من 6 أرقام</string>
-    <string name="auth_login_two_factor_placeholder">رمز من 6 أرقام</string>
+    <string name="auth_login_two_factor_label">رمز التحقق</string>
+    <string name="auth_login_two_factor_placeholder">رمز التحقق</string>
     <string name="auth_login_two_factor_title">المصادقة الثنائية</string>
     <string name="auth_magic_cancel">إلغاء</string>
     <string name="auth_magic_countdown_a11y">ينتهي الرابط خلال</string>

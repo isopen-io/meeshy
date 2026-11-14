@@ -22,8 +22,8 @@
     <string name="auth_forgot_never_had_text">The same link lets you create one.</string>
     <string name="auth_forgot_subtitle">Get a link by email to choose a new password.</string>
     <string name="auth_forgot_title">Forgot password</string>
-    <string name="auth_login_two_factor_label">6-digit code</string>
-    <string name="auth_login_two_factor_placeholder">6-digit code</string>
+    <string name="auth_login_two_factor_label">Verification code</string>
+    <string name="auth_login_two_factor_placeholder">Verification code</string>
     <string name="auth_login_two_factor_title">Two-factor authentication</string>
     <string name="auth_magic_cancel">Cancel</string>
     <string name="auth_magic_countdown_a11y">The link expires in</string>

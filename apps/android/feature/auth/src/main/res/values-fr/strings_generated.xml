@@ -22,8 +22,8 @@
     <string name="auth_forgot_never_had_text">Ce même lien vous permet d\'en créer un.</string>
     <string name="auth_forgot_subtitle">Recevez par e-mail un lien pour choisir un nouveau mot de passe.</string>
     <string name="auth_forgot_title">Mot de passe oublié</string>
-    <string name="auth_login_two_factor_label">Code à 6 chiffres</string>
-    <string name="auth_login_two_factor_placeholder">Code à 6 chiffres</string>
+    <string name="auth_login_two_factor_label">Code de vérification</string>
+    <string name="auth_login_two_factor_placeholder">Code de vérification</string>
     <string name="auth_login_two_factor_title">Authentification à deux facteurs</string>
     <string name="auth_magic_cancel">Annuler</string>
     <string name="auth_magic_countdown_a11y">Le lien expire dans</string>

@@ -58977,43 +58977,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رمز من 6 أرقام"
+            "value": "رمز التحقق"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "6-stelliger Code"
+            "value": "Bestätigungscode"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "6-digit code"
+            "value": "Verification code"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de 6 dígitos"
+            "value": "Código de verificación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code à 6 chiffres"
+            "value": "Code de vérification"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codice a 6 cifre"
+            "value": "Codice di verifica"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de 6 dígitos"
+            "value": "Código de verificação"
           }
         }
       }
@@ -59024,43 +59024,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رمز من 6 أرقام"
+            "value": "رمز التحقق"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "6-stelliger Code"
+            "value": "Bestätigungscode"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "6-digit code"
+            "value": "Verification code"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de 6 dígitos"
+            "value": "Código de verificación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code à 6 chiffres"
+            "value": "Code de vérification"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codice a 6 cifre"
+            "value": "Codice di verifica"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código de 6 dígitos"
+            "value": "Código de verificação"
           }
         }
       }
