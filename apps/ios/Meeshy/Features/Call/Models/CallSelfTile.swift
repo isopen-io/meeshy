@@ -200,3 +200,17 @@ nonisolated enum CallSelfTileCorner: CaseIterable, Sendable {
     }
 }
 
+/// Loi 17.1 · 17.12 (#18206) — ce que montre ma vignette de duo : ma caméra (avec sa piste, même gelée
+/// par la survie réseau, L6-1), la tuile « en pause » quand la piste a disparu, ou rien (caméra éteinte,
+/// groupe, mode, cadre en direct). Elle paraît, part et change de face en fondu, jamais d'un coup.
+nonisolated enum CallSelfViewPresence: Equatable, Sendable {
+    case hidden
+    case camera
+    case paused
+
+    static func resolve(isShown: Bool, isVideoEnabled: Bool, hasLocalVideoTrack: Bool, isVideoSuspended: Bool) -> CallSelfViewPresence {
+        guard isShown, isVideoEnabled else { return .hidden }
+        if hasLocalVideoTrack { return .camera }
+        return isVideoSuspended ? .paused : .hidden
+    }
+}

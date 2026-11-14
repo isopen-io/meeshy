@@ -115,12 +115,25 @@ describe.each(ROUTES)('PATCH /users/me/%s — un fichier de l’appelant seuleme
     await app.close();
   });
 
-  it("laisse une adresse d'un hôte tiers à #16809, sans lecture", async () => {
+  it.each([
+    ['un hôte tiers', 'https://cdn.example.com/a.png'],
+    ['son propre fichier servi par un hôte tiers', `https://evil.test/api/v1/attachments/file/${encodeURIComponent(OWN)}`],
+  ])("refuse %s (#16809) en 400 IDENTITY_IMAGE_NOT_OWNED, sans lecture ni écriture", async (_label, url) => {
     const prisma = makePrisma();
+    const app = await buildApp(prisma, route);
+    const res = await app.inject({ method: 'PATCH', url: `/users/me/${field}`, payload: { [field]: url } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+    expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("garde une adresse tierce DÉJÀ posée (lecture tolérante, #16809)", async () => {
+    const prisma = makePrisma({ [field]: 'https://cdn.example.com/a.png' });
     const app = await buildApp(prisma, route);
     const res = await app.inject({ method: 'PATCH', url: `/users/me/${field}`, payload: { [field]: 'https://cdn.example.com/a.png' } });
     expect(res.statusCode).toBe(200);
-    expect(prisma.messageAttachment.findFirst).not.toHaveBeenCalled();
     await app.close();
   });
 

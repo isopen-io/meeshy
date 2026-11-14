@@ -1047,7 +1047,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-plane][data-call-stow]')?.getAttribute('data-call-stow')).toBe('top');
     tapStage(view);
     expect(chromeOf(view)).toBe('hidden');
-    const rule = stowRule("[data-call-chrome='hidden'] [data-call-stow],");
+    const rule = stowRule("[data-call-chrome='hidden'] [data-call-stow]:not([data-call-chrome-keep]),");
     expect(rule).toContain('visibility: hidden');
     expect(rule).toContain('visibility 0s linear 0.3s');
     expect(rule).not.toContain('pointer-events');
@@ -1057,8 +1057,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   });
 
   test('G1.11 / G2.8 — l’en-tête sort par le haut, la pilule par le bas, mesurés sur leur propre hauteur ; aucun déplacement sous « Réduire les animations »', () => {
-    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='top'],")).toMatch(/translate: 0 calc\(-100% - env\(safe-area-inset-top\)/);
-    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='bottom'],")).toMatch(/translate: 0 calc\(100% \+ env\(safe-area-inset-bottom\)/);
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='top']:not([data-call-chrome-keep]),")).toMatch(/translate: 0 calc\(-100% - env\(safe-area-inset-top\)/);
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='bottom']:not([data-call-chrome-keep]),")).toMatch(/translate: 0 calc\(100% \+ env\(safe-area-inset-bottom\)/);
     const reduced = CALL_MOTION.slice(CALL_MOTION.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
     expect(reduced).toContain('translate: none');
     expect(reduced).not.toContain('transition: none');
