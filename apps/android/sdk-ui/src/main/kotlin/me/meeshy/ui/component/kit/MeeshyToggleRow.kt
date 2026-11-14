@@ -1,8 +1,13 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -110,18 +115,17 @@ public fun MeeshyToggleRowFace(
             .fillMaxWidth()
             .heightIn(min = recipe.minimumHeight)
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
-            .alpha(recipe.contentOpacity)
         if (isAccessibilityScale) {
             Column(lineModifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LeadingSlot(leading, recipe.titleColor)
+                    LeadingSlot(leading, recipe)
                     TextColumn(content, recipe, titleAccessory)
                 }
                 AccessoryGroup(content.accessory, recipe, trailing)
             }
         } else {
             Row(lineModifier, verticalAlignment = Alignment.CenterVertically) {
-                LeadingSlot(leading, recipe.titleColor)
+                LeadingSlot(leading, recipe)
                 TextColumn(content, recipe, titleAccessory)
                 Spacer(Modifier.width(MeeshySpacing.sm))
                 AccessoryGroup(content.accessory, recipe, trailing)
@@ -149,7 +153,7 @@ public fun MeeshyToggleRow(
     val interactionSource = remember { MutableInteractionSource() }
     val haptics = rememberMeeshyHaptics()
     val label = MeeshyToggleRowRecipe.accessibilityLabel(content.title, content.subtitle)
-    val chosen = MeeshyToggleRowRecipe.isChosen(content.accessory)
+    val selection = MeeshyToggleRowRecipe.valueFor(content.accessory) as? MeeshyToggleRowValue.Selected
     val spokenValue = spokenValueOf(content.accessory)
     Box(
         modifier = modifier
@@ -168,7 +172,7 @@ public fun MeeshyToggleRow(
             )
             .semantics(mergeDescendants = true) {
                 contentDescription = label
-                selected = chosen
+                if (selection != null) selected = selection.isSelected
                 if (spokenValue != null) stateDescription = spokenValue
             },
         contentAlignment = Alignment.CenterStart,
@@ -231,14 +235,17 @@ private fun MeeshyToggleRowIcon(icon: ImageVector) {
     Icon(
         imageVector = icon,
         contentDescription = null,
-        modifier = Modifier.size(MeeshyIconSize.xxl).padding(end = MeeshySpacing.md),
+        modifier = Modifier.padding(end = MeeshySpacing.md).size(MeeshyIconSize.xxl),
     )
 }
 
+/** La tête de ligne : à l'encre du titre, baissée avec lui, muette pour le lecteur d'écran (le titre la nomme). */
 @Composable
-private fun LeadingSlot(leading: (@Composable () -> Unit)?, ink: Color) {
+private fun LeadingSlot(leading: (@Composable () -> Unit)?, recipe: MeeshyToggleRowRecipe) {
     if (leading == null) return
-    CompositionLocalProvider(LocalContentColor provides ink) { leading() }
+    Box(Modifier.alpha(recipe.contentOpacity).clearAndSetSemantics {}) {
+        CompositionLocalProvider(LocalContentColor provides recipe.titleColor) { leading() }
+    }
 }
 
 @Composable
@@ -255,8 +262,11 @@ private fun RowScope.TextColumn(
                 color = recipe.titleColor,
                 fontSize = MeeshyFontSize.body,
                 fontWeight = FontWeight.Medium,
+                modifier = Modifier.alpha(recipe.contentOpacity),
             )
-            titleAccessory?.invoke()
+            if (titleAccessory != null) {
+                Box(Modifier.clearAndSetSemantics {}) { titleAccessory() }
+            }
         }
         if (subtitle != null) {
             Text(text = subtitle, color = recipe.subtitleColor, fontSize = MeeshyFontSize.small)
@@ -269,7 +279,7 @@ private fun AccessoryGroup(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTo
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-        modifier = Modifier.clearAndSetSemantics {},
+        modifier = Modifier.alpha(recipe.contentOpacity).clearAndSetSemantics {},
     ) {
         trailing?.invoke()
         AccessoryView(accessory, recipe)
@@ -286,14 +296,7 @@ private fun AccessoryView(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTog
             colors = SwitchDefaults.colors(checkedTrackColor = recipe.trackOnColor),
             modifier = Modifier.clearAndSetSemantics {},
         )
-        is MeeshyToggleRowAccessory.Check -> if (accessory.isSelected) {
-            Icon(
-                imageVector = MeeshyIcons.Check,
-                contentDescription = null,
-                modifier = Modifier.size(MeeshyIconSize.xl),
-                tint = recipe.accessoryColor,
-            )
-        }
+        is MeeshyToggleRowAccessory.Check -> CheckMark(isSelected = accessory.isSelected, color = recipe.accessoryColor)
         is MeeshyToggleRowAccessory.Checkbox -> Icon(
             imageVector = if (accessory.isChecked) MeeshyIcons.CheckBoxChecked else MeeshyIcons.CheckBoxBlank,
             contentDescription = null,
@@ -310,6 +313,28 @@ private fun AccessoryView(accessory: MeeshyToggleRowAccessory, recipe: MeeshyTog
             text = accessory.text,
             color = recipe.accessoryColor,
             fontSize = MeeshyFontSize.label,
+        )
+    }
+}
+
+/**
+ * La coche n'existe que sur le choix retenu (loi 13) ; elle apparaît et s'efface en fondu de 200 ms, instantanément avec
+ * « Réduire les animations ». Fondu d'opacité seulement : la mise en page ne s'anime pas.
+ */
+@Composable
+private fun CheckMark(isSelected: Boolean, color: Color) {
+    val reduceMotion = LocalReduceMotion.current
+    AnimatedVisibility(
+        visible = isSelected,
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(tween(MeeshyToggleRowRecipe.FADE_DURATION_MILLIS)),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(tween(MeeshyToggleRowRecipe.FADE_DURATION_MILLIS)),
+        label = "meeshy-toggle-row-check",
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Check,
+            contentDescription = null,
+            modifier = Modifier.size(MeeshyIconSize.xl),
+            tint = color,
         )
     }
 }

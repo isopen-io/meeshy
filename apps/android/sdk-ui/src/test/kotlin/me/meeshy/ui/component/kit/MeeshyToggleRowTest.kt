@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTouchHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -193,6 +194,45 @@ class MeeshyToggleRowBehaviorTest {
         show { MeeshyToggleRow(title = "Plage", accessory = MeeshyToggleRowAccessory.Check(isSelected = true), onClick = {}) }
 
         compose.onNodeWithContentDescription("Plage").assertIsSelected()
+    }
+
+    @Test
+    fun `une bascule dit son etat par sa valeur, jamais par une selection`() {
+        show { MeeshyToggleRow(title = "Muet", accessory = MeeshyToggleRowAccessory.Toggle(isOn = true), onClick = {}) }
+
+        compose.onNodeWithContentDescription("Muet").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
+    }
+
+    @Test
+    fun `une coche non retenue est lue non selectionnee`() {
+        show { MeeshyToggleRow(title = "Plage", accessory = MeeshyToggleRowAccessory.Check(isSelected = false), onClick = {}) }
+
+        compose.onNodeWithContentDescription("Plage").assertIsNotSelected()
+    }
+
+    @Test
+    fun `une case cochee est selectionnee pour le lecteur d'ecran`() {
+        show { MeeshyToggleRow(title = "Story", accessory = MeeshyToggleRowAccessory.Checkbox(isChecked = true), onClick = {}) }
+
+        compose.onNodeWithContentDescription("Story").assertIsSelected()
+    }
+
+    @Test
+    fun `une valeur se lit comme l'etat de la ligne`() {
+        show { MeeshyToggleRow(title = "Langue du son", accessory = MeeshyToggleRowAccessory.Value("Wolof"), onClick = {}) }
+
+        compose.onNodeWithContentDescription("Langue du son").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wolof"),
+        )
+    }
+
+    @Test
+    fun `un chevron ne porte ni valeur ni selection`() {
+        show { MeeshyToggleRow(title = "Tendances", accessory = MeeshyToggleRowAccessory.Chevron, onClick = {}) }
+
+        compose.onNodeWithContentDescription("Tendances")
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
     }
 
     @Test

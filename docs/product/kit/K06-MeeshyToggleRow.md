@@ -92,4 +92,13 @@ Relevé le 2026-11-12 : la fiche d'origine ne décrivait que iOS. Le lot Android
 - Instantanés : `KitCatalogSnapshotTest` (feature/kit), images `MeeshyToggleRow/<état>.<variante>.png` sous `apps/android/feature/kit/src/test/snapshots/`, enregistrées par le job `kit-snapshots-record` de `android.yml` (jamais sur un poste).
 - Catalogue : `apps/android/feature/kit/src/main/kotlin/me/meeshy/feature/kit/KitCatalogK06.kt` (`entryK06`, seize états, dont dix touchables, miroir de `MeeshyKitCatalog+K06`).
 
+**Relecture du lot Android (2026-11-14), corrections apportées :**
+- **L'icône de tête garde sa taille** : le retrait vers le titre (`MeeshySpacing.md`) se pose AUTOUR de l'icône de `MeeshyIconSize.xxl`, et non dedans (l'icône ne tombait qu'à 10 dp).
+- **Désactivé, la raison garde son encre** (choix 11, iOS) : tête, titre et accessoire baissent à 62 %, le sous-titre non, et le filet non plus. La ligne entière ne baissait plus d'un bloc.
+- **Tête et pastille du titre muettes pour le lecteur d'écran**, comme sur iOS (`accessibilityHidden`) : le titre les nomme.
+- **`selected` ne vit que sur la coche et la case** (§ 5) : une bascule dit son état par `stateDescription`, jamais par une sélection en plus ; une coche non retenue est lue « non sélectionnée ». Le composant iOS pose encore `isSelected` sur une bascule ouverte (`isChosen`), à l'inverse de sa propre fiche : écart iOS, hors de ce lot.
+- **La coche paraît et s'efface en fondu de 200 ms** (`AnimatedVisibility`, opacité seule, rien sous « Réduire les animations »), le miroir de l'animation d'accessoire d'iOS.
+
+Écarts imposés par la plateforme ou laissés : la tête de ligne en `dp` ne suit pas la taille du texte (iOS : `MeeshyFont.relative`) ; la ligne mesure 48 dp au lieu de 46 dès qu'elle se touche (choix 1) ; l'instantané « pressé » est celui du repos (choix 4).
+
 **Non vérifié localement** : aucun SDK Android dans le conteneur. Compilation, témoins et instantanés ne se prouvent que par `android.yml` sur la PR.
