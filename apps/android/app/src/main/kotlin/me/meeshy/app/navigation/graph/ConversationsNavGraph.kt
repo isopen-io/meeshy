@@ -127,19 +127,20 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
         )
     }
-    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
+    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { entry, dismiss ->
         // #14671 — un post, un réel ou une story ouverts depuis les résultats y reviennent (même requête, même
         // onglet) ; une conversation ouverte ferme la recherche, comme iOS.
         GlobalSearchScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigateClosingSheet(Routes.chat(conversationId))
+                navController.navigateClosingSheet(entry, Routes.chat(conversationId))
             },
             onOpenMessage = { conversationId, messageId ->
-                navController.navigateClosingSheet(Routes.chat(conversationId, highlightMessageId = messageId))
+                navController.navigateClosingSheet(entry, Routes.chat(conversationId, highlightMessageId = messageId))
             },
             onOpenPost = { destination ->
                 navController.navigateKeepingSheet(
+                    entry,
                     when (destination) {
                         is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
                         is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)
@@ -150,16 +151,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenUser = rememberProfileOpenerOverSheet(navController),
         )
     }
-    sheetComposable(Routes.DASHBOARD, navController) { _, dismiss ->
+    sheetComposable(Routes.DASHBOARD, navController) { entry, dismiss ->
         DashboardScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigateKeepingSheet(Routes.chat(conversationId))
+                navController.navigateKeepingSheet(entry, Routes.chat(conversationId))
             },
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
             onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
-            onShareLinks = { navController.navigateKeepingSheet(Routes.MY_SHARE_LINKS) },
-            onContacts = { navController.navigateKeepingSheet(Routes.CONTACTS) },
+            onShareLinks = { navController.navigateKeepingSheet(entry, Routes.MY_SHARE_LINKS) },
+            onContacts = { navController.navigateKeepingSheet(entry, Routes.CONTACTS) },
         )
     }
     sheetComposable(

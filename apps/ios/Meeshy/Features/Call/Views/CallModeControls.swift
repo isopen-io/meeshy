@@ -300,7 +300,7 @@ struct CallEffectsModeControls: View {
     /// P8b — un verre SÉPARÉ, posé au-dessus de la barre à la place de la bande de looks :
     /// Luminosité, un titre et son curseur ; Flou du fond, une ligne titrée à interrupteur.
     private var settingsPanel: some View {
-        CallEffectsPanel {
+        CallEffectsPanel(label: CallModeCopy.settingsPanel) {
             smoothingRow
             brightnessRow
             blurRow
@@ -519,7 +519,7 @@ struct CallMontageModeControls: View {
     }
 
     private var settingsPanel: some View {
-        CallEffectsPanel {
+        CallEffectsPanel(label: CallModeCopy.settingsPanel) {
             Button(action: captureFaces) {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "person.crop.square")

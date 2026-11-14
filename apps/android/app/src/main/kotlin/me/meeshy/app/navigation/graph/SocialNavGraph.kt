@@ -86,13 +86,13 @@ internal fun NavGraphBuilder.socialNavGraph(
         route = Routes.USER_POSTS,
         navController = navController,
         arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-    ) { _, dismiss ->
+    ) { entry, dismiss ->
         UserPostsScreen(
             onBack = dismiss,
-            onPostClick = { postId -> navController.navigateKeepingSheet(Routes.reels(seed = postId)) },
-            onOpenPost = { postId -> navController.navigateKeepingSheet(Routes.postDetail(postId)) },
-            onOpenProfile = { userId -> navController.navigateKeepingSheet(Routes.profile(userId)) },
-            onOpenHashtag = { tag -> navController.navigateKeepingSheet(Routes.hashtag(tag)) },
+            onPostClick = { postId -> navController.navigateKeepingSheet(entry, Routes.reels(seed = postId)) },
+            onOpenPost = { postId -> navController.navigateKeepingSheet(entry, Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigateKeepingSheet(entry, Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigateKeepingSheet(entry, Routes.hashtag(tag)) },
         )
     }
     sheetComposable(

@@ -233,6 +233,9 @@ struct CallEffectsAddButton: View {
 /// P8b · C1 — le verre SÉPARÉ posé au-dessus de la barre, à la place de la bande de looks : celui
 /// des réglages, celui de la liste des effets appliqués.
 struct CallEffectsPanel<Content: View>: View {
+    /// P8b.1 — le nom que VoiceOver donne au groupe : « Réglages de mon image » pour les réglages ;
+    /// la liste des effets appliqués se nomme par son propre titre, visible dans le verre.
+    var label = ""
     @ViewBuilder let content: () -> Content
 
     private static var shape: RoundedRectangle {
@@ -248,6 +251,7 @@ struct CallEffectsPanel<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .callChromeGlass(in: Self.shape)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
         .padding(.horizontal, MeeshySpacing.lg)
     }
 }
