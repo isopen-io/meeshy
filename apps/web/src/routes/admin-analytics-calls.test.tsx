@@ -92,17 +92,13 @@ describe('l’onglet Appels — la fiabilité, mesurée sur la télémétrie des
     expect(host.querySelector('[data-admin-stats-section="calls-reliability"]')?.textContent).toContain('Période : 30 derniers jours');
   });
 
-  test('un échantillon plafonné se dit en une ligne ; la période est derrière un (i) nommé par sa question, note lue du lecteur d’écran', async () => {
+  test('un échantillon plafonné se dit en une ligne, période comprise, sans (i) qui la répéterait', async () => {
     const { deps } = statsGateway({ '/api/v1/admin/analytics/calls': { ok: true, data: callsWith({ sampled: true }) } });
     const host = await openTab(deps);
 
-    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Échantillon : les 5 000 appels les plus récents');
-    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).not.toContain('plafonné');
-    const info = host.querySelector<HTMLButtonElement>('[data-admin-notice="warning"] button[aria-label="Sur quelle période portent ces chiffres ?"]');
-    expect(info).not.toBeNull();
-    const note = host.querySelector(`#${info?.getAttribute('aria-controls')}`);
-    expect(note?.textContent).toContain('les 5 000 relevés les plus récents de la période');
-    expect(note?.className).toContain('sr-only');
+    const notice = host.querySelector('[data-admin-notice="warning"]');
+    expect(notice?.textContent).toContain('Échantillon : les 5 000 appels les plus récents de la période');
+    expect(notice?.querySelector('button')).toBeNull();
   });
 
   test('sans plafond, aucune notice', async () => {

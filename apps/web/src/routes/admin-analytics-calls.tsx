@@ -1,8 +1,6 @@
 import { AdminBarChart } from '@/components/admin/charts/bar-chart';
 import { peakOf } from '@/components/admin/charts/chart-scale';
 import { AdminShareChart } from '@/components/admin/charts/share-chart';
-import { adminInfo } from '@/components/admin/info-note';
-import { InfoHintButton, InfoHintText, useInfoHint } from '@/components/info-hint';
 import { AdminStatGrid } from '@/components/admin/stat-card';
 import { AdminEmptyState, AdminInlineNotice } from '@/components/admin/states';
 import { callEndReasonLabel, callIssueLabel, formatDecimal, mergeByLabel } from '@/lib/admin/analytics-labels';
@@ -178,7 +176,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
 
   return (
     <div className="grid gap-6">
-      {data?.sampled === true ? <SampledNotice language={language} /> : null}
+      {data?.sampled === true ? <AdminInlineNotice tone="warning" text={translateAdmin(language, 'admin.analytics.calls.sampled')} /> : null}
 
       <StatsSection id="calls-reliability" title={translateAdmin(language, 'admin.analytics.calls.reliability.title')} note={windowNote(language, period)}>
         <AdminStatGrid columns={4}>
@@ -332,18 +330,6 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
  * millisecondes pour les délais et la latence ; secondes pour la durée.
  * Une moyenne `null` (aucun appel connecté) se dit « — », jamais « 0 ms ».
  */
-/** Une ligne qui dit le plafond ; la précision de période est derrière un (i). */
-function SampledNotice({ language }: { readonly language: AdminLanguage }) {
-  const hint = adminInfo(translateAdmin(language, 'admin.analytics.calls.sampled.question'), translateAdmin(language, 'admin.analytics.calls.sampled.detail'));
-  const state = useInfoHint();
-  return (
-    <div className="grid gap-1">
-      <AdminInlineNotice tone="warning" text={translateAdmin(language, 'admin.analytics.calls.sampled')} action={<InfoHintButton hint={hint} state={state} />} />
-      <InfoHintText hint={hint} state={state} />
-    </div>
-  );
-}
-
 export function AdminCallsTab({ language, deps, period }: TabProps) {
   const days = callsWindowOf(period);
   const calls = useStatsQuery(analyticsKeys.calls(days), (signal) => loadAnalyticsCalls({ ...deps, days, signal }));
