@@ -219,8 +219,35 @@ describe('l’Atlas, la vitrine, le voyage et la joute ne disent rien deux fois'
     );
     expect(html).toMatch(/id="game-league-title"[^>]*>\s*Semaine du/);
     expect(html).not.toMatch(/id="game-league-title"[^>]*>[^<]*Joute/);
-    expect(html).toMatch(/id="game-league-pseudonym-title" class="sr-only"/);
     expect(html).toContain('data-game-league-leave');
+  });
+
+  test('Joute : la carte du nom de joute garde un titre VU tant qu’aucune phrase ne dit le nom (sinon il ne resterait qu’un bouton rouge)', async () => {
+    const base = game.league;
+    if (base === undefined) throw new Error('la fixture porte la ligue');
+    const render = async (pseudonym: string | null) =>
+      visibleText(
+        (
+          await mount(
+            <GameLeague
+              league={{ ...base, pseudonym }}
+              levelRecord={14}
+              week={{ status: 'ready', week: leagueWeekFixture() }}
+              online
+              now={new Date('2026-11-05T14:00:00')}
+              consent={{ pending: false }}
+              pseudonym={{ pending: false }}
+              onConsent={() => undefined}
+              onPseudonym={() => undefined}
+              onRetryWeek={() => undefined}
+            />,
+          )
+        ).querySelector('#game-league-pseudonym-card') as Element,
+      );
+    const named = await render('Colibri-4821');
+    expect(named).toContain('Tu joues sous le nom Colibri-4821.');
+    expect(named).not.toContain('Ton nom de joute');
+    expect(await render(null)).toContain('Ton nom de joute');
   });
 });
 

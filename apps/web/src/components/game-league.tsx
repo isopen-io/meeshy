@@ -241,7 +241,7 @@ export function GameLeague(props: GameLeagueProps) {
       </GameCard>
 
       <GameCard id="game-league-pseudonym-card" labelledBy="game-league-pseudonym-title">
-        <h2 id="game-league-pseudonym-title" className="sr-only">
+        <h2 id="game-league-pseudonym-title" className={league.pseudonym === null ? 'text-body font-bold' : 'sr-only'} style={{ color: GAME_INK }}>
           {gameText('game.league.pseudonym.title')}
         </h2>
         {league.pseudonym === null ? null : (
