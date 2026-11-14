@@ -15,7 +15,6 @@ import {
   CommunityHero,
   CommunityPreviewCard,
   CommunityRefused,
-  CommunityStats,
   PrivacyToggle,
   SubmitButton,
 } from './communities-parts';
@@ -137,13 +136,6 @@ describe('le détail', () => {
     expect(sansPhoto).not.toContain('harbor_41.png');
   });
 
-  test('les compteurs sont des nombres ENTIERS, dans la langue', () => {
-    const html = plain(renderToStaticMarkup(<CommunityStats language="fr" community={community()} />));
-    expect(html).toContain('1 284');
-    expect(html).toContain('Membres');
-    expect(html).toContain('Conversations');
-  });
-
   test('une conversation ouvre son fil ; sans titre elle se nomme par son identifiant', () => {
     expect(renderToStaticMarkup(<CommunityConversationRow language="fr" conversation={conversation()} />)).toContain('href="/c/c-general"');
     expect(renderToStaticMarkup(<CommunityConversationRow language="fr" conversation={conversation({ title: null })} />)).toContain('general');
@@ -159,7 +151,6 @@ describe('le détail', () => {
     const html = renderToStaticMarkup(
       <>
         <CommunityHero language="fr" community={community()} />
-        <CommunityStats language="fr" community={community()} />
       </>,
     );
     expect(html).not.toContain('<button');

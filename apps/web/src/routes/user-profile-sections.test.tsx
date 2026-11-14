@@ -138,7 +138,8 @@ describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un
     const el = empty('all');
     expect(el.querySelector('[data-profile-posts-empty]')?.getAttribute('data-profile-posts-empty')).toBe('all');
     expect(el.textContent).toContain('Aucune publication');
-    expect(el.textContent).toContain('Rien de public à lire');
+    expect(el.textContent).not.toContain('Rien de public à lire');
+    expect(el.querySelectorAll('p').length).toBe(1);
   });
 
   /* Le bandeau annonce « 2 Réels » au-dessus : lui répondre « Aucune
@@ -202,9 +203,10 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect(card.textContent).not.toContain('demandent un compte');
   });
 
-  test('sans relation : ajouter, écrire, bloquer', () => {
+  test('sans relation : ajouter et écrire au repos ; bloquer et signaler derrière ⋯', () => {
     const el = relationSection({ relation: { kind: 'none' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write']);
+    expect(el.querySelector('[data-profile-more]')?.getAttribute('aria-expanded')).toBe('false');
   });
 
   /* AMENDÉ PAR #7122 — la ligne de la demande arrive AVEC l'identité, et ce
@@ -233,9 +235,9 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect([...el.querySelectorAll('[data-profile-action]')].every((n) => n.hasAttribute('disabled'))).toBe(true);
   });
 
-  test('un CONTACT ne se redemande pas : écrire et bloquer, rien d’autre', () => {
+  test('un CONTACT ne se redemande pas : écrire au repos, bloquer et signaler derrière ⋯', () => {
     const el = relationSection({ relation: { kind: 'friend' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write', 'block', 'report']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write']);
     expect(el.querySelector('[data-profile-context]')).toBeNull();
   });
 });
