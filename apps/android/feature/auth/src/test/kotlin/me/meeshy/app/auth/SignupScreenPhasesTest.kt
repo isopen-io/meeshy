@@ -170,6 +170,32 @@ class SignupScreenPhasesTest {
     }
 
     @Test
+    fun `already have an account goes to sign-in through its own path, not through close`() {
+        val rig = rig()
+        var closed = false
+        var signedIn = false
+        compose.setContent {
+            MeeshyTheme {
+                SignupScreen(
+                    onClose = { closed = true },
+                    onRegistered = {},
+                    onSignIn = { signedIn = true },
+                    viewModel = rig.viewModel,
+                )
+            }
+        }
+        typePhone("0612345678")
+        typeEmail("ada@meeshy.me")
+
+        compose.onNodeWithTag(SIGNUP_SIGN_IN_TAG).performScrollTo().performClick()
+        compose.waitForIdle()
+
+        assertThat(signedIn).isTrue()
+        assertThat(closed).isFalse()
+        assertThat(rig.handoffs.signupEmail.take()).isEqualTo("ada@meeshy.me")
+    }
+
+    @Test
     fun `the card carries no second title and says what no password means, at rest`() {
         show(rig())
         typePhone("0612345678")
