@@ -287375,13 +287375,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ترتيب الآخرين مجمّد كل يوم عند الساعة 4 صباحًا"
+            "value": "يُجمَّد ترتيب الآخرين كل يوم عند الساعة 4 صباحًا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rangliste der anderen täglich um 4 Uhr festgehalten"
+            "value": "Plätze der anderen täglich um 4 Uhr festgehalten"
           }
         },
         "en": {
@@ -287422,19 +287422,19 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لماذا الترتيب مجمّد؟"
+            "value": "لماذا يُجمَّد الترتيب؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Warum ist die Rangliste festgehalten?"
+            "value": "Warum sind die Plätze festgehalten?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Why are the standings frozen?"
+            "value": "Why are the standings set?"
           }
         },
         "es": {
@@ -309994,7 +309994,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حلم هذه الليلة: %1$@ من %2$@ فصول، و%3$@ لإنجازها."
+            "value": "حلم هذه الليلة: %1$@ من %2$@ فصول، و%3$@ لتحقيقها."
           }
         },
         "de": {
