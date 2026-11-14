@@ -8,6 +8,7 @@
  */
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -363,7 +364,7 @@ export function registerMessageSearchRoute(
       // root level. Migration to sendSuccess requires a coordinated client update
       // (breaking change).
       // #7950 — la citation d'une story retirée sort expurgée (une requête).
-      const servedResults = await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, mappedResults));
+      const servedResults = await withCallSummaryParticipantNames(prisma, await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, mappedResults)), { conversationId });
       reply.send({
         success: true,
         data: servedResults,

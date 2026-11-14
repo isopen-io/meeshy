@@ -149,10 +149,16 @@ final class ViewOnceDeliveryStatusTests: XCTestCase {
         XCTAssertTrue(content(for: viewOnceMessage(status: .sending, isOpened: true)).pinsPendingDelivery)
     }
 
-    func test_flatRow_ordinaryMessage_doesNotPinItsDelivery_thatIsIssue16542() {
+    func test_flatRow_ordinaryOwnMessage_pinsItsPendingDelivery_16542() {
         let ordinary = Message(id: "m1", conversationId: "c1", senderId: "me", content: "bonjour", deliveryStatus: .sending, isMe: true)
 
-        XCTAssertFalse(content(for: ordinary).pinsPendingDelivery, "#16542 reste à solder pour toutes les bulles")
+        XCTAssertTrue(content(for: ordinary).pinsPendingDelivery, "un envoi en cours se voit au repos sur toute bulle de l'expéditeur (#16542, #18420)")
+    }
+
+    func test_flatRow_receivedMessage_neverPinsADelivery() {
+        let received = Message(id: "m2", conversationId: "c1", senderId: "them", content: "salut", deliveryStatus: .read, isMe: false)
+
+        XCTAssertFalse(content(for: received).pinsPendingDelivery, "un accusé ne dit rien à celui qui reçoit")
     }
 
     func test_metaRow_inFlightStatuses_showAtRest_whenPinned() {
