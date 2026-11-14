@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">بلغتَ حدّ التعليقات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
     <string name="post_daily_limit_reaction">بلغتَ حدّ التفاعلات: يُستأنف عند الساعة %1$s. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
     <string name="post_daily_limit_reaction_untimed">بلغتَ حدّ التفاعلات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
-    <string name="bubble_failed_attachment_right">هذا النوع من المرفقات غير مسموح به هنا.</string>
+    <string name="bubble_failed_attachment_right">هذا النوع من المرفقات غير مسموح به هنا بعد.</string>
     <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل.</string>
     <string name="bring_silent_question">ماذا لو كان هاتفه في الوضع الصامت؟</string>
     <string name="bring_silent_note">قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط.</string>

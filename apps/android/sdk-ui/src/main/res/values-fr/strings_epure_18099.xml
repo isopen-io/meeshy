@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">Limite de commentaires atteinte. Elle compte vos gestes, jamais vos étincelles.</string>
     <string name="post_daily_limit_reaction">Limite de réactions atteinte : reprise à %1$s. Elle compte vos gestes, jamais vos étincelles.</string>
     <string name="post_daily_limit_reaction_untimed">Limite de réactions atteinte. Elle compte vos gestes, jamais vos étincelles.</string>
-    <string name="bubble_failed_attachment_right">Ce type de pièce jointe n\'est pas autorisé ici.</string>
+    <string name="bubble_failed_attachment_right">Ce type de pièce jointe n’est pas encore autorisé ici.</string>
     <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même verrouillé.</string>
     <string name="bring_silent_question">Et si son téléphone est en silencieux ?</string>
     <string name="bring_silent_note">Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.</string>

@@ -82,7 +82,7 @@ class EpureComposantsPartagesStringsTest {
             .isEqualTo("Non envoyé : média introuvable. Touchez pour le retirer, puis rechoisissez-le.")
         assertThat(text("fr", "bubble_failed_location_refused"))
             .isEqualTo("Non envoyé : lieu du fichier non retirable. Retirez-le, puis prenez-en un autre.")
-        assertThat(text("fr", "bubble_failed_attachment_right")).isEqualTo("Ce type de pièce jointe n'est pas autorisé ici.")
+        assertThat(text("fr", "bubble_failed_attachment_right")).isEqualTo("Ce type de pièce jointe n’est pas encore autorisé ici.")
     }
 
     @Test

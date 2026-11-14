@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">Limite di commenti raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
     <string name="post_daily_limit_reaction">Limite di reazioni raggiunto: riprende alle %1$s. Conta i tuoi gesti, mai le tue scintille.</string>
     <string name="post_daily_limit_reaction_untimed">Limite di reazioni raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
-    <string name="bubble_failed_attachment_right">Questo tipo di allegato non è consentito qui.</string>
+    <string name="bubble_failed_attachment_right">Questo tipo di allegato non è ancora consentito qui.</string>
     <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche bloccato.</string>
     <string name="bring_silent_question">E se il suo telefono è in silenzioso?</string>
     <string name="bring_silent_note">In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario.</string>

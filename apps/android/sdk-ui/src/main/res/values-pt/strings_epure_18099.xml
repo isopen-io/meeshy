@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">Limite de comentários atingido. Conta seus gestos, nunca suas faíscas.</string>
     <string name="post_daily_limit_reaction">Limite de reações atingido: retoma às %1$s. Conta seus gestos, nunca suas faíscas.</string>
     <string name="post_daily_limit_reaction_untimed">Limite de reações atingido. Conta seus gestos, nunca suas faíscas.</string>
-    <string name="bubble_failed_attachment_right">Este tipo de anexo não é permitido aqui.</string>
+    <string name="bubble_failed_attachment_right">Este tipo de anexo ainda não é permitido aqui.</string>
     <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado.</string>
     <string name="bring_silent_question">E se o telefone dela estiver no silencioso?</string>
     <string name="bring_silent_note">Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário.</string>

@@ -5,7 +5,7 @@
     <string name="post_daily_limit_comment_untimed">Kommentarlimit erreicht. Es zählt deine Aktionen, nie deine Funken.</string>
     <string name="post_daily_limit_reaction">Reaktionslimit erreicht: weiter ab %1$s. Es zählt deine Aktionen, nie deine Funken.</string>
     <string name="post_daily_limit_reaction_untimed">Reaktionslimit erreicht. Es zählt deine Aktionen, nie deine Funken.</string>
-    <string name="bubble_failed_attachment_right">Dieser Anhangstyp ist hier nicht erlaubt.</string>
+    <string name="bubble_failed_attachment_right">Dieser Anhangstyp ist hier noch nicht erlaubt.</string>
     <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt.</string>
     <string name="bring_silent_question">Und wenn das Telefon lautlos ist?</string>
     <string name="bring_silent_note">Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
