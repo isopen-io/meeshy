@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 
 import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_CARD_MAX_WIDTH, RECORDING_SLOT_MIN, recordingBannerPresent, recordingSlotHeight, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE, TOP_BANNER_LANDSCAPE_MIN, TOP_BANNER_MARGIN, topBannerNeighborOf, topBannerSpan, topBannerStackMaxWidth } from './call-top-banners';
@@ -157,8 +159,8 @@ describe('ma vignette vue de la pile (L1.8)', () => {
     expect(topBannerNeighborOf(null, 852)).toBeNull();
   });
 
-  test('la carte d’accord du web garde sa largeur (`max-w-md`, 448)', async () => {
-    const layer = await Bun.file(new URL('../../components/call-recording-layer.tsx', import.meta.url)).text();
+  test('la carte d’accord du web garde sa largeur (`max-w-md`, 448)', () => {
+    const layer = readFileSync(new URL('../../components/call-recording-layer.tsx', import.meta.url), 'utf8');
     expect(layer).toContain('mx-auto max-w-md');
     expect(RECORDING_CARD_MAX_WIDTH).toBe(448);
   });

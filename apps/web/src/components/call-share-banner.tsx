@@ -124,7 +124,7 @@ export function CallServiceBanners({ call, capturing, hidden, language }: { read
   return (
     <>
       <HeldSwap value={capturing ? call : null} shape="top" className="flex w-full justify-center" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-capture-slot="">
-        {(held) => <CallCaptureAlerts members={held.members} notes={held.journalNotes} language={language} />}
+        {(held) => <CallCaptureAlerts members={held.members} notes={held.journalNotes ?? []} language={language} />}
       </HeldSwap>
       <HeldSwap value={notice === 'none' ? null : notice} shape="top" className="flex w-full justify-center px-3" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-video-notice-slot="">
         {(held) => <CallVideoNoticePill notice={held} language={language} />}

@@ -30,7 +30,7 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
 import { autoSharer, resolveSpotlight, type FullScreenLevel } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_CARD_MAX_WIDTH, recordingBannerPresent, recordingSlotHeight, selfTileClearance, topBannerNeighborOf, topBannerSpan, topBannerStackMaxWidth, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
+import { groupStageTop, headerFloatsOverGroupStage, orderedTopBanners, RECORDING_CARD_MAX_WIDTH, recordingBannerPresent, recordingSlotHeight, selfTileClearance, TOP_BANNER_LANDSCAPE_MIN, topBannerNeighborOf, topBannerSpan, topBannerStackMaxWidth, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import { callLayout, callStatusKey, selfCameraShown, type PlainCallKey, canShareScreen, hasVideo, isCompactHeight, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
@@ -601,7 +601,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const railsShown = rails.length > 0 && !hidden;
   /* L1.8 (#17965) : couchée, la pile se borne à 560 et se centre ; ma vignette du duo garde son coin à côté d'elle tant qu'elle y tient. */
   const tileAtRest = layout === 'video-duo' ? selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: 0, bleed: bleedEnd, railsOpen: railsShown }) : null;
-  const span = topBannerSpan({ window: viewport, safeHorizontal: 0, selfTile: topBannerNeighborOf(tileAtRest, viewport.width), minimumWidth: recordingCard > 0 ? RECORDING_CARD_MAX_WIDTH : undefined });
+  const span = topBannerSpan({ window: viewport, safeHorizontal: 0, selfTile: topBannerNeighborOf(tileAtRest, viewport.width), minimumWidth: recordingCard > 0 ? RECORDING_CARD_MAX_WIDTH : TOP_BANNER_LANDSCAPE_MIN });
   const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} reserveEnd={reserveEnd} reserve={reserve} maxWidth={topBannerStackMaxWidth(span)} /> : null;
   const selfTopInset = span.keepsSelfTileBeside ? 0 : selfTileClearance(present, recordingCard);
   /* P11.1 : sur la grille d'un groupe, l'en-tête flotte sur les vignettes du haut ; à la une, en hauteur compacte ou sous un bandeau, la scène reste sous lui (L4, P14, L4.11). Les vignettes rejoignent leur nouvelle place en glissant. */
