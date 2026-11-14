@@ -5,18 +5,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,16 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,7 +37,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
-import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallCaptionLabels
 import me.meeshy.sdk.model.call.CallCaptionsFooter
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
@@ -56,8 +47,6 @@ import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
-
-private val CAPTION_TARGET = 48.dp
 
 /**
  * The captions as the pill carries them (#17343): they read the live state themselves, so the pill and the glass of a
@@ -210,14 +199,14 @@ private fun CallCaptionsContent(
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
             CallCaptionsFootNote(footer, modifier = Modifier.weight(1f))
-            if (opensJournal) CallJournalChip(onOpenJournal)
+            if (opensJournal) CallJournalButton(isOpen = false, onClick = onOpenJournal)
         }
     }
 }
 
-/** The foot: what the lines say of their translation; it fades from one note to the next, never swaps at once. */
+/** The foot: what the lines say of their translation; it fades from one note to the next, never swaps at once. The journal open in the pill carries the same foot (#17964). */
 @Composable
-private fun CallCaptionsFootNote(footer: CallCaptionsFooter, modifier: Modifier = Modifier) {
+internal fun CallCaptionsFootNote(footer: CallCaptionsFooter, modifier: Modifier = Modifier) {
     val reduceMotion = rememberCallReduceMotion()
     val note = when (footer) {
         CallCaptionsFooter.None -> null
@@ -265,30 +254,4 @@ private fun rememberSettlingClock(lines: List<CallLiveCaptionLine>): Long {
 private fun CallBandEntry.hashKey(): String = when (this) {
     is CallBandEntry.Sentence -> line.key
     is CallBandEntry.Capture -> "capture:${capture.id}"
-}
-
-/** The « Journal » button: a glass chip of the same atom as the other buttons of the call, a 48 dp target. */
-@Composable
-private fun CallJournalChip(onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val hint = stringResource(R.string.call_captions_journal_hint)
-    CallGlassButtonSurface(
-        role = CallButtonRole.Neutral,
-        shape = CircleShape,
-        isPressed = pressed,
-        modifier = Modifier
-            .defaultMinSize(minHeight = CAPTION_TARGET, minWidth = CAPTION_TARGET)
-            .clip(CircleShape)
-            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick),
-    ) {
-        Text(
-            text = stringResource(R.string.call_captions_journal),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = MeeshySpacing.md),
-        )
-    }
 }
