@@ -199,12 +199,30 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' } })} canShare={false} />)).not.toContain('data-call-quality=');
   });
 
-  test('ma vidéo gelée puis suspendue se dit par une pastille', async () => {
+  /* E4 (#18227) : la survie de ma vidéo n'est plus une pastille de la rangée (`data-call-pill`) mais « Vidéo réduite », un maillon de verre partagé de la pile du haut, annoncé poliment. */
+  const stackOf = (html: string): string => html.slice(html.indexOf('data-call-banner-stack'));
+
+  test('ma vidéo gelée puis suspendue se dit par la pastille « Vidéo réduite », en verre du kit, dans la pile du haut', async () => {
     await loadColdCallViews();
-    expect(renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />)).toContain('data-call-pill="video-frozen"');
+    const frozen = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />);
+    expect(frozen).not.toContain('data-call-pill="video-frozen"');
+    expect(stackOf(frozen)).toContain('data-call-video-notice="reduced"');
+    expect(stackOf(frozen)).toContain('Réseau faible : votre vidéo est ralentie');
     const paused = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'suspended' }) })} canShare={false} />);
-    expect(paused).toContain('data-call-pill="video-suspended"');
-    expect(paused).toContain('Réseau faible : votre vidéo est en pause, l’audio continue');
+    expect(paused).not.toContain('data-call-pill="video-suspended"');
+    expect(stackOf(paused)).toContain('data-call-video-notice="paused"');
+    expect(stackOf(paused)).toContain('Réseau faible : votre vidéo est en pause, l’audio continue');
+    const tag = /<[^>]*data-call-video-notice="paused"[^>]*>/.exec(paused)?.[0] ?? '';
+    expect(tag).toContain('role="status"');
+    expect(tag).toContain('data-glass-tone=');
+  });
+
+  test('« Vidéo réduite » se tait caméra coupée, en appel audio et avant l’appel établi (loi des pastilles de service)', async () => {
+    await loadColdCallViews();
+    const frozen = quality({ level: 'poor', survival: 'frozen' });
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, cameraOn: false })} canShare={false} />)).not.toContain('data-call-video-notice');
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, media: 'audio', cameraOn: false })} canShare={false} />)).not.toContain('data-call-video-notice');
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, phase: { kind: 'connecting' }, connectedAt: null })} canShare={false} />)).not.toContain('data-call-video-notice');
   });
 });
 
