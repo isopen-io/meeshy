@@ -48,6 +48,7 @@ const DURATION_KEY = { 60: 'shareLocation.oneHour', 480: 'shareLocation.eightHou
 export const SHARE_LOCATION_PROBLEM_KEY = {
   'location-denied': 'shareLocation.denied',
   'location-unavailable': 'shareLocation.unavailable',
+  'withdrawal-pending': 'shareLocation.stopPending',
   offline: 'shareLocation.offline',
   unconfirmed: 'shareLocation.offline',
   'rate-limited': 'shareLocation.rateLimited',

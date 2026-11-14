@@ -196,6 +196,7 @@ const ar = {
   'shareLocation.offline': 'تتطلب مشاركة الموقع اتصالًا بالشبكة.',
   'shareLocation.rateLimited': 'إرسالات كثيرة جدًا، حاول بعد لحظة.',
   'shareLocation.failed': 'لم تتم مشاركة الموقع، حاول مرة أخرى.',
+  'shareLocation.stopPending': 'ستتوقف المشاركة فور عودة الاتصال.',
 } as const satisfies CirclesCatalog;
 
 export default ar;
