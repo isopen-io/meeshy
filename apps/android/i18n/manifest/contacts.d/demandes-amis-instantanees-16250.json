@@ -17,15 +17,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "contacts_requests_empty_received_subtitle",
-          "status": "android-only"
-        },
-        {
           "androidName": "contacts_requests_empty_sent",
-          "status": "android-only"
-        },
-        {
-          "androidName": "contacts_requests_empty_sent_subtitle",
           "status": "android-only"
         },
         {

@@ -18,7 +18,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * « Aucune publication » (iOS `AdaptiveContentUnavailableView`, `text.bubble`) : un disque dégradé aux couleurs de
- * la marque derrière une bulle de discussion, puis le titre et la phrase qui dit ce qui viendra remplir le fil.
+ * la marque derrière une bulle de discussion, puis le titre seul.
  */
 @Composable
 internal fun FeedEmptyState(modifier: Modifier = Modifier) {
@@ -44,7 +44,7 @@ internal fun FeedEmptyState(modifier: Modifier = Modifier) {
             }
         },
         title = stringResource(R.string.feed_empty),
-        subtitle = stringResource(R.string.feed_empty_subtitle),
+        subtitle = null,
         modifier = modifier,
     )
 }

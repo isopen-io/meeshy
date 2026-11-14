@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="community_add_channel_empty_hint">Crea prima una conversazione per aggiungerla qui.</string>
+    <string name="community_create_privacy_private_description">Solo i membri invitati possono unirsi</string>
+    <string name="community_create_privacy_public_description">Tutti possono scoprirla e unirsi</string>
+</resources>

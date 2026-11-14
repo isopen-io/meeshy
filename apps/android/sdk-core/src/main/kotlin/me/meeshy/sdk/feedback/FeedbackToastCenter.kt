@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.feedback.FeedbackToast
+import me.meeshy.sdk.model.feedback.FeedbackToastInfo
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
 
 /**
@@ -26,13 +27,18 @@ public class FeedbackToastCenter internal constructor(private val clock: () -> L
 
     public val current: StateFlow<FeedbackToast?> = state.asStateFlow()
 
-    /** Montre [message] ; [onTap] rend le toast cliquable (tap = action puis fermeture). */
-    public fun show(message: String, kind: FeedbackToastKind = FeedbackToastKind.SUCCESS, onTap: (() -> Unit)? = null) {
+    /** Montre [message] ; [onTap] rend le toast cliquable (tap = action puis fermeture) ; [info] range sa précision derrière un (i). */
+    public fun show(
+        message: String,
+        kind: FeedbackToastKind = FeedbackToastKind.SUCCESS,
+        onTap: (() -> Unit)? = null,
+        info: FeedbackToastInfo? = null,
+    ) {
         if (message.isBlank()) return
         synchronized(lock) {
             val now = clock()
             if (lastShown?.isDuplicateOf(message, kind, now) == true) return
-            val toast = FeedbackToast(nextId++, message, kind, isTappable = onTap != null, shownAtMillis = now)
+            val toast = FeedbackToast(nextId++, message, kind, isTappable = onTap != null, shownAtMillis = now, info = info)
             lastShown = toast
             tapHandler = onTap
             state.value = toast

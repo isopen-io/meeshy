@@ -90,7 +90,7 @@ internal fun ShareRecipientsZone(
         ShareRecipientsZoneContent.Empty -> MeeshyEmptyState(
             icon = MeeshyIcons.Groups,
             title = stringResource(R.string.share_empty_title),
-            subtitle = stringResource(R.string.share_empty_body),
+            subtitle = "",
             accent = accentColor,
             compact = true,
             modifier = modifier.heightIn(max = 280.dp),

@@ -140,7 +140,6 @@ fun CommunityCreateScreen(
     state.errorMessage?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::dismissError,
-            title = { Text(stringResource(R.string.community_create_error_title)) },
             text = { Text(message.ifBlank { stringResource(R.string.community_create_error_default) }) },
             confirmButton = { TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.community_common_ok)) } },
         )

@@ -180,16 +180,22 @@ private fun RepostAttribution(handle: String) {
 @Composable
 private fun AuthorReachLine(post: FeedPostPresentation) {
     val reach = PostReachFormatter.components(username = post.authorUsername, isAuthor = true, viewCount = post.viewCount, impressionCount = post.impressionCount)
-    val impressions = stringResource(R.string.feed_reel_impressions)
-    val views = stringResource(R.string.feed_reel_views)
-    val spoken = "$impressions ${reach.impressions}, $views ${reach.views}"
+    val impressionsLabel = stringResource(R.string.feed_reel_impressions)
+    val viewsLabel = stringResource(R.string.feed_reel_views)
+    val figures = listOfNotNull(
+        reach.impressions?.let { Triple(MeeshyIcons.ChartBar, it, "$impressionsLabel $it") },
+        reach.views?.let { Triple(MeeshyIcons.EyeFilled, it, "$viewsLabel $it") },
+    )
+    if (figures.isEmpty()) return
+    val spoken = figures.joinToString(", ") { it.third }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
     ) {
-        ReachFigure(MeeshyIcons.ChartBar, reach.impressions.orEmpty())
-        Spacer(Modifier.width(MeeshySpacing.sm))
-        ReachFigure(MeeshyIcons.EyeFilled, reach.views.orEmpty())
+        figures.forEachIndexed { index, (icon, figure, _) ->
+            if (index > 0) Spacer(Modifier.width(MeeshySpacing.sm))
+            ReachFigure(icon, figure)
+        }
     }
 }
 

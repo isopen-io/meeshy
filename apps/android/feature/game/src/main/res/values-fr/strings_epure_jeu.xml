@@ -6,15 +6,12 @@
     <string name="game2_showcase_visibility_hint">Un visiteur ne voit que le mois d’obtention, jamais la date exacte.</string>
     <string name="game2_atlas_empty">Pas encore de tampon : écris dans une autre langue.</string>
     <string name="game2_atlas_privacy">Privé par défaut : le jeu garde la langue et la date, jamais l’interlocuteur ni la conversation.</string>
-    <string name="game2_settings_visibility_body">Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.</string>
     <string name="game2_league_pseudonym_invalid">Non valable.</string>
-    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.</string>
+    <string name="game_rules_2_body">Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.</string>
     <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
     <string name="game2_prestige_meo">Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent. Tes aïeux t’offrent un trophée numéroté et %1$s de gloire.</string>
     <string name="game2_season_seal_body">Purement décoratif : un objet à collectionner toutes les %1$s haltes.</string>
-    <string name="game2_settings_notifications_body">Une par jour au plus, sur tous tes appareils.</string>
-    <string name="game2_settings_notifications_switch">Notifications</string>
-    <string name="game2_settings_friends_league_body">Tes amis acceptés et toi vous voyez dans le classement de la semaine ; l’interrupteur retire les deux sens.</string>
+    <string name="game2_settings_friends_league_body">Tes amis acceptés et toi vous voyez dans le classement de la semaine.</string>
     <string name="game_rules_section_rules">Règles</string>
     <string name="game_rules_section_concepts">Concepts</string>
     <string name="game_rules_4_body">Ton niveau baisse d’autant ; ton rang et tes médailles ne baissent pas.</string>
@@ -23,7 +20,6 @@
     <string name="game_rules_7_body">Un rêve chaque nuit, une Offrande, une Flamme qui grandit tant qu’on revient.</string>
     <string name="game_detail_coin_what">La Meesh, c’est ta lumière figée dans une pièce numérotée.</string>
     <string name="game_detail_fact_mint_next">Une sur cent est en or, une sur mille en prisme.</string>
-    <string name="game_flame_panel_freeze_full">Toutes tes Veilleuses sont là.</string>
     <string name="game_notebook_empty">Chaque signe de tes aïeux peut devenir une photo ici.</string>
     <string name="game_error_league_pseudonym_invalid">Non valable.</string>
     <string name="game2_league_pseudonym_hint_change">3 à 20 caractères (lettres, chiffres, . - _). Ni ton nom, ni ton identifiant.</string>
@@ -43,4 +39,34 @@
     <string name="game_photo_camera_unavailable">La caméra n’est pas disponible.</string>
     <string name="game_mint_blocked_debt_plain">Une ombre voile ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.</string>
     <string name="game_sparks_cumul_record">%1$s cet Âge · %2$s en tout</string>
+    <string name="game2_settings_hidden_body">Le jeu disparaît de cet appareil et se ferme aux autres.</string>
+    <string name="game2_settings_hidden_question">Que ferme le masquage ?</string>
+    <string name="game2_settings_hidden_effects">Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.</string>
+    <string name="game2_settings_visibility_question">Qui voit quand je joue ?</string>
+    <string name="game2_settings_visibility_presence">Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.</string>
+    <string name="game2_settings_friends_league_question">Que retire « Me retirer » ?</string>
+    <string name="game2_settings_friends_league_effects">L’interrupteur te retire de leur classement et les retire du tien : les deux sens.</string>
+    <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe.</string>
+    <string name="game_rules_1_body">Écrire, parler, publier, réagir, inviter : chaque vrai échange compte.</string>
+    <string name="game_rules_1_question">Qu’est-ce qui fait jaillir plus d’étincelles ?</string>
+    <string name="game_rules_1_more">Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.</string>
+    <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : elle fige une part de ta lumière.</string>
+    <string name="game_rules_3_question">Combien de lumière une frappe prend-elle ?</string>
+    <string name="game_rules_3_more" formatted="false">Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
+    <string name="game2_league_consent_how_question">Comment suis-je placé ?</string>
+    <string name="game_concept_league_use">Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.</string>
+    <string name="game2_season_none">Aucun voyage en cours.</string>
+    <string name="game_state_missions_progress">Le rêve de cette nuit : %1$s sur %2$s actes.</string>
+    <string name="reveal_streak_subtitle">%1$d jours d’affilée.</string>
+    <string name="game_progression_offline_empty">Hors ligne — aucune progression en mémoire.</string>
+    <string name="progression_elans_empty">Publie une story, un post ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.</string>
+    <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.</string>
+    <string name="game2_guide_moment_league_relegated_means">Les 5 derniers redescendent ; les étincelles repartent de zéro, rien d’autre ne baisse.</string>
+    <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.</string>
+    <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.</string>
+    <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.</string>
+    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé. Cinq renaissances au plus mènent au Sixième Âge.</string>
+    <string name="game_rules_8_body">À chaque évolution, un signe de tes aïeux devient une photo avec Mee et Meo, gardée dans ta Chronique.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % d’étincelles tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.</string>
+    <string name="game_rules_badges_ribbon_question">Que signifient le ruban et l’émail ?</string>
 </resources>

@@ -9,11 +9,7 @@
           "iosKey": "sticker.sheet.intent.bonjour.title",
           "status": "adopted"
         },
-        {
-          "catalog": "ui",
-          "iosKey": "sticker.sheet.intent.bonjour.hint",
-          "status": "adopted"
-        },
+        { "androidName": "sticker_sheet_intent_bonjour_hint", "status": "android-only" },
         {
           "catalog": "ui",
           "iosKey": "sticker.sheet.intent.amour.title",
@@ -79,21 +75,13 @@
           "iosKey": "sticker.sheet.intent.quotidien.title",
           "status": "adopted"
         },
-        {
-          "catalog": "ui",
-          "iosKey": "sticker.sheet.intent.quotidien.hint",
-          "status": "adopted"
-        },
+        { "androidName": "sticker_sheet_intent_quotidien_hint", "status": "android-only" },
         {
           "catalog": "ui",
           "iosKey": "sticker.sheet.intent.humour-noir.title",
           "status": "adopted"
         },
-        {
-          "catalog": "ui",
-          "iosKey": "sticker.sheet.intent.humour-noir.hint",
-          "status": "adopted"
-        },
+        { "androidName": "sticker_sheet_intent_humour_noir_hint", "status": "android-only" },
         {
           "catalog": "ui",
           "iosKey": "sticker.sheet.instants.message",

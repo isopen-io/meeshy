@@ -50,7 +50,7 @@
     <string name="connection_syncing">المزامنة</string>
     <string name="conversations_logout">تسجيل الخروج</string>
     <string name="conversations_retry">إعادة المحاولة</string>
-    <string name="feed_empty">لا توجد منشورات</string>
+    <string name="feed_empty">لا توجد منشورات من جهات اتصالك</string>
     <string name="feed_like">إعجاب</string>
     <string name="feed_title">التدفق</string>
     <string name="login_button">تسجيل الدخول</string>
@@ -68,7 +68,6 @@
     <string name="notifications_title">الإشعارات</string>
     <string name="profile_back">رجوع</string>
     <string name="profile_bio_label">نبذة</string>
-    <string name="profile_cancel">إلغاء</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_edit_title">تعديل الملف الشخصي</string>

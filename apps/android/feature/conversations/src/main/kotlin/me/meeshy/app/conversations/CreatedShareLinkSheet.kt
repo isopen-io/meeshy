@@ -63,11 +63,6 @@ internal fun CreatedShareLinkSheet(joinUrl: String, onDone: () -> Unit, onCustom
                 color = MeeshyTheme.tokens.textPrimary,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
-                text = stringResource(R.string.share_link_created_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
             MeeshyCard {
                 Text(
                     text = joinUrl,

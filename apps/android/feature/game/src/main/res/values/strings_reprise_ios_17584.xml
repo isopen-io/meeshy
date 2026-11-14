@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">You need an accepted friend to form an alliance.</string>
+    <string name="game2_league_locked">The joust opens at level %1$s · you are at level %2$s</string>
+    <string name="game2_settings_hidden_card">The game is hidden on this device.</string>
+    <string name="game_atlas_tiers_prestige">Rebirth opens at level %1$s: it’s optional, your light can also keep growing.</string>
+    <string name="game_concept_atlas_tip_2">Wait for the reply: it takes a message each way.</string>
+    <string name="game_frappe_refused_shadow">A shadow veils your light. Your next sparks will clear it, and we’ll mint.</string>
+    <string name="game_rules_concept_showcase_body">The shelf of your trophies: joust and journey cups, rebirth and Flame trophies.</string>
+    <string name="game_rules_intro">Eight rules, and the whole game fits inside. Meo explains them, Mee shows you the move.</string>
+    <string name="game_state_points_missing">Your light holds %1$s, that is %2$s. Meesh no. %3$s will bind %4$s of it: %5$s still to come.</string>
+    <string name="game_state_points_ready">Your light holds %1$s, that is %2$s: enough to mint Meesh no. %3$s, which will bind %4$s of it.</string>
+    <string name="game_state_points_missing_plain">Your light holds %1$s. Meesh no. %2$s will bind %3$s of it: %4$s still to come.</string>
+    <string name="game_state_season_progress">Journey %1$s, week %2$s of %3$s: stop %4$s of %5$s, and %6$s to the next.</string>
+</resources>

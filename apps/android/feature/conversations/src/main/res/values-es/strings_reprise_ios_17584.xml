@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_error_subtitle">No se pudieron cargar tus conversaciones.</string>
+    <string name="global_search_empty_subtitle">Mensajes, publicaciones, usuarios</string>
+</resources>

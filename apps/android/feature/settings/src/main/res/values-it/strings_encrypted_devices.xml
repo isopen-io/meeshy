@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">Crittografia end-to-end</string>
     <string name="encrypted_devices_title">I miei dispositivi crittografati</string>
     <string name="encrypted_devices_loading">Caricamento dei tuoi dispositivi crittografati</string>
-    <string name="encrypted_devices_offline_empty">Sei offline. Connettiti per vedere i tuoi dispositivi crittografati.</string>
+    <string name="encrypted_devices_offline_empty">Offline: i tuoi dispositivi torneranno con la rete.</string>
     <string name="encrypted_devices_error">Impossibile caricare i tuoi dispositivi crittografati.</string>
     <string name="encrypted_devices_retry">Riprova</string>
-    <string name="encrypted_devices_offline">Sei offline. Questo elenco potrebbe non essere aggiornato.</string>
-    <string name="encrypted_devices_stale">Impossibile aggiornare questo elenco, potrebbe non essere aggiornato.</string>
+    <string name="encrypted_devices_offline">Offline: ultimo elenco noto.</string>
+    <string name="encrypted_devices_stale">Aggiornamento non riuscito: ultimo elenco noto.</string>
     <string name="encrypted_devices_current">Questo dispositivo</string>
     <string name="encrypted_devices_retiring">Rimozione di %1$s in corso</string>
     <string name="encrypted_devices_retire_a11y">Rimuovi %1$s</string>

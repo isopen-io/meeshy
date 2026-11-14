@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_direct_only_here">Neste telefone, a criptografia de ponta a ponta só está disponível para conversas a dois: ainda não é possível criptografar um grupo de ponta a ponta daqui.</string>
     <string name="encryption_irreversible_refused">A encriptação ponto a ponto não se desativa. Para conversar sem ela, crie uma nova conversa.</string>
     <string name="encryption_action_failed">Não foi possível fazer a alteração. Tente novamente.</string>
     <string name="encryption_offline">Está offline: volte a ligar-se para ler ou alterar a encriptação.</string>

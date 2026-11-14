@@ -76,18 +76,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.list.master_pin_required.message",
-          "androidName": "dialogs_master_pin_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.list.master_pin_required.title",
-          "androidName": "dialogs_master_pin_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "common.delete",
           "androidName": "dialogs_removal_delete",
           "status": "adopted"

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">Necesitas un amigo aceptado para sellar una alianza.</string>
+    <string name="game2_league_locked">La justa se abre en el nivel %1$s · estás en el nivel %2$s</string>
+    <string name="game2_settings_hidden_card">El juego está oculto en este dispositivo.</string>
+    <string name="game_atlas_tiers_prestige">El renacimiento se ofrece en el nivel %1$s: es opcional, tu luz también puede seguir creciendo.</string>
+    <string name="game_concept_atlas_tip_2">Espera su respuesta: hace falta un mensaje en cada sentido.</string>
+    <string name="game_frappe_refused_shadow">Una sombra cubre tu luz. Tus próximas chispas la disiparán, y acuñaremos.</string>
+    <string name="game_rules_concept_showcase_body">El estante de tus trofeos: copas de justa y de viaje, trofeos de renacimiento y de Llama.</string>
+    <string name="game_rules_intro">Ocho reglas, y todo el juego cabe en ellas. Meo las explica, Mee te muestra el gesto.</string>
+    <string name="game_state_points_missing">Tu luz tiene %1$s, es decir, %2$s. La Meesh n.º %3$s fijará %4$s: faltan %5$s.</string>
+    <string name="game_state_points_ready">Tu luz tiene %1$s, es decir, %2$s: suficiente para acuñar la Meesh n.º %3$s, que fijará %4$s.</string>
+    <string name="game_state_points_missing_plain">Tu luz tiene %1$s. La Meesh n.º %2$s fijará %3$s: faltan %4$s.</string>
+    <string name="game_state_season_progress">Viaje %1$s, semana %2$s de %3$s: parada %4$s de %5$s, y %6$s hasta la siguiente.</string>
+</resources>

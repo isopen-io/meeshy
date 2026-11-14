@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="context_more_options">Mehr</string>
+    <string name="share_link_permission_messages">Nachrichten</string>
+    <string name="share_link_permission_images">Bilder</string>
+    <string name="share_link_permission_files">Dateien</string>
+    <string name="share_link_permission_history">Verlauf</string>
+    <string name="share_link_section_permissions">Erlauben</string>
+    <string name="share_link_section_access">Von Gästen verlangen</string>
+    <string name="share_link_access_account">Meeshy-Konto</string>
+    <string name="share_link_access_nickname">Benutzername</string>
+    <string name="share_link_access_email">E-Mail</string>
+    <string name="share_link_access_birthday">Geburtsdatum</string>
+    <string name="invite_access_account">Meeshy-Konto</string>
+    <string name="invite_access_nickname">Benutzername</string>
+    <string name="invite_access_email">E-Mail</string>
+    <string name="invite_section_permissions">Erlauben</string>
+    <string name="invite_section_access">Von Gästen verlangen</string>
+    <string name="shareLink_detail_requireAccount">Meeshy-Konto</string>
+    <string name="shareLink_detail_requireBirthday">Geburtsdatum</string>
+    <string name="shareLink_detail_requireEmail">E-Mail</string>
+    <string name="shareLink_detail_requireNickname">Benutzername</string>
+    <string name="shareLink_detail_historyRight">Verlauf</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, die deine Nachrichten lesen können. Zwischen kompatiblen Geräten werden Texte auf Unversehrtheit geprüft.</string>
+    <string name="share_link_field_description">Beschreibung</string>
+    <string name="share_link_field_slug">Link-Adresse</string>
+    <string name="links_hub_share_title">Teilen</string>
+    <string name="links_hub_tracking_title">Tracking</string>
+    <string name="links_hub_affiliate_title">Empfehlung</string>
+    <string name="links_hub_community_title">Communities</string>
+</resources>

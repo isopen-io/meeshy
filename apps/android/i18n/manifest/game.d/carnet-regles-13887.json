@@ -4,12 +4,7 @@
     ":feature:game": {
       "resDir": "feature/game/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.intro",
-          "androidName": "game_rules_intro",
-          "status": "adopted"
-        },
+        { "androidName": "game_rules_intro", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.rules.section_steps",
@@ -24,12 +19,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.1.body",
-          "androidName": "game_rules_1_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.2.title",
           "androidName": "game_rules_2_title",
           "status": "adopted"
@@ -38,12 +27,6 @@
           "catalog": "app",
           "iosKey": "game.rules.3.title",
           "androidName": "game_rules_3_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.3.body",
-          "androidName": "game_rules_3_body",
           "status": "adopted"
         },
         {
@@ -78,12 +61,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.8.body",
-          "androidName": "game_rules_8_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.concept.elans.body",
           "androidName": "game_rules_concept_elans_body",
           "status": "adopted"
@@ -106,12 +83,7 @@
           "androidName": "game_rules_concept_succes_body",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.showcase.body",
-          "androidName": "game_rules_concept_showcase_body",
-          "status": "adopted"
-        },
+        { "androidName": "game_rules_concept_showcase_body", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.rules.concept.atlas.body",
@@ -162,20 +134,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.concept.tailwind.body",
-          "androidName": "game_rules_concept_tailwind_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.concept.duo.name",
           "androidName": "game_rules_concept_duo_name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.duo.body",
-          "androidName": "game_rules_concept_duo_body",
           "status": "adopted"
         },
         {

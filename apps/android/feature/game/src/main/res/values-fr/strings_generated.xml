@@ -65,7 +65,7 @@
     <string name="game2_door_prestige_locked">Au niveau 100</string>
     <string name="game2_door_prestige_ready">Ta lumière peut renaître</string>
     <string name="game2_door_season">Voyage %1$s</string>
-    <string name="game2_door_season_none">Aucun voyage en cours pour le moment</string>
+    <string name="game2_door_season_none">Aucun voyage en cours</string>
     <string name="game2_door_season_steps">Halte %1$s sur %2$s</string>
     <string name="game2_door_season_upcoming">Ouvre le %1$s</string>
     <string name="game2_door_settings">Réglages du jeu</string>
@@ -82,8 +82,7 @@
     <string name="game2_duo_invite">Inviter %1$s</string>
     <string name="game2_duo_invited_invitee">%1$s te propose une alliance pour la semaine.</string>
     <string name="game2_duo_invited_inviter">Invitation envoyée à %1$s. Elle attend sa réponse.</string>
-    <string name="game2_duo_locked">L’alliance s’ouvre au niveau %1$s, pour vous deux. Tu es au niveau %2$s.</string>
-    <string name="game2_duo_no_friends">Il te faut un ami accepté pour faire alliance.</string>
+    <string name="game2_duo_locked">L’alliance s’ouvre au niveau %1$s, pour vous deux.</string>
     <string name="game2_duo_none">Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.</string>
     <string name="game2_duo_pick">Choisis un ami</string>
     <string name="game2_duo_progress_common">À deux : %1$s sur %2$s</string>
@@ -113,7 +112,6 @@
     <string name="game2_guide_moment_league_promoted_next">Une nouvelle semaine commence : les étincelles repartent de zéro.</string>
     <string name="game2_guide_moment_league_promoted_short">Cercle gravi : joute %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">Tu gravis le cercle : joute %1$s !</string>
-    <string name="game2_guide_moment_league_relegated_means">Les 5 derniers de chaque joute redescendent. Ce n’est pas grave : les étincelles repartent de zéro et rien d’autre ne baisse.</string>
     <string name="game2_guide_moment_league_relegated_next">Remonte dès cette semaine : %1$s jusqu’au cercle suivant.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Remonte dès cette semaine : chaque étincelle compte.</string>
     <string name="game2_guide_moment_league_relegated_short">Retour dans la joute %1$s.</string>
@@ -156,7 +154,6 @@
     <string name="game2_league_friends_title">Joute des amis</string>
     <string name="game2_league_friends_unknown">Un ami</string>
     <string name="game2_league_in_promotion">Tu gravis le cercle suivant si tu gardes ta place.</string>
-    <string name="game2_league_locked">La joute s’ouvre au niveau %1$s : chaque semaine, tu te mesures à 29 héros de lumière semblable. Tu es au niveau %2$s.</string>
     <string name="game2_league_me">Toi</string>
     <string name="game2_league_minor">La joute publique n’est pas ouverte pour ton compte. La Joute des amis, elle, l’est toujours.</string>
     <string name="game2_league_name_ambre">Ambre</string>
@@ -189,7 +186,7 @@
     <string name="game2_prestige_confirm_title">Commencer ta Renaissance %1$s ?</string>
     <string name="game2_prestige_done">Renaissance %1$s ! Ta légende entre dans un nouvel Âge.</string>
     <string name="game2_prestige_go">Renaître</string>
-    <string name="game2_prestige_locked">La Renaissance s’ouvre au niveau 100. Tu es au niveau %1$s.</string>
+    <string name="game2_prestige_locked">La Renaissance s’ouvre au niveau 100.</string>
     <string name="game2_prestige_max">Ta légende a vécu ses cinq renaissances : le sommet du sommet.</string>
     <string name="game2_prestige_mee">Niveau 100 : ta lumière peut renaître, ou grandir encore.</string>
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
@@ -207,7 +204,6 @@
     <string name="game2_season_claim">Réclamer la halte %1$s</string>
     <string name="game2_season_completed">Voyage accompli : une coupe, une médaille datée et %1$s de gloire.</string>
     <string name="game2_season_heading">Voyage %1$s · semaine %2$s sur %3$s</string>
-    <string name="game2_season_none">Aucun voyage n’est en cours pour l’instant. Le prochain part bientôt.</string>
     <string name="game2_season_path">Chemin gratuit</string>
     <string name="game2_season_reward_fragment">Un fragment d’étoile</string>
     <string name="game2_season_reward_freeze">Une Veilleuse pour ta Flamme</string>
@@ -227,13 +223,11 @@
     <string name="game2_season_title">Voyage</string>
     <string name="game2_season_to_next">%1$s jusqu’à la halte suivante</string>
     <string name="game2_season_upcoming">Le voyage %1$s part le %2$s.</string>
-    <string name="game2_settings_celebrations_body">Cartes de Mee et Meo sur Progression. Cet appareil seulement.</string>
+    <string name="game2_settings_celebrations_body">Les cartes de Mee et Meo s’affichent sur Progression</string>
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
-    <string name="game2_settings_friends_league_switch">Me retirer de la joute des amis</string>
+    <string name="game2_settings_friends_league_switch">Me retirer</string>
     <string name="game2_settings_friends_league_title">Joute des amis</string>
-    <string name="game2_settings_hidden_body">Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.</string>
-    <string name="game2_settings_hidden_card">Le jeu est masqué sur cet appareil.</string>
-    <string name="game2_settings_hidden_reopen_note">Tes réglages de visibilité restent fermés : rouvre-les ici quand tu le souhaites.</string>
+    <string name="game2_settings_hidden_reopen_note">Tes réglages de visibilité restent fermés : rouvre-les ici.</string>
     <string name="game2_settings_hidden_show">Réafficher le jeu</string>
     <string name="game2_settings_hidden_switch">Masquer le jeu</string>
     <string name="game2_settings_hidden_title">Jeu masqué</string>
@@ -241,7 +235,6 @@
     <string name="game2_settings_league_on">Tu es dans la joute publique sous le nom %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Tu es dans la joute publique.</string>
     <string name="game2_settings_league_title">Joute publique</string>
-    <string name="game2_settings_notifications_title">Notifications du jeu</string>
     <string name="game2_settings_title">Réglages du jeu</string>
     <string name="game2_settings_visibility_title">Qui voit quoi</string>
     <string name="game2_showcase_awarded">Obtenu le %1$s</string>
@@ -275,7 +268,6 @@
     <string name="game_atlas_coin_prism">Édition prisme · chaque millième</string>
     <string name="game_atlas_coin_reverse">Revers</string>
     <string name="game_atlas_coin_title">La Meesh : avers et revers</string>
-    <string name="game_atlas_flames_line">Un jour de plus et ta Flamme grandit : de la braise jusqu’au soleil.</string>
     <string name="game_atlas_flames_title">Les cinq Flammes</string>
     <string name="game_atlas_leagues_line">Chaque semaine, tu entres dans ta joute : les sept premiers gravissent le cercle suivant.</string>
     <string name="game_atlas_leagues_title">Les huit cercles de la joute</string>
@@ -299,9 +291,7 @@
     <string name="game_atlas_tiers_cap_ranks">Jusqu’au niveau %1$s aux rangs %2$s et %3$s.</string>
     <string name="game_atlas_tiers_glory">La gloire du premier passage : %1$s par niveau jusqu’au %2$s, puis %3$s tous les dix niveaux.</string>
     <string name="game_atlas_tiers_line">Vingt états, de l’Étincelle à la Singularité : ton anneau change à chacun.</string>
-    <string name="game_atlas_tiers_prestige">La renaissance s’offre au niveau %1$s : elle est facultative, ta lumière peut aussi grandir encore.</string>
     <string name="game_atlas_tiers_title">Les 20 états de ta lumière</string>
-    <string name="game_atlas_treasury_line">Garde tes Meeshes : ton Héritage grandit, de la Bourse à la Réserve royale.</string>
     <string name="game_atlas_treasury_title">Les contenants de l’Héritage</string>
     <string name="game_atlas_trophies_line">Un trophée se reçoit à un moment précis, et il ne s’éteint jamais.</string>
     <string name="game_atlas_trophies_title">Les trophées</string>
@@ -341,13 +331,12 @@
     <string name="game_chest_title">L’Offrande</string>
     <string name="game_concept_atlas_name">L’Atlas</string>
     <string name="game_concept_atlas_tip_1">Écris à quelqu’un dans une autre langue que la tienne.</string>
-    <string name="game_concept_atlas_tip_2">Attends sa réponse : il faut un message dans chaque sens.</string>
     <string name="game_concept_atlas_use">Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit.</string>
-    <string name="game_concept_atlas_what">L’Atlas est ton passeport des langues : les terres que ta voix a traversées, un tampon par langue vraiment échangée.</string>
+    <string name="game_concept_atlas_what">Ton passeport des langues : les terres que ta voix a traversées.</string>
     <string name="game_concept_badges_name">Médailles</string>
     <string name="game_concept_badges_tip_1">Choisis un geste que tu aimes et refais-le souvent.</string>
     <string name="game_concept_badges_tip_2">Une médaille éteinte se rallume : rien n’est perdu.</string>
-    <string name="game_concept_badges_use">Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’en éteint aucune : une médaille dit ton total réel.</string>
+    <string name="game_concept_badges_use">Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile.</string>
     <string name="game_concept_badges_what">Une médaille suit un geste précis : un message vocal, une story, une amitié nouée. Il y en a vingt.</string>
     <string name="game_concept_card_hint">Ouvre la fiche</string>
     <string name="game_concept_chip_all_done">Tout est décroché</string>
@@ -373,7 +362,7 @@
     <string name="game_concept_elans_name">Élans</string>
     <string name="game_concept_elans_tip_1">Varie tes gestes : écris, publie, commente, réagis.</string>
     <string name="game_concept_elans_tip_2">Reviens plusieurs jours de suite pour le garder.</string>
-    <string name="game_concept_elans_use">Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles.</string>
+    <string name="game_concept_elans_use">Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.</string>
     <string name="game_concept_elans_what">Un élan est un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci.</string>
     <string name="game_concept_fact_balance">Tu as</string>
     <string name="game_concept_fact_bonus">Bonus sur tes rêves</string>
@@ -409,22 +398,20 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
-    <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_glory_name">Le Rang</string>
     <string name="game_concept_glory_tip_1">Frappe une Meesh : chaque frappe fait grandir ta gloire.</string>
     <string name="game_concept_glory_tip_2">Gravis un cercle de joute, achève un voyage : ta gloire grandit aussi.</string>
-    <string name="game_concept_glory_use">Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.</string>
-    <string name="game_concept_glory_what">Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe.</string>
+    <string name="game_concept_glory_use">Ton rang se montre sur ton blason et sur ton profil.</string>
+    <string name="game_concept_glory_what">Onze rangs, de Murmure à Légende, puis le Mythe.</string>
     <string name="game_concept_guide_hint">Ouvre le message de Mee en entier</string>
     <string name="game_concept_league_name">La Joute</string>
     <string name="game_concept_league_tip_1">Joue un peu chaque jour : les étincelles de la semaine s’additionnent.</string>
     <string name="game_concept_league_tip_2">Vise les premières places avant dimanche soir.</string>
-    <string name="game_concept_league_use">Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.</string>
-    <string name="game_concept_league_what">La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme.</string>
+    <string name="game_concept_league_what">Le classement de la semaine, sous un nom de joute. Huit cercles, du Quartz au Prisme.</string>
     <string name="game_concept_level_name">La Lumière</string>
     <string name="game_concept_level_tip_1">Réalise le rêve de chaque nuit : ses actes font jaillir beaucoup d’étincelles.</string>
     <string name="game_concept_level_tip_2">Garde ta Flamme allumée : elle nourrit tes rêves.</string>
-    <string name="game_concept_level_use">Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.</string>
+    <string name="game_concept_level_use">Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100.</string>
     <string name="game_concept_link_atlas">Voir mes tampons</string>
     <string name="game_concept_link_badges">Toutes les médailles</string>
     <string name="game_concept_link_defis">Tous les défis</string>
@@ -434,25 +421,22 @@
     <string name="game_concept_link_showcase">Ranger mes trophées</string>
     <string name="game_concept_link_succes">Tous les hauts faits</string>
     <string name="game_concept_meesh_name">L’Héritage</string>
-    <string name="game_concept_meesh_use">Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.</string>
+    <string name="game_concept_meesh_use">Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.</string>
     <string name="game_concept_meesh_what">Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.</string>
     <string name="game_concept_missions_name">Le Rêve</string>
     <string name="game_concept_missions_tip_1">Commence par l’acte le plus facile.</string>
-    <string name="game_concept_missions_what">Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.</string>
+    <string name="game_concept_missions_what">Trois actes, de plus en plus riches en gloire ; l’Offrande les accompagne.</string>
     <string name="game_concept_photo_offer">Immortaliser ce moment</string>
     <string name="game_concept_points_name">Étincelles</string>
     <string name="game_concept_points_tip_1">Reviens chaque jour : une Flamme allumée nourrit tes étincelles.</string>
     <string name="game_concept_points_tip_2">Déclenche un élan pour multiplier tes étincelles.</string>
-    <string name="game_concept_points_use">Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.</string>
-    <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.</string>
+    <string name="game_concept_points_use">Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.</string>
     <string name="game_concept_prestige_name">La Renaissance</string>
     <string name="game_concept_prestige_tip_1">Porte ta lumière jusqu’au niveau 100.</string>
-    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.</string>
-    <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Le Voyage</string>
-    <string name="game_concept_season_use">Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>
-    <string name="game_concept_season_what">Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.</string>
+    <string name="game_concept_season_use">Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage.</string>
+    <string name="game_concept_season_what">Quarante haltes, chacune avec son présent gratuit.</string>
     <string name="game_concept_section_act">À toi de jouer</string>
     <string name="game_concept_showcase_name">Trophées</string>
     <string name="game_concept_showcase_tip_1">Finis en haut de ta joute pour gagner une coupe.</string>
@@ -662,7 +646,6 @@
     <string name="game_frappe_refused_light">Ta lumière ne suffit pas encore. Tes prochaines étincelles la nourriront.</string>
     <string name="game_frappe_refused_locked">Ton Héritage attend un rang plus haut. Ta gloire l’ouvrira, et on frappera.</string>
     <string name="game_frappe_refused_offline">Pas de connexion pour l’instant. Dès qu’elle revient, on frappe.</string>
-    <string name="game_frappe_refused_shadow">Une ombre voile ta lumière. Tes prochaines étincelles la dissiperont, et on frappera.</string>
     <string name="game_frappe_refused_unknown">La frappe n’a pas eu lieu. Rien n’est perdu : ta lumière est intacte.</string>
     <string name="game_frappe_say_gold">La n° %1$s est d’or. Tes aïeux l’ont vue.</string>
     <string name="game_frappe_say_prism">La n° %1$s est de prisme : toutes les langues y brillent.</string>
@@ -756,7 +739,7 @@
     <string name="game_guide_step_first_points_means">Tes étincelles forment ta lumière : elles remplissent ton anneau.</string>
     <string name="game_guide_step_first_points_next">Regarde ton anneau se remplir.</string>
     <string name="game_guide_step_first_points_what">Bravo, tes premières étincelles !</string>
-    <string name="game_guide_step_flame_means" formatted="false">Chaque jour de Flamme ajoute 2 % d’étincelles à tes rêves, jusqu’à 50 %. Une Veilleuse la garde allumée un jour d’absence.</string>
+    <string name="game_guide_step_flame_means">Une Veilleuse la garde allumée un jour d’absence.</string>
     <string name="game_guide_step_flame_next">Tes étincelles peuvent devenir des Meeshes.</string>
     <string name="game_guide_step_flame_what">Ta Flamme grandit chaque jour où tu agis.</string>
     <string name="game_guide_step_levels_means">Chaque niveau demande un peu plus d’étincelles que le précédent.</string>
@@ -880,7 +863,7 @@
     <string name="game_mission_write_conversations_other">Écrire dans %1$s conversations différentes</string>
     <string name="game_mission_write_someone_new_one">Écrire à quelqu’un pour la première fois</string>
     <string name="game_mission_write_someone_new_other">Écrire à %1$s personnes pour la première fois</string>
-    <string name="game_missions_locked">Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau %1$s.</string>
+    <string name="game_missions_locked">Le rêve s’ouvre au niveau 5 · tu es au niveau %1$s.</string>
     <string name="game_missions_prism_day">Jour du Prisme : un des actes se joue dans une autre langue que la tienne.</string>
     <string name="game_missions_prism_hour">Heure du Prisme : %1$s – %2$s — chaque acte compte double.</string>
     <string name="game_missions_title">Le rêve de cette nuit</string>
@@ -914,7 +897,6 @@
     <string name="game_photo_kicker_achievement">Haut fait</string>
     <string name="game_photo_kicker_flame">Flamme</string>
     <string name="game_photo_kicker_meesh">Meesh frappée</string>
-    <string name="game_photo_kicker_new_lap">Nouvel Âge</string>
     <string name="game_photo_kicker_rank">Nouveau rang</string>
     <string name="game_photo_kicker_start">Premiers pas</string>
     <string name="game_photo_kicker_summit">Au sommet</string>
@@ -947,7 +929,6 @@
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Ma Légende se charge</string>
     <string name="game_progression_offline">Hors ligne — progression telle qu’à la dernière ouverture</string>
-    <string name="game_progression_offline_empty">Hors ligne — aucune progression en mémoire. Elle s’affichera à la reconnexion.</string>
     <string name="game_progression_retry">Réessayer</string>
     <string name="game_progression_title">Ma Légende</string>
     <string name="game_rank_ambassadeur">Ambassadeur</string>
@@ -963,16 +944,13 @@
     <string name="game_rank_passeur">Passeur</string>
     <string name="game_rank_polyglotte">Polyglotte</string>
     <string name="game_rank_voix">Voix</string>
-    <string name="game_rules_1_body">Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.</string>
     <string name="game_rules_1_title">Chaque geste fait jaillir des étincelles</string>
     <string name="game_rules_2_title">Les étincelles forment ta lumière</string>
-    <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
     <string name="game_rules_3_title">On frappe des Meeshes</string>
     <string name="game_rules_4_title">Frapper fige ta lumière</string>
     <string name="game_rules_5_title">Le rang ne recule jamais</string>
     <string name="game_rules_6_title">L’Héritage se garde ou se dépense</string>
     <string name="game_rules_7_title">Chaque jour compte</string>
-    <string name="game_rules_8_body">À chaque évolution, tes aïeux se manifestent : chaque signe s’immortalise en photo avec Mee et Meo dans ta Chronique.</string>
     <string name="game_rules_8_title">Les aïeux se manifestent</string>
     <string name="game_rules_badges_families">Les vingt médailles, par famille</string>
     <string name="game_rules_badges_imprint">Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.</string>
@@ -984,18 +962,14 @@
     <string name="game_rules_concept_chest_body">Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.</string>
     <string name="game_rules_concept_chest_name">L’Offrande</string>
     <string name="game_rules_concept_defis_body">Des paliers chiffrés dans chaque famille de gestes.</string>
-    <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.</string>
     <string name="game_rules_concept_duo_name">L’Alliance</string>
     <string name="game_rules_concept_elans_body">Un multiplicateur d’étincelles.</string>
-    <string name="game_rules_concept_showcase_body">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.</string>
     <string name="game_rules_concept_steps_body">Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.</string>
     <string name="game_rules_concept_steps_name">Les épreuves</string>
     <string name="game_rules_concept_succes_body">Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.</string>
     <string name="game_rules_concept_tailwind_name">Vent arrière</string>
     <string name="game_rules_concept_treasury_body">Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.</string>
     <string name="game_rules_concept_treasury_name">L’Héritage</string>
-    <string name="game_rules_intro">Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.</string>
     <string name="game_rules_page_title">Comment ça marche</string>
     <string name="game_rules_section_steps">Les sept étapes</string>
     <plurals name="game_sparks_convertible_count">
@@ -1048,15 +1022,10 @@
     <string name="game_state_meesh_kept_none">Ton héritage ne garde aucune Meesh. Depuis toujours, tu en as frappé %1$s.</string>
     <string name="game_state_meesh_next_missing">La Meesh n° %1$s figera %2$s de ta lumière : il manque %3$s.</string>
     <string name="game_state_meesh_next_ready">Tu peux frapper la Meesh n° %1$s : elle figera %2$s de ta lumière.</string>
-    <string name="game_state_missions_claimed">Le rêve de cette nuit : %1$s sur %2$s actes. L’Offrande est ouverte : un nouveau rêve viendra cette nuit.</string>
-    <string name="game_state_missions_progress">Le rêve de cette nuit : %1$s sur %2$s actes, et %3$s à réaliser pour voir l’Offrande.</string>
+    <string name="game_state_missions_claimed">Le rêve de cette nuit : %1$s sur %2$s actes. L’Offrande est ouverte.</string>
     <string name="game_state_missions_ready">Le rêve de cette nuit : %1$s sur %2$s actes. L’Offrande est là : ouvre-la.</string>
-    <string name="game_state_points_missing">Ta lumière compte %1$s, soit %2$s. La Meesh n° %3$s en figera %4$s : il manque %5$s.</string>
-    <string name="game_state_points_missing_plain">Ta lumière compte %1$s. La Meesh n° %2$s en figera %3$s : il manque %4$s.</string>
-    <string name="game_state_points_ready">Ta lumière compte %1$s, soit %2$s : assez pour frapper la Meesh n° %3$s, qui en figera %4$s.</string>
-    <string name="game_state_points_ready_plain">Ta lumière compte %1$s : de quoi frapper la Meesh n° %2$s, qui en figera %3$s.</string>
+    <string name="game_state_points_ready_plain">Ta lumière compte %1$s : de quoi frapper la Meesh n° %2$s.</string>
     <string name="game_state_season_done">Voyage %1$s, semaine %2$s sur %3$s : voyage accompli, les %4$s haltes sont atteintes.</string>
-    <string name="game_state_season_progress">Voyage %1$s, semaine %2$s sur %3$s : halte %4$s sur %5$s, et %6$s jusqu’à la suivante.</string>
     <string name="game_state_showcase_count">%1$s sur ton étagère. Visible par : %2$s.</string>
     <plurals name="game_streak_record">
         <item quantity="one">Ta plus longue Flamme : %1$d jour</item>
@@ -1112,9 +1081,6 @@
     <string name="game_treasury_tresor">Trésor</string>
     <string name="progression_a11y_bar_level">Vers le niveau %1$d</string>
     <string name="progression_a11y_bar_meesh">Vers la prochaine Meesh</string>
-    <string name="progression_a11y_bar_streak">Ta Flamme, vers son prochain jalon</string>
-    <string name="progression_a11y_tier_pending">Palier %1$d à atteindre</string>
-    <string name="progression_a11y_tier_reached">Palier %1$d atteint</string>
     <string name="progression_achievement_a11y_hint">Touche pour voir ce haut fait en grand.</string>
     <string name="progression_achievement_all_content_types_condition">Un message vocal, un message texte, une publication, une story et un réel</string>
     <string name="progression_achievement_all_content_types_title">Touche-à-tout</string>
@@ -1172,7 +1138,6 @@
     <string name="progression_elan_family_many">%1$d familles actives</string>
     <string name="progression_elan_family_one">1 famille active</string>
     <string name="progression_elan_standing">, plus ton assise</string>
-    <string name="progression_elans_empty">Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.</string>
     <string name="progression_elans_hint">Tiens une famille de plus en même temps pour déclencher le multiplicateur.</string>
     <string name="progression_elans_title">Tes élans</string>
     <string name="progression_family_comment">Commentaires</string>
@@ -1227,7 +1192,6 @@
     <string name="progression_unlocked">Débloqué</string>
     <string name="reveal_achievement_photo">En faire une carte</string>
     <string name="reveal_badge_achievement">Succès débloqué</string>
-    <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe. Le suivant se débloque en continuant.</string>
     <string name="reveal_badge_badge">Badge gagné</string>
     <string name="reveal_badge_level">Nouveau niveau</string>
     <string name="reveal_badge_locked">Succès à débloquer</string>
@@ -1237,7 +1201,5 @@
     <string name="reveal_close">Fermer</string>
     <string name="reveal_composed_subtitle">Un palier de plus dans « %1$s ».</string>
     <string name="reveal_continue">Voir ma progression</string>
-    <string name="reveal_level_subtitle">Votre activité vous a fait franchir un rang.</string>
     <string name="reveal_ok">OK</string>
-    <string name="reveal_streak_subtitle">%1$d jours d’affilée. La série continue tant que vous écrivez.</string>
 </resources>

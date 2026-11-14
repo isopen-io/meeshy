@@ -391,12 +391,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.post.detail.loadFailed.body",
-          "androidName": "content_failure_network_body",
-          "status": "adopted"
-        },
-        {
           "androidName": "content_failure_network_title",
           "status": "android-only"
         },
@@ -408,20 +402,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.post.detail.serverFailed.body",
-          "androidName": "content_failure_server_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "feed.post.detail.serverFailed.title",
           "androidName": "content_failure_server_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.detail.unavailable.body",
-          "androidName": "content_failure_unavailable_body",
           "status": "adopted"
         },
         {
