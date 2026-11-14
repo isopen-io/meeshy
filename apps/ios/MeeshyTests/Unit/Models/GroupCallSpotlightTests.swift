@@ -92,8 +92,30 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertNil(GroupCallSpotlight.choice(.grid, afterSharerChangedFrom: nil, to: "d"))
     }
 
-    func test_choice_pinnedTile_survivesASharerChange() {
+    /// #18180 — évolue : la vignette épinglée ne survit plus qu'à la FIN d'un partage.
+    func test_choice_pinnedTile_survivesTheEndOfTheShare() {
         XCTAssertEqual(GroupCallSpotlight.choice(.tile("b"), afterSharerChangedFrom: "c", to: nil), .tile("b"))
+    }
+
+    /// #18180 (loi 15) — Lina mise à la une à la main, Karim commence à partager : son écran prend la une.
+    /// Mêmes vecteurs qu'Android (`GroupCallSpotlightTest`, #18248).
+    func test_choice_aShareThatBegins_takesTheSpotlight_evenAfterAManualChoice() {
+        XCTAssertNil(GroupCallSpotlight.choice(.tile("lina"), afterSharerChangedFrom: nil, to: "karim"))
+        XCTAssertNil(GroupCallSpotlight.choice(.tile("lina"), afterSharerChangedFrom: "alice", to: "karim"))
+        XCTAssertEqual(GroupCallSpotlight.choice(.tile("lina"), afterSharerChangedFrom: "karim", to: "karim"), .tile("lina"))
+        XCTAssertNil(GroupCallSpotlight.choice(.tile(GroupCallStage.localTileId), afterSharerChangedFrom: nil, to: "karim"))
+        let during = tiles(sharing: "c")
+        let after = GroupCallSpotlight.choice(.tile("d"), afterSharerChangedFrom: nil, to: GroupCallSpotlight.sharerId(in: during))
+        XCTAssertEqual(GroupCallSpotlight.focus(tiles: during, choice: after), .spotlight(tileId: "c", isScreenShare: true))
+    }
+
+    /// #18180 — le lecteur d'écran annonce le partage qui commence, sauf si une bannière l'annonce déjà.
+    func test_announcesShare_onceWhenAShareBegins_unlessABannerSaysIt() {
+        XCTAssertTrue(GroupCallSpotlight.announcesShare(oldSharer: nil, newSharer: "karim", isAnnouncedByBanner: false))
+        XCTAssertTrue(GroupCallSpotlight.announcesShare(oldSharer: "alice", newSharer: "karim", isAnnouncedByBanner: false))
+        XCTAssertFalse(GroupCallSpotlight.announcesShare(oldSharer: nil, newSharer: "karim", isAnnouncedByBanner: true))
+        XCTAssertFalse(GroupCallSpotlight.announcesShare(oldSharer: "karim", newSharer: "karim", isAnnouncedByBanner: false))
+        XCTAssertFalse(GroupCallSpotlight.announcesShare(oldSharer: "karim", newSharer: nil, isAnnouncedByBanner: false))
     }
 
     func test_choice_sameSharer_keepsGridOverride() {
@@ -323,5 +345,228 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertTrue(header.contains("CallGlassVeil(shape: Circle()"), "les boutons de l'en-tête s'assombrissent aussi")
         let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
         XCTAssertTrue(root.contains(".environment(\\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen:"), "le ton se pose une fois, à la racine de l'appel")
+    }
+
+    // MARK: - U2.2 · #17961 — deux niveaux de plein écran (vecteurs d'Android, #18248)
+
+    func test_fullScreenLevel_risesOneLevelPerPress_aSharedScreenUpToTotal_aCameraOnlyOnce() {
+        XCTAssertEqual(GroupCallSpotlight.raised(.off, isScreenShare: true), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.raised(.fullScreen, isScreenShare: true), .total)
+        XCTAssertEqual(GroupCallSpotlight.raised(.total, isScreenShare: true), .total)
+        XCTAssertEqual(GroupCallSpotlight.raised(.off, isScreenShare: false), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.raised(.fullScreen, isScreenShare: false), .fullScreen, "une caméra à la une n'a qu'un niveau")
+        XCTAssertEqual(GroupCallSpotlight.lowered(.total), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.lowered(.fullScreen), .off)
+        XCTAssertEqual(GroupCallSpotlight.lowered(.off), .off)
+    }
+
+    func test_fullScreenLevel_isReadFromTheChromeFullScreen_totalReservedToASharedScreen() {
+        XCTAssertEqual(GroupCallSpotlight.fullScreenLevel(isFullScreen: false, wantsTotal: true, isScreenShare: true), .off)
+        XCTAssertEqual(GroupCallSpotlight.fullScreenLevel(isFullScreen: true, wantsTotal: false, isScreenShare: true), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.fullScreenLevel(isFullScreen: true, wantsTotal: true, isScreenShare: true), .total)
+        XCTAssertEqual(GroupCallSpotlight.fullScreenLevel(isFullScreen: true, wantsTotal: true, isScreenShare: false), .fullScreen)
+        XCTAssertFalse(GroupCallFullScreenLevel.off.isFullScreen)
+        XCTAssertTrue(GroupCallFullScreenLevel.fullScreen.isFullScreen)
+        XCTAssertTrue(GroupCallFullScreenLevel.total.isFullScreen)
+    }
+
+    /// #17961 — le plein écran (U2) GARDE les caméras des autres ; seul le plein écran total (U2b) les retire.
+    func test_fullScreenLevel_keepsTheOthersInFullScreen_andHidesThemOnlyInTotal() {
+        XCTAssertFalse(GroupCallFullScreenLevel.off.hidesStrip)
+        XCTAssertFalse(GroupCallFullScreenLevel.fullScreen.hidesStrip)
+        XCTAssertTrue(GroupCallFullScreenLevel.total.hidesStrip)
+    }
+
+    /// U2 « Revenir à la grille · Plein écran total · Quitter le plein écran » ; U2b « Revenir à la grille · Quitter le plein écran total ».
+    func test_capsuleButtons_offerGrid_thenTheNextLevel_thenTheWayDown() {
+        XCTAssertEqual(GroupCallSpotlightButton.allCases.count, 5)
+        XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: .off, isScreenShare: true), [.grid, .fullScreen])
+        XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: .off, isScreenShare: false), [.grid, .fullScreen])
+        XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: .fullScreen, isScreenShare: true), [.grid, .totalFullScreen, .exitFullScreen])
+        XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: .fullScreen, isScreenShare: false), [.grid, .exitFullScreen])
+        XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: .total, isScreenShare: true), [.grid, .exitTotalFullScreen])
+    }
+
+    func test_levelAfter_eachButtonMovesToItsLevel_gridLeavesEverything() {
+        XCTAssertEqual(GroupCallSpotlight.level(after: .fullScreen, from: .off, isScreenShare: true), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.level(after: .totalFullScreen, from: .fullScreen, isScreenShare: true), .total)
+        XCTAssertEqual(GroupCallSpotlight.level(after: .exitTotalFullScreen, from: .total, isScreenShare: true), .fullScreen)
+        XCTAssertEqual(GroupCallSpotlight.level(after: .exitFullScreen, from: .fullScreen, isScreenShare: true), .off)
+        XCTAssertEqual(GroupCallSpotlight.level(after: .grid, from: .total, isScreenShare: true), .off)
+    }
+
+    /// En plein écran, l'en-tête et la pilule sont rangés : le chrome qui se voit, c'est la capsule. Toucher une
+    /// caméra du bandeau la met donc à la une tant que la capsule est là, et rend la capsule quand elle est rangée.
+    func test_isChromeShown_inFullScreen_isTheCapsule() {
+        XCTAssertTrue(GroupCallSpotlight.isChromeShown(isFullScreen: false, isControlsVisible: true, isCapsuleVisible: true))
+        XCTAssertFalse(GroupCallSpotlight.isChromeShown(isFullScreen: false, isControlsVisible: false, isCapsuleVisible: true))
+        XCTAssertTrue(GroupCallSpotlight.isChromeShown(isFullScreen: true, isControlsVisible: false, isCapsuleVisible: true))
+        XCTAssertFalse(GroupCallSpotlight.isChromeShown(isFullScreen: true, isControlsVisible: false, isCapsuleVisible: false))
+    }
+
+    func test_stage_keepsTheStripInFullScreen_leavesItOnlyInTotal_andBuildsTheCapsuleFromTheLaw() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let spotlight = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func spotlight(", in: stage))
+        XCTAssertTrue(spotlight.contains("if !level.hidesStrip"), "le bandeau reste au plein écran, il ne sort qu'au plein écran total")
+        XCTAssertFalse(spotlight.contains("if !isFullScreen"), "le plein écran ne retire plus les caméras des autres")
+        let controls = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
+        XCTAssertTrue(controls.contains("GroupCallSpotlight.capsuleButtons(level:"), "la capsule suit la loi pure, jamais une liste écrite dans la vue")
+        XCTAssertFalse(controls.contains("isFullScreen.toggle()"), "un seul bouton qui bascule ne dit pas deux niveaux")
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.level(after:"), "chaque bouton mène à son niveau par la loi")
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.isChromeShown(isFullScreen:"), "en plein écran, le toucher d'une caméra du bandeau lit la capsule")
+        XCTAssertTrue(stage.contains("\"call.group.fullscreen.total.enter\""))
+        XCTAssertTrue(stage.contains("\"call.group.fullscreen.total.exit\""))
+    }
+
+    func test_totalFullScreenLabels_existInTheSevenLanguages() throws {
+        let catalog = try AppSourceGuard.unit("Meeshy/Localizable.xcstrings")
+        let data = try XCTUnwrap(catalog.data(using: .utf8))
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(json["strings"] as? [String: Any])
+        for key in ["call.group.fullscreen.total.enter", "call.group.fullscreen.total.exit"] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], key)
+            XCTAssertEqual(Set(localizations.keys), ["fr", "en", "es", "de", "it", "pt-BR", "ar"], key)
+        }
+    }
+
+    // MARK: - U2.5 · #17961 point 1 — la puce se range avec la capsule
+
+    func test_screenChip_stowsAndReturnsWithTheCapsule() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        let chip = try XCTUnwrap(featured.range(of: "CallScreenShareChip("))
+        let afterChip = String(featured[chip.lowerBound...].prefix(700))
+        XCTAssertTrue(afterChip.contains("CallEdgeStow(edge: .top"), "la puce sort par le haut avec la capsule")
+        XCTAssertTrue(afterChip.contains(".callChromeVisibility(isCapsuleVisible)"), "la puce suit la visibilité de la capsule, aux deux niveaux")
+    }
+
+    // MARK: - U2.7 · #17753 — l'écran zoomé se déplace, borné à son cadre (vecteurs du web, #17747)
+
+    func test_screenPan_atOneTimes_nothingMoves() {
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 50, y: -30), zoom: 1, width: 400, height: 200), GroupCallScreenPan(x: 0, y: 0))
+    }
+
+    func test_screenPan_zoomed_neverLeavesItsFrame() {
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 999, y: -999), zoom: 2, width: 400, height: 200), GroupCallScreenPan(x: 200, y: -100))
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 40, y: -20), zoom: 2, width: 400, height: 200), GroupCallScreenPan(x: 40, y: -20))
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 999, y: 999), zoom: GroupCallSpotlight.maxZoom, width: 400, height: 200), GroupCallScreenPan(x: 600, y: 300))
+    }
+
+    func test_screenPan_backTowardOneTimes_recentres() {
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 600, y: 300), zoom: 2, width: 400, height: 200), GroupCallScreenPan(x: 200, y: 100))
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 600, y: 300), zoom: 1, width: 400, height: 200), GroupCallScreenPan(x: 0, y: 0))
+    }
+
+    func test_screenPan_aDragAddsItsOffset_bounded() {
+        XCTAssertEqual(GroupCallSpotlight.screenPanAfterDrag(GroupCallScreenPan(x: 10, y: 0), dx: 25, dy: -5, zoom: 2, width: 400, height: 200), GroupCallScreenPan(x: 35, y: -5))
+        XCTAssertEqual(GroupCallSpotlight.screenPanAfterDrag(GroupCallScreenPan(x: 190, y: 0), dx: 50, dy: 0, zoom: 2, width: 400, height: 200), GroupCallScreenPan(x: 200, y: 0))
+    }
+
+    func test_screenPan_anUnmeasuredFrame_movesNothing() {
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 5, y: 5), zoom: 3, width: 0, height: 0), GroupCallScreenPan(x: 0, y: 0))
+        XCTAssertEqual(GroupCallSpotlight.screenPanClamp(GroupCallScreenPan(x: 5, y: 5), zoom: 3, width: .nan, height: .infinity), GroupCallScreenPan(x: 0, y: 0))
+    }
+
+    /// Le déplacement affiché part de la position acquise RAMENÉE dans la borne du zoom vivant, puis ajoute le glissé.
+    func test_screenPan_shown_startsFromTheBoundedAcquiredPan() {
+        let size = CGSize(width: 400, height: 200)
+        XCTAssertEqual(GroupCallSpotlight.screenPan(acquired: GroupCallScreenPan(x: 600, y: 0), drag: CGSize(width: -50, height: 0), zoom: 2, in: size), GroupCallScreenPan(x: 150, y: 0))
+        XCTAssertEqual(GroupCallSpotlight.screenPan(acquired: .zero, drag: CGSize(width: 80, height: 80), zoom: 1, in: size), .zero)
+    }
+
+    func test_featuredScreen_andDuoScreen_panWithTheLaw_onTheGPU() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.screenPan(acquired:"), "la une se déplace par la loi pure")
+        XCTAssertTrue(stage.contains("DragGesture(minimumDistance: GroupCallSpotlight.panSlop"), "le déplacement ne commence qu'au-delà du seuil du toucher")
+        let tile = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct GroupCallTileView: View", in: stage))
+        XCTAssertTrue(tile.contains(".scaleEffect(zoom)\n                        .offset(x: pan.x, y: pan.y)"), "une transformation, jamais une mise en page")
+        let zoom = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallReceivedScreenZoom.swift"))
+        XCTAssertTrue(zoom.contains("GroupCallSpotlight.screenPan(acquired:"), "le duo suit la même loi")
+        XCTAssertTrue(zoom.contains("DragGesture(minimumDistance: GroupCallSpotlight.panSlop"))
+        XCTAssertTrue(zoom.contains("including: isZoomed ? .all : .subviews"), "à 1×, aucun glissé n'est posé : le toucher et le balayage vers le bas restent")
+        XCTAssertTrue(zoom.contains("CallReceivedScreenZoomedKey"), "zoomé, l'écran garde le doigt : le balayage qui réduit l'appel n'en part pas")
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertTrue(connected.contains(".modifier(CallSwipeDownGate(gesture: swipeDownToLeaveGesture))"))
+        XCTAssertTrue(zoom.contains(".simultaneousGesture(gesture, including: isScreenZoomed ? .subviews : .all)"))
+    }
+
+    // MARK: - U2.6 · #16972 — le verre s'assombrit sur l'écran partagé à la une d'un groupe
+
+    func test_glassDarkens_onAReceivedScreen_inDuo_andOnAScreenFeaturedInAGroup() {
+        XCTAssertTrue(GroupCallSpotlight.showsReceivedScreen(isGroupStage: false, isRemoteSharing: true, focus: .grid))
+        XCTAssertFalse(GroupCallSpotlight.showsReceivedScreen(isGroupStage: false, isRemoteSharing: false, focus: .grid))
+        XCTAssertTrue(GroupCallSpotlight.showsReceivedScreen(isGroupStage: true, isRemoteSharing: false, focus: .spotlight(tileId: "c", isScreenShare: true)))
+        XCTAssertFalse(GroupCallSpotlight.showsReceivedScreen(isGroupStage: true, isRemoteSharing: true, focus: .spotlight(tileId: "c", isScreenShare: false)), "une caméra à la une garde le verre de repos")
+        XCTAssertFalse(GroupCallSpotlight.showsReceivedScreen(isGroupStage: true, isRemoteSharing: true, focus: .grid), "« Grille » pendant un partage : aucun écran ne tient la scène")
+    }
+
+    func test_callRoot_readsTheGroupFeaturedScreen_forTheGlassTone() throws {
+        let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
+        XCTAssertTrue(root.contains("CallGlassTone.resolve(showsReceivedScreen: GroupCallSpotlight.showsReceivedScreen("), "le groupe n'est plus exclu du verre sombre")
+        XCTAssertFalse(root.contains("showsReceivedScreen: !isGroupStage &&"))
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertTrue(connected.contains("onFocusChange: { groupStageFocus = $0 }"), "la scène dit à la racine ce qui est à la une")
+    }
+
+    // MARK: - #18180 — le partage qui commence s'annonce
+
+    func test_stage_announcesAShareThatBegins_toVoiceOver() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.announcesShare(oldSharer:"))
+        XCTAssertTrue(stage.contains("UIAccessibility.post(notification: .announcement, argument: CallScreenShareCopy.remoteBanner(name:"))
+    }
+
+    // MARK: - U1.14 · #18181 — le zoom de MA caméra à la une est permis (déjà tenu sur iOS)
+
+    func test_featuredTile_keepsTheZoomOfMyOwnCamera() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"), "#18181 : pincer ma vignette à la une zoome ma caméra")
+    }
+
+    // MARK: - loi 17.12 — la vignette fond entre l'image et l'avatar
+
+    func test_tile_fadesBetweenImageAndAvatar_withTheSharedDuration() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let tile = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct GroupCallTileView: View", in: stage))
+        XCTAssertGreaterThanOrEqual(tile.components(separatedBy: ".transition(.opacity)").count - 1, 2, "l'image et l'avatar entrent et sortent en fondu")
+        XCTAssertTrue(tile.contains("value: showsImage"), "le fondu suit la caméra qui se coupe ou se rallume")
+        XCTAssertTrue(tile.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"), "la durée du duo, courte sous Réduire les animations")
+    }
+
+    // MARK: - U1.11 — la grille ↔ la une garde les rendus vidéo
+
+    func test_rendererPool_lendsTheSameRenderer_toTheNextHostOfTheSamePerson() {
+        let pool = CallVideoRendererPool<UIView>()
+        let first = pool.lend("karim") { UIView() }
+        let second = pool.lend("karim") { UIView() }
+        XCTAssertTrue(first === second, "la une reprend le rendu de la grille, elle ne le recrée pas")
+        XCTAssertFalse(first === pool.lend("lina") { UIView() })
+    }
+
+    func test_rendererPool_keepsARendererAnotherHostHolds_andReleasesAnOrphan() {
+        let pool = CallVideoRendererPool<UIView>()
+        let renderer = pool.lend("karim") { UIView() }
+        let grid = UIView()
+        let spotlight = UIView()
+        grid.addSubview(renderer)
+        spotlight.addSubview(renderer)
+        XCTAssertFalse(pool.isOrphaned("karim", leaving: grid), "la grille part, la une tient déjà le rendu : il reste")
+        XCTAssertTrue(pool.isOrphaned("karim", leaving: spotlight), "le dernier hôte part : le rendu est libre")
+        renderer.removeFromSuperview()
+        XCTAssertTrue(pool.isOrphaned("karim", leaving: grid))
+        XCTAssertTrue(pool.evict("karim") === renderer)
+        XCTAssertNil(pool.evict("karim"))
+        XCTAssertFalse(pool.isOrphaned("karim", leaving: grid), "un rendu rendu n'est plus à libérer")
+    }
+
+    func test_groupTiles_borrowTheirRenderer_byPerson() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let tile = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct GroupCallTileView: View", in: stage))
+        XCTAssertTrue(tile.contains("rendererKey: tile.id"), "une identité par personne, le même rendu dans la grille, à la une et dans le bandeau")
+        let video = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/WebRTCVideoView.swift"))
+        XCTAssertTrue(video.contains("struct PooledWebRTCVideoView: UIViewRepresentable"))
+        XCTAssertTrue(video.contains("CallVideoRendererPool"))
     }
 }

@@ -104,7 +104,9 @@ struct GroupCallStageView: View {
     /// W2.1 — la hauteur de la scène est compacte (`CallGroupStageSizing`) : seule elle autorise la rangée de quatre.
     var isCompactHeight = false
     var onStageTap: () -> Void = {}
-    var onSelfFeaturedChange: (Bool) -> Void = { _ in }
+    /// U2.6 · #16972 — ce qui est à la une, pour la racine : un écran reçu y assombrit le verre, et
+    /// mon image à la une y range mes commandes de caméra (#8576, `GroupCallSpotlight.featuresLocal`).
+    var onFocusChange: (GroupCallStageFocus) -> Void = { _ in }
 
     /// Le choix LOCAL (jamais partagé) : une vignette épinglée, ou « Grille ».
     @State private var choice: GroupCallSpotlightChoice?
@@ -113,6 +115,11 @@ struct GroupCallStageView: View {
     @State var isRemovalPresented = false
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
+    /// U2.2 · #17961 — le second appui sur « Plein écran » : le plein écran total (U2b).
+    @State private var wantsTotalFullScreen = false
+    /// U2.7 · #17753 — le déplacement acquis de l'écran zoomé, et le glissé en cours.
+    @State private var pan: GroupCallScreenPan = .zero
+    @GestureState private var drag: CGSize = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
     @Environment(\.layoutDirection) private var layoutDirection
@@ -141,15 +148,20 @@ struct GroupCallStageView: View {
         .animation(stageAnimation, value: focus)
         .adaptiveOnChange(of: GroupCallSpotlight.sharerId(in: current)) { oldSharer, newSharer in
             choice = GroupCallSpotlight.choice(choice, afterSharerChangedFrom: oldSharer, to: newSharer)
+            announceShare(from: oldSharer, to: newSharer, in: current)
         }
         .adaptiveOnChange(of: focus) { _, newFocus in
             zoom = 1
+            pan = .zero
             if newFocus == .grid { isFullScreen = false }
         }
-        .adaptiveOnChange(of: GroupCallSpotlight.featuresLocal(focus), initial: true) { _, isFeatured in
-            onSelfFeaturedChange(isFeatured)
+        .adaptiveOnChange(of: isFullScreen) { _, isFull in
+            if !isFull { wantsTotalFullScreen = false }
         }
-        .onDisappear { onSelfFeaturedChange(false) }
+        .adaptiveOnChange(of: focus, initial: true) { _, newFocus in
+            onFocusChange(newFocus)
+        }
+        .onDisappear { onFocusChange(.grid) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "call.group.stage", defaultValue: "Participants à l'appel", bundle: .main))
         .removalConfirmation(pendingRemoval: pendingRemoval, isPresented: $isRemovalPresented, controls: callManager.controls)
@@ -169,6 +181,13 @@ struct GroupCallStageView: View {
         GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)
             ? .spring(response: 0.4, dampingFraction: 0.85)
             : .easeInOut(duration: GroupCallStageMotion.fadeDuration)
+    }
+
+    /// #18180 — le partage qui commence prend la une : VoiceOver le dit (aucune bannière ne l'annonce).
+    private func announceShare(from oldSharer: String?, to newSharer: String?, in current: [GroupCallStageTile]) {
+        guard GroupCallSpotlight.announcesShare(oldSharer: oldSharer, newSharer: newSharer, isAnnouncedByBanner: false),
+              let sharer = current.first(where: { $0.id == newSharer }) else { return }
+        UIAccessibility.post(notification: .announcement, argument: CallScreenShareCopy.remoteBanner(name: sharer.displayName))
     }
 
     private func choose(_ newChoice: GroupCallSpotlightChoice) {
@@ -213,7 +232,9 @@ struct GroupCallStageView: View {
             .accessibilityHidden(true)
     }
 
+    /// En plein écran, l'en-tête et la pilule sont rangés : le chrome qui se voit, c'est la capsule.
     private func tapTile(_ tile: GroupCallStageTile) {
+        let isChromeVisible = GroupCallSpotlight.isChromeShown(isFullScreen: isFullScreen, isControlsVisible: self.isChromeVisible, isCapsuleVisible: isCapsuleVisible)
         switch GroupStageTapRule.outcome(isChromeVisible: isChromeVisible) {
         case .revealChrome: onStageTap()
         case .spotlight: choose(.tile(tile.id))
@@ -238,12 +259,13 @@ struct GroupCallStageView: View {
     private func spotlight(_ current: [GroupCallStageTile], tileId: String, isScreenShare: Bool, in size: CGSize, stageFrame: CGRect) -> some View {
         let others = current.filter { $0.id != tileId }
         let isLandscape = size.width > size.height
-        let spacing = isFullScreen ? 0 : Self.spacing
+        let level = fullScreenLevel(isScreenShare: isScreenShare)
+        let spacing = level.hidesStrip ? 0 : Self.spacing
         if let featured = current.first(where: { $0.id == tileId }) {
             if isLandscape {
                 HStack(spacing: spacing) {
                     featuredTile(featured, isScreenShare: isScreenShare)
-                    if !isFullScreen {
+                    if !level.hidesStrip {
                         filmstrip(others, axis: .vertical)
                             .frame(width: Self.columnStripWidth)
                             .transition(stripExit(toward: .trailing, extent: Self.columnStripWidth, stage: stageFrame))
@@ -252,7 +274,7 @@ struct GroupCallStageView: View {
             } else {
                 VStack(spacing: spacing) {
                     featuredTile(featured, isScreenShare: isScreenShare)
-                    if !isFullScreen {
+                    if !level.hidesStrip {
                         filmstrip(others, axis: .horizontal)
                             .frame(height: Self.rowStripHeight)
                             .transition(stripExit(toward: .bottom, extent: Self.rowStripHeight, stage: stageFrame))
@@ -272,42 +294,65 @@ struct GroupCallStageView: View {
             .combined(with: .opacity)
     }
 
+    /// #17961 — le niveau de plein écran de la une : le second appui n'existe que pour un écran partagé.
+    private func fullScreenLevel(isScreenShare: Bool) -> GroupCallFullScreenLevel {
+        GroupCallSpotlight.fullScreenLevel(isFullScreen: isFullScreen, wantsTotal: wantsTotalFullScreen, isScreenShare: isScreenShare)
+    }
+
+    private var featuredIsScreenShare: Bool {
+        guard case .spotlight(_, let isScreenShare) = GroupCallSpotlight.focus(tiles: tiles, choice: choice) else { return false }
+        return isScreenShare
+    }
+
+    private var screenZoom: CGFloat { GroupCallSpotlight.clampedZoom(zoom * pinch) }
+
     private func featuredTile(_ tile: GroupCallStageTile, isScreenShare: Bool) -> some View {
         sharingGeometry(of: tile) {
-            GroupCallTileView(
-                tile: tile,
-                track: track(for: tile),
-                intendedFront: callManager.isUsingFrontCamera,
-                contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
-                screenTitle: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
-                zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
-            )
-            .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
-            .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
-            // #8735 — le double toucher n'existe que pour un écran partagé : posé
-            // partout, il faisait attendre CHAQUE toucher simple (rallumer les
-            // commandes) le délai d'un éventuel second toucher.
-            .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
-            .onTapGesture { onStageTap() }
-            .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
-            .overlay(alignment: .topLeading) {
-                if isScreenShare {
-                    CallScreenShareChip(text: GroupCallSpotlight.featuredChipText(title: CallScreenShareCopy.screenOf(name: tile.displayName), zoom: zoom * pinch, locale: locale))
-                        .padding(MeeshySpacing.sm)
+            GeometryReader { frame in
+                GroupCallTileView(
+                    tile: tile,
+                    track: track(for: tile),
+                    intendedFront: callManager.isUsingFrontCamera,
+                    contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
+                    screenTitle: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
+                    zoom: isScreenShare ? screenZoom : 1,
+                    pan: isScreenShare ? GroupCallSpotlight.screenPan(acquired: pan, drag: drag, zoom: screenZoom, in: frame.size) : .zero
+                )
+                .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
+                // #17753 — zoomé, un doigt déplace l'écran : le glissé n'est jamais un toucher.
+                .simultaneousGesture(panGesture(in: frame.size), including: isScreenShare && zoom > 1 ? .all : .subviews)
+                .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
+                // #8735 — le double toucher n'existe que pour un écran partagé : posé
+                // partout, il faisait attendre CHAQUE toucher simple (rallumer les
+                // commandes) le délai d'un éventuel second toucher.
+                .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
+                .onTapGesture { onStageTap() }
+                .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
+                .overlay(alignment: .topLeading) {
+                    // U2.5 · #17961 — la puce se range et revient avec la capsule, aux deux niveaux.
+                    if isScreenShare {
+                        CallScreenShareChip(text: GroupCallSpotlight.featuredChipText(title: CallScreenShareCopy.screenOf(name: tile.displayName), zoom: zoom * pinch, locale: locale))
+                            .padding(MeeshySpacing.sm)
+                            .modifier(CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach, isVisible: isCapsuleVisible, reduceMotion: reduceMotion))
+                            .callChromeVisibility(isCapsuleVisible)
+                    }
                 }
-            }
-            .overlay(alignment: .topTrailing) {
-                spotlightControls
-                    .padding(MeeshySpacing.sm)
-                    .modifier(CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach, isVisible: isCapsuleVisible, reduceMotion: reduceMotion))
-                    .callChromeVisibility(isCapsuleVisible)
+                .overlay(alignment: .topTrailing) {
+                    spotlightControls
+                        .padding(MeeshySpacing.sm)
+                        .modifier(CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach, isVisible: isCapsuleVisible, reduceMotion: reduceMotion))
+                        .callChromeVisibility(isCapsuleVisible)
+                }
             }
         }
     }
 
     private var zoomResetTap: some Gesture {
         TapGesture(count: 2).onEnded {
-            withAnimation(.easeOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2)) { zoom = 1 }
+            withAnimation(.easeOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2)) {
+                zoom = 1
+                pan = .zero
+            }
         }
     }
 
@@ -317,33 +362,49 @@ struct GroupCallStageView: View {
             .onEnded { value in zoom = GroupCallSpotlight.clampedZoom(zoom * value) }
     }
 
-    /// Grille (revenir) et plein écran, dans UN verre.
+    /// Le glissé part de la position affichée, jamais d'au-delà de la borne, et s'acquiert au relâché.
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: GroupCallSpotlight.panSlop)
+            .updating($drag) { value, state, _ in state = value.translation }
+            .onEnded { value in
+                pan = GroupCallSpotlight.screenPan(acquired: pan, drag: value.translation, zoom: GroupCallSpotlight.clampedZoom(zoom), in: size)
+            }
+    }
+
+    /// Grille (revenir), puis le niveau suivant, puis la descente d'un niveau, dans UN verre (loi 15,
+    /// #17961) : « Plein écran » monte d'un niveau à chaque appui, « Quitter » redescend d'un niveau.
     private var spotlightControls: some View {
-        HStack(spacing: MeeshySpacing.xxs) {
-            Button { choose(.grid) } label: {
-                Image(systemName: "square.grid.2x2")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundStyle(Color.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+        let isScreenShare = featuredIsScreenShare
+        let level = fullScreenLevel(isScreenShare: isScreenShare)
+        return HStack(spacing: MeeshySpacing.xxs) {
+            ForEach(GroupCallSpotlight.capsuleButtons(level: level, isScreenShare: isScreenShare), id: \.self) { button in
+                capsuleButton(button) { press(button, from: level, isScreenShare: isScreenShare) }
+                    .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             }
-            .accessibilityLabel(String(localized: "call.group.grid", defaultValue: "Revenir à la grille", bundle: .main))
-            Button {
-                withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }
-            } label: {
-                Image(systemName: isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundStyle(Color.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(isFullScreen
-                ? String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
-                : String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main))
         }
         .callChromeGlass(in: Capsule())
+    }
+
+    private func capsuleButton(_ button: GroupCallSpotlightButton, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: GroupCallSpotlightCapsuleCopy.glyph(button))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(GroupCallSpotlightCapsuleCopy.label(button))
+    }
+
+    /// « Revenir à la grille » sort de tout ; les autres boutons mènent à leur niveau par la loi.
+    private func press(_ button: GroupCallSpotlightButton, from level: GroupCallFullScreenLevel, isScreenShare: Bool) {
+        let next = GroupCallSpotlight.level(after: button, from: level, isScreenShare: isScreenShare)
+        if button == .grid { choose(.grid) }
+        withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) {
+            isFullScreen = next.isFullScreen
+            wantsTotalFullScreen = next == .total
+        }
     }
 
     private func filmstrip(_ others: [GroupCallStageTile], axis: Axis) -> some View {
@@ -390,6 +451,8 @@ struct GroupCallTileView: View {
     /// de la scène (`CallScreenShareChip`), la plaque gardant le nom de la personne.
     var screenTitle: String? = nil
     var zoom: CGFloat = 1
+    /// U2.7 · #17753 — le déplacement de l'écran zoomé, déjà borné à son cadre.
+    var pan: GroupCallScreenPan = .zero
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -400,9 +463,12 @@ struct GroupCallTileView: View {
             ZStack(alignment: .bottomLeading) {
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(MeeshyColors.indigo950)
-                if tile.showsVideo, track != nil {
+                // Loi 17.12 — l'image et l'avatar passent l'un à l'autre en fondu.
+                if showsImage {
                     tileVideo
                         .scaleEffect(zoom)
+                        .offset(x: pan.x, y: pan.y)
+                        .transition(.opacity)
                 } else {
                     CachedAvatarImage(
                         urlString: tile.avatarURL,
@@ -411,10 +477,12 @@ struct GroupCallTileView: View {
                         accentColor: tile.accentHex
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
                 }
                 nameplate
                     .padding(MeeshySpacing.sm)
             }
+            .animation(.easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)), value: showsImage)
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
@@ -436,6 +504,8 @@ struct GroupCallTileView: View {
         .accessibilityValue(accessibilityValue)
     }
 
+    private var showsImage: Bool { tile.showsVideo && track != nil }
+
     /// La couleur de la personne : la même que ses sous-titres et que son anneau en duo.
     private var speakerColor: Color {
         Color(uiColor: HexColor(hex: CallPeerSpeech.colorHex(forPeer: tile.colorKey))?.uiColor ?? .white)
@@ -451,9 +521,9 @@ struct GroupCallTileView: View {
     @ViewBuilder
     private var tileVideo: some View {
         if tile.isLocal {
-            LocalCameraVideoView(track: track, intendedFront: intendedFront, contentMode: contentMode)
+            LocalCameraVideoView(track: track, intendedFront: intendedFront, contentMode: contentMode, rendererKey: tile.id)
         } else {
-            CallVideoView(track: track, contentMode: contentMode)
+            CallVideoView(track: track, contentMode: contentMode, rendererKey: tile.id)
         }
     }
 
@@ -475,5 +545,26 @@ struct GroupCallTileView: View {
             tile.isReconnecting ? String(localized: "call.group.tile.reconnecting", defaultValue: "Reconnexion…", bundle: .main) : nil
         ]
         return states.compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+/// Les glyphes et libellés de la capsule de la une (loi 15) : « rentrer » pour descendre d'un niveau.
+enum GroupCallSpotlightCapsuleCopy {
+    static func glyph(_ button: GroupCallSpotlightButton) -> String {
+        switch button {
+        case .grid: return "square.grid.2x2"
+        case .fullScreen, .totalFullScreen: return "arrow.up.left.and.arrow.down.right"
+        case .exitFullScreen, .exitTotalFullScreen: return "arrow.down.right.and.arrow.up.left"
+        }
+    }
+
+    static func label(_ button: GroupCallSpotlightButton) -> String {
+        switch button {
+        case .grid: return String(localized: "call.group.grid", defaultValue: "Revenir à la grille", bundle: .main)
+        case .fullScreen: return String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main)
+        case .totalFullScreen: return String(localized: "call.group.fullscreen.total.enter", defaultValue: "Plein écran total", bundle: .main)
+        case .exitFullScreen: return String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
+        case .exitTotalFullScreen: return String(localized: "call.group.fullscreen.total.exit", defaultValue: "Quitter le plein écran total", bundle: .main)
+        }
     }
 }

@@ -16,6 +16,17 @@ nonisolated enum CallModeCarouselRule {
         isSelected ? selectedOpacity : neighbourOpacity
     }
 
+    /// Loi 17.10 — sous « Réduire les animations », le carrousel ne supprime pas son animation : la
+    /// case choisie et l'indice s'estompent du fondu court du chrome, jamais d'une bascule sèche.
+    static func animation(reduceMotion: Bool, full: Animation) -> Animation {
+        reduceMotion ? .easeInOut(duration: CallChromeStow.reducedFadeDuration) : full
+    }
+
+    /// La taille d'une case ne glisse pas sous réduction : seul le fondu (`animation`) la suit.
+    static func scaleAnimation(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.8)
+    }
+
     static func sideInset(containerWidth: CGFloat, itemWidth: CGFloat) -> CGFloat {
         max(0, (containerWidth - itemWidth) / 2)
     }
