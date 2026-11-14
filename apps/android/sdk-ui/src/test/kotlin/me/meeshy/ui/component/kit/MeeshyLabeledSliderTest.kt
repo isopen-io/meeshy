@@ -221,3 +221,28 @@ class MeeshyLabeledSliderTest {
 
     // endregion
 }
+
+class MeeshyLabeledSliderSourceGuardTest {
+
+    @Test
+    fun `le curseur n'ecrit ni couleur en dur ni verre dessine a la main`() {
+        val sources = File(repositoryRoot(), "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit")
+            .listFiles { file -> file.name.startsWith("MeeshyLabeledSlider") && file.name.endsWith(".kt") }
+            .orEmpty()
+            .toList()
+        assertThat(sources).isNotEmpty()
+        sources.forEach { file ->
+            val code = file.readText()
+            assertWithMessage(file.name).that(code).doesNotContain("Color(0x")
+            assertWithMessage(file.name).that(code).doesNotContain("glassEffect")
+            assertWithMessage(file.name).that(code).doesNotContain("MeeshyGlassButton")
+        }
+    }
+
+    private fun repositoryRoot(): File {
+        val start = File("").absoluteFile
+        return generateSequence(start) { it.parentFile }
+            .firstOrNull { File(it, "docs/product/kit").isDirectory }
+            ?: error("dépôt introuvable depuis ${start.absolutePath}")
+    }
+}

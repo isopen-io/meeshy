@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,6 +67,11 @@ import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+
+/**
+ * Fige le pouce en état tenu : la tuile « pressé » du catalogue, rien d'autre. Pendant iOS : `meeshyLabeledSliderForcesPressed`.
+ */
+public val LocalMeeshyLabeledSliderForcesPressed: ProvidableCompositionLocal<Boolean> = compositionLocalOf { false }
 
 /**
  * Le curseur d'un réglage continu (K05) : le nom à gauche, la valeur lue à droite, la piste fine et son pouce dessous.
@@ -179,13 +186,14 @@ public fun MeeshySliderTrack(
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     var isTouching by remember { mutableStateOf(false) }
+    val forcesPressed = LocalMeeshyLabeledSliderForcesPressed.current
     var isFocused by remember { mutableStateOf(false) }
     var widthPx by remember { mutableIntStateOf(0) }
 
     val recipe = MeeshyLabeledSliderRecipe.resolve(
         tone = LocalMeeshyGlassTone.current,
         isEnabled = enabled,
-        isPressed = isTouching,
+        isPressed = isTouching || forcesPressed,
         isOffNeutral = isOffNeutral(value, step, range, neutral),
         tint = tint,
         reduceMotion = reduceMotion,
@@ -194,17 +202,17 @@ public fun MeeshySliderTrack(
     val fraction = rule.fraction(of = value, isRtl = isRtl)
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
-        animationSpec = if (isTouching || reduceMotion) snap() else tween(MeeshyLabeledSliderRecipe.SETTLE_MILLIS),
+        animationSpec = if (isTouching || reduceMotion) snap<Float>() else tween<Float>(MeeshyLabeledSliderRecipe.SETTLE_MILLIS),
         label = "meeshy-labeled-slider-fraction",
     )
     val animatedThumbScale by animateFloatAsState(
         targetValue = recipe.thumbScale,
-        animationSpec = MeeshyMotion.springFast(),
+        animationSpec = MeeshyMotion.springFast<Float>(),
         label = "meeshy-labeled-slider-scale",
     )
     val animatedHalo by animateFloatAsState(
         targetValue = recipe.haloOpacity,
-        animationSpec = MeeshyMotion.springFast(),
+        animationSpec = MeeshyMotion.springFast<Float>(),
         label = "meeshy-labeled-slider-halo",
     )
 
