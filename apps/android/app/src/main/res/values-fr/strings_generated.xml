@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">Modifier le profil</string>
     <string name="a11y_floating_feed_hint">Ouvre le flux d\'actualité</string>
+    <string name="a11y_floating_menu_acts">Actes du jour : %1$d sur %2$d</string>
     <string name="a11y_floating_menu_hint">Ouvre le menu de navigation</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notifications en attente</string>
     <string name="a11y_menu_item_hint">Ouvrir cette section</string>

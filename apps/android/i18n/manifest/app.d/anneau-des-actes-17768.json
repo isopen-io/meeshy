@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "a11y.floating.menu.acts", "androidName": "a11y_floating_menu_acts", "status": "adopted" }
+      ]
+    }
+  }
+}

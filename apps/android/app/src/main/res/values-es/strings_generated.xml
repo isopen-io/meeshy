@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">Editar perfil</string>
     <string name="a11y_floating_feed_hint">Abre el feed de actividad</string>
+    <string name="a11y_floating_menu_acts">Actos del día: %1$d de %2$d</string>
     <string name="a11y_floating_menu_hint">Abre el menú de navegación</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notificaciones pendientes</string>
     <string name="a11y_menu_item_hint">Abrir esta sección</string>

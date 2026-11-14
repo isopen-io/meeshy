@@ -2,6 +2,7 @@
 <resources>
     <string name="a11y_edit_profile">تعديل الملف الشخصي</string>
     <string name="a11y_floating_feed_hint">يفتح تدفق الأخبار</string>
+    <string name="a11y_floating_menu_acts">فصول اليوم: %1$d من %2$d</string>
     <string name="a11y_floating_menu_hint">يفتح قائمة التنقّل</string>
     <string name="a11y_floating_menu_notifications_value">%1$d إشعارات معلّقة</string>
     <string name="a11y_menu_item_hint">فتح هذا القسم</string>
