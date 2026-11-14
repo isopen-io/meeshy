@@ -204,7 +204,6 @@
     <string name="sessions_empty">No hay sesiones activas</string>
     <string name="sessions_error_banner">No se pudo actualizar: desliza hacia abajo para reintentar.</string>
     <string name="sessions_error_ok">OK</string>
-    <string name="sessions_error_title">Error</string>
     <string name="sessions_loading">Cargando las sesiones</string>
     <string name="sessions_login_anonymous">Sesión de invitado</string>
     <string name="sessions_login_email_verification">Inicio de sesión al verificar el correo</string>
@@ -224,11 +223,10 @@
     <string name="sessions_revoke_a11y">Cerrar la sesión de %1$s</string>
     <string name="sessions_revoke_all_action">Cerrar sesión en los demás dispositivos</string>
     <string name="sessions_revoke_all_confirm_message">Solo este dispositivo seguirá con la sesión iniciada. Los demás tendrán que volver a iniciarla.</string>
-    <string name="sessions_revoke_all_error">No se han podido revocar las sesiones</string>
     <string name="sessions_revoke_confirm_action">Cerrar sesión</string>
     <string name="sessions_revoke_confirm_message">%1$s tendrá que volver a iniciar sesión para acceder a tu cuenta.</string>
     <string name="sessions_revoke_confirm_title">¿Cerrar la sesión de este dispositivo?</string>
-    <string name="sessions_revoke_error">No se ha podido revocar la sesión</string>
+    <string name="sessions_revoke_error">No se ha podido cerrar la sesión</string>
     <string name="sessions_section_others">Otros dispositivos</string>
     <string name="sessions_timezone">Zona horaria: %1$s</string>
     <string name="sessions_unknown_device">Dispositivo desconocido</string>

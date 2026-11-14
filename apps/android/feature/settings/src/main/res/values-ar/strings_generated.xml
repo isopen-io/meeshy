@@ -204,7 +204,6 @@
     <string name="sessions_empty">لا توجد جلسات نشطة</string>
     <string name="sessions_error_banner">تعذّر التحديث — اسحب لإعادة المحاولة.</string>
     <string name="sessions_error_ok">حسنًا</string>
-    <string name="sessions_error_title">خطأ</string>
     <string name="sessions_loading">جارٍ تحميل الجلسات</string>
     <string name="sessions_login_anonymous">جلسة ضيف</string>
     <string name="sessions_login_email_verification">تسجيل الدخول بالتحقق من البريد الإلكتروني</string>
@@ -224,11 +223,10 @@
     <string name="sessions_revoke_a11y">تسجيل خروج %1$s</string>
     <string name="sessions_revoke_all_action">تسجيل خروج الأجهزة الأخرى</string>
     <string name="sessions_revoke_all_confirm_message">سيبقى هذا الجهاز وحده متصلًا، وستحتاج الأجهزة الأخرى إلى تسجيل الدخول مجددًا.</string>
-    <string name="sessions_revoke_all_error">تعذّر إنهاء الجلسات</string>
     <string name="sessions_revoke_confirm_action">تسجيل الخروج</string>
     <string name="sessions_revoke_confirm_message">سيحتاج %1$s إلى تسجيل الدخول مجددًا للوصول إلى حسابك.</string>
     <string name="sessions_revoke_confirm_title">تسجيل خروج هذا الجهاز؟</string>
-    <string name="sessions_revoke_error">تعذّر إنهاء الجلسة</string>
+    <string name="sessions_revoke_error">تعذّر تسجيل الخروج</string>
     <string name="sessions_section_others">أجهزة أخرى</string>
     <string name="sessions_timezone">المنطقة الزمنية: %1$s</string>
     <string name="sessions_unknown_device">جهاز غير معروف</string>

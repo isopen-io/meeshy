@@ -18,20 +18,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sessions_error_title",
-          "androidName": "sessions_error_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions_revoke_error",
           "androidName": "sessions_revoke_error",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "sessions_revoke_all_error",
-          "androidName": "sessions_revoke_all_error",
           "status": "adopted"
         },
         {

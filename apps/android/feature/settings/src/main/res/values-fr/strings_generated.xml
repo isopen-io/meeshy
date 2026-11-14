@@ -204,7 +204,6 @@
     <string name="sessions_empty">Aucune session active</string>
     <string name="sessions_error_banner">Actualisation impossible — tirez pour réessayer.</string>
     <string name="sessions_error_ok">OK</string>
-    <string name="sessions_error_title">Erreur</string>
     <string name="sessions_loading">Chargement des sessions</string>
     <string name="sessions_login_anonymous">Session invitée</string>
     <string name="sessions_login_email_verification">Connexion par vérification de l\'e-mail</string>
@@ -224,11 +223,10 @@
     <string name="sessions_revoke_a11y">Déconnecter %1$s</string>
     <string name="sessions_revoke_all_action">Déconnecter les autres appareils</string>
     <string name="sessions_revoke_all_confirm_message">Seul cet appareil restera connecté. Les autres devront se reconnecter.</string>
-    <string name="sessions_revoke_all_error">Impossible de révoquer les sessions</string>
     <string name="sessions_revoke_confirm_action">Déconnecter</string>
     <string name="sessions_revoke_confirm_message">%1$s devra se reconnecter pour accéder à votre compte.</string>
     <string name="sessions_revoke_confirm_title">Déconnecter cet appareil ?</string>
-    <string name="sessions_revoke_error">Impossible de révoquer la session</string>
+    <string name="sessions_revoke_error">Déconnexion impossible</string>
     <string name="sessions_section_others">Autres appareils</string>
     <string name="sessions_timezone">Fuseau : %1$s</string>
     <string name="sessions_unknown_device">Appareil inconnu</string>

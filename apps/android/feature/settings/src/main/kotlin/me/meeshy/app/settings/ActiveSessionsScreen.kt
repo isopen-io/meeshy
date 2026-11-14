@@ -324,20 +324,10 @@ private fun ActiveSessionsDialogs(
             dismissButton = { TextButton(onClick = cancel) { Text(stringResource(R.string.sessions_cancel)) } },
         )
     }
-    state.failure?.let { failure ->
+    if (state.failure != null) {
         AlertDialog(
             onDismissRequest = { onEvent(ActiveSessionsUiEvent.DismissFailure) },
-            title = { Text(stringResource(R.string.sessions_error_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        when (failure) {
-                            ActiveSessionsFailure.REVOKE_ONE -> R.string.sessions_revoke_error
-                            ActiveSessionsFailure.REVOKE_OTHERS -> R.string.sessions_revoke_all_error
-                        },
-                    ),
-                )
-            },
+            text = { Text(stringResource(R.string.sessions_revoke_error)) },
             confirmButton = {
                 TextButton(onClick = { onEvent(ActiveSessionsUiEvent.DismissFailure) }) {
                     Text(stringResource(R.string.sessions_error_ok))

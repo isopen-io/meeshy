@@ -204,7 +204,6 @@
     <string name="sessions_empty">Nenhuma sessão ativa</string>
     <string name="sessions_error_banner">Não foi possível atualizar — puxe para tentar novamente.</string>
     <string name="sessions_error_ok">OK</string>
-    <string name="sessions_error_title">Erro</string>
     <string name="sessions_loading">Carregando as sessões</string>
     <string name="sessions_login_anonymous">Sessão de convidado</string>
     <string name="sessions_login_email_verification">Entrada pela verificação do e-mail</string>
@@ -224,11 +223,10 @@
     <string name="sessions_revoke_a11y">Desconectar %1$s</string>
     <string name="sessions_revoke_all_action">Desconectar os outros aparelhos</string>
     <string name="sessions_revoke_all_confirm_message">Só este aparelho continuará conectado. Os outros precisarão entrar novamente.</string>
-    <string name="sessions_revoke_all_error">Não foi possível revogar as sessões</string>
     <string name="sessions_revoke_confirm_action">Desconectar</string>
     <string name="sessions_revoke_confirm_message">%1$s precisará entrar novamente para acessar sua conta.</string>
     <string name="sessions_revoke_confirm_title">Desconectar este aparelho?</string>
-    <string name="sessions_revoke_error">Não foi possível revogar a sessão</string>
+    <string name="sessions_revoke_error">Não foi possível terminar a sessão</string>
     <string name="sessions_section_others">Outros aparelhos</string>
     <string name="sessions_timezone">Fuso horário: %1$s</string>
     <string name="sessions_unknown_device">Aparelho desconhecido</string>
