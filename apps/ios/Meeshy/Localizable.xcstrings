@@ -102419,43 +102419,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يجدك معارفك على Meeshy بفضل رقمك. ويمكنك أيضًا استخدامه لتسجيل الدخول."
+            "value": "يجدك معارفك بفضل رقمك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Kontakte finden dich auf Meeshy über deine Nummer. Du kannst sie auch zum Anmelden verwenden."
+            "value": "Deine Kontakte finden dich über deine Nummer."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "People you know find you on Meeshy through your number. You can also use it to sign in."
+            "value": "People you know find you through your number."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus contactos te encuentran en Meeshy gracias a tu número. También podrás usarlo para iniciar sesión."
+            "value": "Tus contactos te encuentran gracias a tu número."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes proches te retrouvent sur Meeshy grâce à ton numéro. Tu pourras aussi t’en servir pour te connecter."
+            "value": "Tes proches te retrouvent grâce à ton numéro."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi contatti ti trovano su Meeshy grazie al tuo numero. Potrai usarlo anche per accedere."
+            "value": "I tuoi contatti ti trovano grazie al tuo numero."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus contatos encontram você no Meeshy pelo seu número. Você também poderá usá-lo para entrar."
+            "value": "Seus contatos encontram você pelo seu número."
           }
         }
       }
@@ -213243,53 +213243,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Grave sua voz"
-          }
-        }
-      }
-    },
-    "voice.profile.wizard.success.message": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستستخدم رسائلك الصوتية المترجمة صوتك المستنسخ من الآن."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine übersetzten Sprachnachrichten verwenden ab jetzt deine geklonte Stimme."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your translated voice messages will now use your cloned voice."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus mensajes de voz traducidos usarán a partir de ahora tu voz clonada."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos messages audio traduits utiliseront désormais votre voix clonée."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi messaggi vocali tradotti useranno d'ora in poi la tua voce clonata."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suas mensagens de voz traduzidas passarão a usar sua voz clonada."
           }
         }
       }

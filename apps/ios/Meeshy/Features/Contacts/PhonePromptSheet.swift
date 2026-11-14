@@ -67,7 +67,7 @@ struct PhonePromptSheet: View {
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
-            Text(String(localized: "contacts.phonePrompt.benefit", defaultValue: "Tes proches te retrouvent sur Meeshy grâce à ton numéro. Tu pourras aussi t’en servir pour te connecter.", bundle: .main))
+            Text(String(localized: "contacts.phonePrompt.benefit", defaultValue: "Tes proches te retrouvent grâce à ton numéro.", bundle: .main))
                 .font(.subheadline)
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)

@@ -367,12 +367,6 @@ struct VoiceProfileWizardView: View {
                 .padding(.horizontal, MeeshySpacing.xl)
             }
 
-            Text(String(localized: "voice.profile.wizard.success.message", defaultValue: "Vos messages audio traduits utiliseront désormais votre voix clonée.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(theme.textSecondary)
-                .padding(.horizontal, MeeshySpacing.xxxl)
-
             Button {
                 HapticFeedback.success()
                 dismiss()
