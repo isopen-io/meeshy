@@ -57,6 +57,7 @@ import me.meeshy.ui.format.rememberRelativeTimeLongStrings
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.time.ZoneId
@@ -168,7 +169,16 @@ private fun LazyListScope.loadedContent(
         item(key = "no-others", contentType = "unavailable") { EmptyHint() }
     }
     if (state.showsGeolocation) {
-        item(key = "footer", contentType = "footer") { ActiveSessionsFooter(state.attribution) }
+        item(key = "footer", contentType = "footer") {
+            ActiveSessionsFooter(
+                attribution = state.attribution,
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.sessions_place_question),
+                    text = stringResource(R.string.sessions_place_footnote),
+                ),
+                noteHost = rememberNoteHost(),
+            )
+        }
     }
 }
 

@@ -806,12 +806,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.privacy.save_media",
-          "androidName": "privacy_save_media",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.privacy.contacts_groups",
           "androidName": "privacy_section_contacts",
           "status": "adopted"

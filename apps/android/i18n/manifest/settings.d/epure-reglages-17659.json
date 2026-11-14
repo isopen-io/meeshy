@@ -249,15 +249,15 @@
           "status": "android-only"
         },
         {
+          "androidName": "sessions_place_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "settings_media_autosave_note",
           "status": "android-only"
         },
         {
           "androidName": "settings_media_autosave_question",
-          "status": "android-only"
-        },
-        {
-          "androidName": "settings_media_autosave_subtitle",
           "status": "android-only"
         },
         {
@@ -285,7 +285,15 @@
           "status": "android-only"
         },
         {
+          "androidName": "privacy_save_media",
+          "status": "android-only"
+        },
+        {
           "androidName": "settings_notif_type_contact_activity",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_type_contact_activity_subtitle",
           "status": "android-only"
         },
         {

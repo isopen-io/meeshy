@@ -155,7 +155,6 @@
     <string name="privacy_last_seen">آخر تسجيل دخول</string>
     <string name="privacy_online_status">حالة الاتصال</string>
     <string name="privacy_read_receipts">إيصالات القراءة</string>
-    <string name="privacy_save_media">حفظ الوسائط</string>
     <string name="privacy_section_contacts">جهات الاتصال والمجموعات</string>
     <string name="privacy_section_encryption">التشفير</string>
     <string name="privacy_section_media">الوسائط والبيانات</string>

@@ -360,7 +360,6 @@ private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) 
         CaptureToggleRow(
             icon = Icons.Filled.Download,
             title = stringResource(R.string.settings_media_autosave_title),
-            subtitle = stringResource(R.string.settings_media_autosave_subtitle),
             checked = savesToGallery,
             onCheckedChange = onSavesToGallery,
             note = MeeshyInfoNote(

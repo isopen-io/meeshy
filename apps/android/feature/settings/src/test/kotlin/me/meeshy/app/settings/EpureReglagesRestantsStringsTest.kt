@@ -83,8 +83,8 @@ class EpureReglagesRestantsStringsTest {
             assertWithMessage("question en ${locale ?: "en"}").that(question.last() in listOf('?', '؟')).isTrue()
             assertThat(Tree.entriesOf(locale).getValue("sessions_place_footnote").text.trim()).isNotEmpty()
         }
-        val footer = source("ActiveSessionsFooter.kt")
-        assertThat(footer).contains("MeeshyInfoNote")
-        assertThat(footer).contains("R.string.sessions_place_question")
+        assertThat(source("ActiveSessionsFooter.kt")).contains("MeeshyInfoNoteButton")
+        assertThat(source("ActiveSessionsFooter.kt")).doesNotContain("sessions_place_footnote")
+        assertThat(source("ActiveSessionsScreen.kt")).contains("R.string.sessions_place_question")
     }
 }

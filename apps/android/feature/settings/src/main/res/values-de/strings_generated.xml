@@ -155,7 +155,6 @@
     <string name="privacy_last_seen">Letzte Anmeldung</string>
     <string name="privacy_online_status">Online-Status</string>
     <string name="privacy_read_receipts">Lesebestätigungen</string>
-    <string name="privacy_save_media">Medien sichern</string>
     <string name="privacy_section_contacts">Kontakte &amp; Gruppen</string>
     <string name="privacy_section_encryption">Verschlüsselung</string>
     <string name="privacy_section_media">Medien &amp; Daten</string>
