@@ -9,6 +9,7 @@ import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
 import { SOCKET_SESSION_ID } from '../disconnectSession';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
+import { recordSocketReachability, liveSocketsOf, withCombinedReachability } from '../socketReachability';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -682,7 +683,16 @@ export class AuthHandler {
     const isFirstSocket = (existingSockets?.size ?? 0) === 0;
     const wasPresent = this.foreground.isPresent(user.id);
 
-    this.connectedUsers.set(key, user);
+    // #16726 — la joignabilité est un fait de SOCKET : on la RANGE sur la
+    // socket, et l'entrée du compte en est DÉRIVÉE. Sans cela, ce `set`
+    // écrasait les marqueurs d'un appareil malade dès qu'un second appareil
+    // s'authentifiait, et l'écrasement ne se voyait qu'au départ du sain.
+    recordSocketReachability(socket, {
+      unreachableConversations: user.unreachableConversations,
+      allConversationRoomsUnreachable: user.allConversationRoomsUnreachable,
+    });
+    const liveSockets = liveSocketsOf(socket, existingSockets);
+    this.connectedUsers.set(key, liveSockets ? withCombinedReachability(user, [socket, ...liveSockets]) : user);
     this.socketToUser.set(socket.id, key);
 
     const userSocketsSet = existingSockets ?? new Set<string>();
@@ -720,7 +730,15 @@ export class AuthHandler {
       const nextSocketId = remainingSockets.values().next().value;
       const currentUser = this.connectedUsers.get(userIdOrToken);
       if (currentUser && nextSocketId) {
-        this.connectedUsers.set(userIdOrToken, { ...currentUser, socketId: nextSocketId });
+        // #16726 — l'entrée ne se RECOPIE pas : elle se RECALCULE sur les
+        // sockets qui restent. La recopie faisait hériter au survivant les
+        // marqueurs de celui qui part — dans un sens elle enfilait pour un
+        // compte joignable (doublon), dans l'autre elle laissait une socket
+        // ABSENTE de la room passer pour joignable : ni diffusion, ni file,
+        // ni rien à rejouer.
+        const base: SocketUser = { ...currentUser, socketId: nextSocketId };
+        const liveSockets = liveSocketsOf(socket, remainingSockets);
+        this.connectedUsers.set(userIdOrToken, liveSockets ? withCombinedReachability(base, liveSockets) : base);
       }
       return;
     }

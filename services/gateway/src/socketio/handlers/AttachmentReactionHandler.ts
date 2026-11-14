@@ -226,6 +226,18 @@ export class AttachmentReactionHandler {
         messageId: validated.messageId,
         conversationId,
         participantId: resolved.participantId,
+        // #18124 — la clé par laquelle un AUTRE appareil du MÊME compte
+        // reconnaît sa propre réaction. Le miroir Kotlin la LIT depuis
+        // toujours (`MessageDeltaApplier.kt`, `mine`) ; personne ne la POSAIT,
+        // donc `mine` était toujours faux et la pastille de ma réaction à une
+        // pièce jointe ne s'allumait jamais sur un second appareil.
+        //
+        // `null` pour un invité : `resolved.userId` porte alors sa clé de
+        // PARTICIPANT (`resolveParticipant`), et la publier sous un champ qui
+        // déclare un `User.id` est la confusion exacte que ce champ existe
+        // pour éviter. Même discriminant que `updatedByUserId`, douze lignes
+        // plus bas.
+        userId: resolved.isAnonymous ? null : resolved.userId,
         emoji: validated.emoji,
         action,
         reactionSummary,

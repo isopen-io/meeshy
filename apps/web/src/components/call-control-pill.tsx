@@ -1,10 +1,13 @@
-import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
+import { callOutputButtonTone } from '@/lib/calls/call-button-glass';
+import { callOutputRouting, callOutputStore } from '@/lib/calls/call-output';
 import { PILL_TEXT_WIDTH_CLASS, pillTakesBound, type CallPillText } from '@/lib/calls/call-pill-text';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useGlassTone, usePillGlass } from '@/lib/calls/use-pill-motion';
@@ -46,7 +49,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * flou à eux. Le seul `backdrop-filter` du groupe est celui de la pilule.
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
- * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
+ * `call-devices-sheet.tsx`, chunk à part chargé au premier geste). Il s'allume
+ * quand le son part vers un appareil externe, en audio comme en vidéo, et dit
+ * au lecteur d'écran où il part (P1.6, #17843, `callOutputButtonTone`, miroir
+ * de `CallOutputButtonRule` d'iOS et d'Android).
  *
  * Un toucher qui manque la pilule de peu reste à elle (#8735) : un débord
  * transparent autour d'elle garde les commandes au lieu de les effacer.
@@ -57,6 +63,66 @@ export const loadDeck = () => import('./call-deck-motion');
 const Deck = lazy(() => loadDeck().then((module) => ({ default: module.Deck })));
 
 const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module) => ({ default: module.CallDevicesSheet })));
+
+type ChosenSink = { readonly present: boolean; readonly label: string | null };
+
+/**
+ * La sortie choisie dans le navigateur est-elle branchée, et sous quel nom ? Relue à chaque appareil branché
+ * ou retiré ; le défaut du système ne demande rien. Tant que le navigateur n'a pas répondu, le choix fait foi :
+ * un casque branché ne clignote pas.
+ */
+function useChosenSink(sinkId: string | null): ChosenSink {
+  const [listed, setListed] = useState<readonly MediaDeviceInfo[] | null>(null);
+  useEffect(() => {
+    const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    if (sinkId === null || media?.enumerateDevices === undefined) return undefined;
+    let alive = true;
+    const refresh = () =>
+      void media
+        .enumerateDevices()
+        .then((list) => {
+          if (alive) setListed(list);
+        })
+        .catch(() => undefined);
+    refresh();
+    media.addEventListener?.('devicechange', refresh);
+    return () => {
+      alive = false;
+      media.removeEventListener?.('devicechange', refresh);
+    };
+  }, [sinkId]);
+  const device = listed?.find((entry) => entry.kind === 'audiooutput' && entry.deviceId === sinkId);
+  const label = device?.label.trim() ?? '';
+  return { present: sinkId !== null && (listed === null || device !== undefined), label: label === '' ? null : label };
+}
+
+/** Dans la coque, la route native en cours, relue à l'ouverture de l'écran (la feuille des appareils la pose ensuite à chaque choix). */
+function useShellRoute(): void {
+  useEffect(() => {
+    if (!__SHELL__) return undefined;
+    let alive = true;
+    void import('@/lib/calls/shell-call-runtime')
+      .then(({ shellAudioRoutes }) => shellAudioRoutes())
+      .then((routes) => {
+        if (alive) callOutputStore.setState({ route: routes?.route ?? null });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+}
+
+/** « Sortie » (P1.6) : le ton que la loi choisit, et un libellé qui dit où part le son quand il ne part pas au défaut. */
+function useOutputFace(language: InterfaceLanguage, isVideoCall: boolean): { readonly tone: 'active' | 'disc'; readonly label: string } {
+  const { sinkId, route } = useStore(callOutputStore);
+  useShellRoute();
+  const sink = useChosenSink(route === null ? sinkId : null);
+  const tone = callOutputButtonTone({ ...callOutputRouting({ route, sinkChosen: sink.present }), isVideoCall });
+  const where = route === null ? sink.label : translate(language, `call.audioRoute.${route}`);
+  const name = translate(language, 'call.devices.open');
+  return { tone, label: where === null ? name : `${name}, ${where}` };
+}
 
 type PillProps = {
   readonly call: ActiveCall;
@@ -84,6 +150,7 @@ type PillProps = {
 
 export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, text, captions, panels, kit, panel, stowed = false }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const output = useOutputFace(language, call.media === 'video');
   const box = useRef<HTMLDivElement>(null);
   const skin = useRef<HTMLSpanElement>(null);
   usePillGlass(box, skin, stowed);
@@ -125,9 +192,10 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
             pressed={call.micMuted}
           />
           <CallButton
-            label={translate(language, 'call.devices.open')}
+            label={output.label}
             glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />}
             onPress={() => setDevicesOpen(true)}
+            tone={output.tone}
             popup
             expanded={devicesOpen}
             data={{ 'data-call-devices-open': '' }}

@@ -169,7 +169,7 @@ describe('la file des événements', () => {
 
 describe('la bulle d’appel', () => {
   test('un résumé terminé se rappelle ; un appel en cours se rejoint', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false, recording: null });
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false, recording: null, participants: null, viewerId: '' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', callType: 'audio' } })).toMatchObject({ live: true, media: 'audio' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });

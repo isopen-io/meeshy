@@ -319,6 +319,28 @@ describe('la capsule de capture et la case de la carte d’accord', () => {
     motion.restore();
   });
 
+  test('R1.6 (#17963) : un premier toucher la range vers le haut avec les bannières et la tait au lecteur d’écran ; le second la rend', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = (hidden: boolean) =>
+      act(async () => {
+        root.render(<CallTopBannerStack call={{ ...call(), members: { 'u-peer': peer(true) } }} present={{ capture: true }} language="fr" hidden={hidden} liveFrame={NO_LIVE_FRAME} />);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+    const slot = () => host.querySelector<HTMLElement>('[data-call-capture-slot]');
+    await render(false);
+    expect(slot()?.getAttribute('data-call-stow')).toBe('top');
+    expect(slot()?.hasAttribute('aria-hidden')).toBe(false);
+    await render(true);
+    expect(slot()?.getAttribute('data-call-stow')).toBe('top');
+    expect(slot()?.getAttribute('aria-hidden')).toBe('true');
+    await render(false);
+    expect(slot()?.hasAttribute('aria-hidden')).toBe(false);
+    act(() => root.unmount());
+    host.remove();
+  });
+
   test('la feuille sort la capsule sortante de la mise en page, comme le bandeau de partage', () => {
     const sheet = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
     expect(sheet).toMatch(/\[data-call-banner-stack\]\s*>\s*\[data-call-capture-slot\]\[data-leaving\][^{]*\{[^}]*position:\s*absolute/);

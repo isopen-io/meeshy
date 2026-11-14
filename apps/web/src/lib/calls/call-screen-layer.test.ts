@@ -44,6 +44,12 @@ describe('nextLayer', () => {
     expect(nextLayer(panel('react'), { type: 'open-panel', panel: 'react' })).toEqual(menu);
   });
 
+  test('#18357 (G1, #17964 point 4) — rouvrir le journal déjà ouvert le GARDE : il se lit au repos (`.panel(.journal).opening(.journal)` d’iOS et d’Android)', () => {
+    expect(nextLayer(panel('journal'), { type: 'open-panel', panel: 'journal' })).toEqual(panel('journal'));
+    expect(nextLayer(panel('record'), { type: 'open-panel', panel: 'record' })).toEqual(menu);
+    expect(nextLayer(panel('people'), { type: 'open-panel', panel: 'people' })).toEqual(menu);
+  });
+
   test('‹ revient au menu, ✕ ferme tout', () => {
     expect(nextLayer(panel('journal'), { type: 'back' })).toEqual(menu);
     expect(nextLayer(menu, { type: 'back' })).toEqual(IDLE);
