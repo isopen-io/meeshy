@@ -1076,6 +1076,7 @@ describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)
     const el = await mount(deps, LINK, true, KENJI);
     expect(recorded.guestJoins).toEqual([]);
     expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-layout]')?.className).toContain('grid-cols-[minmax(0,1fr)]');
     expect(el.querySelector('[data-invite-account-required]')).not.toBeNull();
   });
 

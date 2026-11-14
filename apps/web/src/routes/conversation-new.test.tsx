@@ -186,9 +186,16 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
   test('personne choisie : l’interrupteur dit qu’un groupe se crée seul (#14646)', async () => {
     const el = await mount();
     await click(groupToggle(el));
-    expect(text(groupToggle(el))).toContain('Vous pouvez le créer seul');
-    await click(firstPerson(el));
     expect(text(groupToggle(el))).not.toContain('Vous pouvez le créer seul');
+    expect(text(groupToggle(el))).toContain('Nouveau groupe');
+    const info = el.querySelector<HTMLButtonElement>('button[aria-label="Peut-on créer un groupe seul ?"]');
+    expect(info).not.toBeNull();
+    expect(groupToggle(el)?.contains(info ?? null)).toBe(false);
+    const note = el.ownerDocument.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toContain('Vous pouvez le créer seul');
+    expect(note?.className).toContain('sr-only');
+    await click(firstPerson(el));
+    expect(el.querySelector('button[aria-label="Peut-on créer un groupe seul ?"]')).toBeNull();
   });
 
   test('aucun champ de description à la création (#14646)', async () => {

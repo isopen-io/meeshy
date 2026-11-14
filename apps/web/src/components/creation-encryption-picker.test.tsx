@@ -116,6 +116,28 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
   });
 });
 
+describe('la ligne du mode retenu se lit au repos (règle 7, #18361)', () => {
+  test('sous le résumé, avant la phrase d’irréversibilité, hors du <details>', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    const line = document.querySelector('[data-creation-encryption-current]');
+    expect(line?.textContent).toBe('Chiffré sur nos serveurs.');
+    expect(line?.closest('details')).toBeNull();
+    expect(line?.className).not.toContain('sr-only');
+    const footer = document.querySelector('[data-creation-encryption-footer]');
+    expect(line?.compareDocumentPosition(footer as Node)).toBe(4);
+  });
+
+  test('elle suit le mode choisi', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    await act(async () => {
+      radio('hybrid')?.click();
+    });
+    expect(document.querySelector('[data-creation-encryption-current]')?.textContent).toBe(
+      'Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.',
+    );
+  });
+});
+
 describe('replié par défaut, le mode retenu reste dit (#14646)', () => {
   test('la feuille ne montre que « Chiffrement · Serveur » ; déplier offre les modes', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
