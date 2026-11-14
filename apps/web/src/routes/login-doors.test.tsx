@@ -61,6 +61,16 @@ function mountAt(url: string): HTMLDivElement {
 
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/gu, ' ');
 
+describe('/login — les champs ne redisent pas leur libellé (épure #17666)', () => {
+  test('identifiant et mot de passe : le libellé visible nomme le champ, aucun placeholder ne le répète', () => {
+    const el = mountAt('/login?methode=password');
+    expect(text(el)).toContain('E-mail, téléphone ou pseudo');
+    expect(text(el)).toContain('Mot de passe');
+    expect(el.querySelector('#login-username')?.getAttribute('placeholder') ?? '').toBe('');
+    expect(el.querySelector('#login-password')?.getAttribute('placeholder') ?? '').toBe('');
+  });
+});
+
 describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', () => {
   test('sans paramètre : le champ e-mail et « Recevoir le lien », jamais un champ mot de passe', () => {
     const el = mountAt('/login');
@@ -70,13 +80,16 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
     expect(el.querySelector('#login-password')).toBeNull();
   });
 
-  test('le mode de fonctionnement est derrière un (i) « Comment ça marche », replié par défaut', () => {
+  test('le (i) porte la QUESTION, sa note dit le « comment » ET la durée du lien, et reste lue repliée (#6626, épure #17584)', () => {
     const el = mountAt('/login');
-    const info = el.querySelector('button[aria-label="Comment ça marche"]') as HTMLButtonElement | null;
+    expect(el.querySelector('button[aria-label="Comment ça marche"]')).toBeNull();
+    const info = el.querySelector('button[aria-label="Comment se connecter sans mot de passe ?"]') as HTMLButtonElement | null;
     expect(info).not.toBeNull();
     expect(info?.getAttribute('aria-expanded')).toBe('false');
     const note = controlledBy(info);
-    expect(note?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    expect(note?.textContent).toBe(
+      'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté. Le lien est valable 10 minutes et ne sert qu’une fois.',
+    );
     expect(note?.classList.contains('sr-only')).toBe(true);
 
     act(() => {
