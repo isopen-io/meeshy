@@ -243,7 +243,16 @@
   transition: transform 180ms var(--onb-spring), box-shadow 200ms ease, opacity 200ms ease;
 }
 
-.onb-primary:active:not(:disabled) {
+.onb-secondary,
+.onb-skip,
+.onb-link {
+  transition: transform 180ms var(--onb-spring);
+}
+
+.onb-primary:active:not(:disabled),
+.onb-secondary:active:not(:disabled),
+.onb-skip:active:not(:disabled),
+.onb-link:active:not(:disabled) {
   transform: scale(0.96);
 }
 
@@ -1170,5 +1179,13 @@
   .onb-chip,
   .onb-add {
     transition: none;
+  }
+
+  .onb-primary:active:not(:disabled),
+  .onb-secondary:active:not(:disabled),
+  .onb-skip:active:not(:disabled),
+  .onb-link:active:not(:disabled) {
+    transform: none;
+    opacity: var(--press-reduced-opacity);
   }
 }
