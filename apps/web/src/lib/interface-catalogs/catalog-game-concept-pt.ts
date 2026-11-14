@@ -267,7 +267,7 @@ const pt = {
   'game.notebook.intro': 'A Crônica guarda em foto os momentos em que seus ancestrais se manifestam.',
   'game.succes.intro': 'Uma façanha premia uma primeira vez ou um feito.',
   'game.defis.intro': 'Cada desafio é um degrau a alcançar numa família de gestos.',
-  'game.badges.intro': 'Uma medalha se ganha por níveis, a força de gestos.',
+  'game.badges.intro': 'Uma medalha se ganha por níveis, à força de gestos.',
   'game.defis.unmeasured': 'Os desafios ainda não são medidos nesta conta.',
   'game.notebook.size': 'A Crônica ocupa {size}.',
   'game.constellation.next.one': '{count} fragmento de estrela até a próxima estrela',

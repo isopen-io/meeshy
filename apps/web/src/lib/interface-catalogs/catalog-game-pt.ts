@@ -703,7 +703,7 @@ const pt = {
   'game.settings.hidden.show': 'Mostrar o jogo de novo',
   'game.settings.hidden.reopen_note': 'Suas configurações de visibilidade continuam fechadas: reabra-as aqui quando quiser.',
   'game.settings.visibility.title': 'Quem vê o quê',
-  'game.settings.visibility.body': 'Escolha quem vê a sua patente, seu Legado, seus troféus e seu Atlas.',
+  'game.settings.visibility.body': 'Escolha quem vê seu título, sua Herança, seus troféus e seu Atlas.',
   'game.settings.visibility.note': 'Fora dos amigos aceitos, ninguém vê se você está online nem quando joga.',
   'game.settings.visibility.note_q': 'Quem vê se estou online?',
   'game.settings.league.title': 'Torneio público',
