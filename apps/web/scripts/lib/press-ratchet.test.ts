@@ -35,7 +35,7 @@ const sourcesOfTree = () =>
  * grave plus bas dans le même commit. 20 durées dans 19 fichiers depuis que
  * le disque du Bring laisse la feuille porter son fondu.
  */
-const PLAFOND = { mute: 1019, durations: 20 } as const;
+const PLAFOND = { mute: 1017, durations: 20 } as const;
 
 const source = (path: string, text: string) => ({ path, text });
 
