@@ -8,7 +8,6 @@ const f = {
   'admin.kit.info.blindSpot': 'Why this blind spot?',
   'admin.kit.info.table': 'How to read this table?',
   'admin.kit.info.stat': 'What does this figure measure?',
-  'admin.kit.info.edit': 'How do I edit?',
   'admin.kit.info.secret': 'Why are these keys sensitive?',
   'admin.kit.info.purge': 'What does this cleanup remove?',
   'admin.kit.info.backup': 'How does the backup work?',

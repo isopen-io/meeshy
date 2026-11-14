@@ -5,7 +5,6 @@ import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
-import { AdminNoted } from '@/components/admin/info-note';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminInlineField, type AdminInlineStatus } from '@/components/admin/inline-field';
 import { BRAND, INK, INK2, INK3 } from '@/components/admin/tone';
@@ -267,11 +266,14 @@ export function AdminMemberQuickEdit({
           <AdminGlyph name="pencilSimple" size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <AdminNoted question={t('admin.kit.info.edit')} text={folded ? undefined : t('admin.quickEdit.note')}>
-            <h2 id={titleId} className="text-body font-semibold" style={{ color: INK }}>
-              {t('admin.quickEdit.title')}
-            </h2>
-          </AdminNoted>
+          <h2 id={titleId} className="text-body font-semibold" style={{ color: INK }}>
+            {t('admin.quickEdit.title')}
+          </h2>
+          {folded ? null : (
+            <p data-admin-quick-edit-note className="text-caption" style={{ color: INK2 }}>
+              {t('admin.quickEdit.note')}
+            </p>
+          )}
         </div>
         <button
           type="button"

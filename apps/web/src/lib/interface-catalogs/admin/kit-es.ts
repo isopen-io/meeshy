@@ -8,7 +8,6 @@ const f = {
   'admin.kit.info.blindSpot': '¿Por qué este punto ciego?',
   'admin.kit.info.table': '¿Cómo leer esta tabla?',
   'admin.kit.info.stat': '¿Qué mide esta cifra?',
-  'admin.kit.info.edit': '¿Cómo editar?',
   'admin.kit.info.secret': '¿Por qué son sensibles estas claves?',
   'admin.kit.info.purge': '¿Qué elimina esta limpieza?',
   'admin.kit.info.backup': '¿Cómo funciona la copia de seguridad?',
