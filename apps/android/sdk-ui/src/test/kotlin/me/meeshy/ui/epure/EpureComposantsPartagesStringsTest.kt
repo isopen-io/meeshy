@@ -109,13 +109,20 @@ class EpureComposantsPartagesStringsTest {
     }
 
     @Test
-    fun `le talkie qui ne passe pas dit une seule formule, au toast comme a l annonce, sans le mot talkie des anciennes phrases`() {
+    fun `pendant que la voix s'enregistre, l'annonce dit qu'elle PART en message vocal, jamais qu'elle est deja envoyee`() {
+        assertThat(text("fr", "talkie_header_announce_recorded")).isEqualTo("Le talkie ne passe pas : votre voix part en message vocal")
+        assertThat(text("en", "talkie_header_announce_recorded"))
+            .isEqualTo("The talkie can't get through: your voice will be sent as a voice message")
         folders.keys.forEach { language ->
-            assertWithMessage("$language : toast et annonce disent la meme chose")
-                .that(text(language, "talkie_send_voice")).isEqualTo(text(language, "talkie_header_announce_recorded"))
+            assertWithMessage("$language : l'annonce ne confond pas le refus et le repli")
+                .that(text(language, "talkie_header_announce_recorded")).isNotEqualTo(text(language, "talkie_send_voice"))
         }
-        assertThat(text("en", "talkie_send_voice")).isEqualTo("Can’t get through: sent as a voice message.")
-        assertThat(text("fr", "talkie_send_voice")).isEqualTo("Ne passe pas : envoyé en message vocal.")
+    }
+
+    @Test
+    fun `le refus du talkie propose le message vocal sans pretendre l'avoir envoye`() {
+        assertThat(text("fr", "talkie_send_voice")).isEqualTo("Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.")
+        assertThat(text("fr", "talkie_send_voice")).doesNotContain("envoyé")
     }
 
     @Test

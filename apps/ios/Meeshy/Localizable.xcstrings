@@ -202135,43 +202135,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر الاتصال: أُرسل كرسالة صوتية."
+            "value": "تعذّر الاتصال اللاسلكي: سيُرسل صوتك كرسالة صوتية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kommt nicht durch: als Sprachnachricht gesendet."
+            "value": "Das Walkie-Talkie kommt nicht durch: Deine Stimme wird als Sprachnachricht gesendet"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t get through: sent as a voice message."
+            "value": "The talkie can't get through: your voice will be sent as a voice message"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No pasa: enviado como mensaje de voz."
+            "value": "El talkie no pasa: tu voz se enviará como mensaje de voz"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ne passe pas : envoyé en message vocal."
+            "value": "Le talkie ne passe pas : votre voix part en message vocal"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non passa: inviato come messaggio vocale."
+            "value": "Il talkie non passa: la tua voce partirà come messaggio vocale"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não passou: enviado como mensagem de voz."
+            "value": "O talkie não passou: sua voz será enviada como mensagem de voz"
           }
         }
       }
@@ -335579,43 +335579,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر الاتصال: أُرسل كرسالة صوتية."
+            "value": "لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kommt nicht durch: als Sprachnachricht gesendet."
+            "value": "Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t get through: sent as a voice message."
+            "value": "The walkie-talkie can’t get through right now: send a voice message instead."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No pasa: enviado como mensaje de voz."
+            "value": "El walkie-talkie no pasa ahora mismo: envía un mensaje de voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ne passe pas : envoyé en message vocal."
+            "value": "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non passa: inviato come messaggio vocale."
+            "value": "Il walkie-talkie ora non passa: invia un messaggio vocale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não passou: enviado como mensagem de voz."
+            "value": "O walkie-talkie não passa agora: envie uma mensagem de voz."
           }
         }
       }

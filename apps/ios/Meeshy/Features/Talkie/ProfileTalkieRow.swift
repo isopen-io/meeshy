@@ -145,7 +145,7 @@ enum ProfileTalkieWording {
                 bundle: .main
             )
         case .notAllowed:
-            String(localized: "talkie.send.voice", defaultValue: "Ne passe pas : envoyé en message vocal.", bundle: .main)
+            String(localized: "talkie.send.voice", defaultValue: "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.", bundle: .main)
         case .e2ee:
             String(localized: "talkie.send.e2ee", defaultValue: "Indisponible dans une conversation chiffrée.", bundle: .main)
         case .rateLimited:
