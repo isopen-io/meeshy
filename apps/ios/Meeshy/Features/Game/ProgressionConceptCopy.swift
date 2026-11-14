@@ -359,23 +359,44 @@ enum ConceptText {
     /// Comment s’en servir — la section « Comment m’en servir » de la fiche.
     static func use(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
         case .points: String(localized: "game.concept.points.use", defaultValue: "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.use", defaultValue: "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre un acte pour voir où tu en es. L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
-        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
-        case .season: String(localized: "game.concept.season.use", defaultValue: "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.use", defaultValue: "Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre un acte pour voir où tu en es.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
+        case .season: String(localized: "game.concept.season.use", defaultValue: "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.use", defaultValue: "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’en éteint aucune : une médaille dit ton total réel.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.use", defaultValue: "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.use", defaultValue: "Ouvre la liste : chaque palier dit sa rareté.", bundle: .main)
         case .succes: String(localized: "game.concept.succes.use", defaultValue: "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire.", bundle: .main)
         case .showcase: String(localized: "game.concept.showcase.use", defaultValue: "Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul.", bundle: .main)
         case .atlas: String(localized: "game.concept.atlas.use", defaultValue: "Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit.", bundle: .main)
         }
     }
+
+    /// Les cas particuliers de « Comment m’en servir » : la phrase d'usage reste au repos, ce qui ne vaut que dans un
+    /// cas (un seuil qui ne se referme pas, un plafond, une remise à zéro) passe derrière un (i) nommé par sa question.
+    static func useCases(_ concept: ProgressionConcept) -> String? {
+        switch concept {
+        case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.use_cases", defaultValue: "Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.use_cases", defaultValue: "L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
+        case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi.", bundle: .main)
+        case .season: String(localized: "game.concept.season.use_cases", defaultValue: "Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.use_cases", defaultValue: "Une frappe n’en éteint aucune : une médaille dit ton total réel.", bundle: .main)
+        case .points, .meesh, .flame, .prestige, .elans, .defis, .succes, .showcase, .atlas: nil
+        }
+    }
+
+    /// Le (i) de « Comment m’en servir » : sa question est son nom accessible, sa note les cas particuliers.
+    static func useNote(_ concept: ProgressionConcept) -> MeeshyInfoNote? {
+        useCases(concept).map { MeeshyInfoNote(question: ficheUseCases, text: $0) }
+    }
+
+    static var ficheUseCases: String { String(localized: "game.fiche.use.cases_question", defaultValue: "Quels cas particuliers ?", bundle: .main) }
 
     static var ficheUse: String { String(localized: "game.fiche.use", defaultValue: "Comment m’en servir", bundle: .main) }
 
@@ -447,23 +468,15 @@ enum ConceptText {
         String(localized: "game.state.level.simple", defaultValue: "Ta lumière brille au niveau \(level) : \(left) jusqu’au niveau \(next).", bundle: .main)
     }
 
-    static func statePointsMissing(held: String, convertible: String, number: String, price: String, missing: String) -> String {
-        String(localized: "game.state.points.missing", defaultValue: "Ta lumière compte \(held), soit \(convertible). La Meesh n° \(number) en figera \(price) : il manque \(missing).", bundle: .main)
-    }
-
-    static func statePointsReady(held: String, convertible: String, number: String, price: String) -> String {
-        String(localized: "game.state.points.ready", defaultValue: "Ta lumière compte \(held), soit \(convertible) : assez pour frapper la Meesh n° \(number), qui en figera \(price).", bundle: .main)
-    }
-
     /// Les étincelles (#10846) : la poche seule, toute convertible, et ce qui manque pour la pièce visée.
-    static func statePointsMissingPlain(held: String, number: String, price: String, missing: String) -> String {
+    static func statePointsMissingPlain(held: String, missing: String, number: String) -> String {
         String(localized: "game.state.points.missing_plain",
-               defaultValue: "Ta lumière compte \(held). La Meesh n° \(number) en figera \(price) : il manque \(missing).",
+               defaultValue: "Ta lumière compte \(held) : il manque \(missing) pour la Meesh n° \(number).",
                bundle: .main)
     }
 
-    static func statePointsReadyPlain(held: String, number: String, price: String) -> String {
-        String(localized: "game.state.points.ready_plain", defaultValue: "Ta lumière compte \(held) : de quoi frapper la Meesh n° \(number), qui en figera \(price).", bundle: .main)
+    static func statePointsReadyPlain(held: String, number: String) -> String {
+        String(localized: "game.state.points.ready_plain", defaultValue: "Ta lumière compte \(held) : de quoi frapper la Meesh n° \(number).", bundle: .main)
     }
 
     static func stateMeeshKept(balance: String, minted: String) -> String {
@@ -511,7 +524,7 @@ enum ConceptText {
     }
 
     static func stateMissionsProgress(done: String, total: String, left: String) -> String {
-        String(localized: "game.state.missions.progress", defaultValue: "Le rêve de cette nuit : \(done) sur \(total) actes, et \(left) à réaliser pour voir l’Offrande.", bundle: .main)
+        String(localized: "game.state.missions.progress", defaultValue: "Le rêve de cette nuit : \(done) sur \(total) actes, \(left) à réaliser.", bundle: .main)
     }
 
     static func stateMissionsReady(done: String, total: String) -> String {
@@ -519,7 +532,7 @@ enum ConceptText {
     }
 
     static func stateMissionsClaimed(done: String, total: String) -> String {
-        String(localized: "game.state.missions.claimed", defaultValue: "Le rêve de cette nuit : \(done) sur \(total) actes. L’Offrande est ouverte : un nouveau rêve viendra cette nuit.", bundle: .main)
+        String(localized: "game.state.missions.claimed", defaultValue: "Le rêve de cette nuit : \(done) sur \(total) actes. L’Offrande est ouverte.", bundle: .main)
     }
 
     static var stateLeagueUnplaced: String { String(localized: "game.state.league.unplaced", defaultValue: "Tu n’as pas encore de place dans la joute cette semaine. La Joute des amis reste ouverte.", bundle: .main) }
@@ -538,8 +551,8 @@ enum ConceptText {
         String(localized: "game.state.league.zone.relegation", defaultValue: "Tu es dans la zone de descente : \(missing) jusqu’à la zone de montée.", bundle: .main)
     }
 
-    static func stateSeasonProgress(number: String, week: String, weeks: String, steps: String, total: String, stars: String) -> String {
-        String(localized: "game.state.season.progress", defaultValue: "Voyage \(number), semaine \(week) sur \(weeks) : halte \(steps) sur \(total), et \(stars) jusqu’à la suivante.", bundle: .main)
+    static func stateSeasonProgress(number: String, steps: String, total: String) -> String {
+        String(localized: "game.state.season.progress", defaultValue: "Voyage \(number) · halte \(steps) sur \(total)", bundle: .main)
     }
 
     static func stateSeasonDone(number: String, week: String, weeks: String, total: String) -> String {

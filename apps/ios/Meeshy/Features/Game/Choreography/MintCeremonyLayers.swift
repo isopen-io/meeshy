@@ -37,8 +37,8 @@ enum MintCeremonyCopy {
     static func refused(_ reason: MintRefusalReason) -> String {
         switch reason {
         case .shadow:
-            String(localized: "game.frappe.refused.shadow",
-                   defaultValue: "Une ombre voile ta lumière. Tes prochaines étincelles la dissiperont, et on frappera.", bundle: .main)
+            String(localized: "game.mint.blocked.debt_plain",
+                   defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont.", bundle: .main)
         case .locked:
             String(localized: "game.frappe.refused.locked",
                    defaultValue: "Ton Héritage attend un rang plus haut. Ta gloire l’ouvrira, et on frappera.", bundle: .main)

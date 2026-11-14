@@ -191,7 +191,9 @@ struct ProgressionConceptContent: View {
                 sentence(ConceptText.tip2(concept))
             }
             section(ConceptText.ficheUse) {
-                sentence(ConceptText.use(concept))
+                MeeshyInfoNoted(note: ConceptText.useNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
+                    sentence(ConceptText.use(concept))
+                }
             }
             // Le prix et le manque de la prochaine Meesh vivent à l'Héritage : la fiche des Étincelles y MÈNE (#11180).
             if case .sparks = fiche.head {

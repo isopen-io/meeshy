@@ -577,7 +577,6 @@ extension ProgressionConceptModel {
         guard let game else { return nil }
         let mint = game.mint
         let number = count(mint.number)
-        let price = GameCopy.points(mint.price)
         let facts: [ProgressionFactID] = mint.canMint
             ? [.sparksPocket, .mintNext, .mintPrice]
             : [.sparksPocket, .mintNext, .mintPrice, .mintMissing]
@@ -585,22 +584,16 @@ extension ProgressionConceptModel {
         if game.level.sparks != nil {
             let pocket = GameCopy.points(game.level.sparkFacts.pocket)
             let text = mint.canMint
-                ? ConceptText.statePointsReadyPlain(held: pocket, number: number, price: price)
-                : ConceptText.statePointsMissingPlain(held: pocket, number: number, price: price, missing: GameCopy.points(mint.missingPoints))
+                ? ConceptText.statePointsReadyPlain(held: pocket, number: number)
+                : ConceptText.statePointsMissingPlain(held: pocket, missing: GameCopy.points(mint.missingPoints), number: number)
             return ProgressionFactText(text: text, facts: facts)
         }
         let held = GameCopy.points(game.level.score)
-        guard let convertible = convertiblePoints(progress: progress, game: game) else {
-            return ProgressionFactText(text: ConceptText.statePointsReadyPlain(held: held, number: number, price: price), facts: facts)
-        }
-        let toConvert = GameCopy.convertiblePoints(convertible)
-        guard !mint.canMint else {
-            return ProgressionFactText(text: ConceptText.statePointsReady(held: held, convertible: toConvert, number: number, price: price),
-                                       facts: facts)
+        guard convertiblePoints(progress: progress, game: game) != nil, !mint.canMint else {
+            return ProgressionFactText(text: ConceptText.statePointsReadyPlain(held: held, number: number), facts: facts)
         }
         return ProgressionFactText(
-            text: ConceptText.statePointsMissing(held: held, convertible: toConvert, number: number, price: price,
-                                                 missing: GameCopy.convertiblePoints(mint.missingPoints)),
+            text: ConceptText.statePointsMissingPlain(held: held, missing: GameCopy.convertiblePoints(mint.missingPoints), number: number),
             facts: facts
         )
     }
@@ -713,8 +706,7 @@ extension ProgressionConceptModel {
                                        .season, .seasonWeek, .seasonSteps)
         }
         return ProgressionFactText(
-            ConceptText.stateSeasonProgress(number: number, week: week, weeks: weeks, steps: count(season.steps), total: total,
-                                            stars: GameText.seasonStars(count: season.starsToNext)),
+            ConceptText.stateSeasonProgress(number: number, steps: count(season.steps), total: total),
             .season, .seasonWeek, .seasonSteps, .seasonNext
         )
     }

@@ -35,7 +35,7 @@ extension GameText {
     }
 
     static func leagueLocked(level: String, current: String) -> String {
-        String(localized: "game2.league.locked", defaultValue: "La joute s’ouvre au niveau \(level) : chaque semaine, tu te mesures à 29 héros de lumière semblable. Tu es au niveau \(current).", bundle: .main)
+        String(localized: "game2.league.locked", defaultValue: "La joute s’ouvre au niveau \(level) · tu es au niveau \(current)", bundle: .main)
     }
 
     static var leagueMinor: String { String(localized: "game2.league.minor", defaultValue: "La joute publique n’est pas ouverte pour ton compte. La Joute des amis, elle, l’est toujours.", bundle: .main) }

@@ -22,6 +22,7 @@ struct GameFlamePanelView: View {
     let errors: GameErrors
     let onBuyFreeze: () -> Void
     let onRelight: () -> Void
+    @State private var openNoteID: String?
 
     private var flame: GameBlock.Flame { game.flame }
     private var held: Int { game.treasury.held }
@@ -35,13 +36,30 @@ struct GameFlamePanelView: View {
         GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: missing), identifier: identifier)
     }
 
-    var body: some View {
-        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
-            GameNote(text: String(
+    /// La valeur est au repos (« +10 % »), la règle qui la produit derrière un (i) : « Que rapporte ma Flamme ? ».
+    private var bonusNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "game.flame_panel.bonus.question", defaultValue: "Que rapporte ma Flamme ?", bundle: .main),
+            text: String(
                 localized: "game.flame_panel.bonus",
                 defaultValue: "Chaque jour de Flamme nourrit tes rêves : +\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % d’étincelles par acte, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
                 bundle: .main
-            ))
+            )
+        )
+    }
+
+    var body: some View {
+        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
+            MeeshyInfoNoted(note: bonusNote, openNoteID: $openNoteID, tint: ThemeManager.shared.textMuted) {
+                Text(String(
+                    localized: "game.flame_panel.bonus_chip",
+                    defaultValue: "+\(GameCopy.formatCount(min(100, max(0, flame.bonusPercent)))) %",
+                    bundle: .main
+                ))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(ThemeManager.shared.textPrimary)
+                .accessibilityIdentifier("game.flame.bonus")
+            }
             Text(String(
                 localized: "game.flame_panel.freezes",
                 defaultValue: "Veilleuses : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",

@@ -241,7 +241,7 @@ enum GameGuideCopy {
             let what = String(localized: "game.guide.step.flame.what", defaultValue: "Ta Flamme grandit chaque jour où tu agis.", bundle: .main)
             return GuideCopy(
                 what: what,
-                means: String(localized: "game.guide.step.flame.means", defaultValue: "Chaque jour de Flamme ajoute 2 % d’étincelles à tes rêves, jusqu’à 50 %. Une Veilleuse la garde allumée un jour d’absence.", bundle: .main),
+                means: String(localized: "game.guide.step.flame.means", defaultValue: "Une Veilleuse la garde allumée un jour d’absence.", bundle: .main),
                 next: String(localized: "game.guide.step.flame.next", defaultValue: "Tes étincelles peuvent devenir des Meeshes.", bundle: .main),
                 short: what,
                 action: action
@@ -382,20 +382,21 @@ enum GameRulesGlossary {
 
     static func body(_ key: GameRulesGlossaryKey) -> String {
         switch key {
+        // La fiche dit déjà ce que c'est (`ConceptText.what`) : le carnet lit la MÊME phrase, jamais une seconde formulation.
+        case .concept(.points): ConceptText.what(.points)
+        case .concept(.meesh): ConceptText.what(.meesh)
+        case .concept(.league): ConceptText.what(.league)
+        case .concept(.showcase): ConceptText.what(.showcase)
         case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur ta lumière.", bundle: .main)
-        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière.", bundle: .main)
-        case .concept(.meesh): String(localized: "game.rules.concept.meesh.body", defaultValue: "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes.", bundle: .main)
         case .concept(.glory): String(localized: "game.rules.concept.glory.body", defaultValue: "Ta gloire grandit et ne recule jamais : elle te donne ton rang.", bundle: .main)
         case .concept(.flame): String(localized: "game.rules.concept.flame.body", defaultValue: "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste.", bundle: .main)
         case .concept(.missions): String(localized: "game.rules.concept.missions.body", defaultValue: "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5.", bundle: .main)
-        case .concept(.league): String(localized: "game.rules.concept.league.body", defaultValue: "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute.", bundle: .main)
         case .concept(.season): String(localized: "game.rules.concept.season.body", defaultValue: "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites.", bundle: .main)
         case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Une renaissance facultative, offerte au niveau 100, cinq fois au plus.", bundle: .main)
         case .concept(.elans): String(localized: "game.rules.concept.elans.body", defaultValue: "Un multiplicateur d’étincelles.", bundle: .main)
         case .concept(.badges): String(localized: "game.rules.concept.badges.body", defaultValue: "Vingt médailles, une par geste précis.", bundle: .main)
         case .concept(.defis): String(localized: "game.rules.concept.defis.body", defaultValue: "Des paliers chiffrés dans chaque famille de gestes.", bundle: .main)
         case .concept(.succes): String(localized: "game.rules.concept.succes.body", defaultValue: "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent.", bundle: .main)
-        case .concept(.showcase): String(localized: "game.rules.concept.showcase.body", defaultValue: "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.", bundle: .main)
         case .concept(.atlas): String(localized: "game.rules.concept.atlas.body", defaultValue: "Ton passeport des langues.", bundle: .main)
         case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.", bundle: .main)
         case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.", bundle: .main)
