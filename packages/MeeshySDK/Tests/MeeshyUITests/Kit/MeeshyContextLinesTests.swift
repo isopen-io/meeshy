@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import SwiftUI
 @testable import MeeshyUI
 
 /// Témoins de comportement des lois pures de K24 (fiche § 3, loi 13 ; § 8).
