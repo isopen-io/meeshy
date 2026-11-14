@@ -216,4 +216,21 @@ describe('la frontière d’écriture — validée avant tout octet', () => {
       { url: 'https://gate.test/api/v1/users/me/banner', method: 'PATCH', body: { banner: 'https://static.test/b.webp' } },
     ]);
   });
+
+  test('une route de la passerelle autre que le flux des pièces jointes est refusée localement (#16810)', async () => {
+    const { calls, deps } = gatewayReplying([
+      { status: 200, body: { success: true, data: { user: wireUser({ avatar: '/api/v1/attachments/file/2026/11/a.webp' }) } } },
+    ]);
+    const refusals = await Promise.all(
+      ['/api/../../etc/passwd', '/api/v1/auth/logout', '/api/v1/attachments/file/%2e%2e/secret'].map(async (url) => {
+        const result = await patchMyImage(deps, 'avatar', url);
+        return result.ok ? null : result.code;
+      }),
+    );
+    expect(refusals).toEqual(['INVALID_IMAGE_URL', 'INVALID_IMAGE_URL', 'INVALID_IMAGE_URL']);
+    expect((await patchMyImage(deps, 'avatar', '/api/v1/attachments/file/2026/11/a.webp')).ok).toBe(true);
+    expect(calls).toEqual([
+      { url: 'https://gate.test/api/v1/users/me/avatar', method: 'PATCH', body: { avatar: '/api/v1/attachments/file/2026/11/a.webp' } },
+    ]);
+  });
 });
