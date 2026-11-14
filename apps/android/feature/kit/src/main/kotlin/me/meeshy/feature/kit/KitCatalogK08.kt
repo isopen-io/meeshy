@@ -1,22 +1,24 @@
 package me.meeshy.feature.kit
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import me.meeshy.ui.component.kit.MeeshyField
 import me.meeshy.ui.component.kit.MeeshyFieldCounterPlacement
 import me.meeshy.ui.component.kit.MeeshyFieldInput
 import me.meeshy.ui.component.kit.MeeshyFieldLeading
-import me.meeshy.ui.component.kit.MeeshyFieldTone
+import me.meeshy.ui.component.kit.MeeshyGlassTone
 import me.meeshy.ui.component.kit.MeeshyKitCatalogBackdrop
 import me.meeshy.ui.component.kit.MeeshyKitCatalogEntry
 import me.meeshy.ui.component.kit.MeeshyKitCatalogState
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
 private const val STATE_SEARCH_EMPTY = "recherche-vide"
@@ -30,95 +32,158 @@ private const val STATE_TIME = "temps"
 private const val STATE_THEME = "theme"
 private const val STATE_DISABLED = "desactive"
 
-/** Les textes de l'échantillon : des identifiants de développement, jamais des textes publiés (fiche K08 §8). */
-private object SampleTexts {
-    const val LABEL = "Champ d'exemple"
-    const val SEARCH_PROMPT = "Rechercher"
-    const val HASHTAG_PROMPT = "Mot-clé"
-    const val PHRASE = "Une journée au bord de la mer"
-    const val PARAGRAPH = "Un paragraphe de description qui tient sur quelques lignes."
-    const val PARAGRAPH_CAPTION = "Description"
-    const val START_CAPTION = "Début"
+/** La largeur d'une feuille de la planche, celle de l'échantillon iOS. */
+private val SAMPLE_WIDTH = 342.dp
+
+private const val MOOD_LIMIT = 60
+private const val DESCRIPTION_LIMIT = 1000
+
+/** Les textes de l'échantillon, ceux de la planche et d'iOS : des identifiants de développement (fiche K00 §1). */
+private object FieldSampleTexts {
+    const val SEARCH = "Rechercher"
+    const val SEARCH_PERSON = "Rechercher une personne"
+    const val SEARCH_PLACE = "Rechercher un lieu"
+    const val PLACE = "Plage de Ngor"
+    const val HASHTAG = "Hashtag"
+    const val HASHTAG_GLYPH = "#"
+    const val HASHTAG_TEXT = "coucher"
+    const val MOOD = "Humeur"
+    const val MOOD_PROMPT = "Une phrase courte"
+    const val MOOD_TEXT = "Enfin en vacances"
+    const val MOOD_LIMIT_TEXT = "Enfin en vacances au bord de la mer, le soleil se couche"
+    const val DESCRIPTION = "Description"
+    const val DESCRIPTION_CAPTION = "Décrire l’image pour les personnes qui ne la voient pas"
+    const val DESCRIPTION_TEXT = "Coucher de soleil sur la plage de Ngor, un palmier à gauche, la mer calme."
+    const val START = "Début"
+    const val END = "Fin"
+    const val START_TEXT = "0:02"
+    const val END_TEXT = "0:08"
 }
 
+/** Les états de K08, ceux d'iOS (`MeeshyKitCatalog+K08.swift`) : mêmes identifiants, mêmes vues, mêmes fonds. */
 internal val entryK08: MeeshyKitCatalogEntry = MeeshyKitCatalogEntry(
     key = "K08",
     name = "MeeshyField",
     states = listOf(
-        MeeshyKitCatalogState(id = STATE_SEARCH_EMPTY, boardView = "A16", backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_SEARCH_TEXT, boardView = "A18", backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_BUSY, backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_HASHTAG, boardView = "A17", backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_PHRASE_COUNTER, boardView = "P5", backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_LIMIT, backdrop = MeeshyKitCatalogBackdrop.Dark, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_PARAGRAPH, boardView = "O9", backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_TIME, boardView = "O10", backdrop = MeeshyKitCatalogBackdrop.Media, isTouchable = true),
-        MeeshyKitCatalogState(id = STATE_THEME, boardView = "theme", backdrop = MeeshyKitCatalogBackdrop.Light, isTouchable = true),
+        MeeshyKitCatalogState(id = STATE_SEARCH_EMPTY, boardView = "A16", backdrop = MeeshyKitCatalogBackdrop.Dark),
+        MeeshyKitCatalogState(id = STATE_SEARCH_TEXT, boardView = "A18", backdrop = MeeshyKitCatalogBackdrop.Dark),
+        MeeshyKitCatalogState(id = STATE_BUSY, backdrop = MeeshyKitCatalogBackdrop.Dark),
+        MeeshyKitCatalogState(id = STATE_HASHTAG, boardView = "A17", backdrop = MeeshyKitCatalogBackdrop.Dark),
+        MeeshyKitCatalogState(id = STATE_PHRASE_COUNTER, boardView = "P5", backdrop = MeeshyKitCatalogBackdrop.Media),
+        MeeshyKitCatalogState(id = STATE_LIMIT, backdrop = MeeshyKitCatalogBackdrop.Media),
+        MeeshyKitCatalogState(id = STATE_PARAGRAPH, boardView = "O9", backdrop = MeeshyKitCatalogBackdrop.Media),
+        MeeshyKitCatalogState(id = STATE_TIME, boardView = "O10", backdrop = MeeshyKitCatalogBackdrop.Media),
+        MeeshyKitCatalogState(id = STATE_THEME, backdrop = MeeshyKitCatalogBackdrop.Light),
         MeeshyKitCatalogState(id = STATE_DISABLED, backdrop = MeeshyKitCatalogBackdrop.Dark),
     ),
 )
 
+/** Un champ réel par état, dans la forme que la vue lui donne ; aucune couleur : tout vient du composant. */
 @Composable
 @Suppress("UNUSED_PARAMETER")
 internal fun ContentK08(state: MeeshyKitCatalogState, isPressed: Boolean) {
-    var text by remember(state.id) { mutableStateOf(initialText(state.id)) }
-    val enabled = state.id != STATE_DISABLED
-    Column(modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md)) {
-        MeeshyField(
-            label = SampleTexts.LABEL,
-            text = text,
-            onChange = { text = it },
-            input = inputFor(state.id),
-            prompt = promptFor(state.id),
-            caption = captionFor(state.id),
-            leading = leadingFor(state.id),
-            limit = limitFor(state.id),
-            counter = if (state.id == STATE_PARAGRAPH) MeeshyFieldCounterPlacement.Hosted else MeeshyFieldCounterPlacement.Inline,
-            isBusy = state.id == STATE_BUSY,
-            enabled = enabled,
-            tone = if (state.id == STATE_THEME) MeeshyFieldTone.Theme else null,
-        )
+    val modifier = Modifier.width(SAMPLE_WIDTH)
+    when (state.id) {
+        STATE_SEARCH_EMPTY -> SearchSample(FieldSampleTexts.SEARCH_PERSON, "", modifier)
+        STATE_SEARCH_TEXT -> SearchSample(FieldSampleTexts.SEARCH_PLACE, FieldSampleTexts.PLACE, modifier)
+        STATE_BUSY -> SearchSample(FieldSampleTexts.SEARCH_PLACE, FieldSampleTexts.PLACE, modifier, isBusy = true)
+        STATE_HASHTAG -> HashtagSample(modifier)
+        STATE_PHRASE_COUNTER -> MoodSample(FieldSampleTexts.MOOD_TEXT, modifier)
+        STATE_LIMIT -> MoodSample(FieldSampleTexts.MOOD_LIMIT_TEXT, modifier)
+        STATE_PARAGRAPH -> DescriptionSample(modifier)
+        STATE_TIME -> TimeSample(modifier)
+        STATE_THEME -> SearchSample(FieldSampleTexts.SEARCH, "", modifier, tone = MeeshyGlassTone.Theme)
+        else -> SearchSample(FieldSampleTexts.SEARCH_PERSON, "", modifier, enabled = false)
     }
 }
 
-private fun inputFor(id: String): MeeshyFieldInput = when (id) {
-    STATE_SEARCH_EMPTY, STATE_SEARCH_TEXT, STATE_BUSY -> MeeshyFieldInput.Search
-    STATE_HASHTAG -> MeeshyFieldInput.Token
-    STATE_PARAGRAPH -> MeeshyFieldInput.Paragraph
-    STATE_TIME -> MeeshyFieldInput.Numeric
-    else -> MeeshyFieldInput.Sentence
+@Composable
+private fun SearchSample(
+    prompt: String,
+    initial: String,
+    modifier: Modifier,
+    isBusy: Boolean = false,
+    enabled: Boolean = true,
+    tone: MeeshyGlassTone? = null,
+) {
+    var text by remember { mutableStateOf(initial) }
+    MeeshyField(
+        label = FieldSampleTexts.SEARCH,
+        text = text,
+        onChange = { text = it },
+        modifier = modifier,
+        input = MeeshyFieldInput.Search,
+        prompt = prompt,
+        leading = MeeshyFieldLeading.Icon(MeeshyIcons.Search),
+        isBusy = isBusy,
+        enabled = enabled,
+        tone = tone,
+    )
 }
 
-private fun initialText(id: String): String = when (id) {
-    STATE_SEARCH_TEXT, STATE_BUSY, STATE_THEME, STATE_DISABLED -> SampleTexts.SEARCH_PROMPT
-    STATE_HASHTAG -> "voyage"
-    STATE_PHRASE_COUNTER -> SampleTexts.PHRASE
-    STATE_PARAGRAPH -> SampleTexts.PARAGRAPH
-    STATE_TIME -> "0:02"
-    STATE_LIMIT -> "x".repeat(60)
-    else -> ""
+@Composable
+private fun HashtagSample(modifier: Modifier) {
+    var text by remember { mutableStateOf(FieldSampleTexts.HASHTAG_TEXT) }
+    MeeshyField(
+        label = FieldSampleTexts.HASHTAG,
+        text = text,
+        onChange = { text = it },
+        modifier = modifier,
+        input = MeeshyFieldInput.Token,
+        leading = MeeshyFieldLeading.Glyph(FieldSampleTexts.HASHTAG_GLYPH),
+    )
 }
 
-private fun promptFor(id: String): String? = when (id) {
-    STATE_SEARCH_EMPTY -> SampleTexts.SEARCH_PROMPT
-    STATE_HASHTAG -> SampleTexts.HASHTAG_PROMPT
-    else -> null
+@Composable
+private fun MoodSample(initial: String, modifier: Modifier) {
+    var text by remember { mutableStateOf(initial) }
+    MeeshyField(
+        label = FieldSampleTexts.MOOD,
+        text = text,
+        onChange = { text = it },
+        modifier = modifier,
+        prompt = FieldSampleTexts.MOOD_PROMPT,
+        limit = MOOD_LIMIT,
+    )
 }
 
-private fun captionFor(id: String): String? = when (id) {
-    STATE_PARAGRAPH -> SampleTexts.PARAGRAPH_CAPTION
-    STATE_TIME -> SampleTexts.START_CAPTION
-    else -> null
+@Composable
+private fun DescriptionSample(modifier: Modifier) {
+    var text by remember { mutableStateOf(FieldSampleTexts.DESCRIPTION_TEXT) }
+    MeeshyField(
+        label = FieldSampleTexts.DESCRIPTION,
+        text = text,
+        onChange = { text = it },
+        modifier = modifier,
+        input = MeeshyFieldInput.Paragraph,
+        caption = FieldSampleTexts.DESCRIPTION_CAPTION,
+        limit = DESCRIPTION_LIMIT,
+        counter = MeeshyFieldCounterPlacement.Hosted,
+    )
 }
 
-private fun leadingFor(id: String): MeeshyFieldLeading? = when (id) {
-    STATE_HASHTAG -> MeeshyFieldLeading.Glyph("#")
-    else -> null
-}
-
-private fun limitFor(id: String): Int? = when (id) {
-    STATE_PHRASE_COUNTER -> 60
-    STATE_PARAGRAPH -> 1000
-    STATE_LIMIT -> 60
-    else -> null
+@Composable
+private fun TimeSample(modifier: Modifier) {
+    var start by remember { mutableStateOf(FieldSampleTexts.START_TEXT) }
+    var end by remember { mutableStateOf(FieldSampleTexts.END_TEXT) }
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
+        MeeshyField(
+            label = FieldSampleTexts.START,
+            text = start,
+            onChange = { start = it },
+            modifier = Modifier.weight(1f),
+            input = MeeshyFieldInput.Numeric,
+            caption = FieldSampleTexts.START,
+            onStep = {},
+        )
+        MeeshyField(
+            label = FieldSampleTexts.END,
+            text = end,
+            onChange = { end = it },
+            modifier = Modifier.weight(1f),
+            input = MeeshyFieldInput.Numeric,
+            caption = FieldSampleTexts.END,
+            onStep = {},
+        )
+    }
 }

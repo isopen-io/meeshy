@@ -275,6 +275,10 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Creador</string>
     <string name="identity_role_moderator">Moderador</string>
+    <string name="kit_field_busy">En curso</string>
+    <string name="kit_field_clear">Borrar</string>
+    <string name="kit_field_count">%1$s caracteres de %2$s</string>
+    <string name="kit_field_limit_reached">Límite de caracteres alcanzado</string>
     <string name="language_strip_more">Otros idiomas</string>
     <string name="lentille_mode_menu_selected">seleccionado</string>
     <string name="live_location_duration_title">Duración del uso compartido</string>

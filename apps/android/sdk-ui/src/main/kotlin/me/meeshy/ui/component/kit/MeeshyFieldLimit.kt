@@ -1,6 +1,10 @@
 package me.meeshy.ui.component.kit
 
+import android.content.res.Resources
 import java.text.BreakIterator
+import java.text.NumberFormat
+import java.util.Locale
+import me.meeshy.ui.R
 
 /** Un franchissement du plafond : l'entrée dans les 80 %, ou le plafond atteint. */
 public enum class MeeshyFieldLimitCrossing { Near, Reached }
@@ -78,4 +82,39 @@ public data class MeeshyFieldLedger(
         if (draft == committed) return this to null
         return copy(committed = draft) to draft
     }
+}
+
+/**
+ * Les mots du champ : la croix, le compteur écrit et dit, le plafond, l'occupation. Les nombres sont écrits dans les
+ * chiffres du lecteur ([locale]), sans séparateur de milliers. Miroir de `MeeshyFieldWords` (iOS).
+ */
+public object MeeshyFieldWords {
+
+    /** « 17 / 60 » : l'écriture de la planche. */
+    public fun counter(count: Int, limit: Int, locale: Locale): String = "${digits(count, locale)} / ${digits(limit, locale)}"
+
+    /** « 17 caractères sur 60 ». */
+    public fun spokenCount(resources: Resources, count: Int, limit: Int, locale: Locale): String =
+        resources.getString(R.string.kit_field_count, digits(count, locale), digits(limit, locale))
+
+    public fun clear(resources: Resources): String = resources.getString(R.string.kit_field_clear)
+
+    public fun limitReached(resources: Resources): String = resources.getString(R.string.kit_field_limit_reached)
+
+    public fun busy(resources: Resources): String = resources.getString(R.string.kit_field_busy)
+
+    /** Ce qu'un franchissement annonce, une fois, poliment. */
+    public fun announcement(
+        resources: Resources,
+        crossing: MeeshyFieldLimitCrossing,
+        count: Int,
+        limit: Int,
+        locale: Locale,
+    ): String = when (crossing) {
+        MeeshyFieldLimitCrossing.Near -> spokenCount(resources, count, limit, locale)
+        MeeshyFieldLimitCrossing.Reached -> limitReached(resources)
+    }
+
+    private fun digits(value: Int, locale: Locale): String =
+        NumberFormat.getIntegerInstance(locale).apply { isGroupingUsed = false }.format(value.toLong())
 }
