@@ -300,6 +300,28 @@ Sur un écran large, la scène reste centrée et le journal se pose en colonne d
 |---|
 | ![W2](appels-vue-finale/vues/W2.png) |
 
+## Où en est chaque plateforme (audit final, `origin/dev` à `8a9072691e`, 2026-11-14)
+
+Chaque cellule : conformes / total des clauses jugées, puis écarts, absents, à rejouer et sans objet, puis les issues ouvertes principales. Relevé avant les PR #17942 à #18197 (R3.5 et une partie de W1/W2, de C1 et du carrousel VoiceOver iOS sont livrés depuis). Décisions ouvertes : #17730, #17731, #16974, #17810, #17883.
+
+| Famille (vues) | Web | iOS | Android natif |
+|---|---|---|---|
+| Duo vidéo, portrait (P1–P8) | 59/65 (6 écarts) ; ouvert : #17843, #17928, #17982, #18221, #18224 | 63/65 (2 écarts) ; ouvert : #17982, #18208 | 60/65 (5 écarts) ; ouvert : #17819, #17843, #17982, #18213 |
+| Gestes et options (G1–G4, P8b) | 35/39 (4 écarts) ; ouvert : #17982, #18221, #18226 | 37/39 (2 écarts) ; ouvert : #17558, #17982, #18226 | 37/39 (2 écarts) ; ouvert : #17982, #18217, #18226 |
+| À la une (U1–U3) | 27/34 (7 écarts) ; ouvert : #17961 | 25/34 (7 écarts, 2 à rejouer) ; ouvert : #17961 | 27/34 (7 écarts) ; ouvert : #17961, #18213 |
+| Je partage mon écran (S1–S2) | 14/17 (3 écarts) ; ouvert : #17982, #18223 | 12/17 (2 écarts, 3 à rejouer) ; ouvert : #17982, #18210 | 14/17 (3 écarts) ; ouvert : #17982, #18218 |
+| Cadres en direct (C1–C3) | 31/34 (3 écarts) ; ouvert : #18183, #18221, #18222 | 33/34 (1 écart) ; ouvert : #18183 | 32/34 (2 écarts) ; ouvert : #18183, #18213 |
+| Capture et enregistrement (R1–R3) | 28/36 (4 écarts, 3 à rejouer, 1 sans objet) ; ouvert : #17963 | 31/36 (5 écarts) ; ouvert : #17963 | 29/36 (5 écarts, 2 à rejouer) ; ouvert : #17963 |
+| Duo audio (P9, P9b, P10) | 41/44 (3 écarts) ; ouvert : #17928, #17982 | 42/44 (2 écarts) ; ouvert : #17964, #18206 | 43/44 (1 écart) ; ouvert : #17964 |
+| Groupe (P11–P14) | 36/39 (3 écarts) ; ouvert : #17928, #17963 | 34/39 (3 écarts, 2 à rejouer) ; ouvert : #17964, #18206 | 33/39 (3 écarts, 3 à rejouer) ; ouvert : #17964, #18220 |
+| Partage d'écran, appel entrant, appel réduit (P15–P18) | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18223, #18224 | 37/47 (8 écarts, 2 absents) ; ouvert : #17982, #18211, #18212 | 38/47 (7 écarts, 2 absents) ; ouvert : #17982, #18218, #18219 |
+| Paysage (L1–L5) | 52/58 (5 écarts, 1 absent) ; ouvert : #17963, #17982 | 50/58 (5 écarts, 1 absent, 2 à rejouer) ; ouvert : #17982 | 51/58 (5 écarts, 1 absent, 1 à rejouer) ; ouvert : #17982 |
+| Après l'appel : le journal fidèle (A1–A2) | 23/25 (2 écarts) ; ouvert : #17868, #18225 | 21/25 (4 écarts) ; ouvert : #18209 | 21/25 (4 écarts) ; ouvert : #17868, #18216 |
+| Grand écran (web) (W1–W2) | 35/36 (1 écart) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 | 23/36 (1 écart, 12 sans objet) ; ouvert : #17982 |
+| Lois sans vue (lois 17–18) | 9/18 (9 écarts) ; ouvert : #17961, #17982, #18223, #18224, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17961, #17982, #18206, #18207, #18208, #18226 | 9/18 (8 écarts, 1 sans objet) ; ouvert : #17819, #17843, #18213, #18214, #18215, #18226 |
+
+Livré depuis le relevé (fusionné dans dev) : #18189 (iOS C1), #18194 (Android C1) et #18234 (web C1) : la barre ‹ · Réglages · (+) revient au menu de base après chaque choix d'effet ; #18197 : sous VoiceOver iOS, balayer parcourt le carrousel d'effets sans appliquer, le double-tap applique ; #18235 : sur Android, rails, bandeau, colonne et rangées s'effacent en fondu à leurs deux bords ; #18236 : la planche dessine ce que le code porte en plus (E1–E5 : zoom, micro de l'autre, En attente, Vidéo réduite, Lissage) ; #17970, #17980, #18001 et #17999 : en audio et en groupe sans caméra, un toucher sur le fond range l'appel (Android, iOS, web).
+
 ## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev` ; complété le 2026-11-11, le 2026-11-13 et le 2026-11-14)
 
 Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glass et rails, #17340 à #17343, mode Effets) ont été relevées le 2026-11-11 par `gh api` sur ses issues et ses PR, `dev` à `fe780f4b1a` et verrouillé ; `dev` déverrouillé, elles sont remises à jour le même jour : toutes ces PR sont fusionnées. Les lignes de la famille 2 (G1–G4, P8b) sont relevées le 2026-11-11 par `gh api`, `dev` à `e85d0efca6`. La preuve iOS et Android complète se fait sur `dev` après fusion (CI de poussée de `ios.yml`, `sdk-tests.yml` et `android.yml`). Les lignes touchées par l'audit final et ses décisions (#17944 à #17949) sont relevées le 2026-11-13 par `gh api`, `dev` à `8a9072691e`, puis remises à jour le même jour, avec les décisions #17961 à #17965, `dev` à `8d0f8d02ba` (après la fusion de #17970). Les lignes des décisions du 2026-11-14 (règle C1, #18180, #18181, #18183, #17961, #17947) sont relevées le 2026-11-14 sur leurs issues et sur l'audit final, `dev` à `0d3a7b086b`. Les autres lignes restent celles du 2026-11-08. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
