@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
@@ -31,6 +31,47 @@ import { IosSwitch } from './ios-switch';
  */
 
 const PANEL = `glass-call flex ${GLASS_WIDTH} flex-col rounded-[24px]`;
+
+/**
+ * **LA BARRE GARDE SA HAUTEUR, CE QUI EST AU-DESSUS CÈDE** (#17927 ; Android #18474) — à hauteur compacte (un
+ * téléphone en paysage, 568 × 320), le carrousel, les ambiances, l'option « Cadre » et le compte rendu d'une capture
+ * ne tiennent plus au-dessus de ‹ · Réglages · (+) : sans règle, la colonne du mode poussait la barre sous le bord
+ * de l'écran, et avec elle l'appui long qui annule une couche. Chaque boîte entre l'écran et la barre peut donc
+ * rétrécir (`MODE_FIT`), la barre ne rétrécit jamais (`BAR_KEEPS`), et ce qui est posé sur elle (`rider`) défile au
+ * lieu de déborder (`RIDER_FIT`). Le défilement ne s'arme qu'en dessous de 480 px de haut (écrit en toutes lettres : le balayage des classes ne lit pas une valeur calculée) : au-dessus rien ne
+ * déborde, et un `overflow` rognerait pour rien l'ombre des vignettes.
+ */
+export const MODE_FIT = 'min-h-0';
+export const BAR_KEEPS = 'shrink-0';
+export const RIDER_FIT = 'min-h-0 overscroll-y-contain [@media(max-height:480px)]:overflow-y-auto [@media(max-height:480px)]:[scrollbar-width:none] [@media(max-height:480px)]:[&::-webkit-scrollbar]:hidden';
+
+/**
+ * Ce qui défile se range CONTRE la barre : à hauteur compacte, c'est le carrousel — ce qu'on touche — qu'on voit
+ * d'abord, les ambiances et l'option « Cadre » s'atteignent en remontant. Tant que le doigt n'a pas remonté, le
+ * dessus reste calé en bas quand son contenu ou la fenêtre change ; une fois remonté, il ne bouge plus.
+ */
+export function useRiderAtBar(rider: RefObject<HTMLElement | null>): void {
+  const pinned = useRef(true);
+  const pin = (): void => {
+    const host = rider.current;
+    if (host !== null && pinned.current) host.scrollTop = host.scrollHeight;
+  };
+  useLayoutEffect(pin);
+  useEffect(() => {
+    const host = rider.current;
+    if (host === null) return;
+    const onScroll = (): void => {
+      pinned.current = host.scrollHeight - host.clientHeight - host.scrollTop < 2;
+    };
+    host.addEventListener('scroll', onScroll, { passive: true });
+    const watcher = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(pin);
+    watcher?.observe(host);
+    return () => {
+      host.removeEventListener('scroll', onScroll);
+      watcher?.disconnect();
+    };
+  }, []);
+}
 
 export type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
 
@@ -159,6 +200,21 @@ type ListProps = {
   readonly text: LayersText;
 };
 
+/** La liste ne monte jamais au-dessus de l'écran : sa hauteur est la place entre le haut de la fenêtre et la barre qui la porte (88 px au moins, deux rangées), et elle défile au-delà. */
+function useRoomAbove(list: RefObject<HTMLElement | null>, open: boolean): void {
+  useLayoutEffect(() => {
+    const host = list.current;
+    const bar = host?.parentElement;
+    if (!open || host === null || host === undefined || bar === null || bar === undefined) return;
+    const fit = (): void => {
+      host.style.maxHeight = `${Math.max(88, Math.floor(bar.getBoundingClientRect().top - 16))}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [open]);
+}
+
 /**
  * Les effets appliqués, du dessus au dessous : en annuler un le retire, et referme la liste. Ouverte, elle prend le
  * focus sur la couche du dessus — le clavier et le lecteur d'écran y entrent, comme dans un menu.
@@ -166,12 +222,13 @@ type ListProps = {
 function EffectLayersList({ open, stack, label, onUndo, text }: ListProps) {
   const presence = useSwapPresence<HTMLDivElement>(open);
   const entered = presence.mounted && open;
+  useRoomAbove(presence.ref, entered);
   useEffect(() => {
     if (entered) presence.ref.current?.querySelector<HTMLElement>('[data-call-effect-layer-undo]')?.focus();
   }, [entered]);
   if (!presence.mounted) return null;
   return (
-    <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`${PANEL} absolute bottom-full mb-2 p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
+    <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`${PANEL} absolute bottom-full mb-2 overflow-y-auto overscroll-y-contain p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
       <ul className="flex flex-col">
         {listLayers(stack).map((layer) => {
           const name = label(layer);
@@ -332,7 +389,7 @@ export function EffectsBar({ language, mode, categories, settings, add, stack, f
   const leaving = !showsLooks(mode);
   useFocusAfterChoice(bar, mode, categories?.entries.find((entry) => entry.genre === categories.genre)?.id ?? null);
   return (
-    <div ref={bar} className="relative flex w-full flex-col items-center">
+    <div ref={bar} className={`relative flex w-full flex-col items-center ${BAR_KEEPS}`}>
       <EffectLayersList open={shown} stack={stack} label={list.label} onUndo={list.onUndo} text={text} />
       <CallModeBar
         glass
