@@ -196,7 +196,7 @@ private fun LoadedDetail(
                 MeeshyEmptyState(
                     icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),
-                    subtitle = stringResource(R.string.community_detail_posts_empty_subtitle),
+                    subtitle = "",
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                 )
             }
@@ -451,7 +451,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.channelsSection(
             MeeshyEmptyState(
                 icon = MeeshyIcons.Chat,
                 title = stringResource(R.string.community_detail_channels_empty_title),
-                subtitle = stringResource(R.string.community_detail_channels_empty_subtitle),
+                subtitle = "",
                 actionLabel = if (canAdd) stringResource(R.string.community_detail_channels_empty_action) else null,
                 onAction = if (canAdd) onAddChannel else null,
                 modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -510,13 +510,13 @@ private fun DetailSkeleton() {
 private fun LoadFailureState(failure: CommunityLoadFailure, onRetry: () -> Unit, onBack: () -> Unit) {
     val (icon, title, body) = when (failure) {
         CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_load_refused_title, R.string.community_load_refused_body)
-        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, R.string.community_load_network_body)
-        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, R.string.community_load_server_body)
+        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, null)
+        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, null)
     }
     MeeshyEmptyState(
         icon = icon,
         title = stringResource(title),
-        subtitle = stringResource(body),
+        subtitle = body?.let { stringResource(it) }.orEmpty(),
         actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_load_refused_back),
         onAction = if (failure.offersRetry) onRetry else onBack,
     )

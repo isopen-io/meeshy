@@ -22,14 +22,14 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** État vide dédié à un onglet, avec son sous-titre (« Aucune story envoyée », « Rien en file », …). */
+/** État vide dédié à un onglet : une ligne (« Aucune story envoyée », « Aucune publication en cours ou en échec », …). */
 @Composable
 internal fun MyStoriesEmpty(tab: MyStoriesTab, modifier: Modifier = Modifier) {
-    val (title, subtitle) = when (tab) {
-        MyStoriesTab.PUBLISHED -> R.string.my_stories_empty_title to R.string.my_stories_empty_subtitle
-        MyStoriesTab.QUEUE -> R.string.my_stories_queue_empty_title to R.string.my_stories_queue_empty_subtitle
-        MyStoriesTab.DRAFTS -> R.string.my_stories_drafts_empty_title to R.string.my_stories_drafts_empty_subtitle
-        MyStoriesTab.ARCHIVE -> R.string.my_stories_archive_empty_title to R.string.my_stories_archive_empty_subtitle
+    val title = when (tab) {
+        MyStoriesTab.PUBLISHED -> R.string.my_stories_empty_title
+        MyStoriesTab.QUEUE -> R.string.my_stories_queue_empty_title
+        MyStoriesTab.DRAFTS -> R.string.my_stories_drafts_empty_title
+        MyStoriesTab.ARCHIVE -> R.string.my_stories_archive_empty_title
     }
     Column(
         modifier = modifier.fillMaxSize().padding(MeeshySpacing.xl),
@@ -52,13 +52,6 @@ internal fun MyStoriesEmpty(tab: MyStoriesTab, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.size(MeeshySpacing.xs))
-        Text(
-            stringResource(subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
             textAlign = TextAlign.Center,
         )
     }

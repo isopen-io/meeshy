@@ -22,7 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +42,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.game.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.theme.MeeshyPalette
@@ -51,9 +57,11 @@ internal fun GameCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     tint: Color? = null,
+    info: MeeshyInfoNote? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val tokens = MeeshyTheme.tokens
+    var openInfo by rememberSaveable { mutableStateOf<String?>(null) }
     Column(
         modifier
             .fillMaxWidth()
@@ -64,13 +72,15 @@ internal fun GameCard(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         if (title != null) {
-            Text(
-                title.uppercase(),
-                Modifier.semantics { heading() },
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = tokens.textMuted,
-            )
+            MeeshyInfoNoted(note = info, openNoteId = openInfo, onOpenNoteIdChange = { openInfo = it }, tint = tokens.textMuted) {
+                Text(
+                    title.uppercase(),
+                    Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tokens.textMuted,
+                )
+            }
         }
         content()
     }

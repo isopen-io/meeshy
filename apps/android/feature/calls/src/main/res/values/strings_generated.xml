@@ -168,8 +168,6 @@
     <string name="call_journal_erase_failed">Couldn\'t delete. Try again.</string>
     <string name="call_journal_filter_video">Video</string>
     <string name="call_journal_hide">Delete</string>
-    <string name="call_journal_search_empty">No call matches “%1$s”</string>
-    <string name="call_journal_search_empty_hint">The log covers the last three months.</string>
     <string name="call_journal_search_placeholder">Search calls</string>
     <string name="call_live_frame_accept">Apply</string>
     <string name="call_live_frame_answer_accepted_anonymous">The other person applied your frame</string>

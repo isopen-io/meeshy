@@ -2,9 +2,5 @@
 <resources>
     <string name="reels_bookmark">Salvar</string>
     <string name="reels_unbookmark">Remover salvo</string>
-    <string name="reels_comments_loading">A carregar comentários…</string>
-    <string name="reels_comments_error">Não foi possível carregar os comentários</string>
-    <string name="reels_comments_input_hint">Adicionar um comentário…</string>
-    <string name="reels_comments_failed">Falhou — toca para tentar de novo</string>
     <string name="reels_comments_view_post">Ver publicação</string>
 </resources>

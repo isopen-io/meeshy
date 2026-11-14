@@ -33,8 +33,8 @@ object PostReachFormatter {
         if (!isAuthor) return Components(pseudo = pseudo, views = null, impressions = null)
         return Components(
             pseudo = pseudo,
-            views = compact(viewCount, locale),
-            impressions = compact(impressionCount, locale),
+            views = viewCount.takeIf { it > 0 }?.let { compact(it, locale) },
+            impressions = impressionCount.takeIf { it > 0 }?.let { compact(it, locale) },
             uniqueViews = uniqueViewCount?.takeIf { it > 0 }?.let { compact(it, locale) },
         )
     }

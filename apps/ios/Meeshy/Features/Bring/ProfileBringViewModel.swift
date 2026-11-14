@@ -89,7 +89,15 @@ final class ProfileBringViewModel: ObservableObject {
 /// Les phrases du Bring, une clé par sens (sept langues dans `Localizable.xcstrings`).
 enum ProfileBringWording {
     static var explain: String {
-        String(localized: "bring.explain", defaultValue: "Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.", bundle: .main)
+        String(localized: "bring.explain", defaultValue: "Pour une urgence extrême : son téléphone sonne, même verrouillé.", bundle: .main)
+    }
+
+    /// Le détail secondaire (#18088) : la phrase d'orientation reste au repos, le cas du mode silencieux passe derrière un (i).
+    static var explainNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "bring.silent.question", defaultValue: "Et si son iPhone est en silencieux ?", bundle: .main),
+            text: String(localized: "bring.silent.note", defaultValue: "Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.", bundle: .main)
+        )
     }
 
     static var action: String { String(localized: "bring.action", defaultValue: "Bring", bundle: .main) }

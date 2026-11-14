@@ -204,7 +204,7 @@ private fun CallHistoryEmpty(state: CallHistoryUiState) {
         CallHistoryEmptyKind.NO_CALLS -> MeeshyEmptyState(
             icon = MeeshyIcons.Call,
             title = stringResource(R.string.call_journal_empty_title),
-            subtitle = stringResource(R.string.call_journal_search_empty_hint),
+            subtitle = "",
         )
     }
 }

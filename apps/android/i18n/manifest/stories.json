@@ -59,16 +59,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "story.viewer.comments.beFirst",
-          "androidName": "stories_comments_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.viewer.comments.empty",
           "androidName": "stories_comments_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "stories_comments_error",
@@ -629,16 +621,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "story.viewer.empty.subtitle",
-          "androidName": "stories_viewers_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.viewer.empty.title",
           "androidName": "stories_viewers_empty_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "stories_viewers_error",
@@ -753,20 +737,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "story.mine.empty.subtitle",
-          "androidName": "my_stories_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "story.mine.archive.empty.title",
           "androidName": "my_stories_archive_empty_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.mine.archive.empty.subtitle",
-          "androidName": "my_stories_archive_empty_subtitle",
           "status": "adopted"
         },
         {

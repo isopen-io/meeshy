@@ -4,12 +4,7 @@
     ":sdk-ui": {
       "resDir": "sdk-ui/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "talkie.send.explain",
-          "androidName": "talkie_send_explain",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_send_explain", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.send.hold",
@@ -52,24 +47,14 @@
           "androidName": "talkie_send_recording_copy",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.send.voiceCopy",
-          "androidName": "talkie_send_voice_copy",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_send_voice_copy", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.send.voice",
           "androidName": "talkie_send_voice",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.send.e2ee",
-          "androidName": "talkie_send_e2ee",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_send_e2ee", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.send.rateLimited",
@@ -100,18 +85,8 @@
           "androidName": "talkie_send_limit",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.info.text",
-          "androidName": "talkie_info_text",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.info.a11y",
-          "androidName": "talkie_info_a11y",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_info_note", "status": "android-only" },
+        { "androidName": "talkie_info_a11y", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.header.live",

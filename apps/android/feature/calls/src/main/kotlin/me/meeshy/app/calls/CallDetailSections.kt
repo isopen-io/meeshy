@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +47,8 @@ import me.meeshy.sdk.model.call.CallTranscriptLine
 import me.meeshy.sdk.model.call.CallTranscriptState
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -194,16 +193,24 @@ private fun OriginalToggle(showOriginal: Boolean, accent: Color, onChange: (Bool
     }
 }
 
-/** Says where the transcript lives — here AND on the server (the iOS sentence « jamais envoyée au serveur » is not true). */
+/**
+ * Says where the transcript lives — here AND on the server (the iOS sentence « jamais envoyée au serveur » is not true).
+ * The two places stay visible at rest (règle 7 : consent-adjacent, specific to Meeshy) ; only the secondary detail —
+ * what the server journal contains — waits behind its (i), named by the question it answers (#18083).
+ */
 @Composable
-private fun TranscriptDisclaimer() {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-        Icon(
-            imageVector = MeeshyIcons.Info,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textMuted,
-            modifier = Modifier.size(14.dp),
-        )
+internal fun TranscriptDisclaimer() {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    val note = MeeshyInfoNote(
+        question = stringResource(R.string.call_transcript_note_question),
+        text = stringResource(R.string.call_transcript_note),
+    )
+    MeeshyInfoNoted(
+        note = note,
+        openNoteId = openNote,
+        onOpenNoteIdChange = { openNote = it },
+        tint = MeeshyTheme.tokens.textMuted,
+    ) {
         Text(
             text = stringResource(R.string.call_transcript_disclaimer),
             style = MaterialTheme.typography.labelSmall,

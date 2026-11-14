@@ -6,15 +6,12 @@
     <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta.</string>
     <string name="game2_atlas_empty">Aún no hay sellos: escribe en otro idioma.</string>
     <string name="game2_atlas_privacy">Privado por defecto: el juego guarda el idioma y la fecha, nunca al interlocutor ni la conversación.</string>
-    <string name="game2_settings_visibility_body">Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas.</string>
     <string name="game2_league_pseudonym_invalid">No válido.</string>
-    <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100, y una prueba cada diez niveles: mientras no se supere, tu luz espera. Veinte estados. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior.</string>
+    <string name="game_rules_2_body">Tu nivel se lee en tu luz: un millón de chispas hacen el nivel 100.</string>
     <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
     <string name="game2_prestige_meo">Tu nivel vuelve a 1 y tus chispas a 0; tu rango, tu gloria y tus Meeshes se quedan. Tus ancestros te ofrecen un trofeo numerado y %1$s de gloria.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un objeto de colección cada %1$s paradas.</string>
-    <string name="game2_settings_notifications_body">Como máximo una al día, en todos tus dispositivos.</string>
-    <string name="game2_settings_notifications_switch">Notificaciones</string>
-    <string name="game2_settings_friends_league_body">Tus amigos aceptados y tú os veis en la clasificación semanal; el interruptor quita ambos sentidos.</string>
+    <string name="game2_settings_friends_league_body">Tus amigos aceptados y tú os veis en la clasificación semanal.</string>
     <string name="game_rules_section_rules">Reglas</string>
     <string name="game_rules_section_concepts">Conceptos</string>
     <string name="game_rules_4_body">Tu nivel baja otro tanto; tu rango y tus medallas no bajan.</string>
@@ -23,7 +20,6 @@
     <string name="game_rules_7_body">Un sueño cada noche, una Ofrenda, una Llama que crece mientras vuelvas.</string>
     <string name="game_detail_coin_what">La Meesh es tu luz fijada en una moneda numerada.</string>
     <string name="game_detail_fact_mint_next">Una de cada cien es de oro, una de cada mil de prisma.</string>
-    <string name="game_flame_panel_freeze_full">Todas tus Velas están aquí.</string>
     <string name="game_notebook_empty">Cada señal de tus ancestros puede convertirse aquí en una foto.</string>
     <string name="game_error_league_pseudonym_invalid">No válido.</string>
     <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Ni tu nombre ni tu usuario.</string>
@@ -43,4 +39,34 @@
     <string name="game_photo_camera_unavailable">La cámara no está disponible.</string>
     <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
     <string name="game_sparks_cumul_record">%1$s en esta Edad · %2$s en total</string>
+    <string name="game2_settings_hidden_body">El juego desaparece de este dispositivo y se cierra a los demás.</string>
+    <string name="game2_settings_hidden_question">¿Qué cierra el ocultar?</string>
+    <string name="game2_settings_hidden_effects">Oculta el juego en este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a los demás, te saca de la justa pública. Chispas y trofeos se conservan.</string>
+    <string name="game2_settings_visibility_question">¿Quién ve cuándo juego?</string>
+    <string name="game2_settings_visibility_presence">Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas.</string>
+    <string name="game2_settings_friends_league_question">¿Qué quita «Retirarme»?</string>
+    <string name="game2_settings_friends_league_effects">El interruptor te quita de su clasificación y los quita de la tuya: ambos sentidos.</string>
+    <string name="reveal_badge_axis_subtitle">Un nivel más en este eje.</string>
+    <string name="game_rules_1_body">Escribir, hablar, publicar, reaccionar, invitar: cada intercambio de verdad cuenta.</string>
+    <string name="game_rules_1_question">¿Qué hace brotar más chispas?</string>
+    <string name="game_rules_1_more">Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto.</string>
+    <string name="game_rules_3_body" formatted="false">Una Meesh se acuña a mano: fija una parte de tu luz.</string>
+    <string name="game_rules_3_question">¿Cuánta luz toma una acuñación?</string>
+    <string name="game_rules_3_more" formatted="false">Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.</string>
+    <string name="game2_league_consent_how_question">¿Cómo me colocan?</string>
+    <string name="game_concept_league_use">Mira tu puesto y tu zona: los 7 primeros suben, los 5 últimos bajan.</string>
+    <string name="game2_season_none">Ningún viaje en curso.</string>
+    <string name="game_state_missions_progress">El sueño de esta noche: %1$s de %2$s actos.</string>
+    <string name="reveal_streak_subtitle">%1$d días seguidos.</string>
+    <string name="game_progression_offline_empty">Sin conexión — ningún progreso en memoria.</string>
+    <string name="progression_elans_empty">Publica una historia, una publicación o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.</string>
+    <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica. También hace avanzar tu viaje unos pasos.</string>
+    <string name="game2_guide_moment_league_relegated_means">Los 5 últimos bajan; las chispas vuelven a cero, nada más baja.</string>
+    <string name="game_concept_points_what">Cada intercambio de verdad hace brotar chispas: juntas forman tu luz.</string>
+    <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto.</string>
+    <string name="game_concept_prestige_what">El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100; es opcional.</string>
+    <string name="game_concept_prestige_use">En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero; el resto se conserva. Cinco renacimientos como máximo llevan a la Sexta Edad.</string>
+    <string name="game_rules_8_body">Con cada evolución, una señal de tus ancestros se vuelve una foto con Mee y Meo, guardada en tu Crónica.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % de chispas mientras tu nivel esté 7 o más por debajo de tu luz más alta.</string>
+    <string name="game_rules_badges_ribbon_question">¿Qué significan la cinta y el esmalte?</string>
 </resources>

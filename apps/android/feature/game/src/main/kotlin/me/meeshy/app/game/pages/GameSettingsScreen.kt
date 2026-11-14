@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.game.GameVisibility
 import me.meeshy.sdk.model.game.LeagueAccess
 import me.meeshy.sdk.model.game.pages.GameVisibilityEdit
 import me.meeshy.sdk.model.game.pages.VisibilityField
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -67,7 +68,11 @@ private fun CelebrationsCard(on: Boolean, onChange: (Boolean) -> Unit) {
 private fun HiddenCard(state: GameSettingsUiState, onChange: (Boolean) -> Unit) {
     val hidden = state.prefs.hidden
     GameCard(title = stringResource(R.string.game2_settings_hidden_title)) {
-        GameNote(stringResource(R.string.game2_settings_hidden_body))
+        GameNoteWithInfo(
+            text = stringResource(R.string.game2_settings_hidden_body),
+            question = stringResource(R.string.game2_settings_hidden_question),
+            detail = stringResource(R.string.game2_settings_hidden_effects),
+        )
         GameSwitchRow(
             label = stringResource(R.string.game2_settings_hidden_switch),
             on = hidden,
@@ -81,8 +86,13 @@ private fun HiddenCard(state: GameSettingsUiState, onChange: (Boolean) -> Unit) 
 
 @Composable
 private fun VisibilityCard(visibility: GameVisibility, writes: GameArrangementUiState, arrangement: GameArrangementViewModel, hidden: Boolean) {
-    GameCard(title = stringResource(R.string.game2_settings_visibility_title)) {
-        GameNote(stringResource(R.string.game2_settings_visibility_body))
+    GameCard(
+        title = stringResource(R.string.game2_settings_visibility_title),
+        info = MeeshyInfoNote(
+            question = stringResource(R.string.game2_settings_visibility_question),
+            text = stringResource(R.string.game2_settings_visibility_presence),
+        ),
+    ) {
         listOf(
             R.string.game2_visibility_field_rank to VisibilityField.Rank,
             R.string.game2_visibility_field_treasury to VisibilityField.Treasury,
@@ -119,7 +129,11 @@ private fun LeagueCard(inLeague: Boolean, pseudonym: String?) {
 @Composable
 private fun FriendsLeagueCard(state: GameSettingsUiState, onChange: (Boolean) -> Unit) {
     GameCard(title = stringResource(R.string.game2_settings_friends_league_title)) {
-        GameNote(stringResource(R.string.game2_settings_friends_league_body))
+        GameNoteWithInfo(
+            text = stringResource(R.string.game2_settings_friends_league_body),
+            question = stringResource(R.string.game2_settings_friends_league_question),
+            detail = stringResource(R.string.game2_settings_friends_league_effects),
+        )
         GameSwitchRow(
             label = stringResource(R.string.game2_settings_friends_league_switch),
             on = state.friendsLeagueOptedOut,

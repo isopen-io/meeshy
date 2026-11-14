@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.detailsHeader",
-          "androidName": "encryption_detail_details_header",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.detail.enabledOn",
           "androidName": "encryption_detail_enabled_on",
           "status": "adopted"
@@ -32,12 +26,6 @@
           "catalog": "app",
           "iosKey": "conversation.encryption.detail.inactiveLabel",
           "androidName": "encryption_detail_inactive_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.inactiveSubtitle",
-          "androidName": "encryption_detail_inactive_subtitle",
           "status": "adopted"
         },
         {
@@ -66,36 +54,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation",
-          "androidName": "encryption_detail_translation",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.available",
-          "androidName": "encryption_detail_translation_available",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.disabled",
-          "androidName": "encryption_detail_translation_disabled",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.legacy.subtitle",
-          "androidName": "encryption_legacy_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.legacy.title",
-          "androidName": "encryption_legacy_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.mode.e2ee.description",
           "androidName": "encryption_mode_e2ee_description",
           "status": "adopted"
@@ -104,12 +62,6 @@
           "catalog": "app",
           "iosKey": "conversation.encryption.mode.e2ee.label",
           "androidName": "encryption_mode_e2ee_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.mode.hybrid.description",
-          "androidName": "encryption_mode_hybrid_description",
           "status": "adopted"
         },
         {
@@ -134,12 +86,6 @@
           "catalog": "app",
           "iosKey": "conversation.encryption.detail.activationFooterFinal",
           "androidName": "encryption_detail_activation_footer_final",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.servedGap",
-          "androidName": "encryption_detail_served_gap",
           "status": "adopted"
         },
         {
@@ -228,18 +174,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.fact.encryptedOnServerServerReads",
-          "androidName": "encryption_fact_encrypted_on_server_server_reads",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.fact.hybridIsServerToday",
-          "androidName": "encryption_fact_hybrid_is_server_today",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.fact.onlyParticipantsRead",
           "androidName": "encryption_fact_only_participants_read",
           "status": "adopted"
@@ -298,12 +232,7 @@
           "androidName": "encryption_fact_not_yet_attachments",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.fact.notYetDecryptedNotifications",
-          "androidName": "encryption_fact_not_yet_decrypted_notifications",
-          "status": "adopted"
-        },
+        { "androidName": "encryption_fact_not_yet_decrypted_notifications", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "conversation.encryption.fact.notYetGroups",
@@ -372,20 +301,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.fact.endToEndNeverTurnedOffDirect",
-          "androidName": "encryption_fact_end_to_end_never_turned_off_direct",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.fact.serverCannotTurnItOff",
           "androidName": "encryption_fact_server_cannot_turn_it_off",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.onDevice",
-          "androidName": "encryption_detail_translation_on_device",
           "status": "adopted"
         },
         {
@@ -415,16 +332,6 @@
           "iosKey": "common.close",
           "androidName": "encryption_close",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "common.done",
-          "androidName": "encryption_done",
-          "status": "adopted"
-        },
-        {
-          "androidName": "encryption_e2ee_direct_only_here",
-          "status": "android-only"
         },
         {
           "androidName": "encryption_irreversible_refused",

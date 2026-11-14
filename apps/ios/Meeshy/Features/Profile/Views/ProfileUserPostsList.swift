@@ -489,7 +489,6 @@ struct ProfileUserPostsList: View {
         EmptyStateView(
             icon: "square.text.square",
             title: String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main),
-            subtitle: String(localized: "profile.posts.empty.subtitle", defaultValue: "Les publications apparaîtront ici", bundle: .main),
             compact: true
         )
         .padding(.top, 40)
@@ -508,9 +507,10 @@ struct ProfileUserPostsList: View {
                 icon: viewModel.filter == .reels ? "play.rectangle" : "square.text.square",
                 title: viewModel.filter == .reels
                     ? String(localized: "profile.posts.empty.reels", defaultValue: "Aucun réel", bundle: .main)
-                    : String(localized: "profile.posts.empty.posts", defaultValue: "Aucun poste", bundle: .main),
-                subtitle: String(localized: "profile.posts.empty.filter.subtitle", defaultValue: "Touchez à nouveau la tuile pour tout revoir", bundle: .main),
-                compact: true
+                    : String(localized: "profile.posts.empty.posts", defaultValue: "Aucune publication", bundle: .main),
+                actionLabel: String(localized: "profile.posts.empty.filter.action", defaultValue: "Tout voir", bundle: .main),
+                compact: true,
+                onAction: { viewModel.filter = .all }
             )
             .padding(.vertical, MeeshySpacing.xxl)
         }

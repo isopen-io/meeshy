@@ -126,11 +126,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.season.none",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.season.upcoming",
           "status": "adopted"
         },
@@ -281,19 +276,10 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.settings.hidden.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.settings.hidden.switch",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.hidden.card",
-          "status": "adopted"
-        },
+        { "androidName": "game2_settings_hidden_card", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game2.settings.hidden.show",
@@ -302,11 +288,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.settings.hidden.reopen_note",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.notifications.title",
           "status": "adopted"
         },
         {
@@ -364,11 +345,7 @@
           "iosKey": "game2.league.week",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game2.league.locked",
-          "status": "adopted"
-        },
+        { "androidName": "game2_league_locked", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game2.league.minor",
@@ -519,11 +496,7 @@
           "iosKey": "game2.duo.pick",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game2.duo.no_friends",
-          "status": "adopted"
-        },
+        { "androidName": "game2_duo_no_friends", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game2.duo.invited.inviter",

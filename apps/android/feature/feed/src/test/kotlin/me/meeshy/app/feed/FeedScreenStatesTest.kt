@@ -6,6 +6,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertCountEquals
@@ -48,11 +49,11 @@ class FeedScreenStatesTest {
     }
 
     @Test
-    fun `le fil vide est un etat illustre qui dit ce qui viendra`() {
+    fun `le fil vide est un etat illustre d'une seule ligne (epure 18090)`() {
         show { FeedEmptyState() }
 
         compose.onNodeWithText("No posts yet").assertIsDisplayed()
-        compose.onNodeWithText("Posts from your contacts will appear here").assertIsDisplayed()
+        compose.onAllNodesWithText("Posts from your contacts will appear here").assertCountEquals(0)
     }
 
     @Test

@@ -362,7 +362,6 @@ private fun AccessSection(form: CreateShareLinkForm, enabled: Boolean, vm: Creat
     ) {
         RuleToggleRow(
             title = stringResource(R.string.share_link_access_account),
-            subtitle = stringResource(R.string.share_link_access_account_subtitle),
             icon = Icons.Filled.Person,
             iconColor = ShareAccent,
             accent = ShareAccent,
@@ -373,7 +372,6 @@ private fun AccessSection(form: CreateShareLinkForm, enabled: Boolean, vm: Creat
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_access_nickname),
-            subtitle = stringResource(R.string.share_link_access_nickname_subtitle),
             icon = Icons.Filled.Person,
             iconColor = MeeshyPalette.TrackingAccent,
             accent = ShareAccent,
@@ -384,7 +382,6 @@ private fun AccessSection(form: CreateShareLinkForm, enabled: Boolean, vm: Creat
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_access_email),
-            subtitle = stringResource(R.string.share_link_access_email_subtitle),
             icon = Icons.Filled.Email,
             iconColor = MeeshyPalette.CommunityAccent,
             accent = ShareAccent,
@@ -395,7 +392,6 @@ private fun AccessSection(form: CreateShareLinkForm, enabled: Boolean, vm: Creat
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_access_birthday),
-            subtitle = stringResource(R.string.share_link_access_birthday_subtitle),
             icon = Icons.Filled.Today,
             iconColor = MeeshyPalette.Warning,
             accent = ShareAccent,
@@ -416,7 +412,6 @@ private fun PermissionsSection(form: CreateShareLinkForm, enabled: Boolean, vm: 
     ) {
         RuleToggleRow(
             title = stringResource(R.string.share_link_permission_messages),
-            subtitle = stringResource(R.string.share_link_permission_messages_subtitle),
             icon = Icons.Filled.Chat,
             iconColor = ShareAccent,
             accent = ShareAccent,
@@ -427,7 +422,6 @@ private fun PermissionsSection(form: CreateShareLinkForm, enabled: Boolean, vm: 
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_permission_images),
-            subtitle = stringResource(R.string.share_link_permission_images_subtitle),
             icon = Icons.Filled.Image,
             iconColor = MeeshyPalette.Indigo300,
             accent = ShareAccent,
@@ -438,7 +432,6 @@ private fun PermissionsSection(form: CreateShareLinkForm, enabled: Boolean, vm: 
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_permission_files),
-            subtitle = stringResource(R.string.share_link_permission_files_subtitle),
             icon = Icons.Filled.AttachFile,
             iconColor = MeeshyPalette.TrackingAccent,
             accent = ShareAccent,
@@ -449,7 +442,6 @@ private fun PermissionsSection(form: CreateShareLinkForm, enabled: Boolean, vm: 
         FormDivider()
         RuleToggleRow(
             title = stringResource(R.string.share_link_permission_history),
-            subtitle = stringResource(R.string.share_link_permission_history_subtitle),
             icon = Icons.Filled.History,
             iconColor = MeeshyPalette.CommunityAccent,
             accent = ShareAccent,

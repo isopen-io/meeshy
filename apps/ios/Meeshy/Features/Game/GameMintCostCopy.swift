@@ -68,7 +68,7 @@ enum GameMintCostCopy {
     static func debtText(_ debt: Int) -> String {
         guard debt > 0 else {
             return String(localized: "game.mint.blocked.debt_plain",
-                          defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.",
+                          defaultValue: "Une ombre voile ta lumière : tes étincelles la dissiperont, puis on frappera.",
                           bundle: .main)
         }
         return String(localized: "game.mint.blocked.debt",

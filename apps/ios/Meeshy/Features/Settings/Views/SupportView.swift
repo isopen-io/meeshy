@@ -76,7 +76,7 @@ struct SupportView: View {
             sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: MeeshyColors.infoHex)
 
             VStack(spacing: 0) {
-                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email du support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
+                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "E-mail du support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
                 supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
             }
             .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))

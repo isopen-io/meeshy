@@ -3,15 +3,12 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">Copiar</string>
     <string name="about_copyright">2024-2026 Meeshy. Todos los derechos reservados.</string>
-    <string name="about_feature_cloud_sync">Sincronización en la nube</string>
     <string name="about_feature_encryption">Cifrado de extremo a extremo</string>
-    <string name="about_feature_themes">Temas personalizables</string>
     <string name="about_feature_translation">Traducción en tiempo real</string>
     <string name="about_feature_voice_cloning">Clonación de voz</string>
     <string name="about_info_media_tier">Perfil multimedia</string>
     <string name="about_info_platform">Plataforma</string>
     <string name="about_info_sdk_version">Versión del SDK</string>
-    <string name="about_link_about">Acerca de Meeshy</string>
     <string name="about_link_contact">Contacto</string>
     <string name="about_link_github">GitHub</string>
     <string name="about_link_partners">Socios</string>
@@ -22,7 +19,6 @@
     <string name="about_media_tier_mid">Intermedio</string>
     <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_features">Funciones</string>
-    <string name="about_section_informations">Información</string>
     <string name="about_section_links">Enlaces</string>
     <string name="about_title">Acerca de</string>
     <string name="account_contact_cancel">Cancelar</string>
@@ -103,7 +99,6 @@
     <string name="licenses_libsignal_body">libsignal y las bibliotecas que incluye, con el texto de sus licencias.</string>
     <string name="licenses_libsignal_title">Avisos de libsignal</string>
     <string name="licenses_meeshy_body">El código fuente de Meeshy se publica bajo la licencia MIT. Esta aplicación incluye libsignal (Signal Messenger), publicado bajo la licencia GNU AGPL-3.0: la aplicación distribuida es, por tanto, una obra bajo la licencia AGPL-3.0 únicamente.</string>
-    <string name="licenses_meeshy_body_mit">El código fuente de Meeshy se publica bajo la licencia MIT.</string>
     <string name="licenses_meeshy_title">Licencia de Meeshy</string>
     <string name="licenses_section_open_source">Código abierto</string>
     <string name="licenses_source_body">El código fuente de esta versión, scripts de compilación incluidos, está disponible de forma gratuita.</string>
@@ -143,7 +138,7 @@
     <string name="pack_shop_domain_wallpaper">Fondos</string>
     <string name="pack_shop_empty">Aún no hay nada que descubrir aquí.</string>
     <string name="pack_shop_error_insufficient">Te faltan Meeshes para este pack.</string>
-    <string name="pack_shop_error_load">No se pudo cargar la tienda. Inténtalo de nuevo.</string>
+    <string name="pack_shop_error_load">No se pudo cargar la tienda.</string>
     <string name="pack_shop_failed">No se pudo actualizar el paquete. Inténtalo de nuevo.</string>
     <string name="pack_shop_install">Instalar</string>
     <string name="pack_shop_locked">Por desbloquear</string>
@@ -155,10 +150,7 @@
     <string name="privacy_last_seen">Último inicio de sesión</string>
     <string name="privacy_online_status">Estado en línea</string>
     <string name="privacy_read_receipts">Confirmaciones de lectura</string>
-    <string name="privacy_save_media">Guardar multimedia</string>
-    <string name="privacy_section_contacts">Contactos y grupos</string>
     <string name="privacy_section_encryption">Cifrado</string>
-    <string name="privacy_section_media">Multimedia y datos</string>
     <string name="privacy_section_visibility">Visibilidad</string>
     <string name="privacy_typing_indicator">Indicador de escritura</string>
     <string name="purge_action_empty">Selecciona qué vaciar</string>
@@ -205,7 +197,6 @@
     <string name="sessions_empty">No hay sesiones activas</string>
     <string name="sessions_error_banner">No se pudo actualizar: desliza hacia abajo para reintentar.</string>
     <string name="sessions_error_ok">OK</string>
-    <string name="sessions_error_title">Error</string>
     <string name="sessions_loading">Cargando las sesiones</string>
     <string name="sessions_login_anonymous">Sesión de invitado</string>
     <string name="sessions_login_email_verification">Inicio de sesión al verificar el correo</string>
@@ -225,11 +216,9 @@
     <string name="sessions_revoke_a11y">Cerrar la sesión de %1$s</string>
     <string name="sessions_revoke_all_action">Cerrar sesión en los demás dispositivos</string>
     <string name="sessions_revoke_all_confirm_message">Solo este dispositivo seguirá con la sesión iniciada. Los demás tendrán que volver a iniciarla.</string>
-    <string name="sessions_revoke_all_error">No se han podido revocar las sesiones</string>
     <string name="sessions_revoke_confirm_action">Cerrar sesión</string>
     <string name="sessions_revoke_confirm_message">%1$s tendrá que volver a iniciar sesión para acceder a tu cuenta.</string>
     <string name="sessions_revoke_confirm_title">¿Cerrar la sesión de este dispositivo?</string>
-    <string name="sessions_revoke_error">No se ha podido revocar la sesión</string>
     <string name="sessions_section_others">Otros dispositivos</string>
     <string name="sessions_timezone">Zona horaria: %1$s</string>
     <string name="sessions_unknown_device">Dispositivo desconocido</string>
@@ -243,7 +232,7 @@
     <string name="settings_delete_account">Eliminar cuenta</string>
     <string name="settings_dnd">No molestar</string>
     <string name="settings_dnd_time_picker_dismiss">Cancelar</string>
-    <string name="settings_email_notifications">Correo electrónico</string>
+    <string name="settings_email_notifications">Correo</string>
     <string name="settings_export_data">Exportar mis datos</string>
     <string name="settings_help_center">Centro de ayuda</string>
     <string name="settings_interface_language">Idioma de la interfaz</string>
@@ -262,7 +251,6 @@
     <string name="settings_media_capture_original_title">Guardar el original</string>
     <string name="settings_media_download">Descarga automática</string>
     <string name="settings_media_outgoing_header">Al enviar</string>
-    <string name="settings_media_outgoing_location_subtitle">Por defecto, la posición GPS se elimina de cada foto antes de enviarla.</string>
     <string name="settings_media_outgoing_location_title">Conservar la ubicación de las fotos</string>
     <string name="settings_new_message_notifications">Mensajes nuevos</string>
     <string name="settings_notif_cat_calls">Llamadas</string>
@@ -290,7 +278,6 @@
     <string name="settings_notifications_title">Notificaciones</string>
     <string name="settings_open_source_licenses">Licencias de código abierto</string>
     <string name="settings_packs_domain">Tipo de paquete</string>
-    <string name="settings_privacy_encryption_coming_soon_a11y">Cifrado: próximamente, actualmente desactivado</string>
     <string name="settings_privacy_policy">Política de privacidad</string>
     <string name="settings_privacy_title">Privacidad</string>
     <string name="settings_push_notifications">Notificaciones push</string>
@@ -319,8 +306,6 @@
     <string name="settings_tools_progression">Mi Leyenda</string>
     <string name="settings_tools_stats">Estadísticas</string>
     <string name="settings_transcription_auto">Automática</string>
-    <string name="settings_transcription_engine">Motor de transcripción</string>
-    <string name="settings_transcription_engine_a11y">Motor de transcripción</string>
     <string name="settings_version_label">Versión</string>
     <string name="settings_voice_create">Crear</string>
     <string name="support_a11y_opens">Abre %1$s</string>
