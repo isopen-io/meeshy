@@ -14,5 +14,5 @@
     <string name="chat_header_flame_card_today_sparks">Scintille oggi</string>
     <string name="chat_header_flame_card_total_sparks">Scintille in totale</string>
     <string name="export_card_typeface_pairs_question">A cosa si applica il carattere?</string>
-    <string name="encryption_fact_encrypted_on_server_server_reads">I tuoi messaggi sono crittografati sui nostri server.</string>
+    <string name="encryption_fact_encrypted_on_server_server_reads">I tuoi messaggi sono crittografati sui nostri server, che possono leggerli.</string>
 </resources>

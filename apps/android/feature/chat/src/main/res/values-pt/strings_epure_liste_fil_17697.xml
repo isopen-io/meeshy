@@ -14,5 +14,5 @@
     <string name="chat_header_flame_card_today_sparks">Faíscas hoje</string>
     <string name="chat_header_flame_card_total_sparks">Faíscas no total</string>
     <string name="export_card_typeface_pairs_question">A que se aplica a fonte?</string>
-    <string name="encryption_fact_encrypted_on_server_server_reads">Suas mensagens são criptografadas em nossos servidores.</string>
+    <string name="encryption_fact_encrypted_on_server_server_reads">Suas mensagens são criptografadas em nossos servidores, que podem lê-las.</string>
 </resources>

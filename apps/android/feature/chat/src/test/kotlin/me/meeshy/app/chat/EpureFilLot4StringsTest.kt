@@ -32,8 +32,8 @@ class EpureFilLot4StringsTest {
 
     @Test
     fun `le fait chiffre sur nos serveurs tient en une phrase et ne redit pas la liste des fonctions`() {
-        assertThat(all("values-fr")[serverFact]).isEqualTo("Vos messages sont chiffrés sur nos serveurs.")
-        assertThat(all("values")[serverFact]).isEqualTo("Your messages are encrypted on our servers.")
+        assertThat(all("values-fr")[serverFact]).isEqualTo("Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire.")
+        assertThat(all("values")[serverFact]).isEqualTo("Your messages are encrypted on our servers, which can read them.")
         assertThat(all("values")["encryption_fact_every_server_feature"]).contains("automatic translation")
         folders.forEach { folder ->
             val fact = all(folder).getValue(serverFact)
@@ -43,6 +43,24 @@ class EpureFilLot4StringsTest {
         }
         folders.filterNot { it == "values-fr" }.forEach {
             assertWithMessage("$it recopié du français").that(all(it)[serverFact]).isNotEqualTo(all("values-fr")[serverFact])
+        }
+    }
+
+    @Test
+    fun `sous la rubrique Qui lit, le fait serveur dit que nos serveurs peuvent lire, dans les sept langues`() {
+        val bare = mapOf(
+            "values" to "Your messages are encrypted on our servers.",
+            "values-fr" to "Vos messages sont chiffrés sur nos serveurs.",
+            "values-es" to "Tus mensajes se cifran en nuestros servidores.",
+            "values-pt" to "Suas mensagens são criptografadas em nossos servidores.",
+            "values-de" to "Deine Nachrichten werden auf unseren Servern verschlüsselt.",
+            "values-it" to "I tuoi messaggi sono crittografati sui nostri server.",
+            "values-ar" to "تُشفَّر رسائلك على خوادمنا.",
+        )
+        folders.forEach { folder ->
+            val fact = all(folder).getValue(serverFact)
+            assertWithMessage("$folder : la conséquence (le serveur lit) est dite").that(fact).isNotEqualTo(bare.getValue(folder))
+            assertWithMessage("$folder : tient sur une rangée").that(fact.length).isAtMost(80)
         }
     }
 
