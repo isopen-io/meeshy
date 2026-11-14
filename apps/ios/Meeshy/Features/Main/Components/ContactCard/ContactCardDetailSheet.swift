@@ -44,7 +44,9 @@ struct ContactCardDetailSheet: View {
             }
         }
         .onAppear {
-            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)) {
+            meeshyWithAnimation(.spring(response: 0.38, dampingFraction: 0.86),
+                                reduced: .easeOut(duration: 0.15),
+                                reduceMotion: reduceMotion) {
                 isVisible = true
             }
         }
@@ -236,7 +238,7 @@ struct ContactCardDetailSheet: View {
     // MARK: - Fermeture
 
     private func close() {
-        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeOut(duration: 0.2)) {
+        meeshyWithAnimation(.easeOut(duration: 0.2), reduced: .easeOut(duration: 0.12), reduceMotion: reduceMotion) {
             isVisible = false
         }
         delayed.run(after: .milliseconds(200)) {

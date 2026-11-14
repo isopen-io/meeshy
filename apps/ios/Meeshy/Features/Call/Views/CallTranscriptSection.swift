@@ -266,7 +266,9 @@ struct CallTranscriptSection: View {
     /// chaque phrase traduite, en fondu (#17862, #17895). « Voir la traduction » rend l'état par défaut.
     private var originalToggle: some View {
         Button {
-            withAnimation(.easeInOut(duration: reduceMotion ? 0.12 : 0.2)) { showOriginalText.toggle() }
+            meeshyWithAnimation(.easeInOut(duration: 0.2), reduced: .easeInOut(duration: 0.12), reduceMotion: reduceMotion) {
+                showOriginalText.toggle()
+            }
         } label: {
             Text(CallJournalAfterCall.toggleLabel(showsOriginal: showOriginalText))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
