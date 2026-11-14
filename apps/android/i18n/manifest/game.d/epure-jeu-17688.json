@@ -229,7 +229,19 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_rules_8_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_badges_ribbon_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_concept_duo_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_concept_tailwind_body",
           "status": "android-only"
         },
         {

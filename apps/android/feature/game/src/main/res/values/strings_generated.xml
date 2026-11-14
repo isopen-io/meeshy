@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">Your rank never goes back</string>
     <string name="game_rules_6_title">The Legacy is kept or spent</string>
     <string name="game_rules_7_title">Every day counts</string>
-    <string name="game_rules_8_body">At each evolution, your ancestors send you a sign: each sign is immortalized in a photo with Mee and Meo in your Chronicle.</string>
     <string name="game_rules_8_title">Your ancestors send signs</string>
     <string name="game_rules_badges_families">The twenty medals, by family</string>
     <string name="game_rules_badges_imprint">A medal that went out stays an imprint: it says what is missing to light it again.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">Every ten levels, from 10 to 100: mint a Meesh, fulfill dreams, hold a Flame or reach a rank. Until it is passed, your light waits.</string>
     <string name="game_rules_concept_steps_name">The Trials</string>
     <string name="game_rules_concept_succes_body">Rare distinctions, done in one go when you gather what they ask for.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % on the sparks of your moves while your level is 7 or more levels below your highest light. It stops as soon as the gap falls back to 6.</string>
     <string name="game_rules_concept_tailwind_name">Tailwind</string>
     <string name="game_rules_concept_treasury_body">The Meeshes you keep for your line. Six containers, from the Purse to the Reserve, shown on your profile.</string>
     <string name="game_rules_concept_treasury_name">The Legacy</string>

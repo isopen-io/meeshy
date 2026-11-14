@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">El rango nunca retrocede</string>
     <string name="game_rules_6_title">El Legado se guarda o se gasta</string>
     <string name="game_rules_7_title">Cada día cuenta</string>
-    <string name="game_rules_8_body">Con cada evolución, tus ancestros se manifiestan: cada señal se inmortaliza en foto con Mee y Meo en tu Crónica.</string>
     <string name="game_rules_8_title">Los ancestros se manifiestan</string>
     <string name="game_rules_badges_families">Las veinte medallas, por familia</string>
     <string name="game_rules_badges_imprint">Una medalla apagada sigue siendo una huella: dice lo que falta para volver a encenderla.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">Cada diez niveles, de 10 a 100: acuñar una Meesh, hacer realidad sueños, mantener una Llama o alcanzar un rango. Mientras no se supere, tu luz espera.</string>
     <string name="game_rules_concept_steps_name">Las pruebas</string>
     <string name="game_rules_concept_succes_body">Distinciones raras, que se logran de una vez cuando reúnes lo que piden.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % en las chispas de tus gestos mientras tu nivel esté 7 niveles o más por debajo de tu luz más alta. Se detiene en cuanto la diferencia vuelve a 6.</string>
     <string name="game_rules_concept_tailwind_name">Viento de cola</string>
     <string name="game_rules_concept_treasury_body">Las Meeshes que guardas para tu linaje. Seis recipientes, del Monedero a la Reserva, visibles en tu perfil.</string>
     <string name="game_rules_concept_treasury_name">El Legado</string>

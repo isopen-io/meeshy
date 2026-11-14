@@ -66,12 +66,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.8.body",
-          "androidName": "game_rules_8_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.rules.concept.elans.body",
           "androidName": "game_rules_concept_elans_body",
           "status": "adopted"
@@ -146,12 +140,6 @@
           "catalog": "app",
           "iosKey": "game.rules.concept.tailwind.name",
           "androidName": "game_rules_concept_tailwind_name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.rules.concept.tailwind.body",
-          "androidName": "game_rules_concept_tailwind_body",
           "status": "adopted"
         },
         {

@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
     <string name="game2_atlas_privacy">Private by default: the game keeps the language and the date, never the other person or the conversation.</string>
     <string name="game2_league_pseudonym_invalid">Not valid.</string>
-    <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100. Each level asks for a little more than the one before.</string>
+    <string name="game_rules_2_body">Your level is read from your light: a million sparks make level 100.</string>
     <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
     <string name="game2_prestige_meo">Your level restarts at 1 and your sparks at 0; your rank, glory and Meeshes stay. Your ancestors offer you a numbered trophy and %1$s glory.</string>
     <string name="game2_season_seal_body">Purely decorative: a collectible every %1$s stops.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move.</string>
     <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100; it is optional.</string>
     <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero; the rest is kept. At most five rebirths lead to the Sixth Age.</string>
+    <string name="game_rules_8_body">Each sign becomes a photo with Mee and Meo, kept in your Chronicle.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sparks while your level is 7 or more below your highest light.</string>
+    <string name="game_rules_badges_ribbon_question">What do the ribbon and the enamel mean?</string>
 </resources>

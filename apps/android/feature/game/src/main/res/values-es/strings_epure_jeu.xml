@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">Aún no hay sellos: escribe en otro idioma.</string>
     <string name="game2_atlas_privacy">Privado por defecto: el juego guarda el idioma y la fecha, nunca al interlocutor ni la conversación.</string>
     <string name="game2_league_pseudonym_invalid">No válido.</string>
-    <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100. Cada nivel pide un poco más que el anterior.</string>
+    <string name="game_rules_2_body">Tu nivel se lee en tu luz: un millón de chispas hacen el nivel 100.</string>
     <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
     <string name="game2_prestige_meo">Tu nivel vuelve a 1 y tus chispas a 0; tu rango, tu gloria y tus Meeshes se quedan. Tus ancestros te ofrecen un trofeo numerado y %1$s de gloria.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un objeto de colección cada %1$s paradas.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto.</string>
     <string name="game_concept_prestige_what">El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100; es opcional.</string>
     <string name="game_concept_prestige_use">En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero; el resto se conserva. Cinco renacimientos como máximo llevan a la Sexta Edad.</string>
+    <string name="game_rules_8_body">Cada señal se vuelve una foto con Mee y Meo, guardada en tu Crónica.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % de chispas mientras tu nivel esté 7 o más por debajo de tu luz más alta.</string>
+    <string name="game_rules_badges_ribbon_question">¿Qué significan la cinta y el esmalte?</string>
 </resources>

@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">Ainda sem carimbos: escreva em outro idioma.</string>
     <string name="game2_atlas_privacy">Privado por padrão: o jogo guarda o idioma e a data, nunca o interlocutor nem a conversa.</string>
     <string name="game2_league_pseudonym_invalid">Não válido.</string>
-    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100. Cada nível pede um pouco mais do que o anterior.</string>
+    <string name="game_rules_2_body">O seu nível se lê na sua luz: um milhão de faíscas fazem o nível 100.</string>
     <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
     <string name="game2_prestige_meo">Seu nível recomeça em 1 e suas faíscas em 0; seu título, sua glória e suas Meeshes ficam. Seus ancestrais oferecem a você um troféu numerado e %1$s de glória.</string>
     <string name="game2_season_seal_body">Puramente decorativo: um objeto de coleção a cada %1$s paradas.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto.</string>
     <string name="game_concept_prestige_what">O renascimento abre uma nova Era da sua lenda, oferecida no nível 100; ele é opcional.</string>
     <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero; o resto é mantido. Cinco renascimentos no máximo levam à Sexta Era.</string>
+    <string name="game_rules_8_body">Cada sinal vira uma foto com Mee e Meo, guardada na sua Crônica.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25% de faíscas enquanto o seu nível estiver 7 ou mais abaixo do auge da sua luz.</string>
+    <string name="game_rules_badges_ribbon_question">O que significam a fita e o esmalte?</string>
 </resources>

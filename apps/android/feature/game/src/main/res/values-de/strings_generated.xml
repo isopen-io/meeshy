@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">Der Rang weicht nie zurück</string>
     <string name="game_rules_6_title">Das Erbe wird bewahrt oder ausgegeben</string>
     <string name="game_rules_7_title">Jeder Tag zählt</string>
-    <string name="game_rules_8_body">Bei jeder Entwicklung zeigen sich deine Ahnen: Jedes Zeichen wird mit Mee und Meo als Foto in deiner Chronik verewigt.</string>
     <string name="game_rules_8_title">Die Ahnen zeigen sich</string>
     <string name="game_rules_badges_families">Die zwanzig Medaillen nach Familie</string>
     <string name="game_rules_badges_imprint">Eine erloschene Medaille bleibt ein Abdruck: Er zeigt, was zum Wiederentzünden fehlt.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">Alle zehn Level, von 10 bis 100: eine Meesh prägen, Träume erfüllen, eine Flamme halten oder einen Rang erreichen. Solange sie nicht bestanden ist, wartet dein Licht.</string>
     <string name="game_rules_concept_steps_name">Die Prüfungen</string>
     <string name="game_rules_concept_succes_body">Seltene Auszeichnungen, die auf einmal gelingen, wenn du erfüllst, was sie verlangen.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % auf die Funken deiner Aktionen, solange dein Level 7 oder mehr Level unter deinem hellsten Licht liegt. Er endet, sobald der Abstand wieder auf 6 sinkt.</string>
     <string name="game_rules_concept_tailwind_name">Rückenwind</string>
     <string name="game_rules_concept_treasury_body">Die Meeshes, die du für deine Linie bewahrst. Sechs Behältnisse, von der Börse bis zur Reserve, sichtbar auf deinem Profil.</string>
     <string name="game_rules_concept_treasury_name">Das Erbe</string>

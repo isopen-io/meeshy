@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">Il rango non arretra mai</string>
     <string name="game_rules_6_title">L’Eredità si custodisce o si spende</string>
     <string name="game_rules_7_title">Ogni giorno conta</string>
-    <string name="game_rules_8_body">A ogni evoluzione, i tuoi antenati si manifestano: ogni segno si immortala in foto con Mee e Meo nella tua Cronaca.</string>
     <string name="game_rules_8_title">Gli antenati si manifestano</string>
     <string name="game_rules_badges_families">Le venti medaglie, per famiglia</string>
     <string name="game_rules_badges_imprint">Una medaglia spenta resta un’impronta: dice cosa manca per riaccenderla.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">Ogni dieci livelli, da 10 a 100: coniare una Meesh, compiere sogni, tenere una Fiamma o raggiungere un rango. Finché non è superata, la tua luce aspetta.</string>
     <string name="game_rules_concept_steps_name">Le prove</string>
     <string name="game_rules_concept_succes_body">Riconoscimenti rari, compiuti in un colpo solo quando riunisci ciò che chiedono.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sulle scintille dei tuoi gesti finché il tuo livello è 7 livelli o più sotto la tua luce più alta. Si ferma appena la distanza torna a 6.</string>
     <string name="game_rules_concept_tailwind_name">Vento in poppa</string>
     <string name="game_rules_concept_treasury_body">Le Meesh che custodisci per la tua stirpe. Sei custodie, dalla Borsa alla Riserva, visibili sul tuo profilo.</string>
     <string name="game_rules_concept_treasury_name">L’Eredità</string>

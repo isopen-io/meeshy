@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">O título nunca recua</string>
     <string name="game_rules_6_title">A Herança se guarda ou se gasta</string>
     <string name="game_rules_7_title">Cada dia conta</string>
-    <string name="game_rules_8_body">A cada evolução, seus ancestrais se manifestam: cada sinal fica eternizado numa foto com Mee e Meo na sua Crônica.</string>
     <string name="game_rules_8_title">Os ancestrais se manifestam</string>
     <string name="game_rules_badges_families">As vinte medalhas, por família</string>
     <string name="game_rules_badges_imprint">Uma medalha apagada continua uma marca: ela diz o que falta para reacendê-la.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">A cada dez níveis, de 10 a 100: cunhar uma Meesh, realizar sonhos, manter uma Chama ou alcançar um título. Enquanto ela não for vencida, a sua luz espera.</string>
     <string name="game_rules_concept_steps_name">As provas</string>
     <string name="game_rules_concept_succes_body">Distinções raras, cumpridas de uma vez quando você reúne o que elas pedem.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">+25% nas faíscas dos seus gestos enquanto o seu nível estiver 7 níveis ou mais abaixo do auge da sua luz. Ele para assim que a diferença volta a 6.</string>
     <string name="game_rules_concept_tailwind_name">Vento a favor</string>
     <string name="game_rules_concept_treasury_body">As Meeshes que você guarda para a sua linhagem. Seis recipientes, da Bolsa à Reserva, visíveis no seu perfil.</string>
     <string name="game_rules_concept_treasury_name">A Herança</string>

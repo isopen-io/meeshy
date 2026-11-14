@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">Ancora nessun timbro: scrivi in un’altra lingua.</string>
     <string name="game2_atlas_privacy">Privato per impostazione predefinita: il gioco conserva la lingua e la data, mai l’interlocutore né la conversazione.</string>
     <string name="game2_league_pseudonym_invalid">Non valido.</string>
-    <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei. Un milione di scintille per il livello 100. Ogni livello richiede un po’ più del precedente.</string>
+    <string name="game_rules_2_body">Il tuo livello si legge sulla tua luce: un milione di scintille fanno il livello 100.</string>
     <string name="game_state_elans_idle">%1$s in questi giorni: ancora nessuno slancio.</string>
     <string name="game2_prestige_meo">Il tuo livello riparte da 1 e le tue scintille da 0; il tuo rango, la tua gloria e le tue Meesh restano. I tuoi antenati ti offrono un trofeo numerato e %1$s di gloria.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un oggetto da collezione ogni %1$s soste.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto.</string>
     <string name="game_concept_prestige_what">La rinascita apre una nuova Era della tua leggenda, offerta al livello 100; è facoltativa.</string>
     <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero; il resto resta tuo. Cinque rinascite al massimo portano alla Sesta Era.</string>
+    <string name="game_rules_8_body">Ogni segno diventa una foto con Mee e Meo, conservata nella tua Cronaca.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % di scintille finché il tuo livello è 7 o più sotto la tua luce più alta.</string>
+    <string name="game_rules_badges_ribbon_question">Cosa significano il nastro e lo smalto?</string>
 </resources>

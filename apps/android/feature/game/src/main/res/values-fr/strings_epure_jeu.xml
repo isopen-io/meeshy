@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">Pas encore de tampon : écris dans une autre langue.</string>
     <string name="game2_atlas_privacy">Privé par défaut : le jeu garde la langue et la date, jamais l’interlocuteur ni la conversation.</string>
     <string name="game2_league_pseudonym_invalid">Non valable.</string>
-    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100. Chaque niveau demande un peu plus que le précédent.</string>
+    <string name="game_rules_2_body">Ton niveau se lit sur ta lumière : un million d’étincelles font le niveau 100.</string>
     <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
     <string name="game2_prestige_meo">Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent. Tes aïeux t’offrent un trophée numéroté et %1$s de gloire.</string>
     <string name="game2_season_seal_body">Purement décoratif : un objet à collectionner toutes les %1$s haltes.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.</string>
     <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.</string>
     <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé. Cinq renaissances au plus mènent au Sixième Âge.</string>
+    <string name="game_rules_8_body">Chaque signe devient une photo avec Mee et Meo, gardée dans ta Chronique.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % d’étincelles tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.</string>
+    <string name="game_rules_badges_ribbon_question">Que signifient le ruban et l’émail ?</string>
 </resources>

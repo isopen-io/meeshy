@@ -957,7 +957,6 @@
     <string name="game_rules_5_title">الرتبة لا تتراجع أبدًا</string>
     <string name="game_rules_6_title">الإرث يُحفَظ أو يُنفَق</string>
     <string name="game_rules_7_title">كل يوم يُحتسب</string>
-    <string name="game_rules_8_body">مع كل ارتقاء، يتجلّى أجدادك: وكل علامة تُخلَّد في صورة مع مي وميو في سيرتك.</string>
     <string name="game_rules_8_title">الأجداد يتجلّون</string>
     <string name="game_rules_badges_families">الأوسمة العشرون، حسب العائلة</string>
     <string name="game_rules_badges_imprint">الوسام الذي انطفأ يبقى أثرًا: يقول ما ينقص لإعادة إضاءته.</string>
@@ -975,7 +974,6 @@
     <string name="game_rules_concept_steps_body">كل عشرة مستويات، من 10 إلى 100: سكّ Meesh، أو تحقيق أحلام، أو الحفاظ على لهب، أو بلوغ رتبة. ما لم تجتزه، ينتظر نورك.</string>
     <string name="game_rules_concept_steps_name">الاختبارات</string>
     <string name="game_rules_concept_succes_body">تقديرات نادرة، تتحقّق دفعة واحدة حين تجمع ما تطلبه.</string>
-    <string name="game_rules_concept_tailwind_body" formatted="false">يمنحك ⁦+25 %⁩ على شرارات أفعالك ما دام مستواك أدنى من ذروة نورك بسبعة مستويات أو أكثر، ويتوقف حين يعود الفرق إلى 6.</string>
     <string name="game_rules_concept_tailwind_name">رياح مواتية</string>
     <string name="game_rules_concept_treasury_body">عملات Meesh التي تحتفظ بها لسلالتك. ستة أوعية، من الكيس إلى الاحتياطي، تظهر في ملفك.</string>
     <string name="game_rules_concept_treasury_name">الإرث</string>

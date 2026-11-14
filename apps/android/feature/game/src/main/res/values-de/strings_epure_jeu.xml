@@ -7,7 +7,7 @@
     <string name="game2_atlas_empty">Noch kein Stempel: Schreibe in einer anderen Sprache.</string>
     <string name="game2_atlas_privacy">Standardmäßig privat: Das Spiel speichert Sprache und Datum, nie das Gegenüber oder die Unterhaltung.</string>
     <string name="game2_league_pseudonym_invalid">Ungültig.</string>
-    <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus. Eine Million Funken für Level 100. Jedes Level verlangt etwas mehr als das vorherige.</string>
+    <string name="game_rules_2_body">Dein Level liest sich an deinem Licht ab: eine Million Funken ergeben Level 100.</string>
     <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
     <string name="game2_prestige_meo">Dein Level beginnt wieder bei 1 und deine Funken bei 0; dein Rang, dein Ruhm und deine Meeshes bleiben. Deine Ahnen schenken dir eine nummerierte Trophäe und %1$s Ruhm.</string>
     <string name="game2_season_seal_body">Rein dekorativ: alle %1$s Rasten ein Sammelobjekt.</string>
@@ -66,4 +66,7 @@
     <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst.</string>
     <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100; sie ist freiwillig.</string>
     <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten. Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
+    <string name="game_rules_8_body">Jedes Zeichen wird zu einem Foto mit Mee und Meo, aufbewahrt in deiner Chronik.</string>
+    <string name="game_rules_concept_tailwind_body" formatted="false">+25 % Funken, solange dein Level 7 oder mehr unter deinem hellsten Licht liegt.</string>
+    <string name="game_rules_badges_ribbon_question">Was bedeuten das Band und das Email?</string>
 </resources>
