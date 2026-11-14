@@ -141,6 +141,7 @@
     <string name="shared_location_share_sheet_title">موقعي لـ %1$s</string>
     <string name="shared_location_share_stop">إيقاف</string>
     <string name="shared_location_share_stop_a11y">إيقاف مشاركة موقعي مع %1$s</string>
+    <string name="shared_location_share_stop_pending">ستتوقف المشاركة فور عودة الاتصال</string>
     <string name="shared_location_share_unavailable">الموقع غير متاح حاليًا، حاول مرة أخرى</string>
     <string name="user_stats_activity">النشاط</string>
     <string name="user_stats_badges">الشارات</string>
