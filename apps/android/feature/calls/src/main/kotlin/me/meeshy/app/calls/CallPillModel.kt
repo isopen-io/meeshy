@@ -9,6 +9,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionContext
 import me.meeshy.sdk.model.call.CallActionSet
+import me.meeshy.sdk.model.call.CallAudioRouteKind
 import me.meeshy.ui.icons.MeeshyIcons
 
 /** One drawable action of the unfolded rows. [captionRes] defaults to the label when `null`. */
@@ -117,4 +118,24 @@ internal object CallPillModel {
             theCall = set.theCall.filter { it in items },
         )
     }
+}
+
+/**
+ * P1.6 · #17843 — the state of « Sortie » in the pill, mirror of iOS `CallOutputButtonRule` (same vectors). In a video
+ * call the loudspeaker starts on by default: that is the RESTING state, a glass (a white disc is the user's choice, never
+ * the default). An external device (headset, car, hearing aid) stays a choice, so active, in audio as in video.
+ */
+internal object CallOutputButtonRule {
+    fun kind(isSpeaker: Boolean, routesExternally: Boolean, isVideoCall: Boolean): CallPillKind = when {
+        routesExternally -> CallPillKind.Active
+        isSpeaker && !isVideoCall -> CallPillKind.Active
+        else -> CallPillKind.Normal
+    }
+
+    /** The route the platform reports decides; before it reports one, the speaker state of the call does. */
+    fun kind(activeRoute: CallAudioRouteKind?, isSpeakerOn: Boolean, isVideoCall: Boolean): CallPillKind = kind(
+        isSpeaker = activeRoute?.let { it == CallAudioRouteKind.Speaker } ?: isSpeakerOn,
+        routesExternally = activeRoute?.isExternal == true,
+        isVideoCall = isVideoCall,
+    )
 }

@@ -54,6 +54,14 @@ enum CallLiveFrameCopy {
         }
     }
 
+    /// #18367 — ce que VoiceOver dit quand l'autre relâche le cadre que nous partagions.
+    static func peerReleased(by name: String?) -> String {
+        guard let name, !name.isEmpty else {
+            return String(localized: "call.liveFrame.peerReleased.anonymous", defaultValue: "Votre correspondant a retiré le cadre", bundle: .main)
+        }
+        return String(format: String(localized: "call.liveFrame.peerReleased", defaultValue: "%@ a retiré le cadre", bundle: .main), name)
+    }
+
     static func surface(_ name: String) -> String {
         String(format: String(localized: "call.liveFrame.surface", defaultValue: "Cadre %@ autour des deux vidéos", bundle: .main), name)
     }

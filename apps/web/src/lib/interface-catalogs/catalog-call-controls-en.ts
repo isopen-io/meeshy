@@ -81,6 +81,8 @@ const en = {
   'callControls.selfTile.corner.bottom-left': 'My thumbnail: bottom left',
   'callControls.selfTile.corner.bottom-right': 'My thumbnail: bottom right',
   'callControls.spotlight.self': 'Show my video in the spotlight',
+  'callControls.fullscreen.total.enter': 'Total full screen',
+  'callControls.fullscreen.total.exit': 'Exit total full screen',
   'callControls.screenZoom.hint': 'Shared screen: pinch or Ctrl + scroll to zoom, double-tap to see it whole again',
   'callControls.liveFrame.proposal': '{name} suggests the “{frame}” frame',
   'callControls.liveFrame.proposal.anonymous': 'The other person suggests the “{frame}” frame',

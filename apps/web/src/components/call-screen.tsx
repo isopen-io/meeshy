@@ -27,7 +27,7 @@ import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerExpanded, layer
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
-import { autoSharer, resolveSpotlight } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type FullScreenLevel } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { orderedTopBanners, recordingBannerPresent, recordingSlotHeight, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
@@ -302,13 +302,18 @@ const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canSh
 /** Ce que le navigateur montre en plein écran : la couche d'appel entière (`call-layer.tsx` y pose son hôte, carte d'accord comprise) — sinon l'écran d'appel, sa pilule et ses sous-titres avec lui. */
 const fullscreenTarget = (screen: HTMLElement | null): HTMLElement | null => screen?.closest<HTMLElement>('[data-call-fullscreen-host]') ?? screen;
 
-/** Le plein écran de la tuile à la une : l'API Fullscreen sur la couche d'appel, et, sans elle, tout le reste s'efface. Changer de scène (un groupe retombé en duo, `isStageFullScreen = false` d'iOS) en sort. */
-function useImmersive(screen: React.RefObject<HTMLElement | null>, available: boolean, group: boolean): readonly [boolean, () => void] {
-  const [immersive, setImmersive] = useState(false);
+/**
+ * Le plein écran de la tuile à la une : l'API Fullscreen sur la couche d'appel, et, sans elle, tout le reste s'efface.
+ * Deux niveaux pour un écran partagé à la une d'un groupe (loi 15, #17961) — `full`, `total` —, que la capsule monte
+ * et descend : le navigateur n'entre qu'au premier et ne sort qu'au retour à `off`. Changer de scène (un groupe retombé
+ * en duo, `isStageFullScreen = false` d'iOS) en sort.
+ */
+function useImmersive(screen: React.RefObject<HTMLElement | null>, available: boolean, group: boolean): readonly [FullScreenLevel, (level: FullScreenLevel) => void] {
+  const [level, setLevel] = useState<FullScreenLevel>('off');
   const scene = useRef(group);
   useEffect(() => {
     const onChange = () => {
-      if (document.fullscreenElement === null) setImmersive(false);
+      if (document.fullscreenElement === null) setLevel('off');
     };
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
@@ -316,21 +321,17 @@ function useImmersive(screen: React.RefObject<HTMLElement | null>, available: bo
   useEffect(() => {
     const changed = scene.current !== group;
     scene.current = group;
-    if ((available && !changed) || !immersive) return;
-    setImmersive(false);
+    if ((available && !changed) || level === 'off') return;
+    setLevel('off');
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-  }, [available, immersive, group]);
-  const toggle = () => {
+  }, [available, level, group]);
+  const move = (next: FullScreenLevel) => {
     const element = fullscreenTarget(screen.current);
-    if (immersive) {
-      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-      setImmersive(false);
-      return;
-    }
-    if (element !== null && typeof element.requestFullscreen === 'function' && document.fullscreenEnabled) void element.requestFullscreen().catch(() => undefined);
-    setImmersive(true);
+    if (next === 'off' && level !== 'off' && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    if (next !== 'off' && level === 'off' && element !== null && typeof element.requestFullscreen === 'function' && document.fullscreenEnabled) void element.requestFullscreen().catch(() => undefined);
+    setLevel(next);
   };
-  return [available && immersive, toggle] as const;
+  return [available ? level : 'off', move] as const;
 }
 
 type CallScreenProps = {
@@ -419,7 +420,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const [choice, setChoice] = useSpotlightChoice(autoSharer(arrived, call.remoteStreams)?.userId ?? null);
   const spotlight = layout === 'grid' ? resolveSpotlight({ members: arrived, choice, remoteStreams: call.remoteStreams }) : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
-  const [immersive, toggleImmersive] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
+  const [fullScreen, moveFullScreen] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
+  const immersive = fullScreen !== 'off';
   const videoScene = live && isVideoScene(call);
   /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. Le portrait n'est monté que dans la disposition `portrait` : la mesure ne court que là. */
   const peerTint = call.peerKey == null ? undefined : speakerColor(call.peerKey, call.title);
@@ -621,8 +623,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       language={language}
       choice={choice}
       onChoose={setChoice}
-      immersive={immersive}
-      onToggleImmersive={toggleImmersive}
+      fullScreen={fullScreen}
+      onFullScreen={moveFullScreen}
       moderation={moderation}
       self={self}
       chromeVisible={visibility === 'shown'}

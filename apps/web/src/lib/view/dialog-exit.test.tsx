@@ -203,6 +203,46 @@ describe('useDialogExit — Échap et démontage', () => {
   });
 });
 
+describe('le fantôme n’est qu’un décor', () => {
+  test('il ne prend aucun toucher : ni lui, ni son voile — le geste suivant atteint l’écran dessous', async () => {
+    installPopover();
+    const host = await mounter.mount(<Probe />);
+    await mounter.click(buttonNamed(host, 'Quitter'));
+    expect(ghosts()[0]?.style.pointerEvents).toBe('none');
+  });
+
+  test('un fantôme qui ne peut pas se montrer ne reste pas et n’empêche pas la fermeture', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', {
+      configurable: true,
+      writable: true,
+      value: function showPopover() {
+        throw new DOMException('refusé', 'InvalidStateError');
+      },
+    });
+    const closed: string[] = [];
+    const host = await mounter.mount(<Probe onClose={() => closed.push('close')} />);
+    await mounter.click(buttonNamed(host, 'Quitter'));
+    expect(dialogOf(host).open).toBe(false);
+    expect(closed).toEqual(['close']);
+    expect(ghosts()).toHaveLength(0);
+  });
+
+  test('le démontage survit à un fantôme impossible', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', {
+      configurable: true,
+      writable: true,
+      value: function showPopover() {
+        throw new DOMException('refusé', 'InvalidStateError');
+      },
+    });
+    const host = await mounter.mount(<Probe kind="centered" />);
+    const dialog = dialogOf(host);
+    expect(() => mounter.unmountAll()).not.toThrow();
+    expect(dialog.open).toBe(false);
+    expect(ghosts()).toHaveLength(0);
+  });
+});
+
 describe('le fantôme s’en va', () => {
   test('(e) à son `animationend`', async () => {
     installPopover();
@@ -255,6 +295,21 @@ describe('le clone ne rejoue rien', () => {
     expect(video?.getAttribute('preload')).toBe('none');
     expect(ghost?.querySelector('iframe')).toBe(null);
     expect(ghost?.querySelector<HTMLElement>('[data-scroller]')?.scrollTop).toBe(120);
+  });
+
+  test('(f) les champs clonés perdent leur nom : un bouton radio du fantôme ne décoche pas celui du dialogue', async () => {
+    installPopover();
+    const host = await mounter.mount(
+      <Probe>
+        <input type="radio" name="duree" value="1" defaultChecked />
+        <input type="text" name="legende" defaultValue="bonjour" />
+      </Probe>,
+    );
+    await mounter.click(buttonNamed(host, 'Quitter'));
+    const [ghost] = ghosts();
+    expect(ghost?.querySelectorAll('input')).toHaveLength(2);
+    expect(ghost?.querySelectorAll('[name]')).toHaveLength(0);
+    expect(dialogOf(host).querySelector<HTMLInputElement>('input[type=radio]')?.checked).toBe(true);
   });
 
   test('leaveDialogAsGhost sur un dialogue fermé ne rend rien', () => {

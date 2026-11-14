@@ -63,10 +63,10 @@ private struct PendingSettingsBannerInline: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .meeshyTransition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pendingCount)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: pendingCount)
         .task {
             pendingCount = await SettingsActionQueue.shared.count
             subscription = SettingsActionQueue.shared.pendingCountChanged.publisher

@@ -106,7 +106,7 @@
     },
     "c-conversation": {
       "total": 136,
-      "firstScreen": 103
+      "firstScreen": 104
     },
     "calls": {
       "total": 47,
@@ -553,6 +553,18 @@
       },
       "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
       "issue": 18238
+    },
+    "c-conversation": {
+      "de": {
+        "total": 136,
+        "firstScreen": 103
+      },
+      "a": {
+        "total": 136,
+        "firstScreen": 104
+      },
+      "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
+      "issue": 18392
     }
   }
 }

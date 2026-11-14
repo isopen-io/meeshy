@@ -8,6 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
@@ -63,6 +66,7 @@ class CallControlsPillSemanticsTest {
         pillText: CallPillText = CallPillText.None,
         captions: @Composable () -> Unit = {},
         panelContent: @Composable (CallScreenPanel) -> Unit = {},
+        outputState: String? = null,
     ) {
         val state = ui(muted, cameraOn)
         val items = CallPillModel.items(state, offered)
@@ -84,12 +88,28 @@ class CallControlsPillSemanticsTest {
                     onBackToMenu = {},
                     onClosePanel = {},
                     pillText = pillText,
+                    outputKind = if (outputState == null) CallPillKind.Normal else CallPillKind.Active,
+                    outputState = outputState,
                     captions = captions,
                     panelContent = panelContent,
                     modifier = Modifier.testTag("pill"),
                 )
             }
         }
+    }
+
+    @Test
+    fun `P1_6 - routed to a device, the output tells the screen reader where the sound goes`() {
+        setPill(outputState = "AirPods")
+        rule.onNodeWithContentDescription("Audio output")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "AirPods"))
+    }
+
+    @Test
+    fun `P1_6 - with no route reported, the output carries no state of its own`() {
+        setPill()
+        rule.onNodeWithContentDescription("Audio output")
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
     }
 
     @Test

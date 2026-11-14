@@ -21,7 +21,35 @@
  * (`style={{ backgroundColor: 'var(--accent)' }}`) sur `btn-primary`.
  */
 
+:root {
+  --press-scale: 0.95;
+  --press-return-ms: 180ms;
+  --press-curve: cubic-bezier(0.2, 0, 0, 1);
+  --press-reduced-opacity: 0.78;
+}
+
+/* L'APPUI D'UN BOUTON PLEIN (#18412) — l'élément s'enfonce dans l'image même
+ * (`active:scale-95`, l'usage du contrat), sans transition à l'appui, et
+ * revient sur la courbe de l'appui long (`press-feedback.css`). `scale`,
+ * jamais `transform` : les propriétés individuelles se composent avec la
+ * scène et le balayage. Sous « Réduire les animations », plus d'échelle :
+ * le voile de K02 § 4 (`pressedActiveFillOpacity`) reste, seul. */
+@utility btn-press {
+  transition: scale var(--press-return-ms) var(--press-curve);
+  &:active:not(:disabled):not([aria-disabled='true']) {
+    scale: var(--press-scale);
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled):not([aria-disabled='true']) {
+      scale: none;
+      opacity: var(--press-reduced-opacity);
+    }
+  }
+}
+
 @utility btn-primary {
+  @apply btn-press;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -40,6 +68,7 @@
 }
 
 @utility btn-secondary {
+  @apply btn-press;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -58,6 +87,7 @@
 }
 
 @utility btn-destructive {
+  @apply btn-press;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -76,6 +106,7 @@
 }
 
 @utility btn-icon {
+  @apply btn-press;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -90,6 +121,7 @@
 }
 
 @utility btn-on-media {
+  @apply btn-press;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -101,5 +133,31 @@
   color: var(--ios-on-media);
   &:disabled {
     opacity: 0.4;
+  }
+}
+
+/* LE DISQUE DU CHROME (#18412) — `ChromeActionDisc`, dans la cible
+ * `CHROME_ACTION_HIT_CLASS` (classe `chrome-action`). Au repos, 18 % de sa
+ * propre encre ; à l'appui, l'écart « soft » de K02 (+10 points, de 0,12 à
+ * 0,22), sans transition, puis le fondu de 200 ms (`toneFadeMs`). Aucune
+ * échelle : le disque n'est pas un bouton plein. Une cible SANS disque
+ * (`RowAction`, `RowMore`) reçoit le même voile sur son propre fond. La couche
+ * `components` laisse gagner l'utilitaire qu'un site poserait. `transparent`
+ * vient EN PREMIER dans le mélange : le repli que Tailwind écrit pour un
+ * navigateur sans `color-mix` est alors transparent, jamais un disque plein
+ * de `currentColor`. */
+@layer components {
+  [data-chrome-disc] {
+    background-color: color-mix(in srgb, transparent, currentColor var(--chrome-disc-fill, 18%));
+    transition: background-color 200ms ease;
+  }
+
+  .chrome-action:active:not(:disabled) [data-chrome-disc] {
+    --chrome-disc-fill: 28%;
+    transition: none;
+  }
+
+  .chrome-action:not(:has([data-chrome-disc])):active:not(:disabled) {
+    background-color: color-mix(in srgb, transparent, currentColor 10%);
   }
 }
