@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
+import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
@@ -25,6 +26,14 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 const later = (ms: number) => act(async () => void (await new Promise((resolve) => setTimeout(resolve, ms))));
 
 const GONE_MS = 260;
+
+const clipEnv = (): ClipEnv => ({
+  isTypeSupported: (mime) => mime === 'video/webm',
+  record: (_stream, _mime, push, end) => ({ stop: () => queueMicrotask(() => (push(new Blob(['clip'])), end())) }),
+  mixAudio: () => ({ track: null, close: () => undefined }),
+  createStream: (tracks) => ({ getTracks: () => tracks }) as unknown as MediaStream,
+  now: () => new Date(2026, 10, 14, 9, 0, 0),
+});
 
 describe('CallEffectsMode — après un choix, le menu de base', () => {
   beforeAll(async () => {
@@ -72,6 +81,8 @@ describe('CallEffectsMode — après un choix, le menu de base', () => {
           selfVideo={() => host.querySelector<HTMLVideoElement>('[data-testid="self-preview"]')}
           onExit={() => void exits.push('exit')}
           grab={grab}
+          clipEnv={clipEnv}
+          audio={() => []}
           save={async (files) => (saved.push(files), { saved: files.length, failed: 0, cancelled: 0 })}
           {...(options.frames === true ? { onOpenFrames: () => void opened.push('frames') } : {})}
           apply={(patch) => {
@@ -87,9 +98,9 @@ describe('CallEffectsMode — après un choix, le menu de base', () => {
       await act(async () => {});
     };
     const hold = async (selector: string) => {
-      await act(async () => void find(selector)?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })));
+      await act(async () => void find(selector)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, isPrimary: true, pointerId: 1 })));
       await later(CAPTURE_HOLD_MS + 60);
-      await act(async () => void find(selector)?.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })));
+      await act(async () => void find(selector)?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, isPrimary: true, pointerId: 1 })));
     };
     const escape = () => act(() => void find('[data-call-mode="effects"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     const carousel = () => find('[data-call-mode-carousel]');
@@ -196,6 +207,8 @@ describe('CallEffectsMode — après un choix, le menu de base', () => {
     expect(view.find('[data-call-record-stop]')).not.toBeNull();
     await later(GONE_MS);
     expect(view.carousel()).not.toBeNull();
+    await view.press('[data-call-record-stop]');
+    await act(async () => {});
     view.done();
   });
 

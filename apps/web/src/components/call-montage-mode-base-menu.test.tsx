@@ -35,9 +35,19 @@ const duo: MontageCall = { conversationId: 'c1', isGroup: false, title: 'Awa', m
 
 const circleOf = (call: MontageCall) => montageCircle({ call, viewer: { id: 'u-me', handle: 'moi', displayName: 'Sam' }, conversation: undefined, date: '8 nov. 2026' });
 
+const place = (element: Element, box: { left: number; top: number; width: number; height: number }): void => {
+  Object.defineProperty(element, 'getBoundingClientRect', { value: () => ({ ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height }) });
+};
+
 const stage = (): Element => {
   const element = document.createElement('div');
-  Object.defineProperty(element, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 400, height: 800, x: 0, y: 0, right: 400, bottom: 800 }) });
+  place(element, { left: 0, top: 0, width: 400, height: 800 });
+  const video = document.createElement('video');
+  video.setAttribute('data-call-stream', 'cover');
+  Object.defineProperty(video, 'videoWidth', { value: 1280 });
+  Object.defineProperty(video, 'videoHeight', { value: 720 });
+  place(video, { left: 0, top: 0, width: 400, height: 250 });
+  element.appendChild(video);
   return element;
 };
 
@@ -93,7 +103,12 @@ describe('CallMontageMode — après un choix, le menu de base', () => {
 
   const mount = async (options: { readonly hold?: LiveFrameHold; readonly color?: boolean } = {}) => {
     videoEffectsStore.setState({ effects: NO_EFFECTS });
-    const env: CaptureEnv = { canvas: () => ({ context: recorder().context as CanvasRenderingContext2D, image: {} as CanvasImageSource }), detector: null, now: () => new Date(2026, 10, 8) };
+    const env: CaptureEnv = {
+      canvas: () => ({ context: recorder().context as CanvasRenderingContext2D, image: {} as CanvasImageSource }),
+      photo: { surface: () => ({ paint: () => undefined, pixels: () => null, put: () => undefined, encode: async (mime) => new Blob(['jpeg'], { type: mime }) }) },
+      detector: null,
+      now: () => new Date(2026, 10, 8),
+    };
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -132,9 +147,9 @@ describe('CallMontageMode — après un choix, le menu de base', () => {
       await act(async () => {});
     };
     const hold = async (selector: string) => {
-      await act(async () => void find(selector)?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })));
+      await act(async () => void find(selector)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, isPrimary: true, pointerId: 1 })));
       await later(CAPTURE_HOLD_MS + 60);
-      await act(async () => void find(selector)?.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })));
+      await act(async () => void find(selector)?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, isPrimary: true, pointerId: 1 })));
     };
     const carousel = () => find('[data-call-mode-carousel]');
     const atBase = () => carousel() === null && find('[data-call-frame-moods]') === null && find('[data-call-effects-settings]') === null &&  find('[data-call-mode-bar] [data-call-effects-category="frames"]')?.getAttribute('aria-pressed') === 'false' && find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed') === 'false';
