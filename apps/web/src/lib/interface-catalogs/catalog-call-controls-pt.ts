@@ -93,6 +93,7 @@ const pt = {
   'callControls.liveFrame.answer.declined.anonymous': 'A outra pessoa mantém a própria visualização',
   'callControls.liveFrame.notProposed': 'A moldura está aplicada do seu lado, mas não foi possível sugeri-la',
   'callControls.liveFrame.surface': 'Moldura {frame} em volta dos dois vídeos',
+  'callControls.mode.closeSettings': 'Fechar as definições',
   'callControls.mode.frames': 'Molduras',
   'callControls.layers.title': 'Efeitos aplicados',
   'callControls.layers.undo': 'Desfazer {name}',

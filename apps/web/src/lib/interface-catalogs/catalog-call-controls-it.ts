@@ -93,6 +93,7 @@ const it = {
   'callControls.liveFrame.answer.declined.anonymous': 'L\'altra persona mantiene la propria vista',
   'callControls.liveFrame.notProposed': 'La cornice è applicata da te, ma non è stato possibile proporla',
   'callControls.liveFrame.surface': 'Cornice {frame} intorno ai due video',
+  'callControls.mode.closeSettings': 'Chiudi le impostazioni',
   'callControls.mode.frames': 'Cornici',
   'callControls.layers.title': 'Effetti applicati',
   'callControls.layers.undo': 'Annulla {name}',

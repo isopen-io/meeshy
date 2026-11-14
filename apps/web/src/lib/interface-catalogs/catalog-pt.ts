@@ -539,6 +539,7 @@ const pt = {
   'community.members.other': '{count} membros',
   'community.conversations.one': '{count} conversa',
   'community.conversations.other': '{count} conversas',
+  'community.detail.online': '{count} online',
   'community.detail.channels': 'Conversas',
   'community.detail.channels.empty': 'Nenhuma conversa',
   'community.detail.untitled': 'Conversa sem título',

@@ -365,6 +365,7 @@ export function CommunityHero({ language, community }: { readonly language: Inte
                 {community.description}
               </p>
             )}
+            <CommunityOnline language={language} count={community.onlineMemberCount} />
           </div>
           <span
             data-community-privacy
@@ -377,6 +378,17 @@ export function CommunityHero({ language, community }: { readonly language: Inte
         </div>
       </div>
     </div>
+  );
+}
+
+/** « N en ligne » (#18014) — un AGRÉGAT servi par la passerelle, jamais une liste ; rien quand personne n'y est ou qu'elle se tait. */
+export function CommunityOnline({ language, count }: { readonly language: InterfaceLanguage; readonly count: number | null | undefined }) {
+  if (count === undefined || count === null || count <= 0) return null;
+  return (
+    <p data-community-online className="flex items-center gap-1.5 text-chip font-medium" style={{ color: INK_2 }}>
+      <span aria-hidden="true" className="inline-block size-2 rounded-full" style={{ backgroundColor: BRAND }} />
+      {translate(language, 'community.detail.online', { count: new Intl.NumberFormat(language).format(count) })}
+    </p>
   );
 }
 

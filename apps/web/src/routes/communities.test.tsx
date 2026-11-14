@@ -136,6 +136,19 @@ describe('le détail', () => {
     expect(sansPhoto).not.toContain('harbor_41.png');
   });
 
+  test('« N en ligne » s’écrit sous la description, sans nommer personne (#18014)', () => {
+    const html = plain(renderToStaticMarkup(<CommunityHero language="fr" community={community({ onlineMemberCount: 3 })} />));
+    expect(html).toContain('3 en ligne');
+    expect(html).toContain('data-community-online');
+  });
+
+  test('rien ne s’écrit quand personne n’est en ligne, ou quand la passerelle se tait', () => {
+    [0, null, undefined].forEach((onlineMemberCount) => {
+      const served = onlineMemberCount === undefined ? community() : community({ onlineMemberCount });
+      expect(renderToStaticMarkup(<CommunityHero language="fr" community={served} />)).not.toContain('data-community-online');
+    });
+  });
+
   test('une conversation ouvre son fil ; sans titre elle se nomme par son identifiant', () => {
     expect(renderToStaticMarkup(<CommunityConversationRow language="fr" conversation={conversation()} />)).toContain('href="/c/c-general"');
     expect(renderToStaticMarkup(<CommunityConversationRow language="fr" conversation={conversation({ title: null })} />)).toContain('general');

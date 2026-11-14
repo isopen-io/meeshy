@@ -535,6 +535,7 @@ const it = {
   'community.members.other': '{count} membri',
   'community.conversations.one': '{count} conversazione',
   'community.conversations.other': '{count} conversazioni',
+  'community.detail.online': '{count} online',
   'community.detail.channels': 'Conversazioni',
   'community.detail.channels.empty': 'Nessuna conversazione',
   'community.detail.untitled': 'Conversazione senza titolo',

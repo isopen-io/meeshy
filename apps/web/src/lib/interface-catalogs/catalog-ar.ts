@@ -533,6 +533,7 @@ const ar = {
   'community.members.other': '{count} أعضاء',
   'community.conversations.one': '{count} محادثة',
   'community.conversations.other': '{count} محادثات',
+  'community.detail.online': '{count} متصل الآن',
   'community.detail.channels': 'المحادثات',
   'community.detail.channels.empty': 'لا توجد محادثات',
   'community.detail.untitled': 'محادثة بلا عنوان',

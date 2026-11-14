@@ -535,6 +535,7 @@ const en = {
   'community.members.other': '{count} members',
   'community.conversations.one': '{count} conversation',
   'community.conversations.other': '{count} conversations',
+  'community.detail.online': '{count} online',
   'community.detail.channels': 'Conversations',
   'community.detail.channels.empty': 'No conversations',
   'community.detail.untitled': 'Untitled conversation',
