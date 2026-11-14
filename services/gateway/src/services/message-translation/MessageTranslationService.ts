@@ -10,8 +10,9 @@ import { mergeTranslationEntries, saveTranslatedTrack } from './translatedTrackS
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
+import { ZmqTranslationClient, TranslationRequest, TranslationResult, type TranslationErrorPayload } from '../zmq-translation';
 import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
@@ -975,7 +976,7 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-  private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
+  private async _handleTranslationError(data: TranslationErrorPayload) {
     // Même multiplexage que sur le chemin nominal : l'échec d'une traduction de
     // post/commentaire/story n'a pas de room de conversation à notifier — son
     // `conversationId` est un contexte social (`post_context:<id>`), pas une
@@ -993,12 +994,11 @@ export class MessageTranslationService extends EventEmitter {
 
     this.stats.incrementErrors();
 
-    this.emit('translationFailed', {
-      messageId: data.messageId,
-      conversationId: data.conversationId,
-      error: data.error,
-      taskId: data.taskId,
-    });
+    if (!isValidObjectId(data.conversationId)) {
+      logger.warn(`⏭️ [TranslationService] Échec de traduction sans conversation valide, non diffusé: ${data.messageId}`);
+      return;
+    }
+    this.emit('translationFailed', { messageId: data.messageId, conversationId: data.conversationId, error: data.error, taskId: data.taskId });
   }
 
   // ============================================================================

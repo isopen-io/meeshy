@@ -90,6 +90,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
+    /// La course VIVE du bouton de gauche / de droite, à chaque image du glisser
+    /// (`nil` à la levée). C'est ce que l'échelle du menu suit (#18201) ; rien
+    /// n'en est persisté — `onDragEnded` reste le seul producteur d'une position.
+    public var onLeftDragChanged: ((CGSize?) -> Void)? = nil
+    public var onRightDragChanged: ((CGSize?) -> Void)? = nil
     public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
@@ -108,6 +113,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
+        onLeftDragChanged: ((CGSize?) -> Void)? = nil,
+        onRightDragChanged: ((CGSize?) -> Void)? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
@@ -123,6 +130,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
+        self.onLeftDragChanged = onLeftDragChanged
+        self.onRightDragChanged = onRightDragChanged
         self.leftA11yLabel = leftA11yLabel
         self.leftA11yHint = leftA11yHint
         self.leftA11yValue = leftA11yValue
@@ -155,6 +164,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                 },
                 onTap: onLeftTap,
                 onLongPress: onLeftLongPress,
+                onDragChanged: onLeftDragChanged,
                 a11yLabel: leftA11yLabel,
                 a11yHint: leftA11yHint,
                 a11yValue: leftA11yValue,
@@ -172,6 +182,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                 },
                 onTap: onRightTap,
                 onLongPress: onRightLongPress,
+                onDragChanged: onRightDragChanged,
                 a11yLabel: rightA11yLabel,
                 a11yHint: rightA11yHint,
                 a11yValue: rightA11yValue,
@@ -190,12 +201,17 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 /// le doigt image par image pendant le glisser ; à la levée, `onDragEnded`
 /// reçoit la course, et la géométrie décide s'il y a quelque chose à écrire
 /// (`FloatingButtonGeometry.storage(afterDragFrom:…)`).
+///
+/// Pendant le geste, `onDragChanged` publie la course à chaque image, puis `nil`
+/// à la levée : ce qui s'accroche au disque (l'échelle du menu, #18201) le suit
+/// sans attendre la position persistée, et sans rien persister lui-même.
 public struct FreeFloatingButton<Content: View>: View {
     public let center: CGPoint
     public let buttonSize: CGFloat
     public let onDragEnded: (CGSize) -> Void
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
+    public var onDragChanged: ((CGSize?) -> Void)? = nil
     public var a11yLabel: String? = nil
     public var a11yHint: String? = nil
     public var a11yValue: String? = nil
@@ -211,6 +227,7 @@ public struct FreeFloatingButton<Content: View>: View {
         onDragEnded: @escaping (CGSize) -> Void,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
+        onDragChanged: ((CGSize?) -> Void)? = nil,
         a11yLabel: String? = nil,
         a11yHint: String? = nil,
         a11yValue: String? = nil,
@@ -222,6 +239,7 @@ public struct FreeFloatingButton<Content: View>: View {
         self.onDragEnded = onDragEnded
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.onDragChanged = onDragChanged
         self.a11yLabel = a11yLabel
         self.a11yHint = a11yHint
         self.a11yValue = a11yValue
@@ -270,12 +288,14 @@ public struct FreeFloatingButton<Content: View>: View {
             .onChanged { value in
                 isDragging = true
                 dragOffset = value.translation
+                onDragChanged?(value.translation)
             }
             .onEnded { value in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     onDragEnded(value.translation)
                     dragOffset = .zero
                     isDragging = false
+                    onDragChanged?(nil)
                 }
                 HapticFeedback.light()
             }

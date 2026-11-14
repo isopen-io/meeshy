@@ -13,8 +13,10 @@ struct CreateShareLinkView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Conversation
+    @State private var openNoteID: String?
     @State private var selectedConversation: Conversation? = nil
     @State private var showConversationPicker = false
 
@@ -47,38 +49,29 @@ struct CreateShareLinkView: View {
     private let accent = MeeshyColors.shareAccent
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                theme.backgroundGradient.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        conversationSection
-                        identitySection
-                        accessSection
-                        permissionsSection
-                        limitsSection
-                        createButton
-                            .padding(.top, MeeshySpacing.sm)
-                            .padding(.bottom, 40)
-                    }
+        LinksPage(
+            title: String(localized: "share.link.create.title", defaultValue: "Nouveau lien de partage", bundle: .main),
+            accent: accent,
+            glyph: .close
+        ) {
+            VStack(spacing: 0) {
+                conversationSection
+                identitySection
+                accessSection
+                permissionsSection
+                limitsSection
+                createButton
                     .padding(.top, MeeshySpacing.sm)
-                }
+                    .padding(.bottom, 40)
             }
-            .navigationTitle(String(localized: "share.link.create.title", defaultValue: "Nouveau lien de partage", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                        .foregroundStyle(theme.textSecondary)
-                }
-            }
-            .sheet(isPresented: $showConversationPicker) {
-                ConversationPickerSheet(
-                    conversations: sharableConversations,
-                    selected: $selectedConversation,
-                    isPresented: $showConversationPicker
-                )
-            }
+            .padding(.top, MeeshySpacing.sm)
+        }
+        .sheet(isPresented: $showConversationPicker) {
+            ConversationPickerSheet(
+                conversations: sharableConversations,
+                selected: $selectedConversation,
+                isPresented: $showConversationPicker
+            )
         }
     }
 
@@ -92,38 +85,25 @@ struct CreateShareLinkView: View {
 
     private var conversationSection: some View {
         formSection(title: String(localized: "share.link.create.section.conversation", defaultValue: "Conversation", bundle: .main), icon: "bubble.left.and.bubble.right.fill") {
-            Button {
-                showConversationPicker = true
-            } label: {
-                HStack(spacing: MeeshySpacing.md) {
+            MeeshyToggleRow(
+                content: MeeshyToggleRowContent(
+                    title: selectedConversation?.name
+                        ?? String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main),
+                    subtitle: selectedConversation?.type.displayLabel,
+                    accessory: .chevron
+                ),
+                action: { showConversationPicker = true },
+                leading: {
                     if let conv = selectedConversation {
                         conversationTypeIcon(conv.type)
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                            Text(conv.name)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(theme.textPrimary)
-                            Text(conv.type.displayLabel)
-                                .font(.caption)
-                                .foregroundStyle(theme.textSecondary)
-                        }
                     } else {
-                        Image(systemName: "plus.circle.dashed")
-                            .font(.headline)
-                            .foregroundColor(accent)
-                        Text(String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
-                            .font(.subheadline)
-                            .foregroundStyle(theme.textMuted)
+                        iconBadge("plus.circle.dashed", color: MeeshyColors.shareAccentHex)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.forward")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(theme.textMuted)
-                        .accessibilityHidden(true)
-                }
-                .padding(MeeshySpacing.mdPlus)
-                .background(rowBackground)
-            }
-            .buttonStyle(.plain)
+                },
+                titleAccessory: { MeeshyToggleRowNoSlot() },
+                trailing: { MeeshyToggleRowNoSlot() }
+            )
+            .background(rowBackground)
             .accessibilityLabel(selectedConversation.map { "\($0.name), \($0.type.displayLabel)" }
                 ?? String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
             .accessibilityHint(String(localized: "share.link.create.conversation.a11yHint", defaultValue: "Choisit la conversation à partager", bundle: .main))
@@ -135,12 +115,12 @@ struct CreateShareLinkView: View {
     private var identitySection: some View {
         formSection(title: String(localized: "share.link.create.section.identity", defaultValue: "Identité du lien", bundle: .main), icon: "tag.fill") {
             VStack(spacing: 0) {
-                formTextField(String(localized: "share.link.create.field.name", defaultValue: "Nom du lien", bundle: .main), placeholder: String(localized: "share.link.create.field.name.placeholder", defaultValue: "ex: Partage Twitter", bundle: .main), text: $linkName)
+                formField(String(localized: "share.link.create.field.name", defaultValue: "Nom du lien", bundle: .main), placeholder: String(localized: "share.link.create.field.name.placeholder", defaultValue: "ex: Partage Twitter", bundle: .main), text: $linkName, input: .sentence)
                 divider
-                formTextField(String(localized: "share.link.create.field.description", defaultValue: "Description (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "ex: Rejoins notre groupe…", bundle: .main), text: $linkDescription)
+                formField(String(localized: "share.link.create.field.description", defaultValue: "Description", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "Optionnel", bundle: .main), text: $linkDescription, input: .paragraph)
                 divider
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                    formTextField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug)
+                    formField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug, input: .token)
                     if !customSlug.isEmpty {
                         Text("meeshy.me/chat/\(customSlug.lowercased())")
                             .font(.caption2.weight(.medium))
@@ -156,46 +136,43 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Accès invités
 
     private var accessSection: some View {
-        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Accès invités", bundle: .main), icon: "person.badge.key.fill",
-                    subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les visiteurs doivent fournir pour rejoindre", bundle: .main)) {
+        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Demander aux invités", bundle: .main), icon: "person.badge.key.fill",
+                    subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les invités doivent fournir", bundle: .main)) {
             VStack(spacing: 0) {
-                ruleToggle(
-                    String(localized: "share.link.create.access.account_required", defaultValue: "Compte requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.account_required.subtitle", defaultValue: "Seuls les membres Meeshy peuvent rejoindre", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.access.account_required", defaultValue: "Compte Meeshy", bundle: .main),
                     icon: "person.fill.checkmark",
                     iconColor: MeeshyColors.shareAccentHex,
                     isOn: $requireAccount
                 )
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.access.nickname_required", defaultValue: "Pseudonyme requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.nickname_required.subtitle", defaultValue: "Le visiteur doit choisir un pseudo", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.access.nickname_required", defaultValue: "Pseudo", bundle: .main),
                     icon: "person.fill",
                     iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $requireNickname
                 )
                 .disabled(requireAccount)
-                .opacity(requireAccount ? 0.4 : 1)
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.access.email_required", defaultValue: "Email requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.email_required.subtitle", defaultValue: "Le visiteur doit fournir son email", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.access.email_required", defaultValue: "E-mail", bundle: .main),
                     icon: "envelope.fill",
                     iconColor: MeeshyColors.communityAccentHex,
                     isOn: $requireEmail
                 )
                 .disabled(requireAccount)
-                .opacity(requireAccount ? 0.4 : 1)
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.access.birthday_required", defaultValue: "Date de naissance requise", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.birthday_required.subtitle", defaultValue: "Permet le contrôle d'âge", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.access.birthday_required", defaultValue: "Date de naissance", bundle: .main),
+                    note: MeeshyInfoNote(
+                        question: String(localized: "share.link.create.access.birthday_required.question", defaultValue: "Pourquoi demander la date de naissance ?", bundle: .main),
+                        text: String(localized: "share.link.create.access.birthday_required.note", defaultValue: "Permet le contrôle d'âge", bundle: .main)
+                    ),
                     icon: "calendar",
                     iconColor: MeeshyColors.warningHex,
                     isOn: $requireBirthday
                 )
                 .disabled(requireAccount)
-                .opacity(requireAccount ? 0.4 : 1)
             }
         }
     }
@@ -203,36 +180,32 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Permissions
 
     private var permissionsSection: some View {
-        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Permissions", bundle: .main), icon: "slider.horizontal.3",
+        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Autoriser", bundle: .main), icon: "slider.horizontal.3",
                     subtitle: String(localized: "share.link.create.section.permissions.subtitle", defaultValue: "Ce que les invités anonymes peuvent faire", bundle: .main)) {
             VStack(spacing: 0) {
-                ruleToggle(
-                    String(localized: "share.link.create.permission.send_messages", defaultValue: "Envoyer des messages", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_messages.subtitle", defaultValue: "Les invités peuvent écrire dans la conversation", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.permission.send_messages", defaultValue: "Messages", bundle: .main),
                     icon: "bubble.left.fill",
                     iconColor: MeeshyColors.shareAccentHex,
                     isOn: $allowAnonymousMessages
                 )
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.permission.send_images", defaultValue: "Envoyer des images", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_images.subtitle", defaultValue: "Les invités peuvent partager des photos", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.permission.send_images", defaultValue: "Images", bundle: .main),
                     icon: "photo.fill",
                     iconColor: MeeshyColors.indigo300Hex,
                     isOn: $allowAnonymousImages
                 )
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.permission.send_files", defaultValue: "Envoyer des fichiers", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_files.subtitle", defaultValue: "Les invités peuvent envoyer des documents", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.permission.send_files", defaultValue: "Fichiers", bundle: .main),
                     icon: "paperclip",
                     iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $allowAnonymousFiles
                 )
                 divider
-                ruleToggle(
-                    String(localized: "share.link.create.permission.view_history", defaultValue: "Voir l'historique", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.view_history.subtitle", defaultValue: "Les invités voient les messages précédents", bundle: .main),
+                ruleRow(
+                    String(localized: "share.link.create.permission.view_history", defaultValue: "Historique", bundle: .main),
                     icon: "clock.fill",
                     iconColor: MeeshyColors.communityAccentHex,
                     isOn: $allowViewHistory
@@ -245,30 +218,22 @@ struct CreateShareLinkView: View {
 
     private var limitsSection: some View {
         formSection(title: String(localized: "share.link.create.section.limits", defaultValue: "Limites", bundle: .main), icon: "gauge.with.dots.needle.bottom.50percent",
-                    subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Contrôlez l'audience et la durée de vie du lien", bundle: .main)) {
+                    subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Nombre d’utilisations et durée du lien", bundle: .main)) {
             VStack(spacing: 0) {
                 // Max utilisations
-                HStack(spacing: MeeshySpacing.md) {
-                    iconBadge("person.2.fill", color: MeeshyColors.shareAccentHex)
-                    Toggle(isOn: $maxUsesEnabled) {
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                            Text(String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main))
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(theme.textPrimary)
-                            if maxUsesEnabled {
-                                Text(String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main))
-                                    .font(.caption)
-                                    .foregroundColor(accent)
-                            } else {
-                                Text(String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main))
-                                    .font(.caption)
-                                    .foregroundStyle(theme.textSecondary)
-                            }
-                        }
-                    }
-                    .tint(accent)
-                }
-                .padding(MeeshySpacing.mdPlus)
+                MeeshyToggleRow(
+                    content: MeeshyToggleRowContent(
+                        title: String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main),
+                        subtitle: maxUsesEnabled
+                            ? String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main)
+                            : String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main),
+                        accessory: .toggle(isOn: maxUsesEnabled)
+                    ),
+                    action: { maxUsesEnabled.toggle() },
+                    leading: { iconBadge("person.2.fill", color: MeeshyColors.shareAccentHex) },
+                    titleAccessory: { MeeshyToggleRowNoSlot() },
+                    trailing: { MeeshyToggleRowNoSlot() }
+                )
                 .background(rowBackground)
 
                 if maxUsesEnabled {
@@ -281,7 +246,7 @@ struct CreateShareLinkView: View {
                         HStack {
                             Spacer()
                             Text("\(maxUsesValue)")
-                                .font(.system(.title, design: .rounded).weight(.bold))
+                                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                                 .foregroundColor(accent)
                             Text(String(localized: "share.link.create.uses_label", defaultValue: "utilisations", bundle: .main))
                                 .font(.footnote)
@@ -291,30 +256,33 @@ struct CreateShareLinkView: View {
                     }
                     .padding(MeeshySpacing.mdPlus)
                     .background(rowBackground)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
                 divider
 
                 // Expiration
-                HStack(spacing: MeeshySpacing.md) {
-                    iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(theme.textPrimary)
-                        Text(expirationOption.label)
-                            .font(.caption)
-                            .foregroundStyle(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
-                    }
-                    Spacer()
-                    Picker(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main), selection: $expirationOption) {
-                        ForEach(ExpirationOption.allCases, id: \.self) { opt in
-                            Text(opt.label).tag(opt)
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    HStack(spacing: MeeshySpacing.md) {
+                        iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                            Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                                .foregroundStyle(theme.textPrimary)
+                            Text(expirationOption.label)
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                                .foregroundStyle(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
                         }
+                        .accessibilityElement(children: .combine)
                     }
-                    .pickerStyle(.menu)
-                    .tint(accent)
+                    MeeshyChipRow(
+                        ExpirationOption.allCases.map { MeeshyChip(id: $0, title: $0.label) },
+                        selection: [expirationOption],
+                        label: String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main),
+                        surface: .theme,
+                        size: .compact,
+                        onChange: { _, option in expirationOption = option }
+                    )
                 }
                 .padding(MeeshySpacing.mdPlus)
                 .background(rowBackground)
@@ -337,38 +305,16 @@ struct CreateShareLinkView: View {
                 .padding(.horizontal, MeeshySpacing.xl)
             }
 
-            Button(action: create) {
-                HStack(spacing: MeeshySpacing.smPlus) {
-                    if isCreating {
-                        ProgressView().tint(.white).scaleEffect(0.85)
-                    } else {
-                        Image(systemName: "link.badge.plus")
-                            .font(.callout.weight(.semibold))
-                    }
-                    Text(isCreating
-                        ? String(localized: "share.link.create.button.creating", defaultValue: "Création en cours…", bundle: .main)
-                        : String(localized: "share.link.create.button.create", defaultValue: "Créer le lien de partage", bundle: .main))
-                        .font(.callout.weight(.bold))
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, MeeshySpacing.lg)
-
-                .background {
-                    if selectedConversation == nil {
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color.white.opacity(MeeshyOpacity.subtle))
-                    } else {
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .fill(LinearGradient(
-                                colors: [MeeshyColors.shareAccent, MeeshyColors.indigo300],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                    }
-                }
-            }
-            .disabled(selectedConversation == nil || isCreating)
+            MeeshySplitActionButton(
+                String(localized: "share.link.create.button.create", defaultValue: "Créer le lien", bundle: .main),
+                phase: isCreating
+                    ? .busy(progress: nil, title: String(localized: "share.link.create.button.creating", defaultValue: "Création en cours…", bundle: .main))
+                    : .ready,
+                width: .fill,
+                isEnabled: selectedConversation != nil,
+                action: create
+            )
             .padding(.horizontal, MeeshySpacing.xl)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedConversation == nil)
         }
     }
 
@@ -417,50 +363,38 @@ struct CreateShareLinkView: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
+                        .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: 1)
                 )
                 .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
-    private func formTextField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(theme.textSecondary)
-                .accessibilityHidden(true)
-            TextField(placeholder, text: text)
-                .font(.subheadline)
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityLabel(label)
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.md)
-        .background(rowBackground)
+    private func formField(_ label: String, placeholder: String, text: Binding<String>, input: MeeshyFieldInput) -> some View {
+        LinksFormField(label: label, prompt: placeholder, text: text, input: input)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(rowBackground)
     }
 
-    private func ruleToggle(
+    /// Une règle du lien : la ligne du kit, l'icône en tête, la bascule au bout.
+    /// Une note (i) se pose À CÔTÉ de la ligne, jamais dans son bouton.
+    private func ruleRow(
         _ title: String,
-        subtitle: String,
+        note: MeeshyInfoNote? = nil,
         icon: String,
         iconColor: String,
         isOn: Binding<Bool>
     ) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            iconBadge(icon, color: iconColor)
-            Toggle(isOn: isOn) {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(theme.textPrimary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(theme.textSecondary)
-                }
-            }
-            .tint(accent)
+        MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
+            MeeshyToggleRow(
+                content: MeeshyToggleRowContent(title: title, accessory: .toggle(isOn: isOn.wrappedValue)),
+                action: { isOn.wrappedValue.toggle() },
+                leading: { iconBadge(icon, color: iconColor) },
+                titleAccessory: { MeeshyToggleRowNoSlot() },
+                trailing: { MeeshyToggleRowNoSlot() }
+            )
         }
-        .padding(MeeshySpacing.mdPlus)
+        .padding(.trailing, note == nil ? 0 : MeeshySpacing.mdPlus)
         .background(rowBackground)
     }
 
@@ -592,9 +526,8 @@ private struct ConversationPickerSheet: View {
                     }
                     if filtered.isEmpty {
                         AdaptiveContentUnavailableView(
-                            String(localized: "share.link.create.picker.empty.title", defaultValue: "Aucun groupe trouvé", bundle: .main),
-                            systemImage: "bubble.left.and.bubble.right",
-                            description: Text(String(localized: "share.link.create.picker.empty.description", defaultValue: "Créez un groupe ou une communauté pour partager un lien d'invitation", bundle: .main))
+                            String(localized: "share.link.create.picker.empty.title", defaultValue: "Aucun groupe : créez-en un pour partager un lien.", bundle: .main),
+                            systemImage: "bubble.left.and.bubble.right"
                         )
                     }
                 }
@@ -604,7 +537,7 @@ private struct ConversationPickerSheet: View {
             .navigationTitle(String(localized: "share.link.create.picker.title", defaultValue: "Choisir une conversation", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { isPresented = false }
                         .foregroundColor(MeeshyColors.shareAccent)
                 }

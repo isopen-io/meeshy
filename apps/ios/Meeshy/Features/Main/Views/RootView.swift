@@ -867,8 +867,8 @@ struct RootView: View {
         reelsRevealClosing = false
         reelsRevealMasked = true
         reelsRevealProgress = 0
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.35
-        withAnimation(.easeOut(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: true, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: true, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 1
         }
         // Wait for the reveal to FINISH before the first reel plays. Starting
@@ -907,8 +907,8 @@ struct RootView: View {
         // laissant le moteur vidéo (repris par la surface de fond du feed).
         PlaybackCoordinator.shared.stopAllAudio()
         HapticFeedback.light()
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
-        withAnimation(.easeIn(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: false, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: false, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 0
         }
         Task {
@@ -920,9 +920,20 @@ struct RootView: View {
 
     // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
 
-    @ViewBuilder
+    /// Le chrome entre et sort en fondu pour chaque raison qui le retire : pile
+    /// profonde, réel ouvert, onboarding ; fondu court sous « Réduire les animations ».
     private var floatingChrome: some View {
-        if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
+        ZStack { floatingChromeContent }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: floatingChromeIsShown)
+    }
+
+    private var floatingChromeIsShown: Bool {
+        !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented
+    }
+
+    @ViewBuilder
+    private var floatingChromeContent: some View {
+        if floatingChromeIsShown {
             RootFloatingChrome(
                 showFeed: $showFeed,
                 showMenu: $showMenu,
@@ -933,6 +944,7 @@ struct RootView: View {
                 peekPresence: .shared,
                 onPush: { router.push($0) }
             )
+            .meeshyTransition(.opacity)
         }
     }
 }

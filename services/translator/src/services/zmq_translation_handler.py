@@ -18,6 +18,7 @@ from typing import Dict, Optional
 from .zmq_models import TranslationTask
 from .zmq_pool.translation_processor import unsupported_language
 from .zmq_pool.connection_manager import summarize_task_ids
+from .zmq_request_frame import parse_request_frame
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +178,8 @@ class TranslationHandler:
         # Extraire les frames binaires si présents
         binary_frames = frames[1:] if len(frames) > 1 else []
 
-        # Parser le JSON
-        try:
-            request_data = json.loads(json_frame.decode('utf-8'))
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {type(e).__name__}")
+        request_data = parse_request_frame(json_frame)
+        if request_data is None:
             return
 
         # Extraire les infos des frames binaires
@@ -837,7 +835,7 @@ class TranslationHandler:
             deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
         except ErasureNotConfirmedError as error:
             # Fail-closed : sans confirmation de Redis, aucun acquittement — la passerelle rejoue.
-            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {error}")
+            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {type(error).__name__}")
             return
         logger.info(f"[TRANSLATOR] Oubli : {len(request['attachmentIds'])} pièce(s), {len(request['messageIds'])} message(s), {deleted} clé(s) effacée(s)")
         if self.pub_socket and request['requestId']:

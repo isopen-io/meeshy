@@ -69,6 +69,8 @@ class CallChromeVisibilityTest {
             CallChromeElement.OpenPanel,
             CallChromeElement.RecordingStatus,
             CallChromeElement.ScreenShareBanner,
+            CallChromeElement.CaptureAlert,
+            CallChromeElement.ServicePill,
             CallChromeElement.FeaturedCapsule,
         ).forEach { assertThat(stowed.isVisible(it)).isFalse() }
         assertThat(stowed.isVisible(CallChromeElement.Captions)).isTrue()
@@ -78,6 +80,53 @@ class CallChromeVisibilityTest {
         assertThat(stowedText.isOnStage(isStageFullScreen = false)).isTrue()
         val back = CallPillText.resolve(isCaptionsEnabled = true, layer = journal, isChromeRevealed = stowed.toggled().isVisible(CallChromeElement.Controls))
         assertThat(back).isEqualTo(CallPillText.Journal)
+    }
+
+    /**
+     * #17963 (R1.6, loi 11) — la puce « X capture l'écran de l'appel » est une BANNIÈRE : elle se range au premier toucher avec
+     * « Vous partagez votre écran » et la capsule d'enregistrement, et revient avec elles. Mêmes vecteurs que iOS
+     * `test_captureAlert_stowsAndReturnsWithTheBanners` : les huit états toucher × plein écran × mode. Sous TalkBack, aucun
+     * toucher ne range : la puce reste, et son annonce part.
+     */
+    @Test
+    fun `the capture chip stows and returns with the banners, never under TalkBack (#17963)`() {
+        val states = listOf(true, false).flatMap { revealed ->
+            listOf(true, false).flatMap { fullScreen ->
+                listOf(true, false).map { mode -> CallChromeVisibility(isRevealed = revealed, isStageFullScreen = fullScreen, isModeActive = mode) }
+            }
+        }
+        states.forEach { state ->
+            assertThat(state.isVisible(CallChromeElement.CaptureAlert)).isEqualTo(state.isVisible(CallChromeElement.ScreenShareBanner))
+            assertThat(state.isVisible(CallChromeElement.CaptureAlert)).isEqualTo(state.isVisible(CallChromeElement.RecordingStatus))
+        }
+        val start = CallChromeVisibility(isRevealed = true)
+        assertThat(start.isVisible(CallChromeElement.CaptureAlert)).isTrue()
+        assertThat(start.toggled().isVisible(CallChromeElement.CaptureAlert)).isFalse()
+        assertThat(start.toggled().toggled().isVisible(CallChromeElement.CaptureAlert)).isTrue()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true, isTouchExplorationOn = true)).isFalse()
+    }
+
+    /**
+     * #18398 (E3 · E4, loi 11, #17961 point 5) — « En attente » et « Vidéo réduite » sont des BANNIÈRES : elles se rangent au
+     * premier toucher avec les autres et reviennent au second, comme la puce de capture (#18376). Mêmes vecteurs que iOS
+     * `CallChromeElement.servicePill` (#18396) : les huit états toucher × plein écran × mode. Sous TalkBack, rien ne se range.
+     */
+    @Test
+    fun `the service pills stow and return with the banners, never under TalkBack (#18398)`() {
+        val states = listOf(true, false).flatMap { revealed ->
+            listOf(true, false).flatMap { fullScreen ->
+                listOf(true, false).map { mode -> CallChromeVisibility(isRevealed = revealed, isStageFullScreen = fullScreen, isModeActive = mode) }
+            }
+        }
+        states.forEach { state ->
+            assertThat(state.isVisible(CallChromeElement.ServicePill)).isEqualTo(state.isVisible(CallChromeElement.ScreenShareBanner))
+            assertThat(state.isVisible(CallChromeElement.ServicePill)).isEqualTo(state.isVisible(CallChromeElement.CaptureAlert))
+        }
+        val start = CallChromeVisibility(isRevealed = true)
+        assertThat(start.isVisible(CallChromeElement.ServicePill)).isTrue()
+        assertThat(start.toggled().isVisible(CallChromeElement.ServicePill)).isFalse()
+        assertThat(start.toggled().toggled().isVisible(CallChromeElement.ServicePill)).isTrue()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = true, isTouchExplorationOn = true)).isFalse()
     }
 
     @Test

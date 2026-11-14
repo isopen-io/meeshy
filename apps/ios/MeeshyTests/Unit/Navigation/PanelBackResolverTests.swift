@@ -47,4 +47,20 @@ final class PanelBackResolverTests: XCTestCase {
             .dismiss
         )
     }
+
+    // MARK: - Le retour du panneau iPad (#18443)
+
+    /// Sur iPhone, Membres et Invitation sont poussés sur la communauté : le
+    /// retour la rend. Le panneau iPad rend la même chose au lieu de se fermer.
+    @MainActor
+    func test_iPadPanelBack_communitySubpages_returnToTheCommunity() {
+        XCTAssertEqual(iPadPanelBack.route(poppedFrom: .communityMembers("c1")), .communityDetail("c1"))
+        XCTAssertEqual(iPadPanelBack.route(poppedFrom: .communityInvite("c1")), .communityDetail("c1"))
+    }
+
+    @MainActor
+    func test_iPadPanelBack_aRootPage_closesThePanel() {
+        XCTAssertNil(iPadPanelBack.route(poppedFrom: .settings))
+        XCTAssertNil(iPadPanelBack.route(poppedFrom: .communityDetail("c1")))
+    }
 }

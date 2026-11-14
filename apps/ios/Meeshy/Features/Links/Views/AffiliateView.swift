@@ -5,14 +5,6 @@ import MeeshySDK
 import MeeshyUI
 
 struct AffiliateView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @Environment(\.meeshyPanelDismiss) private var panelDismiss
-    /// Retour operant dans les trois contextes de presentation : pile iPhone,
-    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
-    private var back: PanelBackAction {
-        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
-    }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false
@@ -20,21 +12,15 @@ struct AffiliateView: View {
     private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            // Retour en verre de l'en-tête partagé (#6481). `back()` reste le
-            // geste : il ferme aussi le panneau droit iPad.
-            CollapsibleHeaderPage(
-                title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
-                onBack: { back() },
-                titleColor: theme.textPrimary,
-                backArrowColor: Color(hex: accentColor),
-                backgroundColor: theme.backgroundPrimary,
-                trailing: { createLinkButton },
-                content: { affiliateContent }
-            )
-        }
+        LinksPage(
+            title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
+            accent: Color(hex: accentColor),
+            action: LinksPageAction(
+                label: String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main),
+                perform: { showCreateSheet = true }
+            ),
+            content: { affiliateContent }
+        )
         .sheet(isPresented: $showCreateSheet) {
             AffiliateCreateView { token in
                 viewModel.tokens.insert(token, at: 0)
@@ -45,32 +31,11 @@ struct AffiliateView: View {
         .task { await viewModel.load() }
     }
 
-    // MARK: - Header Action
-
-    /// Le (+) devient un disque de verre, du diamètre du retour qui lui fait
-    /// face (#6481) — le glyphe plein cerclé
-    /// ne ressemblait à aucun autre chrome de la barre.
-    private var createLinkButton: some View {
-        Button {
-            HapticFeedback.light()
-            showCreateSheet = true
-        } label: {
-            Image(systemName: "plus")
-                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
-                .foregroundStyle(Color(hex: accentColor))
-                .frame(width: 40, height: 40)
-                .adaptiveGlass(in: Circle(), interactive: true)
-                .meeshyTapTarget()
-                .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
-    }
-
     // MARK: - Content
 
     private var affiliateContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
+            SettingsSentence(text: String(localized: "affiliate.orientation", defaultValue: "Ceux qui s'inscrivent par votre lien de parrainage vous sont rattachés.", bundle: .main))
             statsOverview
             tokensSection
             Spacer().frame(height: 40)
@@ -189,9 +154,17 @@ struct AffiliateView: View {
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundStyle(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showCreateSheet = true
+            } label: {
+                Text(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                    .foregroundStyle(Color(hex: accentColor))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)
@@ -213,6 +186,13 @@ struct AffiliateView: View {
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
+                if let created = AffiliateTokenRowDates.line(for: token) {
+                    Text(created)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundStyle(theme.textMuted)
+                        .lineLimit(1)
+                }
+
                 HStack(spacing: MeeshySpacing.sm) {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
@@ -228,28 +208,25 @@ struct AffiliateView: View {
 
             Spacer()
 
-            Button {
-                if let link = token.affiliateLink {
-                    UIPasteboard.general.string = link
-                    HapticFeedback.success()
-                }
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main),
+                size: .s36,
+                glyphTint: Color(hex: accentColor),
+                haptic: .none,
+                action: { token.affiliateLink.map { LinksClipboard.copy($0) } }
+            )
+            .disabled(token.affiliateLink == nil)
 
             shareTokenButton(token)
 
-            Button {
-                Task { await viewModel.deleteToken(token) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "trash",
+                label: String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main),
+                kind: .destructive,
+                size: .s36,
+                action: { Task { await viewModel.deleteToken(token) } }
+            )
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -282,9 +259,20 @@ struct AffiliateView: View {
     }
 
     private var shareTokenGlyph: some View {
-        Image(systemName: "square.and.arrow.up")
-            .font(MeeshyFont.relative(MeeshyIconSize.md))
-            .foregroundStyle(Color(hex: accentColor))
+        MeeshyGlassButtonFace(systemImage: "square.and.arrow.up", size: .s36, glyphTint: Color(hex: accentColor))
+    }
+}
+
+/// La date de création d'un lien de parrainage, pour le reconnaître dans la liste (règle 7 de l'épure). Le serveur ne
+/// sert aucune date de dernier usage : rien n'est inventé, une date illisible ne produit pas de ligne.
+enum AffiliateTokenRowDates {
+    static func line(for token: AffiliateToken, locale: Locale = .current) -> String? {
+        WireDate.date(from: token.createdAt).map { date in
+            String(
+                format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
+                date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+            )
+        }
     }
 }
 
@@ -338,6 +326,7 @@ final class AffiliateViewModel: ObservableObject {
             tokens = snapshot
             await bestEffort("affiliateView.affiliateTokens.save.3", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list") }
             HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
         }
     }
 }

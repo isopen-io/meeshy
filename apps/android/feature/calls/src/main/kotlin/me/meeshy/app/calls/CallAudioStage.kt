@@ -42,7 +42,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 private val PAIR_AVATAR_SIZE = CallAudioStageLayout.FULL_AVATAR_DP.dp
 private const val PILL_BACKGROUND_ALPHA = 0.15f
 private const val LOCAL_BADGE_RATIO = 0.4f
-private val LOCAL_BADGE_MIN = 44.dp
+internal val LOCAL_BADGE_MIN = 44.dp
+internal val TIGHT_BADGE_MIN = 20.dp
 
 /**
  * La disposition AUDIO de l'appel établi (miroir de iOS `audioCallLayout`) : la paire d'avatars de
@@ -92,8 +93,10 @@ internal fun CallAvatarPair(
     modifier: Modifier = Modifier,
     /** Sa couleur d'auteur ([CallTileRim.peerFace]) et sa parole : l'anneau et le halo fondent à l'opacité ; au repos, rien. */
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
+    /** #18488 : the floor of the « you » badge; the tight avatar of a low window lowers it so the badge never outgrows its avatar. */
+    badgeMin: Dp = LOCAL_BADGE_MIN,
 ) {
-    val badge = maxOf(LOCAL_BADGE_MIN, size * LOCAL_BADGE_RATIO)
+    val badge = maxOf(badgeMin, size * LOCAL_BADGE_RATIO)
     val reach = callSpeakingReach(compact = false)
     Box(modifier = modifier.clearAndSetSemantics { }) {
         CallSpeakingAvatar(

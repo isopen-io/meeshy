@@ -251,7 +251,7 @@ struct TwoFactorSetupView: View {
                 .padding(.top, MeeshySpacing.xl)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "2fa_activated_title", defaultValue: "2FA activé avec succès !"))
+            Text(String(localized: "2fa_activated_title", defaultValue: "2FA activée avec succès !"))
                 .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
 

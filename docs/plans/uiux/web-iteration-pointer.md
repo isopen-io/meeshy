@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-u8t5dq` |
+| Branche de travail de la session courante | `claude/practical-fermat-vayul2` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -50,7 +50,25 @@ normal.
 | **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ✅ mergé |
 | **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ✅ mergé |
 | **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
-| **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ⏳ ouverte |
+| **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ✅ mergé |
+| **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ⏳ ouverte |
+
+**87w** — cohérence de thème / maintenabilité : deux pastilles d'action de l'en-tête
+d'un fil peignaient le glyphe de leur état **actif** en littéral `'#fff'`, chacune sur
+un **aplat saturé** — `thread-header-bring.tsx:80` (cloche qui sonne, fond
+`var(--color-error)`) et `thread-header-talkie.tsx:129` (talkie pressé, fond
+`linear-gradient(135deg, var(--accent), …)`) : 2 des 8 violations du gate. La charte
+nomme déjà cette encre (blanc sur aplat marque/accent/erreur → `var(--color-ios-on-brand)`,
+`#fff` byte-identique, ligne 40) — même rôle que l'encre du bouton d'envoi de 86w.
+L'encre active des deux pastilles passe donc à `var(--color-ios-on-brand)` ; les fonds
+d'aplat étaient déjà des jetons (non touchés). Pas une exemption : un jeton partagé.
+Témoins : `check-design-harmony.test.ts` (describe « la pastille d'action d'en-tête »,
+36→38) + `thread-header-bring`/`thread-header-talkie`/`thread-header-talkie-band`/
+`talkie-host` (28/28, non-régression). Gate **8 → 6 violations** (−2, exactement les
+deux pastilles), **7 → 5 fichiers** ; `tsc` 0. Housekeeping : 86w confirmée mergée
+(`--send-accent-fill` sur `dev`, gate mesuré 8/7 à l'ouverture) ; appariement
+analyses↔plans 1:1 revérifié (45w→86w), 0 doublon de numéro `w`. Analyse :
+`docs/analyses/uiux/2026-11-14-iteration-87w.md`.
 
 **86w** — cohérence de positionnement / maintenabilité : le bouton d'envoi de marque
 était recopié en **trois jumelles divergentes** — `composer.tsx` (envoi),

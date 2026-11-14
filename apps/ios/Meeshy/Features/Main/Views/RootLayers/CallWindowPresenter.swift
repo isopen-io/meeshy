@@ -224,17 +224,27 @@ enum CallReturnPoint {
     /// La bulle se montre en mode bulle, et en mode pastille quand un plein
     /// écran recouvre la pastille. Jamais pendant le PiP système, qui est
     /// lui-même le point de retour.
+    ///
+    /// Dans la conversation de l'appel (#18457), la puce d'en-tête suffit : la
+    /// bulle se tait en audio, et devient la vignette vidéo en vidéo.
     static func showsBubble(
         displayMode: CallDisplayMode,
         callState: CallState,
         isSystemPiPActive: Bool,
-        isMainScreenCovered: Bool
+        isMainScreenCovered: Bool,
+        isInCallConversation: Bool = false,
+        isVideo: Bool = false
     ) -> Bool {
-        guard callState.isActive, !isSystemPiPActive else { return false }
-        switch displayMode {
-        case .bubble: return true
-        case .pip: return isMainScreenCovered
-        case .fullScreen: return false
+        switch CallReducedPresence.resolve(
+            displayMode: displayMode,
+            isActive: callState.isActive,
+            isSystemPiPActive: isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        ) {
+        case .bubble, .vignette: return true
+        case .pill: return isMainScreenCovered
+        case .headerOnly, .none: return false
         }
     }
 
@@ -311,10 +321,19 @@ struct CallReturnPointFrameKey: PreferenceKey {
 final class CallScreenCoverage: ObservableObject {
     nonisolated deinit {}
     @Published private(set) var isMainScreenCovered = false
+    /// La conversation que l'écran principal montre, relue à la même cadence
+    /// que le recouvrement : la bulle sait ainsi si elle est dans la
+    /// conversation de l'appel (#18457).
+    @Published private(set) var visibleConversationId: String?
 
     func update(_ isCovered: Bool) {
         guard isCovered != isMainScreenCovered else { return }
         isMainScreenCovered = isCovered
+    }
+
+    func update(visibleConversationId: String?) {
+        guard visibleConversationId != self.visibleConversationId else { return }
+        self.visibleConversationId = visibleConversationId
     }
 }
 
@@ -338,7 +357,15 @@ struct CallReturnPointRoot: View {
     let frameSink: CallReturnPointFrameSink
 
     var body: some View {
-        CallBubbleView(callManager: callManager, isMainScreenCovered: coverage.isMainScreenCovered)
+        CallBubbleView(
+            callManager: callManager,
+            isMainScreenCovered: coverage.isMainScreenCovered,
+            isInCallConversation: CallReducedPresence.isInCallConversation(
+                visibleConversationId: coverage.visibleConversationId,
+                callConversationId: callManager.conversationId
+            )
+        )
+            .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: callManager.displayMode)
             .onPreferenceChange(CallReturnPointFrameKey.self) { frameSink.update($0) }
     }
 }
@@ -473,8 +500,13 @@ final class CallReturnPointPresenter {
             .sink { [weak self] _ in self?.refreshCoverage() }
     }
 
+    /// La conversation que l'écran principal montre, remise par la racine (la
+    /// seule à connaître son routeur) ; relue à chaque passage de la sonde (#18457).
+    var visibleConversationProvider: (() -> String?)?
+
     func refreshCoverage() {
         coverage.update(probe())
+        coverage.update(visibleConversationId: visibleConversationProvider?())
         hosting.refreshAppearance()
     }
 }

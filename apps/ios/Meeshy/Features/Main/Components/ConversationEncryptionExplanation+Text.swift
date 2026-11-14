@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 /// Les mots de la fiche Chiffrement (#12880) : une clé LITTÉRALE par texte,
 /// dans les sept langues du catalogue.
@@ -41,7 +42,6 @@ extension ConversationEncryptionExplanation.Fact {
         case .noForward: "arrowshape.turn.up.right"
         case .noOfflineSending: "wifi.slash"
         case .notYetAttachments: "paperclip"
-        case .notYetDecryptedNotifications: "bell"
         case .notYetGroups: "person.3"
         case .groupSendingUnavailable: "person.3.fill"
         case .notYetSafetyNumbers: "checkmark.shield"
@@ -65,11 +65,11 @@ extension ConversationEncryptionExplanation.Fact {
         case .transitProtected:
             String(localized: "conversation.encryption.fact.transitProtected", defaultValue: "Entre votre appareil et le serveur, les messages voyagent toujours protégés.", bundle: .main)
         case .storedWithoutEncryption:
-            String(localized: "conversation.encryption.fact.storedWithoutEncryption", defaultValue: "Cette conversation a été créée avant le chiffrement systématique : ses messages sont stockés sans chiffrement.", bundle: .main)
+            String(localized: "conversation.encryption.fact.storedWithoutEncryption", defaultValue: "Ses messages sont stockés sans chiffrement.", bundle: .main)
         case .encryptedOnServerServerReads:
-            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.", bundle: .main)
+            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire.", bundle: .main)
         case .hybridIsServerToday:
-            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié.", bundle: .main)
+            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride n’est pas du bout en bout : nos serveurs lisent les messages pour la traduction et la recherche.", bundle: .main)
         case .onlyParticipantsRead:
             String(localized: "conversation.encryption.fact.onlyParticipantsRead", defaultValue: "Seuls vos appareils et ceux des participants lisent les messages.", bundle: .main)
         case .everyServerFeature:
@@ -79,7 +79,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .noServerTranscription:
             String(localized: "conversation.encryption.fact.noServerTranscription", defaultValue: "Le serveur ne transcrit pas les messages vocaux.", bundle: .main)
         case .noNotificationPreview:
-            String(localized: "conversation.encryption.fact.noNotificationPreview", defaultValue: "Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas.", bundle: .main)
+            String(localized: "conversation.encryption.fact.noNotificationPreview", defaultValue: "Les notifications n’affichent pas le texte : le serveur ne le connaît pas.", bundle: .main)
         case .noSearch:
             String(localized: "conversation.encryption.fact.noSearch", defaultValue: "La recherche du serveur ne trouve pas ces messages.", bundle: .main)
         case .noEdit:
@@ -94,17 +94,15 @@ extension ConversationEncryptionExplanation.Fact {
     private var limitText: String? {
         switch self {
         case .noOfflineSending:
-            String(localized: "conversation.encryption.fact.noOfflineSending", defaultValue: "Hors connexion, un message n’est pas mis en attente : renvoyez-le une fois connecté.", bundle: .main)
+            String(localized: "conversation.encryption.fact.noOfflineSending", defaultValue: "Hors connexion, un message n’est pas mis en attente.", bundle: .main)
         case .notYetAttachments:
-            String(localized: "conversation.encryption.fact.notYetAttachments", defaultValue: "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés.", bundle: .main)
-        case .notYetDecryptedNotifications:
-            String(localized: "conversation.encryption.fact.notYetDecryptedNotifications", defaultValue: "Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetAttachments", defaultValue: "Pas encore de photos, vidéos, fichiers, vocaux, lieux ni stickers.", bundle: .main)
         case .notYetGroups:
-            String(localized: "conversation.encryption.fact.notYetGroups", defaultValue: "Le chiffrement de bout en bout des groupes n’est pas encore disponible dans l’application.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetGroups", defaultValue: "Pas encore de chiffrement de bout en bout pour les groupes.", bundle: .main)
         case .groupSendingUnavailable:
             String(localized: "conversation.encryption.fact.groupSendingUnavailable", defaultValue: "Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré.", bundle: .main)
         case .notYetSafetyNumbers:
-            String(localized: "conversation.encryption.fact.notYetSafetyNumbers", defaultValue: "La vérification des numéros de sécurité avec vos contacts n’est pas encore disponible.", bundle: .main)
+            String(localized: "conversation.encryption.fact.notYetSafetyNumbers", defaultValue: "La vérification des numéros de sécurité n’est pas encore disponible.", bundle: .main)
         case .oneKeyPerDevice:
             String(localized: "conversation.encryption.fact.oneKeyPerDevice", defaultValue: "Chaque appareil a sa propre clé, qui ne le quitte jamais.", bundle: .main)
         case .deviceLimit:
@@ -127,12 +125,66 @@ extension ConversationEncryptionExplanation.Fact {
         case .endToEndIsFinal:
             String(localized: "conversation.encryption.fact.endToEndIsFinal", defaultValue: "Une fois activé, le chiffrement de bout en bout ne se désactive plus.", bundle: .main)
         case .endToEndNeverTurnedOff:
-            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.", bundle: .main)
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais.", bundle: .main)
         case .endToEndNeverTurnedOffDirect:
-            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste.", bundle: .main)
         case .serverCannotTurnItOff:
-            String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais sans chiffrement de bout en bout, même si le serveur la présentait ensuite autrement.", bundle: .main)
+            String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Vue chiffrée de bout en bout, elle ne s’écrit plus jamais en clair ici.", bundle: .main)
         default: nil
         }
+    }
+}
+
+/// Les (i) de la fiche Chiffrement (épure #18078) : la phrase d'état reste LISIBLE au repos, le détail
+/// secondaire passe derrière un (i) dont le nom est la QUESTION à laquelle la note répond.
+extension ConversationEncryptionExplanation.Fact {
+    var note: MeeshyInfoNote? {
+        switch self {
+        case .hybridIsServerToday:
+            MeeshyInfoNote(
+                question: String(localized: "conversation.encryption.note.hybridLayer.question", defaultValue: "Que vérifie la seconde couche ?", bundle: .main),
+                text: String(localized: "conversation.encryption.note.hybridLayer.text", defaultValue: "Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié.", bundle: .main)
+            )
+        case .endToEndNeverTurnedOff:
+            ConversationEncryptionRevertNote.note(direct: false)
+        case .endToEndNeverTurnedOffDirect:
+            ConversationEncryptionRevertNote.note(direct: true)
+        case .serverCannotTurnItOff:
+            MeeshyInfoNote(
+                question: String(localized: "conversation.encryption.note.serverSays.question", defaultValue: "Et si le serveur dit le contraire ?", bundle: .main),
+                text: String(localized: "conversation.encryption.note.serverSays.text", defaultValue: "Même si le serveur la présentait ensuite autrement, votre compte n’y écrit plus sans chiffrement de bout en bout depuis cet appareil.", bundle: .main)
+            )
+        case .oneKeyPerDevice:
+            MeeshyInfoNote(
+                question: String(localized: "conversation.encryption.note.devices.question", defaultValue: "Que devient un appareil retiré ou réinstallé ?", bundle: .main),
+                text: joinedNoteText()
+            )
+        case .switchKeepsHistory:
+            MeeshyInfoNote(
+                question: String(localized: "conversation.encryption.note.whoMayToggle.question", defaultValue: "Qui peut changer de mode, et qui le voit ?", bundle: .main),
+                text: joinedNoteText()
+            )
+        default:
+            nil
+        }
+    }
+
+    private func joinedNoteText() -> String {
+        ConversationEncryptionExplanation.noteFacts(of: self).map(\.text).joined(separator: " ")
+    }
+}
+
+/// « Et si je veux revenir sans chiffrement ? » : la seconde phrase du pied « ne se désactive jamais », la même
+/// derrière le pied de création, le pied d'activation, l'écart servi et le fait « Définitif » de la fiche.
+enum ConversationEncryptionRevertNote {
+    static var question: String {
+        String(localized: "conversation.encryption.note.revert.question", defaultValue: "Et si je veux revenir sans chiffrement ?", bundle: .main)
+    }
+
+    static func note(direct: Bool = false) -> MeeshyInfoNote {
+        let text = direct
+            ? String(localized: "conversation.encryption.note.revertDirect.text", defaultValue: "Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
+            : String(localized: "conversation.encryption.note.revert.text", defaultValue: "Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.", bundle: .main)
+        return MeeshyInfoNote(question: question, text: text)
     }
 }

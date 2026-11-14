@@ -12,7 +12,6 @@
     <string name="profile_action_report">Signaler</string>
     <string name="profile_action_resend_request">Renvoyer la demande</string>
     <string name="profile_action_send_message">Envoyer un message</string>
-    <string name="profile_action_unblock_user">Débloquer l\'utilisateur</string>
     <string name="profile_activity_title">Activité</string>
     <string name="profile_avatar_edit">Modifier la photo de profil</string>
     <string name="profile_back">Retour</string>
@@ -22,8 +21,7 @@
     <string name="profile_blocked_unblock">Débloquer</string>
     <string name="profile_call_not_placed">Pas de connexion : l\'appel n\'est pas parti</string>
     <string name="profile_close_hint">Ferme le profil</string>
-    <string name="profile_connection_context_received">%1$s souhaite entrer en contact avec vous. Acceptez pour échanger des messages.</string>
-    <string name="profile_connection_context_sent">Vous avez envoyé une demande de connexion à %1$s. En attente de sa réponse.</string>
+    <string name="profile_connection_context_received">%1$s souhaite entrer en contact avec vous.</string>
     <string name="profile_conversations_interactionsDisabled">Interactions désactivées</string>
     <string name="profile_conversations_noShared">Aucune conversation en commun</string>
     <string name="profile_decor_banner_section">Bannière</string>
@@ -52,7 +50,6 @@
     <string name="profile_language_custom">Langue personnalisée</string>
     <string name="profile_language_none">Aucune</string>
     <string name="profile_language_primary">Langue principale</string>
-    <string name="profile_language_primary_subtitle">Le contenu sera traduit dans cette langue</string>
     <string name="profile_language_regional">Langue régionale</string>
     <string name="profile_language_unset">Non défini</string>
     <string name="profile_last_name_label">Nom</string>
@@ -61,10 +58,7 @@
     <string name="profile_not_verified">Non vérifié</string>
     <string name="profile_open_conversation_error">Impossible d\'ouvrir la conversation</string>
     <string name="profile_phone">Téléphone</string>
-    <string name="profile_presence_away">Absent</string>
-    <string name="profile_presence_online">En ligne</string>
-    <string name="profile_progression_hint">Ouvre votre progression</string>
-    <string name="profile_progression_subtitle">Badges, niveau et série</string>
+    <string name="profile_progression_subtitle">Médailles, niveau et Flamme</string>
     <string name="profile_progression_title">Ma Légende</string>
     <string name="profile_report_quick_reason_fake_profile">Faux profil</string>
     <string name="profile_report_quick_reason_harassment">Harcèlement</string>
@@ -100,7 +94,6 @@
     <string name="profile_stats_messagesShort">Messages</string>
     <string name="profile_stats_title">Statistiques</string>
     <string name="profile_status_connected">Connectés</string>
-    <string name="profile_system_language_label">Langue principale</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_details">Détails</string>
     <string name="profile_tab_posts">Publications</string>
@@ -148,6 +141,7 @@
     <string name="shared_location_share_sheet_title">Ma position pour %1$s</string>
     <string name="shared_location_share_stop">Arrêter</string>
     <string name="shared_location_share_stop_a11y">Arrêter de partager ma position avec %1$s</string>
+    <string name="shared_location_share_stop_pending">Le partage s\'arrêtera dès le retour du réseau</string>
     <string name="shared_location_share_unavailable">Position introuvable pour le moment, réessaie</string>
     <string name="user_stats_activity">ACTIVITÉ</string>
     <string name="user_stats_badges">BADGES</string>

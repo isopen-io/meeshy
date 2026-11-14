@@ -416,7 +416,7 @@ final class PlayerBannerTests: XCTestCase {
     func test_theSlotNeverReadsTheWindowInsetsItself() throws {
         let host = try source("Meeshy/Features/Game/PlayerBannerHost.swift")
         XCTAssertFalse(host.contains("DeviceLayout.safeAreaTop"), "lire l'encart de la fenêtre clé depuis l'intérieur fige la vue (#8772) : il est mesuré par préférence")
-        XCTAssertTrue(host.contains("withAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, pas par une .animation(value:)")
+        XCTAssertTrue(host.contains("meeshyWithAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, sous la racine du mouvement, pas par une .animation(value:)")
         XCTAssertFalse(host.contains(".animation(TopChromeBarMotion"), "une .animation(value:) n'anime pas une sortie (#9048)")
         XCTAssertFalse(host.contains(".animation(PlayerBannerMotion"), "idem pour la sortie lente : un changement d'état fait sous withAnimation")
     }
@@ -540,5 +540,79 @@ final class PlayerBannerTests: XCTestCase {
                        "une image sous le texte lui prend son contraste : le petit texte passe à l'encre")
         XCTAssertEqual(PlayerBannerView.detailColor(palette: palette, overBackdrop: false), palette.muted,
                        "sur l'aplat seul, le ton discret reste")
+    }
+
+    // MARK: - L'Offrande, ouverte sur le bandeau (#18199)
+
+    private func offeringStore(_ service: MockGameService, ids: [String] = ["id-1", "id-2", "id-3"]) -> (PlayerBannerStore, FakeSource) {
+        let source = FakeSource()
+        source.cachedBlock = GameFixture.game(chestStatus: .ready)
+        var remaining = ids
+        let sut = PlayerBannerStore(source: source, settings: FakeSettings(), minimumInterval: 45, now: { Date() },
+                                    gameService: service, newRequestId: { remaining.isEmpty ? "id-x" : remaining.removeFirst() })
+        return (sut, source)
+    }
+
+    func test_aReadyOffering_isAPieceOfTheBanner_rightAfterTheDream() async {
+        let (sut, _) = offeringStore(MockGameService())
+        await sut.readCache()
+        let pieces = sut.banner?.pieces ?? []
+        XCTAssertTrue(pieces.contains(.offering))
+        XCTAssertEqual(pieces.firstIndex(of: .offering), pieces.firstIndex(of: .mission).map { $0 + 1 })
+    }
+
+    func test_openOffering_leavesTheBannerAtOnce_thenSaysTheServedReward() async {
+        let service = MockGameService()
+        let (sut, _) = offeringStore(service)
+        await sut.readCache()
+        let reward = DailyChest(points: 40, fragment: false, freeze: false)
+        service.chestResult = .success(ChestClaimResponse(status: "claimed", reward: reward, score: 121_840))
+        let probe = Probe<[GamePlayerBanner.Piece]>()
+        service.duringChest = { probe.value = sut.banner?.pieces }
+
+        await sut.openOffering()
+
+        XCTAssertEqual(probe.value?.contains(.offering), false, "l'Offrande part AVANT la réponse")
+        XCTAssertEqual(sut.offeringReward, 40)
+        XCTAssertEqual(service.chestRequestIds, ["id-1"])
+        sut.clearOfferingReward()
+        XCTAssertNil(sut.offeringReward)
+    }
+
+    func test_aRefusedOffering_comesBack_andTheSameRequestIdIsReplayed() async {
+        let service = MockGameService()
+        let (sut, _) = offeringStore(service)
+        await sut.readCache()
+        service.chestResult = .failure(URLError(.notConnectedToInternet))
+
+        await sut.openOffering()
+        XCTAssertEqual(sut.banner?.pieces.contains(.offering), true, "un refus remet l'Offrande")
+        XCTAssertNil(sut.offeringReward)
+
+        service.chestResult = .success(ChestClaimResponse(status: "claimed", reward: DailyChest(points: 12, fragment: false, freeze: false), score: 121_812))
+        await sut.openOffering()
+        XCTAssertEqual(service.chestRequestIds, ["id-1", "id-1"], "un second toucher après une coupure rejoue la même demande")
+    }
+
+    func test_anOfferingThatIsNotReady_sendsNothing() async {
+        let service = MockGameService()
+        let source = FakeSource()
+        source.cachedBlock = GameFixture.game(chestStatus: .claimed)
+        let sut = PlayerBannerStore(source: source, settings: FakeSettings(), gameService: service)
+        await sut.readCache()
+
+        await sut.openOffering()
+
+        XCTAssertTrue(service.chestRequestIds.isEmpty)
+        XCTAssertEqual(sut.banner?.pieces.contains(.offering), false)
+    }
+
+    func test_theOfferingIsSaid_inTheBannerSentence_andByItsOwnButton() async {
+        let (sut, _) = offeringStore(MockGameService())
+        await sut.readCache()
+        guard let banner = sut.banner else { return XCTFail("un bandeau était attendu") }
+        XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: banner).contains(PlayerBannerCopy.offeringReady))
+        XCTAssertFalse(PlayerBannerCopy.pieceLabel(.offering, banner).isEmpty)
+        XCTAssertEqual(PlayerBannerCopy.texts(for: banner, offeringReward: 40).offeringReward, "+40")
     }
 }

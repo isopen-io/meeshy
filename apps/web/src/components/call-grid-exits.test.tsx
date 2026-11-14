@@ -9,7 +9,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { CallMember } from '@/lib/calls/call-store';
 
 import { CallGrid, type CallGridProps } from './call-grid';
-import { CALL_GRID_KIT } from './call-stage';
+import { CALL_GRID_KIT, callGridView } from './call-stage';
 
 /**
  * **RIEN NE DISPARAÎT D'UN COUP, SUR LA UNE D'UN GROUPE** (U1.12, U2.5, U2.10 ; #17406) — la capsule « Revenir à la
@@ -31,8 +31,8 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
   self: { stream: null, cameraOn: false, mirrored: true, micMuted: false },
   choice: { kind: 'self' },
   onChoose: () => undefined,
-  immersive: false,
-  onToggleImmersive: () => undefined,
+  fullScreen: 'off',
+  onFullScreen: () => undefined,
   moderation: null,
   language: 'fr',
   ...overrides,
@@ -40,8 +40,12 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
 
 const sharing = { members: [member('u-a', 'Awa'), member('u-k', 'Kofi', { screenSharing: true })], remoteStreams: { 'u-k': liveVideo }, choice: null };
 
+/** Monté, l'écran partagé pose son flux sur un vrai `<video>` : un vrai `MediaStream` du DOM (`srcObject` refuse tout autre objet). */
+const sharingLive = () => ({ ...sharing, remoteStreams: { 'u-k': Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] }) } });
+
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await callGridView.load();
   await loadPillMotion();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
@@ -90,7 +94,7 @@ const mount = (overrides: Partial<CallGridProps>) => {
 };
 
 describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)', () => {
-  test('« Revenir à la grille » : la capsule reste le temps de son fondu, sans prendre le doigt, puis se démonte', async () => {
+  test('« Revenir à la grille » : la capsule reste le temps de son fondu, touchable (loi 17.11), puis se démonte', async () => {
     const motion = recordAnimations();
     const view = mount({});
     expect(view.host.querySelector('[data-call-spotlight-capsule]')).not.toBeNull();
@@ -100,7 +104,7 @@ describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)
     expect(view.host.querySelector('[data-call-spotlight]')).toBeNull();
     expect(leaving).not.toBeNull();
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.getAttribute('aria-hidden')).toBe('true');
     const fade = motion.played.find((move) => move.element === leaving);
     expect(fade?.frames).toEqual([{ opacity: 1 }, { opacity: 0 }]);
@@ -141,15 +145,18 @@ describe('CallGrid — la capsule repart en fondu au retour à la grille (U1.12)
 });
 
 describe('CallGrid — le bandeau des autres sort par son bord et revient par lui (U2.10)', () => {
-  test('plein écran : le bandeau quitte la mise en page à l’instant et repart vers le bas, tuiles comprises, sans prendre le doigt', async () => {
+  test('plein écran total (U2b, #17961) : le bandeau quitte la mise en page à l’instant et repart vers le bas, tuiles comprises, touchable (loi 17.11)', async () => {
     const motion = recordAnimations();
-    const view = mount({ members: [member('u-a', 'Awa'), member('u-b', 'Bintou')] });
+    const live = sharingLive();
+    const view = mount(live);
     expect(view.host.querySelector('[data-call-strip]')?.getAttribute('data-call-strip-edge')).toBe('bottom');
+    view.render({ ...live, fullScreen: 'full' });
+    expect(view.host.querySelector('[data-call-strip]')?.hasAttribute('data-leaving')).toBe(false);
     motion.played.length = 0;
-    view.render({ immersive: true });
+    view.render({ ...live, fullScreen: 'total' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.hasAttribute('data-leaving')).toBe(true);
-    expect(strip?.hasAttribute('inert')).toBe(true);
+    expect(strip?.hasAttribute('inert')).toBe(false);
     const out = motion.played.find((move) => move.element === strip);
     expect(out?.frames).toEqual([
       { opacity: 1, transform: 'translateY(0)' },
@@ -163,10 +170,11 @@ describe('CallGrid — le bandeau des autres sort par son bord et revient par lu
 
   test('en paysage, la colonne repart par le bord de fin de l’écran, à gauche en droite à gauche', async () => {
     const motion = recordAnimations();
-    const view = mount({ landscape: true });
+    const live = sharingLive();
+    const view = mount({ ...live, landscape: true });
     motion.played.length = 0;
     view.host.style.direction = 'rtl';
-    view.render({ landscape: true, immersive: true });
+    view.render({ ...live, landscape: true, fullScreen: 'total' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.getAttribute('data-call-strip-edge')).toBe('trailing');
     expect(motion.played.find((move) => move.element === strip)?.frames[1]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
@@ -174,12 +182,13 @@ describe('CallGrid — le bandeau des autres sort par son bord et revient par lu
     motion.restore();
   });
 
-  test('quitter le plein écran : le bandeau revient par son bord', () => {
+  test('quitter le plein écran total : le bandeau revient par son bord', () => {
     const motion = recordAnimations();
-    const view = mount({ immersive: true });
+    const live = sharingLive();
+    const view = mount({ ...live, fullScreen: 'total' });
     expect(view.host.querySelector('[data-call-strip]')).toBeNull();
     motion.played.length = 0;
-    view.render({ immersive: false });
+    view.render({ ...live, fullScreen: 'full' });
     const strip = view.host.querySelector('[data-call-strip]');
     expect(strip?.hasAttribute('data-leaving')).toBe(false);
     expect(motion.played.find((move) => move.element === strip)?.frames[0]).toEqual({ opacity: 0, transform: 'translateY(100%)' });

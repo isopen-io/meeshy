@@ -177,9 +177,17 @@ fun CallScreen(
     val glassTone = callGlassTone(groupShown, state.isPeerScreenSharing, duo, chromeState.layer.activeMode, groupFocus)
     // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
     val bannerHeights = remember { CallTopBannerHeights() }
-    val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
+    // L1.8 · L2.8 : ma vignette longe la pile des bannières et cède son coin aux rails, en paysage.
+    val selfTileNeighbours = remember { CallSelfTileNeighbours() }
+    // E3 · E4 (#18227) : « En attente » et « Vidéo réduite » sont des maillons de la pile ; ma vignette et la grille leur cèdent la place.
+    val servicePills = overlayContext.servicePills()
+    val selfTileClearance = rememberSelfTileBannerClearance(
+        bannerHeights, state.isPeerScreenCapturing && !inPip, servicePills, reduceMotion,
+    )
+    // P11.1 : sur la grille, l'en-tête flotte et la scène part de la zone sûre ; à la une, elle reste sous lui.
     val groupGridClearance = rememberGroupGridBannerClearance(
-        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen, reduceMotion,
+        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen,
+        servicePills, reduceMotion, isGroupGrid = groupFocus == GroupCallStageFocus.Grid,
     )
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
@@ -191,6 +199,7 @@ fun CallScreen(
             LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallSelfTileNeighbours provides selfTileNeighbours,
             LocalCallGroupGridClearance provides groupGridClearance,
         ) {
         Box(
@@ -279,6 +288,7 @@ fun CallScreen(
                                 modifier = stageModifier,
                                 onFocusChange = { groupFocus = it },
                                 isCompactHeight = isCompactHeight,
+                                selfCameraZoom = selfCamera.zoom,
                             )
                         }
                     } else {
@@ -340,12 +350,6 @@ fun CallScreen(
                 )
             }
 
-            if (state.showsConnectedLayout && !inPip) {
-                CallVideoNoticePill(
-                    notice = state.videoNotice,
-                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MeeshySpacing.xxl * 2),
-                )
-            }
             CallOverlaySlotHost(
                 extensions.overlays, CallOverlaySlot.Center, overlayContext,
                 Modifier.align(Alignment.Center),
@@ -410,8 +414,13 @@ fun CallScreen(
                 onOpenEffects = { chrome.enter(CallScreenMode.Effects) },
             )
 
-            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
-            if (chromeState.layer.activeMode == CallScreenMode.Effects) {
+            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet. Sa couche
+            // fond à l'entrée et à la sortie, sans monter du bas (P8.14, loi 17, #17819 ; iOS `.transition(.opacity)`).
+            CallModeLayer(
+                visible = chromeState.layer.activeMode == CallScreenMode.Effects,
+                mode = CallScreenMode.Effects,
+                reduceMotion = reduceMotion,
+            ) { _ ->
                 CallEffectsMode(
                     state = state,
                     localTrack = viewModel.localVideoTrack,
@@ -422,6 +431,7 @@ fun CallScreen(
                     onOpenFrames = { chrome.enter(CallScreenMode.Montage) },
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerAvatarUrl = avatarUrl,
+                    active = chromeState.layer.activeMode == CallScreenMode.Effects,
                 )
             }
 

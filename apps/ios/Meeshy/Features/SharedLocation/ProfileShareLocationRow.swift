@@ -82,8 +82,14 @@ struct ProfileShareLocationRow: View {
     }
 
     private func stop() async {
-        guard let problem = await center.stopSharing(with: userId) else { return }
-        FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+        switch await center.stopSharing(with: userId) {
+        case nil:
+            return
+        case .withdrawalPending:
+            FeedbackToastManager.shared.showNotice(ShareLocationWording.problem(.withdrawalPending))
+        case let problem?:
+            FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+        }
     }
 }
 
@@ -93,6 +99,7 @@ struct ShareLocationChoiceSheet: View {
     let onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Void
     @State private var precision: SharedLocationPrecision = .city
     @State private var duration: SharedLocationShareDuration = .oneHour
+    @State private var openNoteID: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -117,7 +124,9 @@ struct ShareLocationChoiceSheet: View {
                 } header: {
                     Text(ShareLocationWording.precisionTitle)
                 } footer: {
-                    Text(ShareLocationWording.explain(name: displayName))
+                    MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
+                        Text(ShareLocationWording.explain(name: displayName))
+                    }
                 }
             }
             .navigationTitle(ShareLocationWording.sheetTitle(name: displayName))
@@ -175,7 +184,15 @@ enum ShareLocationWording {
     }
 
     static func explain(name: String) -> String {
-        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance, puis plus rien ; elle se met à jour quand Meeshy est ouvert. Tu peux arrêter à tout moment depuis sa fiche.", bundle: .main), name)
+        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.", bundle: .main), name)
+    }
+
+    /// Le détail technique (#18088) : l'échéance et l'arrêt restent au repos, la mise à jour passe derrière un (i).
+    static var explainNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "sharedLocation.share.refresh.question", defaultValue: "Quand ma position se met-elle à jour ?", bundle: .main),
+            text: String(localized: "sharedLocation.share.refresh.note", defaultValue: "Elle se met à jour quand Meeshy est ouvert.", bundle: .main)
+        )
     }
 
     static var confirm: String {
@@ -203,7 +220,9 @@ enum ShareLocationWording {
             return String(localized: "sharedLocation.share.denied", defaultValue: "Autorise la localisation dans Réglages pour partager ta position", bundle: .main)
         case .locationUnavailable:
             return String(localized: "sharedLocation.share.unavailable", defaultValue: "Position introuvable pour le moment, réessaie", bundle: .main)
-        case .refused(.offline):
+        case .withdrawalPending:
+            return String(localized: "sharedLocation.share.stopPending", defaultValue: "Le partage s'arrêtera dès le retour du réseau", bundle: .main)
+        case .refused(.offline), .refused(.unconfirmed):
             return String(localized: "sharedLocation.share.offline", defaultValue: "Le partage de position a besoin du réseau", bundle: .main)
         case .refused(.rateLimited):
             return String(localized: "sharedLocation.share.rateLimited", defaultValue: "Trop d'envois, réessaie dans un instant", bundle: .main)

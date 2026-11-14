@@ -329,7 +329,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
         XCTAssertFalse(effects.contains("settings: {"), "La barre ne reçoit plus le panneau")
-        XCTAssertTrue(effects.contains("CallEffectsPanel {"), "Le panneau de réglages est le verre séparé partagé")
+        XCTAssertTrue(effects.contains("CallEffectsPanel(label: CallModeCopy.settingsPanel) {"), "Le panneau de réglages est le verre séparé partagé, nommé « Réglages de mon image » (P8b.1)")
         XCTAssertTrue(effects.contains(".combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))"), "Le panneau monte depuis la barre, en fondu")
         XCTAssertTrue(effects.contains("CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion)"), "Réduire les animations = fondu court")
         XCTAssertFalse(effects.contains("reduceMotion ? nil"), "Réduire les animations ne supprime plus l'animation")
@@ -488,7 +488,9 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift")
         )
         XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
-        XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
+        XCTAssertTrue(stage.contains("onFocusChange(newFocus)"), "la scène dit à la racine ce qui est à la une")
+        let rail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+CameraRail.swift"))
+        XCTAssertTrue(rail.contains("GroupCallSpotlight.featuresLocal(groupStageFocus)"), "mon image à la une se lit de la une servie")
     }
 
     /// Le bouton PiP et le glissé quittent le plein écran par la même entrée.
@@ -775,8 +777,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(cell.contains("onSelect: { chooseDeclination($0) }"), "Une déclinaison feuilletée passe par le choix d'un cadre")
         let declination = try block("private func chooseDeclination(_ id: String) {", until: "\n    }\n", in: montage)
         XCTAssertTrue(declination.contains("closeAfterChoice()"), "Une déclinaison choisie est un cadre choisi")
-        let step = try block("private func stepDeclination(_ offset: Int, people: Int) {", until: "\n    }\n", in: montage)
-        XCTAssertTrue(step.contains("chooseDeclination("), "VoiceOver choisit une déclinaison par le même chemin")
+        XCTAssertFalse(montage.contains("stepDeclination("), "#18192 — à la voix, une déclinaison se PARCOURT dans le carrousel ; seule l'activation l'applique")
         let hold = try block("private func holdChip(for selection: CallMontageChoice) -> CallFrameHoldChip? {", until: "\n    }\n", in: montage)
         XCTAssertTrue(hold.contains("closeAfterChoice()"), "L'option « Cadre » choisie rend le menu de base")
         let moods = try block("{ tapped in", until: "}", in: montage)
@@ -791,6 +792,39 @@ final class CallViewGlassGuardTests: XCTestCase {
         let chips = try block("struct CallEffectsGenreChips: View {", until: "struct CallEffectsBar<Looks: View>: View {", in: bar)
         XCTAssertTrue(chips.contains("let selected: CallEffectKind?"), "Au menu de base, aucun genre n'est pressé")
         XCTAssertFalse(chips.contains("guard !isSelected else { return }"), "Retoucher le genre ouvert le referme")
+    }
+
+    /// #18192 — sous VoiceOver, le carrousel est un élément ajustable : balayer haut/bas déplace la
+    /// position ANNONCÉE (nom, « 3 sur 12 ») sans appliquer ni refermer ; l'activation applique ce qui
+    /// est annoncé et rend le menu de base (C1 généralisée). Les déclinaisons du Montage se
+    /// parcourent de même. Hors VoiceOver, le doigt choisit comme avant, au repos du défilement.
+    func test_voiceOver_browsesTheCarousel_andOnlyActivationApplies() throws {
+        let carousel = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift"))
+        let view = try block("struct CallModeCarousel<Item: Hashable, Cell: View>: View {", until: "private struct CallModeTrackLayout {", in: carousel)
+        XCTAssertTrue(view.contains("@State private var browse = CallModeCarouselBrowse<Item>()"), "La position parcourue est un état distinct de l'effet appliqué")
+        let step = try block("private func step(_ offset: Int) {", until: "\n    }\n", in: view)
+        XCTAssertTrue(step.contains("browse.step(by: offset, in: items, applied: selection)"))
+        XCTAssertFalse(step.contains("selection ="), "Balayer ne pose aucun effet")
+        let activate = try block("private func activate() {", until: "\n    }\n", in: view)
+        XCTAssertTrue(activate.contains("browse.activation(applied: selection"), "L'activation applique ce qui est annoncé")
+        XCTAssertTrue(activate.contains("selection = item"))
+        XCTAssertTrue(activate.contains("onConfirm?()"), "Activer l'effet déjà posé rend le menu de base sans rien réappliquer")
+        XCTAssertTrue(view.contains(".accessibilityAction { activate() }"), "Le double-tap de VoiceOver est l'activation")
+        XCTAssertTrue(view.contains(".accessibilityValue(isRecording ? CallModeCopy.recording : spokenValue)"))
+        XCTAssertTrue(view.contains("CallModeCarouselRule.ordinal("), "La valeur dit la position : « 3 sur 12 »")
+        XCTAssertTrue(view.contains(".accessibilityFocused($isFocused)"), "Quitter l'élément oublie la position parcourue")
+        let handle = try block("private func handle(_ item: Item, _ gesture: CallModeGesture) {", until: "\n    }\n", in: view)
+        XCTAssertTrue(handle.contains("selection = item"), "Hors VoiceOver, un toucher choisit comme avant")
+        XCTAssertTrue(view.contains(".modifier(CallModeShotActions("), "Photo et film restent offerts à la voix")
+
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        XCTAssertEqual(controls.components(separatedBy: "onConfirm: closeAfterChoice").count - 1, 3, "Les trois carrousels (Visage, Couleur, Montage) rendent le menu de base à l'activation")
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        XCTAssertTrue(montage.contains("variants: declinationVariants(people: people)"), "Les déclinaisons se parcourent dans le carrousel")
+        let variants = try block("private func declinationVariants(people: Int) -> CallModeCarouselVariants<CallMontageChoice> {", until: "\n    }\n", in: montage)
+        XCTAssertTrue(variants.contains("current: { declined($0, people: people) }"), "Le pas part de la déclinaison posée")
+        XCTAssertFalse(variants.contains("chooseDeclination("), "Parcourir une déclinaison ne l'applique pas")
+        XCTAssertFalse(montage.contains(".accessibilityAction(named: CallFrameCopy.nextDeclination)"), "Plus de pas de déclinaison qui applique et referme")
     }
 
     /// #17948 — en groupe, toucher la vignette à la une range les contrôles (loi 11), comme toucher

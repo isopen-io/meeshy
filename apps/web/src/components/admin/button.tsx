@@ -70,8 +70,8 @@ export function AdminButton({
       aria-busy={busy}
       {...(label === undefined ? {} : { 'aria-label': label })}
       {...(onClick === undefined ? {} : { onClick })}
-      className={`inline-flex items-center justify-center gap-2 ${SIZE[size].className} text-body font-semibold disabled:cursor-not-allowed ${FOCUS} ${palette.className}`.trim()}
-      style={{ ...palette.style, minHeight: SIZE[size].height, opacity: inactive ? 0.45 : 1, outlineColor: BRAND }}
+      className={['btn-press inline-flex items-center justify-center gap-2', SIZE[size].className, 'text-body font-semibold disabled:cursor-not-allowed', inactive ? 'opacity-45' : '', FOCUS, palette.className].filter(Boolean).join(' ')}
+      style={{ ...palette.style, minHeight: SIZE[size].height, outlineColor: BRAND }}
     >
       {children}
     </button>

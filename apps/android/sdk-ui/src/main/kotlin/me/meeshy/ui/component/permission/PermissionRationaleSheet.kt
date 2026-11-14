@@ -1,22 +1,16 @@
 package me.meeshy.ui.component.permission
 
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.PermissionSurface
 import me.meeshy.ui.R
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -39,20 +33,10 @@ public fun PermissionRationaleSheet(
     accent: Color = MeeshyPalette.Indigo500,
 ) {
     val copy = MediaPermissionMessages.copy(nature, PermissionSurface.RATIONALE)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
     val continueChosen by rememberUpdatedState(onContinue)
-    val dismissChosen by rememberUpdatedState(onDismiss)
-    var leaving by remember { mutableStateOf(false) }
-    fun leaveThen(choice: () -> Unit) {
-        if (leaving) return
-        leaving = true
-        scope.launch { sheetState.hide() }.invokeOnCompletion { cause -> if (cause == null) choice() else leaving = false }
-    }
-    ModalBottomSheet(
+    MeeshyModalSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
-        sheetState = sheetState,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
         PermissionPanel(
@@ -60,9 +44,9 @@ public fun PermissionRationaleSheet(
             title = stringResource(copy.title),
             body = stringResource(copy.body),
             primaryLabel = stringResource(copy.action),
-            onPrimary = { leaveThen { continueChosen() } },
+            onPrimary = { dismiss { continueChosen() } },
             secondaryLabel = stringResource(R.string.media_permission_not_now),
-            onSecondary = { leaveThen { dismissChosen() } },
+            onSecondary = { dismiss() },
             accent = accent,
         )
     }

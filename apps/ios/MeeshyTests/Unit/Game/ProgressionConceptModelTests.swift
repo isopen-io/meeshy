@@ -130,8 +130,8 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_theSheetDevelopsTheCard_itNeverRephrasesIt() {
         for concept in ProgressionConcept.allCases {
-            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.tip1(concept), ConceptText.tip2(concept)]
-            XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : la fiche redit une phrase de la carte au lieu de la développer")
+            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.tip1(concept), ConceptText.tip2(concept)].compactMap { $0 }
+            XCTAssertEqual(Set(texts).count, texts.count, "\(concept.rawValue) : la fiche redit une phrase de la carte au lieu de la développer")
             XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une phrase vide")
         }
     }
@@ -383,9 +383,8 @@ final class ProgressionConceptModelTests: XCTestCase {
     }
 
     func test_state_points_nameTheTwoBalances_andTheMissingAmountAimsAtTheCoin() {
-        XCTAssertEqual(state(.points, jcnm, meesh: jcnmWallet), ConceptText.statePointsMissing(
-            held: GameCopy.points(77_099), convertible: GameCopy.convertiblePoints(5_823), number: n(79),
-            price: GameCopy.points(7_662), missing: GameCopy.convertiblePoints(1_839)
+        XCTAssertEqual(state(.points, jcnm, meesh: jcnmWallet), ConceptText.statePointsMissingPlain(
+            held: GameCopy.points(77_099), missing: GameCopy.convertiblePoints(1_839), number: n(79)
         ))
     }
 
@@ -401,7 +400,7 @@ final class ProgressionConceptModelTests: XCTestCase {
                                 chest: base.chest, flame: base.flame, boosts: base.boosts, guideSeen: base.guideSeen,
                                 wave2: base.wave2)
         XCTAssertEqual(state(.points, sparked, meesh: jcnmWallet), ConceptText.statePointsMissingPlain(
-            held: GameCopy.points(5_823), number: n(79), price: GameCopy.points(7_662), missing: GameCopy.points(1_839)
+            held: GameCopy.points(5_823), missing: GameCopy.points(1_839), number: n(79)
         ))
     }
 
@@ -449,14 +448,13 @@ final class ProgressionConceptModelTests: XCTestCase {
     func test_state_points_enoughToMint_saySo_withoutAnyMissing() {
         let rich = GameFixture.game()
         XCTAssertTrue(rich.mint.canMint, "le témoin veut une frappe possible")
-        XCTAssertEqual(state(.points, rich), ConceptText.statePointsReady(
-            held: GameCopy.points(rich.level.score), convertible: GameCopy.convertiblePoints(121_800),
-            number: n(rich.mint.number), price: GameCopy.points(rich.mint.price)
+        XCTAssertEqual(state(.points, rich), ConceptText.statePointsReadyPlain(
+            held: GameCopy.points(rich.level.score), number: n(rich.mint.number)
         ))
         // Sans porte-monnaie servi et frappe possible : le solde à convertir reste inconnu, jamais déduit du score.
         XCTAssertNil(ProgressionConceptModel.convertiblePoints(progress: progress(rich, meesh: nil), game: rich))
         XCTAssertEqual(state(.points, rich, meesh: nil), ConceptText.statePointsReadyPlain(
-            held: GameCopy.points(rich.level.score), number: n(rich.mint.number), price: GameCopy.points(rich.mint.price)
+            held: GameCopy.points(rich.level.score), number: n(rich.mint.number)
         ))
     }
 
@@ -506,24 +504,33 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(state(.league, placed(.safe, missing: nil)), place, "sans manque servi, la zone ne s'invente pas")
 
         let locked = GameWave2Fixture.game(league: GameWave2Fixture.league(access: .locked, current: nil))
-        XCTAssertEqual(state(.league, locked), GameText.leagueLocked(level: n(GameLeague.minLevel), current: n(locked.level.shown.level)))
+        XCTAssertEqual(state(.league, locked), GameText.doorLeagueLocked(level: n(GameLeague.minLevel)))
         let unplaced = GameWave2Fixture.game(league: GameWave2Fixture.league(current: nil))
         XCTAssertEqual(state(.league, unplaced), ConceptText.stateLeagueUnplaced)
+    }
+
+    /// Épure (#17687) : la phrase ne garde que la valeur que la tête ne montre pas ; la semaine, l'étoile suivante et le
+    /// prix de la frappe restent des FAITS tapables, dont le (i) porte la phrase.
+    func test_state_shortLines_keepTheDroppedValuesAsTappableFacts() throws {
+        let season = ProgressionConceptModel.stateLine(.season, progress: progress(GameWave2Fixture.game()), game: GameWave2Fixture.game())
+        XCTAssertEqual(season?.facts, [.season, .seasonWeek, .seasonSteps, .seasonNext])
+        XCTAssertLessThanOrEqual(try XCTUnwrap(season?.text).count, 60, "une ligne, pas une phrase à six valeurs")
+        let points = ProgressionConceptModel.stateLine(.points, progress: progress(jcnm, meesh: jcnmWallet), game: jcnm)
+        XCTAssertEqual(points?.facts, [.sparksPocket, .mintNext, .mintPrice, .mintMissing])
     }
 
     func test_state_season_saysTheWeek_theStep_andWhatIsMissingForTheNext() throws {
         let game = GameWave2Fixture.game()
         let season = try XCTUnwrap(game.season)
         XCTAssertEqual(state(.season, game), ConceptText.stateSeasonProgress(
-            number: n(season.number), week: n(season.week), weeks: n(GameSeason.weeks), steps: n(season.steps),
-            total: n(season.stepsTotal), stars: GameText.seasonStars(count: season.starsToNext)
+            number: n(season.number), steps: n(season.steps), total: n(season.stepsTotal)
         ))
         XCTAssertEqual(state(.season, GameWave2Fixture.game(season: nil)), GameText.seasonNone)
     }
 
     func test_state_prestige_saysWhereItOpens_andWhereYouAre() {
         let game = GameWave2Fixture.game()
-        XCTAssertEqual(state(.prestige, game), GameText.prestigeLocked(level: n(game.level.shown.level)))
+        XCTAssertEqual(state(.prestige, game), GameText.prestigeLocked)
         XCTAssertEqual(state(.prestige, GameWave2Fixture.atLevel100()), GameText.prestigeMee)
     }
 
@@ -579,12 +586,12 @@ final class ProgressionConceptModelTests: XCTestCase {
             : ConceptText.stateElansIdle(families: families))
     }
 
-    /// Quatre questions par concept : ce que c'est, à quoi ça sert, comment ça marche, comment s'en servir — quatre
+    /// Jusqu'à quatre questions par concept : ce que c'est, à quoi ça sert, comment ça marche (sauf quand `what` le dit), comment s'en servir — autant de
     /// phrases, jamais une répétée.
     func test_everyConcept_answersFourQuestions() {
         for concept in ProgressionConcept.allCases {
-            let texts = [ConceptText.what(concept), ConceptText.why(concept), ConceptText.how(concept), ConceptText.use(concept)]
-            XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : une question reçoit la réponse d'une autre")
+            let texts = [ConceptText.what(concept), ConceptText.why(concept), ConceptText.how(concept), ConceptText.use(concept)].compactMap { $0 }
+            XCTAssertEqual(Set(texts).count, texts.count, "\(concept.rawValue) : une question reçoit la réponse d'une autre")
             XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une question sans réponse")
         }
     }

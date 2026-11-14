@@ -895,3 +895,76 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132, #17133 et #18154.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 25 — 2026-11-14
+
+- **Base** : `origin/dev` @ `ac59c0e6`. Le lot du cycle 24 (#18064) y est fusionné.
+- **Branche** : `claude/determined-volta-ah45gp`.
+- **Objectif** : #18097. `_handleTranslationError` reçoit un `TranslationErrorPayload`, et aucun `translation:failed` ne part sans `conversationId`.
+- **Livré** (seule la passerelle change ; aucune charge socket modifiée pour un `conversationId` valide) :
+  - **`MessageTranslationService._handleTranslationError`** est typé `TranslationErrorPayload`.
+  - Un échec dont le `conversationId` est vide est toujours compté (`errors`, `pool_full_rejections`). Il n'émet plus `translationFailed` : un `warn` le dit. C'est le seul émetteur de `translationFailed`, et son seul abonné est `MeeshySocketIOManager._handleTranslationFailed`. La room fantôme `conversation:` ne reçoit donc plus rien.
+  - Budget : le fichier fait 3023 lignes, hors budget. Le diff y est de +7/−7, sans aucun ajout net.
+- **Tests** : `MessageTranslationService.translationFailedNoConversation.test.ts` (4). L'événement `translationError` est émis sur le faux client ZMQ.
+  - **Rouge avant correctif** : `2 failed, 2 passed`. La QA l'a reproduit en remettant le code de `origin/dev` en place.
+  - **Vert** : relancé par moi, `4 passed`, avec `toStrictEqual` sur le cas sans `taskId` (réserve QA 3). La QA mesure 44 suites et 877 tests (`translation-failure-broadcast`, `MessageTranslationService`, `zmq-translation`, `ZmqTranslationClient`, `ZmqMessageHandler`, `directTextTranslation`, `admin-monitoring`). `tsc --noEmit` sort à 0.
+  - **Mutations QA** : 4 sur 4 font rougir les témoins.
+- **QA** : favorable avec réserves.
+  - Un `conversationId` non vide mais invalide est encore diffusé, et le chien de garde émet sans `metadata` → #18232.
+  - Témoin du `taskId` absent trop laxiste (`toEqual`) : corrigé dans le lot.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18232 (identifiant de conversation validé avant diffusion, `metadata` du chien de garde).
+2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+3. #17132, #17133 et #18154.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 26 — 2026-11-14
+
+- **Base** : `origin/dev` @ `4408c1e7`. Le lot du cycle 25 (#18097) y est fusionné.
+- **Branche** : `claude/determined-volta-wqyhpl`.
+- **Objectif** : #18232. Un échec de traduction n'est diffusé qu'à une conversation dont l'identifiant est un ObjectId, et le chien de garde émet un `TranslationErrorPayload` complet.
+- **Livré** (seule la passerelle change : ni le protocole ZMQ, ni le traducteur, ni la charge `translation:failed` quand l'identifiant est valide) :
+  - **`MessageTranslationService._handleTranslationError`** : la garde passe de `!data.conversationId` à `!isValidObjectId(data.conversationId)`. Un identifiant invalide (`'  '`, `conv-1`, 23 hex, un `z`) est toujours compté, n'est pas diffusé, et un `warn` le dit. Le fichier fait 3023 lignes avant comme après : l'import en double de `TranslationErrorPayload` a été fusionné pour garder zéro ajout net.
+  - **`ZmqTranslationClient._registerRequestTimeout`** devient générique sur le nom d'événement (`TimeoutErrorEvent<E>`). Pour `'translationError'`, `tsc` exige un `TranslationErrorPayload`, et le site texte fournit `metadata: {}`. Les chemins audio, transcription et voix gardent leur forme.
+  - La QA a vérifié qu'aucun identifiant légitime n'est perdu. `Message.conversationId` est un `@db.ObjectId`, les trois appelants de `sendTranslationRequest` le lisent en base, et les requêtes qui ne portent pas sur un message (`direct-text:`, `call-caption:`, post, story) sont écartées plus haut par `isMessageTranslationTarget`.
+- **Tests** : 6 témoins ajoutés à `MessageTranslationService.translationFailedNoConversation.test.ts`, et `ZmqTranslationClient.timeoutErrorPayload.test.ts` (4, sur minuteries simulées et les trois chemins d'expiration). Une fixture de `MessageTranslationService.branches.test.ts` passe de `conv-1` à un ObjectId, sans changer son assertion.
+  - **Rouge avant correctif** : `9 failed, 6 passed`. La QA l'a reproduit en remettant le code de `origin/dev` en place.
+  - **Vert** : relancé par moi, `15 passed` sur les deux fichiers. La QA mesure 48 suites et 898 tests (`MessageTranslationService`, `translation-failure-broadcast`, `zmq-translation`, `ZmqTranslationClient`, `ZmqMessageHandler`, `call-caption`, `directTextTranslation`, `admin-monitoring`). `tsc --noEmit` sort à 0.
+  - **Mutations QA** : 4 sur 4 font rougir les témoins de la garde. Retirer `metadata`, puis `messageId`, du chien de garde fait échouer `tsc` (TS2345).
+- **QA** : favorable. Remarque : un ObjectId en majuscules passe la garde et part vers une room où personne n'est abonné (déjà le cas sur `origin/dev`) → #18371.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
+2. #17132, #17133, #18154 et #18371.
+3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 27 — 2026-11-14
+
+- **Base** : `origin/dev` @ `8ab427ff`. Le lot du cycle 26 (#18232) y est fusionné.
+- **Branche** : `claude/determined-volta-c27utf8`.
+- **Objectif** : #17205. Un premier frame multipart qui n'est pas de l'UTF-8, ou qui n'est pas un objet JSON, est refusé proprement par le traducteur.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le routage par `type`) :
+  - **`zmq_request_frame.parse_request_frame`** (nouveau) : une fonction pure qui rend le `dict` ou `None`. Elle attrape `UnicodeDecodeError` et `JSONDecodeError`, et refuse un JSON qui n'est pas un objet. Sa seule ligne `[TRANSLATOR]` ne nomme que le type.
+  - **Le routeur `zmq_server_core`** décodait le frame sans garde, et il le fait avant le handler. Le défaut y était plus large que ce que décrivait l'issue : un `b'\xff\xfe'` remontait jusqu'à la boucle de réception, qui loguait `{e}` puis imprimait une traceback. Le routeur et le handler passent maintenant tous deux par la fonction, et sortent sur `None`.
+  - **`_handle_cache_forget`** : décision d'aligner le log sur `type(error).__name__`. Les quatre sites de levée actuels ne portent aucun identifiant, mais un site futur pourrait en porter. Le refus reste fail-closed.
+- **Tests** : `tests/test_zmq_non_utf8_frame.py` (15). Ils couvrent le routeur, le handler, la vraie boucle `start()` et l'oubli non confirmé, avec un secret placé dans le frame.
+  - **Rouge avant le correctif** : `14 failed, 1 passed`. La QA l'a reproduit avec le code de `origin/dev`.
+  - **Vert** : relancé par moi, `59 passed` sur le nouveau fichier et trois voisins. Sur la QA, 16 fichiers `test_*zmq*`, `test_*handler*` et `test_*forget*` donnent `376 passed, 6 skipped, 5 errors` avant comme après, avec une liste d'échecs identique. Les 5 erreurs, préexistantes, viennent de `TestRealTranslatorIntegration`.
+  - **Mutations QA** : 8 sur 8 font rougir les témoins.
+- **Environnement** : venv uv jetable (recette du cycle 20), lancé par `python -m pytest -p no:cacheprovider -o addopts=""`.
+- **QA** : favorable avec réserves. Les trois réserves vont dans #18436 :
+  - R2 : la boucle de réception logue encore `{e}` et imprime une traceback pour les autres exceptions.
+  - R1 : la branche `except JSONDecodeError` du handler est morte.
+  - R3 : un avertissement `never awaited` apparaît dans le test.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #17189 (contrat déclaré du libellé « pool full »), puis #18436.
+2. #17132, #17133, #18154 et #18371.
+3. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

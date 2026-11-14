@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -39,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.R
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -179,18 +180,20 @@ private fun BubbleImageCell(
 
 /**
  * La pastille des réactions d'une pièce, en bas à gauche de sa tuile (#13596) : elle apparaît et disparaît avec la
- * dernière réaction reçue, sans rien déplacer — un fondu, pas un saut de mise en page.
+ * dernière réaction reçue, sans rien déplacer — un fondu, pas un saut de mise en page. Retirée, la pastille sort avec
+ * son dernier libellé, jamais vide ; réduire les animations : fondu court seul.
  */
 @Composable
 private fun BoxScope.TileReactions(label: String?) {
-    AnimatedVisibility(
-        visible = label != null,
-        enter = fadeIn() + scaleIn(initialScale = 0.8f),
-        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+    MeeshyAnimatedVisibility(
+        value = label,
+        enter = fadeIn(MeeshyMotion.springDefault()) + scaleIn(MeeshyMotion.springDefault(), initialScale = TILE_REACTION_SCALE),
+        exit = fadeOut(MeeshyMotion.springDefault()) + scaleOut(MeeshyMotion.springDefault(), targetScale = TILE_REACTION_SCALE),
         modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs),
-    ) {
+        label = "bubble-tile-reactions",
+    ) { shown ->
         Text(
-            text = label.orEmpty(),
+            text = shown,
             color = MeeshyPalette.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
@@ -209,6 +212,8 @@ private fun BoxScope.TileReactions(label: String?) {
  */
 internal fun bubbleImageContentDescription(image: BubbleImage, fallback: String): String =
     image.alt?.takeIf { it.isNotBlank() } ?: fallback
+
+private const val TILE_REACTION_SCALE: Float = 0.8f
 
 private fun imageAspectRatio(image: BubbleImage): Float {
     val width = image.width ?: return 1f

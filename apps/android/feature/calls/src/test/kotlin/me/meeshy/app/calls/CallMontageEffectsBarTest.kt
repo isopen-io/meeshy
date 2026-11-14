@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
@@ -181,7 +182,7 @@ class CallMontageEffectsBarTest {
         rule.waitForIdle()
 
         assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isEqualTo(before)
-        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Cover"))
+        rule.onNodeWithContentDescription("Call montage").assert(SemanticsMatcher("announces the browsed style then its rank") { it.config.getOrNull(SemanticsProperties.StateDescription)?.matches(Regex("Cover, \\d+ of \\d+")) == true })
     }
 
     /**

@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">Actos del día: %1$d de %2$d</string>
     <string name="a11y_floating_menu_hint">Abre el menú de navegación</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notificaciones pendientes</string>
+    <string name="a11y_floating_rung_game_both">Mi Leyenda, Ofrenda lista, Llama en peligro</string>
+    <string name="a11y_floating_rung_game_chest_ready">Mi Leyenda, Ofrenda lista</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">Mi Leyenda, Llama en peligro</string>
     <string name="a11y_menu_item_hint">Abrir esta sección</string>
     <string name="a11y_state_open">Abrir</string>
     <string name="app_name">Meeshy</string>
@@ -50,7 +53,7 @@
     <string name="connection_syncing">Sincronización</string>
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_retry">Reintentar</string>
-    <string name="feed_empty">Ninguna publicación</string>
+    <string name="feed_empty">Ninguna publicación de tus contactos</string>
     <string name="feed_like">Me gusta</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Iniciar sesión</string>
@@ -68,7 +71,6 @@
     <string name="notifications_title">Notificaciones</string>
     <string name="profile_back">Atrás</string>
     <string name="profile_bio_label">Biografía</string>
-    <string name="profile_cancel">Cancelar</string>
     <string name="profile_display_name_label">Nombre visible</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_edit_title">Editar perfil</string>
@@ -79,7 +81,7 @@
     <string name="push_action_comment_hint">Comentar…</string>
     <string name="root_pending_changes">Cambios pendientes</string>
     <string name="root_sync_on_reconnect">Se sincronizará al volver a estar en línea</string>
-    <string name="route_title_affiliate">Afiliación</string>
+    <string name="route_title_affiliate">Referidos</string>
     <string name="route_title_bookmarks">Marcadores</string>
     <string name="route_title_communities">Comunidades</string>
     <string name="route_title_community">Comunidad</string>

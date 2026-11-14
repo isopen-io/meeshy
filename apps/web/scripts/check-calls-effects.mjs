@@ -54,7 +54,13 @@
  *     vignettes et l'aperçu se peignent, deux tapes photographient le cadre
  *     (JPEG 1080 × 1920) ; une troisième personne arrive (caméra coupée) et
  *     plus AUCUNE ambiance n'offre de cadre de duo ;
- *  9. aucune erreur de page.
+ *  8 ter. HAUTEUR COMPACTE (#17927) : fenêtre couchée (568 × 320, 640 × 260 ; 568 × 200 en Effets), un cadre
+ *     choisi ou deux couches posées, la barre ‹ · Réglages · (+) reste entière, à 44 au moins, atteinte par le doigt ;
+ *     ce qui est au-dessus défile et se range contre elle ; l'appui long sur (+) ouvre une liste qui ne sort pas de l'écran ;
+ *  9. aucune erreur de page ;
+ * 10. à 1 280 px, colonne du journal ouverte, la surface du cadre en direct se
+ *     borne à la scène réduite et suit son glissé (transform seul), en LTR et en
+ *     RTL ; la colonne repartie, elle couvre de nouveau la fenêtre (#17929, W1).
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -86,6 +92,12 @@ const capture = async (page, name) => {
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 /** Un toucher CENTRE son élément en défilant : le geste suivant vise l'élément arrêté, comme un doigt. */
+/** Le carrousel rouvert a fini de monter (#18186) : une double tape le vise à sa place, pas pendant sa montée. */
+const risen = (page, selector) => page.waitForFunction((target) => {
+  const element = document.querySelector(target);
+  return element !== null && element.getAnimations().every((animation) => animation.playState !== 'running');
+}, selector, { timeout: 4000 }).catch(() => undefined);
+
 const centered = (page, id) =>
   until(
     page,
@@ -254,6 +266,98 @@ const nestedGlass = (page) =>
     return [...document.querySelectorAll(GLASS)].filter((glass) => glass.parentElement?.closest(GLASS) != null).length;
   });
 
+// <compact>
+/**
+ * 7 ter. HAUTEUR COMPACTE (#17927) : un cadre choisi, ou deux couches posées, la barre ‹ · Réglages · (+) reste
+ * ENTIÈREMENT dans la fenêtre et touchable (44 au moins, rien ne la recouvre), l'appui long sur (+) ouvre la liste, qui
+ * ne monte pas au-dessus de l'écran. Ce qui est au-dessus (carrousel, ambiances, option « Cadre », compte rendu) défile :
+ * jamais la barre. On entre dans le mode à hauteur d'écran d'accueil, PUIS la fenêtre se resserre — un téléphone qu'on
+ * couche, comme en recette.
+ */
+const COMPACT_CASES = [
+  { mode: 'montage', width: 568, height: 320 },
+  { mode: 'montage', width: 640, height: 260 },
+  { mode: 'effects', width: 568, height: 320 },
+  { mode: 'effects', width: 568, height: 200 },
+];
+
+const barReach = (page) =>
+  page.evaluate(() => {
+    const bar = document.querySelector('[data-call-mode-bar]')?.getBoundingClientRect();
+    const buttons = [...document.querySelectorAll('[data-call-mode-quit], [data-call-effects-settings-toggle], [data-call-effects-add-look]')].map((button) => {
+      const box = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return { name: button.getAttribute('aria-label'), width: box.width, height: box.height, top: box.top, bottom: box.bottom, left: box.left, right: box.right, reached: hit !== null && button.contains(hit) };
+    });
+    return { height: window.innerHeight, width: window.innerWidth, bar: bar === undefined ? null : { top: bar.top, bottom: bar.bottom }, buttons };
+  });
+
+const compactCase = async (browser, { mode, width, height }) => {
+  const label = `hauteur compacte ${width}×${height}, ${mode === 'montage' ? 'Montage, cadre choisi' : 'Effets, deux couches'}`;
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+  await context.addInitScript(ARM_PEER);
+  const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    check(await startConnectedVideoCall(page), `${label} : l'appel se connecte et la caméra s'allume`);
+    await openActions(page);
+    if (mode === 'montage') {
+      await page.click('[data-call-control="capture"]');
+      check(await appears(page, '[data-call-mode="montage"] [data-call-frame-moods] [data-call-frame-mood]:nth-child(2)', 15_000), `${label} : le Montage s'ouvre sur ses ambiances`);
+      await risen(page, '[data-call-montage-looks]');
+      const mood = (await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => button.getAttribute('data-call-frame-mood'))))[1];
+      await page.click(`[data-call-frame-mood="${mood}"]`);
+      check(await appears(page, '[data-call-montage-options]'), `${label} : un cadre choisi, l'option « Cadre » s'ajoute au-dessus des ambiances`);
+    } else {
+      await page.click('[data-call-control="effects"]');
+      check(await appears(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : le mode Effets s'ouvre`);
+      await risen(page, '[data-call-effects-looks]');
+      await page.click('[data-carousel-item="toad"]');
+      await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]');
+      await page.click('[data-call-effects-category="color"]');
+      await risen(page, '[data-call-effects-looks]');
+      await page.click('[data-carousel-item="golden"]');
+      await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]');
+    }
+    await page.setViewportSize({ width, height });
+    await until(page, (target) => window.innerHeight === target, height);
+    await page.waitForTimeout(700);
+    const reach = await barReach(page);
+    check(reach.buttons.length === 3 && reach.bar !== null && reach.bar.top >= 0 && reach.bar.bottom <= reach.height + 0.5, `${label} : la barre ‹ · Réglages · (+) est entièrement dans la fenêtre (${JSON.stringify(reach.bar)} sur ${reach.height})`);
+    check(reach.buttons.every((button) => button.width >= TAP_FLOOR - 0.5 && button.height >= TAP_FLOOR - 0.5 && button.top >= 0 && button.bottom <= reach.height + 0.5 && button.left >= 0 && button.right <= reach.width + 0.5), `${label} : ses trois boutons font ${TAP_FLOOR} au moins et tiennent dans l'écran`);
+    check(reach.buttons.every((button) => button.reached), `${label} : rien ne recouvre ses boutons — le doigt les atteint (${reach.buttons.map((button) => `${button.name}:${button.reached}`).join(' · ')})`);
+    const above = await page.evaluate(() => {
+      const rider = document.querySelector('[data-call-mode-rider]');
+      const bar = document.querySelector('[data-call-mode-bar]')?.getBoundingClientRect();
+      const box = rider?.getBoundingClientRect();
+      return { scrolls: rider !== null && getComputedStyle(rider).overflowY === 'auto', clear: box !== undefined && bar !== undefined && box.bottom <= bar.top + 1, scrollable: rider !== null && rider.scrollHeight > rider.clientHeight, pinned: rider !== null && rider.scrollHeight - rider.clientHeight - rider.scrollTop < 2 };
+    });
+    check(above.scrolls && above.clear, `${label} : ce qui est au-dessus défile et s'arrête à la barre (${JSON.stringify(above)})`);
+    check(!above.scrollable || above.pinned, `${label} : le dessus se range contre la barre — le carrousel se voit d'abord, les ambiances se remontent`);
+    await capture(page, `barre-compacte-${mode}-${width}x${height}`);
+    check(await holdAddLook(page), `${label} : l'appui long sur (+) ouvre la liste des effets appliqués`);
+    const list = await page.evaluate(() => {
+      const box = document.querySelector('[data-call-effect-layers]');
+      const area = box?.getBoundingClientRect();
+      const undo = box?.querySelector('[data-call-effect-layer-undo]')?.getBoundingClientRect();
+      const hit = undo === undefined ? null : document.elementFromPoint(undo.left + undo.width / 2, undo.top + undo.height / 2);
+      return { top: area?.top ?? -1, bottom: area?.bottom ?? -1, scrolls: box !== null && getComputedStyle(box).overflowY === 'auto', reached: hit !== null && (box?.contains(hit) ?? false) };
+    });
+    check(list.top >= 0 && list.bottom <= height + 0.5 && list.reached, `${label} : la liste reste dans l'écran et sa première ligne se touche (${JSON.stringify(list)})`);
+    const again = await barReach(page);
+    check(again.bar !== null && again.bar.bottom <= again.height + 0.5 && again.buttons.every((button) => button.reached && button.bottom <= again.height + 0.5), `${label} : la liste ouverte, la barre reste entière et touchable`);
+    await page.keyboard.press('Escape');
+    check(await vanishes(page, '[data-call-effect-layers]'), `${label} : Échap referme la liste`);
+  } catch (error) {
+    failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
+  }
+  check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
+  await context.close();
+};
+// </compact>
+
 const browser = await launchChromium({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 try {
   for (const [scheme, width, height] of [
@@ -349,7 +453,11 @@ try {
       });
       check(/^linear-gradient\(/.test(edgeFade) && (edgeFade.match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length === 2, `${label} : le carrousel s'efface en fondu à ses deux bords (#17409) — ${edgeFade}`);
       await page.click('[data-carousel-item="golden"]');
-      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Doré » est coché`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : « Doré » choisi, le carrousel se referme (#18186)`);
+      check((await page.$$eval('[data-call-mode-bar] [data-call-effects-category][aria-pressed="true"]', (tabs) => tabs.length)) === 0 && (await page.$('[data-call-mode-bar] [data-call-effects-add-look]')) !== null, `${label} : la barre revient à son menu de base — Visage · Couleur · Cadres sur ‹ · Réglages · (+)`);
+      await page.click('[data-call-effects-category="color"]');
+      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Couleur » rouvre le carrousel, « Doré » coché`);
+      await risen(page, '[data-call-effects-looks]');
       await centered(page, 'golden');
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="golden"]');
@@ -366,7 +474,7 @@ try {
       // ------------------------------------------------ 4 bis. l'éruption
       await page.click('[data-call-effects-category="face"]');
       await page.click('[data-carousel-item="volcano"]');
-      check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : « Éruption » est coché`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : « Éruption » choisie, le carrousel se referme`);
       const warmth = (color) => (color === null ? 0 : color.r - color.b);
       const tinted = await until(page, (base) => {
         const video = document.querySelector('[data-call-mode-preview] video');
@@ -409,9 +517,13 @@ try {
       check((await page.$('[data-call-mode-bar] [data-call-effects-categories]')) === null, `${label} : la barre a perdu ses puces et se resserre sur ‹ · Réglages · (+)`);
       check(settingsLayout.titles[0] === 'Luminosité' && settingsLayout.titleAbove, `${label} : « Luminosité » au-dessus de son curseur (P8b.3)`);
       await capture(page, `effets-reglages-${slug}`);
-      check(await vanishes(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : à la place du carrousel, qui repart en fondu`);
       await page.click('[data-call-effects-settings-toggle]');
-      check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
+      check((await vanishes(page, '[data-call-effects-settings]')) && (await appears(page, '[data-call-mode-bar] [data-call-effects-categories]')) && (await page.$('[data-call-mode="effects"] [data-call-mode-carousel]')) === null, `${label} : un second appui rend le menu de base, ses puces revenues`);
+      await page.click('[data-call-effects-settings-toggle]');
+      await appears(page, '[data-call-effects-settings]');
+      check((await page.getAttribute('[data-call-mode-quit]', 'aria-label')) === 'Fermer les réglages', `${label} : panneau ouvert, ‹ se nomme « Fermer les réglages »`);
+      await page.click('[data-call-mode-quit]');
+      check((await vanishes(page, '[data-call-effects-settings]')) && (await page.$('[data-call-mode="effects"]')) !== null, `${label} : ‹ referme le panneau sans quitter le mode (#17947)`);
 
       // ------------------------------------------------ 5 bis. la pile d'effets : l'appui long sur (+) liste ce qui est appliqué (#17903)
       check(await holdAddLook(page), `${label} : l'appui long sur (+) liste les effets appliqués`);
@@ -436,7 +548,8 @@ try {
       check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : l'effet validé est gardé`);
       await page.click('[data-call-effects-category="color"]');
       await page.click('[data-carousel-item="sky"]');
-      await page.focus('[data-carousel-item="sky"]');
+      await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]');
+      check(await until(page, () => document.activeElement?.getAttribute('data-call-effects-category') === 'color'), `${label} : le carrousel refermé, le focus rejoint la puce « Couleur »`);
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]') && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : Échap quitte le mode sans réduire l'appel`);
       await openActions(page);
@@ -490,6 +603,7 @@ try {
       check(await paintedAll('[data-call-capture-thumb]'), `${label} : les treize vignettes se peignent (${(await painted(page, '[data-call-capture-thumb]')).filter(Boolean).length}/13)`);
       await page.click('[data-carousel-item="cover"]');
       check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === 'cover', `${label} : l'aperçu passe en Couverture`);
+      check(await vanishes(page, '[data-call-mode="montage"] [data-call-mode-carousel]'), `${label} : « Couverture » choisie, le carrousel se referme (#18186)`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : la couverture se peint`);
       await capture(page, `montage-couverture-${slug}`);
       // ------------------------------------------------ 8 ter. la barre du Montage est celle d'Effets (#17903, #16979)
@@ -504,15 +618,18 @@ try {
           frames: bar?.querySelector('[data-call-effects-category="frames"]')?.getAttribute('aria-pressed') ?? null,
           sizes,
           validate: document.querySelector('[data-call-effects-validate]') !== null,
-          faces: document.querySelector('[data-call-capture-faces]') !== null,
+          faces: document.querySelector('[data-call-mode-bar] [data-call-capture-faces]') === null,
           keyboard: document.querySelector('[data-call-record-key]') !== null,
         };
       });
       check(montageBar.glass && montageBar.back === 'Retour à l’appel' && montageBar.settings && montageBar.add && !montageBar.validate, `${label} : la barre du Montage est celle d'Effets — verre, ‹ · Réglages · (+), ni Quitter ni Valider (${JSON.stringify(montageBar.back)})`);
-      check(montageBar.frames === 'true', `${label} : sous la barre, la puce « Cadres » est pressée`);
+      check(montageBar.frames === 'false', `${label} : menu de base — la puce « Cadres » n'est pas pressée, rien n'est ouvert`);
       check(montageBar.sizes.length === 3 && montageBar.sizes.every((size) => size >= TAP_FLOOR - 0.5), `${label} : les trois boutons de la barre font ${TAP_FLOOR} au moins`);
-      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » et la vidéo au clavier restent atteignables`);
+      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » (dans Réglages) et la vidéo au clavier restent atteignables`);
 
+      await page.click('[data-call-effects-category="frames"]');
+      check((await appears(page, '[data-call-mode="montage"] [data-call-mode-carousel]')) && (await page.getAttribute('[data-call-effects-category="frames"]', 'aria-pressed')) === 'true', `${label} : « Cadres » rouvre le carrousel, pressée`);
+      await risen(page, '[data-call-montage-looks]');
       await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
@@ -547,13 +664,17 @@ try {
       const tiles = await page.$$eval('video[data-call-stream]', (videos) => videos.filter((video) => video.videoWidth > 0).length);
       const downloads = [];
       page.on('download', (item) => downloads.push(item.suggestedFilename()));
+      await page.click('[data-call-effects-settings-toggle]');
+      await appears(page, '[data-call-effects-settings] [data-call-capture-faces]');
       await page.click('[data-call-capture-faces]');
+      check(await vanishes(page, '[data-call-effects-settings]'), `${label} : « Chaque visage », dans Réglages, rend le menu de base`);
       check(await until(page, () => /visages? enregistrés?/.test(document.querySelector('[data-call-capture-status]')?.textContent ?? '')), `${label} : « Chaque visage » le dit (${await page.textContent('[data-call-capture-status]')})`);
       const deadline = Date.now() + 3000;
       while (downloads.length < tiles && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
       check(tiles > 0 && downloads.length === tiles && downloads.every((name) => /^meeshy-appel-visage-/.test(name)), `${label} : un portrait par tuile affichée (${downloads.length}/${tiles})`);
 
       // ------------------------------------------------ 8 bis. les cadres de capture (#8742, #8743)
+      await page.click('[data-call-effects-category="frames"]');
       check(await appears(page, '[data-call-frame-moods] [data-call-frame-mood]:nth-child(2)'), `${label} : les puces d'ambiance se montrent`);
       const chips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }));
       check(chips[0]?.id === 'classics' && chips[0]?.label === 'Classiques' && chips[0]?.pressed === 'true' && chips.length > 2, `${label} : « Classiques » d'abord et choisie, puis ${chips.length - 1} ambiances (${chips.map((chip) => chip.label).join(' · ')})`);
@@ -572,7 +693,9 @@ try {
       check((await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')))).includes('frame'), `${label} : le cadre est une couche de la pile`);
       await capture(page, `montage-pile-${slug}`);
       await page.click('[data-call-effect-layer-undo="frame"]');
-      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : annuler le cadre referme la liste et rend les classiques`);
+      check(await vanishes(page, '[data-call-effect-layers]'), `${label} : annuler le cadre referme la liste et rend le menu de base`);
+      await page.click('[data-call-effects-category="frames"]');
+      check((await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : le cadre annulé, « Cadres » rouvre les classiques`);
       await page.click(`[data-call-frame-mood="${mood}"]`);
       await centered(page, duoFrames[0]);
       const framed = page.waitForEvent('download', { timeout: 8000 });
@@ -609,6 +732,97 @@ try {
     await context.close();
   }
 
+  // ------------------------------------------------ 10. le cadre en direct suit la scène quand la colonne du journal s'ouvre (W1, #17929)
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+    await context.addInitScript(ARM_PEER);
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const label = 'sombre 1280×800 (W1)';
+    const geometry = () =>
+      page.evaluate(() => {
+        const box = (selector) => {
+          const node = document.querySelector(selector);
+          if (node === null) return null;
+          const { left, right, top, bottom, width, height } = node.getBoundingClientRect();
+          return { left, right, top, bottom, width, height };
+        };
+        const canvas = document.querySelector('canvas[data-call-live-frame-surface]');
+        return { bounds: box('[data-call-live-frame-bounds]'), stage: box('[data-call-stage-surface]'), column: box('[data-call-journal-column]:not([data-leaving])'), canvas: canvas === null ? null : { cw: canvas.clientWidth, ch: canvas.clientHeight, w: canvas.width, h: canvas.height }, viewport: window.innerWidth };
+      });
+    const settled = () => page.waitForFunction(() => (document.querySelector('[data-call-live-frame-bounds]')?.getAnimations({ subtree: true }) ?? []).every((animation) => animation.playState !== 'running'), undefined, { timeout: 4000 }).then(() => true, () => false);
+    /** La toile redimensionnée est repeinte à sa place : sa matrice a le rapport de sa case (aucune attente à durée fixe). */
+    const repainted = () => until(page, () => { const canvas = document.querySelector('canvas[data-call-live-frame-surface]'); return canvas !== null && canvas.clientWidth > 0 && Math.abs(canvas.width / canvas.height - canvas.clientWidth / canvas.clientHeight) < 0.02; });
+    const near = (a, b) => a !== undefined && b !== undefined && Math.abs(a - b) <= 1.5;
+    const toggleJournal = async () => {
+      await openActions(page);
+      return page.evaluate(() => {
+        document.querySelector('[data-call-control="journal"]')?.click();
+        const moved = document.querySelector('[data-call-live-frame-bounds]')?.getAnimations() ?? [];
+        return moved.flatMap((animation) => (animation.effect?.getKeyframes() ?? []).flatMap((frame) => Object.keys(frame))).filter((key) => !['offset', 'computedOffset', 'easing', 'composite', 'transform'].includes(key));
+      });
+    };
+    const bounded = async (rtl) => {
+      const g = await geometry();
+      const side = rtl ? 'à gauche' : 'à droite';
+      check(g.column !== null && g.bounds !== null && g.stage !== null, `${label}${rtl ? ' RTL' : ''} : la colonne est ouverte et la surface du cadre est posée`);
+      if (g.column === null || g.bounds === null || g.stage === null) return;
+      check(rtl ? g.bounds.left >= g.column.right - 1.5 : g.bounds.right <= g.column.left + 1.5, `${label}${rtl ? ' RTL' : ''} : la surface du cadre s'arrête avant la colonne, ${side} (${Math.round(g.bounds.left)}–${Math.round(g.bounds.right)} px, colonne ${Math.round(g.column.left)}–${Math.round(g.column.right)})`);
+      check(near(g.bounds.left, g.stage.left) && near(g.bounds.right, g.stage.right), `${label}${rtl ? ' RTL' : ''} : la surface du cadre a la place de la scène réduite (${Math.round(g.bounds.width)} px pour ${Math.round(g.stage.width)})`);
+      check(g.canvas !== null && g.canvas.cw > 0 && Math.abs(g.canvas.w / g.canvas.h - g.canvas.cw / g.canvas.ch) < 0.02, `${label}${rtl ? ' RTL' : ''} : la toile est peinte à la taille de cette place, sans déformation (${JSON.stringify(g.canvas)})`);
+    };
+    try {
+      check(await startConnectedVideoCall(page), `${label} : l'appel se connecte et la caméra s'allume`);
+      await openActions(page);
+      await page.click('[data-call-control="capture"]');
+      check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
+      await page.click('[data-call-effects-category="frames"]');
+      check(await until(page, () => document.querySelectorAll('[data-call-frame-moods] [data-call-frame-mood]').length > 2), `${label} : les ambiances de cadre se montrent`);
+      await page.evaluate(() => document.querySelectorAll('[data-call-frame-moods] [data-call-frame-mood]')[1]?.click());
+      check(await until(page, () => document.querySelector('[data-call-mode="montage"] [data-carousel-item]')?.getAttribute('data-carousel-item')?.endsWith('.duo') === true), `${label} : une ambiance offre des cadres de duo, le premier passe à l'aperçu`);
+      check(await appears(page, '[data-call-live-frame-hold]'), `${label} : un cadre de duo offre « Cadre en direct »`);
+      await page.click('[data-call-live-frame-hold]');
+      await page.keyboard.press('Escape');
+      check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
+      check(await appears(page, 'canvas[data-call-live-frame-surface]'), `${label} : le cadre gardé se peint autour des deux vidéos`);
+      await settled();
+      const before = await geometry();
+      check(before.bounds !== null && near(before.bounds.width, before.viewport), `${label} : colonne fermée, la surface couvre la fenêtre (${Math.round(before.bounds?.width ?? 0)} px sur ${before.viewport})`);
+
+      const impure = await toggleJournal();
+      check(impure.length === 0, `${label} : la surface rejoint la scène par la transformation seule (propriétés animées hors transform : ${JSON.stringify(impure)})`);
+      check(await appears(page, '[data-call-journal-column]:not([data-leaving])'), `${label} : « Journal » ouvre la colonne`);
+      await settled();
+      await repainted();
+      await bounded(false);
+      await capture(page, 'cadre-colonne-dark-1280x800');
+
+      await toggleJournal();
+      check(await vanishes(page, '[data-call-journal-column]'), `${label} : « Journal » referme la colonne`);
+      await settled();
+      await repainted();
+      const after = await geometry();
+      check(after.bounds !== null && near(after.bounds.width, after.viewport) && after.canvas !== null && Math.abs(after.canvas.w / after.canvas.h - after.canvas.cw / after.canvas.ch) < 0.02, `${label} : la colonne repartie, la surface couvre de nouveau la fenêtre (${Math.round(after.bounds?.width ?? 0)} px)`);
+
+      await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+      await toggleJournal();
+      check(await appears(page, '[data-call-journal-column]:not([data-leaving])'), `${label} RTL : « Journal » ouvre la colonne`);
+      await settled();
+      await repainted();
+      await bounded(true);
+      await capture(page, 'cadre-colonne-rtl-dark-1280x800');
+      await page.evaluate(() => document.documentElement.setAttribute('dir', 'ltr'));
+      await openActions(page);
+      await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
+    } catch (error) {
+      failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
+    }
+    check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
+    await context.close();
+  }
+
   // ------------------------------------------------ 7 bis. une caméra qui offre le zoom
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
   await context.addInitScript(ARM_PEER_AND_ZOOM);
@@ -636,6 +850,9 @@ try {
   }
   check(errors.length === 0, `zoom : aucune erreur de page — ${JSON.stringify(errors)}`);
   await context.close();
+
+  // ------------------------------------------------ 7 ter. la barre garde sa hauteur à hauteur compacte (#17927)
+  for (const compact of COMPACT_CASES) await compactCase(browser, compact);
 } finally {
   await browser.close();
   served.close();

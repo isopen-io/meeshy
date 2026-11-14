@@ -30,6 +30,7 @@ import { sendForbidden, sendNotFound } from '../../utils/response.js';
 import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from './readerAttachmentLifecycle';
 import { ADMITTED_FILE_READER_WHERE, withoutExpiredShareLinks } from './fileReaderAdmission';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../historyFloor';
 
 export type AttachmentReadVerdict = 'allow' | 'forbidden' | 'gone';
 
@@ -92,9 +93,11 @@ export async function resolveSignedReaderVerdict(
 }
 
 /**
- * Le cœur commun : appartenance ACTIVE à la conversation du message, puis vie
- * du porteur, puis échéance de CE lecteur. L'appartenance d'abord, pour la
- * raison écrite en tête de fichier.
+ * Le cœur commun : appartenance ACTIVE à la conversation du message, puis
+ * plancher d'historique de CE lecteur (#18470), puis vie du porteur, puis
+ * échéance de CE lecteur. L'appartenance d'abord, pour la raison écrite en tête
+ * de fichier ; un message d'avant le plancher n'existe pas pour ce lecteur, donc
+ * `gone`, comme le 404 que la liste et le détail lui rendent.
  */
 async function memberReadVerdict(
   prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'conversationShareLink'>,
@@ -118,10 +121,13 @@ async function memberReadVerdict(
   // d'entrée non échu.
   const found = await prisma.participant.findFirst({
     where: { ...input.participantWhere(message.conversationId), ...ADMITTED_FILE_READER_WHERE },
-    select: { id: true, shareLinkId: true },
+    select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
   });
   const [participant] = found ? await withoutExpiredShareLinks(prisma, [found], input.now) : [];
   if (!participant) return 'forbidden';
+
+  const floor = await loadHistoryFloor(prisma, participant);
+  if (floor && message.createdAt < floor) return 'gone';
 
   // Le dernier maillon de la chaîne de destruction des cycles 92 à 94 : les
   // octets suivent la vie du message porteur. Cf. `carrierMessageLifecycle`.

@@ -266,9 +266,13 @@ describe("la famille appel — un masque de fondu UNIQUE, un verre qui se LIT da
     expect(grid).not.toContain("'linear-gradient(to ");
   });
 
-  test("le verre de la pastille d'appel se lit `media-hairline`, jamais un blanc 22 % en dur", () => {
+  /* Témoin qui ÉVOLUE (#18223, S1.2) : le filet `media-hairline` était le fond d'« Arrêter » ; la planche S1, iOS
+     et Android en font une capsule blanche à encre rouge, lue dans la charte (`--color-on-media`, `--ios-error-dark`,
+     ceux du bandeau « Vous partagez »). La règle tient : aucun blanc en dur. */
+  test("« Arrêter » de la pastille d'appel se lit dans la charte, jamais un blanc 22 % en dur", () => {
     expect(scanSource(pill)).toEqual([]);
-    expect(pill).toContain('var(--color-media-hairline)');
+    expect(pill).toContain("background: 'var(--color-on-media)'");
+    expect(pill).toContain("color: 'var(--ios-error-dark)'");
     expect(pill).not.toContain('white 22%');
   });
 });
@@ -308,6 +312,35 @@ describe("le bouton d'envoi — un fond de marque UNIQUE, une encre qui se LIT d
       expect(source).toContain('text-ios-on-brand');
     }
     expect(edit).not.toContain('text-white');
+  });
+});
+
+describe("la pastille d'action d'en-tête — l'encre blanche sur aplat saturé se LIT dans la charte", () => {
+  // Deux pastilles de la barre d'en-tête d'un fil peignaient leur glyphe en
+  // `'#fff'` brut dès qu'elles s'activent sur un aplat SATURÉ : `thread-header-
+  // bring.tsx` (la cloche qui sonne, fond `var(--color-error)`) et
+  // `thread-header-talkie.tsx` (le talkie pressé, fond `linear-gradient(135deg,
+  // var(--accent), …)`). La charte nomme déjà cette encre — blanc sur un aplat
+  // marque/accent/ERREUR est `var(--color-ios-on-brand)` (= `--ios-on-brand`,
+  // #fff byte-identique) — donc le littéral quitte la surface sans rien changer
+  // au rendu. Même rôle, même jeton que l'encre du bouton d'envoi (86w) ; pas
+  // une exemption.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const bring = read('components/thread-header-bring.tsx');
+  const talkie = read('components/thread-header-talkie.tsx');
+
+  test('aucune des deux pastilles ne porte plus de littéral de couleur', () => {
+    expect(scanSource(bring)).toEqual([]);
+    expect(scanSource(talkie)).toEqual([]);
+    expect(exemptionOf('components/thread-header-bring.tsx')).toBe(null);
+    expect(exemptionOf('components/thread-header-talkie.tsx')).toBe(null);
+  });
+
+  test("l'encre active porte le jeton var(--color-ios-on-brand), jamais '#fff'", () => {
+    for (const source of [bring, talkie]) {
+      expect(source).toContain('var(--color-ios-on-brand)');
+      expect(source).not.toContain("'#fff'");
+    }
   });
 });
 

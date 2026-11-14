@@ -8,10 +8,11 @@ import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-captur
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { addingGenre, canAdd, genreRow, isFull, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
+import { ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-bar-rule';
 import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { useEffectLayers } from '@/lib/calls/use-effect-layers';
-import { useSwapPresence } from '@/lib/calls/use-mode-motion';
+import { loadModeMotion, useModeFade, useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
@@ -21,7 +22,7 @@ import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
-import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, MODE_FIT, RIDER_FIT, SettingsGlass, STACKED, textOf, useEffectsBarMode, useRiderAtBar } from './call-effects-bar';
 import type { LiveFrameHold } from './call-live-frame-hold-option';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
@@ -39,8 +40,10 @@ import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
  *   de la barre — Luminosité · Flou du fond, là où la caméra l'offre — qui monte en
  *   fondu depuis elle pendant que la barre se resserre (morphisme) ; le
  *   re-toucher rend la bande de looks par le chemin inverse ;
- * - le look touché s'applique tout de suite et RESTE : ni Valider ni ✕. ‹ (ou
- *   Échap) rend l'appel ; (+) ouvre les looks d'un autre genre, à poser par-dessus ;
+ * - le look touché s'applique tout de suite et RESTE : ni Valider ni ✕ ; le
+ *   carrousel se referme et la barre revient à son menu de base (#18186) — une
+ *   puce le rouvre, (+) ouvre les looks d'un autre genre, à poser par-dessus.
+ *   ‹ (ou Échap) referme Réglages, sinon rend l'appel ;
  * - plus de déclencheur (#8625) : DEUX TAPES sur l'effet choisi capturent mon
  *   image, un APPUI LONG la filme avec le son de l'appel, jusqu'au stop posé
  *   au centre (`call-capture-studio.tsx`) ;
@@ -54,7 +57,7 @@ import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
  * d'appel ; son catalogue se charge avec lui (`loadEffectsModeText`).
  */
 
-export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language)]);
+export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language), loadModeMotion()]);
 
 /**
  * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
@@ -108,6 +111,9 @@ type ModeProps = {
   readonly hold?: LiveFrameHold | undefined;
   /** La puce « Cadres » ouvre le Montage : sans lui, la rangée ne propose que Visage et Couleur. */
   readonly onOpenFrames?: (() => void) | undefined;
+  /** La couche repart (P8.14) : elle se fond, puis appelle `onGone`. */
+  readonly leaving?: boolean;
+  readonly onGone?: () => void;
 };
 
 /** Ce qu'on tire de ma vidéo affichée : une image, ou une piste à filmer. */
@@ -241,24 +247,29 @@ const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
 
 const layerChoice = (id: string): string => (id === 'none' || id === 'natural' ? NO_CHOICE : id);
 
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv, startOn = 'face', hold, onOpenFrames, leaving = false, onGone = () => undefined }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const root = useRef<HTMLDivElement>(null);
   const [category, setCategory] = useState<EffectsCategory>(startOn);
-  const [settings, setSettings] = useState(!colorAvailable);
+  const bar = useEffectsBarMode(colorAvailable ? ENTERING : 'settings', onExit, !colorAvailable);
+  const settings = bar.mode === 'settings';
   const t = textOf(language);
   const words = layersTextOf(language);
   const heldFrame = hold?.heldFrameId ?? null;
   const stack = useEffectLayers([...effectsApplied(effects), ...(heldFrame === null ? [] : [{ genre: 'frame' as const, choice: heldFrame }])], OWNED);
   const full = isFull(stack);
   const row = genreRow(true, onOpenFrames !== undefined);
-  const list = useLayersList();
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
+  useRiderAtBar(rider);
   const style = useRef('none');
-  const puces = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
-  const looks = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
+  const puces = useSwapPresence<HTMLDivElement>(colorAvailable && showsLooks(bar.mode));
+  const looks = useSwapPresence<HTMLDivElement>(colorAvailable && showsCarousel(bar.mode));
   const panel = useSwapPresence<HTMLDivElement>(settings);
+  const leavingAttributes = useModeFade(root, leaving, onGone, () => {
+    bar.reopen();
+    setCategory(startOn);
+  });
   const studio = useCaptureStudio({
     language,
     still: async () => {
@@ -282,8 +293,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    if (list.open) list.hide();
-    else onExit();
+    bar.escape();
   };
 
   const items: readonly CarouselItem[] =
@@ -298,7 +308,6 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
     const preset = VIDEO_PRESET_CATALOG.find((entry) => entry === id);
-    list.hide();
     if (category === 'face' && face !== undefined && face !== effects.faceEffect) {
       if (refuses('face', face)) refuse();
       else apply({ faceEffect: face });
@@ -308,9 +317,12 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       else apply({ preset });
     }
   };
+  /** Un choix arrêté rend le menu de base ; refusé (trois couches), il n'en est pas un et le carrousel reste. */
+  const chosen = (id: string): void => {
+    if (!refuses(category, id)) bar.chosen();
+  };
   const addLook = (): void => {
-    setSettings(false);
-    list.hide();
+    bar.adding();
     if (full) {
       refuse();
       return;
@@ -320,7 +332,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
     else if (target === 'face' || target === 'color') setCategory(target);
   };
   const undo = (genre: EffectGenre): void => {
-    list.hide();
+    bar.removed();
     if (genre === 'face') apply({ faceEffect: 'none' });
     else if (genre === 'color') apply({ preset: 'natural' });
     else {
@@ -329,26 +341,27 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
     }
   };
   const labelOf = (genre: EffectGenre): string => (genre === 'face' ? t('callStudio.mode.face') : genre === 'color' ? t('callStudio.effects.color') : words.frames);
-  const entries = row.map((genre) => ({ id: genre === 'frame' ? 'frames' : genre, label: labelOf(genre) }));
+  const entries = row.map((genre) => ({ id: genre === 'frame' ? 'frames' : genre, label: labelOf(genre), genre }));
   const pick = (id: string): void => {
-    list.hide();
     if (id === 'frames') onOpenFrames?.();
-    else if (id === 'face' || id === 'color') setCategory(id);
+    if (id !== 'face' && id !== 'color') return;
+    bar.genre(id === category);
+    setCategory(id);
   };
 
   return (
-    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="effects">
+    <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className={`flex w-full flex-col items-center gap-3 ${MODE_FIT}`} data-call-mode="effects" {...leavingAttributes}>
       <div className="pointer-events-none fixed inset-0 z-0 bg-media-backdrop" data-call-mode-preview="effects">
         {preview}
       </div>
       {companions.length === 0 ? null : <CallEffectsCompanions language={language} companions={companions} captions={captions} floor={controls} />}
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
-        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+      <div ref={controls} className={`relative z-10 flex w-full flex-col items-center gap-3 ${MODE_FIT}`}>
+        <div ref={rider} className={`flex w-full flex-col items-center gap-3 ${RIDER_FIT}`} data-call-mode-rider="">
           <CaptureStatus status={studio.status} />
           <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
             {looks.mounted ? (
-              <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-effects-looks="">
+              <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${showsCarousel(bar.mode) ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-looks="">
                 <CaptureHint language={language} />
                 <ModeCarousel
                   key={category}
@@ -356,6 +369,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
                   items={items}
                   selected={selected}
                   onSelect={select}
+                  onChosen={chosen}
                   onWheel={onWheel}
                   capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
                 />
@@ -367,15 +381,16 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
         </div>
         <EffectsBar
           language={language}
+          mode={colorAvailable ? bar.mode : 'base'}
           rider={rider}
           stack={stack}
           full={full}
-          chips={{ mounted: puces.mounted, ref: puces.ref, leaving: settings }}
-          categories={{ entries, pressed: category, onPick: pick }}
-          settings={colorAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
+          chips={{ mounted: puces.mounted, ref: puces.ref }}
+          categories={{ entries, genre: category, onPick: pick }}
+          settings={colorAvailable ? { onToggle: bar.toggleSettings } : null}
           add={colorAvailable ? { onAdd: addLook } : null}
-          list={{ open: list.open, onOpen: list.show, onClose: list.hide, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
-          onBack={onExit}
+          list={{ onOpen: () => bar.showApplied(stack.length > 0), onClose: bar.removed, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
+          onBack={bar.back}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

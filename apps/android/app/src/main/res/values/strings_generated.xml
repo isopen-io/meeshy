@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">Today’s acts: %1$d of %2$d</string>
     <string name="a11y_floating_menu_hint">Opens the navigation menu</string>
     <string name="a11y_floating_menu_notifications_value">%1$d pending notifications</string>
+    <string name="a11y_floating_rung_game_both">My Legend, Offering ready, Flame in danger</string>
+    <string name="a11y_floating_rung_game_chest_ready">My Legend, Offering ready</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">My Legend, Flame in danger</string>
     <string name="a11y_menu_item_hint">Open this section</string>
     <string name="a11y_state_open">Open</string>
     <string name="app_name">Meeshy</string>
@@ -50,7 +53,7 @@
     <string name="connection_syncing">Syncing</string>
     <string name="conversations_logout">Log out</string>
     <string name="conversations_retry">Retry</string>
-    <string name="feed_empty">No posts yet</string>
+    <string name="feed_empty">No posts from your contacts</string>
     <string name="feed_like">Like</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Log in</string>
@@ -68,7 +71,6 @@
     <string name="notifications_title">Notifications</string>
     <string name="profile_back">Back</string>
     <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Cancel</string>
     <string name="profile_display_name_label">Display name</string>
     <string name="profile_edit">Edit</string>
     <string name="profile_edit_title">Edit profile</string>
@@ -79,7 +81,7 @@
     <string name="push_action_comment_hint">Comment…</string>
     <string name="root_pending_changes">Pending changes</string>
     <string name="root_sync_on_reconnect">Syncs when back online</string>
-    <string name="route_title_affiliate">Affiliate</string>
+    <string name="route_title_affiliate">Referral</string>
     <string name="route_title_bookmarks">Bookmarks</string>
     <string name="route_title_communities">Communities</string>
     <string name="route_title_community">Community</string>

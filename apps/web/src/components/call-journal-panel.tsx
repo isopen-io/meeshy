@@ -1,12 +1,14 @@
 import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
+import { CallJournalToggle } from '@/components/call-journal-toggle';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
-import { CallPanelFrame, type ColumnPanelHead, type PillPanelHead } from '@/components/call-panel-frame';
+import { CallPanelFrame, type ColumnPanelHead, type PlainPillPanelHead } from '@/components/call-panel-frame';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
-import { captionLanguageLabel, captionReveal, captionText, revealState, type CallCaption } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, revealState, type CallCaption } from '@/lib/calls/call-captions';
+import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
-import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
+import { journalEntries, type CallJournalEntry, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { journalClock } from '@/lib/calls/call-journal-clock';
 import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
@@ -36,6 +38,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * Une capture d'écran et les moments de l'enregistrement consenti y entrent à
  * leur heure (#16665, loi 13) : une ligne datée, la phrase à l'encre
  * secondaire, le pseudo seul à sa couleur.
+ *
+ * DANS la pilule, il a la tête et le pied d'iOS : « Journal » au bord de tête et
+ * la bascule Traduit · Original au bord de fin, sans ‹ ni ✕ (P6.3, P9b.4, #17928) ;
+ * à son pied, ce que disent les dernières phrases (comme le pied des sous-titres)
+ * et « Journal » en disque blanc, qui le referme (#17964, `call-journal-toggle.tsx`).
+ * En colonne, il n'a pas de pied : « Journal », au pied de la bande, la referme.
  */
 
 const INK = 'var(--color-on-media)';
@@ -45,6 +53,8 @@ const INK_2 = 'var(--color-on-media-3)';
 const NEAR_BOTTOM = 24;
 
 const COLUMN_HEAD: ColumnPanelHead = { fill: true };
+
+const PILL_HEAD: PlainPillPanelHead = { plain: true };
 
 type JournalBase = {
   readonly id: string;
@@ -62,8 +72,8 @@ type JournalBase = {
   readonly onListen: () => void;
 };
 
-/** Dans la pilule : ‹ et ✕ (le bouton rond et le glyphe remis par l'écran), et la hauteur de la fenêtre, dont la liste prend une part (`callJournalHeight`, #17343). */
-type JournalInPill = Omit<PillPanelHead, 'closeLabel' | 'closeData'> & { readonly fill?: false; readonly windowHeight?: number };
+/** Dans la pilule : la hauteur de la fenêtre, dont la liste prend une part (`callJournalHeight`, #17343). Ni ‹ ni ✕ : « Journal », au pied, le referme (#17964). */
+type JournalInPill = { readonly fill?: false; readonly windowHeight?: number };
 
 /** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur, et la tête n'a ni ‹ ni ✕ (#17932). */
 type JournalProps = JournalBase & (JournalInPill | ColumnPanelHead);
@@ -133,8 +143,25 @@ const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, lan
   );
 });
 
-/** La liste du journal dans la pilule : une part de la fenêtre (`callJournalHeight`), et jamais plus que ce que la fenêtre laisse sous l'en-tête et au-dessus de la rangée de base. */
-const listSize = (windowHeight: number | undefined): CSSProperties => (windowHeight === undefined ? { maxHeight: 'min(28rem, calc(100dvh - 20rem))' } : { height: `${callJournalHeight(windowHeight)}px`, maxHeight: 'max(8rem, calc(100dvh - 17rem))' });
+/** Ce que disent les dernières phrases, lues dans la vue du journal : la paire et le geste, ou les langues comptées. Le journal ne guette aucune attente — il dit ce qui est traduit. */
+function footLabel(entries: readonly CallJournalEntry[], view: JournalView, revealed: ReadonlySet<string>, language: InterfaceLanguage): string | null {
+  const lines = entries.slice(-CAPTIONS_OVERLAY_LINES).map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, view, revealed.has(entry.caption.id)).mode, Number.POSITIVE_INFINITY)));
+  const footer = callCaptionsFooter(lines);
+  return footer === null ? null : callCaptionsFooterLabel(language, footer);
+}
+
+/** Le pied du journal dans la pilule (P6, P9b) : à gauche ce que disent les dernières phrases, à droite « Journal » actif, qui le referme. */
+function JournalFoot({ label, language, onClose }: { readonly label: string | null; readonly language: InterfaceLanguage; readonly onClose: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-x-3 px-3 text-mini" style={{ color: INK_2 }} data-call-journal-foot="">
+      <span className="min-w-0 truncate">{label}</span>
+      <CallJournalToggle language={language} on onPress={onClose} marker="data-call-journal-toggle" />
+    </div>
+  );
+}
+
+/** La liste du journal dans la pilule : une part de la fenêtre (`callJournalHeight`), et jamais plus que ce que la fenêtre laisse sous l'en-tête et au-dessus de son pied (« Journal », 3rem) et de la rangée de base. */
+const listSize = (windowHeight: number | undefined): CSSProperties => (windowHeight === undefined ? { maxHeight: 'min(28rem, calc(100dvh - 23rem))' } : { height: `${callJournalHeight(windowHeight)}px`, maxHeight: 'max(8rem, calc(100dvh - 20rem))' });
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
@@ -176,7 +203,7 @@ export function CallJournalPanel(props: JournalProps) {
       id={id}
       title={t(language, 'callControls.journal')}
       onClose={onClose}
-      {...(props.fill === true ? COLUMN_HEAD : { closeLabel: t(language, 'callControls.close'), closeGlyph: props.closeGlyph, Button: props.Button, back: props.back })}
+      {...(fill ? COLUMN_HEAD : PILL_HEAD)}
       trailing={<CallJournalViewSwitch language={language} view={view} onChange={setView} />}
       data={{ 'data-call-journal-panel': '' }}
     >
@@ -223,6 +250,7 @@ export function CallJournalPanel(props: JournalProps) {
           ) : null}
         </div>
       )}
+      {fill ? null : <JournalFoot label={footLabel(entries, view, revealed, language)} language={language} onClose={onClose} />}
     </CallPanelFrame>
   );
 }

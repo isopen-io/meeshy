@@ -111,6 +111,7 @@ describe('ComposerStickerSheet', () => {
     });
     const host = await mount();
     expect(host.querySelector('[data-sticker-empty]')).not.toBe(null);
+    expect(host.querySelector('[data-sticker-empty]')?.textContent).toBe('Aucun sticker');
 
     await mounter.click(host.querySelector('[data-sticker-paste]'));
     await act(async () => {
@@ -335,5 +336,20 @@ describe('ComposerStickerSheet', () => {
     const mee = host.querySelector('[data-sticker-favorites] [data-mee-sticker="mee-coucou"]');
     expect(mee).not.toBe(null);
     expect(mee?.querySelector('svg')).not.toBe(null);
+  });
+
+  test('« Comment créer un sticker ? » : la consigne vit derrière un (i) lu par le lecteur d’écran, le statut reste visible', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const host = await mount();
+
+    const question = host.querySelector('button[aria-label="Comment créer un sticker ?"]');
+    expect(question).not.toBe(null);
+    const note = host.querySelector(`#${question?.getAttribute('aria-controls')}`);
+    expect(note?.textContent).toBe('Collez ou déposez une image ici pour en faire un sticker');
+    expect(note?.className).toContain('sr-only');
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('');
+
+    await mounter.click((question as HTMLElement | null) ?? null);
+    expect(note?.className).not.toContain('sr-only');
   });
 });

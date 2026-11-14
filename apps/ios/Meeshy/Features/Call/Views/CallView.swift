@@ -40,11 +40,13 @@ struct CallView: View {
     @State var showTranscript = false
     @State var showOriginalText = false
     @State var journalShowsOriginal = false
-    /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
-    /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
-    /// `onAppear` (expansion depuis la bannière) — voir le trio
-    /// scale/opacité/coins posé sur le ZStack racine.
+    /// Progression du morph PiP (0 = plein écran, 1 = contracté vers l'appel
+    /// réduit). Piloté par `collapseIntoPip()` (réduction) et par
+    /// `onAppear` (expansion depuis l'appel réduit) — voir l'échelle et
+    /// l'opacité posées sur le ZStack racine.
     @State var pipMorphProgress: CGFloat = 0
+    /// P18.4 — vers où l'appel se contracte, d'où il se redéploie (bannière ou bulle).
+    @State var pipMorphTarget = CallShareCapsuleMotion.window(reduceMotion: false, capsuleLive: true)
     /// #8435 — le décalage que l'écran suit pendant le glissé vers le bas.
     @State var swipeDownOffset: CGFloat = 0
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
@@ -89,7 +91,7 @@ struct CallView: View {
     @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
-    @State var isSelfFeatured = false
+    @State var groupStageFocus: GroupCallStageFocus = .grid
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
     /// #17791 — la hauteur réelle de chaque bandeau du haut, rendue par les bandeaux eux-mêmes.
@@ -215,7 +217,7 @@ struct CallView: View {
                 AnyView(topChrome)
             }
         }
-        // BORD À BORD sur les quatre côtés. Le `clipShape` du morph PiP (plus
+        // BORD À BORD sur les quatre côtés. La découpe du morph PiP (plus
         // bas) rogne à la BOÎTE de ce ZStack : tant qu'elle excluait la safe
         // area haute, il coupait net le fond, le self-preview et les flux vidéo
         // que leurs propres `.ignoresSafeArea()` avaient étendus jusqu'au bord —
@@ -226,14 +228,9 @@ struct CallView: View {
         // `chromeTopInset`, seule façon de la retrouver sous un conteneur qui
         // l'ignore (le proxy d'un GeometryReader y répond 0).
         .ignoresSafeArea()
-        // Morph PiP (retour user 2026-08-12) : la réduction vers la bannière
-        // et l'agrandissement depuis elle sont portés par CE trio scale/
-        // opacité/coins — le fullScreenCover est basculé SANS animation
-        // système (withTransaction) pour que la contraction/expansion soit LA
-        // transition. Ancre .top : la bannière PiP vit en haut du viewport.
-        .scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)
-        .opacity(1 - 0.55 * Double(pipMorphProgress))
-        .clipShape(RoundedRectangle(cornerRadius: pipMorphProgress * 32, style: .continuous))
+        // Morph PiP (P18.4 · P18.8) : vers l'appel réduit et depuis lui, présenté
+        // SANS animation système — transformation et opacité seulement.
+        .modifier(CallPipMorphEffect(target: pipMorphTarget, progress: $pipMorphProgress))
         .offset(y: swipeDownOffset)
         .statusBarHidden(true)
         // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
@@ -245,11 +242,11 @@ struct CallView: View {
         // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
         // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
         .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
-        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: !isGroupStage && callManager.screenShare.isRemoteSharing))
+        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: GroupCallSpotlight.showsReceivedScreen(isGroupStage: isGroupStage, isRemoteSharing: callManager.screenShare.isRemoteSharing, focus: groupStageFocus)))
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()
-            if callManager.consumePendingPipExpansion() { CallPipMorph.playExpansion(reduceMotion: reduceMotion, progress: $pipMorphProgress) }
+            CallPipMorph.playExpansion(from: callManager.consumePendingPipExpansion(), reduceMotion: reduceMotion, target: $pipMorphTarget, progress: $pipMorphProgress)
         }
         .onDisappear {
             stopPulseAnimation()

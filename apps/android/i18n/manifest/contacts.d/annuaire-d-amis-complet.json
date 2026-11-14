@@ -29,10 +29,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "contacts_list_mood_a11y",
-          "status": "android-only"
-        },
-        {
           "androidName": "contacts_list_offline_lower",
           "status": "android-only"
         },

@@ -10,7 +10,11 @@ struct GameCard<Content: View>: View {
     var tint: Color = MeeshyColors.brandPrimary
     var anchor: GameAnchor?
     var title: String?
+    /// Le détail du titre, rangé derrière un (i) : sa question en est le nom accessible (épure, règle 1).
+    var note: MeeshyInfoNote?
     @ViewBuilder let content: () -> Content
+
+    @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -18,10 +22,12 @@ struct GameCard<Content: View>: View {
         ProgressionCard(tint: tint) {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 if let title {
-                    Text(title)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundStyle(theme.textPrimary)
-                        .accessibilityAddTraits(.isHeader)
+                    MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textMuted) {
+                        Text(title)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                            .foregroundStyle(theme.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
+                    }
                 }
                 content()
             }
@@ -153,6 +159,22 @@ struct GameNote: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(tone ?? theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Une phrase d'orientation du jeu, lisible au repos, suivie du (i) de son détail secondaire (épure, règles 1 et 7).
+/// L'hôte tient l'identifiant de la note ouverte : un seul (i) est ouvert par écran.
+struct GameNoteInfo: View {
+    let text: String
+    let note: MeeshyInfoNote
+    @Binding var openNoteID: String?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textMuted) {
+            GameNote(text: text)
+        }
     }
 }
 

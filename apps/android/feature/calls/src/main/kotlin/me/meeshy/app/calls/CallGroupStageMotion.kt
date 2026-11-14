@@ -118,7 +118,8 @@ internal data class CallGroupTileRender(
     val eglContext: EglBase.Context,
     val mirror: Boolean,
     val fit: Boolean = false,
-    val zoom: Float = 1f,
+    /** La couche de l'image seule (le zoom et le déplacement d'un écran partagé, lus au dessin) — jamais la plaque. */
+    val videoLayer: Modifier = Modifier,
 )
 
 internal typealias CallGroupTileContent = @Composable (CallGroupTileRender, Modifier) -> Unit
@@ -142,7 +143,7 @@ internal fun rememberCallGroupTileContents(tileIds: List<String>): (String) -> C
                     mirror = render.mirror,
                     modifier = tileModifier,
                     fit = render.fit,
-                    zoom = render.zoom,
+                    videoLayer = render.videoLayer,
                 )
             }
         }

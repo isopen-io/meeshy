@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { transcriptReading, type ReadableLine } from './call-transcript-reading';
+import { transcriptReading, transcriptSpokenLabel, type ReadableLine } from './call-transcript-reading';
 
 /**
  * LA BASCULE « VOIR L'ORIGINAL » DU JOURNAL D'APRÈS L'APPEL (#17897, loi 7 de
@@ -55,5 +55,28 @@ describe('transcriptReading', () => {
       primary: { kind: 'translated', text: 'Tu m’entends ?', language: undefined },
       secondary: { kind: 'original', text: 'Can you hear me?', language: undefined },
     });
+  });
+});
+
+/**
+ * A1.19 (#18225) — ce que le lecteur d'écran lit d'une phrase du journal d'après l'appel, d'un trait, dans l'ordre où
+ * l'œil la lit : « nom, heure : ligne en tête. Original : … » (ou « Traduit : … » une fois la bascule posée). Mêmes
+ * vecteurs qu'Android (`CallTranscriptRowAccessibilityTest`) et iOS (`CallJournalAfterCall.spokenLabel`).
+ */
+describe('transcriptSpokenLabel (A1.19)', () => {
+  const words = { original: 'Original', translated: 'Traduit' } as const;
+  const zoe = line({ original: 'Nos vemos mañana', originalLanguage: 'es', text: 'On se voit demain', language: 'fr' });
+
+  test('par défaut, la traduction, puis « Original »', () => {
+    expect(transcriptSpokenLabel({ name: 'Zoé', clock: '0:12', reading: transcriptReading(zoe, false), words })).toBe('Zoé, 0:12 : On se voit demain. Original : Nos vemos mañana');
+  });
+
+  test('l’original montré, l’original, puis « Traduit »', () => {
+    expect(transcriptSpokenLabel({ name: 'Zoé', clock: '0:12', reading: transcriptReading(zoe, true), words })).toBe('Zoé, 0:12 : Nos vemos mañana. Traduit : On se voit demain');
+  });
+
+  test('une phrase sans traduction se lit seule dans les deux états', () => {
+    const alone = line({ translated: false, original: 'Nos vemos mañana', text: 'Nos vemos mañana', language: 'es', originalLanguage: 'es' });
+    for (const inverted of [false, true]) expect(transcriptSpokenLabel({ name: 'Zoé', clock: '0:12', reading: transcriptReading(alone, inverted), words })).toBe('Zoé, 0:12 : Nos vemos mañana');
   });
 });

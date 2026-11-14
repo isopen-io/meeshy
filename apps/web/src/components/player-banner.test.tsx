@@ -91,10 +91,13 @@ describe('seulement ce qui existe', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  test('la jauge dit les points et ce qu’il manque ; au sommet, plus rien ne manque', () => {
-    const model = newcomer();
-    expect(markup(model)).toContain('data-player-banner-missing=');
-    expect(markup({ ...model, level: model.level === null ? null : { ...model.level, nextLevel: null, pointsToNext: null, progress: 1 } })).not.toContain('data-player-banner-missing=');
+  test('la jauge garde la valeur et la barre, sans légende tronquée ; le nom accessible dit les étincelles et le niveau visé', () => {
+    const host = document.createElement('div');
+    host.innerHTML = markup(newcomer());
+    const gauge = host.querySelector('[data-player-banner-gauge]');
+    expect(gauge?.textContent?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('✦ 1 000');
+    expect(host.querySelector('[data-player-banner-missing]')).toBeNull();
+    expect(host.querySelector('a[data-player-banner-link="points"]')?.getAttribute('aria-label')?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe('Étincelles : 1 000, 14 % vers le 4');
   });
 });
 
@@ -407,25 +410,14 @@ describe('aux très grandes tailles de texte', () => {
 describe('le rang, sa jauge de Gloire et ce qui manque', () => {
   const rankBlock = (host: ParentNode): HTMLElement | null => host.querySelector<HTMLElement>('a[data-player-banner-link="glory"] [data-player-banner-rank-gauge]');
 
-  test('le nom du rang, la jauge de la division et la forme courte « 1 200 vers Conteur II »', async () => {
+  test('le nom du rang et la jauge de la division, sans légende tronquée « 1 200 jusqu’à Conteur II » (le nom accessible la dit)', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Conteur III');
     expect(block?.querySelector<HTMLElement>('[data-player-banner-rank-fill]')?.style.transform).toBe('scaleX(0.400)');
-    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 jusqu’à Conteur II');
+    expect(block?.querySelector('[data-player-banner-rank-missing]')).toBeNull();
+    expect(block?.textContent).not.toContain('jusqu’à');
     expect(block?.querySelector('[data-player-banner-rank-total]')).toBeNull();
-  });
-
-  test('un manque de 10 000 et plus se dit en chiffre compact', async () => {
-    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur({ gloryMissing: 12_345, next: { rank: 'passeur', division: 2 } }) }} motion={motion().value} />);
-    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k jusqu’à Passeur II');
-  });
-
-  test('la jauge du niveau dit la forme courte : « 8 700 vers le 62 », compacte dès 10 000', async () => {
-    const at = (pointsToNext: number): PlayerBannerModel => ({ ...newcomer(), level: { level: 61, progress: 0.5, prestige: 0, nextLevel: 62, pointsToNext, opener: null } });
-    const short = (host: ParentNode): string => host.querySelector('[data-player-banner-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ') ?? '';
-    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 jusqu’au 62');
-    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k jusqu’au 62');
   });
 
   test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque — la forme complète', async () => {
@@ -453,5 +445,56 @@ describe('le rang, sa jauge de Gloire et ce qui manque', () => {
     expect(large.querySelector('a[data-player-banner-link="showcase"]')).not.toBeNull();
     expect(large.querySelector('a[data-player-banner-link="season"]')).not.toBeNull();
     expect(large.querySelector('[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr', 'large'));
+  });
+});
+
+describe('le Rêve en trois points, l’Offrande prête s’ouvre d’un toucher (#18199)', () => {
+  const dream = (done: number): PlayerBannerModel => ({ ...newcomer(), missions: { done, total: 3 } });
+  const ready = (): PlayerBannerModel => ({ ...dream(3), attention: { chestReady: true, flameAtRisk: false } });
+  const actsOf = (host: ParentNode): readonly (string | undefined)[] =>
+    Array.from(host.querySelectorAll('[data-player-banner-act]')).map((dot) => (dot as HTMLElement).dataset.playerBannerAct);
+
+  test('un point par acte du jour, plein pour chaque acte réalisé, et plus de « 1/3 » écrit', async () => {
+    const host = await mount(<PlayerBanner model={dream(1)} />);
+    expect(actsOf(host)).toEqual(['done', 'todo', 'todo']);
+    expect(host.querySelector('[data-player-banner-missions]')?.textContent).not.toContain('/');
+    expect(host.querySelector('a[data-player-banner-link="missions"]')?.getAttribute('aria-label')).toBe('Rêve : 1 sur 3');
+  });
+
+  test('sans Offrande prête : aucune pièce Offrande', async () => {
+    const host = await mount(<PlayerBanner model={dream(3)} offering={{ open: () => undefined, reward: null }} />);
+    expect(host.querySelector('[data-player-banner-offering]')).toBeNull();
+  });
+
+  test('l’Offrande prête paraît à côté du Rêve : un bouton nommé, à la hauteur des pièces du milieu (24 px)', async () => {
+    const host = await mount(<PlayerBanner model={ready()} offering={{ open: () => undefined, reward: null }} />);
+    const button = host.querySelector('[data-player-banner-row="bottom"] button[data-player-banner-offering="ready"]');
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Offrande prête : l’ouvrir');
+    expect(button?.getAttribute('style') ?? '').toMatch(/min-height:\s*24px/);
+    const order = Array.from(host.querySelectorAll('[data-player-banner-row="bottom"] > *')).map((piece) => piece.getAttribute('data-player-banner-link') ?? piece.getAttribute('data-player-banner-offering'));
+    expect(order.slice(0, 2)).toEqual(['missions', 'ready']);
+  });
+
+  test('la toucher l’ouvre sur place, sans quitter l’écran', async () => {
+    const opened: number[] = [];
+    const before = window.location.pathname;
+    const host = await mount(<PlayerBanner model={ready()} offering={{ open: () => void opened.push(1), reward: null }} />);
+    await click(host.querySelector('button[data-player-banner-offering="ready"]'));
+    expect(opened).toEqual([1]);
+    expect(window.location.pathname).toBe(before);
+  });
+
+  test('sans hôte qui l’ouvre (un aperçu), la pièce ne paraît pas', async () => {
+    const host = await mount(<PlayerBanner model={ready()} />);
+    expect(host.querySelector('[data-player-banner-offering]')).toBeNull();
+  });
+
+  test('le gain s’annonce à la place de la pièce, lu par le lecteur d’écran', async () => {
+    const host = await mount(<PlayerBanner model={dream(3)} offering={{ open: () => undefined, reward: 40 }} />);
+    const reward = host.querySelector('[data-player-banner-offering="opened"]');
+    expect(reward?.getAttribute('role')).toBe('status');
+    expect(reward?.textContent).toContain('+40');
+    expect(reward?.getAttribute('aria-label')).toBe('Offrande ouverte :\u00a0+40 étincelles');
   });
 });

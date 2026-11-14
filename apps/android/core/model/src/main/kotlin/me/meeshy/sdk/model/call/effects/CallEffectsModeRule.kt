@@ -106,6 +106,9 @@ data class CallEffectsModeState(
         bar = CallEffectsBarRule.afterGenre(bar, isOpen = CallEffectsBarRule.pressed(this.category.kind, bar) == category.kind),
     )
 
+    /** TalkBack's double tap on the look already applied: nothing to re-apply, the bar gives the base menu back (C1 generalised, #18192). */
+    fun confirming(): CallEffectsModeState = copy(bar = CallEffectsBarRule.afterChoice)
+
     /** ‹ (and the system back): closes the settings panel back to the base menu (#17947); `null` elsewhere, which leaves the mode. */
     fun back(): CallEffectsModeState? = CallEffectsBarRule.afterBack(bar)?.let { copy(bar = it) }
     fun togglingSettings(): CallEffectsModeState = copy(bar = CallEffectsBarRule.afterSettings(bar))

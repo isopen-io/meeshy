@@ -144,3 +144,73 @@ nonisolated enum CallSelfTileStroke {
         return key
     }
 }
+
+/// #17982 — la plaque de ma vignette de duo : le composant de plaque du groupe (`CallTileNameplate`),
+/// au pied de la vignette. Elle nomme la personne montrée, comme le liseré (loi 4) : « Vous », ou
+/// l'autre après une permutation. Sa largeur suit la vignette VISIBLE (rangée, loi 11) et laisse le
+/// liseré et le badge micro coupé du correspondant à découvert.
+nonisolated enum CallSelfTilePlate {
+    static let sideInset: CGFloat = 6
+    static let badgeReserve: CGFloat = 28
+
+    static func title(showsLocal: Bool, you: String, peer: String) -> String {
+        showsLocal ? you : peer
+    }
+
+    static func maxWidth(tileWidth: CGFloat, stowFactor: CGFloat, reservesBadge: Bool) -> CGFloat {
+        let factor = stowFactor.isFinite && stowFactor > 0 ? stowFactor : 1
+        let inset = reservesBadge ? badgeReserve : sideInset
+        return max(0, tileWidth * factor - 2 * inset)
+    }
+
+    static func accessibilityValue(name: String, size: String) -> String {
+        [name, size].joined(separator: ", ")
+    }
+}
+
+/// Loi 17.10 — ma vignette se déplace, change de palier et se permute par un ressort ; Réduire les
+/// animations le remplace par le fondu court du chrome, jamais par une bascule sèche.
+enum CallSelfTileMotion {
+    static func spring(response: Double, dampingFraction: Double, reduceMotion: Bool) -> Animation {
+        reduceMotion
+            ? .easeInOut(duration: CallChromeStow.reducedFadeDuration)
+            : .spring(response: response, dampingFraction: dampingFraction)
+    }
+}
+
+/// §7.2 — les quatre coins où ma vignette s'aimante. Son centre se pose à la distance de chaque bord
+/// (zone sûre, en-tête et pile au-dessus, pilule au-dessous, rail quand elle lui cède le coin).
+nonisolated enum CallSelfTileCorner: CaseIterable, Sendable {
+    case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    var isTop: Bool { self == .topLeading || self == .topTrailing }
+
+    var isLeading: Bool { self == .topLeading || self == .bottomLeading }
+
+    func center(of size: CGSize, in container: CGSize, insets: EdgeInsets) -> CGPoint {
+        CGPoint(
+            x: isLeading ? insets.leading + size.width / 2 : container.width - insets.trailing - size.width / 2,
+            y: isTop ? insets.top + size.height / 2 : container.height - insets.bottom - size.height / 2
+        )
+    }
+
+    /// Le coin le plus proche d'un point : celui où la vignette lâchée s'aimante.
+    static func nearest(to point: CGPoint, center: (CallSelfTileCorner) -> CGPoint) -> CallSelfTileCorner {
+        allCases.min { hypot(point.x - center($0).x, point.y - center($0).y) < hypot(point.x - center($1).x, point.y - center($1).y) } ?? .topTrailing
+    }
+}
+
+/// Loi 17.1 · 17.12 (#18206) — ce que montre ma vignette de duo : ma caméra (avec sa piste, même gelée
+/// par la survie réseau, L6-1), la tuile « en pause » quand la piste a disparu, ou rien (caméra éteinte,
+/// groupe, mode, cadre en direct). Elle paraît, part et change de face en fondu, jamais d'un coup.
+nonisolated enum CallSelfViewPresence: Equatable, Sendable {
+    case hidden
+    case camera
+    case paused
+
+    static func resolve(isShown: Bool, isVideoEnabled: Bool, hasLocalVideoTrack: Bool, isVideoSuspended: Bool) -> CallSelfViewPresence {
+        guard isShown, isVideoEnabled else { return .hidden }
+        if hasLocalVideoTrack { return .camera }
+        return isVideoSuspended ? .paused : .hidden
+    }
+}

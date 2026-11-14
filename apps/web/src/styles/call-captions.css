@@ -6,8 +6,8 @@
    #17406) — les trois points d'une traduction attendue (`TypingDots`, leur battement est
    celui de la frappe) ; la traduction qui remplace l'original à la même place. L'original
    déplié a sa feuille, partagée avec le journal (`call-unfolded-original.css`).
-   Seules la transformation et l'opacité bougent ; la règle 32 (`app.css`) les ramène à
-   un instant sous « Réduire les animations », où la sortie n'attend pas. */
+   Seule l'opacité bouge ; sous « Réduire les animations », la règle 32 (`app.css`) lit
+   leur durée dans `--reduced-fade`, qu'elles posent au fondu court du moteur (loi 17.10). */
 [data-call-caption-waiting],
 button[data-call-caption-line] > span[dir='auto'] {
   animation: call-caption-in 200ms ease-out both;
@@ -26,5 +26,12 @@ button[data-call-caption-line] > span[dir='auto'] {
 @keyframes call-caption-out {
   to {
     opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-caption-waiting],
+  button[data-call-caption-line] > span[dir='auto'] {
+    --reduced-fade: 150ms;
   }
 }

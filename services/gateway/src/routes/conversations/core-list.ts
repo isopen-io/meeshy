@@ -24,7 +24,7 @@ import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank
 import { loadListEphemeralExpiries, loadListInheritedExpiries } from './utils/list-ephemeral-expiry';
 import { inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
-import { projectListLastMessageBody } from './utils/list-last-message-body';
+import { namedCallSummaryPreviews, projectListLastMessageBody } from './utils/list-last-message-body';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -394,6 +394,7 @@ export function registerConversationListRoute(
       // #11381 — la ligne d'une conversation `server`/`hybrid` lit le clair.
       const previewKeyring = lazyKeyring(() => getEncryptionService(prisma));
       await Promise.all(conversations.map(async (c) => { c.messages = await revealAtRestRows(c.messages, previewKeyring); }));
+      const namedCallPreviews = await namedCallSummaryPreviews(prisma, conversations.flatMap((c) => c.messages));
 
       // Extract current user's participant data from already-fetched participants (take:5 per conv).
       // For DMs and small groups the current user is always in the first 5 — zero extra DB queries.
@@ -869,7 +870,7 @@ export function registerConversationListRoute(
             viewerLanguages: viewerLanguages
           }),
           lastMessage: (() => {
-            const msg = conversation.messages[0];
+            const msg = conversation.messages[0] && (namedCallPreviews.get(conversation.messages[0].id) ?? conversation.messages[0]);
             if (!msg) return null;
             const readerParticipantId = readerParticipantByConversation.get(conversation.id);
             const sender = msg.sender as ConversationListPreviewSender | null;

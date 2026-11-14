@@ -4,11 +4,7 @@
     ":feature:settings": {
       "resDir": "feature/settings/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.encryption.coming_soon.a11y",
-          "status": "adopted"
-        }
+        { "androidName": "settings_privacy_encryption_coming_soon_a11y", "status": "android-only" }
       ]
     }
   }

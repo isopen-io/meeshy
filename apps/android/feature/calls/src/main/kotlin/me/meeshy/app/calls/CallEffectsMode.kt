@@ -20,6 +20,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -84,6 +86,8 @@ class CallEffectsViewModel @Inject constructor(val effects: CallVideoEffectsCont
  * referment d'abord le panneau des réglages (#17947), sinon reviennent à l'appel avec le look.
  * Comme le Montage, la prise se déclenche sur l'effet CENTRÉ du carrousel (#13737) : deux tapes photographient
  * mon image, un appui long la filme ; la scène ne porte aucun geste.
+ * L'écran la compose dans [CallModeLayer] (#17819) : elle fond à l'entrée et à la sortie. Tant qu'elle fond en sortant, elle
+ * n'est plus [active] : le retour système ne lui revient plus, et y rentrer pendant ce temps rouvre la session.
  */
 @Composable
 internal fun CallEffectsMode(
@@ -96,6 +100,7 @@ internal fun CallEffectsMode(
     onOpenFrames: () -> Unit = {},
     peerUserId: String? = null,
     peerAvatarUrl: String? = null,
+    active: Boolean = true,
 ) {
     val effects = hiltViewModel<CallEffectsViewModel>().effects
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
@@ -106,7 +111,8 @@ internal fun CallEffectsMode(
     val finish: () -> Unit = { if (session.finish()) onClose() }
     val goBack: () -> Unit = { session.state.value.back()?.let(setMode) ?: finish() }
     val companions = rememberDuoCompanions(state, peerUserId, peerAvatarUrl)
-    BackHandler { goBack() }
+    BackHandler(enabled = active) { goBack() }
+    LaunchedEffect(session, active) { if (active) session.reopen() }
     // Le mode peut disparaître autrement que par ‹ (l'appel se termine, la couche change) : le look se garde, la
     // session ne se termine qu'une fois.
     DisposableEffect(session) { onDispose { session.finish() } }
@@ -221,8 +227,10 @@ private fun EffectsControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        CallModeCaptions(state)
-        EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        EffectsAbove {
+            CallModeCaptions(state)
+            EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        }
         EffectsModeBar(mode, row, reduceMotion, onChange, onFinish, onOpenFrames)
     }
 }
@@ -315,6 +323,7 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
         CallEffectsCategory.Color -> CallModeCarousel(
             items = CallEffectsModeRule.colors,
@@ -326,17 +335,28 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
     }
 }
 
 /**
- * Le panneau Réglages (iOS `settingsPanel`) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
+ * Le panneau Réglages (iOS `settingsPanel`), UN groupe que TalkBack nomme « Réglages de mon image » (P8b.1) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
  * est choisi, Luminosité (un titre et son curseur), puis Flou du fond (une ligne titrée à interrupteur).
  */
 @Composable
 internal fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
-    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+    val name = stringResource(R.string.call_effects_settings_panel)
+    CallControlsGlass(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg)
+            .semantics {
+                paneTitle = name
+                contentDescription = name
+                isTraversalGroup = true
+            },
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),

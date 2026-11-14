@@ -1,5 +1,8 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.pushFrom
+import me.meeshy.app.navigation.rememberConversationOpener
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
@@ -25,12 +28,12 @@ import me.meeshy.app.profile.ReportUserViewModel
 internal fun NavGraphBuilder.socialNavGraph(
     navController: NavHostController,
 ) {
-    composable(Routes.CONTACTS) {
-        ContactsScreen(onBack = { navController.popBackStack() }, onOpenProfile = rememberProfileOpenerOverSheet(navController))
+    composable(Routes.CONTACTS) { entry ->
+        ContactsScreen(onBack = { navController.popFrom(entry) }, onOpenProfile = rememberProfileOpenerOverSheet(navController))
     }
-    composable(Routes.CONTACTS_DISCOVER) {
+    composable(Routes.CONTACTS_DISCOVER) { entry ->
         ContactsScreen(
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popFrom(entry) },
             initialTab = me.meeshy.app.contacts.ContactsTab.Discover,
             onOpenProfile = rememberProfileOpenerOverSheet(navController),
         )
@@ -42,29 +45,30 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenProfile = rememberProfileOpenerOverSheet(navController),
         )
     }
-    composable(Routes.NOTIFICATIONS) {
+    composable(Routes.NOTIFICATIONS) { entry ->
+        val openConversation = rememberConversationOpener(navController, entry)
         NotificationsScreen(
-            onBack = { navController.popBackStack() },
-            onOpenConversation = { navController.navigate(Routes.chat(it)) },
-            onOpenPost = { navController.navigate(Routes.postDetail(it)) },
-            onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
-            onOpenStory = { navController.navigate(Routes.story(it)) },
-            onOpenMood = { navController.navigate(Routes.moodSpotlight(it)) },
+            onBack = { navController.popFrom(entry) },
+            onOpenConversation = { openConversation(it, null) },
+            onOpenPost = { navController.pushFrom(entry, Routes.postDetail(it)) },
+            onOpenReel = { navController.pushFrom(entry, Routes.reels(seed = it)) },
+            onOpenStory = { navController.pushFrom(entry, Routes.story(it)) },
+            onOpenMood = { navController.pushFrom(entry, Routes.moodSpotlight(it)) },
             onOpenProfile = rememberProfileOpenerOverSheet(navController),
-            onOpenGame = { navController.navigate(GameRoutes.route(it)) },
+            onOpenGame = { navController.pushFrom(entry, GameRoutes.route(it)) },
             onOpenStoryContent = { target, context ->
-                navController.navigate(StoryRoutes.storyTarget(target.postId, target.action, target.commentId, target.parentCommentId, context))
+                navController.pushFrom(entry, StoryRoutes.storyTarget(target.postId, target.action, target.commentId, target.parentCommentId, context))
             },
         )
     }
-    composable(ProfileRoutes.OWN) {
+    composable(ProfileRoutes.OWN) { entry ->
         OwnProfileScreen(
-            onBack = { navController.popBackStack() },
-            onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
-            onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
-            onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
-            onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
-            onOpenDecor = { navController.navigate(ProfileRoutes.DECOR) },
+            onBack = { navController.popFrom(entry) },
+            onViewPosts = { userId -> navController.pushFrom(entry, Routes.userPosts(userId)) },
+            onOpenFriendRequests = { navController.pushFrom(entry, FriendRequestsDestinations.ROUTE) },
+            onOpenProgression = { navController.pushFrom(entry, GameRoutes.PROGRESSION) },
+            onOpenStats = { navController.pushFrom(entry, ProfileRoutes.STATS) },
+            onOpenDecor = { navController.pushFrom(entry, ProfileRoutes.DECOR) },
         )
     }
     // iOS présente `ProfileDecorSheet` en `.sheet` depuis ma page : « Terminé » + glissé vers le bas (#13364).
@@ -75,7 +79,7 @@ internal fun NavGraphBuilder.socialNavGraph(
         ProfileDecorSheet(
             onDone = dismiss,
             uploadViewModel = if (page != null) hiltViewModel(page) else hiltViewModel(),
-            onOpenShop = { domain -> navController.navigate(Routes.packShop(domain = domain.wire)) },
+            onOpenShop = { domain -> navController.pushFrom(entry, Routes.packShop(domain = domain.wire)) },
         )
     }
     // iOS présente `UserStatsView` en `.sheet` depuis ma page et les Réglages : croix + glissé vers le bas (#13364).
@@ -86,13 +90,13 @@ internal fun NavGraphBuilder.socialNavGraph(
         route = Routes.USER_POSTS,
         navController = navController,
         arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-    ) { _, dismiss ->
+    ) { entry, dismiss ->
         UserPostsScreen(
             onBack = dismiss,
-            onPostClick = { postId -> navController.navigateKeepingSheet(Routes.reels(seed = postId)) },
-            onOpenPost = { postId -> navController.navigateKeepingSheet(Routes.postDetail(postId)) },
-            onOpenProfile = { userId -> navController.navigateKeepingSheet(Routes.profile(userId)) },
-            onOpenHashtag = { tag -> navController.navigateKeepingSheet(Routes.hashtag(tag)) },
+            onPostClick = { postId -> navController.navigateKeepingSheet(entry, Routes.reels(seed = postId)) },
+            onOpenPost = { postId -> navController.navigateKeepingSheet(entry, Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigateKeepingSheet(entry, Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigateKeepingSheet(entry, Routes.hashtag(tag)) },
         )
     }
     sheetComposable(

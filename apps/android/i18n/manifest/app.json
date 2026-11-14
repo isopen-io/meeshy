@@ -247,12 +247,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "voiceProfile.manage.cancelDelete",
-          "androidName": "profile_cancel",
-          "status": "adopted"
-        },
-        {
           "catalog": "app",
           "iosKey": "profile.display_name",
           "androidName": "profile_display_name_label",

@@ -139,11 +139,9 @@ const arShellLabels = {
   'list.empty': 'لا توجد محادثات بعد.',
   'list.empty.filter': 'لا توجد محادثة تطابق «{query}».',
   'list.showAll': 'عرض الكل',
-  'list.quick.start': 'ابدأ من هنا',
-  'list.quick.next': 'وماذا بعد؟',
-  'list.quick.subtitle': 'Meeshy تُكتب مع الآخرين — ادعُ شخصًا للانضمام إليك.',
   'list.quick.invite': 'دعوة أصدقاء',
   'list.quick.invite.hint': 'شارك رابط Meeshy الخاص بك: هكذا تبدأ أول محادثة.',
+  'list.quick.invite.question': 'ما فائدة هذا الرابط؟',
   'list.quick.story': 'إنشاء قصة',
   'list.quick.story.hint': 'صورة، صوت، بضع كلمات — مرئية لمدة عشرين ساعة.',
   'list.quick.mood': 'مشاركة مزاج',
@@ -190,6 +188,7 @@ const arShellLabels = {
   'newConversation.group.chosen.one': '{count} شخص',
   'newConversation.group.chosen.other': '{count} أشخاص',
   'newConversation.group.chosen.hint': 'يمكنك إنشاؤها بمفردك، للتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا.',
+  'newConversation.group.chosen.question': 'هل يمكن إنشاء مجموعة بمفردي؟',
   'newConversation.group.remove': 'إزالة {name}',
 
   'summary.title': 'الملخّص الحيّ',
@@ -224,7 +223,6 @@ const arShellLabels = {
   'hashtag.loading': 'جارٍ تحميل المنشورات',
   'hashtag.error': 'تعذّر تحميل هذا الوسم',
   'hashtag.empty.title': 'لا شيء تحت #{tag}',
-  'hashtag.empty.body': 'لا يوجد منشور مرئي يحمل هذا الوسم.',
   'hashtag.loadMore': 'تحميل المزيد',
   'hashtag.loadingMore': 'جارٍ التحميل…',
 } satisfies ShellLabelsCatalogSlice;

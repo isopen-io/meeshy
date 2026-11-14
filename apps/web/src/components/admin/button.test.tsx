@@ -84,6 +84,32 @@ describe('AdminButton — le bouton commun de l’administration', () => {
   });
 });
 
+describe('AdminButton répond à l’appui (#18412)', () => {
+  test('actif ou inactif, le bouton porte la recette d’appui', async () => {
+    const host = await mount(
+      <>
+        <AdminButton>Annuler</AdminButton>
+        <AdminButton disabled>Fermer</AdminButton>
+      </>,
+    );
+    for (const button of host.querySelectorAll('button')) expect(button.className.split(' ')).toContain('btn-press');
+  });
+
+  test('l’opacité de repos est une classe, jamais un style en ligne qui masquerait le voile', async () => {
+    const host = await mount(
+      <>
+        <AdminButton>Annuler</AdminButton>
+        <AdminButton busy>Fermer</AdminButton>
+      </>,
+    );
+    const [idle, busy] = [...host.querySelectorAll('button')];
+    expect(idle?.style.opacity).toBe('');
+    expect(busy?.style.opacity).toBe('');
+    expect(idle?.className.split(' ')).not.toContain('opacity-45');
+    expect(busy?.className.split(' ')).toContain('opacity-45');
+  });
+});
+
 describe('les gestes des fiches de membre passent par le bouton commun', () => {
   test('« primary » n’a plus de dégradé : le texte blanc tient son contraste, l’ancre de l’écran reste', async () => {
     const host = await mount(<AdminButton tone="primary" data={{ 'data-admin-create-open': '' }}>Créer un compte</AdminButton>);

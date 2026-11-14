@@ -103,17 +103,15 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
-  'video-frozen': 'call.video.frozen',
-  'video-suspended': 'call.video.suspended',
 };
 
-/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`). */
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`) ; la survie de ma vidéo non plus : c'est « Vidéo réduite », une pastille de service de la même pile (E4, `call-service-pills.ts`). */
 export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
@@ -121,8 +119,6 @@ export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' 
     ...(call.micMuted ? (['mic-muted'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
-    ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),
-    ...(call.quality?.survival === 'suspended' ? (['video-suspended'] as const) : []),
   ];
 }
 

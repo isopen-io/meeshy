@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">Atos do dia: %1$d de %2$d</string>
     <string name="a11y_floating_menu_hint">Abre o menu de navegação</string>
     <string name="a11y_floating_menu_notifications_value">%1$d notificações pendentes</string>
+    <string name="a11y_floating_rung_game_both">Minha Lenda, Oferenda pronta, Chama em perigo</string>
+    <string name="a11y_floating_rung_game_chest_ready">Minha Lenda, Oferenda pronta</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">Minha Lenda, Chama em perigo</string>
     <string name="a11y_menu_item_hint">Abrir esta seção</string>
     <string name="a11y_state_open">Abrir</string>
     <string name="app_name">Meeshy</string>
@@ -50,7 +53,7 @@
     <string name="connection_syncing">Sincronização</string>
     <string name="conversations_logout">Sair</string>
     <string name="conversations_retry">Tentar novamente</string>
-    <string name="feed_empty">Nenhuma publicação</string>
+    <string name="feed_empty">Nenhuma publicação dos seus contatos</string>
     <string name="feed_like">Curtir</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Entrar</string>
@@ -68,7 +71,6 @@
     <string name="notifications_title">Notificações</string>
     <string name="profile_back">Voltar</string>
     <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Cancelar</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_edit_title">Editar perfil</string>
@@ -79,7 +81,7 @@
     <string name="push_action_comment_hint">Comentar…</string>
     <string name="root_pending_changes">Alterações pendentes</string>
     <string name="root_sync_on_reconnect">Sincroniza ao voltar a ficar online</string>
-    <string name="route_title_affiliate">Afiliação</string>
+    <string name="route_title_affiliate">Indicação</string>
     <string name="route_title_bookmarks">Favoritos</string>
     <string name="route_title_communities">Comunidades</string>
     <string name="route_title_community">Comunidade</string>

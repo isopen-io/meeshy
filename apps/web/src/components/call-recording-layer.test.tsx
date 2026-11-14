@@ -316,7 +316,7 @@ describe('la carte d’accord et la capsule de l’enregistrement', () => {
       motion.played.length = 0;
       await view.renderState(recording);
       expect(card?.hasAttribute('data-leaving')).toBe(true);
-      expect(card?.hasAttribute('inert')).toBe(true);
+      expect(card?.hasAttribute('inert')).toBe(false);
       expect(motion.played.find((move) => move.element === card)?.frames).toEqual([
         { opacity: 1, transform: 'translateY(0)' },
         { opacity: 0, transform: 'translateY(-100%)' },

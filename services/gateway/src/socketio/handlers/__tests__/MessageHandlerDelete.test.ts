@@ -651,8 +651,86 @@ describe('MessageHandler — handleMessageDelete', () => {
     expect(deps.io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
     expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
       'message:deleted',
-      { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID },
+      { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID, deletedAt: expect.any(String) },
     ]);
+  });
+
+  // #18159 — l'heure du retrait est celle du SERVEUR, et c'est la MÊME des deux
+  // côtés.
+  //
+  // Assertion sur l'ÉGALITÉ avec la colonne écrite, pas sur « un horodatage est
+  // présent » : un `new Date()` recomposé à l'émission satisferait la seconde et
+  // rendrait deux instants pour un seul retrait — c'est la forme exacte du
+  // défaut qu'on corrige, une horloge prise une seconde fois au lieu d'être
+  // passée. Et c'est la charge LITTÉRALE qui part sur le fil qui est lue, pas un
+  // événement reconstruit : le contrat déclare une chaîne ISO, et un objet
+  // `Date` sortirait identique de `JSON.stringify` tout en faisant mentir tout
+  // témoin posé sur sa forme.
+  it("#18159 — sert l'heure SERVEUR du retrait, identique à la colonne écrite", async () => {
+    setupSuccessfulDelete();
+    // L'horloge AVANCE entre l'écriture et l'émission — c'est ce qui rend ce
+    // témoin capable de tomber. Sans cela, une implémentation qui recompose un
+    // `new Date()` à l'émission rendrait la même milliseconde que l'écriture
+    // la plupart du temps, et le témoin passerait au vert sur le défaut qu'il
+    // nomme (il ne tomberait qu'au hasard du tick, ce qui est pire que rien :
+    // un témoin intermittent se lit comme un harnais instable, pas comme un
+    // défaut).
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    jest.setSystemTime(new Date('2026-11-14T10:00:00.000Z'));
+    (deps.prisma.message.update as jest.Mock<any>).mockImplementation(async () => {
+      jest.setSystemTime(new Date('2026-11-14T10:00:05.000Z'));
+      return {};
+    });
+
+    try {
+      await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+      const written = (deps.prisma.message.update as jest.Mock<any>).mock.calls[0][0].data.deletedAt as Date;
+      expect(written.toISOString()).toBe('2026-11-14T10:00:00.000Z');
+      const found = emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)
+        .find(([event]: [string, unknown]) => event === 'message:deleted');
+      expect(found).toBeDefined();
+      const payload = (found as [string, Record<string, unknown>])[1];
+      // Une chaîne, pas un `Date` : les deux sortent identiques de
+      // `JSON.stringify`, donc seul le témoin peut dire laquelle le contrat
+      // déclare (§ « un horodatage dont le type n'est pas énoncé est décidé par
+      // l'encodeur »).
+      expect(typeof payload.deletedAt).toBe('string');
+      expect(payload.deletedAt).toBe('2026-11-14T10:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // La file hors ligne porte la MÊME charge que la diffusion directe — c'est le
+  // destinataire absent qui a le plus besoin de l'heure serveur : il rejoue des
+  // heures plus tard, et son horloge locale daterait la pierre tombale de sa
+  // RECONNEXION.
+  it("#18159 — l'entrée de file hors ligne porte la même heure serveur", async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const offlineUserId = 'user-offline-del-00112233445566';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    setupSuccessfulDelete({ senderUserId: USER_ID });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-offline-del', userId: offlineUserId },
+    ]);
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const written = (deps.prisma.message.update as jest.Mock<any>).mock.calls[0][0].data.deletedAt as Date;
+    expect(enqueue).toHaveBeenCalledWith(offlineUserId, expect.objectContaining({
+      payload: expect.objectContaining({ deletedAt: written.toISOString() }),
+    }));
   });
 
   it('deletes attachments before soft-deleting message', async () => {

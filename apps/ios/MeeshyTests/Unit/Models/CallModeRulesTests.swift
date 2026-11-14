@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// #8578 — le carrousel unique d'un mode : l'élément choisi au centre, agrandi,
@@ -93,6 +94,112 @@ final class CallModeRulesTests: XCTestCase {
     func test_nearestIndex_emptyTrack_isNil() {
         XCTAssertNil(CallModeCarouselRule.nearestIndex(offset: 0, itemWidth: 60, spacing: 14, count: 0))
         XCTAssertNil(CallModeCarouselRule.nearestIndex(offset: 0, itemWidth: 0, spacing: 0, count: 3))
+    }
+
+    // MARK: - Parcourir à la voix (#18192)
+
+    private let looks = ["a", "b", "c", "d"]
+
+    func test_browse_atRest_announcesTheAppliedEffect_andActivationOnlyConfirms() {
+        let browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.isBrowsing)
+        XCTAssertEqual(browse.position(applied: "b"), "b")
+        XCTAssertEqual(browse.activation(applied: "b"), .confirm, "Rien de parcouru : l'activation ne réapplique rien, elle rend le menu de base")
+    }
+
+    func test_browse_adjusting_movesTheAnnouncedPosition_withoutApplyingAnything() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.step(by: 1, in: looks, applied: "a"))
+        XCTAssertTrue(browse.step(by: 1, in: looks, applied: "a"))
+        XCTAssertTrue(browse.isBrowsing)
+        XCTAssertEqual(browse.position(applied: "a"), "c", "Chaque balayage avance d'un look depuis la position PARCOURUE")
+        XCTAssertEqual(browse.activation(applied: "a"), .apply("c"), "Seule l'activation applique, et elle applique ce qui est annoncé")
+    }
+
+    func test_browse_atTheEdge_doesNotMove() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.step(by: -1, in: looks, applied: "a"))
+        XCTAssertFalse(browse.step(by: 1, in: looks, applied: "d"))
+        XCTAssertEqual(browse.position(applied: "d"), "d")
+    }
+
+    func test_browse_backOnTheAppliedLook_activationOnlyConfirms() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 1, in: looks, applied: "b")
+        browse.step(by: -1, in: looks, applied: "b")
+        XCTAssertEqual(browse.position(applied: "b"), "b")
+        XCTAssertEqual(browse.activation(applied: "b"), .confirm)
+    }
+
+    func test_browse_leaving_forgetsThePosition() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 2, in: looks, applied: "a")
+        browse.leave()
+        XCTAssertFalse(browse.isBrowsing, "Quitter l'élément, ou un effet appliqué ailleurs, rend l'annonce à l'effet appliqué")
+        XCTAssertEqual(browse.position(applied: "a"), "a")
+    }
+
+    func test_ordinal_isOneBased_andNilOutsideTheList() {
+        XCTAssertEqual(CallModeCarouselRule.ordinal(of: "c", in: looks), CallModeCarouselOrdinal(rank: 3, count: 4))
+        XCTAssertEqual(CallModeCarouselRule.ordinal(of: "a", in: looks), CallModeCarouselOrdinal(rank: 1, count: 4))
+        XCTAssertNil(CallModeCarouselRule.ordinal(of: "z", in: looks))
+    }
+
+    // MARK: - Les déclinaisons se parcourent aussi (#18192)
+
+    private func declinations(_ item: String) -> [String] {
+        item == "b" ? ["b", "b.1", "b.2"] : []
+    }
+
+    private func posedB1(_ item: String) -> String {
+        item == "b" ? "b.1" : item
+    }
+
+    func test_browse_variant_startsFromThePosedDeclination_andIsNotApplied() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.stepVariant(by: 1, applied: "b", variants: declinations, current: posedB1))
+        XCTAssertEqual(browse.variant, "b.2", "La déclinaison suivante part de celle qui est posée")
+        XCTAssertTrue(browse.isBrowsing)
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .apply("b.2"))
+    }
+
+    func test_browse_variant_backToThePlainFrame_appliesIt_whenADeclinationIsPosed() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertTrue(browse.stepVariant(by: -1, applied: "b", variants: declinations, current: posedB1))
+        XCTAssertEqual(browse.variant, "b")
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .apply("b"), "Le cadre nu n'est pas la déclinaison posée : il s'applique")
+    }
+
+    func test_browse_variant_onThePosedDeclination_onlyConfirms() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.stepVariant(by: 1, applied: "b", variants: declinations, current: posedB1)
+        browse.stepVariant(by: -1, applied: "b", variants: declinations, current: posedB1)
+        XCTAssertEqual(browse.activation(applied: "b", current: posedB1), .confirm)
+    }
+
+    func test_browse_variant_followsTheBrowsedFrame_notTheAppliedOne() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.step(by: 1, in: looks, applied: "a")
+        XCTAssertTrue(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertEqual(browse.variant, "b.1", "Les déclinaisons sont celles du cadre annoncé")
+        XCTAssertTrue(browse.stepVariant(by: 5, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertEqual(browse.variant, "b.2", "Sans boucler : la dernière déclinaison arrête le pas")
+        XCTAssertFalse(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+    }
+
+    func test_browse_variant_withoutDeclinations_doesNotMove() {
+        var browse = CallModeCarouselBrowse<String>()
+        XCTAssertFalse(browse.stepVariant(by: 1, applied: "a", variants: declinations, current: { $0 }))
+        XCTAssertNil(browse.variant)
+        XCTAssertFalse(browse.isBrowsing)
+    }
+
+    func test_browse_movingToAnotherFrame_forgetsTheVariant() {
+        var browse = CallModeCarouselBrowse<String>()
+        browse.stepVariant(by: 1, applied: "b", variants: declinations, current: { $0 })
+        browse.step(by: 1, in: looks, applied: "b")
+        XCTAssertNil(browse.variant)
+        XCTAssertEqual(browse.activation(applied: "b"), .apply("c"))
     }
 
     func test_motion_swipe_choosesOnlyWhereItRests() {
@@ -318,5 +425,23 @@ final class CallModeRulesTests: XCTestCase {
         let open = CallScreenLayer.idle.entering(.effects)
         XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: true))), open)
         XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: false))), .idle)
+    }
+
+    // MARK: - Réduire les animations, part du carrousel (loi 17.10)
+
+    func test_animation_underReduceMotion_isTheShortChromeFade_whateverTheFullOneIs() {
+        let fade = Animation.easeInOut(duration: CallChromeStow.reducedFadeDuration)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: true, full: .spring(response: 0.25, dampingFraction: 0.8)), fade)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: true, full: .easeInOut(duration: 0.25)), fade)
+    }
+
+    func test_animation_withMotion_keepsTheFullOne() {
+        let full = Animation.easeInOut(duration: 0.25)
+        XCTAssertEqual(CallModeCarouselRule.animation(reduceMotion: false, full: full), full)
+    }
+
+    func test_scaleAnimation_underReduceMotion_neverMoves_andElseSprings() {
+        XCTAssertNil(CallModeCarouselRule.scaleAnimation(reduceMotion: true), "Le fondu seul : la taille ne glisse pas d'une case à l'autre")
+        XCTAssertNotNil(CallModeCarouselRule.scaleAnimation(reduceMotion: false))
     }
 }

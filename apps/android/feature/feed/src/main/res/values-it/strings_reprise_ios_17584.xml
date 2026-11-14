@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">Aggiunto ai preferiti</string>
+    <string name="feed_notice_bookmark_failed">Errore nel salvataggio del segnalibro</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d ricondivisione</item>
+        <item quantity="many">%1$d ricondivisioni</item>
+        <item quantity="other">%1$d ricondivisioni</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">Tocca di nuovo il riquadro per rivedere tutto</string>
+</resources>

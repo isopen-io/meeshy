@@ -2,6 +2,8 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+/// Un état vide tient en une ligne, plus une action quand il y en a une (épure #17584, règle 4) : le sous-titre est
+/// facultatif, et seul un état qui explique quelque chose que le titre ne dit pas en porte un.
 public struct EmptyStateView: View {
     public let icon: String
     public let title: String
@@ -18,7 +20,7 @@ public struct EmptyStateView: View {
     public init(
         icon: String,
         title: String,
-        subtitle: String,
+        subtitle: String = "",
         actionLabel: String? = nil,
         accentColor: String = MeeshyColors.brandPrimaryHex,
         compact: Bool = false,

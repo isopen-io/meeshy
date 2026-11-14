@@ -269,6 +269,101 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         watch.cancel()
     }
 
+    // MARK: - Une notification touchée sous un réel (#18443)
+
+    private func makeNavigator(_ router: Router) -> RootNotificationNavigator {
+        RootNotificationNavigator(router: router,
+                                  conversationOpener: RootConversationOpener(router: router, knownConversations: { [] }))
+    }
+
+    private func notification(_ userInfo: [AnyHashable: Any]) -> RootView.NotificationNavContext {
+        RootView.NotificationNavContext(from: NotificationPayload(userInfo: userInfo))
+    }
+
+    private func awaitValue<Value>(_ publisher: Published<Value>.Publisher, where matches: @escaping (Value) -> Bool,
+                                   _ description: String) async {
+        let reached = expectation(description: description)
+        let watch = publisher.first(where: matches).sink { _ in reached.fulfill() }
+        await fulfillment(of: [reached], timeout: 2)
+        watch.cancel()
+    }
+
+    func test_friendRequestNotification_underAReel_opensTheProfileOnceTheReaderHasLeft() async {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry, surfaceHandoff: .milliseconds(40))
+        let reels = ReelsPresenter(surfaces: registry, stopPlayback: {})
+        reels.presentFresh()
+
+        makeNavigator(router).navigateFromNotification(
+            notification(["type": "friend_request", "senderId": "0000000000000000000000f1", "senderUsername": "alice"]))
+
+        XCTAssertNil(reels.launch, "le lecteur de réels descend d'abord")
+        XCTAssertNil(router.deepLinkProfileUser, "la fiche ne monte pas pendant que le lecteur descend")
+        await awaitValue(router.$deepLinkProfileUser, where: { $0?.userId == "0000000000000000000000f1" },
+                         "la fiche de l'expéditeur monte une fois le lecteur parti")
+    }
+
+    func test_communityInviteNotification_underAReel_pushesTheCommunityOnceTheReaderHasLeft() async {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry, surfaceHandoff: .milliseconds(40))
+        let reels = ReelsPresenter(surfaces: registry, stopPlayback: {})
+        reels.presentFresh()
+
+        makeNavigator(router).navigateFromNotification(
+            notification(["type": "community_invite", "communityId": "0000000000000000000000c7"]))
+
+        XCTAssertNil(reels.launch)
+        XCTAssertTrue(router.path.isEmpty, "la communauté ne se pose pas sous le lecteur qui descend")
+        await awaitValue(router.$path, where: { $0 == [.communityDetail("0000000000000000000000c7")] },
+                         "la communauté se pose une fois le lecteur parti")
+    }
+
+    // MARK: - La fenêtre détachée lit la feuille d'un post (#18443)
+
+    func test_detachedWindow_mountsThePostDetailSheet() throws {
+        let source = try appSource("Features/Main/Views/AdaptiveRootView.swift")
+        let window = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct DetachedWindowView", in: source))
+        let sheets = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct DetachedWindowSheets", in: source))
+        XCTAssertTrue(window.contains(".modifier(DetachedWindowSheets(router: router"))
+        XCTAssertTrue(sheets.contains(".modifier(PostDetailSheetHost("),
+                      "sans hôte, push(.postDetail) écrit presentedPost et rien ne le lit")
+    }
+
+    // MARK: - Cliquets (#18443) : ces plafonds ne font que descendre
+
+    private func maskedSources(under relativeDirectory: String, where keep: (String) -> Bool) throws -> [String: String] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy").appendingPathComponent(relativeDirectory)
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        var sources: [String: String] = [:]
+        for case let url as URL in enumerator where url.pathExtension == "swift" && keep(url.lastPathComponent) {
+            sources[url.lastPathComponent] = DeclarationBodyScanner.mask(try String(contentsOf: url, encoding: .utf8))
+        }
+        return sources
+    }
+
+    private func count(_ needle: String, in sources: [String: String]) -> Int {
+        sources.values.reduce(0) { $0 + $1.components(separatedBy: needle).count - 1 }
+    }
+
+    /// Une fiche de profil posée hors du routeur ne referme rien de ce qui est
+    /// présenté : elle passe par `Router.presentProfileSheet(_:)`. Base mesurée
+    /// sur le code masqué : 4 (fenêtre détachée, réels de l'iPhone, relais
+    /// de la notification `openProfileSheet`, aiguillage des notifications de l'iPad).
+    func test_ratchet_profileSheetWritesOutsideTheRouter_neverRise() throws {
+        let sources = try maskedSources(under: "") { !["Router.swift", "RouterCommands.swift"].contains($0) }
+        XCTAssertLessThanOrEqual(count("deepLinkProfileUser = ProfileSheetUser(", in: sources), 4)
+    }
+
+    /// Le panneau de l'iPad se ferme par `router.pop()`, qui anime et rend le
+    /// parent d'une sous-page, jamais par une remise à nil sèche.
+    func test_ratchet_iPadPanelDryCloses_neverRise() throws {
+        let sources = try maskedSources(under: "Features/Main/Views") { $0.hasPrefix("iPadRootView") }
+        XCTAssertLessThanOrEqual(count("rightPanelRoute = nil", in: sources), 9)
+    }
+
     // MARK: - Deux fenêtres, deux routeurs (#10543)
 
     func test_navigateToConversation_surfaceOfTheOtherWindow_staysPresented() {
@@ -395,7 +490,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let iPhone = try appSource("Features/Main/Views/RootNotificationNavigator.swift")
         let opening = try XCTUnwrap(iPhone.components(separatedBy: "private func openSocialContent(").dropFirst().first)
         XCTAssertTrue(opening.components(separatedBy: "private func showSocialContent(")[0]
-            .contains("router.clearPresentedSurfaces { _ in showSocialContent(ctx, postId: postId) }"))
+            .contains("router.present(afterPresentedSurfacesLeave: { showSocialContent(ctx, postId: postId) })"))
         XCTAssertEqual(iPhone.components(separatedBy: "switch socialSurface(ctx, postId: postId)").count - 1, 1,
                        "un seul aiguillage social : la branche des notifications passe par openSocialContent")
 

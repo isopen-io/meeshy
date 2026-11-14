@@ -55,6 +55,74 @@ enum CallPillText: Equatable, Sendable {
     }
 }
 
+/// P9b.15 (#17529, #18206) — en duo audio, le journal ouvert dans la pilule RÉDUIT l'avatar de 120 à
+/// 56 pt en en-tête compact, le nom et la durée à côté. Le passage est un morphisme : UNE vue
+/// d'avatar, dessinée à sa taille de repos et réduite par une échelle, glisse vers l'en-tête pendant
+/// que le nom et la durée la rejoignent en fondu (≈ 200 ms) ; « Réduire les animations » en fait un
+/// fondu court, sans déplacement ni échelle. Mêmes vecteurs qu'Android (`CallAudioStageLayout`).
+nonisolated enum CallAudioStageLayout {
+    static let fullAvatarSize: CGFloat = 120
+    static let compactAvatarSize: CGFloat = 56
+    static let morphDuration: TimeInterval = 0.2
+
+    static var shrinkScale: CGFloat { compactAvatarSize / fullAvatarSize }
+
+    static func avatarSize(isCompact: Bool) -> CGFloat {
+        isCompact ? compactAvatarSize : fullAvatarSize
+    }
+
+    static func faceScale(isCompact: Bool) -> CGFloat {
+        isCompact ? shrinkScale : 1
+    }
+
+    static func morphs(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
+
+    static func transitionDuration(reduceMotion: Bool) -> TimeInterval {
+        morphs(reduceMotion: reduceMotion) ? morphDuration : CallChromeStow.reducedFadeDuration
+    }
+
+    /// Une identité pour les deux dispositions tant que l'avatar se déplace ; sous « Réduire les
+    /// animations », une par disposition, qui se fondent sur place.
+    static func identity(isCompact: Bool, reduceMotion: Bool) -> Int {
+        guard !morphs(reduceMotion: reduceMotion) else { return 0 }
+        return isCompact ? 2 : 1
+    }
+
+    /// #18488 — la hauteur qu'il faut au repos sous la rangée d'en-tête : l'avatar de 120 pt et son
+    /// marge, le nom, la durée, la rangée d'états et leurs trois interlignes.
+    static let restContentHeight: CGFloat = 270
+
+    /// #18488 — la forme de la scène audio : celle du repos, celle du journal ouvert dans la pilule
+    /// (P9b), ou la même forme compacte quand c'est la HAUTEUR qui manque (iPad en fenêtre basse).
+    nonisolated enum Form: Equatable, Sendable {
+        case rest, journal, lowHeight
+
+        var isCompact: Bool { self != .rest }
+
+        /// Hauteur courte seulement : les états (micro coupé, reconnexion…) restent sous la durée. Sous
+        /// le journal, P9b.2 n'en pose aucune.
+        var showsStatuses: Bool { self == .lowHeight }
+    }
+
+    /// Le journal ouvert garde sa forme. Sinon la scène passe à la forme compacte dès qu'elle ne tient
+    /// plus sous la rangée d'en-tête (`stageHeight` : celle de la scène, mesurée ; 0 = pas encore mesurée).
+    static func form(isJournalOpen: Bool, stageHeight: CGFloat, topClearance: CGFloat) -> Form {
+        guard !isJournalOpen else { return .journal }
+        guard stageHeight > 0, stageHeight < topClearance + restContentHeight else { return .rest }
+        return .lowHeight
+    }
+
+    static func avatarSize(form: Form) -> CGFloat { avatarSize(isCompact: form.isCompact) }
+
+    static func faceScale(form: Form) -> CGFloat { faceScale(isCompact: form.isCompact) }
+
+    static func identity(form: Form, reduceMotion: Bool) -> Int {
+        identity(isCompact: form.isCompact, reduceMotion: reduceMotion)
+    }
+}
+
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre
 /// des sous-titres rangés sont limités à 560 pt pour que l'œil ne balaie pas tout
 /// l'écran (paysage, tablette) ; la pilule au repos garde ses 440 pt.
@@ -88,6 +156,31 @@ enum CallJournalSizing {
     static func height(windowHeight: CGFloat) -> CGFloat {
         min(max(windowHeight * share, minimum), maximum)
     }
+
+    /// #18488 — ce que le journal du duo audio laisse aux autres : l'espace entre l'avatar compact et le
+    /// journal, son titre et son pied (« Journal » en disque blanc), la rangée de base et l'encart bas.
+    static let compactHeaderGap: CGFloat = MeeshySpacing.md
+    static let panelChrome: CGFloat = 84
+    static let baseRowHeight: CGFloat = 68
+    /// Plancher lisible quand la fenêtre est basse : environ deux phrases, jamais zéro.
+    static let compactMinimum: CGFloat = 56
+
+    static func reservedAround(topClearance: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        topClearance + CallAudioStageLayout.compactAvatarSize + compactHeaderGap + panelChrome + baseRowHeight + bottomInset
+    }
+
+    /// Le journal ne prend que ce qu'il reste dans la fenêtre : la pilule entière, (…) compris, y
+    /// reste ; seul le plancher lisible peut la dépasser.
+    static func height(windowHeight: CGFloat, reservedAround: CGFloat) -> CGFloat {
+        max(compactMinimum, min(height(windowHeight: windowHeight), windowHeight - reservedAround))
+    }
+
+    /// Le groupe garde la part de la fenêtre (sa grille a sa propre loi) ; le duo audio ne prend que ce
+    /// qu'il reste autour de l'avatar compact et de la pilule.
+    static func listHeight(isGroup: Bool, windowHeight: CGFloat, topClearance: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        guard !isGroup else { return height(windowHeight: windowHeight) }
+        return height(windowHeight: windowHeight, reservedAround: reservedAround(topClearance: topClearance, bottomInset: bottomInset))
+    }
 }
 
 /// #17343 — le pied des sous-titres : ce que les lignes disent de leur traduction, à
@@ -113,5 +206,11 @@ enum CallCaptionsFooter: Equatable, Sendable {
         let distinct = Set(pairs.map { "\($0.0)>\($0.1)" })
         guard distinct.count > 1 else { return .touchForOriginal(pair: "\(newest.0) → \(newest.1)") }
         return .translatedLanguages(count: Set(pairs.flatMap { [$0.0, $0.1] }).count)
+    }
+
+    /// #17964 — le pied du journal ouvert dans la pilule, à côté de « Journal » qui le referme :
+    /// le même pied que celui des sous-titres, sans attente — le journal n'en dessine aucune.
+    static func journal(lines: [CallCaptionLine]) -> CallCaptionsFooter {
+        resolve(lines: lines.map { $0.settled(at: .distantFuture) })
     }
 }

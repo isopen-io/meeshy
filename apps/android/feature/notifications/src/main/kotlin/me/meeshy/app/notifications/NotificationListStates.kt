@@ -97,12 +97,6 @@ internal fun NotificationListErrorState(onRetry: () -> Unit, modifier: Modifier 
             color = MeeshyTheme.tokens.textPrimary,
             textAlign = TextAlign.Center,
         )
-        Text(
-            stringResource(R.string.notifications_error_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textMuted,
-            textAlign = TextAlign.Center,
-        )
         NotificationRetryCapsule(onRetry)
     }
 }
@@ -128,13 +122,13 @@ internal fun NotificationRetryCapsule(onRetry: () -> Unit, modifier: Modifier = 
     }
 }
 
-/** L'état vide d'une catégorie : son icône à sa couleur (40 %, taille hero), son titre propre, la promesse du sous-titre. */
+/** L'état vide d'une catégorie : son icône à sa couleur (40 %, taille hero) et son titre propre, rien d'autre (#18083). */
 @Composable
 internal fun NotificationListEmptyState(category: NotificationFilterCategory, modifier: Modifier = Modifier) {
     MeeshyEmptyState(
         icon = category.icon(),
         title = stringResource(category.emptyRes()),
-        subtitle = stringResource(R.string.notifications_empty_subtitle),
+        subtitle = "",
         modifier = modifier,
         accent = category.color(),
     )

@@ -10,8 +10,6 @@
         {"catalog": "app", "iosKey": "conversation.engagement.a11y.streak_days.one", "androidName": "chat_engagement_a11y_streak_days_one", "status": "adopted"},
         {"catalog": "app", "iosKey": "conversation.engagement.a11y.streak_days.other", "androidName": "chat_engagement_a11y_streak_days_other", "status": "adopted"},
         {"catalog": "app", "iosKey": "conversation.header.flame.card.hint", "androidName": "chat_header_flame_card_hint", "status": "adopted"},
-        {"catalog": "app", "iosKey": "conversation.header.flame.card.today", "androidName": "chat_header_flame_card_today", "status": "adopted"},
-        {"catalog": "app", "iosKey": "conversation.header.flame.card.total", "androidName": "chat_header_flame_card_total", "status": "adopted"},
         {"catalog": "app", "iosKey": "conversation.header.flame.card.open", "androidName": "chat_header_flame_card_open", "status": "adopted"},
         {"catalog": "app", "iosKey": "conversation.header.flame.card.hide", "androidName": "chat_header_flame_card_hide", "status": "adopted"},
         {"catalog": "app", "iosKey": "conversation.header.flame.card.streak.one", "androidName": "chat_header_flame_card_streak_one", "status": "adopted"},

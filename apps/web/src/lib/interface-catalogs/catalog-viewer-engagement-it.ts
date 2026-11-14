@@ -16,7 +16,6 @@ const it = {
   'viewerEngagement.openProfile': 'Vedi profilo',
   'viewerEngagement.back': 'Torna alle visualizzazioni',
   'viewerEngagement.openDetail': 'Vedi cosa ha fatto {name}',
-  'viewerEngagement.empty.subtitle': 'Le persone che vedranno questo post appariranno qui.',
   'viewerEngagement.forbidden': 'Non hai accesso all’elenco di chi ha visto questo post.',
   'viewerEngagement.unavailable': 'Il dettaglio dell’attività è momentaneamente non disponibile.',
   'viewerEngagement.visitors.one': 'e {count} visitatore senza account',

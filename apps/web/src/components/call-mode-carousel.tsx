@@ -81,6 +81,12 @@ type CarouselProps = {
   readonly capture?: CarouselCapture | undefined;
   /** La boîte d'une vignette : le disque de 64 par défaut ; un portrait (48 × 85 au Montage, C1.5) montre l'aperçu entier. */
   readonly itemSize?: ItemSize | undefined;
+  /**
+   * Un CHOIX arrêté (#18186) : une tape, ou un appui long qui choisit un autre élément, au doigt levé. Le défilement
+   * choisit encore en direct, mais n'en est pas un. Remis, il change aussi les flèches : elles PARCOURENT (le focus
+   * va au voisin, centré) sans rien appliquer, et Entrée ou Espace sur l'élément atteint le choisit.
+   */
+  readonly onChosen?: ((id: string) => void) | undefined;
 };
 
 const DISC: ItemSize = { width: 64, height: 64 };
@@ -108,7 +114,7 @@ const SCROLL_QUIET_MS = 200;
 
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function ModeCarousel({ label, items, selected, onSelect, onWheel, capture, itemSize = DISC }: CarouselProps) {
+export function ModeCarousel({ label, items, selected, onSelect, onWheel, capture, itemSize = DISC, onChosen }: CarouselProps) {
   const ITEM = itemSize.width;
   const shape = shapeOf(itemSize);
   const track = useRef<HTMLDivElement>(null);
@@ -242,18 +248,23 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
     center(id, true);
   };
 
+  const pickFinal = (id: string): void => {
+    pick(id);
+    onChosen?.(id);
+  };
+
   useEffect(() => () => clearTimeout(press.current?.timer), []);
 
   const act = (id: string, gesture: PressGesture): void => {
     if (capture === undefined) {
-      pick(id);
+      pickFinal(id);
       return;
     }
     const intent = captureIntent({ gesture, selected: id === selected, recording: capture.recording });
     if (intent === 'select' && gesture === 'long-press') {
       announce(id);
       aimed.current = id;
-    } else if (intent === 'select') pick(id);
+    } else if (intent === 'select') pickFinal(id);
     else if (intent !== 'none') capture.onCapture(intent);
   };
 
@@ -270,7 +281,9 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
   const lift = (): void => {
     const target = aimed.current;
     drop();
-    if (target !== null) center(target, true);
+    if (target === null) return;
+    center(target, true);
+    onChosen?.(target);
   };
 
   const pressStart = (id: string) => (event: PointerEvent<HTMLButtonElement>): void => {
@@ -297,7 +310,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       return;
     }
     if (capture === undefined) {
-      pick(id);
+      pickFinal(id);
       return;
     }
     const now = Date.now();
@@ -321,12 +334,14 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       return;
     }
     const rtl = typeof getComputedStyle === 'function' && getComputedStyle(event.currentTarget).direction === 'rtl';
-    const next = carouselStep({ key: event.key, index: items.findIndex((item) => item.id === selected), count: items.length, rtl });
+    const from = onChosen === undefined || focused === null ? selected : focused;
+    const next = carouselStep({ key: event.key, index: items.findIndex((item) => item.id === from), count: items.length, rtl });
     const target = next === null ? undefined : items[next];
     if (target === undefined) return;
     event.preventDefault();
-    pick(target.id);
-    track.current?.querySelector<HTMLElement>(`[data-carousel-item="${target.id}"]`)?.focus();
+    if (onChosen === undefined) pick(target.id);
+    else center(target.id, true);
+    track.current?.querySelector<HTMLElement>(`[data-carousel-item="${target.id}"]`)?.focus({ preventScroll: onChosen !== undefined });
   };
 
   const current = items.find((item) => item.id === selected);

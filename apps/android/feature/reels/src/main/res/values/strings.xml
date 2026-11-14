@@ -2,9 +2,5 @@
 <resources>
     <string name="reels_bookmark">Bookmark</string>
     <string name="reels_unbookmark">Remove bookmark</string>
-    <string name="reels_comments_loading">Loading comments…</string>
-    <string name="reels_comments_error">Couldn\'t load comments</string>
-    <string name="reels_comments_input_hint">Add a comment…</string>
-    <string name="reels_comments_failed">Failed — tap to retry</string>
     <string name="reels_comments_view_post">View post</string>
 </resources>

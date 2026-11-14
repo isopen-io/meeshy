@@ -59,13 +59,13 @@ class PostScenesSoundIndicatorComposeTest {
     fun `a feed page playing a scene with sound says its sound is off`() {
         showFeed(scenes(MosaicLayoutMode.CAROUSEL, listOf(true), offersSound = true), live = true)
 
-        compose.onNodeWithContentDescription("Sound off — open full screen to hear it", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Sound off", useUnmergedTree = true).assertExists()
     }
 
     @Test
     fun `a silent feed page carries no sound indicator, and a playing page no play glyph`() {
         showFeed(scenes(MosaicLayoutMode.CAROUSEL, listOf(true), offersSound = false), live = true)
-        compose.onNodeWithContentDescription("Sound off — open full screen to hear it", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sound off", useUnmergedTree = true).assertDoesNotExist()
         compose.onAllNodesWithTag(SCENE_PLAY_GLYPH_TAG, useUnmergedTree = true).assertCountEquals(0)
     }
 
@@ -73,7 +73,7 @@ class PostScenesSoundIndicatorComposeTest {
     fun `a feed page at rest with sound shows the play glyph, never the sound indicator`() {
         showFeed(scenes(MosaicLayoutMode.CAROUSEL, listOf(true), offersSound = true), live = false)
 
-        compose.onNodeWithContentDescription("Sound off — open full screen to hear it", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sound off", useUnmergedTree = true).assertDoesNotExist()
         compose.onAllNodesWithTag(SCENE_PLAY_GLYPH_TAG, useUnmergedTree = true).assertCountEquals(1)
     }
 

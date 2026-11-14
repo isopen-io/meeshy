@@ -72,6 +72,7 @@ internal fun NotificationTypesEditor(
         section.items.forEach { item ->
             NotificationToggleRow(
                 label = labels.getValue(item.type),
+                subtitle = notificationTypeSubtitleRes(item.type)?.let { stringResource(it) },
                 checked = item.enabled,
                 enabled = notifications.pushEnabled,
                 onCheckedChange = { onToggleType(item.type, it) },
@@ -86,6 +87,11 @@ private fun notificationCategoryLabelRes(category: NotificationCategory): Int = 
     NotificationCategory.SOCIAL -> R.string.settings_notif_cat_social
     NotificationCategory.GROUPS -> R.string.settings_notif_cat_groups
     NotificationCategory.SYSTEM -> R.string.settings_notif_cat_system
+}
+
+private fun notificationTypeSubtitleRes(type: NotificationType): Int? = when (type) {
+    NotificationType.CONTACT_ACTIVITY -> R.string.settings_notif_type_contact_activity_subtitle
+    else -> null
 }
 
 private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) {

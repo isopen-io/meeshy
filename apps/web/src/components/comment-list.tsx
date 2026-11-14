@@ -68,7 +68,7 @@ function CommentState({
 }: {
   readonly glyph: 'chatCircle' | 'warningCircle';
   readonly title: string;
-  readonly hint: string;
+  readonly hint?: string;
   readonly action?: { readonly label: string; readonly onPress: () => void };
 }) {
   return (
@@ -83,9 +83,11 @@ function CommentState({
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {title}
       </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {hint}
-      </p>
+      {hint === undefined ? null : (
+        <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {hint}
+        </p>
+      )}
       {action !== undefined ? (
         <button
           type="button"
@@ -144,7 +146,7 @@ export function CommentList({
 
   if (comments.length === 0) {
     return (
-      <CommentState glyph="chatCircle" title={translate(language, 'comments.empty')} hint={translate(language, 'comments.empty.hint')} />
+      <CommentState glyph="chatCircle" title={translate(language, 'comments.empty')} />
     );
   }
 

@@ -34,8 +34,8 @@ internal fun ProvideConversationMoods(
     val statuses by statusesViewModel.state.collectAsStateWithLifecycle()
     val moods = remember(statuses.statuses, statuses.myStatus) { MoodLookup.from(statuses) }
     val directory = remember(moods) { PeerMoodDirectory(moods::peerMoodOf) }
-    val opener = remember(navController) {
-        PeerMoodOpener { mood -> navController.navigate(Routes.moodSpotlight(mood.statusId)) }
+    val opener = remember(navController, entry) {
+        PeerMoodOpener { mood -> navController.pushFrom(entry, Routes.moodSpotlight(mood.statusId)) }
     }
     CompositionLocalProvider(
         LocalPeerMoodDirectory provides directory,

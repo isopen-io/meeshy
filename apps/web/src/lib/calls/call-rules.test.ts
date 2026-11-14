@@ -116,9 +116,9 @@ describe('ce que l’écran dit', () => {
     expect(visibleStatusPills(muted, 'grid')).toEqual(['poor-network']);
   });
 
-  test('pastilles de survie (#8047) : ma vidéo ralentie, puis en pause, tant que le réseau est faible', () => {
-    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('poor', 'frozen'), isGroup: false })).toEqual(['poor-network', 'video-frozen']);
-    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('good', 'suspended'), isGroup: false })).toEqual(['video-suspended']);
+  test('la survie de ma vidéo (#8047) n’est plus une pastille de la rangée : c’est « Vidéo réduite », un maillon de la pile du haut (#18227, `call-service-pills.ts`)', () => {
+    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('poor', 'frozen'), isGroup: false })).toEqual(['poor-network']);
+    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('good', 'suspended'), isGroup: false })).toEqual([]);
   });
 
   test('la grille suit l’ORDRE D’ARRIVÉE : un pair qui se reconnecte garde sa case, ma vignette reste en dernier (P11.3)', () => {
@@ -169,7 +169,7 @@ describe('la file des événements', () => {
 
 describe('la bulle d’appel', () => {
   test('un résumé terminé se rappelle ; un appel en cours se rejoint', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false, recording: null });
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false, recording: null, participants: null, viewerId: '' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', callType: 'audio' } })).toMatchObject({ live: true, media: 'audio' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });

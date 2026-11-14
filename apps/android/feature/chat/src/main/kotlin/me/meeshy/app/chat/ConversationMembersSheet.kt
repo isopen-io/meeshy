@@ -363,7 +363,6 @@ internal fun ConversationMembersContent(
     if (state.actionFailed) {
         AlertDialog(
             onDismissRequest = viewModel::dismissActionError,
-            title = { Text(stringResource(R.string.members_sheet_error_title)) },
             text = { Text(stringResource(R.string.conversation_members_action_failed)) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissActionError) {

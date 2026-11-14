@@ -86,7 +86,7 @@ final class PlayerBannerPiecesTests: XCTestCase {
         let screen = mounted(width: 390)
         let sparks = try XCTUnwrap(screen.frame(of: "game.player_banner.sparks", borne: 5))
         let rank = try XCTUnwrap(screen.frame(of: "game.player_banner.rank", borne: 5))
-        for piece in PlayerBannerView.middlePieces {
+        for piece in full.pieces where PlayerBannerView.middlePieces.contains(piece) {
             let frame = try XCTUnwrap(screen.frame(of: "game.player_banner.\(piece.rawValue)", borne: 5), "\(piece)")
             XCTAssertGreaterThanOrEqual(frame.minX, sparks.maxX - 0.5, "\(piece) après les étincelles")
             XCTAssertLessThanOrEqual(frame.maxX, rank.minX + 0.5, "\(piece) avant la Gloire")
@@ -156,12 +156,37 @@ final class PlayerBannerPiecesTests: XCTestCase {
     }
 
     func test_trophiesAndSeason_leaveTheCompactRow() {
-        XCTAssertEqual(PlayerBannerView.compactPieces, [.level, .sparks, .flame, .meesh, .mission, .treasury, .league, .rank])
+        XCTAssertEqual(PlayerBannerView.compactPieces, [.level, .sparks, .flame, .meesh, .mission, .offering, .treasury, .league, .rank])
     }
 
     func test_theBannerIs48ptTall_likeTheWeb() {
         XCTAssertEqual(PlayerBannerView.minimumHeight, 48)
         XCTAssertEqual(PlayerBannerView.cornerTarget, 24)
-        XCTAssertEqual(PlayerBannerView.middlePieces, [.flame, .meesh, .mission, .treasury, .league])
+        XCTAssertEqual(PlayerBannerView.middlePieces, [.flame, .meesh, .mission, .offering, .treasury, .league])
+    }
+
+    // MARK: - L'Offrande prête, sur la ligne du Rêve (#18199)
+
+    func test_aReadyOffering_isItsOwnButton_rightOfTheDream_onTheDreamLine() throws {
+        let banner = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
+                                      flame: .init(form: .braise, days: 5), dailyMission: .init(done: 3, total: 3),
+                                      attention: GameAttention(chestReady: true, flameAtRisk: false))
+        let screen = RenderedScreen(
+            PlayerBannerView(model: banner, texts: PlayerBannerCopy.texts(for: banner),
+                             palette: PlayerBannerStyle.palette(tier: banner.tier, isDark: false),
+                             accessibilityLabel: PlayerBannerCopy.accessibilityLabel(for: banner), onSelect: { _ in })
+                .frame(width: 390),
+            size: CGSize(width: 390, height: 400))
+        let mission = try XCTUnwrap(screen.frame(of: "game.player_banner.mission", borne: 5))
+        let offering = try XCTUnwrap(screen.frame(of: "game.player_banner.offering", borne: 5), "l'Offrande prête est un bouton à part")
+        XCTAssertGreaterThanOrEqual(offering.minX, mission.maxX - 0.5, "à droite du Rêve qui l'a fait naître")
+        XCTAssertEqual(offering.midY, mission.midY, accuracy: 1, "sur la ligne du Rêve")
+        XCTAssertGreaterThanOrEqual(offering.height, PlayerBannerView.cornerTarget - 0.5)
+    }
+
+    func test_theDream_isDrawnInDots_andStillSpokenInWords() {
+        let label = PlayerBannerCopy.texts(for: full).pieceLabels[.mission] ?? ""
+        XCTAssertTrue(label.contains(GameCopy.formatCount(1)) && label.contains(GameCopy.formatCount(3)),
+                      "le bouton du Rêve dit encore « Rêve : 1 sur 3 », même dessiné en points")
     }
 }

@@ -58,7 +58,7 @@ struct GameNotebookPage: View {
     private var whenNote: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "game.notebook.when", defaultValue: "Quand une photo est-elle proposée ?", bundle: .main),
-            text: String(localized: "game.notebook.when.note", defaultValue: "À chaque signe de tes aïeux : un rang, une première Meesh, une Flamme de 7 jours.", bundle: .main)
+            text: String(localized: "game.notebook.when.note", defaultValue: "À chaque signe de tes aïeux, une photo avec Mee et Meo : un rang, une première Meesh, une Flamme de 7 jours.", bundle: .main)
         )
     }
 
@@ -70,7 +70,7 @@ struct GameNotebookPage: View {
             MeeshyInfoNoted(note: whenNote, openNoteID: $openNoteID, tint: theme.textMuted) {
                 Text(String(
                     localized: "game.notebook.empty",
-                    defaultValue: "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
+                    defaultValue: "Ta Chronique attend sa première page.",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

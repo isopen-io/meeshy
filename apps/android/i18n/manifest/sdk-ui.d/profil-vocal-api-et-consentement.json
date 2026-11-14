@@ -4,12 +4,7 @@
     ":sdk-ui": {
       "resDir": "sdk-ui/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "audio.consent.notice.message",
-          "androidName": "audio_consent_notice_message",
-          "status": "adopted"
-        },
+        { "androidName": "audio_consent_notice_message", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "audio.consent.notice.action",

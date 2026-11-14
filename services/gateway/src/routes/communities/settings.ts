@@ -15,8 +15,10 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { identityImagesAreCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -95,7 +97,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
       const community = await fastify.prisma.community.findFirst({
         where: { id, isActive: true },
-        select: { createdBy: true, identifier: true, isPrivate: true }
+        select: { createdBy: true, identifier: true, isPrivate: true, avatar: true, banner: true }
       });
 
       if (!community) {
@@ -104,6 +106,17 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
       if (community.createdBy !== userId) {
         return sendForbidden(reply, 'Only community creator can update community', { code: 'COMMUNITY_CREATOR_ONLY' });
+      }
+
+      const ownsImages = await identityImagesAreCallers(fastify.prisma, {
+        userId,
+        images: [
+          { reference: validatedData.avatar, current: community.avatar },
+          { reference: validatedData.banner, current: community.banner },
+        ],
+      });
+      if (!ownsImages) {
+        return sendBadRequest(reply, 'Invalid community', { code: IDENTITY_IMAGE_NOT_OWNED });
       }
 
       // Preparer les donnees de mise a jour
@@ -161,6 +174,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
         );
       }
+      scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId: id });
 
       return sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {

@@ -1,0 +1,126 @@
+/*
+ * LES FEUILLES ET LES CONFIRMATIONS ENTRENT ET SORTENT EN MOUVEMENT (#18362).
+ *
+ * L'ENTRÉE se joue sur le `<dialog>` ouvert ; la SORTIE sur son fantôme (`lib/view/dialog-exit.ts`),
+ * une copie inerte posée dans la couche supérieure pendant que le vrai dialogue est déjà fermé. Les
+ * sélecteurs portent sur des attributs : `data-sheet-presentation` et `data-confirm-dialog` pour le
+ * dialogue, `data-dialog-ghost` pour le fantôme. Les durées et la courbe viennent des variables que le
+ * composant pose depuis `SHEET_MOTION_MS`, `DIALOG_FADE_MS` et `SHEET_MOTION_CURVE`.
+ *
+ * K15 : la feuille monte du bas en 280 ms avec un fondu, et redescend vers le même bord. Les fenêtres
+ * centrées (et la feuille dès qu'elle en devient une) entrent et sortent en fondu de 200 ms. Sous
+ * « Réduire les animations », rien de tout cela : la règle générale d'`app.css` rend tout immédiat, et
+ * le fantôme n'existe pas.
+ */
+/* Le fantôme et son voile ne prennent aucun toucher : le geste qui suit la fermeture atteint l'écran
+   dessous (N4). `inert` le dit au fantôme ; son `::backdrop`, que tous les moteurs ne font pas hériter,
+   le reçoit ici. */
+[data-dialog-ghost]::backdrop {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog[data-sheet-presentation][open],
+  dialog[data-confirm-dialog][open] {
+    animation: dialog-fade-in var(--dialog-fade-ms) var(--dialog-motion-curve) both;
+  }
+
+  dialog[data-sheet-presentation][open]::backdrop,
+  dialog[data-confirm-dialog][open]::backdrop {
+    animation: dialog-fade-in var(--dialog-fade-ms) linear both;
+  }
+
+  [data-dialog-ghost='fullscreen'],
+  [data-dialog-ghost='centered'],
+  [data-dialog-ghost='wide'],
+  [data-dialog-ghost='bottom'],
+  [data-dialog-ghost='confirm'] {
+    animation: dialog-fade-out var(--dialog-fade-ms) var(--dialog-motion-curve) forwards;
+  }
+
+  [data-dialog-ghost='fullscreen']::backdrop,
+  [data-dialog-ghost='centered']::backdrop,
+  [data-dialog-ghost='wide']::backdrop,
+  [data-dialog-ghost='bottom']::backdrop,
+  [data-dialog-ghost='confirm']::backdrop {
+    animation: dialog-fade-out var(--dialog-fade-ms) linear forwards;
+  }
+
+  /* La feuille basse, sur un téléphone : elle monte du bas et y redescend. */
+  @media (width < 40rem) {
+    dialog[data-sheet-presentation='bottom'][open] {
+      animation: dialog-rise var(--dialog-rise-ms) var(--dialog-motion-curve) both;
+    }
+
+    dialog[data-sheet-presentation='bottom'][open]::backdrop {
+      animation: dialog-fade-in var(--dialog-rise-ms) linear both;
+    }
+
+    [data-dialog-ghost='bottom'] {
+      animation: dialog-sink var(--dialog-rise-ms) var(--dialog-motion-curve) forwards;
+    }
+
+    [data-dialog-ghost='bottom']::backdrop {
+      animation: dialog-fade-out var(--dialog-rise-ms) linear forwards;
+    }
+  }
+
+  /* La feuille plein écran, sur un téléphone : même geste. Dès 768 px, c'est une fenêtre centrée. */
+  @media (width < 48rem) {
+    dialog[data-sheet-presentation='fullscreen'][open] {
+      animation: dialog-rise var(--dialog-rise-ms) var(--dialog-motion-curve) both;
+    }
+
+    dialog[data-sheet-presentation='fullscreen'][open]::backdrop {
+      animation: dialog-fade-in var(--dialog-rise-ms) linear both;
+    }
+
+    [data-dialog-ghost='fullscreen'] {
+      animation: dialog-sink var(--dialog-rise-ms) var(--dialog-motion-curve) forwards;
+    }
+
+    [data-dialog-ghost='fullscreen']::backdrop {
+      animation: dialog-fade-out var(--dialog-rise-ms) linear forwards;
+    }
+  }
+}
+
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialog-sink {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

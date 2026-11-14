@@ -276,12 +276,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "progression.offline.empty",
-          "status": "adopted",
-          "androidName": "game_progression_offline_empty"
-        },
-        {
-          "catalog": "app",
           "iosKey": "progression.load_error",
           "status": "adopted",
           "androidName": "game_progression_load_error"
@@ -343,11 +337,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.points.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.points.use",
           "status": "adopted"
         },
@@ -403,11 +392,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.flame.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.missions.name",
           "status": "adopted"
         },
@@ -443,11 +427,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.league.use",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.season.name",
           "status": "adopted"
         },
@@ -469,16 +448,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.prestige.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.use",
           "status": "adopted"
         },
         {
@@ -616,11 +585,7 @@
           "iosKey": "game.concept.atlas.tip.1",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.atlas.tip.2",
-          "status": "adopted"
-        },
+        { "androidName": "game_concept_atlas_tip_2", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.concept.atlas.what",

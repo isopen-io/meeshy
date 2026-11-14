@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
+import { hasGameAttention, type GameAttention } from '@meeshy/shared/utils/game/attention';
 
 import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
 import { MenuActsRing } from './menu-acts-ring';
 import { MenuGlyph } from './menu-glyph';
-import { UnreadCornerBadge, UnreadRungBadge, unreadBadgeText } from './unread-badge';
+import { RungSignalDot, UnreadCornerBadge, UnreadRungBadge, unreadBadgeText } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -14,7 +15,16 @@ import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { callsAvailable } from '@/lib/calls/calls-availability';
-import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
+import {
+  FLOATING_RUNG_MS,
+  FLOATING_RUNG_STAGGER_MS,
+  PROFILE_DESTINATION,
+  feedDiscDestination,
+  floatingLadderExitMs,
+  gameRungLabelKey,
+  menuLadderFor,
+  type FloatingDestination,
+} from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import { belowScreenTop } from '@/lib/view/safe-area';
 import {
@@ -37,7 +47,7 @@ import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useGamePrefs } from '@/lib/game/preferences';
-import { useActsRing } from '@/lib/view/use-acts-ring';
+import { useActsRing, useGameAttention } from '@/lib/view/use-acts-ring';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -115,8 +125,15 @@ const RUNG_LABELS = {
   },
 } as const;
 
-/** Le nom d'un barreau — il dit son compte quand il en porte un, une fois. */
-function rungLabel(language: InterfaceLanguage, destination: FloatingDestination, counts: RungCounts): string {
+/** Le point d'un barreau qui SIGNALE sans compter — seul « Ma Légende », sur l'Offrande prête ou la Flamme en danger (#18165). */
+function rungSignaled(destination: FloatingDestination, attention: GameAttention): boolean {
+  return destination.signal === 'gameAttention' && hasGameAttention(attention);
+}
+
+/** Le nom d'un barreau — il dit son compte quand il en porte un, une fois ; et ce que le jeu signale. */
+function rungLabel(language: InterfaceLanguage, destination: FloatingDestination, counts: RungCounts, attention: GameAttention): string {
+  const signalKey = destination.signal === 'gameAttention' ? gameRungLabelKey(attention) : null;
+  if (signalKey !== null) return translate(language, signalKey);
   const count = rungCount(destination, counts);
   if (count <= 0 || destination.badge === undefined) return translate(language, destination.labelKey);
   const labels = RUNG_LABELS[destination.badge];
@@ -179,6 +196,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   const roving = useRovingMenu({
     itemCount: ladder.length,
+    layer: false,
+    exitMs: floatingLadderExitMs(ladder.length),
     /* Une rotation échelle ouverte change la place : le pas se remesure. */
     onResize: () => setRooms(measureLadderRooms(roving.buttonRef.current)),
   });
@@ -211,6 +230,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
   const monContour = useMyRing();
   /* L'ANNEAU DES ACTES DU JOUR (#17768) — lu dans le cache du jeu, décrit par le bouton menu fermé. */
   const actes = useActsRing();
+  /* LE POINT DE « MA LÉGENDE » (#18165) — l'Offrande prête ou la Flamme en danger, lues dans la même entrée du cache. */
+  const attention = useGameAttention();
   const actesId = useId();
   const decritActes = actes !== null && !open;
 
@@ -350,13 +371,23 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
             : { transform: `translate(${menu.offset.x}px, ${menu.offset.y}px) scale(1.15)` }),
         }}
       >
-        {open ? (
+        {roving.mounted ? (
           <div
             ref={menuRef}
             role="menu"
             aria-label={translate(langue, 'a11y.floating.menu.ladder')}
             onKeyDown={onMenuKeyDown}
+            /* EN SORTIE, L'ÉCHELLE EST PEINTE MAIS NE RÉPOND PLUS (#18460) : ni
+               toucher, ni tabulation, ni lecteur d'écran. */
+            inert={roving.leaving}
             className="pointer-events-none absolute inset-0"
+            style={
+              {
+                '--floating-rung-ms': `${FLOATING_RUNG_MS}ms`,
+                '--floating-rung-stagger': `${FLOATING_RUNG_STAGGER_MS}ms`,
+                '--rung-count': ladder.length,
+              } as React.CSSProperties
+            }
           >
             {ladder.map((destination, index) => (
               <Link
@@ -368,7 +399,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
                   itemRefs.current[index] = el;
                 }}
                 onClick={() => setOpen(false)}
-                aria-label={rungLabel(langue, destination, counts)}
+                data-leaving={roving.leaving ? '' : undefined}
+                aria-label={rungLabel(langue, destination, counts, attention)}
                 className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
@@ -385,6 +417,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
               >
                 <MenuGlyph glyph={destination.glyph} size={18} />
                 <UnreadRungBadge count={rungCount(destination, counts)} tint={destination.tint} size={LADDER_RUNG} />
+                {rungSignaled(destination, attention) ? <RungSignalDot size={LADDER_RUNG} /> : null}
               </Link>
             ))}
           </div>

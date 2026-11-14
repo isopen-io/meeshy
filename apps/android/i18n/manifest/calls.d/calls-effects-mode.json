@@ -118,6 +118,18 @@
         },
         {
           "catalog": "app",
+          "iosKey": "call.mode.effects.settings.panel",
+          "androidName": "call_effects_settings_panel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.carousel.position",
+          "androidName": "call_mode_carousel_position",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "call.mode.effects.applied.cancel",
           "androidName": "call_effects_layer_undo",
           "status": "adopted"

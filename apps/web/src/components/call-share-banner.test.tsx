@@ -102,7 +102,7 @@ describe('le bandeau de partage', () => {
     view.done();
   });
 
-  test('il repart par le HAUT, le temps de son mouvement, sans prendre le doigt, puis se démonte (P16.6)', async () => {
+  test('il repart par le HAUT, le temps de son mouvement, touchable (loi 17.11), puis se démonte (P16.6)', async () => {
     const motion = recordAnimations();
     const view = mount(true);
     motion.played.length = 0;
@@ -110,7 +110,7 @@ describe('le bandeau de partage', () => {
     const leaving = view.find('[data-call-screen-share-banner]');
     expect(leaving).not.toBeNull();
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     const exit = motion.played.find((move) => move.element === leaving);
     expect(exit?.frames[1]).toEqual({ opacity: 0, transform: 'translateY(-100%)' });
     await act(async () => exit?.finish());
@@ -292,7 +292,7 @@ describe('la capsule de capture et la case de la carte d’accord', () => {
     motion.restore();
   });
 
-  test('elle repart vers le haut, sans prendre le doigt, épinglée à sa place d’avant (sous la case de l’enregistrement), puis se démonte', async () => {
+  test('elle repart vers le haut, touchable (loi 17.11), épinglée à sa place d’avant (sous la case de l’enregistrement), puis se démonte', async () => {
     const motion = recordAnimations();
     const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
@@ -307,7 +307,7 @@ describe('la capsule de capture et la case de la carte d’accord', () => {
     await view.render(false);
     const leaving = view.host.querySelector<HTMLElement>('[data-call-capture-slot]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.style.top).toBe('60px');
     const exit = motion.played.find((move) => move.element === leaving);
     expect(exit?.frames[1]).toEqual({ opacity: 0, transform: 'translateY(-100%)' });
@@ -317,6 +317,28 @@ describe('la capsule de capture et la case de la carte d’accord', () => {
     if (real === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
     else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', real);
     motion.restore();
+  });
+
+  test('R1.6 (#17963) : un premier toucher la range vers le haut avec les bannières et la tait au lecteur d’écran ; le second la rend', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = (hidden: boolean) =>
+      act(async () => {
+        root.render(<CallTopBannerStack call={{ ...call(), members: { 'u-peer': peer(true) } }} present={{ capture: true }} language="fr" hidden={hidden} liveFrame={NO_LIVE_FRAME} />);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+    const slot = () => host.querySelector<HTMLElement>('[data-call-capture-slot]');
+    await render(false);
+    expect(slot()?.getAttribute('data-call-stow')).toBe('top');
+    expect(slot()?.hasAttribute('aria-hidden')).toBe(false);
+    await render(true);
+    expect(slot()?.getAttribute('data-call-stow')).toBe('top');
+    expect(slot()?.getAttribute('aria-hidden')).toBe('true');
+    await render(false);
+    expect(slot()?.hasAttribute('aria-hidden')).toBe(false);
+    act(() => root.unmount());
+    host.remove();
   });
 
   test('la feuille sort la capsule sortante de la mise en page, comme le bandeau de partage', () => {

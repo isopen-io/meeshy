@@ -1,6 +1,8 @@
 package me.meeshy.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -27,6 +29,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.R
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -34,6 +38,20 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /** Durée d'entrée du bandeau (iOS `.animation(.easeOut(duration: 0.25))`). */
 internal const val PENDING_LINK_ENTER_MILLIS = 250
+
+/** Le bandeau se déplie en fondu ; sous « Réduire les animations », il prend sa place en fondu court, sans pousser l'écran. */
+internal fun pendingLinkBannerEnter(reduce: Boolean): EnterTransition = meeshyEnter(
+    reduce,
+    fadeIn(tween(PENDING_LINK_ENTER_MILLIS, easing = LinearOutSlowInEasing)) +
+        expandVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = LinearOutSlowInEasing)),
+)
+
+/** La sortie symétrique : repli en fondu, ou fondu court seul sous « Réduire les animations ». */
+internal fun pendingLinkBannerExit(reduce: Boolean): ExitTransition = meeshyExit(
+    reduce,
+    fadeOut(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)) +
+        shrinkVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)),
+)
 
 /**
  * « Connectez-vous : le contenu qu'on vous a partagé s'ouvrira juste après. » (iOS `PendingLinkNotice`), posé au-dessus
@@ -44,10 +62,8 @@ internal fun PendingLinkBanner(isVisible: Boolean, modifier: Modifier = Modifier
     AnimatedVisibility(
         visible = isVisible,
         modifier = modifier,
-        enter = fadeIn(tween(PENDING_LINK_ENTER_MILLIS, easing = LinearOutSlowInEasing)) +
-            expandVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = LinearOutSlowInEasing)),
-        exit = fadeOut(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)) +
-            shrinkVertically(tween(PENDING_LINK_ENTER_MILLIS, easing = FastOutSlowInEasing)),
+        enter = pendingLinkBannerEnter(reduce = FeedOverlayTransition.reduceMotion),
+        exit = pendingLinkBannerExit(reduce = FeedOverlayTransition.reduceMotion),
     ) {
         val brand = MeeshyPalette.Indigo500
         Row(

@@ -1,4 +1,6 @@
 import { useCallback, useId, useMemo, useRef } from 'react';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -88,9 +90,9 @@ export function StarredMessagesEmpty() {
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'starred.messages.empty.title')}
       </p>
-      <p className="max-w-xs text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'starred.messages.empty.subtitle')}
-      </p>
+      <InfoAlone
+        hint={{ label: translate(language, 'starred.messages.empty.question'), text: translate(language, 'starred.messages.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+      />
       <Link
         to="list"
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"

@@ -327,7 +327,7 @@ describe('CallService', () => {
 
       await callService.initiateCall(validInitiateData);
 
-      expect(capturedData).toHaveProperty('leftAt', null);
+      expect(capturedData).toMatchObject({ leftAt: null, answeredAt: null });
     });
 
     it('audit C5: phantom cleanup scans initiator participations matching leftAt null OR unset', async () => {
@@ -5417,7 +5417,7 @@ describe('CallService - joinCall settings branches', () => {
       participantId: 'participant-456'
     });
 
-    expect(capturedData).toHaveProperty('leftAt', null);
+    expect(capturedData).toMatchObject({ leftAt: null, answeredAt: null });
   });
 
   it('item F: joining an initiated call transitions to RINGING without answeredAt (the real answer stamps both)', async () => {

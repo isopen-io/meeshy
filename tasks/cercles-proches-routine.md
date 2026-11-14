@@ -1008,3 +1008,130 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : l'émission web (#14109), l'arrière-plan (#18135), l'indicateur global « tu partages » (#18136, iOS ;
   Android à suivre), la révocation iOS (#18166).
 - Prochain lot recommandé : la révocation iOS (#18166, sécurité), puis l'émission web (#14109).
+
+## 2026-11-14 — réveil de l'après-midi : arrêter un partage de position marche toujours, sur iOS (#18166)
+
+- Reprise : aucune PR cercles ouverte ; #18170 (émission Android) fusionnée. Aucune branche n'écrit le centre iOS :
+  lot réservé sur `claude/cercles-18166-ios-revocation`.
+- Lot : la RÉVOCATION iOS, iso du centre Android audité. `SharedLocationSharingCenter.swift` : un verrou d'ordre
+  d'arrivée (`SharedLocationSerialGate`) sérialise démarrages, arrêts, échéances et mises à jour (une mise à jour
+  saute son tour si le verrou est pris) ; une réponse arrivée après `abandon()` n'adopte, n'écrit ni ne rallume rien ;
+  sans relevé (liste reprise d'un lancement, permission retirée), retirer une personne ARRÊTE tout ; un accusé perdu
+  (`SharedLocationSendOutcome.unconfirmed`, nouveau cas du SDK, `.timedOut` ne vaut plus `.offline`) garde « Arrêter »
+  pour l'union des deux listes (`SharedLocationRoster.union`) ; une échéance non soldée est rejouée toutes les 30 s
+  (`SharedLocationWakeScheduling`) et à chaque socket accrochée (`socketReady`, depuis `connectionState`) ; la ligne
+  de la fiche reste tant qu'un partage court, même sous Ami (`showsRow`). Aucune chaîne neuve : un accusé perdu dit
+  le message hors ligne, comme Android.
+- Témoins XCTest : un par scénario de l'issue, plus le compte quitté et `union` ; le témoin du SDK suit le nouveau cas.
+- Gates locaux : `check_house_rules.sh` vert (36 règles), `check_cohesion_budget.sh` identique avec et sans le lot,
+  `check_localization.py` et `check_test_registration.sh` verts. Swift ne compile pas en conteneur : la preuve est
+  la CI de `dev` après fusion (`CI_DEV_SEUL`, #18048).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné. `abandon()` n'était appelé qu'à l'ouverture d'une fiche :
+  après un changement de compte, le centre du compte quitté réconciliait sur la socket du suivant (un `start` au nom de
+  l'autre compte) et effaçait sa propre liste sur un `NOT_SHARING`. Le centre connaît désormais son compte (`owner`) et
+  ne lit, n'émet ni n'adopte rien tant que le compte connecté n'est pas le sien (`isLive`, iso du ticket Android),
+  avant chaque émission et après chaque `await`. Suivis ouverts : « Arrêter » tenté hors ligne jamais rejoué, iOS et
+  Android (#18204) ; échéance par destinataire tenue par la passerelle, seule réponse quand l'app dort (#18205).
+  Mineurs non traités : « Arrêter » peut attendre le relevé (jusqu'à 30 s) quand aucun n'a été envoyé ; un accusé
+  perdu dit « a besoin du réseau » (même phrase qu'Android).
+- Prochain lot recommandé : l'émission web (#14109), puis #18204 (iOS + Android), puis la passerelle #18205.
+
+## 2026-11-14 — réveil du matin : partager ma position depuis le web (#18345 ⊂ #14109)
+
+- Reprise : aucune PR cercles ouverte ; #18228 (révocation iOS) fusionnée. Aucune branche n'écrit l'émission web :
+  issue #18345 ouverte (milestone #215, sous-issue de #14109), lot réservé sur `claude/cercles-18345-web-emission`.
+- Lot : l'ÉMISSION web, iso #16983 et des lois de révocation de #18166. `lib/shared-locations/` :
+  `shared-location-sending.ts` (charge bornée comme le schéma serveur, sans Zod ; accusé ; cadence 5 s / 50 m / 120 s),
+  `shared-location-roster.ts` (échéance par personne, terme serveur qui couvre la plus lointaine, union),
+  `shared-location-sharing.ts` (le centre : verrou unique, compte propriétaire relu après chaque attente, « dans le
+  doute on arrête »), `shared-location-sharing-live.ts` (`navigator.geolocation`, la socket vivante, un centre par
+  compte, liste en `localStorage` par compte — identifiants et échéances, jamais une position). La fiche d'un Ami porte
+  « Partager ma position » (feuille : 1 h · 8 h, ville par défaut, quartier, exacte), puis « X voit votre position (…)
+  jusqu'à HH:MM » et « Arrêter », gardés sous Ami tant qu'un partage court. Le chrome différé reprend le partage au
+  chargement. 21 libellés en sept langues (adaptés du catalogue iOS, vouvoiement du web).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné — deux onglets du même compte, un arrêt fait dans l'un
+  était republié par l'autre (liste relue sous le verrou et à l'événement `storage`). Corrigés aussi : la liste gardée
+  couvre l'union AVANT l'accusé (onglet fermé pendant l'attente), aucune demande de géolocalisation sans geste
+  (reprise et retrait lisent la permission sans la demander), un retrait refusé retombe sur l'arrêt complet, une
+  échéance réveillée trop tôt se réarme. Ouvert : « Se déconnecter arrête mon partage » (#18351, `décision-produit`,
+  vaut aussi pour iOS et Android).
+- Gates locaux : `bun test` du lot 74/74 (témoins des correctifs vus rouges d'abord) ; `tsc --noEmit` vert ; build,
+  `check-utilities`, `measure-weight` verts. Suite web complète : 31 958 verts, 5 rouges hors lot (parité des
+  catalogues du jeu web/iOS ×2, `act-leak-guard`, et deux témoins de présence `focal-row`/`lens-row` qui passent seuls).
+- Prochain lot recommandé : #18204 (« Arrêter » hors ligne rejoué, iOS + Android), puis la passerelle #18205, puis
+  #18351 une fois tranchée.
+
+## 2026-11-14 — réveil du soir : un « Arrêter » hors ligne part au retour du réseau, iOS et Android (#18204)
+
+- Reprise : aucune PR cercles ouverte ; #18352 (émission web) fusionnée. Aucune branche n'écrit les centres de partage :
+  lot réservé sur `claude/cercles-18204-arreter-hors-ligne`.
+- Lot : le RETRAIT EN ATTENTE, iOS et Android ensemble (même loi). La liste (`SharedLocationRoster`, Swift et Kotlin)
+  gagne `withdrawing` (la personne sort, son identifiant est gardé au plus 8 h, le plus long terme serveur possible),
+  `settled` (la liste envoyée solde tous les retraits), `isSettled`, `hasRecipients`, `hasPendingWithdrawals` ; le
+  format gardé ajoute `withdrawals` (identifiants et bornes, jamais une position), une liste d'avant se relit sans
+  retrait. Le centre : un « Arrêter » qui échoue (hors ligne, accusé perdu) rend `withdrawalPending`, arme le rejeu de
+  30 s, coupe le suivi s'il ne reste personne ; `reconcile()` rejoue dès que la liste n'est pas soldée (minuteur,
+  socket accrochée, lancement) ; aucune mise à jour de position ne part tant qu'un retrait attend. Message neuf
+  « Le partage s'arrêtera dès le retour du réseau » (sept langues, iOS, adopté par Android), en toast d'information.
+- Le témoin « un accusé perdu en arrêtant une personne garde Arrêter pour tous » change de sens : l'intention est
+  désormais gardée par le centre et rejouée, la personne n'attend plus un second toucher.
+- Suivi ouvert : la même loi sur le web (#18388).
+- Audit adversarial avant PR : un BLOQUANT corrigé et témoigné — sur iOS, le centre ne naissait qu'à l'ouverture d'une
+  fiche : un retrait gardé n'aurait pas pu partir après un relancement. Il naît désormais avec la session du compte
+  (`SharedLocationSharingHolder.followAccounts()`, appelé par la séquence de lancement, réveillé une fois par compte
+  connecté). Android l'avait déjà (le centre est un `PerAccountCache` tiré au lancement par `LaunchPurgeHook`).
+  Corrigés aussi, sur les deux : un retrait refusé pour autre chose que le réseau (débit, liste invalide) ARRÊTE tout
+  au lieu de se rejouer des heures ; une dernière position plus vieille qu'un battement (120 s) n'est plus republiée
+  comme fraîche, l'appareil est redemandé ; un retrait passé sa borne s'oublie sans rien émettre (plus de boucle).
+  Noté : revenir à une version antérieure de l'app perd un retrait en attente (le format ancien ignore la clé).
+  Suivis : la même loi sur le web (#18388) ; un second appareil du même compte (#18389).
+- Gates locaux : `jvm-check -PjvmCheckModelOnly` `SharedLocationRosterTest` 8/8 verts ; `xcstrings_to_android.py
+  --check`, `check-verbosity-native.mjs`, `check-file-budget.sh` verts ; iOS `check_localization.py`,
+  `check_test_registration.sh` verts, `check_house_rules.sh` et `check_cohesion_budget.sh` identiques avec et sans le
+  lot (rouge hérité de `dev` pour le premier). Swift et `sdk-core` se prouvent par la CI de `dev` après fusion
+  (`CI_DEV_SEUL`, #18048).
+- Prochain lot recommandé : #18388 (le web), puis la passerelle #18205 avec #18389.
+
+## 2026-11-14 — réveil de la nuit : un « Arrêter » hors ligne part au retour du réseau, sur le web (#18388)
+
+- Reprise : aucune PR cercles ouverte ; #18390 (iOS + Android) fusionnée. Aucune branche n'écrit
+  `apps/web/src/lib/shared-locations/` : lot réservé sur `claude/cercles-18388-web-arreter-hors-ligne`.
+- Lot : le RETRAIT EN ATTENTE sur le web, même loi que iOS/Android (#18204). `shared-location-roster.ts` : la liste
+  devient `{ entries, withdrawals }` avec `withdrawing` (8 h au plus), `settled`, `isSettled`, `hasRecipients`,
+  `hasPendingWithdrawals`. Le centre : un « Arrêter » qui échoue (hors ligne, accusé perdu) rend `withdrawal-pending`,
+  coupe le suivi s'il ne reste personne et se rejoue toutes les 30 s et à la socket accrochée ; aucune mise à jour ne
+  part tant qu'un retrait attend ; un refus autre que le réseau arrête tout ; une dernière position plus vieille qu'un
+  battement est redemandée à l'appareil. Message « Le partage s'arrêtera dès le retour du réseau » en sept langues.
+- Audit adversarial avant PR : deux défauts corrigés et témoignés — (1) un démarrage en vol dans un autre onglet
+  ressuscitait la personne mise en retrait pendant l'attente : après l'accusé, les retraits gardés l'emportent et se
+  rejouent aussitôt ; (2) un onglet d'une version d'avant effaçait le retrait en réécrivant la liste : les retraits
+  vivent sous leur propre clé (`<clé>.withdrawals`), la liste garde le format d'avant. Corrigé aussi : une écriture
+  refusée par le stockage laisse la mémoire faire foi (la liste gardée en retard n'est plus relue).
+  Suivis ouverts : verrou entre onglets pour un arrêt RÉUSSI (#18431, course antérieure au lot) ; la fiche dit qu'un
+  arrêt attend le réseau, et un arrêt complet décidé en arrière-plan se dit, sur les trois clients (#18432).
+- Gates locaux : `bun test` du lot 97/97 (témoins vus rouges d'abord) ; `tsc --noEmit` vert ; build,
+  `check-utilities`, `measure-weight` verts.
+- Prochain lot recommandé : la passerelle #18205 avec #18389, puis #18431, puis #18351 une fois tranchée.
+
+## 2026-11-14 — réveil de l'après-midi : la passerelle tient l'échéance de chaque personne (#18205, serveur + web)
+
+- Reprise : aucune PR cercles ouverte ; #18433 (web) fusionnée. Aucune branche n'écrit `services/sharedLocation/` :
+  lot réservé sur `claude/cercles-18205-echeance-par-personne`.
+- Lot : `location:share-start` accepte `recipients[].expiresInSeconds` (optionnel, entier, au plus 8 h, ramené au
+  terme). La passerelle range l'échéance de chaque destinataire dans l'état scellé (`secret-at-rest`, inchangé) ;
+  `accessOf` ne garde que les destinataires non échus (`liveRecipients`), donc aucun chemin (direct, rattrapage,
+  remontée de cercle, réconciliation) ne sert plus un lecteur échu, sans que l'appareil de l'émetteur tourne ; chaque
+  lecteur reçoit SA propre échéance en `expiresAt`, plus le terme du partage (qui trahissait qu'un autre voyait plus
+  longtemps). Sans la clé (ancien client), le terme vaut pour tous. Le web envoie l'échéance de chaque personne qui
+  tombe avant le terme (`rosterOps.deadlinedRecipients`) et renvoie la liste sans échéances si une passerelle d'avant
+  la refuse (`startTolerant`).
+- Audit adversarial avant PR : aucun bloquant. Corrigés et témoignés : une personne échue pendant l'attente d'un relevé
+  ne part plus (même pour une seconde) ; une échéance rangée illisible ferme l'état au lieu de retomber sur le terme.
+  Assumés et écrits dans la PR : une passerelle d'avant le lot qui réécrit un état (retour arrière, deux versions en
+  déploiement) efface les échéances des sessions touchées ; le code `INVALID` sert aussi au refus « appelant non
+  inscrit », d'où un repli sans échéances possible dans une fenêtre de quelques millisecondes (retombe au
+  comportement d'avant). Suivi ouvert : iOS et Android (#18467).
+- Gates locaux : gateway `jest` `sharedLocation` + handler + admin 11 suites, 197 verts (témoins vus rouges d'abord,
+  mutations prouvées) ; `tsc` gateway et shared verts ; contrat partagé `vitest` 6/6 ; web `bun test` du lot 97/97,
+  `tsc --noEmit`, build, `check-utilities`, `measure-weight` verts.
+- Prochain lot recommandé : #18467 (iOS + Android), puis #18389 (multi-appareils), puis #18431.

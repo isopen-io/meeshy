@@ -684,6 +684,53 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     );
   });
 
+  /**
+   * #18380 — une ÉTAPE de l'éventail qui lève ne doit pas emporter LES
+   * SUIVANTES.
+   *
+   * Les quatre témoins ci-dessus gardent la place de l'enfilage : il est
+   * PREMIER, donc rien de ce qui vient après ne peut l'annuler. Ils ne disent
+   * rien de ce que l'enfilage, lui, ne protège pas — et c'est la totalité de
+   * l'éventail d'aval, qui vit dans UN seul `try` sous le `catch` de fin de
+   * méthode du producteur WS : mentions, `conversation:updated` PAR
+   * destinataire, badge de non-lus, et l'accusé de remise automatique.
+   *
+   * Son jumeau REST/ZMQ garde chacun de ces blocs SÉPARÉMENT
+   * (`MeeshySocketIOManager._broadcastNewMessage`, deux `try/catch` nommés).
+   * Le producteur WS — **le transport PRIMAIRE de `message:send`** — n'en avait
+   * aucun : une seule levée coûtait le re-tri de la liste, la pastille de
+   * non-lus ET le passage de ✓ à ✓✓ pour tout le monde, jusqu'au prochain
+   * rechargement complet.
+   *
+   * C'est la forme du cycle 127 vue sous un autre angle : une garde posée sur
+   * le chemin le plus FRÉQUENTÉ se lit comme posée sur le SUJET. Ici l'auteur
+   * du jumeau avait raison deux fois, et la leçon n'avait pas traversé.
+   */
+  it('#18380 — WS : `conversation:updated` qui lève ne retire pas la pastille de non-lus', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect((ioState.toEmit.mock.calls as any[]).map((c) => c[0]))
+      .toContain(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+  });
+
+  /* Le jumeau REST/ZMQ le fait déjà — le témoin le dit, pour que la parité soit LUE et non supposée. */
+  it('#18380 — REST/ZMQ : même propriété, déjà tenue par ses deux `try/catch` nommés', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect((ioState.toEmit.mock.calls as any[]).map((c) => c[0]))
+      .toContain(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+  });
+
   it("le producteur REST/ZMQ enfile même quand la requête SUPERSET tombe", async () => {
     // La requête qui échoue est celle du PRISME de la ligne de liste
     // (`user` + `joinedAt`) ; la file, elle, n'a besoin que de `{id, userId}`

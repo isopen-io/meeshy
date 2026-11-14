@@ -5,7 +5,7 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         { "catalog": "app", "iosKey": "story.sentinel.title", "status": "adopted" },
-        { "catalog": "app", "iosKey": "story.sentinel.body", "status": "adopted" },
+        { "androidName": "story_sentinel_body", "status": "android-only" },
         { "catalog": "app", "iosKey": "story.sentinel.update", "status": "adopted" },
         { "catalog": "app", "iosKey": "story.sentinel.skip", "status": "adopted" },
         { "catalog": "ui", "iosKey": "story.reader.loading", "status": "adopted" }

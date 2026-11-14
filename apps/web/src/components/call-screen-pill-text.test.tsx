@@ -135,7 +135,7 @@ const spyAnimate = () => {
   };
 };
 
-/** Un texte qui repart : marqué sortant, INERTE (ni focus, ni clic) et caché au lecteur d'écran. */
+/** Un texte qui repart : marqué sortant et caché au lecteur d'écran, mais TOUCHABLE jusqu'à la fin de son fondu (loi 17.11, comme iOS `CallChromeVisibility`). */
 const leavingOf = (node: Element | null | undefined) => {
   const leaving = node?.closest('[data-leaving]');
   return leaving === null || leaving === undefined ? null : { inert: leaving.hasAttribute('inert'), hidden: leaving.getAttribute('aria-hidden') === 'true' };
@@ -199,11 +199,25 @@ describe('(…) les range et les rend (P6.12)', () => {
     await view.settle();
     const leaving = inPill(view, '[data-call-captions-panel]');
     expect(leaving?.getAttribute('data-call-captions-surface')).toBe('inset');
-    expect(leavingOf(leaving)).toEqual({ inert: true, hidden: true });
+    expect(leavingOf(leaving)).toEqual({ inert: false, hidden: true });
     expect(leaving?.closest('[data-call-pill-text="captions"][data-leaving]')).not.toBeNull();
     await outlast();
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     expect(view.find('[data-call-control-pill]')?.className.split(' ')).toContain('w-fit');
+    view.done();
+  });
+
+  test('loi 17.11 — une phrase touchée pendant le fondu de sortie répond : son original se déplie, rien n’est rendu insensible', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    const line = inPill(view, '[data-call-captions-panel] button[data-call-caption-line]');
+    expect(line?.closest('[data-leaving]')).not.toBeNull();
+    expect(line?.closest('[inert]')).toBeNull();
+    act(() => line?.click());
+    await view.settle();
+    expect(line?.closest('[data-call-captions-panel]')?.querySelector('[data-call-unfolded-original]')).not.toBeNull();
     view.done();
   });
 
@@ -236,7 +250,7 @@ describe('(…) les range et les rend (P6.12)', () => {
         await view.settle();
         const leaving = view.find('[data-call-pill-text="captions"]');
         expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-        expect(leavingOf(leaving?.querySelector('[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+        expect(leavingOf(leaving?.querySelector('[data-call-captions-panel]'))).toEqual({ inert: false, hidden: true });
         const out = animations.of('[data-call-pill-text="captions"]').at(-1);
         expect(out?.frames).toEqual([{ opacity: 1 }, { opacity: 0 }]);
         expect(out?.duration).toBe(STOW_REDUCED_MS);
@@ -285,14 +299,14 @@ describe('(…) les range et les rend (P6.12)', () => {
     view.done();
   });
 
-  test('#17700 (P13.12) — en groupe, (…) ne remplace pas les sous-titres d’un coup : ils repartent en fondu, inertes, AU-DESSUS des rangées qui arrivent', async () => {
+  test('#17700 (P13.12) — en groupe, (…) ne remplace pas les sous-titres d’un coup : ils repartent en fondu, touchables, AU-DESSUS des rangées qui arrivent', async () => {
     const view = mount(group);
     await view.settle();
     view.press('[data-call-more]');
     await view.settle();
     const leaving = inPill(view, '[data-call-captions-panel]');
     expect(leaving).not.toBeNull();
-    expect(leavingOf(leaving)).toEqual({ inert: true, hidden: true });
+    expect(leavingOf(leaving)).toEqual({ inert: false, hidden: true });
     const pill = view.find('[data-call-control-pill]');
     const order = [...(pill?.querySelectorAll('[data-call-captions-panel], [data-call-row], [data-call-more]') ?? [])].map((node) => (node.hasAttribute('data-call-captions-panel') ? 'captions' : node.hasAttribute('data-call-more') ? 'base' : 'rows'));
     expect(order.at(0)).toBe('captions');
@@ -308,7 +322,7 @@ describe('(…) les range et les rend (P6.12)', () => {
     view.press('[data-call-captions-journal]');
     await view.settle();
     expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
-    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toEqual({ inert: false, hidden: true });
     await outlast();
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     view.done();
@@ -409,6 +423,70 @@ describe('le journal, DANS la pilule, à la place des sous-titres (P6)', () => {
   });
 });
 
+/**
+ * #17964 (point 3, tranché le 2026-11-13 ; P6, P9b.3, P13.9) — « Journal » referme le journal :
+ * tant qu'il est ouvert DANS la pilule, le bouton « Journal » reste au pied, en disque blanc
+ * plein, et le retoucher rend ce que le journal remplaçait — les sous-titres s'ils sont allumés,
+ * sinon la pilule de base. (…) n'est pas ouvert pour autant : il reste un disque au repos.
+ */
+describe('#17964 — « Journal » en disque blanc referme le journal dans la pilule', () => {
+  for (const [shape, overrides] of [
+    ['en duo', {}],
+    ['en groupe', group],
+  ] as const) {
+    test(`${shape} : journal ouvert, « Journal » reste au pied, pressé, et (…) reste au repos (P9b.3, P13.9)`, async () => {
+      const view = mount(overrides);
+      await view.settle();
+      view.press('[data-call-captions-journal]');
+      await view.settle();
+      const toggle = inPill(view, '[data-call-journal-panel] [data-call-journal-toggle]');
+      expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+      /* Loi 1, P6 : actif, il porte le pictogramme du Journal — la page et ses lignes du rail « L'appel » (`list.bullet.rectangle` d'iOS). */
+      expect([...(toggle?.querySelectorAll('svg[aria-hidden="true"] path') ?? [])].map((path) => path.getAttribute('d'))).toEqual(['M6 3.5h9l3 3v14H6z', 'M9 9.5h6M9 13h6M9 16.5h3.5']);
+      expect(toggle?.closest('[aria-hidden="true"], [inert]')).toBeNull();
+      expect(inPill(view, '[data-call-journal-panel] [data-panel-close]')).toBeNull();
+      expect(inPill(view, '[data-call-journal-panel] [data-panel-back]')).toBeNull();
+      const more = inPill(view, '[data-call-more]');
+      expect(more?.getAttribute('aria-expanded')).toBe('false');
+      expect(more?.getAttribute('aria-label')).toBe('Afficher les actions');
+      expect(more?.style.background).not.toBe('var(--color-on-media)');
+      view.done();
+    });
+
+    test(`${shape} : retoucher « Journal » rend les sous-titres, et leur « Journal » reprend le focus`, async () => {
+      const view = mount(overrides);
+      await view.settle();
+      view.press('[data-call-captions-journal]');
+      await view.settle();
+      view.find('[data-call-journal-toggle]')?.focus();
+      view.press('[data-call-journal-toggle]');
+      await view.settle();
+      expect(view.layer()).toBe('idle');
+      expect(view.find('[data-call-journal-panel]')).toBeNull();
+      expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
+      expect(document.activeElement?.hasAttribute('data-call-captions-journal')).toBe(true);
+      view.done();
+    });
+  }
+
+  test('sous-titres éteints : retoucher « Journal » rend la pilule de base, et le focus à (…)', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    view.press('[data-call-control="journal"]');
+    await view.settle();
+    expect(inPill(view, '[data-call-journal-toggle]')?.getAttribute('aria-pressed')).toBe('true');
+    view.press('[data-call-journal-toggle]');
+    await view.settle();
+    expect(view.layer()).toBe('idle');
+    expect(view.find('[data-call-journal-panel]')).toBeNull();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect(document.activeElement?.hasAttribute('data-call-more')).toBe(true);
+    view.done();
+  });
+});
+
 describe('un toucher range la pilule : UN SEUL verre se resserre autour des sous-titres (loi 11, G1.3)', () => {
   test('la pilule rangée ne s’efface pas et ne laisse pas un second verre : le même verre garde les sous-titres, lus et annoncés', async () => {
     const view = mount();
@@ -488,6 +566,60 @@ describe('un toucher range la pilule : UN SEUL verre se resserre autour des sous
   });
 });
 
+/**
+ * #18357 (G1, #17964 point 4) — pilule rangée d'un toucher, « Journal » touché dans le verre des
+ * sous-titres REND les contrôles, et avec eux le journal : ouvert, il le reste (il se range avec la
+ * pilule et revient avec elle) ; fermé, il s'ouvre. Jamais le menu. Mêmes vecteurs qu'iOS (#18237,
+ * `togglePanel` : `opening(.journal)` puis `showControls = true`) et Android (#18250).
+ */
+describe('« Journal » touché pilule rangée rend les contrôles avec le journal (G1, #18357)', () => {
+  test('journal ouvert puis rangé : toucher « Journal » rend les contrôles AVEC le journal, jamais le menu', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    expect(inPill(view, '[data-call-journal-panel]')?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  test('journal fermé, pilule rangée : toucher « Journal » l’ouvre ET rend les contrôles', async () => {
+    const view = mount();
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    view.done();
+  });
+
+  test('en groupe, le même geste rend les contrôles avec le journal', async () => {
+    const view = mount(group);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    expect(view.layer()).toBe('panel');
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    view.done();
+  });
+});
+
 describe('au clavier', () => {
   test('Échap ferme le journal, rien d’autre : l’appel n’est pas réduit', async () => {
     const view = mount();
@@ -528,6 +660,7 @@ describe('#17933 — en groupe, la bande des sous-titres est celle du duo', () =
       const journal = panel?.querySelector('[data-call-captions-journal]');
       expect(journal?.tagName).toBe('BUTTON');
       expect(journal?.textContent).toBe('Journal');
+      expect(journal?.querySelector('svg')).toBeNull();
       expect(panel?.querySelector('.rounded-card, .glass-call, .glass-call-prominent')).toBeNull();
       expect(panel?.className).not.toContain('glass-call');
       view.done();

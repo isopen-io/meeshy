@@ -11,9 +11,9 @@ internal enum class ConversationMenuSection {
     HEADER,
     /** Ouvrir la conversation autrement : ses détails, en tête de la liste (#17244). */
     REACH,
-    /** La regarder et la ranger. */
+    /** Ce qui s'atteint d'un geste : profil, membres, brouillon (#17697, règle 6). */
     ORGANIZE,
-    /** « Plus d'options ». */
+    /** « Plus » : le rare, rangé derrière un panneau ; chaque entrée reste atteignable (#17697). */
     MORE,
     /** Ce qui la retire, en dernier. */
     DEPARTURE;
@@ -102,7 +102,9 @@ internal data class ConversationMenuInput(
 
 /**
  * LE menu d'une rangée, calculé une fois depuis [ConversationRowMenuCapabilities] : le composable
- * ne porte aucune condition, il parcourt [groups] dans l'ordre. Miroir de `ConversationMenuCatalog.make`.
+ * ne porte aucune condition, il parcourt [groups] dans l'ordre. Miroir de `ConversationMenuCatalog.make`,
+ * dont il DIVERGE depuis l'épure (#17697, règle 6) : Renommer, Favori, Tags, Déplacer, Mentions seulement
+ * Mode de lecture, Supprimer pour tous et Rendre obsolète sont rangés derrière « Plus » ; l'iOS les garde à la racine tant que son lot n'a pas suivi.
  */
 internal data class ConversationMenuModel(
     val header: List<ConversationMenuEntry>,
@@ -139,17 +141,17 @@ internal data class ConversationMenuModel(
                     ConversationMenuEntry.DETAILS to dest.details,
                 ),
                 organize = offered(
-                    ConversationMenuEntry.READING_MODE to input.offersReadingModes,
                     ConversationMenuEntry.VIEW_PROFILE to dest.profile,
-                    ConversationMenuEntry.RENAME to law.rename,
                     ConversationMenuEntry.MANAGE_MEMBERS to (dest.manageMembers && law.offersManageMembers(input.isLocked)),
+                    ConversationMenuEntry.DISCARD_DRAFT to input.hasDraft,
+                ),
+                more = offered(
+                    ConversationMenuEntry.READING_MODE to input.offersReadingModes,
+                    ConversationMenuEntry.RENAME to law.rename,
                     ConversationMenuEntry.FAVORITE to true,
                     ConversationMenuEntry.TAGS to true,
                     ConversationMenuEntry.MOVE to true,
                     (if (input.mentionsOnly) ConversationMenuEntry.ALL_NOTIFICATIONS else ConversationMenuEntry.MENTIONS_ONLY) to !input.isMuted,
-                    ConversationMenuEntry.DISCARD_DRAFT to input.hasDraft,
-                ),
-                more = offered(
                     ConversationMenuEntry.INVITE to law.invite,
                     (if (input.isLocked) ConversationMenuEntry.UNLOCK else ConversationMenuEntry.LOCK) to true,
                     (if (input.isArchived) ConversationMenuEntry.UNARCHIVE else ConversationMenuEntry.ARCHIVE) to
@@ -158,13 +160,13 @@ internal data class ConversationMenuModel(
                         (input.isPeerBlocked != null),
                     ConversationMenuEntry.REPORT to law.report,
                     ConversationMenuEntry.ADMIN_OPEN to (law.adminOpen && dest.admin),
+                    ConversationMenuEntry.DELETE_FOR_ALL to (input.isCreator && law.deleteForAll),
+                    ConversationMenuEntry.MAKE_OBSOLETE to law.obsolete,
                 ),
                 departure = offered(
                     ConversationMenuEntry.LEAVE to law.leave,
                     ConversationMenuEntry.DELETE to (law.removal == ConversationRowMenuCapabilities.Removal.DELETE),
                     ConversationMenuEntry.HIDE to (law.removal == ConversationRowMenuCapabilities.Removal.HIDE),
-                    ConversationMenuEntry.DELETE_FOR_ALL to (input.isCreator && law.deleteForAll),
-                    ConversationMenuEntry.MAKE_OBSOLETE to law.obsolete,
                 ),
             )
         }
