@@ -193,6 +193,47 @@ imbriqué vidé (Swift, les trois `comment.author`).
 
 ---
 
+## Lot F — #18123 : les CINQ idiomes de routage, et la famille `call:*` enfin confrontée
+
+La garde Kotlin n'en lisait que trois, et le trou avait une FORME plutôt qu'une
+taille : toute la famille `call:*` sociale route par un **parseur écrit à la
+main**, sans aucune classe `@Serializable` à confronter, et les quatre
+`viewing:*` par un `decode<T>` **réifié** derrière `socketManager.on(…)`.
+
+> La QUESTION ne change pas d'un idiome à l'autre — « le miroir exige-t-il une
+> clé que le contrat ne garantit pas ? » — **seule la PREUVE change.** Un parseur
+> manuel dit son exigence par `o.str("x") ?: return@decode null` : sans la clé, il
+> rend `null`, la route écarte la trame, et rien ne rougit. Même panne que
+> `MissingFieldException`, autre mécanisme, même silence.
+
+Et le rapport le DIT, au lieu de recopier le symptôme de kotlinx : un lecteur qui
+chercherait un `MissingFieldException` dans un fichier qui n'en produit aucun
+conclurait que la garde se trompe. Le `MirrorIdentity` du cycle (lot B) a servi
+une troisième fois sans une ligne de duplication.
+
+**Couverture : 110 → 125 des 176 événements.** Zéro divergence sur les seize
+événements neufs : les douze parseurs d'appel et les quatre `viewing:*` sont
+conformes — et le dire est un résultat, pas un vide.
+
+### Deux pièges, mesurés plutôt que prévenus
+
+- **Un index global des corps de fonction par NOM rendait le dernier homonyme.**
+  `recordingStarted`, `recordingStopped` et `previewSignal` existent ailleurs dans
+  le dépôt : trois routes revenaient « sans aucune exigence », donc silencieusement
+  non gardées, et la garde restait verte. Le corps se cherche désormais dans le
+  fichier qui DÉCLARE l'objet nommé par la route. **C'est la faute des deux
+  `struct Update` Swift, dans l'autre langage, à une heure d'intervalle.**
+- **`previewSignal` ne lit aucune clé : il DÉLÈGUE** à `CallSignalMapper`. Il est
+  ÉNUMÉRÉ comme non confronté et exclu du compte de couverture — *un zéro qu'on
+  ne distingue pas d'une absence est le mode de panne silencieux d'une garde qui
+  déduit sa table.*
+
+Vu rougir : une clé requise injectée dans
+`CallSocialEventParser.mutedByModerator` (le rapport nomme le fichier du PARSEUR
+et son vrai symptôme) et dans `ViewingChange` (les trois `viewing:*` d'un coup).
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
@@ -215,5 +256,6 @@ rougira le jour où on l'en sortira** — et il attend une session avec Xcode.
 | #18249 | le contrat de `notification:new` redéclarait une jumelle plus lâche | **fermée** par ce lot |
 | #18116 | les champs imbriqués, les deux miroirs | **fermée** par ce lot (UN cran ; au-delà il faudrait suivre alias et unions) |
 | #18120 | la portée COMMUNAUTÉ n'atteint jamais iOS | ouverte — inventoriée par la garde, demande Xcode |
-| #18123 | les deux idiomes de routage Kotlin non vus (66 événements) | ouverte |
+| #18123 | les deux idiomes de routage Kotlin non vus | **fermée** par ce lot (110 → 125 des 176) |
+| #18252 | les deux rouges Android de `dev` | **fermée** par ce lot |
 | #18159, #18124, #18115 | les pièges armés du cycle 157 | ouvertes |
