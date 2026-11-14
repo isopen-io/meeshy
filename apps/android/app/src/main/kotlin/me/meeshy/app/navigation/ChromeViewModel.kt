@@ -3,17 +3,26 @@ package me.meeshy.app.navigation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.game.GameDevicePrefsStore
 import me.meeshy.sdk.game.InMemoryGameDevicePrefsStore
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.game.GameActsRing
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.UnreadBadgeCoordinator
@@ -42,6 +51,7 @@ import javax.inject.Inject
  * `SharedFlow`s with `replay = 0`, so a collector scoped to a single screen
  * misses every event that arrives while that screen is closed.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ChromeViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
@@ -51,6 +61,7 @@ class ChromeViewModel @Inject constructor(
     messageSocketManager: MessageSocketManager,
     private val config: MeeshyConfig,
     private val unreadBadge: UnreadBadgeCoordinator,
+    private val engagement: EngagementProgressRepository,
     private val gamePrefs: GameDevicePrefsStore = InMemoryGameDevicePrefsStore(),
 ) : ViewModel() {
 
@@ -77,6 +88,21 @@ class ChromeViewModel @Inject constructor(
         .map { friendshipCache.pendingReceivedCount }
         .stateIn(viewModelScope, SharingStarted.Eagerly, friendshipCache.pendingReceivedCount)
 
+    private val authenticated = MutableStateFlow(false)
+
+    /**
+     * L'anneau des actes du jour autour du disque du menu (#17768), lu dans le bloc `game` du cache de la progression —
+     * la clé de « Ma Légende ». Cache d'abord, revalidé en silence quand il est périmé : Android n'a pas de bandeau du
+     * joueur qui le tienne à jour comme sur iOS et le web. Rien avant l'authentification, rien sous « Jeu masqué ».
+     */
+    val actsRing: StateFlow<GameActsRing?> = combine(authenticated, gameHidden) { signedIn, hidden -> signedIn && !hidden }
+        .distinctUntilChanged()
+        .flatMapLatest { shown ->
+            if (!shown) flowOf(null) else engagement.progress().map { GameActsRing.of(it.valueOrNull?.game, hidden = false) }
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private var warmedUp = false
 
     init {
@@ -84,6 +110,7 @@ class ChromeViewModel @Inject constructor(
     }
 
     fun warmUpIfAuthenticated(isAuthenticated: Boolean) {
+        authenticated.value = isAuthenticated
         if (!isAuthenticated) {
             warmedUp = false
             return
