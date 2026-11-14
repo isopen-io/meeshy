@@ -1,5 +1,6 @@
 import { noteDirection } from '@/components/call-journal-note';
 import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
+import { transcriptSpokenLabel, type TranscriptReading } from '@/lib/calls/call-transcript-reading';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -24,6 +25,13 @@ export const CALL_GLASS_INK = 'var(--color-on-media-3)';
 export const THREAD_SECONDARY_INK = 'var(--color-ios-ink-2)';
 
 const LABELS = { original: 'callControls.journal.original', translated: 'callControls.journal.translated' } as const;
+
+/**
+ * Ce que le lecteur d'écran lit d'une phrase du journal, d'un trait (A1.19, #18225) : la ligne dessous y garde les
+ * mots de cette pièce, « Original » ou « Traduit », dans la langue de l'interface (`transcriptSpokenLabel`).
+ */
+export const spokenSentence = ({ name, clock, reading, language }: { readonly name: string; readonly clock: string; readonly reading: TranscriptReading; readonly language: InterfaceLanguage }): string =>
+  transcriptSpokenLabel({ name, clock, reading, words: { original: translateCallControls(language, LABELS.original), translated: translateCallControls(language, LABELS.translated) } });
 
 type Props = {
   readonly open: boolean;
