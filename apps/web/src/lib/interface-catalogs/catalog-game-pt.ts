@@ -617,6 +617,7 @@ const pt = {
   'game.prestige.title': 'Renascimento',
   'game.prestige.stars': 'Renascimentos: {stars} de {max}',
   'game.prestige.locked': 'O Renascimento se abre no nível 100.',
+  'game.prestige.what': 'Renascer leva seu nível de volta a 1 e abre uma nova Era para a sua lenda; seu título nunca recua.',
   'game.prestige.max': 'Sua lenda viveu os seus cinco renascimentos: o topo do topo.',
   'game.prestige.mee': 'Nível 100: sua luz pode renascer, ou crescer mais.',
   'game.prestige.meo': 'Ao renascer, seu nível recomeça em 1 e suas faíscas em 0. Seus ancestrais oferecem a você uma nova Era, um troféu numerado e {glory} de glória. Seu título nunca recua.',

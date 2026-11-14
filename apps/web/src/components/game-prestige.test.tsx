@@ -143,6 +143,11 @@ describe('les états fermés', () => {
     expect(html).not.toContain('data-game-prestige-go');
   });
 
+  test('sous le niveau 100 : une phrase dit, au repos, ce que la Renaissance fera (règle 7, un repère du jeu)', () => {
+    const t = text(renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />));
+    expect(t).toContain('Renaître remet ton niveau à 1 et ouvre un nouvel Âge à ta légende ; ton rang ne recule jamais.');
+  });
+
   test('le titre de carte n’est plus vu (la barre le dit), mais nomme encore la région ; le compteur N sur 5 n’est pas redit', () => {
     const html = renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />);
     expect(html).toContain('<h2 id="game-prestige-title" class="sr-only">Renaissance</h2>');

@@ -617,6 +617,7 @@ const es = {
   'game.prestige.title': 'Renacimiento',
   'game.prestige.stars': 'Renacimientos: {stars} de {max}',
   'game.prestige.locked': 'El Renacimiento se abre en el nivel 100.',
+  'game.prestige.what': 'Renacer devuelve tu nivel a 1 y abre una nueva Edad para tu leyenda; tu rango nunca retrocede.',
   'game.prestige.max': 'Tu leyenda ha vivido sus cinco renacimientos: la cima de la cima.',
   'game.prestige.mee': 'Nivel 100: tu luz puede renacer, o crecer todavía.',
   'game.prestige.meo': 'Al renacer, tu nivel vuelve a 1 y tus chispas a 0. Tus ancestros te ofrecen una nueva Edad, un trofeo numerado y {glory} de gloria. Tu rango nunca retrocede.',

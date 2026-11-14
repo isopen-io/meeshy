@@ -121,6 +121,9 @@ export function GamePrestige({ level, score, prestige, online, pending, error, o
             <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
               {gameText('game.prestige.locked')}
             </p>
+            <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
+              {gameText('game.prestige.what')}
+            </p>
             <GameRequirementLine concept="prestige" current={level.level} required={GAME_PRESTIGE_LEVEL} />
           </>
         ) : null}
