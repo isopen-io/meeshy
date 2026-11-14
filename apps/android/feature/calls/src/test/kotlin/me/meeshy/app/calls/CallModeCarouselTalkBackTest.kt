@@ -31,11 +31,13 @@ class CallModeCarouselTalkBackTest {
     private fun state(): String? = node().fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
 
     private fun run(label: String) {
+        rule.waitForIdle()
         val action = node().fetchSemanticsNode().config[SemanticsActions.CustomActions].first { it.label == label }.action
         rule.runOnIdle { action() }
     }
 
     private fun activate() {
+        rule.waitForIdle()
         rule.runOnIdle { node().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!() }
     }
 
@@ -63,7 +65,7 @@ class CallModeCarouselTalkBackTest {
                         current = { if (it == "b") posed else it },
                         next = "Next version",
                         previous = "Previous version",
-                        apply = { spy.applied += it },
+                        pose = { spy.applied += it },
                     ),
                 ) { item, _ -> Text(item) }
             }
