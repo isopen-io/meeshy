@@ -18,7 +18,7 @@ class CallPillToneMotionTest {
         .first { File(it, "CallGroupTile.kt").isFile }
 
     private fun code(name: String): String =
-        File(calls(), name).readLines().filterNot { commentLine.containsMatchIn(it) }.joinToString("\n")
+        File(calls(), name).also { assertThat(it.isFile).isTrue() }.readLines().filterNot { commentLine.containsMatchIn(it) }.joinToString("\n")
 
     @Test
     fun `the veil keeps the exact values of both tones at the ends of the fade`() {
@@ -50,13 +50,56 @@ class CallPillToneMotionTest {
         assertThat(CallGlassTone.OverPicture.fadeTarget).isEqualTo(0f)
     }
 
+    /**
+     * L3.3 · loi 17.2 — ce témoin figeait une largeur ANIMÉE À LA MISE EN PAGE (`animateDpAsState` lu par un `layout`),
+     * et la hauteur suivait par `expandVertically` : deux animations de géométrie, que la loi 17.2 interdit (« Android :
+     * graphicsLayer »). Il évolue : la mise en page passe d'un coup à sa forme finale (440 → 560 dp compris), et c'est le
+     * VERRE qui en repart, par une échelle tracée au dessin (FLIP, miroir de `morphKeyframes` du web).
+     */
     @Test
-    fun `L3_3 the pill's width is animated at layout, not set at once`() {
+    fun `L3_3 loi 17_2 - the pill's width and height are set at once, the glass morphs by a scale drawn at draw time`() {
         val pill = code("CallControlsPill.kt")
-        assertThat(pill).contains("animateDpAsState(")
-        assertThat(pill).contains("CallPillMotion.widthMillis(reduceMotion)")
-        assertThat(pill).doesNotContain("widthIn(max = CallPillWidth")
         assertThat(pill).contains("CallPillWidth.maxWidthDp(pillText, isUnfolded = ")
+        assertThat(pill).doesNotContain("animateDpAsState(")
+        assertThat(pill).doesNotContain("widthMillis")
+        assertThat(pill).doesNotContain("expandVertically(")
+        assertThat(pill).doesNotContain("shrinkVertically(")
+        assertThat(pill).doesNotContain("SizeTransform(")
+        assertThat(pill).contains("swap using null")
+        assertThat(pill).contains("CallMorphingControlsGlass(")
+        val morph = code("CallPillMorph.kt")
+        assertThat(morph).contains("CallPillMotion.morph(")
+        assertThat(morph).contains("drawWithContent")
+        assertThat(morph).contains("scale(")
+        assertThat(morph).contains("CallGlassPlate(")
+        assertThat(morph).doesNotContain("animateDpAsState(")
+    }
+
+    @Test
+    fun `loi 17_2 - what the layout moves inside the glass glides back by a translation drawn at draw time`() {
+        val pill = code("CallControlsPill.kt")
+        assertThat(Regex("""followsCallGlass\(""").findAll(pill).count()).isAtLeast(6)
+        val morph = code("CallPillMorph.kt")
+        assertThat(morph).contains("CallPillMotion.followShift(")
+        assertThat(morph).contains("onPlaced")
+        assertThat(morph).contains("translate(")
+        assertThat(morph).doesNotContain(".offset(")
+    }
+
+    @Test
+    fun `loi 17_2 - a button's caption fades in place, its room is set at once`() {
+        val button = code("CallControlGlass.kt").let { it.substring(it.indexOf("internal fun CallPillButton("), it.indexOf("internal fun CallGlassPlate(")) }
+        assertThat(button).contains("visible = captionShown")
+        assertThat(button).doesNotContain("expandVertically(")
+        assertThat(button).doesNotContain("shrinkVertically(")
+    }
+
+    @Test
+    fun `loi 17_10 - under reduce motion the pill neither scales nor slides, the glass cross-fades`() {
+        val morph = code("CallPillMorph.kt")
+        assertThat(morph).contains("ghostAlpha")
+        assertThat(morph).contains("saveLayer(")
+        assertThat(code("CallControlsPill.kt")).contains("CallPillMotion.scalesOnUnfold(reduceMotion)")
     }
 
     @Test
