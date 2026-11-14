@@ -34,7 +34,7 @@ internal fun LockPinCopy.subtitleTakesName(): Boolean = when (this) {
     else -> false
 }
 
-/** Un titre qui dit déjà tout (« Confirmer… », « Supprimer… », « Vérifier le code PIN principal ») n'a pas de sous-titre. */
+/** Un titre qui dit déjà tout (« Confirmer… », « Supprimer… », « Vérifier le code PIN principal ») n'a pas de sous-titre ; « Tout déverrouiller » garde le sien, qui dit quel code saisir. */
 @StringRes
 internal fun LockPinCopy.subtitleRes(): Int? = when (this) {
     LockPinCopy.CREATE_MASTER_PIN -> R.string.conversations_lock_subtitle_create_master
@@ -43,8 +43,9 @@ internal fun LockPinCopy.subtitleRes(): Int? = when (this) {
     LockPinCopy.UNLOCK -> R.string.conversations_lock_subtitle_unlock
     LockPinCopy.OPEN -> R.string.conversations_lock_subtitle_open
     LockPinCopy.NEW_MASTER_PIN -> R.string.conversations_lock_subtitle_new_master
+    LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_subtitle_unlock_all
     LockPinCopy.CONFIRM_MASTER_PIN, LockPinCopy.CONFIRM_NEW_MASTER_PIN, LockPinCopy.REMOVE_MASTER_PIN,
-    LockPinCopy.VERIFY_MASTER_PIN, LockPinCopy.UNLOCK_ALL, LockPinCopy.CHANGE_VERIFY_MASTER_PIN -> null
+    LockPinCopy.VERIFY_MASTER_PIN, LockPinCopy.CHANGE_VERIFY_MASTER_PIN -> null
 }
 
 @StringRes

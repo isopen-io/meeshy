@@ -30,4 +30,5 @@
     <string name="conversations_lock_title_remove_master">حذف رمز PIN الرئيسي</string>
     <string name="conversations_lock_title_verify_master">التحقق من رمز PIN الرئيسي</string>
     <string name="conversations_remove_master_pin">حذف رمز PIN الرئيسي</string>
+    <string name="conversations_lock_subtitle_unlock_all">أدخل رمز PIN الرئيسي</string>
 </resources>

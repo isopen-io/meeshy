@@ -30,4 +30,5 @@
     <string name="conversations_lock_title_remove_master">Master-PIN entfernen</string>
     <string name="conversations_lock_title_verify_master">Master-PIN überprüfen</string>
     <string name="conversations_remove_master_pin">Master-PIN entfernen</string>
+    <string name="conversations_lock_subtitle_unlock_all">Gib deine Master-PIN ein</string>
 </resources>

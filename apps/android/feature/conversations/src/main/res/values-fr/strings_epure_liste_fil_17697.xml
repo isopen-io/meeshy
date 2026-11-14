@@ -30,4 +30,5 @@
     <string name="conversations_lock_title_remove_master">Supprimer le code PIN principal</string>
     <string name="conversations_lock_title_verify_master">Vérifier le code PIN principal</string>
     <string name="conversations_remove_master_pin">Supprimer le code PIN principal</string>
+    <string name="conversations_lock_subtitle_unlock_all">Saisissez votre code PIN principal</string>
 </resources>

@@ -55,7 +55,7 @@ class EpureListeLot3Test {
 
     private val removed = listOf(
         "my_share_links_empty_subtitle", "links_tracking_empty_subtitle", "links_affiliate_empty_subtitle",
-        "conversations_lock_subtitle_unlock_all", "conversations_lock_subtitle_verify_master",
+        "conversations_lock_subtitle_verify_master",
         "conversations_lock_subtitle_change_verify",
     )
 
@@ -92,14 +92,16 @@ class EpureListeLot3Test {
     }
 
     @Test
-    fun `a lock sheet whose title already says it has no subtitle, the ones that give the name or the length keep theirs`() {
-        listOf(LockPinCopy.UNLOCK_ALL, LockPinCopy.VERIFY_MASTER_PIN, LockPinCopy.CHANGE_VERIFY_MASTER_PIN).forEach {
+    fun `a lock sheet whose title already says it has no subtitle, the ones that give the name, the length or the code keep theirs`() {
+        listOf(LockPinCopy.VERIFY_MASTER_PIN, LockPinCopy.CHANGE_VERIFY_MASTER_PIN).forEach {
             assertWithMessage(it.name).that(it.subtitleRes()).isNull()
         }
         listOf(
             LockPinCopy.ENTER_CODE, LockPinCopy.CONFIRM_CODE, LockPinCopy.OPEN, LockPinCopy.UNLOCK,
-            LockPinCopy.CREATE_MASTER_PIN, LockPinCopy.NEW_MASTER_PIN,
+            LockPinCopy.CREATE_MASTER_PIN, LockPinCopy.NEW_MASTER_PIN, LockPinCopy.UNLOCK_ALL,
         ).forEach { assertWithMessage(it.name).that(it.subtitleRes()).isNotNull() }
+        assertThat(all("values-fr")["conversations_lock_title_unlock_all"]).isEqualTo("Tout déverrouiller")
+        assertThat(all("values-fr")["conversations_lock_subtitle_unlock_all"]).isEqualTo("Saisissez votre code PIN principal")
     }
 
     @Test

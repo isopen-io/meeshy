@@ -30,4 +30,5 @@
     <string name="conversations_lock_title_remove_master">Elimina il PIN principale</string>
     <string name="conversations_lock_title_verify_master">Verifica il PIN principale</string>
     <string name="conversations_remove_master_pin">Elimina il PIN principale</string>
+    <string name="conversations_lock_subtitle_unlock_all">Inserisci il tuo PIN principale</string>
 </resources>

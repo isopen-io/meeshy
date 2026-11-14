@@ -53,6 +53,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "conversations_lock_subtitle_unlock_all",
+          "status": "android-only"
+        },
+        {
           "androidName": "links_affiliate_intro",
           "status": "android-only"
         },

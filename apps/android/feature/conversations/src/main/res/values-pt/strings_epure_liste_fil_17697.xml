@@ -30,4 +30,5 @@
     <string name="conversations_lock_title_remove_master">Remover o PIN mestre</string>
     <string name="conversations_lock_title_verify_master">Verificar o PIN mestre</string>
     <string name="conversations_remove_master_pin">Remover o PIN mestre</string>
+    <string name="conversations_lock_subtitle_unlock_all">Digite seu PIN mestre</string>
 </resources>
