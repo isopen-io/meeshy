@@ -417,4 +417,59 @@ final class CallTopBannerSpanTests: XCTestCase {
         XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: false, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
         XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: false, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
     }
+
+    // MARK: - #17963 — la puce de capture : verre teinté rouge, 5 s, rangée avec les bannières (R1.2, R1.4, R1.6)
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func kitMilliseconds(_ name: String) throws -> Double {
+        let source = try String(contentsOf: Self.repoRoot.appendingPathComponent("packages/shared/types/call-capture.ts"), encoding: .utf8)
+        let regex = try NSRegularExpression(pattern: "export const \(name) = ([0-9_]+);")
+        let match = try XCTUnwrap(regex.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)), "\(name) introuvable dans le kit")
+        let literal = try XCTUnwrap(Range(match.range(at: 1), in: source).map { String(source[$0]) })
+        return try XCTUnwrap(Double(literal.replacingOccurrences(of: "_", with: "")))
+    }
+
+    /// R1.4 — une capture ponctuelle tient la puce le temps du kit partagé, 5 s, comme Android et
+    /// le web ; la passerelle relaie sa fin synthétique au même terme. Le témoin lit la constante
+    /// du kit : elle ne peut plus diverger en silence.
+    func test_captureChip_lastsTheKitScreenshotAlertTTL() throws {
+        let ttl = try kitMilliseconds("CALL_SCREENSHOT_ALERT_TTL_MS")
+        XCTAssertEqual(ttl, 5_000)
+        XCTAssertEqual(CallCaptureAlertCapsule.transientSeconds * 1_000, ttl, "la puce dure CALL_SCREENSHOT_ALERT_TTL_MS")
+    }
+
+    /// R1.2 — la puce porte le verre teinté rouge du kit, celui du bandeau de partage : plus
+    /// d'aplat rouge. L'anneau blanc puis la phrase, aucun bouton, 44 pt de haut, une seule
+    /// annonce pour VoiceOver.
+    func test_captureChip_wearsTheKitRedTintedGlass_likeTheShareBanner() throws {
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func capsule(_ text: String) -> some View", in: views))
+        XCTAssertTrue(
+            capsule.contains(".adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: false)"),
+            "le verre teinté rouge du kit, comme « Vous partagez votre écran »"
+        )
+        XCTAssertFalse(capsule.contains(".background(MeeshyColors.error"), "plus d'aplat rouge")
+        XCTAssertFalse(capsule.contains("Button("), "la puce n'a aucun bouton")
+        XCTAssertTrue(capsule.contains(".stroke(Color.white, lineWidth: MeeshyBorder.strong)"), "l'anneau blanc reste")
+        XCTAssertTrue(capsule.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(capsule.contains(".accessibilityElement(children: .ignore)"))
+        XCTAssertTrue(capsule.contains(".modifier(CallTopBannerHeightReporter(banner: .capture))"), "la pile mesure toujours sa hauteur")
+    }
+
+    /// R1.6 — au premier toucher, la puce sort par le haut AVEC les bannières (loi 11) et revient
+    /// au second ; « Réduire les animations » : un fondu. Sa minuterie de 5 s court pendant qu'elle
+    /// est rangée : la ranger ne la prolonge pas.
+    func test_captureChip_stowsByTheTopEdge_withTheBanners() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let capture = try XCTUnwrap(stack.range(of: "case .capture:").map { String(stack[$0.upperBound...]) })
+        let branch = try XCTUnwrap(capture.components(separatedBy: "case .liveFrame:").first)
+        XCTAssertTrue(branch.contains("CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)"), "rien ne change de ce qui la nourrit")
+        XCTAssertTrue(branch.contains(".modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.captureAlert), reduceMotion: reduceMotion))"))
+        XCTAssertTrue(branch.contains(".callChromeVisibility(chrome.isVisible(.captureAlert))"))
+    }
 }
