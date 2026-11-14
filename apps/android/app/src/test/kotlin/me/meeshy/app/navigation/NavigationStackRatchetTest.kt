@@ -12,8 +12,8 @@ import org.junit.Test
  *
  * Ce qui est compté, dans `app/src/main` (lignes de commentaire exclues) : (a) chaque appel `navigate(`, tous récepteurs,
  * et chaque référence `::navigate`, hors `navigator.navigate(`, hors déclarations, hors des fichiers de la garde, et hors
- * des appels dont les arguments ou le constructeur de fin nomment `launchSingleTop` ; (b) chaque `popBackStack()` sans
- * argument, hors du routeur et des feuilles.
+ * des appels dont les arguments ou le constructeur de fin nomment `launchSingleTop` ; (b) chaque `popBackStack()` et
+ * chaque `navigateUp()` sans argument (le même retour nu sous un autre nom), hors du routeur et des feuilles.
  *
  * Mesuré le 2026-11-14 sur 4afe432feb : 190 poussées et 49 retours nus. Ce lot les ramène à 11 et 0 ; le reste vit dans
  * des calques que les lots suivants migrent. Abaisser, jamais relever.
@@ -24,7 +24,7 @@ class NavigationStackRatchetTest {
 
     private val commentLine = Regex("""^\s*(//|\*|/\*)""")
     private val navigateCall = Regex("""(?<!\w)navigate\(|::navigate\b""")
-    private val popCall = Regex("""(?<!\w)popBackStack\(\)""")
+    private val popCall = Regex("""(?<!\w)(popBackStack|navigateUp)\(\)""")
     private val declaration = Regex("""\bfun\s+(\w+\.)?$""")
     private val navigateExempt = setOf("StackGuard.kt", "AppNavigator.kt", "TopLevelNavigation.kt", "SheetReturn.kt")
     private val popExempt = setOf("AppNavigator.kt", "SheetReturn.kt", "SheetDestination.kt")
@@ -124,6 +124,18 @@ class NavigationStackRatchetTest {
     }
 
     @Test
+    fun `navigateUp sans argument est un retour nu comme popBackStack`() {
+        val found = barePops(
+            """
+            navController.navigateUp()
+            navController.popFrom(entry)
+            """.trimIndent(),
+        )
+
+        assertThat(found.map { it.line }).containsExactly(1)
+    }
+
+    @Test
     fun `le nombre de poussees nues ne monte jamais`() {
         val found = navigations()
 
@@ -139,7 +151,7 @@ class NavigationStackRatchetTest {
         val found = pops()
 
         assertWithMessage(
-            "Un popBackStack() nu a ete ajoute (${found.size} > $POP_CEILING). Un retour passe par popFrom(entry) ou " +
+            "Un popBackStack() ou un navigateUp() nu a ete ajoute (${found.size} > $POP_CEILING). Un retour passe par popFrom(entry) ou " +
                 "closeSheet(entry). Sites :\n" + found.joinToString("\n") { "${it.file}:${it.line}" },
         ).that(found.size).isAtMost(POP_CEILING)
     }

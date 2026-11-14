@@ -1,8 +1,8 @@
-# Un blocage qui dispense de livrer se vérifie avec le même soin qu'un défaut qu'on rapporte
+## Un blocage qui dispense de livrer se vérifie avec le même soin qu'un défaut qu'on rapporte
 
 *2026-11-14, cycle 156. Défaut de raisonnement du cycle 155, trouvé en le reprenant.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le cycle 155 a mesuré un défaut sévère (#18069 — aucune traduction temps réel
 n'atteignait Android), l'a parfaitement documenté, et a REFUSÉ de le livrer. Sa
@@ -23,7 +23,7 @@ laisse tourner les jobs que sur `dev`, `main` et `ci/promotion-*`. Le défaut
 **temporaire, nommée, avec un critère de levée**, et non pour une propriété
 permanente du workflow.
 
-## Pourquoi l'écart compte, alors que la conclusion tenait
+### Pourquoi l'écart compte, alors que la conclusion tenait
 
 Les deux causes n'ouvrent pas les mêmes suites, et c'est tout l'enjeu :
 
@@ -36,7 +36,7 @@ Le cycle 155 a classé un empêchement conjoncturel en fatalité structurelle. L
 coût n'est pas le défaut — il était consigné — c'est le lot qui n'a pas été
 ÉCRIT pendant qu'il avait son contexte, et qu'il a fallu reconstruire.
 
-## La règle
+### La règle
 
 **Une raison de ne pas livrer est une affirmation sur le dépôt, exactement comme
 un défaut. Elle se MESURE avant d'être écrite.** Le dépôt tient déjà la moitié
@@ -49,7 +49,7 @@ Le test est mécanique, et tient en une ligne : **si la raison cite un fichier,
 ouvrir le fichier.** Si elle cite une configuration, la lire. Si elle cite un
 refus réseau, le provoquer.
 
-## Ce que ce cycle a fait de son propre empêchement
+### Ce que ce cycle a fait de son propre empêchement
 
 Il l'a provoqué plutôt que déduit : `./apps/android/meeshy.sh jvm-check` échoue
 sur `build-artifacts.signal.org` (403 par le proxy), et le `workflow_dispatch`
@@ -58,7 +58,7 @@ datées, reproductibles — et la seconde a du même coup montré que le dispatc
 d'une branche de lot est précisément ce que #18048 existe pour empêcher, ce
 qu'une lecture du `if` seule n'aurait pas dit.
 
-## Et je l'ai rejouée dans le cycle qui l'écrit
+### Et je l'ai rejouée dans le cycle qui l'écrit
 
 `./apps/android/meeshy.sh jvm-check` échoue sur `build-artifacts.signal.org`
 (403 par le proxy). J'en ai conclu, et ANNONCÉ au porteur, que « ce conteneur ne

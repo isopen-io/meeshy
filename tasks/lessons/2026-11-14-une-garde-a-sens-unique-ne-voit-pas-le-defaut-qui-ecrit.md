@@ -1,9 +1,9 @@
-# Une garde à sens unique ne voit pas le défaut qui ÉCRIT
+## Une garde à sens unique ne voit pas le défaut qui ÉCRIT
 
 *2026-11-14, cycle 157. Issues : #18158 (la garde), #18157 (la panne), #18159
 (ce qui reste). Garde jumelle : #18070. Classe nommée par : #18124.*
 
-## La règle
+### La règle
 
 Quand une garde compare deux déclarations — un miroir client et un contrat
 serveur — **elle choisit un sens, et le sens qu'elle ne regarde pas porte sa
@@ -24,7 +24,7 @@ donnée — donc il est RECOPIÉ, et il écrase.
 > qu'on garde en second parce que c'est celui auquel on ne pense pas : on écrit
 > d'abord la garde qui empêche de lever.
 
-## Ce qui l'a mesuré
+### Ce qui l'a mesuré
 
 La passerelle sert `likeCount` ; trois miroirs Kotlin lisaient `likesCount`.
 `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut `0`,
@@ -37,7 +37,7 @@ L'intention du contrat (`types/post.ts`) était de servir l'absolu plutôt qu'un
 après un manqué. Elle était entièrement perdue à l'arrivée, et remplacée par
 son pire cas.
 
-## Le corollaire de MÉTHODE, qui est la vraie leçon
+### Le corollaire de MÉTHODE, qui est la vraie leçon
 
 #18124 avait trouvé UN cas de ce sens, par audit adversarial, et l'issue disait
 elle-même ce qui manquait : « personne n'a balayé le dépôt pour cette classe ».
@@ -53,7 +53,7 @@ cherchait.
 Quand une issue dit « personne n'a balayé », c'est une **spécification
 d'outil**, pas une réserve de prudence.
 
-## Deux pièges en écrivant la garde
+### Deux pièges en écrivant la garde
 
 **1. Le critère doit exclure ce qui a un AUTRE producteur.** Une classe partagée
 avec le REST (`ApiMessage`) porte légitimement des champs que le fil ne sert
@@ -73,7 +73,7 @@ c'est la seconde qui compte.**
 Sans la seconde, un inventaire est un baseline — c'est-à-dire une garde verte
 sur un défaut vivant, qui arme le piège au lieu de le désamorcer.
 
-## Et le corollaire de LIVRAISON
+### Et le corollaire de LIVRAISON
 
 Entre deux correctifs justes, **celui qui ne demande rien aux consommateurs est
 celui qui peut être prouvé**. `@SerialName("likeCount")` ne change pas le nom de
@@ -83,7 +83,7 @@ besoin d'être vérifié. Renommer la propriété aurait touché `feature/feed`,
 `feature/reels` et `feature/chat`, donc l'AGP, donc `dl.google.com`, que le
 proxy refuse : même valeur produit, lot invérifiable.
 
-## Et un empêchement se mesure, même quand il ne dispense de rien
+### Et un empêchement se mesure, même quand il ne dispense de rien
 
 `gradle` a rendu trois fois « Not enough memory to run compilation ». La machine
 avait 13 Go libres : le compilateur Kotlin lit `kotlin.daemon.jvmargs` comme une
