@@ -407,10 +407,7 @@ describe('CallEffectsMode', () => {
       expect(played).toEqual([
         {
           what: 'layer',
-          keyframes: [
-            { opacity: 0, transform: 'none' },
-            { opacity: 1, transform: 'none' },
-          ],
+          keyframes: [{ opacity: 0 }, { opacity: 1 }],
           duration: 200,
         },
       ]);

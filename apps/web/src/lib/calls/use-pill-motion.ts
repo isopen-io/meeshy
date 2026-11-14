@@ -181,7 +181,7 @@ const CAPSULE: WindowFrom = { kind: 'capsule' };
  * la capsule qui se replie en bulle se démonte à l'instant. Revenir à la vue qui repart la rend à l'arrivée, sans
  * la remonter.
  */
-export function useViewHold(view: CallView | null, revive?: () => void): { readonly screen: ViewMotion | null; readonly pill: ViewMotion | null } {
+export function useViewHold(view: CallView | null, revive: () => void): { readonly screen: ViewMotion | null; readonly pill: ViewMotion | null } {
   const last = useRef<CallView | null>(view);
   const held = useRef<CallView | null>(null);
   const bubble = useRef<WindowFrom | null>(null);
@@ -196,47 +196,20 @@ export function useViewHold(view: CallView | null, revive?: () => void): { reado
     held.current = null;
     redraw((count) => count + 1);
   };
-  const screen: Pick<ViewMotion, 'from' | 'revive'> = { from: bubble.current ?? CAPSULE, ...(revive === undefined ? {} : { revive }) };
-  const extra = (which: CallView) => (which === 'screen' ? screen : {});
-  const motionOf = (which: CallView): ViewMotion | null =>
-    view === which ? { leaving: false, arrives: held.current !== null || (which === 'screen' && bubble.current !== null), gone: gone(which), ...extra(which) } : held.current === which ? { leaving: true, arrives: false, gone: gone(which), ...extra(which) } : null;
+  const motionOf = (which: CallView): ViewMotion | null => {
+    const leaving = held.current === which;
+    if (view !== which && !leaving) return null;
+    const base = { leaving: view !== which, arrives: view === which && (held.current !== null || bubble.current !== null), gone: gone(which) };
+    return which === 'screen' ? { ...base, from: bubble.current ?? CAPSULE, revive } : base;
+  };
   return { screen: motionOf('screen'), pill: motionOf('pill') };
 }
 
-/**
- * Un toucher sur la vue qui repart la reprend (P18.8, `CallPipMorph.interruptContraction` d'iOS) : il la rend sans
- * déclencher le contrôle qu'il a touché, dont le clic qui suit est retenu.
- */
-function useReviveTouch(root: RefObject<HTMLElement | null>, motion: ViewMotion | undefined): void {
+/** Un toucher sur la vue qui repart la reprend (P18.8) : le moteur l'écoute (`reviveOnTouch`), ce crochet lui dit quoi rendre. */
+function useReviveTouch(root: RefObject<HTMLElement | null>, motion: ViewMotion | undefined, engine: Engine | null): void {
   const current = useRef(motion);
   current.current = motion;
-  useEffect(() => {
-    const element = root.current;
-    if (element === null) return;
-    let swallow = false;
-    const down = (event: Event) => {
-      const revive = current.current?.leaving ? current.current.revive : undefined;
-      swallow = revive !== undefined;
-      if (revive === undefined) return;
-      event.stopPropagation();
-      revive();
-    };
-    const key = () => void (swallow = false);
-    const click = (event: Event) => {
-      if (!swallow) return;
-      swallow = false;
-      event.stopPropagation();
-      event.preventDefault();
-    };
-    element.addEventListener('pointerdown', down, true);
-    element.addEventListener('keydown', key, true);
-    element.addEventListener('click', click, true);
-    return () => {
-      element.removeEventListener('pointerdown', down, true);
-      element.removeEventListener('keydown', key, true);
-      element.removeEventListener('click', click, true);
-    };
-  }, [root]);
+  useEffect(() => (engine === null || root.current === null ? undefined : engine.reviveOnTouch(root.current, () => (current.current?.leaving ? current.current.revive : undefined))), [engine]);
 }
 
 /**
@@ -249,7 +222,7 @@ export function useViewMotion(root: RefObject<HTMLElement | null>, motion: ViewM
   const running = useRef<Animation | null>(null);
   const was = useRef<boolean | null>(null);
   const leaving = motion?.leaving;
-  useReviveTouch(root, motion);
+  useReviveTouch(root, motion, engine);
   useLayoutEffect(() => {
     const element = root.current;
     if (motion === undefined || element === null) return;

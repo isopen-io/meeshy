@@ -136,7 +136,8 @@ export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: R
 /**
  * **LA COUCHE EFFETS ARRIVE ET REPART EN FONDU** (P8.14, #17831 ; `.transition(.opacity)` d'iOS, `CallModeLayer`
  * d'Android #18451) — la loi 17 excepte Effets de la montée du bas, pas du fondu : la couche entière (`layer`,
- * sa barre et son aperçu) se fond à l'entrée et à la sortie, 200 ms, 150 ms sous « Réduire les animations ».
+ * sa barre et son aperçu) se fond à l'entrée et à la sortie, 200 ms, 150 ms sous « Réduire les animations », par
+ * l'opacité SEULE : l'aperçu plein écran est `fixed`, une transformation animée sur la couche le déplacerait.
  * Le moteur est chargé AVEC le mode (`loadEffectsModeText`). Rouverte pendant son départ, elle n'est pas remontée :
  * `reopened` la rend à son menu d'entrée, comme une entrée neuve (Android `CallEffectsController.reopen`, #18451).
  */
@@ -146,5 +147,5 @@ export function useModeFade(layer: RefObject<HTMLElement | null>, leaving: boole
     if (was.current && !leaving) reopened();
     was.current = leaving;
   }, [leaving]);
-  return useModeMotion([[layer, 'fade']], leaving, gone);
+  return useModeMotion([[layer, 'opacity']], leaving, gone);
 }

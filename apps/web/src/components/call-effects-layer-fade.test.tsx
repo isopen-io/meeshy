@@ -145,7 +145,7 @@ describe('la couche Effets se fond à l’entrée et à la sortie (P8.14)', () =
   };
   const fadeOf = (entry: Played) => entry.keyframes.map((frame) => [frame.opacity, frame.transform]);
 
-  test('Effets ne monte pas du bas : la couche arrive en fondu, l’en-tête et la pilule partent par leurs bords', async () => {
+  test('Effets ne monte pas du bas : la couche arrive en fondu, l’opacité seule (son aperçu plein écran est fixe), l’en-tête et la pilule partent par leurs bords', async () => {
     const view = await enterEffects();
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
     const rises = (entry: Played) => entry.keyframes.some((frame) => frame.transform === 'translateY(100%)');
@@ -153,8 +153,8 @@ describe('la couche Effets se fond à l’entrée et à la sortie (P8.14)', () =
     expect(of('effects-layer').map((entry) => [fadeOf(entry), entry.duration])).toEqual([
       [
         [
-          [0, 'none'],
-          [1, 'none'],
+          [0, undefined],
+          [1, undefined],
         ],
         200,
       ],
@@ -175,8 +175,8 @@ describe('la couche Effets se fond à l’entrée et à la sortie (P8.14)', () =
     expect(of('effects-layer').map((entry) => [fadeOf(entry), entry.duration])).toEqual([
       [
         [
-          [1, 'none'],
-          [0, 'none'],
+          [1, undefined],
+          [0, undefined],
         ],
         200,
       ],

@@ -195,6 +195,37 @@ export function bubbleFrom(): WindowFrom {
   return { kind: 'bubble', center: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, size: { width: window.innerWidth, height: window.innerHeight } };
 }
 
+/**
+ * UN TOUCHER SUR LA VUE QUI REPART LA REPREND (P18.8, loi 17.11 ; `CallPipMorph.interruptContraction` d'iOS) : tant
+ * que `reviver` rend de quoi la rendre, un appui la rend sans déclencher le contrôle touché, dont le clic qui suit
+ * est retenu. Rend de quoi cesser d'écouter.
+ */
+export function reviveOnTouch(element: HTMLElement, reviver: () => (() => void) | undefined): () => void {
+  let swallow = false;
+  const down = (event: Event): void => {
+    const revive = reviver();
+    swallow = revive !== undefined;
+    if (revive === undefined) return;
+    event.stopPropagation();
+    revive();
+  };
+  const key = (): void => void (swallow = false);
+  const click = (event: Event): void => {
+    if (!swallow) return;
+    swallow = false;
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  element.addEventListener('pointerdown', down, true);
+  element.addEventListener('keydown', key, true);
+  element.addEventListener('click', click, true);
+  return () => {
+    element.removeEventListener('pointerdown', down, true);
+    element.removeEventListener('keydown', key, true);
+    element.removeEventListener('click', click, true);
+  };
+}
+
 const SLIDING = new WeakMap<Element, Animation>();
 
 /** Où se voit un élément à cet instant — un mouvement en cours compris. */

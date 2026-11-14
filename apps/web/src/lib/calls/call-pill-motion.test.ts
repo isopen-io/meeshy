@@ -242,6 +242,15 @@ describe('ce qui se recentre quand la colonne du journal entre ou repart (W1.20)
  * repart est marqué sortant et caché au lecteur d'écran, mais aucun contrôle n'est rendu insensible au toucher le
  * temps de son mouvement : ni `inert`, ni `pointer-events: none` posés par la feuille de l'appel.
  */
+describe('un fondu sans transformation pour ce qui porte des descendants fixes (P8.14)', () => {
+  test('`opacity` : l’opacité seule, à l’arrivée comme au départ, et sous « Réduire les animations »', () => {
+    for (const reduced of [false, true]) {
+      expect(swapKeyframes(true, reduced, 'opacity')).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+      expect(swapKeyframes(false, reduced, 'opacity')).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    }
+  });
+});
+
 describe('ce qui repart reste touchable jusqu’à la fin de son mouvement (loi 17.11)', () => {
   test('marqué sortant et caché au lecteur d’écran, jamais inerte', () => {
     expect(LEAVING).toEqual({ 'data-leaving': '', 'aria-hidden': true });
