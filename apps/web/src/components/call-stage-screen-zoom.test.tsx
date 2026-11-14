@@ -8,7 +8,7 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { DOUBLE_TAP_MS } from '@/lib/view/tap-gate';
 
-import { CallStage, screenZoomSurfaceView } from './call-stage';
+import { CallStage, duoScreenView } from './call-stage';
 
 /**
  * L'ÉCRAN REÇU EN DUO SE ZOOME (P15.11) — jusqu'à 4× au pincement, à Ctrl + molette, se déplace une fois
@@ -59,7 +59,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
-  await screenZoomSurfaceView.load();
+  await duoScreenView.load();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });

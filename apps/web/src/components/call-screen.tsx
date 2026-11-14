@@ -11,7 +11,7 @@ import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-c
 import { CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, callGridView, duoCornerView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
+import { CallStage, callGridView, duoCornerView, duoScreenView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -116,8 +116,8 @@ const CallIncomingAnswer = incomingAnswer.View;
 const endedControls = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallEndedControls));
 const CallEndedControls = endedControls.View;
 
-/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, ma vignette du duo, la capture déjà en cours, la fin. */
-export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), duoCornerView.load(), captureAlerts.load(), endedControls.load()]);
+/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu en duo, ma vignette du duo et ses gestes, la capture déjà en cours, la fin. */
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), duoScreenView.load(), duoCornerView.load(), captureAlerts.load(), endedControls.load()]);
 
 /** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
 const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -211,7 +211,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   captureAlerts.load,
   callGridView.load,
   endedControls.load,
-  screenZoomSurfaceView.load,
+  duoScreenView.load,
   duoCornerView.load,
 ];
 
@@ -482,9 +482,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
     if (expanded || grown) prefetchCallChunks();
   }, [expanded, grown]);
 
-  /* Un appel sonne avant de se connecter : la grille d'un groupe (#17650), la vignette du coin d'un duo (#17982) arrivent pendant ce temps. */
+  /* Un appel sonne avant de se connecter : la grille d'un groupe (#17650), la vignette du coin d'un duo (#17982) et l'écran qu'un pair y partagera (#17930) arrivent pendant ce temps. */
   useEffect(() => {
-    void (call.isGroup ? callGridView : duoCornerView).load().catch(() => undefined);
+    (call.isGroup ? [callGridView] : [duoCornerView, duoScreenView]).forEach((view) => void view.load().catch(() => undefined));
   }, [call.isGroup]);
 
   useEffect(() => {
