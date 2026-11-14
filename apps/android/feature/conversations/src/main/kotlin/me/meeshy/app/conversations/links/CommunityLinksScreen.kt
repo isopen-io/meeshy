@@ -62,6 +62,13 @@ fun CommunityLinksScreen(
         },
     ) {
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_community_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 LinkStatTile(MeeshyIcons.Groups, stats.totalCommunities, R.plurals.links_count_groups, accent, Modifier.weight(1f))

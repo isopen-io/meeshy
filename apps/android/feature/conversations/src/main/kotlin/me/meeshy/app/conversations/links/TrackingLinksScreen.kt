@@ -80,6 +80,13 @@ fun TrackingLinksScreen(
         },
     ) {
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_tracking_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         state.stats?.let { stats -> item(key = "stats", contentType = "stats") { StatsRow(stats, accent) } }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }

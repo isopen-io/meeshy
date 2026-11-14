@@ -219,4 +219,18 @@ class EpureListeLiensStringsTest {
             assertWithMessage(folder).that(all(folder).getValue("dialogs_master_pin_message").length).isAtMost(70)
         }
     }
+
+    @Test
+    fun `the tracking and community screens say at rest what their links are for, like the referral screen`() {
+        val en = all("values")
+        mapOf(
+            "links/TrackingLinksScreen.kt" to ("links_hub_tracking_description" to "Follow the clicks and campaigns of your links"),
+            "links/CommunityLinksScreen.kt" to ("links_hub_community_description" to "Manage the invitation links to your communities"),
+        ).forEach { (path, phrase) ->
+            val (key, text) = phrase
+            assertWithMessage(path).that(source(path).substringBefore("private fun ")).contains("R.string.$key")
+            assertWithMessage(key).that(en[key]).isEqualTo(text)
+            folders.forEach { folder -> assertWithMessage("$folder/$key").that(all(folder)[key]).isNotEmpty() }
+        }
+    }
 }
