@@ -88,6 +88,11 @@ enum CallModeCopy {
         String(localized: "call.mode.effects.settings.hint", defaultValue: "Affiche la luminosité et le flou du fond à la place des effets", bundle: .main)
     }
 
+    /// P8b.1 — le nom du groupe Luminosité · Flou du fond au lecteur d'écran : la légende de la planche.
+    static var settingsPanel: String {
+        String(localized: "call.mode.effects.settings.panel", defaultValue: "Réglages de mon image", bundle: .main)
+    }
+
     static func categoryName(_ category: CallEffectsCategory) -> String {
         switch category {
         case .face: return String(localized: "call.mode.effects.category.face", defaultValue: "Visage", bundle: .main)
@@ -144,11 +149,6 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Text(browse.isBrowsing ? announcedName : name(centred ?? selection))
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
             if let hint {
                 Text(hint)
                     .font(.caption2.weight(.medium))
@@ -163,8 +163,15 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
                 track(inset: CallModeCarouselRule.sideInset(containerWidth: geo.size.width, itemWidth: itemSize.width))
             }
             .frame(height: CallModeCarouselRule.trackHeight(itemHeight: itemSize.height))
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
+            // P8.6 — UN seul nom, SOUS la case choisie ; les voisines n'en portent pas.
+            Text(browse.isBrowsing ? announcedName : name(centred ?? selection))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: hint)
+        .animation(CallModeCarouselRule.animation(reduceMotion: reduceMotion, full: .easeInOut(duration: 0.25)), value: hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(isRecording ? CallModeCopy.recording : spokenValue)
@@ -534,8 +541,9 @@ private struct CallModeCarouselItem<Content: View>: View {
         content()
             .frame(width: size.width, height: size.height)
             .scaleEffect(CallModeCarouselRule.scale(isSelected: isSelected) * (isPressed && listens ? 0.94 : 1))
+            .animation(CallModeCarouselRule.scaleAnimation(reduceMotion: reduceMotion), value: isSelected)
             .opacity(CallModeCarouselRule.opacity(isSelected: isSelected))
-            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+            .animation(CallModeCarouselRule.animation(reduceMotion: reduceMotion, full: .spring(response: 0.25, dampingFraction: 0.8)), value: isSelected)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isPressed)
             .contentShape(Rectangle())
             .highPriorityGesture(

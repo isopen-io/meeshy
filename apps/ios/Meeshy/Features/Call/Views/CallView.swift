@@ -89,7 +89,7 @@ struct CallView: View {
     @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
-    @State var isSelfFeatured = false
+    @State var groupStageFocus: GroupCallStageFocus = .grid
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
     /// #17791 — la hauteur réelle de chaque bandeau du haut, rendue par les bandeaux eux-mêmes.
@@ -245,7 +245,7 @@ struct CallView: View {
         // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
         // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
         .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
-        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: !isGroupStage && callManager.screenShare.isRemoteSharing))
+        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: GroupCallSpotlight.showsReceivedScreen(isGroupStage: isGroupStage, isRemoteSharing: callManager.screenShare.isRemoteSharing, focus: groupStageFocus)))
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()

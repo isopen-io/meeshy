@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// Le contenu d'un plein écran ou d'une feuille se déclare au registre des
 /// surfaces (#10539, #10543).
@@ -7,6 +8,10 @@ import SwiftUI
 /// `onDisappear` n'y sont fiables que là (#9052). Sans `close`, la surface se
 /// referme par le `dismiss` de sa présentation — ce qui emporte aussi tout ce
 /// qu'elle a elle-même présenté (commentaires, profil, visionneuse).
+///
+/// Le contenu présenté porte aussi la racine du mouvement
+/// (`meeshyMotionRoot()`, #18354) : « Réduire les animations » y vaut, que la
+/// transaction de la fenêtre traverse la présentation ou non.
 struct PresentedSurfaceModifier: ViewModifier {
     let kind: PresentedSurfaceKind
     let answer: @MainActor () -> PresentedSurfaceYield
@@ -19,6 +24,7 @@ struct PresentedSurfaceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .meeshyMotionRoot()
             .onAppear {
                 guard token == nil else { return }
                 let dismiss = dismiss
