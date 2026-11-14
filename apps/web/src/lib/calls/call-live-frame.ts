@@ -18,7 +18,10 @@ import { callLayout } from './call-view';
  * Chacun reste libre de son cadre : le mien s'applique tout de suite CHEZ MOI
  * et part à l'autre comme une PROPOSITION, avec le prénom que je partage. Une
  * proposition reçue ne touche jamais à mon cadre — je l'applique ou je la
- * refuse, et l'autre l'apprend. Le cadre tombe localement quand l'appel n'est
+ * refuse, et l'autre l'apprend. Un cadre PARTAGÉ (appliqué chez les deux) que
+ * l'un relâche tombe chez les deux (C1.10, #18183) : le retrait est le même
+ * `frameId: null` que celui d'une proposition retirée, donc un ancien client
+ * le lit comme avant et garde son cadre. Le cadre tombe localement quand l'appel n'est
  * plus à deux. Ce client n'annonce pas `call-live-frame-group` : le groupe est #12313.
  */
 
@@ -35,12 +38,18 @@ export function toggledHold(current: string | null, tapped: string): string | nu
 
 export type LiveFrameRelease = Pick<CallLiveFrameState, 'frameId' | 'sentProposal' | 'peerFrameId'>;
 
-export function liveFrameReleaseReachesPeer({ sentProposal }: LiveFrameRelease): boolean {
-  return sentProposal !== null;
+/**
+ * Relâcher « Cadre » prévient l'autre (C1.10, #18183) quand ma proposition attend sa réponse, ou
+ * quand il montre le même cadre que moi — le cadre PARTAGÉ tombe chez les deux. Un cadre refusé, ou
+ * que l'autre ne montre pas, se relâche en silence.
+ */
+export function liveFrameReleaseReachesPeer({ frameId, sentProposal, peerFrameId }: LiveFrameRelease): boolean {
+  return sentProposal !== null || (frameId !== null && frameId === peerFrameId);
 }
 
-export function liveFramePeerReleaseDropsMine(_: Pick<CallLiveFrameState, 'frameId' | 'peerFrameId'>): boolean {
-  return false;
+/** Le retrait de l'autre fait tomber mon cadre quand c'était celui qu'il montrait — jamais un autre que j'ai gardé depuis. */
+export function liveFramePeerReleaseDropsMine({ frameId, peerFrameId }: Pick<CallLiveFrameState, 'frameId' | 'peerFrameId'>): boolean {
+  return frameId !== null && frameId === peerFrameId;
 }
 
 const joined = (call: ActiveCall): boolean => call.phase.kind === 'connected' || call.phase.kind === 'reconnecting';
@@ -156,11 +165,12 @@ async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<voi
   const callId = ctx.pairCallId();
   if (callId === null || (id !== null && !isLiveFrameId(id))) return;
   ctx.follow(callId);
-  const { sentProposal, peerFrameId } = state();
+  const held = state();
+  const { peerFrameId } = held;
   patch({ frameId: id, answer: null, notice: null });
   if (id === null) {
-    if (sentProposal === null) return;
-    patch({ sentProposal: null });
+    if (!liveFrameReleaseReachesPeer(held)) return;
+    patch({ sentProposal: null, ...(held.frameId === peerFrameId ? { peerFrameId: null } : {}) });
     await sendFrameSelect(deps, { callId, frameId: null });
     return;
   }
@@ -186,7 +196,8 @@ function receiveReply(ctx: LiveFrameContext, reply: CallLiveFrameReply, answered
 
 /** Le cadre que l'autre montre : une proposition, sauf s'il est déjà le mien (acceptée d'office, la réponse est rendue). */
 function receivePeerFrame(ctx: LiveFrameContext, callId: string, id: string | null): Promise<void> | null {
-  ctx.patch({ peerFrameId: id });
+  const dropsMine = id === null && liveFramePeerReleaseDropsMine(ctx.state());
+  ctx.patch({ peerFrameId: id, ...(dropsMine ? { frameId: null } : {}) });
   if (id === null) {
     ctx.place(null);
     return null;
