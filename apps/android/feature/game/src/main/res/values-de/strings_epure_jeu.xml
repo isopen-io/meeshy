@@ -66,7 +66,7 @@
     <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst.</string>
     <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100; sie ist freiwillig.</string>
     <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten. Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
-    <string name="game_rules_8_body">Jedes Zeichen wird zu einem Foto mit Mee und Meo, aufbewahrt in deiner Chronik.</string>
+    <string name="game_rules_8_body">Bei jeder Entwicklung wird ein Zeichen deiner Ahnen zu einem Foto mit Mee und Meo, aufbewahrt in deiner Chronik.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % Funken, solange dein Level 7 oder mehr unter deinem hellsten Licht liegt.</string>
     <string name="game_rules_badges_ribbon_question">Was bedeuten das Band und das Email?</string>
 </resources>

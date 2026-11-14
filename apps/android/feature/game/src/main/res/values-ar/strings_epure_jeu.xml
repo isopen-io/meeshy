@@ -66,7 +66,7 @@
     <string name="game_concept_flame_what">لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل.</string>
     <string name="game_concept_prestige_what">الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100؛ وهو اختياري.</string>
     <string name="game_concept_prestige_use">عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر؛ والباقي يبقى لك. خمسة انبعاثات على الأكثر تقود إلى العصر السادس.</string>
-    <string name="game_rules_8_body">كل علامة تصبح صورة مع مي وميو، محفوظة في سيرتك.</string>
+    <string name="game_rules_8_body">مع كل ارتقاء، تصبح علامة من أجدادك صورة مع مي وميو، محفوظة في سيرتك.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false"> ⁦+25 %⁩ شرارات ما دام مستواك أدنى من ذروة نورك بسبعة مستويات أو أكثر.</string>
     <string name="game_rules_badges_ribbon_question">ماذا يعني الشريط والمينا؟</string>
 </resources>

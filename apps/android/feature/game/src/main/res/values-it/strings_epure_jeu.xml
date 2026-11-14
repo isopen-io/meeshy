@@ -66,7 +66,7 @@
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto.</string>
     <string name="game_concept_prestige_what">La rinascita apre una nuova Era della tua leggenda, offerta al livello 100; è facoltativa.</string>
     <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero; il resto resta tuo. Cinque rinascite al massimo portano alla Sesta Era.</string>
-    <string name="game_rules_8_body">Ogni segno diventa una foto con Mee e Meo, conservata nella tua Cronaca.</string>
+    <string name="game_rules_8_body">A ogni evoluzione, un segno dei tuoi antenati diventa una foto con Mee e Meo, conservata nella tua Cronaca.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % di scintille finché il tuo livello è 7 o più sotto la tua luce più alta.</string>
     <string name="game_rules_badges_ribbon_question">Cosa significano il nastro e lo smalto?</string>
 </resources>

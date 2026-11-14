@@ -66,7 +66,7 @@
     <string name="game_concept_flame_what">Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto.</string>
     <string name="game_concept_prestige_what">O renascimento abre uma nova Era da sua lenda, oferecida no nível 100; ele é opcional.</string>
     <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero; o resto é mantido. Cinco renascimentos no máximo levam à Sexta Era.</string>
-    <string name="game_rules_8_body">Cada sinal vira uma foto com Mee e Meo, guardada na sua Crônica.</string>
+    <string name="game_rules_8_body">A cada evolução, um sinal dos seus ancestrais vira uma foto com Mee e Meo, guardada na sua Crônica.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25% de faíscas enquanto o seu nível estiver 7 ou mais abaixo do auge da sua luz.</string>
     <string name="game_rules_badges_ribbon_question">O que significam a fita e o esmalte?</string>
 </resources>

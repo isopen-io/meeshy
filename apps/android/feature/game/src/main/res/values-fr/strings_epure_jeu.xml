@@ -66,7 +66,7 @@
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste.</string>
     <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100 ; elle est facultative.</string>
     <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé. Cinq renaissances au plus mènent au Sixième Âge.</string>
-    <string name="game_rules_8_body">Chaque signe devient une photo avec Mee et Meo, gardée dans ta Chronique.</string>
+    <string name="game_rules_8_body">À chaque évolution, un signe de tes aïeux devient une photo avec Mee et Meo, gardée dans ta Chronique.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % d’étincelles tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.</string>
     <string name="game_rules_badges_ribbon_question">Que signifient le ruban et l’émail ?</string>
 </resources>
