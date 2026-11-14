@@ -333,8 +333,8 @@ describe('GET /admin/monitoring — les compteurs du client ZMQ (#18064)', () =>
       errorsReceived: 4,
       poolFullRejections: 3,
       translationSkipped: 5,
-      avgResponseTimeMs: 210.5,
     });
+    expect(data.translatorClient).not.toHaveProperty('avgResponseTimeMs');
     await app.close();
   });
 
@@ -391,7 +391,6 @@ describe('GET /admin/monitoring — les compteurs du client ZMQ (#18064)', () =>
       errorsReceived: 0,
       poolFullRejections: 0,
       translationSkipped: 2,
-      avgResponseTimeMs: 0,
     });
     await app.close();
   });

@@ -43,6 +43,8 @@
  *   n'est pas initialisé ou ne sait pas lire ses compteurs. Il porte ce que la
  *   carte `translator` ne voit pas : les refus de pool plein, les traductions
  *   ignorées et les erreurs reçues du traducteur, comptés au plus près du fil.
+ *   `avg_response_time` n'en sort pas : le client ne l'alimente jamais, il
+ *   vaudrait toujours 0. `errorsReceived` inclut les refus de pool plein.
  * - `backups` (#9668) est `null` quand le verdict de la sauvegarde nocturne est
  *   absent, illisible ou hors schéma (`services/admin/backup-status.ts`) : la
  *   passerelle ne voit que ce fichier, jamais les sauvegardes elles-mêmes.
@@ -100,7 +102,6 @@ type ZmqClientStatsLike = {
   readonly errors_received?: number;
   readonly pool_full_rejections?: number;
   readonly translation_skipped?: number;
-  readonly avg_response_time?: number;
 };
 
 type FastifyWithLiveServices = {
@@ -202,7 +203,6 @@ function readTranslatorClient(fastify: FastifyInstance) {
       errorsReceived: count(stats.errors_received),
       poolFullRejections: count(stats.pool_full_rejections),
       translationSkipped: count(stats.translation_skipped),
-      avgResponseTimeMs: count(stats.avg_response_time),
     };
   } catch {
     return null;
@@ -290,7 +290,6 @@ const monitoringSchema = {
         errorsReceived: nombre,
         poolFullRejections: nombre,
         translationSkipped: nombre,
-        avgResponseTimeMs: nombre,
       },
     },
     circuitBreakers: {
