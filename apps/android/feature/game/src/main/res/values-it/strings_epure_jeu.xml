@@ -6,7 +6,7 @@
     <string name="game2_showcase_visibility_hint">Un visitatore vede solo il mese in cui l’hai ottenuto, mai la data esatta.</string>
     <string name="game2_atlas_empty">Ancora nessun timbro: scrivi in un’altra lingua.</string>
     <string name="game2_atlas_privacy">Privato per impostazione predefinita: il gioco conserva la lingua e la data, mai l’interlocutore né la conversazione.</string>
-    <string name="game2_settings_visibility_body">Fuori dagli amici accettati nessuno vede se sei online né quando giochi.</string>
+    <string name="game2_settings_visibility_body">Scegli chi vede rango, Eredità, trofei e Atlante.</string>
     <string name="game2_league_pseudonym_invalid">Non valido.</string>
     <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei. Un milione di scintille per il livello 100, e una prova ogni dieci livelli: finché non è superata, la tua luce aspetta. Venti stati. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente.</string>
     <string name="game_state_elans_idle">%1$s in questi giorni: ancora nessuno slancio.</string>
@@ -14,7 +14,7 @@
     <string name="game2_season_seal_body">Puramente decorativo: un oggetto da collezione ogni %1$s soste.</string>
     <string name="game2_settings_notifications_body">Al massimo una al giorno, su tutti i tuoi dispositivi.</string>
     <string name="game2_settings_notifications_switch">Notifiche</string>
-    <string name="game2_settings_friends_league_body">I tuoi amici accettati e tu vi vedete nella classifica settimanale; l’interruttore toglie i due sensi.</string>
+    <string name="game2_settings_friends_league_body">I tuoi amici accettati e tu vi vedete nella classifica settimanale.</string>
     <string name="game_rules_section_rules">Regole</string>
     <string name="game_rules_section_concepts">Concetti</string>
     <string name="game_rules_4_body">Il tuo livello scende di altrettanto; rango e medaglie non scendono.</string>
@@ -43,4 +43,12 @@
     <string name="game_photo_camera_unavailable">La fotocamera non è disponibile.</string>
     <string name="game_mint_blocked_debt_plain">Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno, poi potrai coniare.</string>
     <string name="game_sparks_cumul_record">%1$s in quest’Era · %2$s in tutto</string>
+    <string name="game2_settings_hidden_body">Il gioco sparisce da questo dispositivo e si chiude agli altri.</string>
+    <string name="game2_settings_hidden_question">Cosa chiude il nascondere?</string>
+    <string name="game2_settings_hidden_effects">Nasconde il gioco su questo dispositivo, chiude trofei, rango, Eredità e Atlante agli altri, ti toglie dal torneo pubblico. Scintille e trofei restano custoditi.</string>
+    <string name="game2_settings_visibility_question">Chi vede quando gioco?</string>
+    <string name="game2_settings_visibility_presence">Fuori dagli amici accettati nessuno vede se sei online né quando giochi.</string>
+    <string name="game2_settings_friends_league_question">Cosa toglie «Ritirami»?</string>
+    <string name="game2_settings_friends_league_effects">L’interruttore ti toglie dalla loro classifica e loro dalla tua: i due sensi.</string>
+    <string name="reveal_badge_axis_subtitle">Un livello in più su questo asse.</string>
 </resources>

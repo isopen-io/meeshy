@@ -231,7 +231,6 @@
     <string name="game2_settings_celebrations_title">Mee y Meo</string>
     <string name="game2_settings_friends_league_switch">Retirarme</string>
     <string name="game2_settings_friends_league_title">Justa de los amigos</string>
-    <string name="game2_settings_hidden_body">Oculta el juego en este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a los demás, te saca de la justa pública. Chispas y trofeos se conservan.</string>
     <string name="game2_settings_hidden_card">El juego está oculto en este dispositivo.</string>
     <string name="game2_settings_hidden_reopen_note">Tus ajustes de visibilidad siguen cerrados: ábrelos aquí cuando quieras.</string>
     <string name="game2_settings_hidden_show">Volver a mostrar el juego</string>
@@ -1227,7 +1226,6 @@
     <string name="progression_unlocked">Desbloqueado</string>
     <string name="reveal_achievement_photo">Hacer una tarjeta</string>
     <string name="reveal_badge_achievement">Logro desbloqueado</string>
-    <string name="reveal_badge_axis_subtitle">Un nivel más en este eje. El siguiente se desbloquea al continuar.</string>
     <string name="reveal_badge_badge">Insignia obtenida</string>
     <string name="reveal_badge_level">Nuevo nivel</string>
     <string name="reveal_badge_locked">Logro por desbloquear</string>

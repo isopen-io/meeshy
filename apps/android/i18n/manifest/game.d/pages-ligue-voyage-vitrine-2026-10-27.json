@@ -281,11 +281,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.settings.hidden.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.settings.hidden.switch",
           "status": "adopted"
         },

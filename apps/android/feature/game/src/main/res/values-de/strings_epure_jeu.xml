@@ -6,7 +6,7 @@
     <string name="game2_showcase_visibility_hint">Besucher sehen nur den Monat, nie das genaue Datum.</string>
     <string name="game2_atlas_empty">Noch kein Stempel: Schreibe in einer anderen Sprache.</string>
     <string name="game2_atlas_privacy">Standardmäßig privat: Das Spiel speichert Sprache und Datum, nie das Gegenüber oder die Unterhaltung.</string>
-    <string name="game2_settings_visibility_body">Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst.</string>
+    <string name="game2_settings_visibility_body">Wähle, wer Rang, Erbe, Trophäen und Atlas sieht.</string>
     <string name="game2_league_pseudonym_invalid">Ungültig.</string>
     <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus. Eine Million Funken für Level 100, und alle zehn Level eine Prüfung: Solange sie nicht bestanden ist, wartet dein Licht. Zwanzig Gestalten. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige.</string>
     <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
@@ -14,7 +14,7 @@
     <string name="game2_season_seal_body">Rein dekorativ: alle %1$s Rasten ein Sammelobjekt.</string>
     <string name="game2_settings_notifications_body">Höchstens eine pro Tag, auf allen deinen Geräten.</string>
     <string name="game2_settings_notifications_switch">Mitteilungen</string>
-    <string name="game2_settings_friends_league_body">Bestätigte Freunde und du seht euch in der Wochenwertung; der Schalter entfernt beide Richtungen.</string>
+    <string name="game2_settings_friends_league_body">Bestätigte Freunde und du seht euch in der Wochenwertung.</string>
     <string name="game_rules_section_rules">Regeln</string>
     <string name="game_rules_section_concepts">Begriffe</string>
     <string name="game_rules_4_body">Dein Level sinkt um ebenso viel; Rang und Medaillen sinken nicht.</string>
@@ -43,4 +43,12 @@
     <string name="game_photo_camera_unavailable">Die Kamera ist nicht verfügbar.</string>
     <string name="game_mint_blocked_debt_plain">Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben, dann kannst du prägen.</string>
     <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
+    <string name="game2_settings_hidden_body">Das Spiel verschwindet von diesem Gerät und ist für andere geschlossen.</string>
+    <string name="game2_settings_hidden_question">Was schließt das Ausblenden?</string>
+    <string name="game2_settings_hidden_effects">Blendet das Spiel auf diesem Gerät aus, verbirgt Trophäen, Rang, Erbe und Atlas vor anderen, nimmt dich aus dem öffentlichen Turnier. Funken und Trophäen bleiben erhalten.</string>
+    <string name="game2_settings_visibility_question">Wer sieht, wann ich spiele?</string>
+    <string name="game2_settings_visibility_presence">Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst.</string>
+    <string name="game2_settings_friends_league_question">Was entfernt „Mich zurückziehen“?</string>
+    <string name="game2_settings_friends_league_effects">Der Schalter nimmt dich aus ihrer Wertung und sie aus deiner: beide Richtungen.</string>
+    <string name="reveal_badge_axis_subtitle">Eine Stufe mehr auf dieser Achse.</string>
 </resources>

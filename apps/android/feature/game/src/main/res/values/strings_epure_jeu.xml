@@ -6,7 +6,7 @@
     <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date.</string>
     <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
     <string name="game2_atlas_privacy">Private by default: the game keeps the language and the date, never the other person or the conversation.</string>
-    <string name="game2_settings_visibility_body">Outside accepted friends, nobody sees whether you are online or when you play.</string>
+    <string name="game2_settings_visibility_body">Choose who sees your rank, Legacy, trophies and Atlas.</string>
     <string name="game2_league_pseudonym_invalid">Not valid.</string>
     <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100, and a trial every ten levels: until it is passed, your light waits. Twenty phases. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before.</string>
     <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
@@ -14,7 +14,7 @@
     <string name="game2_season_seal_body">Purely decorative: a collectible every %1$s stops.</string>
     <string name="game2_settings_notifications_body">At most one a day, on all your devices.</string>
     <string name="game2_settings_notifications_switch">Notifications</string>
-    <string name="game2_settings_friends_league_body">Accepted friends and you see each other in the weekly ranking; the switch removes both directions.</string>
+    <string name="game2_settings_friends_league_body">Accepted friends and you see each other in the weekly ranking.</string>
     <string name="game_rules_section_rules">Rules</string>
     <string name="game_rules_section_concepts">Concepts</string>
     <string name="game_rules_4_body">Your level drops by as much; your rank and medals don’t drop.</string>
@@ -43,4 +43,12 @@
     <string name="game_photo_camera_unavailable">The camera is not available.</string>
     <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it, then you can mint.</string>
     <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
+    <string name="game2_settings_hidden_body">The game disappears from this device and closes to others.</string>
+    <string name="game2_settings_hidden_question">What does hiding close?</string>
+    <string name="game2_settings_hidden_effects">Hides the game on this device, closes your trophies, rank, Legacy and Atlas to others, takes you out of the public joust. Sparks and trophies are kept.</string>
+    <string name="game2_settings_visibility_question">Who sees when I play?</string>
+    <string name="game2_settings_visibility_presence">Outside accepted friends, nobody sees whether you are online or when you play.</string>
+    <string name="game2_settings_friends_league_question">What does “Opt me out” remove?</string>
+    <string name="game2_settings_friends_league_effects">The switch removes you from their ranking and them from yours: both directions.</string>
+    <string name="reveal_badge_axis_subtitle">One more tier on this axis.</string>
 </resources>

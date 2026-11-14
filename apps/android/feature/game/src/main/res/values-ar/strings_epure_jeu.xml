@@ -6,7 +6,7 @@
     <string name="game2_showcase_visibility_hint">يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا.</string>
     <string name="game2_atlas_empty">لا أختام بعد: اكتب بلغة أخرى.</string>
     <string name="game2_atlas_privacy">خاص افتراضيًا: تحتفظ اللعبة باللغة والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة.</string>
-    <string name="game2_settings_visibility_body">خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب.</string>
+    <string name="game2_settings_visibility_body">اختر من يرى رتبتك وإرثك وكؤوسك وأطلسك.</string>
     <string name="game2_league_pseudonym_invalid">غير صالح.</string>
     <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
     <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
@@ -14,7 +14,7 @@
     <string name="game2_season_seal_body">للزينة فقط: قطعة للجمع كل ⁦%1$s⁩ محطات.</string>
     <string name="game2_settings_notifications_body">إشعار واحد في اليوم على الأكثر، على جميع أجهزتك.</string>
     <string name="game2_settings_notifications_switch">الإشعارات</string>
-    <string name="game2_settings_friends_league_body">أنت وأصدقاؤك المقبولون ترون بعضكم في الترتيب الأسبوعي؛ والمفتاح يزيل الاتجاهين.</string>
+    <string name="game2_settings_friends_league_body">أنت وأصدقاؤك المقبولون ترون بعضكم في الترتيب الأسبوعي.</string>
     <string name="game_rules_section_rules">القواعد</string>
     <string name="game_rules_section_concepts">المفاهيم</string>
     <string name="game_rules_4_body">ينخفض مستواك بقدره؛ أما رتبتك وأوسمتك فلا تنخفض.</string>
@@ -43,4 +43,12 @@
     <string name="game_photo_camera_unavailable">الكاميرا غير متاحة.</string>
     <string name="game_mint_blocked_debt_plain">ظلّ يحجب نورك: شراراتك القادمة ستبدّده، ثم يمكنك السكّ.</string>
     <string name="game_sparks_cumul_record">⁦%1$s⁩ في هذا العصر · ⁦%2$s⁩ في المجموع</string>
+    <string name="game2_settings_hidden_body">تختفي اللعبة من هذا الجهاز وتُغلق أمام الآخرين.</string>
+    <string name="game2_settings_hidden_question">ماذا يغلق الإخفاء؟</string>
+    <string name="game2_settings_hidden_effects">يخفي اللعبة على هذا الجهاز، ويغلق كؤوسك ورتبتك وإرثك وأطلسك أمام الآخرين، ويخرجك من المبارزة العامة. تبقى الشرارات والكؤوس محفوظة.</string>
+    <string name="game2_settings_visibility_question">من يرى متى ألعب؟</string>
+    <string name="game2_settings_visibility_presence">خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب.</string>
+    <string name="game2_settings_friends_league_question">ماذا يزيل «الانسحاب»؟</string>
+    <string name="game2_settings_friends_league_effects">يزيلك المفتاح من ترتيبهم ويزيلهم من ترتيبك: الاتجاهان.</string>
+    <string name="reveal_badge_axis_subtitle">مستوى إضافي على هذا المحور.</string>
 </resources>

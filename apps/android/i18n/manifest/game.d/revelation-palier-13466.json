@@ -536,12 +536,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "reveal.badgeAxis.subtitle",
-          "androidName": "reveal_badge_axis_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "reveal.close",
           "androidName": "reveal_close",
           "status": "adopted"

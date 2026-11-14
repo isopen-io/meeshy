@@ -231,7 +231,6 @@
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
     <string name="game2_settings_friends_league_switch">Me retirer</string>
     <string name="game2_settings_friends_league_title">Joute des amis</string>
-    <string name="game2_settings_hidden_body">Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.</string>
     <string name="game2_settings_hidden_card">Le jeu est masqué sur cet appareil.</string>
     <string name="game2_settings_hidden_reopen_note">Tes réglages de visibilité restent fermés : rouvre-les ici quand tu le souhaites.</string>
     <string name="game2_settings_hidden_show">Réafficher le jeu</string>
@@ -1227,7 +1226,6 @@
     <string name="progression_unlocked">Débloqué</string>
     <string name="reveal_achievement_photo">En faire une carte</string>
     <string name="reveal_badge_achievement">Succès débloqué</string>
-    <string name="reveal_badge_axis_subtitle">Un palier de plus sur cet axe. Le suivant se débloque en continuant.</string>
     <string name="reveal_badge_badge">Badge gagné</string>
     <string name="reveal_badge_level">Nouveau niveau</string>
     <string name="reveal_badge_locked">Succès à débloquer</string>

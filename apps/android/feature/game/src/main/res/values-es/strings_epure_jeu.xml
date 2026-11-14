@@ -6,7 +6,7 @@
     <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta.</string>
     <string name="game2_atlas_empty">Aún no hay sellos: escribe en otro idioma.</string>
     <string name="game2_atlas_privacy">Privado por defecto: el juego guarda el idioma y la fecha, nunca al interlocutor ni la conversación.</string>
-    <string name="game2_settings_visibility_body">Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas.</string>
+    <string name="game2_settings_visibility_body">Elige quién ve tu rango, tu Legado, tus trofeos y tu Atlas.</string>
     <string name="game2_league_pseudonym_invalid">No válido.</string>
     <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100, y una prueba cada diez niveles: mientras no se supere, tu luz espera. Veinte estados. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior.</string>
     <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
@@ -14,7 +14,7 @@
     <string name="game2_season_seal_body">Puramente decorativo: un objeto de colección cada %1$s paradas.</string>
     <string name="game2_settings_notifications_body">Como máximo una al día, en todos tus dispositivos.</string>
     <string name="game2_settings_notifications_switch">Notificaciones</string>
-    <string name="game2_settings_friends_league_body">Tus amigos aceptados y tú os veis en la clasificación semanal; el interruptor quita ambos sentidos.</string>
+    <string name="game2_settings_friends_league_body">Tus amigos aceptados y tú os veis en la clasificación semanal.</string>
     <string name="game_rules_section_rules">Reglas</string>
     <string name="game_rules_section_concepts">Conceptos</string>
     <string name="game_rules_4_body">Tu nivel baja otro tanto; tu rango y tus medallas no bajan.</string>
@@ -43,4 +43,12 @@
     <string name="game_photo_camera_unavailable">La cámara no está disponible.</string>
     <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
     <string name="game_sparks_cumul_record">%1$s en esta Edad · %2$s en total</string>
+    <string name="game2_settings_hidden_body">El juego desaparece de este dispositivo y se cierra a los demás.</string>
+    <string name="game2_settings_hidden_question">¿Qué cierra el ocultar?</string>
+    <string name="game2_settings_hidden_effects">Oculta el juego en este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a los demás, te saca de la justa pública. Chispas y trofeos se conservan.</string>
+    <string name="game2_settings_visibility_question">¿Quién ve cuándo juego?</string>
+    <string name="game2_settings_visibility_presence">Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas.</string>
+    <string name="game2_settings_friends_league_question">¿Qué quita «Retirarme»?</string>
+    <string name="game2_settings_friends_league_effects">El interruptor te quita de su clasificación y los quita de la tuya: ambos sentidos.</string>
+    <string name="reveal_badge_axis_subtitle">Un nivel más en este eje.</string>
 </resources>

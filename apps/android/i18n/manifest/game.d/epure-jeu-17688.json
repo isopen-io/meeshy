@@ -53,6 +53,26 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_settings_friends_league_effects",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_friends_league_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_hidden_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_hidden_effects",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_hidden_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_settings_notifications_body",
           "status": "android-only"
         },
@@ -62,6 +82,14 @@
         },
         {
           "androidName": "game2_settings_visibility_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_presence",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_question",
           "status": "android-only"
         },
         {
@@ -170,6 +198,10 @@
         },
         {
           "androidName": "game_state_elans_idle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reveal_badge_axis_subtitle",
           "status": "android-only"
         }
       ]
