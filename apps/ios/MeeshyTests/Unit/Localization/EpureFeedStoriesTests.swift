@@ -81,8 +81,6 @@ final class EpureFeedStoriesTests: XCTestCase {
         "feed.scene.sound.muted": "Son coupé",
         "feed.scene.sound.muted.hint": "Ouvrir en plein écran pour l'entendre",
         "feed.nearby.empty.awaiting.detail": "Déplacez la carte pour choisir un point de départ.",
-        "feed.nearby.empty.unavailable.detail": "Le serveur n'a pas répondu.",
-        "feed.nearby.empty.denied.detail": "Meeshy n'a pas accès à votre position.",
         "feed.nearby.empty.none.why": "Seules les publications « trouvables à proximité » apparaissent ici.",
         "feed.nearby.empty.none.why.question": "Pourquoi une publication manque-t-elle ?",
         "feed.nearby.empty.none.why.note": "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas.",
@@ -151,14 +149,31 @@ final class EpureFeedStoriesTests: XCTestCase {
     private static let removedFromApp = [
         "story.viewer.comments.beFirst", "story.mine.drafts.empty.subtitle", "feed.map.empty.detail",
         "feed.post.detail.loadFailed.body", "feed.post.detail.serverFailed.body",
+        "feed.nearby.empty.denied.detail", "feed.nearby.empty.unavailable.detail", "feed.nearby.empty.offline.detail",
+        "feed.nearby.empty.signin.detail", "feed.nearby.empty.none.detail", "bookmarks.empty.subtitle",
+        "story.viewer.notFound.description", "feed.bookmark.error", "feed.bookmark.success", "feed.post.stat.reposts",
     ]
+    private static let removedFromKit = ["story.repost.reprojected"]
 
     func test_removedKeys_areGoneFromEveryLanguage_andNoSourceReadsThemAnymore() throws {
-        let app = try app(), sources = try shippedSources()
+        let app = try app(), kit = try kit(), sources = try shippedSources()
         for key in Self.removedFromApp {
             XCTAssertNil(app[key], "\(key) : encore au catalogue")
             XCTAssertFalse(sources.contains("\"\(key)\""), "\(key) : une source la lit encore")
         }
+        for key in Self.removedFromKit {
+            XCTAssertNil(kit[key], "\(key) : encore au catalogue du kit")
+            XCTAssertFalse(sources.contains("\"\(key)\""), "\(key) : une source la lit encore")
+        }
+    }
+
+    func test_bookmarksEmpty_isTheTitleAlone_andTheStoryNotFoundOverlayIsTitlePlusItsTwoButtons() throws {
+        let bookmarks = try code(Self.views + "BookmarksView.swift")
+        XCTAssertTrue(bookmarks.contains("bookmarks.empty.title"))
+        XCTAssertFalse(bookmarks.contains("bookmarks.empty.subtitle"))
+        let viewer = try code(Self.stories + "StoryViewerContainer.swift")
+        XCTAssertTrue(viewer.contains("story.viewer.notFound.title"))
+        XCTAssertFalse(viewer.contains("story.viewer.notFound.description"))
     }
 
     func test_storyCommentsOverlay_emptyIsOneLine_theReplyBarIsTheAction_andTheExpiredBannerIsNeverTruncated() throws {
@@ -216,11 +231,11 @@ final class EpureFeedStoriesTests: XCTestCase {
 
     func test_nearbyDetail_isOneSentence_andAbsentOnTheEmptyMap() {
         XCTAssertNil(NearbyEmptyStateCard.detail(for: .nothingOnTheMap, radiusKm: 10), "titre seul : l'état vide tient en une ligne")
-        for reason in [NearbyEmptyReason.locationDenied, .awaitingLocation, .serviceUnavailable] {
-            let detail = NearbyEmptyStateCard.detail(for: reason, radiusKm: 10)
-            XCTAssertNotNil(detail)
-            XCTAssertEqual(detail?.filter { $0 == "." }.count, 1, "une phrase : « \(detail ?? "") »")
+        for reason in [NearbyEmptyReason.locationDenied, .offline, .signInRequired, .serviceUnavailable, .noneInRadius] {
+            XCTAssertNil(NearbyEmptyStateCard.detail(for: reason, radiusKm: 10), "\(reason) : le titre et l'action suffisent")
         }
+        let awaiting = NearbyEmptyStateCard.detail(for: .awaitingLocation, radiusKm: 10)
+        XCTAssertEqual(awaiting?.filter { $0 == "." }.count, 1, "la seule consigne qui guide le geste reste une phrase")
     }
 
     func test_soundMutedBadge_isNamedSonCoupe_andTheRestIsTheAccessibilityHint() throws {
