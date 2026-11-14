@@ -55,8 +55,8 @@ describe('les célébrations', () => {
     expect(calls).toEqual([false]);
   });
 
-  test('le texte dit que le réglage vaut pour cet appareil seulement', () => {
-    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('Cet appareil seulement');
+  test('le texte dit où les cartes s’affichent', () => {
+    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('Les cartes de Mee et Meo s’affichent sur Progression');
   });
 });
 

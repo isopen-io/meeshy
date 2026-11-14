@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -163,7 +164,7 @@ fun MeeshyApp(
         // destinations de lancement legitimes hors session : ce sont eux qui en ouvrent une ou qui
         // choisissent le mot de passe. Tout le reste (chat, appel) attend l'authentification.
         if (launchRoute != null && (authState.isAuthenticated || LaunchRouter.opensWithoutSession(launchRoute))) {
-            navController.navigate(launchRoute)
+            navController.navigateSingleTop(launchRoute)
             onLaunchRouteConsumed()
         }
     }
@@ -188,10 +189,11 @@ fun MeeshyApp(
     LaunchedEffect(Unit) {
         incomingCallViewModel.incomingOffers.collect { offer ->
             LaunchRouter.routeIncomingSocketOffer(offer, navController.currentDestination?.route)
-                ?.let(navController::navigate)
+                ?.let { navController.navigateSingleTop(it) }
         }
     }
 
+    CompositionLocalProvider(LocalAppNavigator provides navigator) {
     UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
     ProvideViewerCallPill(callViewModel, navController, shown = CallPillPresenter.shouldShow(callStatus, onCallScreen)) {
@@ -279,8 +281,8 @@ fun MeeshyApp(
                 activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
                 activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
                 onOpenConversation = { navigator.openConversation(it) },
-                onOpenPost = { navController.navigate(Routes.postDetail(it)) },
-                onOpenGame = { navController.navigate(GameRoutes.route(it)) },
+                onOpenPost = { navController.navigateSingleTop(Routes.postDetail(it)) },
+                onOpenGame = { navController.navigateSingleTop(GameRoutes.route(it)) },
             )
 
             BannerPeekSheetHost(bannerPeek) { navigator.openConversation(it) }
@@ -330,6 +332,7 @@ fun MeeshyApp(
         LoggingOutVeil(visible = authState.isLoggingOut)
 
         SplashOverlay()
+    }
     }
     }
     }

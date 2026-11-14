@@ -64,16 +64,17 @@ internal fun NavGraphBuilder.chatDestination(
         val conversationId = entry.arguments
             ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
             .orEmpty()
-        ChatLockGate(conversationId = conversationId, onBack = { navController.popBackStack() }) {
+        ChatLockGate(conversationId = conversationId, onBack = { navController.popFrom(entry) }) {
             ReportsConversationViewing(conversationId)
             ProvideConversationMoods(navController, entry) {
                 ProvideConversationLinkCards {
                     val localCall = rememberChatLocalCall(navController, callStatus)
-                    val packShopOpener = remember(navController) {
-                        PackShopOpener { domain -> navController.navigate(Routes.packShop(domain = domain.wire)) }
+                    val openConversation = rememberConversationOpener(navController, entry)
+                    val packShopOpener = remember(navController, entry) {
+                        PackShopOpener { domain -> navController.pushFrom(entry, Routes.packShop(domain = domain.wire)) }
                     }
-                    val settingsInviteOpener = remember(navController) {
-                        SettingsInviteOpener { invite -> navController.navigate(Routes.settingsFocus(invite)) }
+                    val settingsInviteOpener = remember(navController, entry) {
+                        SettingsInviteOpener { invite -> navController.pushFrom(entry, Routes.settingsFocus(invite)) }
                     }
                     val callJournal = rememberCallJournalSlot(conversationId)
                     CompositionLocalProvider(
@@ -82,16 +83,17 @@ internal fun NavGraphBuilder.chatDestination(
                         LocalSettingsInviteOpener provides settingsInviteOpener,
                     ) {
                     ChatScreen(
-                        onBack = { navController.popBackStack() },
+                        onBack = { navController.popFrom(entry) },
                         onStartCall = { peerName, isVideo ->
-                            navController.navigate(Routes.call(conversationId, peerName, isVideo))
+                            navController.pushFrom(entry, Routes.call(conversationId, peerName, isVideo))
                         },
                         onRejoinCall = { call, peerName ->
                             // Rejoin an existing, still-live call: reuse the incoming
                             // deep-link with autoAnswer so the shared join path adopts
                             // the server callId and connects straight away — never a
                             // new outgoing call.
-                            navController.navigate(
+                            navController.pushFrom(
+                                entry,
                                 CallRoute.incoming(
                                     callId = call.id,
                                     conversationId = conversationId,
@@ -102,16 +104,16 @@ internal fun NavGraphBuilder.chatDestination(
                             )
                         },
                         onCreateShareLink = {
-                            navController.navigate(Routes.createShareLink(conversationId))
+                            navController.pushFrom(entry, Routes.createShareLink(conversationId))
                         },
                         // A live local call (minimised/floating) suppresses the rejoin
                         // pill — don't offer to rejoin the call this device is in.
                         hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
                         localCall = localCall,
                         locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
-                        onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
-                        onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
-                        onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
+                        onOpenCitedPost = { postId -> navController.pushFrom(entry, Routes.postDetail(postId)) },
+                        onOpenConversation = { id -> openConversation(id, null) },
+                        onOpenProgression = { navController.pushFrom(entry, GameRoutes.PROGRESSION) { launchSingleTop = true } },
                     )
                     }
                 }

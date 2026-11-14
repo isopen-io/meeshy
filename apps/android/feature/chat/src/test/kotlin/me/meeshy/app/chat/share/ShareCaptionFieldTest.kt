@@ -119,6 +119,6 @@ class ShareCaptionFieldTest {
     @Test
     fun `offline shows its banner`() {
         show(state(online = false))
-        compose.onNodeWithText("Offline.", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Offline:", substring = true).assertIsDisplayed()
     }
 }

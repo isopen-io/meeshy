@@ -1,11 +1,11 @@
 package me.meeshy.app.navigation.graph
 
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import me.meeshy.app.navigation.isOnTop
+import me.meeshy.app.navigation.navigateSingleTop
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.pushFrom
 import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -96,41 +96,31 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
         builder.composable(
             route = GameRoutes.PROGRESSION,
             deepLinks = GameRoutes.PROGRESSION_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
-        ) {
+        ) { entry ->
             ProgressionScreen(
-                onBack = { navController.popBackStack() },
-                onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
-                onOpenSettings = { navController.navigate(GameRoutes.page(GamePage.Settings)) },
-                onOpenRules = { navController.navigate(GameRoutes.RULES_TOP) },
-                onOpenNotebook = { navController.navigate(GameRoutes.NOTEBOOK) },
+                onBack = { navController.popFrom(entry) },
+                onOpenConcept = { navController.pushFrom(entry, GameRoutes.concept(it)) },
+                onOpenSettings = { navController.pushFrom(entry, GameRoutes.page(GamePage.Settings)) },
+                onOpenRules = { navController.pushFrom(entry, GameRoutes.RULES_TOP) },
+                onOpenNotebook = { navController.pushFrom(entry, GameRoutes.NOTEBOOK) },
                 onOpenConversations = {
-                    if (!navController.backToConversations()) navController.navigate(Routes.CONVERSATIONS)
+                    if (navController.isOnTop(entry) && !navController.backToConversations()) {
+                        navController.navigateSingleTop(Routes.CONVERSATIONS)
+                    }
                 },
             )
         }
         builder.composable(
             route = GameRoutes.NOTEBOOK,
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
-        ) {
-            GameNotebookScreen(onBack = { navController.popBackStack() })
+        ) { entry ->
+            GameNotebookScreen(onBack = { navController.popFrom(entry) })
         }
         builder.composable(
             route = GameRoutes.PAGE,
             arguments = listOf(navArgument(GameRoutes.PAGE_ARG) { type = NavType.StringType }),
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
         ) { entry ->
             val page = GamePage.fromWire(entry.arguments?.getString(GameRoutes.PAGE_ARG))
-            val back: () -> Unit = { navController.popBackStack() }
+            val back: () -> Unit = { navController.popFrom(entry) }
             when (page) {
                 GamePage.League -> LeagueScreen(onBack = back)
                 GamePage.Season -> SeasonScreen(onBack = back)
@@ -138,39 +128,31 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                 GamePage.Atlas -> AtlasScreen(onBack = back)
                 GamePage.Prestige -> PrestigeScreen(onBack = back)
                 GamePage.Settings -> GameSettingsScreen(onBack = back)
-                null -> LaunchedEffect(Unit) { navController.popBackStack() }
+                null -> LaunchedEffect(Unit) { navController.popFrom(entry) }
             }
         }
         builder.composable(
             route = GameRoutes.SECTION,
             arguments = listOf(navArgument(GameRoutes.SECTION_ARG) { type = NavType.StringType }),
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
         ) { entry ->
             val section = ProgressionSection.fromWire(entry.arguments?.getString(GameRoutes.SECTION_ARG))
             if (section == null) {
-                LaunchedEffect(Unit) { navController.popBackStack() }
+                LaunchedEffect(Unit) { navController.popFrom(entry) }
             } else {
                 ProgressionSectionScreen(
                     section = section,
-                    onBack = { navController.popBackStack() },
-                    onOpenBadgesGuide = { navController.openBadgesGuide() },
+                    onBack = { navController.popFrom(entry) },
+                    onOpenBadgesGuide = { navController.openBadgesGuide(entry) },
                 )
             }
         }
         builder.composable(
             route = GameRoutes.RULES,
             arguments = listOf(navArgument(GameRoutes.RULES_ARG) { type = NavType.StringType }),
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
         ) { entry ->
             val wire = entry.arguments?.getString(GameRoutes.RULES_ARG)
             GameRulesScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popFrom(entry) },
                 focused = GameRulesSection.fromWire(wire),
                 focusedRule = (GameRulesFocus.parse(wire) as? GameRulesFocus.Rule)?.index,
             )
@@ -178,22 +160,18 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
         builder.composable(
             route = GameRoutes.CONCEPT,
             arguments = listOf(navArgument(GameRoutes.CONCEPT_ARG) { type = NavType.StringType }),
-            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
-            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
-            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
-            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
         ) { entry ->
             val concept = ProgressionConcept.fromWire(entry.arguments?.getString(GameRoutes.CONCEPT_ARG))
             if (concept == null) {
-                LaunchedEffect(Unit) { navController.popBackStack() }
+                LaunchedEffect(Unit) { navController.popFrom(entry) }
             } else {
                 ProgressionConceptScreen(
                     concept = concept,
-                    onBack = { navController.popBackStack() },
-                    onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
-                    onOpenPage = { navController.navigate(GameRoutes.page(it)) },
-                    onOpenSection = { navController.navigate(GameRoutes.section(it)) },
-                    onOpenBadgesGuide = { navController.openBadgesGuide() },
+                    onBack = { navController.popFrom(entry) },
+                    onOpenConcept = { navController.pushFrom(entry, GameRoutes.concept(it)) },
+                    onOpenPage = { navController.pushFrom(entry, GameRoutes.page(it)) },
+                    onOpenSection = { navController.pushFrom(entry, GameRoutes.section(it)) },
+                    onOpenBadgesGuide = { navController.openBadgesGuide(entry) },
                 )
             }
         }
@@ -203,17 +181,13 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
      * « Comprendre les médailles » (iOS `GameNavigationMap.badgesGuide`) : le carnet est une porte de la PREMIÈRE page —
      * son retour y ramène, quelle que soit la fiche ou la section d'où l'on vient.
      */
-    private fun NavHostController.openBadgesGuide() {
-        navigate(GameRoutes.rules(GameRulesSection.Badges)) {
+    private fun NavHostController.openBadgesGuide(entry: NavBackStackEntry) {
+        pushFrom(entry, GameRoutes.rules(GameRulesSection.Badges)) {
             popUpTo(GameRoutes.PROGRESSION)
             launchSingleTop = true
         }
     }
 
-    private companion object {
-        const val PUSH_MILLIS = 280
-        const val FADE_MILLIS = 180
-    }
 }
 
 @Module

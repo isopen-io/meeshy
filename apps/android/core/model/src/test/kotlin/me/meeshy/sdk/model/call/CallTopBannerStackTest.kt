@@ -16,6 +16,37 @@ class CallTopBannerStackTest {
     }
 
     @Test
+    fun `#18227 E3 E4 - les pastilles de service sont des maillons de la pile, apres la capture et avant le cadre en direct`() {
+        assertThat(CallTopBannerStack.ordered(CallTopBanner.entries.toSet()))
+            .containsExactly(
+                CallTopBanner.ScreenShare,
+                CallTopBanner.Recording,
+                CallTopBanner.Capture,
+                CallTopBanner.Hold,
+                CallTopBanner.VideoNotice,
+                CallTopBanner.LiveFrame,
+            )
+            .inOrder()
+    }
+
+    @Test
+    fun `#18227 - la grille de groupe cede aussi la place des pastilles de service`() {
+        val service = setOf(CallTopBanner.Hold, CallTopBanner.VideoNotice)
+
+        assertThat(
+            CallTopBannerStack.present(
+                isScreenShareShown = false,
+                isRecordingShown = false,
+                isCaptureAlertShown = false,
+                isLiveFrameShown = false,
+                service = service,
+            ),
+        ).containsExactlyElementsIn(service)
+        assertThat(CallTopBannerStack.groupGridClearanceDp(service, emptyMap(), isStageFullScreen = false))
+            .isEqualTo(2 * (CallTopBannerStack.BANNER_HEIGHT_DP + CallTopBannerStack.GAP_DP))
+    }
+
+    @Test
     fun `un bandeau absent ne laisse pas de trou`() {
         assertThat(CallTopBannerStack.ordered(setOf(CallTopBanner.LiveFrame, CallTopBanner.ScreenShare)))
             .containsExactly(CallTopBanner.ScreenShare, CallTopBanner.LiveFrame)

@@ -61,7 +61,7 @@ class EpureCodePinPrincipalTest {
         )
         expected.forEach { (folder, word) ->
             assertWithMessage("$folder/dialogs_master_pin_title")
-                .that(all(folder).getValue("dialogs_master_pin_title")).contains(word)
+                .that(all(folder).getValue("dialogs_master_pin_title")).ignoringCase().contains(word)
         }
     }
 

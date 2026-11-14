@@ -128,4 +128,31 @@ final class CallShareCapsuleTests: XCTestCase {
             "Le cadre touchable de la fenêtre passe-plat doit s'étendre jusqu'à « Arrêter »."
         )
     }
+
+    // MARK: - S2.3 — « Arrêter » du bandeau « Vous partagez votre écran » : la capsule blanche à encre rouge
+
+    func test_shareBanner_stopIsTheSharedWhiteCapsuleWithRedInk_notBareText() throws {
+        let controls = try source("Meeshy/Features/Call/Views/CallScreenShareControls.swift")
+        let banner = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func banner(", in: controls))
+        XCTAssertTrue(
+            banner.contains("CallShareStopButton(stop: onStop)"),
+            "« Arrêter » du bandeau est le bouton partagé de la capsule (blanc, encre rouge), comme Android et le web."
+        )
+        XCTAssertFalse(
+            banner.contains("CallScreenShareCopy.stopCaption"),
+            "Plus de texte blanc nu : la légende vit dans CallShareStopButton, une seule fois."
+        )
+        let stop = try source("Meeshy/Features/Call/Views/CallShareStopButton.swift")
+        XCTAssertTrue(stop.contains("MeeshyColors.errorInk"))
+        XCTAssertTrue(stop.contains("Capsule().fill(Color.white)"))
+        XCTAssertTrue(stop.contains(".frame(minHeight: 44)"), "Cible de 44 pt")
+        XCTAssertTrue(stop.contains(".accessibilityLabel(CallScreenShareCopy.label(isSharing: true))"))
+    }
+
+    func test_shareBanner_keepsItsRedGlassAndHeightReporter() throws {
+        let controls = try source("Meeshy/Features/Call/Views/CallScreenShareControls.swift")
+        let banner = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func banner(", in: controls))
+        XCTAssertTrue(banner.contains(".adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium)"))
+        XCTAssertTrue(banner.contains("CallTopBannerHeightReporter(banner: .screenShare)"))
+    }
 }

@@ -38,7 +38,7 @@ internal fun rememberProfileOpenerOverSheet(navController: NavHostController): (
                 target = target,
                 isSelf = gate::resolvesToSelf,
                 opener = opener,
-                navigateOwn = { navController.navigate(ProfileRoutes.OWN) },
+                navigateOwn = { navController.navigateSingleTop(ProfileRoutes.OWN) },
             )
         }
     }
