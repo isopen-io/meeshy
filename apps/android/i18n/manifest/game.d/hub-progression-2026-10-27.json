@@ -276,12 +276,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "progression.offline.empty",
-          "status": "adopted",
-          "androidName": "game_progression_offline_empty"
-        },
-        {
-          "catalog": "app",
           "iosKey": "progression.load_error",
           "status": "adopted",
           "androidName": "game_progression_load_error"

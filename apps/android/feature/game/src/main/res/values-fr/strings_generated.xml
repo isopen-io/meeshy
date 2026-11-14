@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">Une nouvelle semaine commence : les étincelles repartent de zéro.</string>
     <string name="game2_guide_moment_league_promoted_short">Cercle gravi : joute %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">Tu gravis le cercle : joute %1$s !</string>
-    <string name="game2_guide_moment_league_relegated_means">Les 5 derniers de chaque joute redescendent. Ce n’est pas grave : les étincelles repartent de zéro et rien d’autre ne baisse.</string>
     <string name="game2_guide_moment_league_relegated_next">Remonte dès cette semaine : %1$s jusqu’au cercle suivant.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Remonte dès cette semaine : chaque étincelle compte.</string>
     <string name="game2_guide_moment_league_relegated_short">Retour dans la joute %1$s.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Ma Légende se charge</string>
     <string name="game_progression_offline">Hors ligne — progression telle qu’à la dernière ouverture</string>
-    <string name="game_progression_offline_empty">Hors ligne — aucune progression en mémoire. Elle s’affichera à la reconnexion.</string>
     <string name="game_progression_retry">Réessayer</string>
     <string name="game_progression_title">Ma Légende</string>
     <string name="game_rank_ambassadeur">Ambassadeur</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.</string>
     <string name="game_rules_concept_chest_name">L’Offrande</string>
     <string name="game_rules_concept_defis_body">Des paliers chiffrés dans chaque famille de gestes.</string>
-    <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.</string>
     <string name="game_rules_concept_duo_name">L’Alliance</string>
     <string name="game_rules_concept_elans_body">Un multiplicateur d’étincelles.</string>
     <string name="game_rules_concept_showcase_body">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.</string>
@@ -1159,7 +1156,6 @@
     <string name="progression_elan_family_many">%1$d familles actives</string>
     <string name="progression_elan_family_one">1 famille active</string>
     <string name="progression_elan_standing">, plus ton assise</string>
-    <string name="progression_elans_empty">Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.</string>
     <string name="progression_elans_hint">Tiens une famille de plus en même temps pour déclencher le multiplicateur.</string>
     <string name="progression_elans_title">Tes élans</string>
     <string name="progression_family_comment">Commentaires</string>

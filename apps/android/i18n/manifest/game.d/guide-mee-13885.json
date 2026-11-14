@@ -612,12 +612,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.guide.moment.league_relegated.means",
-          "androidName": "game2_guide_moment_league_relegated_means",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.guide.moment.league_relegated.next",
           "androidName": "game2_guide_moment_league_relegated_next",
           "status": "adopted"

@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">Eine neue Woche beginnt: Die Funken starten bei null.</string>
     <string name="game2_guide_moment_league_promoted_short">Kreis erklommen: %1$s-Turnier.</string>
     <string name="game2_guide_moment_league_promoted_what">Du steigst auf: %1$s-Turnier!</string>
-    <string name="game2_guide_moment_league_relegated_means">Die letzten 5 jedes Turniers steigen ab. Nicht schlimm: Die Funken beginnen wieder bei null, und sonst sinkt nichts.</string>
     <string name="game2_guide_moment_league_relegated_next">Steig schon diese Woche wieder auf: %1$s bis zum nächsten Kreis.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Steig diese Woche wieder auf: Jeder Funke zählt.</string>
     <string name="game2_guide_moment_league_relegated_short">Zurück im %1$s-Turnier.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">Fortschritt konnte nicht geladen werden</string>
     <string name="game_progression_loading">Meine Legende wird geladen</string>
     <string name="game_progression_offline">Offline – Fortschritt wie beim letzten Öffnen</string>
-    <string name="game_progression_offline_empty">Offline – kein Fortschritt gespeichert. Er erscheint bei der nächsten Verbindung.</string>
     <string name="game_progression_retry">Erneut versuchen</string>
     <string name="game_progression_title">Meine Legende</string>
     <string name="game_rank_ambassadeur">Botschafter</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">Sie erscheint, wenn die drei Akte des Traums erfüllt sind: ein verhülltes Geschenk.</string>
     <string name="game_rules_concept_chest_name">Die Gabe</string>
     <string name="game_rules_concept_defis_body">Stufen mit einer Zahl in jeder Aktionsfamilie.</string>
-    <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung. Es bringt deine Reise auch ein paar Schritte voran.</string>
     <string name="game_rules_concept_duo_name">Das Bündnis</string>
     <string name="game_rules_concept_elans_body">Ein Funken-Multiplikator.</string>
     <string name="game_rules_concept_showcase_body">Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme.</string>
@@ -1156,7 +1153,6 @@
     <string name="progression_elan_family_many">%1$d aktive Familien</string>
     <string name="progression_elan_family_one">1 aktive Familie</string>
     <string name="progression_elan_standing">, plus dein Bestand</string>
-    <string name="progression_elans_empty">Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken.</string>
     <string name="progression_elans_hint">Halte eine weitere Familie gleichzeitig am Laufen, um den Multiplikator auszulösen.</string>
     <string name="progression_elans_title">Dein Schwung</string>
     <string name="progression_family_comment">Kommentare</string>

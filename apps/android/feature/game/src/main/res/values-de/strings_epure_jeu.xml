@@ -60,4 +60,8 @@
     <string name="game2_season_none">Keine Reise unterwegs.</string>
     <string name="game_state_missions_progress">Der Traum dieser Nacht: %1$s von %2$s Akten.</string>
     <string name="reveal_streak_subtitle">%1$d Tage in Folge.</string>
+    <string name="game_progression_offline_empty">Offline – kein Fortschritt gespeichert.</string>
+    <string name="progression_elans_empty">Poste eine Story, einen Beitrag oder starte eine Unterhaltung.</string>
+    <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung.</string>
+    <string name="game2_guide_moment_league_relegated_means">Die letzten 5 steigen ab; die Funken beginnen wieder bei null, sonst sinkt nichts.</string>
 </resources>

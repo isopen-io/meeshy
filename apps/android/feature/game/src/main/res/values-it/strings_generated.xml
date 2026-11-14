@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">Inizia una nuova settimana: le scintille della settimana ripartono da zero.</string>
     <string name="game2_guide_moment_league_promoted_short">Cerchio salito: torneo di %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">Sali di cerchio: torneo di %1$s!</string>
-    <string name="game2_guide_moment_league_relegated_means">Gli ultimi 5 di ogni torneo riscendono. Non è grave: le scintille ripartono da zero e nient’altro cala.</string>
     <string name="game2_guide_moment_league_relegated_next">Risali già questa settimana: %1$s fino al cerchio successivo.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Risali già questa settimana: ogni scintilla conta.</string>
     <string name="game2_guide_moment_league_relegated_short">Di nuovo nel torneo di %1$s.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">Impossibile caricare i progressi</string>
     <string name="game_progression_loading">Caricamento della mia Leggenda</string>
     <string name="game_progression_offline">Offline — progressi come all’ultima apertura</string>
-    <string name="game_progression_offline_empty">Offline — nessun progresso in memoria. Comparirà alla riconnessione.</string>
     <string name="game_progression_retry">Riprova</string>
     <string name="game_progression_title">La mia Leggenda</string>
     <string name="game_rank_ambassadeur">Ambasciatore</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">Appare quando i tre atti del sogno sono compiuti: un dono velato.</string>
     <string name="game_rules_concept_chest_name">L’Offerta</string>
     <string name="game_rules_concept_defis_body">Gradini numerati in ogni famiglia di gesti.</string>
-    <string name="game_rules_concept_duo_body">Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia. Fa anche avanzare il tuo viaggio di qualche passo.</string>
     <string name="game_rules_concept_duo_name">L’Alleanza</string>
     <string name="game_rules_concept_elans_body">Un moltiplicatore di scintille.</string>
     <string name="game_rules_concept_showcase_body">Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma.</string>
@@ -1159,7 +1156,6 @@
     <string name="progression_elan_family_many">%1$d famiglie attive</string>
     <string name="progression_elan_family_one">1 famiglia attiva</string>
     <string name="progression_elan_standing">, più la tua base</string>
-    <string name="progression_elans_empty">Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica le tue scintille.</string>
     <string name="progression_elans_hint">Porta avanti un’altra famiglia allo stesso tempo per attivare il moltiplicatore.</string>
     <string name="progression_elans_title">I tuoi slanci</string>
     <string name="progression_family_comment">Commenti</string>

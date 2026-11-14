@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">يبدأ أسبوع جديد: تبدأ الشرارات من الصفر.</string>
     <string name="game2_guide_moment_league_promoted_short">ارتقاء الحلقة: مبارزة %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">ارتقيت الحلقة: مبارزة %1$s!</string>
-    <string name="game2_guide_moment_league_relegated_means">الخمسة الأخيرون في كل مبارزة يهبطون. لا بأس: تبدأ الشرارات من الصفر ولا ينخفض شيء آخر.</string>
     <string name="game2_guide_moment_league_relegated_next">اصعد من جديد هذا الأسبوع: %1$s حتى الحلقة التالية.</string>
     <string name="game2_guide_moment_league_relegated_next_far">اصعد من جديد هذا الأسبوع: كل شرارة لها وزنها.</string>
     <string name="game2_guide_moment_league_relegated_short">العودة إلى مبارزة %1$s.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">تعذّر تحميل التقدّم</string>
     <string name="game_progression_loading">جارٍ تحميل أسطورتي</string>
     <string name="game_progression_offline">غير متصل — التقدّم كما كان عند آخر فتح</string>
-    <string name="game_progression_offline_empty">غير متصل — لا يوجد تقدّم محفوظ. سيظهر عند إعادة الاتصال.</string>
     <string name="game_progression_retry">إعادة المحاولة</string>
     <string name="game_progression_title">أسطورتي</string>
     <string name="game_rank_ambassadeur">سفير</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">تظهر حين تتحقّق فصول الحلم الثلاثة: هدية محجوبة.</string>
     <string name="game_rules_concept_chest_name">العطيّة</string>
     <string name="game_rules_concept_defis_body">درجات بأرقام في كل فئة من الإجراءات.</string>
-    <string name="game_rules_concept_duo_body">مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة. وهو يُقدّم رحلتك بضع خطوات أيضًا.</string>
     <string name="game_rules_concept_duo_name">التحالف</string>
     <string name="game_rules_concept_elans_body">مضاعِف للشرارات.</string>
     <string name="game_rules_concept_showcase_body">رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب.</string>
@@ -1168,7 +1165,6 @@
     <string name="progression_elan_family_many">%1$d فئات نشطة</string>
     <string name="progression_elan_family_one">فئة واحدة نشطة</string>
     <string name="progression_elan_standing">، بالإضافة إلى رصيدك الثابت</string>
-    <string name="progression_elans_empty">انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف شراراتك.</string>
     <string name="progression_elans_hint">حافظ على عائلة إضافية في الوقت نفسه لتفعيل المضاعف.</string>
     <string name="progression_elans_title">زخمك</string>
     <string name="progression_family_comment">التعليقات</string>

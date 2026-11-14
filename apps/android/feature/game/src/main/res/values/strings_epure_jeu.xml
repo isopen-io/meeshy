@@ -60,4 +60,8 @@
     <string name="game2_season_none">No journey under way.</string>
     <string name="game_state_missions_progress">Tonight’s dream: %1$s of %2$s acts.</string>
     <string name="reveal_streak_subtitle">%1$d days in a row.</string>
+    <string name="game_progression_offline_empty">Offline — no progress in memory.</string>
+    <string name="progression_elans_empty">Post a story, a post or start a conversation.</string>
+    <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles.</string>
+    <string name="game2_guide_moment_league_relegated_means">The bottom 5 go back down; the sparks start again from zero, nothing else goes down.</string>
 </resources>

@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">Empieza una nueva semana: las chispas vuelven a cero.</string>
     <string name="game2_guide_moment_league_promoted_short">Círculo ganado: justa %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">¡Subes de círculo: justa %1$s!</string>
-    <string name="game2_guide_moment_league_relegated_means">Los 5 últimos de cada justa bajan. No pasa nada: las chispas vuelven a cero y nada más baja.</string>
     <string name="game2_guide_moment_league_relegated_next">Vuelve a subir esta semana: %1$s hasta el círculo siguiente.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Vuelve a subir esta semana: cada chispa cuenta.</string>
     <string name="game2_guide_moment_league_relegated_short">De vuelta en la justa %1$s.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">No se pudo cargar el progreso</string>
     <string name="game_progression_loading">Cargando Mi Leyenda</string>
     <string name="game_progression_offline">Sin conexión — progreso tal como en la última apertura</string>
-    <string name="game_progression_offline_empty">Sin conexión — ningún progreso en memoria. Aparecerá al reconectarse.</string>
     <string name="game_progression_retry">Reintentar</string>
     <string name="game_progression_title">Mi Leyenda</string>
     <string name="game_rank_ambassadeur">Embajador</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">Aparece cuando los tres actos del sueño se han hecho realidad: un regalo envuelto.</string>
     <string name="game_rules_concept_chest_name">La Ofrenda</string>
     <string name="game_rules_concept_defis_body">Escalones con cifra en cada familia de gestos.</string>
-    <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica. También hace avanzar tu viaje unos pasos.</string>
     <string name="game_rules_concept_duo_name">La Alianza</string>
     <string name="game_rules_concept_elans_body">Un multiplicador de chispas.</string>
     <string name="game_rules_concept_showcase_body">El estante de tus trofeos: copas de justa y de viaje, trofeos de renacimiento y de Llama.</string>
@@ -1159,7 +1156,6 @@
     <string name="progression_elan_family_many">%1$d familias activas</string>
     <string name="progression_elan_family_one">1 familia activa</string>
     <string name="progression_elan_standing">, más tu base</string>
-    <string name="progression_elans_empty">Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.</string>
     <string name="progression_elans_hint">Mantén una familia más a la vez para activar el multiplicador.</string>
     <string name="progression_elans_title">Tus impulsos</string>
     <string name="progression_family_comment">Comentarios</string>

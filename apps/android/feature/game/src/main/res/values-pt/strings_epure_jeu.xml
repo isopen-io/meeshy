@@ -60,4 +60,8 @@
     <string name="game2_season_none">Nenhuma viagem em andamento.</string>
     <string name="game_state_missions_progress">O sonho desta noite: %1$s de %2$s atos.</string>
     <string name="reveal_streak_subtitle">%1$d dias seguidos.</string>
+    <string name="game_progression_offline_empty">Offline — nenhum progresso em memória.</string>
+    <string name="progression_elans_empty">Publique um story, um post ou inicie uma conversa.</string>
+    <string name="game_rules_concept_duo_body">Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra.</string>
+    <string name="game2_guide_moment_league_relegated_means">Os 5 últimos voltam a descer; as faíscas recomeçam do zero, nada mais baixa.</string>
 </resources>

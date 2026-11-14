@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">Começa uma nova semana: as faíscas voltam a zero.</string>
     <string name="game2_guide_moment_league_promoted_short">Círculo alcançado: torneio %1$s.</string>
     <string name="game2_guide_moment_league_promoted_what">Você sobe de círculo: torneio %1$s!</string>
-    <string name="game2_guide_moment_league_relegated_means">Os 5 últimos de cada torneio voltam a descer. Não é grave: as faíscas recomeçam do zero e nada mais baixa.</string>
     <string name="game2_guide_moment_league_relegated_next">Suba de novo já nesta semana: %1$s até o círculo seguinte.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Volte a subir esta semana: cada faísca conta.</string>
     <string name="game2_guide_moment_league_relegated_short">De volta ao torneio %1$s.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">Não foi possível carregar o progresso</string>
     <string name="game_progression_loading">Carregando Minha Lenda</string>
     <string name="game_progression_offline">Offline — progresso conforme a última abertura</string>
-    <string name="game_progression_offline_empty">Offline — nenhum progresso em memória. Aparecerá ao reconectar.</string>
     <string name="game_progression_retry">Tentar novamente</string>
     <string name="game_progression_title">Minha Lenda</string>
     <string name="game_rank_ambassadeur">Embaixador</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">Ela aparece quando os três atos do sonho estão realizados: um presente velado.</string>
     <string name="game_rules_concept_chest_name">A Oferenda</string>
     <string name="game_rules_concept_defis_body">Patamares com número em cada família de gestos.</string>
-    <string name="game_rules_concept_duo_body">Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra. Ela também faz a sua viagem avançar alguns passos.</string>
     <string name="game_rules_concept_duo_name">A Aliança</string>
     <string name="game_rules_concept_elans_body">Um multiplicador de faíscas.</string>
     <string name="game_rules_concept_showcase_body">A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama.</string>
@@ -1159,7 +1156,6 @@
     <string name="progression_elan_family_many">%1$d famílias ativas</string>
     <string name="progression_elan_family_one">1 família ativa</string>
     <string name="progression_elan_standing">, mais sua base</string>
-    <string name="progression_elans_empty">Publique um story, um post, um reels ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica suas faíscas.</string>
     <string name="progression_elans_hint">Mantenha mais uma família ao mesmo tempo para ativar o multiplicador.</string>
     <string name="progression_elans_title">Seus impulsos</string>
     <string name="progression_family_comment">Comentários</string>

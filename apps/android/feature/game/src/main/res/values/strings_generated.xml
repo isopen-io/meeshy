@@ -113,7 +113,6 @@
     <string name="game2_guide_moment_league_promoted_next">A new week starts: sparks begin again from zero.</string>
     <string name="game2_guide_moment_league_promoted_short">Circle climbed: %1$s joust.</string>
     <string name="game2_guide_moment_league_promoted_what">You climb a circle: %1$s joust!</string>
-    <string name="game2_guide_moment_league_relegated_means">The bottom 5 of each joust go back down. No big deal: the sparks start again from zero and nothing else goes down.</string>
     <string name="game2_guide_moment_league_relegated_next">Climb back this very week: %1$s to the next circle.</string>
     <string name="game2_guide_moment_league_relegated_next_far">Climb back this week: every spark counts.</string>
     <string name="game2_guide_moment_league_relegated_short">Back in the %1$s joust.</string>
@@ -940,7 +939,6 @@
     <string name="game_progression_load_error">Couldn’t load your progress</string>
     <string name="game_progression_loading">Loading My Legend</string>
     <string name="game_progression_offline">Offline — progress as of the last opening</string>
-    <string name="game_progression_offline_empty">Offline — no progress in memory. It will show once you’re back online.</string>
     <string name="game_progression_retry">Try again</string>
     <string name="game_progression_title">My Legend</string>
     <string name="game_rank_ambassadeur">Ambassador</string>
@@ -975,7 +973,6 @@
     <string name="game_rules_concept_chest_body">It appears when the dream’s three acts are complete: a veiled gift.</string>
     <string name="game_rules_concept_chest_name">The Offering</string>
     <string name="game_rules_concept_defis_body">Numbered tiers in every family of actions.</string>
-    <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles. It also carries your journey a few strides further.</string>
     <string name="game_rules_concept_duo_name">The Alliance</string>
     <string name="game_rules_concept_elans_body">A spark multiplier.</string>
     <string name="game_rules_concept_showcase_body">The shelf of your trophies: joust and journey cups, rebirth and Flame trophies.</string>
@@ -1156,7 +1153,6 @@
     <string name="progression_elan_family_many">%1$d active families</string>
     <string name="progression_elan_family_one">1 active family</string>
     <string name="progression_elan_standing">, plus your standing</string>
-    <string name="progression_elans_empty">Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks.</string>
     <string name="progression_elans_hint">Keep one more family going at the same time to trigger the multiplier.</string>
     <string name="progression_elans_title">Your momentum</string>
     <string name="progression_family_comment">Comments</string>

@@ -13,6 +13,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_guide_moment_league_relegated_means",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_league_consent_how_question",
           "status": "android-only"
         },
@@ -169,6 +173,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_progression_offline_empty",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_1_body",
           "status": "android-only"
         },
@@ -213,6 +221,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_rules_concept_duo_body",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_section_concepts",
           "status": "android-only"
         },
@@ -230,6 +242,10 @@
         },
         {
           "androidName": "game_state_missions_progress",
+          "status": "android-only"
+        },
+        {
+          "androidName": "progression_elans_empty",
           "status": "android-only"
         },
         {

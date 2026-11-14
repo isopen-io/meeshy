@@ -162,12 +162,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.rules.concept.duo.body",
-          "androidName": "game_rules_concept_duo_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.guide.step_of",
           "androidName": "game_guide_step_of",
           "status": "adopted"
