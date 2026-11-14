@@ -72,7 +72,7 @@ export interface DashboardConversationRow {
 /** L'aperçu SERVI, ou `null` quand aucune ligne ne l'est pour ce lecteur. */
 export type DashboardPreview = Record<string, unknown> | null;
 
-type PreviewRow = Record<string, unknown> & { readonly id: string; readonly createdAt: Date };
+type PreviewRow = Record<string, unknown> & { readonly id: string; readonly createdAt: Date; readonly metadata?: unknown };
 
 const asRow = (value: unknown): PreviewRow | null => {
   if (typeof value !== 'object' || value === null) return null;
