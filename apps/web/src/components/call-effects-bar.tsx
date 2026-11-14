@@ -425,6 +425,7 @@ export function useEffectsBarMode(entering: EffectsBarMode, onExit: () => void, 
     adding: () => setMode(afterAddingLook),
     removed: () => setMode(afterRemoval),
     genre: (isOpen: boolean) => setMode((from) => afterGenre(from, { isOpen })),
+    reopen: () => setMode(entering),
     showApplied: (hasLayers: boolean) => setMode((from) => afterShowingApplied(from, { hasLayers })),
   };
 }

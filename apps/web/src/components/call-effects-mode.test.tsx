@@ -316,7 +316,7 @@ describe('CallEffectsMode', () => {
       media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
       played.length = 0;
       Object.defineProperty(proto(), 'animate', { configurable: true, writable: true, value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
-        played.push({ what: this.getAttribute('data-call-effects-settings') !== null ? 'panel' : this.hasAttribute('data-call-effects-looks') ? 'looks' : this.hasAttribute('data-call-effects-categories-row') ? 'puces' : this.hasAttribute('data-call-mode-bar-skin') ? 'skin' : this.hasAttribute('data-call-mode-rider') ? 'rider' : 'other', keyframes, duration: options.duration });
+        played.push({ what: this.getAttribute('data-call-mode') === 'effects' ? 'layer' : this.getAttribute('data-call-effects-settings') !== null ? 'panel' : this.hasAttribute('data-call-effects-looks') ? 'looks' : this.hasAttribute('data-call-effects-categories-row') ? 'puces' : this.hasAttribute('data-call-mode-bar-skin') ? 'skin' : this.hasAttribute('data-call-mode-rider') ? 'rider' : 'other', keyframes, duration: options.duration });
         return { cancel: () => undefined, finished: Promise.resolve(), onfinish: null };
       } });
     });
@@ -332,7 +332,7 @@ describe('CallEffectsMode', () => {
       view.press('[data-call-effects-settings-toggle]');
       const up = [{ opacity: 0, transform: 'translateY(20px)' }, { opacity: 1, transform: 'translateY(0)' }];
       const down = [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(20px)' }];
-      expect(played.filter((entry) => entry.what !== 'other')).toEqual([
+      expect(played.filter((entry) => entry.what !== 'other' && entry.what !== 'layer')).toEqual([
         { what: 'puces', keyframes: down, duration: 200 },
         { what: 'looks', keyframes: down, duration: 200 },
         { what: 'panel', keyframes: up, duration: 200 },
@@ -345,7 +345,7 @@ describe('CallEffectsMode', () => {
       view.press('[data-call-effects-settings-toggle]');
       played.length = 0;
       view.press('[data-call-effects-settings-toggle]');
-      expect(played.filter((entry) => entry.what !== 'other').map((entry) => [entry.what, entry.keyframes[0]?.opacity])).toEqual([
+      expect(played.filter((entry) => entry.what !== 'other' && entry.what !== 'layer').map((entry) => [entry.what, entry.keyframes[0]?.opacity])).toEqual([
         ['puces', 0],
         ['panel', 1],
       ]);
@@ -356,7 +356,7 @@ describe('CallEffectsMode', () => {
       Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
       const view = mount({ blur: true });
       view.press('[data-call-effects-settings-toggle]');
-      const entries = played.filter((entry) => entry.what !== 'other');
+      const entries = played.filter((entry) => entry.what !== 'other' && entry.what !== 'layer');
       expect(entries.map((entry) => entry.duration)).toEqual([150, 150, 150]);
       expect(entries.every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
       view.done();
@@ -402,9 +402,15 @@ describe('CallEffectsMode', () => {
       }
     });
 
-    test('la première peinture ne joue rien', () => {
+    test('la première peinture ne joue que l’arrivée de la couche, en fondu (P8.14) : rien en elle ne bouge', () => {
       const view = mount({ blur: true });
-      expect(played).toEqual([]);
+      expect(played).toEqual([
+        {
+          what: 'layer',
+          keyframes: [{ opacity: 0 }, { opacity: 1 }],
+          duration: 200,
+        },
+      ]);
       view.done();
     });
   });

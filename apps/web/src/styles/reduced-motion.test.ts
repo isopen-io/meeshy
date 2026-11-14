@@ -28,8 +28,9 @@ describe('app.css — prefers-reduced-motion', () => {
     expect(declaration(reducedBlock(), 'transition-duration')).toBe('0s !important');
   });
 
-  test('les animations gardent une durée infime, pour que leur fin (animationend) arrive encore', () => {
-    expect(declaration(reducedBlock(), 'animation-duration')).toBe('0.01ms !important');
+  test('les animations gardent une durée infime, pour que leur fin (animationend) arrive encore — sauf un fondu court déclaré (loi 17.10)', () => {
+    expect(declaration(reducedBlock(), 'animation-duration')).toBe('var(--reduced-fade, 0.01ms) !important');
+    expect(/@property\s+--reduced-fade\s*\{[^}]*initial-value:\s*0\.01ms/.test(CSS)).toBe(true);
   });
 });
 

@@ -59,8 +59,12 @@ export function stowedGlass({ height, keptTop, keptHeight, padding }: StowInput)
   return { scale: Math.min(1, (keptHeight + 2 * padding) / height), shift: Math.max(0, height - padding - (keptTop + keptHeight)) };
 }
 
-/** Ce que porte ce qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
-export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+/**
+ * Ce que porte ce qui repart : marqué sortant et caché au lecteur d'écran, mais TOUCHABLE jusqu'à la fin de son
+ * mouvement (loi 17.11 ; iOS `CallChromeVisibility`, qui ne coupe le toucher qu'au terme du fondu) : un contrôle
+ * touché en plein départ répond, et ce qu'il rend repart de l'état affiché.
+ */
+export const LEAVING = { 'data-leaving': '', 'aria-hidden': true } as const;
 
 /** Le fondu court : l'opacité seule, jamais un déplacement. */
 export const stowFadeKeyframes = (stowing: boolean): readonly Keyframe[] =>
@@ -89,14 +93,17 @@ export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_
  * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
  * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`) ; `fade` : la capsule de la une
  * repart sur place, en fondu (U1.12) ; `bottom` et `end` : le bandeau des autres repart par le bord
- * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin ; `top` : le bandeau « Vous partagez » repart par le bord du haut, comme l'en-tête (P16.6).
+ * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin ; `top` : le bandeau « Vous partagez » repart par le bord du haut, comme l'en-tête (P16.6) ;
+ * `opacity` : l'opacité SEULE, sans aucune transformation — ce qui porte des descendants `fixed` (la couche Effets
+ * et son aperçu plein écran, P8.14) : une transformation, même `none`, animée sur lui en ferait leur bloc conteneur.
  */
-export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end' | 'top';
+export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end' | 'top' | 'opacity';
 
 const SCALE_FROM = 0.8;
 
 const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly hidden: string }>> = {
   rise: { shown: 'translateY(0)', hidden: `translateY(${SWAP_RISE_PX}px)` },
+  opacity: { shown: 'none', hidden: 'none' },
   scale: { shown: 'scale(1)', hidden: `scale(${SCALE_FROM})` },
   fade: { shown: 'none', hidden: 'none' },
   bottom: { shown: 'translateY(0)', hidden: 'translateY(100%)' },
@@ -108,8 +115,9 @@ const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly
 export function swapKeyframes(entering: boolean, reducedMotion: boolean, shape: SwapShape = 'rise', rtl = false): readonly Keyframe[] {
   const { shown: at, hidden } = SWAP_SHAPES[shape];
   const away = rtl && shape === 'end' ? 'translateX(-100%)' : hidden;
-  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: at };
-  const gone: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: away };
+  const still = reducedMotion || shape === 'opacity';
+  const shown: Keyframe = still ? { opacity: 1 } : { opacity: 1, transform: at };
+  const gone: Keyframe = still ? { opacity: 0 } : { opacity: 0, transform: away };
   return entering ? [gone, shown] : [shown, gone];
 }
 

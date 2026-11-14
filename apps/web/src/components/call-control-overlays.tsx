@@ -29,7 +29,7 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 export const NOTICE_MS = 4_000;
 
-const KEYFRAMES = `@keyframes call-reaction-rise{0%{opacity:0;transform:translate(-50%,0) scale(.6)}12%{opacity:1;transform:translate(-50%,-4vh) scale(1.25)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-38vh) scale(1.05)}}@keyframes call-reaction-fade{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}[data-call-reaction]{animation:call-reaction-rise ${REACTION_LIFETIME_MS}ms ease-out forwards}@media (prefers-reduced-motion:reduce){[data-call-reaction]{animation-name:call-reaction-fade;transform:translate(-50%,-12vh)}}`;
+const KEYFRAMES = `@keyframes call-reaction-rise{0%{opacity:0;transform:translate(-50%,0) scale(.6)}12%{opacity:1;transform:translate(-50%,-4vh) scale(1.25)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-38vh) scale(1.05)}}@keyframes call-reaction-fade{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}[data-call-reaction]{animation:call-reaction-rise ${REACTION_LIFETIME_MS}ms ease-out forwards}@media (prefers-reduced-motion:reduce){[data-call-reaction]{--reduced-fade:${REACTION_LIFETIME_MS}ms;animation-name:call-reaction-fade;transform:translate(-50%,-12vh)}}`;
 
 type NameOf = (userId: string) => string | null;
 
