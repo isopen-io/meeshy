@@ -29,12 +29,22 @@ import { extname, join } from 'node:path';
 
 import { EVENT_NAMES_KT, REPO } from './mirror-contract';
 
-export const CLIENT_ROOTS = [
-  'apps/web/src',
-  'apps/android',
-  'packages/MeeshySDK/Sources',
-  'apps/ios/Meeshy',
-] as const;
+/**
+ * Les racines PAR PLATEFORME. iOS en a deux — le SDK et l'application — et
+ * c'est une plateforme, pas deux : un événement cité dans l'un des deux est
+ * connu d'iOS.
+ */
+export const CLIENT_PLATFORM_ROOTS = {
+  web: ['apps/web/src'],
+  android: ['apps/android'],
+  ios: ['packages/MeeshySDK/Sources', 'apps/ios/Meeshy'],
+} as const;
+
+export type ClientPlatform = keyof typeof CLIENT_PLATFORM_ROOTS;
+
+export const CLIENT_PLATFORMS = Object.keys(CLIENT_PLATFORM_ROOTS) as readonly ClientPlatform[];
+
+export const CLIENT_ROOTS = Object.values(CLIENT_PLATFORM_ROOTS).flat() as readonly string[];
 
 export const SHARED_EVENT_NAMES_TS = 'packages/shared/types/socketio-events/event-names.ts';
 
@@ -70,10 +80,9 @@ const constantValues = (): ReadonlyMap<string, string> => {
  * personne ne connaît. Un nom cité sans être branché resterait invisible ici —
  * c'est une limite, pas un silence : elle est écrite.
  */
-export const eventsNamedByClients = (): ReadonlySet<string> => {
-  const constants = constantValues();
+const namedUnder = (roots: readonly string[], constants: ReadonlyMap<string, string>): ReadonlySet<string> => {
   const named = new Set<string>();
-  for (const root of CLIENT_ROOTS) {
+  for (const root of roots) {
     for (const file of sources(join(REPO, root))) {
       const source = readFileSync(file, 'utf8');
       for (const match of source.matchAll(/['"`]([a-z][\w-]*:[a-z][\w-]*(?::[\w-]+)?)['"`]/g)) named.add(match[1]);
@@ -84,4 +93,31 @@ export const eventsNamedByClients = (): ReadonlySet<string> => {
     }
   }
   return named;
+};
+
+/**
+ * Le même relevé, PAR PLATEFORME (#18342, cycle 161).
+ *
+ * `eventsNamedByClients` répond « au moins un client connaît ce nom » — ce qui
+ * suffit à trouver l'orphelin TOTAL, et masque par construction l'asymétrie :
+ * un événement que deux clients lisent et que le troisième ignore y est
+ * indiscernable d'un événement lu par les trois. C'est la limite que #18342
+ * s'écrivait (« elle ne dit rien des événements écoutés par un seul client là
+ * où trois devraient l'être »), et cette fonction est ce qui permet de la
+ * mesurer.
+ *
+ * Les deux relevés partagent leur BALAYAGE : `eventsNamedByClients` est
+ * désormais l'union de celui-ci, et ne peut plus en diverger.
+ */
+export const eventsNamedByPlatform = (): ReadonlyMap<ClientPlatform, ReadonlySet<string>> => {
+  const constants = constantValues();
+  return new Map(
+    CLIENT_PLATFORMS.map((platform) => [platform, namedUnder(CLIENT_PLATFORM_ROOTS[platform], constants)] as const),
+  );
+};
+
+export const eventsNamedByClients = (): ReadonlySet<string> => {
+  const union = new Set<string>();
+  for (const named of eventsNamedByPlatform().values()) for (const event of named) union.add(event);
+  return union;
 };
