@@ -37,7 +37,6 @@
     <string name="conversations_delete_for_all_confirm_button">Delete for everyone</string>
     <string name="conversations_delete_for_all_confirm_title">Delete for everyone</string>
     <string name="conversations_error_subtitle">Couldn\'t load your conversations.</string>
-    <string name="conversations_error_title">Something went wrong</string>
     <string name="conversations_filter_all">All</string>
     <string name="conversations_filter_archived">Archived</string>
     <string name="conversations_filter_channels">Channels</string>
@@ -353,8 +352,6 @@
     <string name="shareLink_detail_maxConcurrentField">People at the same time</string>
     <string name="shareLink_detail_maxUsesField">Max uses</string>
     <string name="shareLink_detail_meeshyAccount">Meeshy account</string>
-    <string name="shareLink_detail_messageField">Invitation message (shown to guests)</string>
-    <string name="shareLink_detail_nameField">Link name (only you can see it)</string>
     <string name="shareLink_detail_never">Never</string>
     <string name="shareLink_detail_noAccountBadge">no account</string>
     <string name="shareLink_detail_noArrivals">No one has joined through this link yet.</string>

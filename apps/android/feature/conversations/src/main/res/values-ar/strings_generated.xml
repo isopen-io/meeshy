@@ -37,7 +37,6 @@
     <string name="conversations_delete_for_all_confirm_button">الحذف للجميع</string>
     <string name="conversations_delete_for_all_confirm_title">الحذف للجميع</string>
     <string name="conversations_error_subtitle">تعذّر تحميل محادثاتك.</string>
-    <string name="conversations_error_title">حدث خطأ</string>
     <string name="conversations_filter_all">الكل</string>
     <string name="conversations_filter_archived">الأرشيف</string>
     <string name="conversations_filter_channels">قنوات</string>
@@ -393,8 +392,6 @@
     <string name="shareLink_detail_maxConcurrentField">الأشخاص في الوقت نفسه</string>
     <string name="shareLink_detail_maxUsesField">الحد الأقصى للاستخدامات</string>
     <string name="shareLink_detail_meeshyAccount">حساب Meeshy</string>
-    <string name="shareLink_detail_messageField">رسالة الدعوة (تظهر للضيوف)</string>
-    <string name="shareLink_detail_nameField">اسم الرابط (مرئي لك وحدك)</string>
     <string name="shareLink_detail_never">أبدًا</string>
     <string name="shareLink_detail_noAccountBadge">دون حساب</string>
     <string name="shareLink_detail_noArrivals">لم ينضم أحد عبر هذا الرابط بعد.</string>

@@ -98,8 +98,8 @@ internal fun ShareLinkConversationPickerSheet(
 
                     state.errorMessage != null && state.eligibleConversations.isEmpty() ->
                         PickerMessage(
-                            title = stringResource(R.string.conversations_error_title),
-                            body = stringResource(R.string.conversations_error_subtitle),
+                            title = stringResource(R.string.conversations_error_subtitle),
+                            body = null,
                             cta = stringResource(R.string.conversations_retry),
                             ctaIcon = null,
                             onCta = onRetry,

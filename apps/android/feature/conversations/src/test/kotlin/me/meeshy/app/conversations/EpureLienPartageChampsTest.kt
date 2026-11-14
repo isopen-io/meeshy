@@ -1,7 +1,6 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -61,19 +60,13 @@ class EpureLienPartageChampsTest {
         }
     }
 
-    private fun noteState(question: String) = SemanticsMatcher("stateDescription of $question") { node ->
-        node.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(question) == true &&
-            node.config.getOrNull(SemanticsProperties.StateDescription) != null
-    }
-
     @Test
     fun nameField_isShortAndItsNoteIsBehindAnInfoButtonNamedByTheQuestion() {
         setForm()
-        compose.onNodeWithText("Link name").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Who sees this name?").assertExists()
-        compose.onNode(noteState("Who sees this name?")).assertExists()
+        compose.onNodeWithText("Link name", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Who sees this name?", useUnmergedTree = true).assertExists()
         assertThat(
-            compose.onNode(hasContentDescription("Who sees this name?")).fetchSemanticsNode()
+            compose.onNode(hasContentDescription("Who sees this name?"), useUnmergedTree = true).fetchSemanticsNode()
                 .config.getOrNull(SemanticsProperties.StateDescription),
         ).isEqualTo("Only you see it; guests don't.")
     }
@@ -81,9 +74,9 @@ class EpureLienPartageChampsTest {
     @Test
     fun messageField_isShortAndItsNoteIsBehindAnInfoButtonNamedByTheQuestion() {
         setForm()
-        compose.onNodeWithText("Invitation message").assertIsDisplayed()
+        compose.onNodeWithText("Invitation message", useUnmergedTree = true).assertIsDisplayed()
         assertThat(
-            compose.onNode(hasContentDescription("Who reads this message?")).fetchSemanticsNode()
+            compose.onNode(hasContentDescription("Who reads this message?"), useUnmergedTree = true).fetchSemanticsNode()
                 .config.getOrNull(SemanticsProperties.StateDescription),
         ).isEqualTo("Guests who open the link see it.")
     }
@@ -91,9 +84,9 @@ class EpureLienPartageChampsTest {
     @Test
     fun tappingTheInfoButton_unfoldsTheNoteUnderTheField() {
         setForm()
-        compose.onNodeWithText("Only you see it; guests don't.").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Who sees this name?").performClick()
-        compose.onNodeWithText("Only you see it; guests don't.").assertIsDisplayed()
+        compose.onNodeWithText("Only you see it; guests don't.", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Who sees this name?", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Only you see it; guests don't.", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -107,18 +100,18 @@ class EpureLienPartageChampsTest {
             assertWithMessage(folder).that(strings["shareLink_detail_nameField"]).doesNotContain("(")
             assertWithMessage(folder).that(strings["shareLink_detail_messageField"]).doesNotContain("(")
             assertWithMessage(folder).that(strings["shareLink_detail_messageField"]).isEqualTo(strings["invite_messageLabel"])
-            listOf("shareLink_detail_nameField_question", "shareLink_detail_nameField_note",
-                "shareLink_detail_messageField_question", "shareLink_detail_messageField_note").forEach { key ->
+            listOf("share_link_name_question", "share_link_name_note",
+                "share_link_message_question", "share_link_message_note").forEach { key ->
                 assertWithMessage("$folder/$key").that(strings[key]).isNotEmpty()
             }
             expected[folder]?.let { (name, message, note) ->
                 assertThat(strings["shareLink_detail_nameField"]).isEqualTo(name)
                 assertThat(strings["shareLink_detail_messageField"]).isEqualTo(message)
-                assertThat(strings["shareLink_detail_nameField_note"]).isEqualTo(note)
+                assertThat(strings["share_link_name_note"]).isEqualTo(note)
             }
             if (folder != "values") {
-                assertWithMessage("$folder traduit").that(strings["shareLink_detail_nameField_question"])
-                    .isNotEqualTo(all("values")["shareLink_detail_nameField_question"])
+                assertWithMessage("$folder traduit").that(strings["share_link_name_question"])
+                    .isNotEqualTo(all("values")["share_link_name_question"])
             }
         }
     }

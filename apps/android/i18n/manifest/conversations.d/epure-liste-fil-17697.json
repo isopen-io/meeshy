@@ -5,6 +5,30 @@
       "resDir": "feature/conversations/src/main/res",
       "entries": [
         {
+          "androidName": "shareLink_detail_nameField",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_name_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_name_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shareLink_detail_messageField",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_message_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_message_note",
+          "status": "android-only"
+        },
+        {
           "androidName": "context_more_options",
           "status": "android-only"
         },

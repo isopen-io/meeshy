@@ -180,18 +180,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.messageField",
-          "androidName": "shareLink_detail_messageField",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.nameField",
-          "androidName": "shareLink_detail_nameField",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.never",
           "androidName": "shareLink_detail_never",
           "status": "adopted"

@@ -37,7 +37,6 @@
     <string name="conversations_delete_for_all_confirm_button">Supprimer pour tous</string>
     <string name="conversations_delete_for_all_confirm_title">Supprimer pour tous</string>
     <string name="conversations_error_subtitle">Impossible de charger vos conversations.</string>
-    <string name="conversations_error_title">Une erreur est survenue</string>
     <string name="conversations_filter_all">Tout</string>
     <string name="conversations_filter_archived">Archives</string>
     <string name="conversations_filter_channels">Channels</string>
@@ -363,8 +362,6 @@
     <string name="shareLink_detail_maxConcurrentField">Personnes en même temps</string>
     <string name="shareLink_detail_maxUsesField">Utilisations max</string>
     <string name="shareLink_detail_meeshyAccount">Compte Meeshy</string>
-    <string name="shareLink_detail_messageField">Message d\'invitation (affiché aux invités)</string>
-    <string name="shareLink_detail_nameField">Nom du lien (visible par toi seul)</string>
     <string name="shareLink_detail_never">Jamais</string>
     <string name="shareLink_detail_noAccountBadge">sans compte</string>
     <string name="shareLink_detail_noArrivals">Personne n\'est encore arrivé par ce lien.</string>

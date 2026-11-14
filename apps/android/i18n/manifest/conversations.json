@@ -149,12 +149,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversations.error.title",
-          "androidName": "conversations_error_title",
-          "status": "adopted"
-        },
-        {
           "androidName": "conversations_favorite_set_content_description",
           "status": "android-only"
         },
