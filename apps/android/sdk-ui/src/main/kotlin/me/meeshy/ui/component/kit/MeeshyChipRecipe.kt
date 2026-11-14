@@ -53,6 +53,10 @@ public data class MeeshyChipRecipe(
         public const val EDGE_FADE_MILLIS: Int = 150
         public const val REVEAL_MILLIS: Int = 250
 
+        /** L'anneau du focus clavier : décalé de la capsule, jamais au doigt. */
+        public const val FOCUS_RING_WIDTH_DP: Float = 2f
+        public const val FOCUS_RING_OFFSET_DP: Float = 2f
+
         /** L'estompe de bord : la largeur d'une cible tactile iOS (44), sur les deux plateformes. */
         public val EDGE_FADE_DP: Float = MeeshyControlSize.tapTarget.value
 

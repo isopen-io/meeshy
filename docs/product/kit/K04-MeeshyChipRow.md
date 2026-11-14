@@ -114,6 +114,13 @@ Instantanés (`MeeshyChipRow/<id>.<variante>`) : `simple`, `icone`, `deborde`, `
 
 Catalogue : entrée K04, vide sur `dev` sur les trois plateformes (`MeeshyKitCatalog+K04.swift`, `KitCatalogK04.kt`, `components/kit/catalog/k04.tsx`). Vues : `simple` S1, `icone` A2, `deborde` A12, `replie` A16, `multiple` A17 ; chaque échantillon se pose sur une plaque sombre opaque.
 
+## 8 bis. Android (reproduction du composant iOS, #17599)
+- `me.meeshy.ui.component.kit` : `MeeshyChipRow.kt` (la rangée), `MeeshyChipCell.kt` (la puce), `MeeshyChipRowRule.kt` (vocabulaire, loi du toucher, nom et rôle), `MeeshyChipRecipe.kt` (la recette), `MeeshyScrollEdges.kt` (la loi des bords), `MeeshyChipEdgeFade.kt` (le masque). Témoins : `MeeshyChipRowTest` (lois, lues sur les vecteurs) et `MeeshyChipRowBehaviorTest` (rendu, rôles, toucher, recomposition) ; catalogue : `KitCatalogK04.kt`.
+- Transposition imposée par la plateforme : Compose ne prend aucun toucher hors des bornes de la mise en page, la cible de 48 dp tient donc DANS la rangée (capsule centrée, 6 dp de marge haut et bas en régulier) ; l'écart entre deux capsules de rangées repliées vaut 12 dp (cible moins capsule), porté par ces marges, l'écart de mise en page entre rangées est nul.
+- Rôles : choix simple `Role.RadioButton` et `selected`, multiple `Role.Checkbox` et `toggleableState`, `tabs` `Role.Tab`, action `Role.Button`, menu `Role.DropdownList`. Le groupe est un `selectableGroup` nommé par `label`.
+- Les bords se lisent depuis `ScrollState` en phase de dessin (`scrollEdgesOf`), le masque n'ouvre un calque hors écran que s'il y a débordement ; la courante se centre par les largeurs mesurées (aucune référence retenue). « Réduire les animations » (`LocalReduceMotion`) : fondus et centrage immédiats, voile d'appui conservé.
+- L'anneau du clavier est dessiné décalé de 2 dp ; le survol au pointeur donne le voile d'appui.
+
 ## 9. Écarts connus et choix retenus
 Écarts relevés :
 - Registre : `CallPillChip`, `KindChip` sont des vignettes ; `ReferenceChipRow`, `FooterChip` relèvent de K24 ; `ComposerObjectChipsRow` n'a plus d'appelant. Il omet `MoodChips` d'Android, les filtres de conversation et de contacts, et tout le web.
