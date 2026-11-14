@@ -379,6 +379,26 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
+    func test_progressionEmpty_isOneShortLine_withoutTheListOfGestes() throws {
+        let app = try app()
+        XCTAssertEqual(app["progression.empty"]?["fr"], "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.")
+        XCTAssertEqual(ProgressionNotice(kind: .empty).text, "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.")
+        XCTAssertFalse(ProgressionNotice(kind: .empty).text.contains("story"), "le premier geste est partout dans l'app : l'énumération part")
+    }
+
+    func test_elansEmpty_keepsTheOrientationSentence_withoutTheEnumerationOfFamilies_inEveryLanguage() throws {
+        let app = try app()
+        let expected = "Tiens plusieurs familles à la fois pour multiplier tes étincelles."
+        XCTAssertEqual(app["progression.elans.empty"]?["fr"], expected)
+        XCTAssertEqual(ProgressionCopy.elansEmpty, expected)
+        XCTAssertFalse(ProgressionCopy.elansEmpty.contains("réel"), "les pastilles de famille et elansHint disent déjà lesquelles")
+        let french = try XCTUnwrap(app["progression.elans.empty"]?["fr"])
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(app["progression.elans.empty"]?[language])
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+        }
+    }
+
     func test_progressionNotice_empty_saysWhatLightsTheFirstMedal() {
         let text = ProgressionNotice(kind: .empty).text
         XCTAssertTrue(text.contains("médaille"), "l'avis lu à l'écran oriente vers le premier geste : « \(text) »")
