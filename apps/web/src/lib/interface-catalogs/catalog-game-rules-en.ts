@@ -21,7 +21,7 @@ const en = {
   'game.rules.page_title': 'How it works',
   'game.rules.intro': 'Eight rules, and the whole game fits inside. Meo explains them, Mee shows you the move.',
   'game.rules.section_rules': 'The rules on one page',
-  'game.rules.steps_fold': 'The seven cards from Mee and Meo',
+  'game.rules.steps_fold': 'The game in seven cards',
   'game.rules.atlas.title': 'The game in pictures',
   'game.rules.atlas.meesh': 'The Meesh',
   'game.rules.atlas.medals': 'Medals',

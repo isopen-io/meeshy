@@ -271,7 +271,7 @@ describe('le carnet des règles : rangées repliées, une seule ouverte à la fo
 
   test('les sept cartes de l’intégration tiennent en une rangée repliée, atteignable', async () => {
     const host = await mount(<RulesBody />);
-    const row = foldButton(host, 'Les sept cartes de Mee et Meo');
+    const row = foldButton(host, 'Le jeu en sept cartes');
     expect(row.getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector(`[id="${row.getAttribute('aria-controls')}"]`)?.textContent).toContain('Étape 7 sur 7');
     await click(row);

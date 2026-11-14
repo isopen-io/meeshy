@@ -21,7 +21,7 @@ const ar = {
   'game.rules.page_title': 'كيف تعمل اللعبة',
   'game.rules.intro': 'ثماني قواعد، واللعبة كلها بداخلها. ميو يشرحها، ومي تُريك الإجراء.',
   'game.rules.section_rules': 'القواعد في صفحة واحدة',
-  'game.rules.steps_fold': 'بطاقات مي وميو السبع',
+  'game.rules.steps_fold': 'اللعبة في سبع بطاقات',
   'game.rules.atlas.title': 'اللعبة بالصور',
   'game.rules.atlas.meesh': 'عملة Meesh',
   'game.rules.atlas.medals': 'الميداليات',
