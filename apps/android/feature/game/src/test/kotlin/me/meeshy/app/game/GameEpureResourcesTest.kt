@@ -381,4 +381,38 @@ class GameEpureResourcesTest {
         }
         assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s cet Âge · %2\$s en tout")
     }
+
+    @Test
+    fun `la regle des etincelles et celle de la frappe se lisent en une phrase, le calcul derriere un i`() {
+        assertThat(text(R.string.game_rules_1_body)).isEqualTo("Chaque vrai échange fait jaillir des étincelles : écrire, parler, publier, réagir, inviter.")
+        assertThat(text(R.string.game_rules_1_question)).isEqualTo("Qu’est-ce qui fait jaillir plus d’étincelles ?")
+        assertThat(text(R.string.game_rules_1_more)).contains("communauté ou amis").contains("Flamme")
+        assertThat(text(R.string.game_rules_3_body)).isEqualTo("Une Meesh se frappe à la main : elle fige une part de ta lumière.")
+        assertThat(text(R.string.game_rules_3_question)).isEqualTo("Combien de lumière une frappe prend-elle ?")
+        assertThat(text(R.string.game_rules_3_more)).contains("30 %").contains("niveau 100")
+        assertThat(text(R.string.game2_league_consent_how_question)).isEqualTo("Comment suis-je placé ?")
+        assertThat(text(R.string.game_concept_league_use))
+            .isEqualTo("Regarde ta place et ta zone : les 7 premiers gravissent, les 5 derniers redescendent.")
+    }
+
+    @Test
+    fun `les notes du carnet et de la joute sont traduites dans les sept langues, courtes, et leurs noms de i sont des questions`() {
+        listOf(
+            "game_rules_1_body", "game_rules_1_question", "game_rules_1_more",
+            "game_rules_3_body", "game_rules_3_question", "game_rules_3_more",
+            "game2_league_consent_how_question", "game_concept_league_use",
+        ).forEach { name ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value).isNotEmpty()
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+                if (name.endsWith("_question")) assertThat(value).containsMatch("[?؟]")
+            }
+        }
+        retiredLanguages.forEach { folder ->
+            assertThat(valueIn(folder, "game_rules_1_body").length).isAtMost(110)
+            assertThat(valueIn(folder, "game_rules_3_body").length).isAtMost(80)
+            assertThat(valueIn(folder, "game_concept_league_use").length).isAtMost(100)
+        }
+    }
 }

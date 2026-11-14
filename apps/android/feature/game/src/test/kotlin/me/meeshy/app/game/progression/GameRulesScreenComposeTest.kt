@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -79,5 +82,30 @@ class GameRulesScreenComposeTest {
         listOf("Fais ton premier geste", "Regarde ton anneau se remplir", "Immortalisons ton départ en photo").forEach { invite ->
             compose.onNodeWithText(invite, substring = true).assertDoesNotExist()
         }
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `la regle des etincelles et celle de la frappe disent leur phrase au repos et rangent le calcul derriere un i nomme par sa question`() {
+        show(focused = null)
+        compose.onNodeWithText(context.getString(R.string.game_rules_1_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertDoesNotExist()
+        listOf(
+            R.string.game_rules_1_question to R.string.game_rules_1_more,
+            R.string.game_rules_3_question to R.string.game_rules_3_more,
+        ).forEach { (question, more) ->
+            val info = compose.onNodeWithContentDescription(context.getString(question))
+            info.assertExists()
+            assertThat(info.fetchSemanticsNode().config[SemanticsProperties.StateDescription]).isEqualTo(context.getString(more))
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `toucher le i de la frappe deplie le calcul de la part de lumiere`() {
+        show(focused = null)
+        compose.onNodeWithContentDescription(context.getString(R.string.game_rules_3_question)).performClick()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertExists()
     }
 }
