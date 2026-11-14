@@ -59,6 +59,12 @@ class EpureCoqueStringsTest {
     }
 
     @Test
+    fun `le portugais de la coque est celui du Bresil, comme le reste de l'application`() {
+        assertThat(text("pt", "share_sheet_sign_in_body_reshare")).isEqualTo("Nada foi copiado: faça login e compartilhe de novo.")
+        assertThat(text("pt", "share_sheet_sign_in_body_reshare")).doesNotContain("partilhe")
+    }
+
+    @Test
     fun `les textes de la coque en francais`() {
         assertThat(text("fr", "bring_channel_description")).isEqualTo("Sonne quand un proche déclenche un Bring, même en silencieux")
         assertThat(text("fr", "talkie_wake_channel_description")).isEqualTo("Un proche vous parle : sa voix sort, même en arrière-plan")
