@@ -222,4 +222,14 @@ class CallEffectsModeRuleTest {
         assertThat(CallFaceEffect.None.analyticsName).isNull()
         assertThat(CallFaceEffect.Angel.analyticsName).isEqualTo("face:angel")
     }
+
+    @Test
+    fun `confirming the look already applied gives the base menu back and changes nothing else (#18192)`() {
+        val opened = CallEffectsModeState.opening(VideoFilterConfig()).togglingSettings()
+        val confirmed = opened.confirming()
+
+        assertThat(confirmed.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(confirmed.current).isEqualTo(opened.current)
+        assertThat(confirmed.layers).isEqualTo(opened.layers)
+    }
 }

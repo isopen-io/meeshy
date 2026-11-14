@@ -131,7 +131,7 @@ class CallLiveFrameUiTest {
         rule.setContent { Picker(controller, capture) }
 
         rule.onNodeWithText("Classics").assertExists()
-        carousel().assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Screen"))
+        carousel().assert(androidx.compose.ui.test.SemanticsMatcher("announces the style then its rank") { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.StateDescription)?.matches(Regex("Screen, \\d+ of \\d+")) == true })
         rule.runOnIdle { action("Next montage")() }
         rule.waitForIdle()
         val activate = carousel().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!

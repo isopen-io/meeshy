@@ -177,4 +177,53 @@ class CallTopBannerStackTest {
         assertThat(CallTopBannerStack.groupGridClearanceDp(setOf(CallTopBanner.LiveFrame), heights, isStageFullScreen = false))
             .isEqualTo(120f + CallTopBannerStack.GAP_DP)
     }
+
+    @Test
+    fun `L1_8 - en portrait la pile tient presque toute la largeur et ma vignette descend dessous`() {
+        val span = CallTopBannerStack.span(CallTileSize(400f, 800f), selfTileReserveDp = 154f)
+        assertThat(span.maxWidthDp).isNull()
+        assertThat(span.hostMaxWidthDp).isNull()
+        assertThat(span.pushesSelfTile).isTrue()
+        assertThat(span.selfTileClearanceDp(stackDp = 56f)).isEqualTo(56f)
+    }
+
+    @Test
+    fun `L1_8 - en paysage la pile est bornee a 560, la borne de la pilule, et ma vignette garde son coin`() {
+        val span = CallTopBannerStack.span(CallTileSize(1280f, 800f), selfTileReserveDp = 154f)
+        assertThat(span.maxWidthDp).isEqualTo(CallPillWidth.TEXT_DP)
+        assertThat(span.maxWidthDp).isEqualTo(560f)
+        assertThat(span.hostMaxWidthDp).isEqualTo(560f + 2 * CallTopBannerStack.HORIZONTAL_MARGIN_DP)
+        assertThat(span.pushesSelfTile).isFalse()
+        assertThat(span.selfTileClearanceDp(stackDp = 56f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `L1_8 - sur un telephone couche la pile centree se resserre pour longer ma vignette, sans la toucher`() {
+        val window = CallTileSize(844f, 390f)
+        val reserve = CallSelfTileLaw.bannerReserveDp(CallSelfTileCorner.TopEnd, CallSafeInsets(), 130f)
+        val span = CallTopBannerStack.span(window, reserve)
+        val width = span.maxWidthDp!!
+        assertThat(width).isLessThan(560f)
+        assertThat(span.pushesSelfTile).isFalse()
+        val bannerEnd = window.widthDp / 2 + width / 2
+        val tileStart = window.widthDp - CallSelfTileLaw.MARGIN_DP - 130f
+        assertThat(tileStart - bannerEnd).isWithin(0.001f).of(CallSelfTileLaw.NEIGHBOUR_GAP_DP)
+    }
+
+    @Test
+    fun `L1_8 - sans vignette en haut, la pile couchee prend toute sa borne`() {
+        val span = CallTopBannerStack.span(CallTileSize(844f, 390f), selfTileReserveDp = 0f)
+        assertThat(span.maxWidthDp).isEqualTo(560f)
+        assertThat(span.pushesSelfTile).isFalse()
+    }
+
+    @Test
+    fun `L1_8 - une fenetre couchee trop etroite pour la longer garde la pile bornee et fait descendre ma vignette`() {
+        val span = CallTopBannerStack.span(CallTileSize(640f, 360f), selfTileReserveDp = 218f)
+        assertThat(span.pushesSelfTile).isTrue()
+        assertThat(span.maxWidthDp).isEqualTo(560f)
+        assertThat(span.selfTileClearanceDp(stackDp = 56f)).isEqualTo(56f)
+        val narrow = CallTopBannerStack.span(CallTileSize(500f, 360f), selfTileReserveDp = 0f)
+        assertThat(narrow.maxWidthDp).isEqualTo(500f - 2 * CallTopBannerStack.HORIZONTAL_MARGIN_DP)
+    }
 }

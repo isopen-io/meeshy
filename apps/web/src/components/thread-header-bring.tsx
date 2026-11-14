@@ -77,7 +77,7 @@ export function ThreadHeaderBring({
             style={{
               width: 'var(--size-header-circle)',
               height: 'var(--size-header-circle)',
-              color: state === 'ringing' ? '#fff' : DANGER,
+              color: state === 'ringing' ? 'var(--color-ios-on-brand)' : DANGER,
               background: state === 'ringing' ? DANGER : 'color-mix(in srgb, currentColor 18%, transparent)',
             }}
           >

@@ -50,12 +50,12 @@ class CallGroupSceneGuardTest {
 
     @Test
     fun `the pill rows and both filmstrips fade at their edges with the one shared modifier`() {
-        assertThat(code("CallActionRow.kt")).contains(".callScrollEdgeFade(scroll, horizontal = true)")
+        assertThat(code("CallActionRow.kt")).contains(".callScrollEdgeFade(horizontal = true)")
         val spotlight = code("CallGroupSpotlight.kt")
-        assertThat(spotlight).contains("callScrollEdgeFade(state, horizontal = true)")
-        assertThat(spotlight).contains("callScrollEdgeFade(state, horizontal = false)")
+        assertThat(spotlight).contains("callScrollEdgeFade(horizontal = true)")
+        assertThat(spotlight).contains("callScrollEdgeFade(horizontal = false)")
         val rails = code("CallActionRails.kt")
-        assertThat(rails).contains(".callScrollEdgeFade(scroll, horizontal = false, symmetric = false)")
+        assertThat(rails).contains(".callScrollEdgeFade(horizontal = false)")
         assertThat(rails).doesNotContain("callRailScrollFade")
     }
 

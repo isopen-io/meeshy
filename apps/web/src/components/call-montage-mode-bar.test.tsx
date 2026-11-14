@@ -172,15 +172,16 @@ describe('CallMontageMode — la barre d’Effets', () => {
     view.done();
   });
 
-  test('« Chaque visage » et la vidéo au clavier restent atteignables, hors de la barre', async () => {
+  test('« Chaque visage » (dans Réglages, #17962) et la vidéo au clavier restent atteignables, hors de la barre', async () => {
     const view = await mount();
-    expect(view.find('[data-call-capture-faces]')).not.toBeNull();
     expect(view.find('[data-call-record-key]')).not.toBeNull();
+    await view.press('[data-call-effects-settings-toggle]');
+    expect(view.find('[data-call-effects-settings] [data-call-capture-faces]')).not.toBeNull();
     expect(view.find('[data-call-mode-bar] [data-call-capture-faces]')).toBeNull();
     view.done();
   });
 
-  test('« Réglages » ouvre Luminosité · Flou du fond dans un verre séparé, à la place du carrousel ; retoucher les rend', async () => {
+  test('« Réglages » ouvre Luminosité · Flou du fond dans un verre séparé, à la place du carrousel ; retoucher rend le menu de base (#18186)', async () => {
     const view = await mount();
     await view.press('[data-call-effects-settings-toggle]');
     const panel = view.find('[data-call-effects-settings]');
@@ -189,7 +190,10 @@ describe('CallMontageMode — la barre d’Effets', () => {
     await later(260);
     expect(view.find('[data-call-mode-carousel]')).toBeNull();
     await view.press('[data-call-effects-settings-toggle]');
-    expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
+    await later(260);
+    expect(view.find('[data-call-effects-settings]')).toBeNull();
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
+    expect(view.find('[data-call-mode-bar] [data-call-effects-category="frames"]')?.getAttribute('aria-pressed')).toBe('false');
     view.done();
   });
 
@@ -213,6 +217,8 @@ describe('CallMontageMode — la barre d’Effets', () => {
     expect(view.find('[data-call-effects-settings]')).toBeNull();
     await view.press('[data-call-effects-settings-toggle]');
     await view.press('[data-call-mode-quit]');
+    expect(view.exits).toEqual([]);
+    await view.press('[data-call-mode-quit]');
     expect(view.exits).toEqual(['exit']);
     view.done();
   });
@@ -230,8 +236,10 @@ describe('CallMontageMode — la barre d’Effets', () => {
     await view.press('[data-call-effect-layer-undo="frame"]');
     await later(260);
     expect(view.find('[data-call-effect-layers]')).toBeNull();
-    expect(view.find('[data-call-mode-carousel] [aria-checked="true"]')?.getAttribute('data-carousel-item')).toBe('grid');
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
     expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('false');
+    await view.press('[data-call-effects-category="frames"]');
+    expect(view.find('[data-call-mode-carousel] [aria-checked="true"]')?.getAttribute('data-carousel-item')).toBe('grid');
     view.done();
   });
 
