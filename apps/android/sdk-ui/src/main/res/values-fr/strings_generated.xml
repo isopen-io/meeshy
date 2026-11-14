@@ -189,9 +189,7 @@
     <string name="contacts_phonebook_write">Lui écrire</string>
     <string name="contacts_skeleton_loading">Chargement en cours</string>
     <string name="contacts_tab_prefix">Onglet</string>
-    <string name="content_failure_network_body">Vérifiez votre connexion, puis réessayez.</string>
     <string name="content_failure_retry">Réessayer</string>
-    <string name="content_failure_server_body">Le problème vient de notre côté. Réessayez dans un instant.</string>
     <string name="content_failure_server_title">Meeshy n\'a pas pu charger ce contenu</string>
     <string name="content_failure_unavailable_body">Il a peut-être expiré ou été retiré par son auteur.</string>
     <string name="content_failure_unavailable_title">Ce contenu n\'est plus disponible</string>
@@ -486,7 +484,7 @@
     <string name="slide_rail_delete_confirm_action">Supprimer</string>
     <string name="slide_rail_delete_confirm_title">Supprimer cette scène ?</string>
     <string name="sticker_sheet_close">Fermer</string>
-    <string name="sticker_sheet_favorites_empty">Appuie longuement sur une décoration pour l\'épingler ici.</string>
+    <string name="sticker_sheet_favorites_empty">Appuyez longuement sur une décoration pour l\'épingler ici.</string>
     <string name="sticker_sheet_instants_hint">Ce que vous écrivez s’affiche sur le sticker</string>
     <string name="sticker_sheet_instants_lieu">Lieux</string>
     <string name="sticker_sheet_instants_message">Messages</string>
@@ -509,7 +507,7 @@
     <string name="sticker_sheet_intent_surprise_hint">Pour l’étonnement, la peur, la gêne ou un « oups »</string>
     <string name="sticker_sheet_intent_surprise_title">Surprise et frisson</string>
     <string name="sticker_sheet_pin">Épingler aux favoris</string>
-    <string name="sticker_sheet_recents_empty">Ce que tu poses apparaîtra ici.</string>
+    <string name="sticker_sheet_recents_empty">Ce que vous posez apparaîtra ici.</string>
     <string name="sticker_sheet_search_clear">Effacer la recherche</string>
     <string name="sticker_sheet_search_empty">Aucune famille ne correspond.</string>
     <string name="sticker_sheet_search_prompt">Chercher un sticker…</string>

@@ -37,13 +37,10 @@ public fun ContentFetchFailureView(
                 ContentFetchFailure.FORBIDDEN, ContentFetchFailure.NOT_FOUND -> R.string.content_failure_unavailable_title
             },
         ),
-        subtitle = stringResource(
-            when (failure) {
-                ContentFetchFailure.NETWORK -> R.string.content_failure_network_body
-                ContentFetchFailure.SERVER -> R.string.content_failure_server_body
-                ContentFetchFailure.FORBIDDEN, ContentFetchFailure.NOT_FOUND -> R.string.content_failure_unavailable_body
-            },
-        ),
+        subtitle = when (failure) {
+            ContentFetchFailure.NETWORK, ContentFetchFailure.SERVER -> ""
+            ContentFetchFailure.FORBIDDEN, ContentFetchFailure.NOT_FOUND -> stringResource(R.string.content_failure_unavailable_body)
+        },
         modifier = modifier,
         actionLabel = retry?.let { stringResource(R.string.content_failure_retry) },
         onAction = retry,

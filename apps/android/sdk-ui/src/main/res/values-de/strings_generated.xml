@@ -187,9 +187,7 @@
     <string name="contacts_phonebook_write">Nachricht senden</string>
     <string name="contacts_skeleton_loading">Wird geladen</string>
     <string name="contacts_tab_prefix">Tab</string>
-    <string name="content_failure_network_body">Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="content_failure_retry">Erneut versuchen</string>
-    <string name="content_failure_server_body">Das Problem liegt bei uns. Versuche es gleich noch einmal.</string>
     <string name="content_failure_server_title">Meeshy konnte diesen Inhalt nicht laden</string>
     <string name="content_failure_unavailable_body">Er ist möglicherweise abgelaufen oder wurde von der Person entfernt.</string>
     <string name="content_failure_unavailable_title">Dieser Inhalt ist nicht mehr verfügbar</string>

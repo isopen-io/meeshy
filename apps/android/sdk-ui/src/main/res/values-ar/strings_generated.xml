@@ -195,9 +195,7 @@
     <string name="contacts_phonebook_write">إرسال رسالة</string>
     <string name="contacts_skeleton_loading">جارٍ التحميل</string>
     <string name="contacts_tab_prefix">تبويب</string>
-    <string name="content_failure_network_body">تحقّق من اتصالك ثم أعد المحاولة.</string>
     <string name="content_failure_retry">إعادة المحاولة</string>
-    <string name="content_failure_server_body">المشكلة من جهتنا. أعد المحاولة بعد قليل.</string>
     <string name="content_failure_server_title">تعذّر على Meeshy تحميل هذا المحتوى</string>
     <string name="content_failure_unavailable_body">ربما انتهت صلاحيته أو أزاله صاحبه.</string>
     <string name="content_failure_unavailable_title">لم يعد هذا المحتوى متاحًا</string>

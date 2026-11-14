@@ -187,9 +187,7 @@
     <string name="contacts_phonebook_write">Send a message</string>
     <string name="contacts_skeleton_loading">Loading</string>
     <string name="contacts_tab_prefix">Tab</string>
-    <string name="content_failure_network_body">Check your connection, then try again.</string>
     <string name="content_failure_retry">Retry</string>
-    <string name="content_failure_server_body">The problem is on our side. Try again in a moment.</string>
     <string name="content_failure_server_title">Meeshy couldn\'t load this content</string>
     <string name="content_failure_unavailable_body">It may have expired or been removed by its author.</string>
     <string name="content_failure_unavailable_title">This content is no longer available</string>

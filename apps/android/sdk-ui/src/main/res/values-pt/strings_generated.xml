@@ -189,9 +189,7 @@
     <string name="contacts_phonebook_write">Enviar mensagem</string>
     <string name="contacts_skeleton_loading">Carregando</string>
     <string name="contacts_tab_prefix">Aba</string>
-    <string name="content_failure_network_body">Verifique sua conexão e tente novamente.</string>
     <string name="content_failure_retry">Tentar novamente</string>
-    <string name="content_failure_server_body">O problema é do nosso lado. Tente novamente em instantes.</string>
     <string name="content_failure_server_title">O Meeshy não conseguiu carregar este conteúdo</string>
     <string name="content_failure_unavailable_body">Ele pode ter expirado ou sido removido pelo autor.</string>
     <string name="content_failure_unavailable_title">Este conteúdo não está mais disponível</string>

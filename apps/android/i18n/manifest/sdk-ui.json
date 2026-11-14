@@ -391,12 +391,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.post.detail.loadFailed.body",
-          "androidName": "content_failure_network_body",
-          "status": "adopted"
-        },
-        {
           "androidName": "content_failure_network_title",
           "status": "android-only"
         },
@@ -404,12 +398,6 @@
           "catalog": "app",
           "iosKey": "conversations.error.retry",
           "androidName": "content_failure_retry",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.detail.serverFailed.body",
-          "androidName": "content_failure_server_body",
           "status": "adopted"
         },
         {
