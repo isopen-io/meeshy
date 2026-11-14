@@ -900,6 +900,12 @@
       "long": 3,
       "explanations": 15
     },
+    "ios:Meeshy/sharedLocation": {
+      "labels": 19,
+      "words": 105,
+      "long": 0,
+      "explanations": 1
+    },
     "ios:Meeshy/shareLink": {
       "labels": 61,
       "words": 184,

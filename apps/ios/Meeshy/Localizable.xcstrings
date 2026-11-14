@@ -331206,43 +331206,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل. قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط."
+            "value": "لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt. Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis."
+            "value": "Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "For an extreme emergency: their phone rings, even when locked. Depending on settings, an iPhone on silent may only show a priority alert."
+            "value": "For an extreme emergency: their phone rings, even when locked."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para una urgencia extrema: su teléfono suena, incluso bloqueado. Según sus ajustes, un iPhone en silencio puede mostrar solo una alerta prioritaria."
+            "value": "Para una urgencia extrema: su teléfono suena, incluso bloqueado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire."
+            "value": "Pour une urgence extrême : son téléphone sonne, même verrouillé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Per un’emergenza estrema: il suo telefono squilla, anche bloccato. In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario."
+            "value": "Per un’emergenza estrema: il suo telefono squilla, anche bloccato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para uma emergência extrema: o telefone dela toca, mesmo bloqueado. Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário."
+            "value": "Para uma emergência extrema: o telefone dela toca, mesmo bloqueado."
+          }
+        }
+      }
+    },
+    "bring.silent.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وماذا لو كان آيفونه في الوضع الصامت؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Und wenn sein iPhone auf lautlos steht?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What if their iPhone is on silent?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Y si su iPhone está en silencio?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et si son iPhone est en silencieux ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se il suo iPhone è in silenzioso?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se o iPhone dela estiver no silencioso?"
+          }
+        }
+      }
+    },
+    "bring.silent.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depending on settings, an iPhone on silent may only show a priority alert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Según sus ajustes, un iPhone en silencio puede mostrar solo una alerta prioritaria."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário."
           }
         }
       }
@@ -337260,43 +337354,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يرى %@ موقعك حتى انتهاء المدة، ثم لا شيء؛ ويتحدّث الموقع عندما يكون Meeshy مفتوحًا. يمكنك الإيقاف في أي وقت من ملفه."
+            "value": "يرى %@ موقعك حتى انتهاء المدة؛ يمكنك الإيقاف في أي وقت."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ sieht deinen Standort bis zum Ende, danach nichts mehr; er wird aktualisiert, solange Meeshy geöffnet ist. Du kannst jederzeit über das Profil beenden."
+            "value": "%@ sieht deinen Standort bis zum Ende; du kannst jederzeit beenden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ sees your location until it ends, then nothing; it updates while Meeshy is open. You can stop any time from their profile."
+            "value": "%@ sees your location until it ends; you can stop any time."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ve tu ubicación hasta que termine, y luego nada; se actualiza mientras Meeshy está abierto. Puedes detenerlo cuando quieras desde su perfil."
+            "value": "%@ ve tu ubicación hasta que termine; puedes detenerlo cuando quieras."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ voit ta position jusqu'à l'échéance, puis plus rien ; elle se met à jour quand Meeshy est ouvert. Tu peux arrêter à tout moment depuis sa fiche."
+            "value": "%@ voit ta position jusqu'à l'échéance ; tu peux arrêter à tout moment."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vede la tua posizione fino alla scadenza, poi più nulla; si aggiorna quando Meeshy è aperto. Puoi interrompere in qualsiasi momento dal suo profilo."
+            "value": "%@ vede la tua posizione fino alla scadenza; puoi interrompere in qualsiasi momento."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vê sua localização até o fim do prazo e depois mais nada; ela se atualiza enquanto o Meeshy está aberto. Você pode parar a qualquer momento pelo perfil."
+            "value": "%@ vê sua localização até o fim do prazo; você pode parar a qualquer momento."
+          }
+        }
+      }
+    },
+    "sharedLocation.share.refresh.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى يتحدّث موقعي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann wird mein Standort aktualisiert?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When does my location update?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo se actualiza mi ubicación?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand ma position se met-elle à jour ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando si aggiorna la mia posizione?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando minha localização é atualizada?"
+          }
+        }
+      }
+    },
+    "sharedLocation.share.refresh.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتحدّث الموقع عندما يكون Meeshy مفتوحًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er wird aktualisiert, solange Meeshy geöffnet ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It updates while Meeshy is open."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se actualiza mientras Meeshy está abierto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elle se met à jour quand Meeshy est ouvert."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si aggiorna quando Meeshy è aperto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ela se atualiza enquanto o Meeshy está aberto."
           }
         }
       }
