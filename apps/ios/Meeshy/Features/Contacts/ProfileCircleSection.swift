@@ -33,10 +33,13 @@ struct ProfileCircleSection: View {
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
                     }
+                    if viewModel.offersSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName)
+                    }
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether {
+            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || viewModel.offersSharedLocation {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
@@ -46,6 +49,9 @@ struct ProfileCircleSection: View {
                     }
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
+                    }
+                    if viewModel.offersSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName)
                     }
                 }
             } else {
