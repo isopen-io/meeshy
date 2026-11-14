@@ -61,10 +61,11 @@ class CallOutputButtonRuleTest {
     @Test
     fun `the pill draws the output with the kind the law picks, never a hard-coded glass`() {
         val pill = code("CallControlsPill.kt")
-        val output = pill.substring(pill.indexOf("icon = outputIcon"), pill.indexOf("Icons.Filled.CallEnd"))
-        assertThat(output).contains("kind = outputKind")
+        val output = pill.substring(pill.indexOf("icon = output.icon"), pill.indexOf("Icons.Filled.CallEnd"))
+        assertThat(output).contains("kind = output.kind")
         assertThat(output).doesNotContain("kind = CallPillKind.Normal")
-        assertThat(output).contains("stateDescription = it")
+        assertThat(output).contains("stateDescription = where")
+        assertThat(pill).contains("CallOutputFace(outputIcon, outputKind, outputState)")
     }
 
     @Test

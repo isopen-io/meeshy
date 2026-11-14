@@ -78,7 +78,10 @@ class CallPillToneMotionTest {
     @Test
     fun `loi 17_2 - what the layout moves inside the glass glides back by a translation drawn at draw time`() {
         val pill = code("CallControlsPill.kt")
-        assertThat(Regex("""followsCallGlass\(""").findAll(pill).count()).isAtLeast(6)
+        assertThat(pill).contains("followsCallGlass(rememberCallGlassFollower()")
+        assertThat(Regex("""\.weight\(1f\)\.followingCell\(follow\)""").findAll(pill).count()).isEqualTo(4)
+        assertThat(pill).contains("Box(Modifier.followingCell(follow)) { captions() }")
+        assertThat(pill).contains("Column(Modifier.followingCell(CallGlassFollow(anchor, reduceMotion)))")
         val morph = code("CallPillMorph.kt")
         assertThat(morph).contains("CallPillMotion.followShift(")
         assertThat(morph).contains("onPlaced")

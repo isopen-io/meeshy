@@ -303,6 +303,8 @@ internal fun CallConnectedColumn(
                     rows = rows,
                     items = pill.items,
                     outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
+                    outputKind = CallOutputButtonRule.kind(activeRoute = route.route.active?.kind, state.isSpeakerOn, state.isVideoCall),
+                    outputState = route.route.active?.displayName(),
                     onToggleMenu = chrome::toggleMenu,
                     onToggleMute = viewModel::toggleMute,
                     onOutput = { routeSheetOpen = true },
