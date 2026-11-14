@@ -15,8 +15,6 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 const AT_REST: readonly ListFilter[] = ['all', 'unread', 'personal', 'private'];
 
-const STORED = LIST_FILTERS.filter((filter) => !AT_REST.includes(filter));
-
 const chipClass = 'rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors';
 
 const chipStyle = (active: boolean) =>
@@ -34,9 +32,7 @@ export function ListFilterChips({
   readonly onToggle: (filter: ListFilter) => void;
 }) {
   const [opened, setOpened] = useState(false);
-  const storedActive = STORED.some((filter) => selection.includes(filter));
-  const expanded = opened || storedActive;
-  const shown = expanded ? LIST_FILTERS : AT_REST;
+  const shown = opened ? LIST_FILTERS : LIST_FILTERS.filter((filter) => AT_REST.includes(filter) || selection.includes(filter));
   return (
     <ul className="flex gap-2 px-4 py-1.5">
       {shown.map((filter) => {
@@ -53,8 +49,8 @@ export function ListFilterChips({
         <button
           type="button"
           data-list-filters-more
-          onClick={() => setOpened(!expanded)}
-          aria-expanded={expanded}
+          onClick={() => setOpened(!opened)}
+          aria-expanded={opened}
           className={chipClass}
           style={chipStyle(false)}
         >

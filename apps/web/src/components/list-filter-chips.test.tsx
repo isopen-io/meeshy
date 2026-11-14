@@ -58,7 +58,17 @@ describe('les puces au repos', () => {
     await click(host.querySelector('[data-list-filter="archived"]'));
     expect(host.querySelector('[data-list-filter="archived"]')?.getAttribute('aria-pressed')).toBe('true');
     await click(more(host));
-    expect(shown(host)).toContain('archived');
+    expect(shown(host)).toEqual(['all', 'unread', 'personal', 'private', 'archived']);
+    expect(more(host)?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  test('« Plus » n’est jamais inerte : avec une puce rangée posée, il replie les autres et les rouvre', async () => {
+    const host = await mount(<Host initial={['pinned']} />);
+    expect(shown(host)).toEqual(['all', 'unread', 'personal', 'private', 'pinned']);
+    await click(more(host));
+    expect(shown(host)).toHaveLength(10);
+    await click(more(host));
+    expect(shown(host)).toEqual(['all', 'unread', 'personal', 'private', 'pinned']);
   });
 
   test('une sélection rangée au montage (Épinglés) n’est jamais cachée', async () => {
