@@ -622,3 +622,48 @@ describe('GET /admin/communities — la liste étendue', () => {
     await app.close();
   });
 });
+
+describe('communautés — le geste se voit chez les membres (#18435)', () => {
+  const REASON_TEXT = 'Décision de modération';
+  const settle = () => new Promise<void>((resolve) => setImmediate(() => setImmediate(resolve)));
+
+  async function buildWithSocket(row: Row) {
+    const prisma = makePrisma(row);
+    prisma.community.findFirst = jest.fn<any>(async (args: { where: Row }) =>
+      args.where.isActive === true && row.isActive === true ? { ...row, isPrivate: true } : null);
+    prisma.communityMember.findMany = jest.fn<any>(async (args: { where: Row }) =>
+      args.where.isActive === true ? [{ userId: JEAN }] : []);
+    const emitted: Array<{ room: string; event: string; payload: any }> = [];
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma);
+    app.decorate('socketIOHandler', {
+      io: { to: (room: string) => ({ emit: (event: string, payload: unknown) => { emitted.push({ room, event, payload }); return true; } }) },
+    } as never);
+    app.decorate('authenticate', async (request: any) => {
+      request.authContext = { isAuthenticated: true, isAnonymous: false, userId: ACTOR, registeredUser: { id: ACTOR, role: 'ADMIN', username: 'acteur' } };
+    });
+    registerCommunityOversightRoutes(app);
+    await app.ready();
+    return { app, emitted };
+  }
+
+  it('rendre une communauté privée diffuse community:updated à ses membres actifs et au créateur', async () => {
+    const { app, emitted } = await buildWithSocket(communityRow());
+    expect((await patch(app, { isPrivate: true, reason: REASON_TEXT })).statusCode).toBe(200);
+    await settle();
+
+    const updates = emitted.filter((e) => e.event === 'community:updated');
+    expect(updates.map((e) => e.room).sort()).toEqual([`user:${AWA}`, `user:${JEAN}`].sort());
+    expect(updates[0]?.payload).toMatchObject({ communityId: COMMUNITY, isPrivate: true, memberCount: 1 });
+    await app.close();
+  });
+
+  it("une communauté désactivée n'annonce rien", async () => {
+    const { app, emitted } = await buildWithSocket(communityRow({ isActive: false }));
+    await patch(app, { isActive: false, isPrivate: true, reason: REASON_TEXT });
+    await settle();
+
+    expect(emitted.filter((e) => e.event === 'community:updated')).toEqual([]);
+    await app.close();
+  });
+});

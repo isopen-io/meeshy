@@ -40,6 +40,7 @@ const ar = {
   'listFilter.channels': 'قنوات',
   'listFilter.pinned': 'المثبّتة',
   'listFilter.archived': 'المؤرشفة',
+  'listFilter.more': 'المزيد',
   'listRow.muted': 'مكتومة',
   'listRow.endToEnd': 'مشفّرة تمامًا بين الطرفين',
   'listRow.announce.pin.on': 'تم تثبيت المحادثة',

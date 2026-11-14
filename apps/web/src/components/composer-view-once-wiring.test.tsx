@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 
@@ -51,6 +52,7 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     act(() => {
       root.render(<Composer onSend={onSend} preferred={['fr']} />);
     });
+    openComposerTools(container);
     return container;
   };
 
@@ -70,9 +72,12 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     el.querySelector('[role="group"][aria-label="Types de pièces jointes"]') !== null;
 
   const attachImage = async (el: HTMLElement, name = 'plage.jpg'): Promise<void> => {
-    act(() => {
-      el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
-    });
+    // Le menu est déjà ouvert : `mount` l'ouvre pour atteindre les outils rangés derrière lui (#18361).
+    if (el.querySelector('[aria-label="Ouvrir le menu des pièces jointes"]') !== null) {
+      act(() => {
+        el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
+      });
+    }
     await flush(tiroirMonte(el));
     const input = el.querySelector<HTMLInputElement>('[aria-label="Choisir des photos"]')!;
     const file = new File([new Uint8Array([1, 2, 3])], name, { type: 'image/jpeg' });
@@ -147,6 +152,7 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
       sent = p as { protection: { viewOnce?: boolean } };
     });
     await attachImage(el);
+    openComposerTools(el);
     act(() => {
       toggleOf(el)!.click();
     });
@@ -180,6 +186,7 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
   test('retirer la dernière image ne DÉSARME plus la bascule : elle vaut pour tout ce qui part', async () => {
     const el = mount(() => {});
     await attachImage(el, 'seule.jpg');
+    openComposerTools(el);
     act(() => {
       toggleOf(el)!.click();
     });

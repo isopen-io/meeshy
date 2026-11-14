@@ -143,6 +143,8 @@ extension ConversationView {
 
     private func clearComposerForSend() {
         composerText.text = ""
+        // Un vocal qui part ne continue pas de jouer depuis le plateau (#7171).
+        pendingAudioPlayer.stop()
         withAnimation { composerState.pendingPlace = nil }
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)

@@ -2,6 +2,8 @@ package me.meeshy.ui.component.presentation
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.activity.ComponentDialog
+import org.robolectric.shadows.ShadowDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -83,6 +85,28 @@ class MeeshySheetPresenceTest {
         compose.waitForIdle()
 
         compose.onAllNodesWithText(OTHER).assertCountEquals(1)
+    }
+
+    @Test
+    fun `a back press during the descent still unmounts the sheet, without calling onDismissRequest`() {
+        var dismissed = 0
+        compose.setContent {
+            MeeshySheetPresence(item) { name ->
+                MeeshyModalSheet(onDismissRequest = { dismissed++ }) { Text(name) }
+            }
+        }
+        compose.waitForIdle()
+
+        compose.mainClock.autoAdvance = false
+        set(null)
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnUiThread { (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText(NAME).assertCountEquals(0)
+        assertThat(dismissed).isEqualTo(0)
     }
 
     private fun set(next: String?) {

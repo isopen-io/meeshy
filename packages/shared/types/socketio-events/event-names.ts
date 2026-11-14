@@ -618,6 +618,9 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
   USER_PREFERENCES_COMMUNITY_REORDERED: 'user:preferences-community-reordered',
 
+  // --- Communautés (#16857) : l'identité d'une communauté, à jour chez ses membres ---
+  COMMUNITY_UPDATED: 'community:updated',
+
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
 

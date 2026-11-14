@@ -964,11 +964,11 @@ final class GameEpureTests: XCTestCase {
 
     // MARK: - Épure 1/3, constats 1 à 6 (#17687) : la redite sort, le repère reste
 
-    private static let removedKeys = ["game.rules.intro", "game2.settings.hidden.card"]
+    private static let removedKeysEpureOne = ["game.rules.intro", "game2.settings.hidden.card"]
 
-    func test_removedKeys_areGoneFromTheCatalog_andNoSourceReadsThemAnymore() throws {
+    func test_removedKeysEpureOne_areGoneFromTheCatalog_andNoSourceReadsThemAnymore() throws {
         let catalog = try Self.catalog()
-        for key in Self.removedKeys {
+        for key in Self.removedKeysEpureOne {
             XCTAssertNil(catalog[key], "\(key) : plus aucun lecteur, supprimée de toutes les langues")
         }
         let rules = try code("Meeshy/Features/Game/GameRulesView.swift")

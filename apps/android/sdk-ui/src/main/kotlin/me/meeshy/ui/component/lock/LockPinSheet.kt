@@ -2,7 +2,12 @@ package me.meeshy.ui.component.lock
 
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -34,7 +37,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -66,10 +72,8 @@ public fun LockPinSheet(
     modifier: Modifier = Modifier,
     accent: Color = MeeshyPalette.Indigo500,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    MeeshyModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
         containerColor = MeeshyTheme.tokens.backgroundSecondary,
         modifier = modifier,
     ) {
@@ -100,7 +104,12 @@ public fun LockPinSheet(
                 )
             }
             ShakingDots(filled = filledCount, total = pinLength, texts = texts, accent = accent)
-            texts.errorText?.let { message ->
+            MeeshyAnimatedVisibility(
+                value = texts.errorText,
+                enter = fadeIn(errorSpring()) + scaleIn(errorSpring(), initialScale = ERROR_SCALE),
+                exit = fadeOut(errorSpring()) + scaleOut(errorSpring(), targetScale = ERROR_SCALE),
+                label = "lock-pin-error",
+            ) { message ->
                 Text(
                     text = message,
                     style = MaterialTheme.typography.labelMedium,
@@ -211,3 +220,9 @@ private fun NumpadDeleteKey(enabled: Boolean, description: String, onDelete: () 
         )
     }
 }
+
+/** iOS `ConversationLockSheet` : le message d'erreur entre et sort en fondu avec une echelle de 0,9. */
+private const val ERROR_SCALE: Float = 0.9f
+
+/** Le ressort du message d'erreur d'iOS : reponse 0,3 s, amortissement 0,8. */
+private fun <T> errorSpring() = spring<T>(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))

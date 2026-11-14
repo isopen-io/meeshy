@@ -920,16 +920,20 @@ struct RootView: View {
 
     // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
 
-    /// Le chrome entre et sort en fondu quand la pile s'approfondit ou revient
-    /// à la racine ; fondu court sous « Réduire les animations ».
+    /// Le chrome entre et sort en fondu pour chaque raison qui le retire : pile
+    /// profonde, réel ouvert, onboarding ; fondu court sous « Réduire les animations ».
     private var floatingChrome: some View {
         ZStack { floatingChromeContent }
-            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: router.isDeepRoute)
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: floatingChromeIsShown)
+    }
+
+    private var floatingChromeIsShown: Bool {
+        !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented
     }
 
     @ViewBuilder
     private var floatingChromeContent: some View {
-        if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
+        if floatingChromeIsShown {
             RootFloatingChrome(
                 showFeed: $showFeed,
                 showMenu: $showMenu,

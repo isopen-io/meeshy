@@ -15,9 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
@@ -33,6 +31,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -54,10 +53,8 @@ public fun CommentsSheet(
     headerAction: (@Composable RowScope.() -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    MeeshyModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
         containerColor = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = SHEET_SCRIM_ALPHA),
         dragHandle = { BottomSheetDefaults.DragHandle() },
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
@@ -91,7 +88,7 @@ public fun CommentsSheet(
                     modifier = Modifier.weight(1f),
                 )
                 headerAction?.invoke(this)
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = { this@MeeshyModalSheet.dismiss() }) {
                     Icon(MeeshyIcons.Close, contentDescription = closeLabel, tint = MeeshyTheme.tokens.textSecondary)
                 }
             }

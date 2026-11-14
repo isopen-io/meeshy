@@ -38,7 +38,7 @@ const arIdentity = {
   'conversation.details.role.moderator': 'مُراقب',
   'conversation.details.share': 'مشاركة رابط',
   'conversation.details.share.busy': 'جارٍ إنشاء الرابط…',
-  'conversation.details.share.copied': 'تم نسخ الرابط — ما عليك إلا لصقه.',
+  'conversation.details.share.copied': 'تم نسخ الرابط.',
   'conversation.details.share.failed': 'تعذّر إنشاء الرابط — أعد المحاولة بعد لحظة.',
   'conversation.details.share.unavailable': 'المشاركة غير متاحة هنا — انسخ الرابط: {url}',
   'thread.header.active_members': 'الأعضاء الأكثر نشاطًا',

@@ -11,9 +11,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +34,8 @@ import me.meeshy.app.R
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallLinkTarget
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
+import me.meeshy.ui.component.presentation.MeeshySheetPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -44,7 +46,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * `meeshy://call?contactId=…&type=…` n'appelle JAMAIS : il dépose une demande que cet hôte présente en confirmation
  * (« Appeler @x en vidéo ? »), et seul « Appeler » compose. Sans session, le lien ouvre l'app sur la connexion et ne
- * garde rien : [onHandled] le consomme dans tous les cas.
+ * garde rien : [onHandled] le consomme dans tous les cas. Annuler, ou la demande retirée par le ViewModel, laisse la
+ * feuille redescendre avant de la démonter ([MeeshySheetPresence]).
  */
 @Composable
 fun CallLinkHost(
@@ -78,7 +81,7 @@ fun CallLinkHost(
     }
 
     val pending by viewModel.pending.collectAsStateWithLifecycle()
-    pending?.let { target ->
+    MeeshySheetPresence(pending) { target ->
         CallLinkConfirmationSheet(
             target = target,
             onCall = { viewModel.confirm(target) },
@@ -91,7 +94,11 @@ fun CallLinkHost(
 @Composable
 private fun CallLinkConfirmationSheet(target: CallLinkTarget, onCall: () -> Unit, onCancel: () -> Unit) {
     val tokens = MeeshyTheme.tokens
-    ModalBottomSheet(onDismissRequest = onCancel, containerColor = tokens.backgroundPrimary) {
+    MeeshyModalSheet(
+        onDismissRequest = onCancel,
+        sheetState = rememberModalBottomSheetState(),
+        containerColor = tokens.backgroundPrimary,
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xxl, vertical = MeeshySpacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -121,7 +128,7 @@ private fun CallLinkConfirmationSheet(target: CallLinkTarget, onCall: () -> Unit
                 )
                 Text(text = stringResource(R.string.call_link_confirm_call), fontWeight = FontWeight.SemiBold)
             }
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            OutlinedButton(onClick = { this@MeeshyModalSheet.dismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(text = stringResource(R.string.call_link_confirm_cancel), color = tokens.textPrimary)
             }
         }
