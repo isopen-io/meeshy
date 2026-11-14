@@ -131,4 +131,36 @@ final class EpureReglagesFichesTests: XCTestCase {
         XCTAssertEqual(rows["settings.data.export.content.messages"]?["fr"], "Messages")
         XCTAssertEqual(rows["settings.data.export.content.contacts"]?["fr"], "Contacts")
     }
+
+    // MARK: - Règle 1 : une clé sans lecteur sort de TOUTES les langues
+
+    private static let orphanKeys = [
+        "about.feature.cloudSync",
+        "about.feature.themes",
+        "about.licenses.meeshy.body_mit",
+        "about.section.informations",
+        "settings.privacy.encryption.coming_soon.a11y",
+        "settings.transcription.engine",
+        "settings.transcription.engine.a11y"
+    ]
+
+    func test_settingsAndAbout_keysWithoutReader_areGoneFromTheCatalog() throws {
+        let catalog = try app()
+        for key in Self.orphanKeys {
+            XCTAssertNil(catalog[key], "\(key) n'a plus aucun lecteur : elle sort de toutes les langues")
+        }
+    }
+
+    func test_settingsAndAbout_removedKeys_haveNoReaderLeftInTheSources() throws {
+        let sources = try shippedSources()
+        for key in Self.orphanKeys {
+            XCTAssertFalse(sources.contains("\"\(key)\""), key)
+        }
+    }
+
+    func test_about_licenseSentence_isCarriedByTheSingleBodyKey() throws {
+        let catalog = try app()
+        XCTAssertNotNil(catalog["about.licenses.meeshy.body"]?["fr"])
+        XCTAssertTrue(try shippedSources().contains("\"about.licenses.meeshy.body\""))
+    }
 }
