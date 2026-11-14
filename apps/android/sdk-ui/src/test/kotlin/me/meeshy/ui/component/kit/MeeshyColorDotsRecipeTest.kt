@@ -43,6 +43,7 @@ class MeeshyColorDotsRecipeTest {
                 available = row.double("available"),
                 size = sizeOf(row.getValue("size").jsonPrimitive.content),
                 layout = layoutOf(row.getValue("layout").jsonPrimitive.content),
+                cell = row.double("cell"),
             )
             assertThat(recipe.rows).containsExactlyElementsIn(row.getValue("rows").jsonArray.map { it.jsonPrimitive.int }).inOrder()
             assertThat(recipe.scrolls).isEqualTo(row.getValue("scrolls").jsonPrimitive.content == "true")

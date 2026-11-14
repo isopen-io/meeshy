@@ -281,6 +281,7 @@
     <string name="identity_role_admin">مشرف</string>
     <string name="identity_role_creator">المنشئ</string>
     <string name="identity_role_moderator">مُنظّم</string>
+    <string name="kit_color_dots_position">اللون %1$s من %2$s</string>
     <string name="language_strip_more">لغات أخرى</string>
     <string name="lentille_mode_menu_selected">محدد</string>
     <string name="live_location_duration_title">مدة المشاركة</string>

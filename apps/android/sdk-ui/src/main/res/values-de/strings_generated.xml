@@ -273,6 +273,7 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Ersteller</string>
     <string name="identity_role_moderator">Moderator</string>
+    <string name="kit_color_dots_position">Farbe %1$s von %2$s</string>
     <string name="language_strip_more">Weitere Sprachen</string>
     <string name="lentille_mode_menu_selected">ausgewählt</string>
     <string name="live_location_duration_title">Freigabedauer</string>

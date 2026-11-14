@@ -275,6 +275,7 @@
     <string name="identity_role_admin">Amministratore</string>
     <string name="identity_role_creator">Creatore</string>
     <string name="identity_role_moderator">Moderatore</string>
+    <string name="kit_color_dots_position">Colore %1$s di %2$s</string>
     <string name="language_strip_more">Altre lingue</string>
     <string name="lentille_mode_menu_selected">selezionato</string>
     <string name="live_location_duration_title">Durata della condivisione</string>
