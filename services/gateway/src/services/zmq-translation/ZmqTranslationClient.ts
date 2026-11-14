@@ -49,6 +49,14 @@ export type TranslationDeadline = {
   readonly timeoutMs?: number;
 };
 
+type TypedTimeoutErrors = {
+  translationError: TranslationErrorPayload;
+};
+
+type TimeoutErrorEvent<E extends string> = E extends keyof TypedTimeoutErrors
+  ? TypedTimeoutErrors[E]
+  : Record<string, unknown>;
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
@@ -178,10 +186,10 @@ export class ZmqTranslationClient extends EventEmitter {
    * @param opts.retryEnabled - When false, no retry; one shot with the long deadman
    * @param opts.timeoutMs - Override timeout (defaults to ZMQ_REQUEST_TIMEOUT_MS)
    */
-  private _registerRequestTimeout(
+  private _registerRequestTimeout<E extends string>(
     taskId: string,
-    errorEventName: string,
-    errorEvent: Record<string, unknown>,
+    errorEventName: E,
+    errorEvent: TimeoutErrorEvent<E>,
     resend: (existingTaskId: string, pendingLanguages?: string[]) => Promise<string>,
     opts: TranslationDeadline = {}
   ): void {
@@ -653,7 +661,7 @@ export class ZmqTranslationClient extends EventEmitter {
     this._registerRequestTimeout(
       taskId,
       'translationError',
-      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
+      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId, metadata: {} },
       async (existingTaskId: string, pendingLanguages?: string[]) => {
         // Ne redemander QUE les langues encore manquantes : re-pousser une langue
         // déjà rendue duplique le travail du worker pool ML pour rien.

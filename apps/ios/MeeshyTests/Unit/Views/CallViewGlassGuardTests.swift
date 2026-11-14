@@ -329,7 +329,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
         XCTAssertFalse(effects.contains("settings: {"), "La barre ne reçoit plus le panneau")
-        XCTAssertTrue(effects.contains("CallEffectsPanel {"), "Le panneau de réglages est le verre séparé partagé")
+        XCTAssertTrue(effects.contains("CallEffectsPanel(label: CallModeCopy.settingsPanel) {"), "Le panneau de réglages est le verre séparé partagé, nommé « Réglages de mon image » (P8b.1)")
         XCTAssertTrue(effects.contains(".combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))"), "Le panneau monte depuis la barre, en fondu")
         XCTAssertTrue(effects.contains("CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion)"), "Réduire les animations = fondu court")
         XCTAssertFalse(effects.contains("reduceMotion ? nil"), "Réduire les animations ne supprime plus l'animation")
@@ -488,7 +488,9 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift")
         )
         XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
-        XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
+        XCTAssertTrue(stage.contains("onFocusChange(newFocus)"), "la scène dit à la racine ce qui est à la une")
+        let rail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+CameraRail.swift"))
+        XCTAssertTrue(rail.contains("GroupCallSpotlight.featuresLocal(groupStageFocus)"), "mon image à la une se lit de la une servie")
     }
 
     /// Le bouton PiP et le glissé quittent le plein écran par la même entrée.

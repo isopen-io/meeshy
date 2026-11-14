@@ -296,7 +296,8 @@ describe('les langues du Prisme', () => {
     expect(html).toContain('lang="fr"');
     expect(html).toContain('lang="es"');
     expect(html).toContain('Aucune');
-    expect(html).toContain('Le contenu sera traduit dans cette langue');
+    expect(html).toContain('Le contenu est traduit dans la première de ces langues qui est disponible.');
+    expect(html).not.toContain('Le contenu sera traduit dans cette langue');
   });
 
   test('un rang secondaire posé se retire par un contrôle NOMMÉ ; la langue principale, jamais', () => {

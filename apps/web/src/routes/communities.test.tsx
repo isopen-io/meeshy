@@ -15,7 +15,6 @@ import {
   CommunityHero,
   CommunityPreviewCard,
   CommunityRefused,
-  CommunityStats,
   PrivacyToggle,
   SubmitButton,
 } from './communities-parts';
@@ -137,15 +136,8 @@ describe('le détail', () => {
     expect(sansPhoto).not.toContain('harbor_41.png');
   });
 
-  test('les compteurs sont des nombres ENTIERS, dans la langue', () => {
-    const html = plain(renderToStaticMarkup(<CommunityStats language="fr" community={community()} />));
-    expect(html).toContain('1 284');
-    expect(html).toContain('Membres');
-    expect(html).toContain('Conversations');
-  });
-
-  test('« N en ligne » s’écrit sous les compteurs, sans nommer personne (#18014)', () => {
-    const html = plain(renderToStaticMarkup(<CommunityStats language="fr" community={community({ onlineMemberCount: 3 })} />));
+  test('« N en ligne » s’écrit sous la description, sans nommer personne (#18014)', () => {
+    const html = plain(renderToStaticMarkup(<CommunityHero language="fr" community={community({ onlineMemberCount: 3 })} />));
     expect(html).toContain('3 en ligne');
     expect(html).toContain('data-community-online');
   });
@@ -153,7 +145,7 @@ describe('le détail', () => {
   test('rien ne s’écrit quand personne n’est en ligne, ou quand la passerelle se tait', () => {
     [0, null, undefined].forEach((onlineMemberCount) => {
       const served = onlineMemberCount === undefined ? community() : community({ onlineMemberCount });
-      expect(renderToStaticMarkup(<CommunityStats language="fr" community={served} />)).not.toContain('data-community-online');
+      expect(renderToStaticMarkup(<CommunityHero language="fr" community={served} />)).not.toContain('data-community-online');
     });
   });
 
@@ -172,7 +164,6 @@ describe('le détail', () => {
     const html = renderToStaticMarkup(
       <>
         <CommunityHero language="fr" community={community()} />
-        <CommunityStats language="fr" community={community()} />
       </>,
     );
     expect(html).not.toContain('<button');
