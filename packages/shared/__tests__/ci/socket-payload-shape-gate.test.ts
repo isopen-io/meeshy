@@ -108,6 +108,13 @@ const REPO = resolve(HERE, '../../../..');
  * routerait un événement devrait rejoindre cette liste — et l'invariant de
  * minimum ci-dessous est ce qui rend l'oubli visible, puisqu'il compte les
  * routes trouvées.
+ *
+ * Que deux racines SUFFISENT est une mesure, pas une hypothèse (2026-11-14) :
+ * hors d'elles, un seul fichier Android cite `SocketEventNames`
+ * (`app/.../TalkieWakeService.kt`), et c'est une ÉMISSION client→serveur — donc
+ * aucun décodage, donc hors du champ de cette garde. Refaire la mesure :
+ * `grep -rln 'SocketInboundRoute\.\(decoding\|subject\)\|SocketEventNames\.'
+ * --include=*.kt apps/android --exclude-dir=test`.
  */
 const KOTLIN_ROOTS = ['apps/android/core/model/src/main', 'apps/android/sdk-core/src/main'] as const;
 
