@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { callActions } from '@/lib/calls/call-actions';
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
 import { listLayers, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
-import { pressed as pressedGenre, showsLooks, type EffectsBarMode } from '@/lib/calls/call-effects-bar-rule';
+import { afterAddingLook, afterBack, afterChoice, afterEscape, afterGenre, afterRemoval, afterSettings, afterShowingApplied, pressed as pressedGenre, showsLooks, type EffectsBarMode } from '@/lib/calls/call-effects-bar-rule';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, type VideoEffects } from '@/lib/calls/video-effects';
 import { translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
@@ -334,11 +334,42 @@ export function EffectsBar({ language, mode, categories, settings, add, stack, f
   );
 }
 
-/** L'état que chaque mode garde pour sa barre : où elle en est, et ce qu'en disent ‹ et Échap (`call-effects-bar-rule.ts`). */
-export function useEffectsBarMode(entering: EffectsBarMode, onExit: () => void) {
+/**
+ * L'état que chaque mode garde pour sa barre, et les gestes qui le font avancer (`call-effects-bar-rule.ts`) : ‹ et
+ * Échap referment avant de quitter, sauf `direct` (rien à refermer : le mode Effets sans traitement d'images).
+ */
+export function useEffectsBarMode(entering: EffectsBarMode, onExit: () => void, direct = false) {
   const [mode, setMode] = useState<EffectsBarMode>(entering);
-  const leave = (next: EffectsBarMode | null): void => (next === null ? onExit() : setMode(next));
-  return { mode, setMode, leave };
+  const leave = (next: EffectsBarMode | null): void => (next === null || direct ? onExit() : setMode(next));
+  return {
+    mode,
+    back: () => leave(afterBack(mode)),
+    escape: () => leave(afterEscape(mode)),
+    toggleSettings: () => setMode(afterSettings),
+    chosen: () => setMode(afterChoice),
+    adding: () => setMode(afterAddingLook),
+    removed: () => setMode(afterRemoval),
+    genre: (isOpen: boolean) => setMode((from) => afterGenre(from, { isOpen })),
+    showApplied: (hasLayers: boolean) => setMode((from) => afterShowingApplied(from, { hasLayers })),
+  };
+}
+
+const facesGlyph = (
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="8" cy="9" r="3" />
+    <circle cx="16.5" cy="9" r="3" />
+    <path d="M3 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5M11.5 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5" />
+  </svg>
+);
+
+/** « Chaque visage », en tête du panneau Réglages du Montage (#17962, comme iOS) : une rangée de 44 px au moins. */
+export function FacesRow({ language, onPress }: { readonly language: InterfaceLanguage; readonly onPress: () => void }) {
+  return (
+    <button type="button" aria-label={translateCallStudio(language, 'callStudio.capture.facesLabel')} onClick={onPress} className="flex min-h-11 w-full touch-manipulation items-center gap-3 text-mini font-semibold text-on-media" data-call-capture-faces="">
+      {facesGlyph}
+      <span aria-hidden="true">{translateCallStudio(language, 'callStudio.capture.faces')}</span>
+    </button>
+  );
 }
 
 type SettingsProps = {

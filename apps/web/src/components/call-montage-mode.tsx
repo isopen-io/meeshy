@@ -7,7 +7,7 @@ import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
 import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
-import { afterAddingLook, afterBack, afterChoice, afterEscape, afterGenre, afterRemoval, afterSettings, afterShowingApplied, ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-bar-rule';
+import { ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-bar-rule';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -26,7 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { LiveFrameHoldOption, type LiveFrameHold } from './call-live-frame-hold-option';
-import { appliedLabel, applyNow, EffectsBar, SettingsGlass, STACKED, useEffectsBarMode } from './call-effects-bar';
+import { appliedLabel, applyNow, EffectsBar, FacesRow, SettingsGlass, STACKED, useEffectsBarMode } from './call-effects-bar';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
 import { useMontageLayers } from './use-montage-layers';
@@ -150,24 +150,6 @@ function paint(canvas: HTMLCanvasElement | null, stage: Element | null, style: M
   drawMontage(context, montageLayout({ style, count: tiles.length, size, onScreen: tiles.map((tile) => tile.onScreen) }), tiles, text);
 }
 
-const facesGlyph = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="8" cy="9" r="3" />
-    <circle cx="16.5" cy="9" r="3" />
-    <path d="M3 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5M11.5 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5" />
-  </svg>
-);
-
-/** « Chaque visage », en tête du panneau Réglages du Montage (#17962, comme iOS) : une rangée de 44 px au moins. */
-function FacesRow({ label, name, onPress }: { readonly label: string; readonly name: string; readonly onPress: () => void }) {
-  return (
-    <button type="button" aria-label={label} onClick={onPress} className="flex min-h-11 w-full touch-manipulation items-center gap-3 text-mini font-semibold text-on-media" data-call-capture-faces="">
-      {facesGlyph}
-      <span aria-hidden="true">{name}</span>
-    </button>
-  );
-}
-
 export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined, colorAvailable = false, blurAvailable = false, apply = applyNow, onAddLook }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
@@ -256,9 +238,9 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
     ...(clipEnv === undefined ? {} : { clipEnv }),
   });
 
-  const layers = useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame: () => setFrameId(null), onAdding: () => bar.setMode(afterAddingLook), onRemoval: () => bar.setMode(afterRemoval), say: (text) => studio.setStatus({ text, tone: 'error' }) });
+  const layers = useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame: () => setFrameId(null), onAdding: bar.adding, onRemoval: bar.removed, say: (text) => studio.setStatus({ text, tone: 'error' }) });
   /** L'option « Cadre » est un choix : garder ou rendre le cadre en direct rend le menu de base. */
-  const held: LiveFrameHold | undefined = hold === undefined ? undefined : { ...hold, toggle: (id) => (hold.toggle(id), bar.setMode(afterChoice)) };
+  const held: LiveFrameHold | undefined = hold === undefined ? undefined : { ...hold, toggle: (id) => (hold.toggle(id), bar.chosen()) };
 
   useEffect(() => {
     const big = (): void => paintRef.current(preview.current, current.current, 'preview');
@@ -300,7 +282,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
 
   const faces = async (): Promise<void> => {
     const shown = scene.current();
-    bar.setMode(afterChoice);
+    bar.chosen();
     if (studio.busy || studio.recording || shown === null) return;
     studio.setStatus({ text: t(language, 'callStudio.capture.busy'), tone: 'busy' });
     const files = await captureFaces({ stage: shown, env: captureEnv() });
@@ -317,7 +299,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    bar.leave(afterEscape(bar.mode));
+    bar.escape();
   };
 
   const thumbRef = (id: string) => (canvas: HTMLCanvasElement | null) => void (canvas === null ? thumbs.current.delete(id) : thumbs.current.set(id, canvas));
@@ -371,7 +353,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
 
   /** Un choix arrêté rend le menu de base ; un cadre refusé (trois couches) n'en est pas un. */
   const chosen = (id: string): void => {
-    if (frames?.find(id) == null || layers.frameFits) bar.setMode(afterChoice);
+    if (frames?.find(id) == null || layers.frameFits) bar.chosen();
   };
 
   function chooseFinal(id: string): void {
@@ -430,7 +412,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
                 />
               </div>
             ) : null}
-            {panel.mounted ? <SettingsGlass presence={panel} open={settings} language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} first={<FacesRow label={t(language, 'callStudio.capture.facesLabel')} name={t(language, 'callStudio.capture.faces')} onPress={() => void faces()} />} /> : null}
+            {panel.mounted ? <SettingsGlass presence={panel} open={settings} language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} first={<FacesRow language={language} onPress={() => void faces()} />} /> : null}
           </div>
           {showsLooks(bar.mode) ? (
             <div className="flex items-center justify-center gap-2" data-call-montage-options="">
@@ -446,11 +428,11 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
           stack={layers.stack}
           full={layers.crowded}
           chips={{ mounted: puces.mounted, ref: puces.ref }}
-          categories={{ entries: layers.sortEntries, genre: 'frame', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : bar.setMode((mode) => afterGenre(mode, { isOpen: true }))) }}
-          settings={{ onToggle: () => bar.setMode(afterSettings) }}
+          categories={{ entries: layers.sortEntries, genre: 'frame', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : bar.genre(true)) }}
+          settings={{ onToggle: bar.toggleSettings }}
           add={{ onAdd: layers.addLook }}
-          list={{ onOpen: () => bar.setMode((mode) => afterShowingApplied(mode, { hasLayers: layers.stack.length > 0 })), onClose: () => bar.setMode(afterRemoval), onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
-          onBack={() => bar.leave(afterBack(bar.mode))}
+          list={{ onOpen: () => bar.showApplied(layers.stack.length > 0), onClose: bar.removed, onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
+          onBack={bar.back}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

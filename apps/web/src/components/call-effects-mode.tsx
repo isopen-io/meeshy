@@ -8,7 +8,7 @@ import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-captur
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { addingGenre, canAdd, genreRow, isFull, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
-import { afterAddingLook, afterChoice, afterEscape, afterGenre, afterRemoval, afterSettings, afterShowingApplied, afterBack, ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-bar-rule';
+import { ENTERING, showsCarousel, showsLooks } from '@/lib/calls/call-effects-bar-rule';
 import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { useEffectLayers } from '@/lib/calls/use-effect-layers';
@@ -248,7 +248,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const root = useRef<HTMLDivElement>(null);
   const [category, setCategory] = useState<EffectsCategory>(startOn);
-  const bar = useEffectsBarMode(colorAvailable ? ENTERING : 'settings', onExit);
+  const bar = useEffectsBarMode(colorAvailable ? ENTERING : 'settings', onExit, !colorAvailable);
   const settings = bar.mode === 'settings';
   const t = textOf(language);
   const words = layersTextOf(language);
@@ -285,7 +285,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    bar.leave(colorAvailable ? afterEscape(bar.mode) : null);
+    bar.escape();
   };
 
   const items: readonly CarouselItem[] =
@@ -311,10 +311,10 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   };
   /** Un choix arrêté rend le menu de base ; refusé (trois couches), il n'en est pas un et le carrousel reste. */
   const chosen = (id: string): void => {
-    if (!refuses(category, id)) bar.setMode(afterChoice);
+    if (!refuses(category, id)) bar.chosen();
   };
   const addLook = (): void => {
-    bar.setMode(afterAddingLook);
+    bar.adding();
     if (full) {
       refuse();
       return;
@@ -324,7 +324,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
     else if (target === 'face' || target === 'color') setCategory(target);
   };
   const undo = (genre: EffectGenre): void => {
-    bar.setMode(afterRemoval);
+    bar.removed();
     if (genre === 'face') apply({ faceEffect: 'none' });
     else if (genre === 'color') apply({ preset: 'natural' });
     else {
@@ -337,7 +337,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const pick = (id: string): void => {
     if (id === 'frames') onOpenFrames?.();
     if (id !== 'face' && id !== 'color') return;
-    bar.setMode((mode) => afterGenre(mode, { isOpen: id === category }));
+    bar.genre(id === category);
     setCategory(id);
   };
 
@@ -379,10 +379,10 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
           full={full}
           chips={{ mounted: puces.mounted, ref: puces.ref }}
           categories={{ entries, genre: category, onPick: pick }}
-          settings={colorAvailable ? { onToggle: () => bar.setMode(afterSettings) } : null}
+          settings={colorAvailable ? { onToggle: bar.toggleSettings } : null}
           add={colorAvailable ? { onAdd: addLook } : null}
-          list={{ onOpen: () => bar.setMode((mode) => afterShowingApplied(mode, { hasLayers: stack.length > 0 })), onClose: () => bar.setMode(afterRemoval), onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
-          onBack={() => bar.leave(colorAvailable ? afterBack(bar.mode) : null)}
+          list={{ onOpen: () => bar.showApplied(stack.length > 0), onClose: bar.removed, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
+          onBack={bar.back}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

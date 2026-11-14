@@ -269,6 +269,7 @@ try {
   await page.click('[data-carousel-item="volcano"]');
   await measure(page, 'effet (Doré + Éruption)');
 
+  await page.click('[data-call-effects-category="face"]');
   await page.click('[data-carousel-item="none"]');
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
