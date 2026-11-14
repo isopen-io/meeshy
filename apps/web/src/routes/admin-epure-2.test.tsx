@@ -104,7 +104,6 @@ const ADDED = [
   "admin.analytics.calls.reasons.question",
   "admin.analytics.measure.question",
   "admin.kit.info.stat",
-  "admin.ranking.periodQuestion",
   "admin.scale.abuse.question",
   "admin.scale.abuse.detail",
   "admin.scale.links.question",

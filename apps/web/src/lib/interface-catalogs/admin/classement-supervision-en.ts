@@ -56,7 +56,6 @@ const f = {
   'admin.ranking.period.all': 'All time',
   'admin.ranking.periodNone': 'This criterion covers the whole history: the period does not apply.',
   'admin.ranking.periodCreation': 'The period keeps the links created during it, whatever the date of the clicks.',
-  'admin.ranking.periodQuestion': 'What does the period filter?',
 
   'admin.ranking.limit.label': 'Number of rows',
   'admin.ranking.limit.option': 'Top {count}',
