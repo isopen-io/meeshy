@@ -310,6 +310,14 @@ struct MeeshyTrimTrackTests {
         #expect(layers[readout.upperBound...].prefix(1500).contains(".accessibilityHidden(true)"))
     }
 
+    @Test("loi 13 : sans `keptText` aucun relevé, une source trop courte n'a ni poignées ni cadre ni voile, la tête reste")
+    func source_law13_drawsOnlyWhatIsUseful() throws {
+        let code = try Self.code("MeeshyTrimTrack.swift")
+        #expect(code.contains("if let keptText {\n            MeeshyTrimTrackReadout("))
+        #expect(code.components(separatedBy: "if rule.canTrim {").count == 3, "le voile avec son liseré, et les poignées")
+        #expect(code.contains("if let playhead {\n            let shown"), "la tête ne dépend que de `playhead`, jamais de la coupe")
+    }
+
     @Test("le temps ne se met pas en miroir : la piste et le relevé sont forcés de gauche à droite")
     func source_layout_isLeftToRight() throws {
         let code = try Self.code("MeeshyTrimTrack.swift")
@@ -325,6 +333,14 @@ struct MeeshyTrimTrackTests {
             #expect(!code.contains(".blur("))
         }
         #expect(layers.contains(".scaleEffect(x: fraction, y: 1, anchor: anchor)"))
+        #expect(layers.contains(".scaleEffect(x: 1, y: gripHeight / MeeshyTrimTrackRecipe.restGripHeight)"), "la prise grandit par une échelle")
+        #expect(layers.contains(".scaleEffect(x: recipe.playheadWidth / MeeshyTrimTrackRecipe.playheadWidth, y: 1)"), "la tête s'épaissit par une échelle")
+        #expect(!layers.contains(".frame(width: recipe.playheadWidth"), "jamais une largeur animée")
+        #expect(!layers.contains("height: gripHeight)"), "jamais une hauteur animée")
+        #expect(
+            track.contains(".meeshyAnimation(.easeOut(duration: MeeshyTrimTrackRecipe.loupeFade), value: recipe.isPrecise)"),
+            "la loupe et le décor qu'elle efface passent en fondu de 150 ms, rien sous « Réduire les animations »"
+        )
         #expect(layers.contains("let first = Int((max(0, window.lowerBound) * 100).rounded(.up))"))
         for layer in ["VeilLayer", "HandleShape", "HeadShape", "LoupeLayer", "Readout", "PreciseCapsule"] {
             #expect(layers.contains("struct MeeshyTrimTrack\(layer): View, Equatable"), "\(layer)")
@@ -354,9 +370,15 @@ struct MeeshyTrimTrackTests {
 
     @Test("la garde « un seul rogneur » admet `MeeshyTrimTrack` et refuse toute autre piste hors `Composer…`")
     func source_oneTrimTrack_isTheKitOne() throws {
-        let pattern = #"(struct|class)\s+(?!Meeshy|Composer)\w*TrimTrack\w*\s*[:<]"#
-        let ok = ["public struct MeeshyTrimTrack<Content: View>: View {", "struct ComposerTrimTrack: View {"]
-        let ko = ["struct SoundTrimTrack: View {", "struct TrimTrack<Content>: View {"]
+        let pattern = #"(struct|class)\s+(?!MeeshyTrimTrack|ComposerTrimTrack)\w*TrimTrack\w*\s*[:<]"#
+        let ok = [
+            "public struct MeeshyTrimTrack<Content: View>: View {", "struct MeeshyTrimTrackVeilLayer: View, Equatable {",
+            "struct ComposerTrimTrack: View {",
+        ]
+        let ko = [
+            "struct SoundTrimTrack: View {", "struct TrimTrack<Content>: View {",
+            "struct MeeshyAudioTrimTrack: View {", "struct ComposerVideoTrimTrack: View {",
+        ]
         for line in ok { #expect(line.range(of: pattern, options: .regularExpression) == nil, "\(line)") }
         for line in ko { #expect(line.range(of: pattern, options: .regularExpression) != nil, "\(line)") }
     }
