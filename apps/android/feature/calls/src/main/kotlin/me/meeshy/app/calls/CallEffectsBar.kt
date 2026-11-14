@@ -135,7 +135,7 @@ private fun KindPicker(chips: List<CallEffectKind>, selected: CallEffectKind?, o
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .callScrollEdgeFade(scroll, horizontal = true)
+            .callScrollEdgeFade(horizontal = true)
             .horizontalScroll(scroll)
             .padding(horizontal = MeeshySpacing.sm),
     ) {

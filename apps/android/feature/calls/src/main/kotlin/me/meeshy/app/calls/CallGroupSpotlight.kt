@@ -169,7 +169,7 @@ private fun CallGroupFilmstripRow(others: List<GroupCallStageTile>, scope: CallG
     val state = rememberScrollState()
     Row(
         modifier = modifier
-            .callScrollEdgeFade(state, horizontal = true)
+            .callScrollEdgeFade(horizontal = true)
             .horizontalScroll(state)
             .padding(vertical = STRIP_HALO_PAD),
         horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING),
@@ -186,7 +186,7 @@ private fun CallGroupFilmstripColumn(others: List<GroupCallStageTile>, scope: Ca
     val state = rememberScrollState()
     Column(
         modifier = modifier
-            .callScrollEdgeFade(state, horizontal = false)
+            .callScrollEdgeFade(horizontal = false)
             .verticalScroll(state)
             .padding(vertical = STRIP_HALO_PAD),
         verticalArrangement = Arrangement.spacedBy(STAGE_SPACING),
