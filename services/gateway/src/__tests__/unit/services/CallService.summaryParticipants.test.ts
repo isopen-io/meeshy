@@ -20,7 +20,7 @@ jest.mock('../../../services/TURNCredentialService', () => ({
 }));
 
 import { CallService } from '../../../services/CallService';
-import { findManyIn, type MongoDocument } from '../../helpers/mongo-where';
+import { findManyIn, findUniqueIn, type MongoDocument } from '../../helpers/mongo-where';
 
 type AsyncMock = jest.Mock<(args?: unknown) => Promise<unknown>>;
 type Written = { readonly data: { readonly metadata: Record<string, unknown> } };
@@ -80,6 +80,22 @@ const GROUP_OF_THREE = [
 const linesOf = (rows: ReadonlyArray<MongoDocument>) => {
   const { findMany } = findManyIn(rows);
   return (args?: unknown) => findMany(args as Parameters<typeof findMany>[0]);
+};
+
+/** La session telle que MongoDB la garde : `findUnique` la PROJETTE par le `select` de `createCallSummaryMessage`. */
+const sessionDocument = (overrides: MongoDocument = {}): MongoDocument => ({
+  ...session(),
+  bytesSent: null,
+  bytesReceived: null,
+  networkQuality: null,
+  invitedUserIds: [],
+  conversation: { type: 'direct', title: null },
+  ...overrides
+});
+
+const sessionsOf = (rows: ReadonlyArray<MongoDocument>) => {
+  const findUnique = findUniqueIn(rows);
+  return (args?: unknown) => findUnique(args as Parameters<typeof findUnique>[0]);
 };
 
 const LIVE = { id: 'm-live', metadata: { kind: 'call-live', callId: CALL_ID, initiatorId: INITIATOR_USER_ID, callType: 'video', outcome: 'completed' } };
@@ -147,6 +163,33 @@ describe('CallService.createCallSummaryMessage — participants persistés', () 
 
     expect(result?.kind).toBe('created');
     expect('participants' in writtenMetadata(prisma.message.create)).toBe(false);
+  });
+
+  it('#18453 M32 — un DUO dont la marque du destinataire s\'est perdue nomme ses deux bouts : le `select` lit `conversation.type`', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockImplementation(sessionsOf([sessionDocument()]));
+    prisma.callParticipant.findMany.mockImplementation(linesOf([
+      line(INITIATOR_USER_ID, { id: 'line-init', role: 'initiator', answeredAt: ANSWERED_AT }),
+      line('u_karim', { id: 'line-karim', answeredAt: null })
+    ]));
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(writtenMetadata(prisma.message.create).participants).toEqual([{ userId: INITIATOR_USER_ID }, { userId: 'u_karim' }]);
+  });
+
+  it('#18453 M32 — un duo où un tiers a été INVITÉ suit la règle du groupe : le `select` lit `invitedUserIds`', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockImplementation(sessionsOf([sessionDocument({ invitedUserIds: ['u_awa'] })]));
+    prisma.callParticipant.findMany.mockImplementation(linesOf([
+      line(INITIATOR_USER_ID, { id: 'line-init', role: 'initiator', answeredAt: null }),
+      line('u_karim', { id: 'line-karim', answeredAt: null }),
+      line('u_awa', { id: 'line-awa' })
+    ]));
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(writtenMetadata(prisma.message.create).participants).toEqual([{ userId: INITIATOR_USER_ID }, { userId: 'u_awa' }]);
   });
 
   it('la conversion GC d\'un message vivant d\'un appel décroché garde ses participants', async () => {

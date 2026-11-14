@@ -314,8 +314,9 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         let stow = try block("struct CallSelfTileStow: ViewModifier {", until: "\n}\n", in: glass)
         XCTAssertTrue(stow.contains(".scaleEffect(factor, anchor: anchor)"))
         XCTAssertFalse(stow.contains("clipShape"), "L'échelle ne redécoupe pas : ombre et badges restent hors découpe")
-        XCTAssertTrue(stow.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)"),
+        XCTAssertTrue(stow.contains(".animation(CallChromeStow.transform(reduceMotion: reduceMotion), value: isChromeVisible)"),
                       "Réduire les animations : la vignette change de taille sans mouvement")
+        XCTAssertTrue(stow.contains(".opacity(fade.opacity(at: context.date))"), "… et en fondu court, jamais une bascule sèche (loi 17.10, #18207)")
     }
 
     /// G1.9 (loi 15) — contrôles cachés, toucher ma vignette rend d'abord les contrôles ; la

@@ -89,7 +89,13 @@ function aliasNonVersionne(relatif: string) {
  */
 export interface SocketIOAdminManager {
   getStats(): Record<string, unknown>;
-  disconnectUser(userId: string): boolean;
+  /**
+   * Coupe TOUTES les sessions du compte, y compris celles qui vivent sur un
+   * autre nœud — d'où le `Promise` (#18381 suite) : la traversée de
+   * l'adaptateur est asynchrone, et la version synchrone d'avant répondait
+   * `404 « non connecté »` pour un compte parfaitement connecté ailleurs.
+   */
+  disconnectUser(userId: string): Promise<boolean>;
 }
 
 export interface SocketIOAdminRoutesOptions {
@@ -149,7 +155,7 @@ export async function socketIOAdminRoutes(
 
       const manager = options.getManager();
       if (manager) {
-        const disconnected = manager.disconnectUser(userId);
+        const disconnected = await manager.disconnectUser(userId);
         if (disconnected) {
           reply.send({
             success: true,

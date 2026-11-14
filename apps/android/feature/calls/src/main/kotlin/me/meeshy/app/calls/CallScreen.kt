@@ -414,8 +414,13 @@ fun CallScreen(
                 onOpenEffects = { chrome.enter(CallScreenMode.Effects) },
             )
 
-            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
-            if (chromeState.layer.activeMode == CallScreenMode.Effects) {
+            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet. Sa couche
+            // fond à l'entrée et à la sortie, sans monter du bas (P8.14, loi 17, #17819 ; iOS `.transition(.opacity)`).
+            CallModeLayer(
+                visible = chromeState.layer.activeMode == CallScreenMode.Effects,
+                mode = CallScreenMode.Effects,
+                reduceMotion = reduceMotion,
+            ) { _ ->
                 CallEffectsMode(
                     state = state,
                     localTrack = viewModel.localVideoTrack,
@@ -426,6 +431,7 @@ fun CallScreen(
                     onOpenFrames = { chrome.enter(CallScreenMode.Montage) },
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerAvatarUrl = avatarUrl,
+                    active = chromeState.layer.activeMode == CallScreenMode.Effects,
                 )
             }
 

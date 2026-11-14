@@ -68,7 +68,8 @@ describe('un fondu sans durée prend celle de la fiche (#18412)', () => {
 describe('les boutons de l’accueil répondent à l’appui, sans échelle sous réduction (#18412)', () => {
   test('les quatre boutons de l’accueil s’enfoncent à l’appui', () => {
     const css = sheet('onboarding.css');
-    for (const selector of ONBOARDING_PRESSED) expect(css.slice(0, css.indexOf('@media (prefers-reduced-motion: reduce)'))).toContain(selector);
+    const motion = css.slice(0, css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const selector of ONBOARDING_PRESSED) expect(ruleFor(motion, selector)).toContain('transform: scale(0.96)');
   });
 
   test('sous réduction, aucun ne garde d’échelle : le voile de K02 reste', () => {

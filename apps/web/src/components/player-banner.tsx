@@ -231,7 +231,7 @@ function OfferingPiece({ ready, label, offering, language }: { readonly ready: b
       data-player-banner-offering="ready"
       aria-label={label}
       onClick={offering.open}
-      className="pointer-events-auto flex shrink-0 items-center rounded-card px-1 focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="btn-press pointer-events-auto flex shrink-0 items-center rounded-card px-1 focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ minHeight: 24 }}
     >
       <Chest state="closed" size={20} />

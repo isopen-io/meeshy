@@ -271,6 +271,85 @@ describe('relâcher « Cadre » retire le cadre partagé chez les deux (C1.10, #
   });
 });
 
+/**
+ * #18367 — quand l'autre relâche le cadre que nous partageons, le lecteur d'écran le dit poliment
+ * (« Awa a retiré le cadre ») : l'image a changé sans que je touche rien. Mêmes cas que
+ * `CallLiveFrameSessionTests` d'iOS (#18415) : rien quand c'est moi qui relâche, ni quand le retrait
+ * ne touche pas mon cadre.
+ */
+describe('le retrait de l’autre s’annonce (#18367)', () => {
+  test('Awa relâche le cadre qu’elle m’avait proposé et que j’ai appliqué : l’annonce porte son prénom', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    expect(h.state().peerReleased).toBeNull();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    expect(h.state().peerReleased).toEqual({ from: 'Awa' });
+  });
+
+  test('Awa relâche mon cadre qu’elle avait appliqué : l’annonce part aussi', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'accepted' }));
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    expect(h.state().peerReleased).toEqual({ from: 'Awa' });
+  });
+
+  test('accepté d’office (nous avions choisi le même cadre) puis relâché : annoncé', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.settle();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    expect(h.state().frameId).toBeNull();
+    expect(h.state().peerReleased).toEqual({ from: 'Awa' });
+  });
+
+  test('sans prénom partagé, l’annonce est anonyme', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ texts: undefined }));
+    await h.frame.accept();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    expect(h.state().peerReleased).toEqual({ from: null });
+  });
+
+  test('c’est moi qui relâche : rien n’est annoncé', async () => {
+    const h = harness();
+    await h.frame.apply('jovial.confettis');
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ reply: 'accepted' }));
+    await h.frame.apply(null);
+    expect(h.state().peerReleased).toBeNull();
+  });
+
+  test('une proposition retirée, ou un autre cadre gardé depuis : rien n’est annoncé', async () => {
+    const pending = harness();
+    await pending.frame.apply('signature.trait');
+    pending.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    pending.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    expect(pending.state().peerReleased).toBeNull();
+    const moved = harness();
+    moved.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await moved.frame.accept();
+    await moved.frame.apply('signature.trait');
+    moved.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    expect(moved.state().peerReleased).toBeNull();
+  });
+
+  test('l’annonce s’efface au geste suivant : un second retrait se redit', async () => {
+    const h = harness();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    expect(h.state().peerReleased).toBeNull();
+    await h.frame.accept();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null, texts: undefined }));
+    expect(h.state().peerReleased).toEqual({ from: 'Awa' });
+    await h.frame.apply('signature.trait');
+    expect(h.state().peerReleased).toBeNull();
+  });
+});
+
 describe('la proposition de l’autre (C2)', () => {
   test('elle se pose sans toucher à mon cadre, avec le prénom qu’il partage', async () => {
     const h = harness();

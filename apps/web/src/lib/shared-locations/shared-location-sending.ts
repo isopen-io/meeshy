@@ -16,7 +16,8 @@ import {
  */
 
 export type SharedLocationFix = { readonly latitude: number; readonly longitude: number; readonly accuracy?: number };
-export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
+/** `expiresInSeconds` : l'échéance de la personne quand elle tombe avant le terme du partage — la passerelle la tient (#18205). */
+export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision; readonly expiresInSeconds?: number };
 export type SharedLocationStartPayload = {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
@@ -56,10 +57,19 @@ export function sharedLocationStartPayloadOf({
   readonly durationMinutes: SharedLocationDurationMinutes;
   readonly fix: SharedLocationFix;
 }): SharedLocationStartPayload | null {
-  const latest = new Map(recipients.filter((r) => OBJECT_ID.test(r.userId)).map((r) => [r.userId.toLowerCase(), r.precision] as const));
-  const ordered = [...latest.entries()].map(([userId, precision]) => ({ userId, precision }));
+  const latest = new Map(recipients.filter((r) => OBJECT_ID.test(r.userId)).map((r) => [r.userId.toLowerCase(), r] as const));
+  const ordered = [...latest.entries()].map(([userId, { precision, expiresInSeconds }]) => ({ userId, precision, ...(expiresInSeconds === undefined ? {} : { expiresInSeconds }) }));
   if (ordered.length === 0 || ordered.length > SHARED_LOCATION_RECIPIENTS_MAX) return null;
   return { recipients: ordered, durationMinutes, position: fix };
+}
+
+/**
+ * La même charge sans les échéances par personne, pour une passerelle d'avant #18205 qui refuse la clé (`INVALID`) ;
+ * `null` quand il n'y en avait aucune : un refus n'a alors rien à voir avec elles.
+ */
+export function sharedLocationPayloadWithoutDeadlines(payload: SharedLocationStartPayload): SharedLocationStartPayload | null {
+  if (!payload.recipients.some((recipient) => recipient.expiresInSeconds !== undefined)) return null;
+  return { ...payload, recipients: payload.recipients.map(({ userId, precision }) => ({ userId, precision })) };
 }
 
 const REFUSALS: Readonly<Record<string, SharedLocationSendOutcome>> = {

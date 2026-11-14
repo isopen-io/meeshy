@@ -232,8 +232,8 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertTrue(glass.contains("struct CallSelfTilePlacement: ViewModifier {"))
         XCTAssertTrue(glass.contains(".position(position)"))
         XCTAssertTrue(
-            glass.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: clearance)"),
-            "elle glisse avec la pile, pour chaque bandeau ; Réduire les animations : elle se pose sans mouvement"
+            glass.contains(".animation(nil, value: clearance)") && glass.contains("clock.following(from: old.position, to: new.position, at: Date(), reduceMotion: reduceMotion)"),
+            "elle glisse avec la pile, pour chaque bandeau, par une translation (loi 17.2) ; Réduire les animations : un fondu court (#18207)"
         )
     }
 

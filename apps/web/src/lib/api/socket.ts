@@ -456,7 +456,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   /** `attachment:reaction-added|removed` (#7894) — le résumé ABSOLU d'une pièce ; la règle vit dans `realtime-attachment-reactions.ts`. */
   const onAttachmentReactionChanged = (payload: unknown): void => {
     if (!isAttachmentReactionUpdate(payload)) return;
-    applyAttachmentReactionUpdate(deps.queryClient, payload);
+    applyAttachmentReactionUpdate(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `attachment:deleted` (#13611) — une pièce retirée par un membre quitte le fil, l'écran des médias et la ligne de liste. Règle : `realtime-attachment-deleted.ts`. */

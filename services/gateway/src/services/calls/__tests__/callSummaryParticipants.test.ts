@@ -39,6 +39,7 @@ type Line = {
 const row = (userId: string | null, line: Line = {}, order = 0): MongoDocument => {
   const { answeredAt, ...rest } = { role: 'participant' as const, answeredAt: null, leftAt: null, ...line };
   return {
+    id: `line-${userId ?? 'sans-compte'}-${order}`,
     callSessionId: CALL,
     joinedAt: new Date(RING.getTime() + order),
     ...rest,
@@ -147,7 +148,34 @@ describe('resolveCallSummaryParticipantIds — seuls ceux qui ont DÉCROCHÉ', (
     const { prisma } = prismaWith([initiator(), row('u_karim', {}, 1), row('u_awa', { answeredAt: undefined }, 2)]);
 
     expect(await resolveCallSummaryParticipantIds(prisma, groupCall)).toEqual(['u_moi']);
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringMatching(/answered call has no answered participant/i), expect.objectContaining({ callId: CALL }));
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringMatching(/answered call has a participant without an answer mark/i), expect.objectContaining({ callId: CALL }));
+  });
+
+  it('#18453 — un appel de groupe suivi et décroché normalement (Karim a sonné, Awa a décroché) n\'alerte pas', async () => {
+    const { prisma } = prismaWith([initiator({ answeredAt: ANSWER }), row('u_karim', {}, 1), row('u_awa', { answeredAt: ANSWER }, 2)]);
+
+    expect(await resolveCallSummaryParticipantIds(prisma, groupCall)).toEqual(['u_moi', 'u_awa']);
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it('#18453 — lignes MIXTES (une ligne d\'avant le champ dans un appel suivi) : la ligne sans la clé sort de la liste, et l\'alerte le dit', async () => {
+    const { prisma } = prismaWith([initiator({ answeredAt: ANSWER }), row('u_karim', { answeredAt: undefined }, 1), row('u_awa', { answeredAt: ANSWER }, 2)]);
+
+    expect(await resolveCallSummaryParticipantIds(prisma, groupCall)).toEqual(['u_moi', 'u_awa']);
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringMatching(/answered call has a participant without an answer mark/i),
+      expect.objectContaining({ callId: CALL, missing: ['lines-without-answer-key'] })
+    );
+  });
+
+  it('#18453 — un duo devenu groupe (Awa invitée, jamais venue) puis revenu à deux : Karim seul a pu décrocher, sa marque manque, l\'alerte le dit même si l\'initiateur est marqué', async () => {
+    const { prisma } = prismaWith([initiator({ answeredAt: ANSWER }), row('u_karim', {}, 1)]);
+
+    expect(await resolveCallSummaryParticipantIds(prisma, { ...duoCall, invitedUserIds: ['u_awa'] })).toEqual(['u_moi']);
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringMatching(/answered call has a participant without an answer mark/i),
+      expect.objectContaining({ callId: CALL, duo: false, missing: ['no-answerer-marked'] })
+    );
   });
 
   it('écarte une ligne sans compte, une ligne orpheline et le second appareil d\'un même compte', async () => {

@@ -72,6 +72,34 @@ class CallServicePillsGuardTest {
         assertThat(code("CallScreen.kt")).doesNotContain("CallVideoNoticePill(")
     }
 
+    /**
+     * #18398 (loi 11, #17961 point 5) — au premier toucher, les deux pastilles sortent par le haut AVEC les bannières et
+     * reviennent au second, par le chemin de la puce de capture (#18376) : [CallChromeFade] lit l'élément partagé
+     * `CallChromeElement.ServicePill` (iOS `.servicePill`, #18396) ; « Réduire les animations » ⇒ fondu seul ; sous TalkBack,
+     * la visibilité ne bascule jamais. Le fondu enveloppe la pastille, sous [CallBannerPresence] qui garde son entrée et sa
+     * sortie, et la mesure de hauteur de la pile reste sur la pastille.
+     */
+    @Test
+    fun `#18398 - En attente et Video reduite se rangent au premier toucher avec les bannieres`() {
+        val hold = code("CallHoldOverlay.kt")
+        val fade = block(hold, "internal fun CallServicePillFade(", "\n}")
+        assertThat(fade).contains("CallChromeFade(")
+        assertThat(fade).contains("isVisible = context.chrome.isVisible(CallChromeElement.ServicePill)")
+        assertThat(fade).contains("onRevive = context.onChromeRevive")
+        assertThat(fade).contains("stowsToward = CallVerticalEdge.Top")
+        assertThat(fade).contains("edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp")
+
+        val overlays = mapOf(
+            "CallHoldBadge(" to block(hold, "class CallHoldOverlay", "\n}"),
+            "CallVideoNoticePill(" to block(code("CallVideoNoticePill.kt"), "class CallVideoNoticeOverlay", "@Module"),
+        )
+        overlays.forEach { (pill, overlay) ->
+            assertWithMessage(pill).that(overlay).contains("CallServicePillFade(context) {")
+            assertWithMessage(pill).that(overlay.indexOf("CallBannerPresence(")).isLessThan(overlay.indexOf("CallServicePillFade("))
+            assertWithMessage(pill).that(overlay.indexOf("CallServicePillFade(")).isLessThan(overlay.indexOf(pill))
+        }
+    }
+
     @Test
     fun `#18227 - le declenchement des deux pastilles est la loi pure, lue en un seul site`() {
         val hold = code("CallHoldOverlay.kt")
