@@ -108,11 +108,9 @@ struct KeypadTab: View {
                 title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouvé", bundle: .main)
             )
         default:
-            // Idle / too-short / error: prompt without falsely claiming a
-            // completed search found nothing.
-            hintMessage(
-                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numéro ou un nom", bundle: .main)
-            )
+            // Idle / too-short / error: nothing under the field — its placeholder
+            // is the prompt, and no search is claimed to have come back empty.
+            EmptyView()
         }
     }
 

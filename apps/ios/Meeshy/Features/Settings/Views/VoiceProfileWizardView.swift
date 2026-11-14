@@ -14,6 +14,7 @@ struct VoiceProfileWizardView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = VoiceProfileWizardViewModel()
+    @State private var openNoteID: String?
 
     var body: some View {
         ZStack {
@@ -265,15 +266,11 @@ struct VoiceProfileWizardView: View {
             VStack(spacing: MeeshySpacing.xl) {
                 Spacer().frame(height: 16)
 
-                Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
-
-                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les phrases affichées, sans forcer le ton.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(theme.textSecondary)
-                    .padding(.horizontal, MeeshySpacing.xxl)
+                MeeshyInfoNoted(note: VoiceProfileWizardWording.recordingNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                    Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
+                }
 
                 VoiceRecordingView(
                     accentColor: accentColor,
@@ -407,5 +404,16 @@ struct VoiceProfileWizardView: View {
                 .foregroundStyle(theme.textPrimary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Les phrases de l'étape d'enregistrement. La consigne de lecture est portée par la carte du kit
+/// (« Lisez ce texte à voix haute ») ; le conseil de ton passe derrière un (i) (#18088).
+enum VoiceProfileWizardWording {
+    static var recordingNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "voice.profile.wizard.recording.question", defaultValue: "Comment dois-je parler ?", bundle: .main),
+            text: String(localized: "voice.profile.wizard.recording.description", defaultValue: "Parlez naturellement, sans forcer le ton.", bundle: .main)
+        )
     }
 }

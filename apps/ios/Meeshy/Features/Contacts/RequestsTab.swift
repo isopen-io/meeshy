@@ -244,7 +244,7 @@ struct RequestsTab: View {
                         .foregroundStyle(theme.textMuted)
                 }
 
-                levelCaption(for: request, key: String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main))
+                levelCaption(for: request, key: String(localized: "circles.requests.outgoing", defaultValue: "Niveau %@", bundle: .main))
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))

@@ -8093,43 +8093,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "قيد الانتظار · %@"
+            "value": "المستوى %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wartet · %@"
+            "value": "Stufe %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Waiting · %@"
+            "value": "Level %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En espera · %@"
+            "value": "Nivel %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En attente · %@"
+            "value": "Niveau %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "In attesa · %@"
+            "value": "Livello %@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aguardando · %@"
+            "value": "Nível %@"
           }
         }
       }
@@ -138102,53 +138102,6 @@
         }
       }
     },
-    "keypad.prompt.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اطلب رقمًا أو اسمًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nummer oder Namen wählen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dial a number or name"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Marca un número o un nombre"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Composez un numéro ou un nom"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Componi un numero o un nome"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Digite um número ou nome"
-          }
-        }
-      }
-    },
     "keypad.result.open-profile.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -159834,6 +159787,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Erro ao salvar"
+          }
+        }
+      }
+    },
+    "profile.save.queued": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الحفظ، وسيُرسل عند عودة الشبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeichert, Versand bei Netzverbindung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved, will send when back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado, se enviará al volver la red"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistré, envoi au retour du réseau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvato, invio al ritorno della rete"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvo, envio quando a rede voltar"
           }
         }
       }
@@ -213770,43 +213770,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اقرأ بصوت عالٍ الجمل المعروضة، دون تكلّف."
+            "value": "تحدّث بشكل طبيعي دون تكلّف في النبرة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lies die angezeigten Sätze laut vor, ganz natürlich."
+            "value": "Sprich natürlich, ohne den Ton zu verstellen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Read the sentences shown aloud, in your natural tone."
+            "value": "Speak naturally, without forcing your tone."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lee en voz alta las frases mostradas, con tono natural."
+            "value": "Habla con naturalidad, sin forzar el tono."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lisez à voix haute les phrases affichées, sans forcer le ton."
+            "value": "Parlez naturellement, sans forcer le ton."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leggi ad alta voce le frasi mostrate, con tono naturale."
+            "value": "Parla in modo naturale, senza forzare il tono."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leia em voz alta as frases exibidas, em tom natural."
+            "value": "Fale naturalmente, sem forçar o tom."
+          }
+        }
+      }
+    },
+    "voice.profile.wizard.recording.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف يجب أن أتحدث؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie soll ich sprechen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How should I speak?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo debo hablar?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment dois-je parler ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come devo parlare?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como devo falar?"
           }
         }
       }

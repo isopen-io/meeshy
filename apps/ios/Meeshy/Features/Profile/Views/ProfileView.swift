@@ -824,8 +824,9 @@ struct ProfileView: View {
             )
             Task { await SettingsActionQueue.shared.enqueue(action) }
             FeedbackToastManager.shared.showSuccess(String(
-                localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
-
+                localized: "profile.save.queued",
+                defaultValue: "Enregistré, envoi au retour du réseau",
+                bundle: .main
             ))
         } catch {
             // Encoding failure means nothing was queued — the optimistic
