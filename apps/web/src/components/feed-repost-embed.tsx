@@ -139,7 +139,7 @@ export function FeedRepostEmbed({ repost, openOrigin = null }: { readonly repost
         style={{ color: 'var(--color-ios-ink-3)' }}
       >
         <GlyphSvg glyph={FEED_GLYPHS.heartFill} size={12} title={translate(language, 'feed.post.action.like')} />
-        {repost.likeCount}
+        {repost.likeCount > 0 ? repost.likeCount : null}
       </span>
     </div>
   );

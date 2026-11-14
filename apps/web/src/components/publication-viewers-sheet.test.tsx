@@ -183,6 +183,12 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(host.textContent).toContain('Aucune vue pour le moment');
     expect(host.textContent).not.toContain('apparaîtront ici');
   });
+
+  test('#18446 — compte nul ⇒ le titre est « Vues », jamais « 0 vues »', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 0 });
+    expect(host.querySelector('h2')?.textContent).toBe('Vues');
+    expect(host.textContent).not.toContain('0 vues');
+  });
 });
 
 describe('PublicationViewersSheet — « et N visiteurs » (#10483)', () => {
