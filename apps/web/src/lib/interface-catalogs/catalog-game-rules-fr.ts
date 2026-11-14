@@ -1,9 +1,9 @@
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Le français est la SOURCE des clés ; les six autres langues portent exactement les mêmes. */
 const fr = {
   'game.rules.1.title': 'Chaque geste fait jaillir des étincelles',
-  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.',
+  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles.',
   'game.rules.2.title': 'Les étincelles forment ta lumière',
-  'game.rules.2.body': 'Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.',
+  'game.rules.2.body': 'Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100.',
   'game.rules.3.title': 'On frappe des Meeshes',
   'game.rules.3.body': 'Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.',
   'game.rules.4.title': 'Frapper fige ta lumière',

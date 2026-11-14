@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const pt = {
   'game.rules.1.title': 'Cada gesto faz saltar faíscas',
-  'game.rules.1.body': 'Escrever, falar, publicar, reagir, convidar: cada troca de verdade faz saltar faíscas. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto.',
+  'game.rules.1.body': 'Escrever, falar, publicar, reagir, convidar. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas.',
   'game.rules.2.title': 'As faíscas formam a sua luz',
-  'game.rules.2.body': 'Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela: um milhão de faíscas para o nível 100. Uma cunhagem cristaliza uma parte dela, então o faz baixar.',
+  'game.rules.2.body': 'Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela: um milhão de faíscas para o nível 100.',
   'game.rules.3.title': 'Cunham-se Meeshes',
   'game.rules.3.body': 'Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens.',
   'game.rules.4.title': 'Cunhar cristaliza a sua luz',

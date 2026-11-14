@@ -11,7 +11,7 @@ import { GameShowcase } from '@/components/game-showcase';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { startMoment } from '@/lib/game-photo/moments';
+import { achievementMoment } from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -93,7 +93,7 @@ describe('rien n’est dit deux fois', () => {
       <GameShowcase trophies={trophies} visibility="friends" online savingOrder={false} savingVisibility={false} errors={{}} onOrder={() => undefined} onVisibility={() => undefined} />,
     );
     const head = visibleText(host.querySelector('#game-showcase') as Element);
-    expect(head).not.toContain('trophées');
+    expect(head).not.toMatch(/\d+ trophées/);
     expect(host.querySelector('#game-showcase-title')?.className).toContain('sr-only');
     expect(host.querySelector('#game-showcase-title')?.textContent).toContain('3 trophées');
   });
@@ -132,7 +132,7 @@ describe('le carnet : la Chronique se dit, les cartes ne se répètent pas', () 
   });
 
   test('un moment en attente garde son bouton d’action, nommé de même', async () => {
-    const moment = startMoment();
+    const moment = achievementMoment('achievement.first_voice');
     const pending: NotebookEntry = {
       id: moment.id,
       momentId: moment.id,
@@ -184,7 +184,7 @@ describe('les verrous : une ligne d’état et une jauge sans légende', () => {
     const host = await mount(
       <GameLeague
         league={league}
-        levelRecord={11}
+        levelRecord={4}
         week={{ status: 'loading' }}
         online
         now={new Date('2026-11-05T14:00:00')}
@@ -197,7 +197,7 @@ describe('les verrous : une ligne d’état et une jauge sans légende', () => {
     );
     const shown = visibleText(host);
     expect(shown).not.toContain('Tu es au niveau');
-    expect(shown).toContain('11 / 20');
+    expect(shown).toContain('4 / 10');
     expect(host.querySelector('#game-league-locked-title')?.className).toContain('sr-only');
   });
 });

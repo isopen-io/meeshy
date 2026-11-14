@@ -127,7 +127,7 @@ describe('les trois autres accès', () => {
     expect(html).toContain('Au plus haut 7');
     expect(html).toContain('Requis 10');
     expect(html).not.toContain('Il manque');
-    expect(html).toContain('Tu es au niveau 7');
+    expect(html).not.toContain('Tu es au niveau');
   });
 
   test('fermée aux mineurs : la ligue entre amis, elle, reste ouverte', () => {

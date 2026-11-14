@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const en = {
   'game.rules.1.title': 'Every move makes sparks fly',
-  'game.rules.1.body': 'Writing, talking, posting, reacting, inviting: every real exchange makes sparks fly. A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move.',
+  'game.rules.1.body': 'Writing, talking, posting, reacting, inviting. A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks.',
   'game.rules.2.title': 'Sparks form your light',
-  'game.rules.2.body': 'Together, your sparks form your light, and your level is read from it: a million sparks for level 100. A mint binds part of it, so it lowers your level.',
+  'game.rules.2.body': 'Together, your sparks form your light, and your level is read from it: a million sparks for level 100.',
   'game.rules.3.title': 'We mint Meeshes',
   'game.rules.3.body': 'A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.',
   'game.rules.4.title': 'Minting binds your light',

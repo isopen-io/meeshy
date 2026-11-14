@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const es = {
   'game.rules.1.title': 'Cada gesto hace brotar chispas',
-  'game.rules.1.body': 'Escribir, hablar, publicar, reaccionar, invitar: cada intercambio de verdad hace brotar chispas. Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas: los impulsos, la Llama y los eventos hacen brotar más en cada gesto.',
+  'game.rules.1.body': 'Escribir, hablar, publicar, reaccionar, invitar. Una publicación las hace brotar según quién puede verla: público, comunidad o amigos. Los límites se aplican a tus gestos, nunca a tus chispas.',
   'game.rules.2.title': 'Las chispas forman tu luz',
-  'game.rules.2.body': 'Juntas, tus chispas forman tu luz, y tu nivel se lee en ella: un millón de chispas para el nivel 100. Acuñar fija una parte, así que lo hace bajar.',
+  'game.rules.2.body': 'Juntas, tus chispas forman tu luz, y tu nivel se lee en ella: un millón de chispas para el nivel 100.',
   'game.rules.3.title': 'Se acuñan Meeshes',
   'game.rules.3.body': 'Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.',
   'game.rules.4.title': 'Acuñar fija tu luz',

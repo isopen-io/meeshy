@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const it = {
   'game.rules.1.title': 'Ogni gesto fa scaturire scintille',
-  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni vero scambio fa scaturire scintille. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici. I limiti riguardano i tuoi gesti, mai le tue scintille: slanci, Fiamma ed eventi ne fanno scaturire di più a ogni gesto.',
+  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici. I limiti riguardano i tuoi gesti, mai le tue scintille.',
   'game.rules.2.title': 'Le scintille formano la tua luce',
-  'game.rules.2.body': 'Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei: un milione di scintille per il livello 100. Un conio ne fissa una parte, quindi lo fa scendere.',
+  'game.rules.2.body': 'Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei: un milione di scintille per il livello 100.',
   'game.rules.3.title': 'Si coniano Meesh',
   'game.rules.3.body': 'Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni.',
   'game.rules.4.title': 'Coniare fissa la tua luce',

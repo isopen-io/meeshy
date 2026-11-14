@@ -16,7 +16,6 @@ import { GameMedal } from '@/components/game/medal';
 import { GameRarityLine } from '@/components/game-rarity';
 import { GameTouch } from '@/components/game-touch';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
-import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { medalOfAxis } from '@/lib/game/medal';
@@ -156,7 +155,6 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
           tier={medal.tier}
           progress={medal.progress}
           {...(medal.threshold === null ? {} : { threshold: String(medal.threshold) })}
-          {...(medal.missing === null ? {} : { missing: `−${medal.missing}` })}
           {...(medalLabel === undefined ? {} : { label: medalLabel })}
         />
       </span>
@@ -192,16 +190,15 @@ export function AchievementsSection({
   /** La révélation d'un succès se photographie (#7742) ; absent : aucun bouton. */
   onPhoto?: (key: EngagementAchievementKey) => void;
 }) {
-  const unlocked = progress.achievements.filter((a) => a.unlocked).length;
   return (
     <section aria-labelledby="progression-achievements" className="flex flex-col gap-2">
-      <SectionTitle
-        id="progression-achievements"
-        glyph={GLYPHS.trophy}
-        title={gameText('game.concept.succes.name')}
-        tint={UNLOCKED_TINT}
-        trailing={`${unlocked} / ${progress.achievements.length}`}
-      />
+      {/* Le nom et le compteur sont ceux de l'en-tête de page : le titre de la section reste pour le lecteur d'écran, la phrase dit ce qu'est un haut fait (règles 2 et 7). */}
+      <h2 id="progression-achievements" className="sr-only">
+        {gameText('game.concept.succes.name')}
+      </h2>
+      <p className="px-1 text-caption" style={{ color: INK_2 }}>
+        {gameText('game.succes.intro')}
+      </p>
       <Card tint={UNLOCKED_TINT} className="py-1">
         <ul className="divide-y" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }}>
           {progress.achievements.map((achievement) => {
@@ -287,12 +284,13 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
   if (sections.length === 0) return null;
   return (
     <section aria-labelledby="progression-generated" className="flex flex-col gap-4">
-      <SectionTitle
-        id="progression-generated"
-        glyph={PROGRESSION_GLYPHS.medal}
-        title={gameText('game.concept.defis.name')}
-        tint={BRAND}
-      />
+      {/* Le titre « Défis » est celui de l'en-tête de page : ici il ne reste que pour le lecteur d'écran, la phrase dit ce qu'est un défi (règles 2 et 7). */}
+      <h2 id="progression-generated" className="sr-only">
+        {gameText('game.concept.defis.name')}
+      </h2>
+      <p className="px-1 text-caption" style={{ color: INK_2 }}>
+        {gameText('game.defis.intro')}
+      </p>
       {sections.map((vue) => (
         <div key={vue.section} className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">

@@ -167,12 +167,12 @@ export function GameSettings(props: GameSettingsProps) {
 
       <GameCard id="game-settings-hidden" labelledBy="game-settings-hidden-title">
         <BlockTitle block="hidden" note={notes.hidden}>
-          {gameText('game.settings.hidden.title')}
+          {gameText('game.settings.hidden.section')}
         </BlockTitle>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.hidden.body')}
         </p>
-        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.switch')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
+        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.row')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
         {online ? null : (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.offline.action')}

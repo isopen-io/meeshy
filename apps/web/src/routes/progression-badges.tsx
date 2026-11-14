@@ -31,6 +31,9 @@ export function BadgesBody({ progress }: { readonly progress: EngagementProgress
   const groups = badgeGuidesByFamily(progress.axes.map(badgeGuideOfProgress));
   return (
     <>
+      <p className="px-1 text-caption" style={{ color: INK_2 }}>
+        {gameText('game.badges.intro')}
+      </p>
       <Link
         to={BADGES_GUIDE_LINK.to}
         search={BADGES_GUIDE_LINK.search}

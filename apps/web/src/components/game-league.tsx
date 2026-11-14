@@ -134,11 +134,11 @@ export type GameLeagueProps = {
 function LockedCard({ levelRecord }: { readonly levelRecord: number }) {
   return (
     <GameCard id="game-league-locked" labelledBy="game-league-locked-title">
-      <h2 id="game-league-locked-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+      <h2 id="game-league-locked-title" className="sr-only">
         {gameText('game.league.title')}
       </h2>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(levelRecord) })}
+        {gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL) })}
       </p>
       <GameRequirementLine concept="league" current={levelRecord} required={LEAGUE_MIN_LEVEL} record />
     </GameCard>

@@ -177,7 +177,7 @@ function league(view: EngagementWithGame): ConceptState | null {
   const served = game?.league;
   if (game === undefined || served === undefined) return null;
   if (served.access === 'locked') {
-    return said(gameText('game.league.locked', { level: count(LEAGUE_MIN_LEVEL), current: count(shownLevelOf(game.level).level) }), 'league_unlock_level', 'level');
+    return said(gameText('game.league.locked', { level: count(LEAGUE_MIN_LEVEL) }), 'league_unlock_level', 'level');
   }
   const current = served.current;
   if (served.access !== 'open' || current === null) return said(gameText('game.state.league.unplaced'), 'league');

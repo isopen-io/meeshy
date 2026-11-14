@@ -171,15 +171,16 @@ describe('l’Atlas, la vitrine, le voyage et la joute ne disent rien deux fois'
     expect(noteOf(host, infoButton(host, 'Que garde le jeu de mes échanges ?')).textContent).toContain('jamais l’interlocuteur ni la conversation');
   });
 
-  test('Vitrine : l’en-tête dit « 3 trophées » sans répéter « Tes trophées » ; la date exacte est derrière un (i)', async () => {
+  test('Vitrine : la carte ne redit ni « Tes trophées » ni « 3 trophées » (l’en-tête de page les porte) ; la date exacte est derrière un (i)', async () => {
     const trophies = game.trophies;
     if (trophies === undefined) throw new Error('la fixture porte les trophées');
     const host = await mount(
       <GameShowcase trophies={trophies} visibility="friends" online savingOrder={false} savingVisibility={false} errors={{}} onOrder={() => undefined} onVisibility={() => undefined} />,
     );
     const head = visibleText(host.querySelector('#game-showcase') as Element);
-    expect(head).toContain('3 trophées');
+    expect(head).not.toMatch(/\d+ trophées/);
     expect(head).not.toContain('Tes trophées');
+    expect(host.querySelector('#game-showcase-title')?.className).toContain('sr-only');
     expect(host.querySelector('#game-showcase-visibility legend')?.className).toContain('sr-only');
     expect(visibleText(host.querySelector('#game-showcase-visibility') as Element)).not.toContain('jamais la date exacte');
     expect(noteOf(host, infoButton(host, 'Un visiteur voit-il la date exacte ?')).textContent).toContain('jamais la date exacte');

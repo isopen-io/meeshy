@@ -201,11 +201,19 @@ export type GameRequirementLineProps = {
 
 export function GameRequirementLine({ concept, current, required, record = false }: GameRequirementLineProps) {
   const requirement = requirementPreview({ current, required });
-  const chips: readonly GameFactChip[] = [
-    record
-      ? { fact: 'level_record', label: gameText('game.fact.record'), value: formatCount(requirement.current) }
-      : { fact: 'level_now', label: gameText('game.mint.row.level'), value: formatCount(requirement.current) },
-    { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) },
-  ];
-  return <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />;
+  const reached = { fact: record ? 'level_record' : 'level_now', label: record ? gameText('game.fact.record') : gameText('game.mint.row.level'), value: formatCount(requirement.current) } as const;
+  const needed = { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) } as const;
+  return (
+    <div data-game-requirement="" className="flex items-center gap-1.5">
+      <GameTouch
+        detail={factDetail(concept, needed.fact, needed.label, needed.value)}
+        className="flex min-h-[44px] items-center rounded-chip px-2.5 py-1 text-check font-bold"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: GAME_INK }}
+      >
+        <span className="sr-only">{reached.label} </span>
+        {reached.value} / <span className="sr-only">{needed.label} </span>
+        {needed.value}
+      </GameTouch>
+    </div>
+  );
 }

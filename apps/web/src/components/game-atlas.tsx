@@ -47,9 +47,6 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
         <h2 id="game-atlas-title" className="sr-only">
           {gameText('game.atlas.title')}
         </h2>
-        <p className="text-body font-semibold" style={{ color: GAME_INK }}>
-          {gameText('game.atlas.count', { stamped: formatCount(atlas.stamped), total: formatCount(atlas.total) })}
-        </p>
         <div
           role="progressbar"
           aria-valuemin={0}

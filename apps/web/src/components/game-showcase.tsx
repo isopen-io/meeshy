@@ -102,7 +102,7 @@ export function GameShowcase(props: GameShowcaseProps) {
   return (
     <>
       <GameCard id="game-showcase" labelledBy="game-showcase-title">
-        <h2 id="game-showcase-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <h2 id="game-showcase-title" className="sr-only">
           {translateGamePlural(language, 'game.door.showcase.count', entries.length)}
         </h2>
         {entries.length === 0 ? (

@@ -8,6 +8,8 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/ap
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { GameBird } from '@/components/game';
+import { GlyphSvg } from '@/components/glyph';
+import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { appPhotoAlerts } from '@/lib/game-photo/app-alerts';
@@ -164,6 +166,10 @@ function KeptEntry({ entry, env, onRemoved, onRetake }: { readonly entry: Notebo
   );
 }
 
+/** Un seul geste nominal par carte : l'appareil photo, nommé « Photographier — titre » pour le lecteur d'écran. */
+const TAKE_CLASS = 'grid size-11 shrink-0 place-items-center rounded-chip';
+const TAKE_STYLE = { color: 'var(--color-ios-surface)', backgroundColor: GAME_BRAND } as const;
+
 function PendingEntry({ entry, onTake }: { readonly entry: NotebookEntry; readonly onTake: (moment: PhotoMoment) => void }) {
   const { kicker, title } = momentOf(entry);
   return (
@@ -182,11 +188,12 @@ function PendingEntry({ entry, onTake }: { readonly entry: NotebookEntry; readon
       <button
         type="button"
         data-carnet-take=""
+        aria-label={`${gameText('game.photo.offer.start')} — ${title}`}
         onClick={() => onTake(momentOf(entry))}
-        className="shrink-0 rounded-chip px-3 text-check font-semibold"
-        style={{ minHeight: 44, color: 'var(--color-ios-surface)', backgroundColor: GAME_BRAND }}
+        className={TAKE_CLASS}
+        style={TAKE_STYLE}
       >
-        {gameText('game.photo.offer.start')}
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.camera} size={18} />
       </button>
     </li>
   );
@@ -211,7 +218,7 @@ function LockGlyph() {
   );
 }
 
-function CatchUpEntry({ entry, firstTitle, onTake }: { readonly entry: CatchUpMoment; readonly firstTitle: string | null; readonly onTake: (moment: PhotoMoment) => void }) {
+function CatchUpEntry({ entry, firstTitle, groupLabel, onTake }: { readonly entry: CatchUpMoment; readonly firstTitle: string | null; readonly groupLabel: string; readonly onTake: (moment: PhotoMoment) => void }) {
   const { id, kicker, title } = entry.moment;
   if (entry.state === 'locked') {
     const first = firstTitle ?? '';
@@ -236,9 +243,11 @@ function CatchUpEntry({ entry, firstTitle, onTake }: { readonly entry: CatchUpMo
   return (
     <li data-carnet-catch-up={id} className="flex items-center gap-3 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-          {kicker}
-        </p>
+        {kicker === groupLabel ? null : (
+          <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
+            {kicker}
+          </p>
+        )}
         <p className="text-body font-bold" style={{ color: GAME_INK }}>
           {title}
         </p>
@@ -246,11 +255,12 @@ function CatchUpEntry({ entry, firstTitle, onTake }: { readonly entry: CatchUpMo
       <button
         type="button"
         data-carnet-catch-up-take=""
+        aria-label={`${gameText('game.photo.offer.start')} — ${title}`}
         onClick={() => onTake(entry.moment)}
-        className="shrink-0 rounded-chip px-3 text-check font-semibold"
-        style={{ minHeight: 44, color: 'var(--color-ios-surface)', backgroundColor: GAME_BRAND }}
+        className={TAKE_CLASS}
+        style={TAKE_STYLE}
       >
-        {gameText('game.photo.offer.start')}
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.camera} size={18} />
       </button>
     </li>
   );
@@ -271,7 +281,7 @@ function CatchUpSection({ entries, onTake }: { readonly entries: readonly CatchU
           </h3>
           <ul className="flex flex-col gap-2">
             {items.map((entry) => (
-              <CatchUpEntry key={entry.moment.id} entry={entry} firstTitle={entry.blockedBy === null ? null : (titles.get(entry.blockedBy) ?? null)} onTake={onTake} />
+              <CatchUpEntry key={entry.moment.id} entry={entry} groupLabel={gameText(TRACK_LABEL[track])} firstTitle={entry.blockedBy === null ? null : (titles.get(entry.blockedBy) ?? null)} onTake={onTake} />
             ))}
           </ul>
         </div>
@@ -324,6 +334,10 @@ export function CarnetBody({
 
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
+      <p className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.notebook.intro')}
+      </p>
+
       {legacy === 'quarantined' ? (
         <section data-carnet-legacy="" className="flex flex-col gap-2 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
           <p className="text-body" style={{ color: GAME_INK }}>

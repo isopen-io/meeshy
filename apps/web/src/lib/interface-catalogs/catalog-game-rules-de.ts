@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const de = {
   'game.rules.1.title': 'Jede Aktion lässt Funken sprühen',
-  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch lässt Funken sprühen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen.',
+  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken.',
   'game.rules.2.title': 'Die Funken bilden dein Licht',
-  'game.rules.2.body': 'Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus: eine Million Funken für Level 100. Eine Prägung bannt einen Teil davon und lässt das Level sinken.',
+  'game.rules.2.body': 'Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus: eine Million Funken für Level 100.',
   'game.rules.3.title': 'Man prägt Meeshes',
   'game.rules.3.body': 'Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.',
   'game.rules.4.title': 'Prägen bannt dein Licht',

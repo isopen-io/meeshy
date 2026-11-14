@@ -47,7 +47,8 @@ describe('un passeport', () => {
 
   test('le compte et la barre — la jauge dit le reste, aucune ligne « à découvrir » ne le répète', () => {
     const t = text(html);
-    expect(t).toMatch(/4 langues sur \d+/);
+    expect(t).not.toMatch(/4 langues sur \d+/);
+    expect(html).toMatch(/aria-label="4 langues sur \d+"/);
     expect(t).not.toMatch(/à découvrir/);
     expect(html).toContain('role="progressbar"');
   });
