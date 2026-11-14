@@ -241,12 +241,16 @@ type TsType = {
 };
 type TsChecker = {
   getPropertiesOfType(type: TsType): readonly TsSymbol[];
+  /** Un tableau se confronte par son ÉLÉMENT — `translations: TranslationData[]` porte `TranslationData`. */
+  isArrayType?(type: TsType): boolean;
+  getTypeArguments?(type: TsType): readonly TsType[];
   getTypeAtLocation(node: unknown): TsType;
   getTypeOfSymbolAtLocation(symbol: TsSymbol, node: unknown): TsType;
 };
 type TsApi = {
   readonly sys: unknown;
   readonly SymbolFlags: { readonly Optional: number };
+  readonly TypeFlags: { readonly Nullable: number };
   readConfigFile(path: string, read: (p: string) => string | undefined): { config: unknown };
   parseJsonConfigFileContent(config: unknown, host: unknown, basePath: string): { options: Record<string, unknown> };
   createProgram(roots: readonly string[], options: unknown): {
@@ -278,7 +282,23 @@ const loadTypeScript = (): TsApi => {
   );
 };
 
-export type ContractField = { readonly name: string; readonly optional: boolean };
+export type ContractField = {
+  readonly name: string;
+  readonly optional: boolean;
+  /**
+   * Les clés de l'OBJET que ce champ porte, quand il en porte un — un cran, pas davantage (#18116).
+   *
+   * Un champ imbriqué tue la trame exactement comme un champ de premier niveau : le décodeur
+   * descend dans l'objet, n'y trouve pas une clé que le miroir exige, et l'ÉVÉNEMENT ENTIER est
+   * perdu. `SocketPostCreatedData.post`, `SocketCommentAddedData.comment`, `ApiNotification.actor`
+   * sont des documents complets derrière une seule clé.
+   *
+   * `undefined` ⇒ rien à confronter (primitif, carte opaque, `unknown`) : la garde se TAIT plutôt
+   * que de deviner. Le tableau est pris à son ÉLÉMENT, et une union à ses propriétés COMMUNES —
+   * la sémantique de `getPropertiesOfType`, qui est exactement « ce que la valeur porte à coup sûr ».
+   */
+  readonly nested?: readonly ContractField[];
+};
 
 /**
  * Ce que le contrat dit d'UN événement : les clés que sa charge porte à coup sûr, et le nombre de
@@ -301,6 +321,30 @@ export type ContractPayload = {
  * en sont des projections.
  */
 let contractCache: Map<string, ContractPayload> | undefined;
+
+/**
+ * Les clés d'un objet PORTÉ par un champ — après avoir retiré `null`/`undefined` et ouvert un
+ * tableau sur son élément. Rend `undefined` dès qu'il n'y a pas d'objet à confronter : zéro
+ * propriété ne veut pas dire « objet vide », ça veut dire « je ne sais pas », et une garde qui
+ * confond les deux rougit sur tout un domaine à la fois.
+ */
+const nestedFields = (ts: TsApi, checker: TsChecker, type: TsType): readonly ContractField[] | undefined => {
+  const withoutNullish = type.isUnion?.()
+    ? (type.types ?? []).filter((member) => !(((member as { flags?: number }).flags ?? 0) & ts.TypeFlags.Nullable))
+    : [type];
+  const opened = withoutNullish.map((member) => {
+    const element = checker.getTypeArguments?.(member)?.[0];
+    return checker.isArrayType?.(member) && element ? element : member;
+  });
+  const carried = opened.length === 1 ? opened[0] : undefined;
+  if (!carried) return undefined;
+  const properties = checker.getPropertiesOfType(carried);
+  if (properties.length === 0) return undefined;
+  return properties.map((property) => ({
+    name: property.getName(),
+    optional: Boolean(property.flags & ts.SymbolFlags.Optional),
+  }));
+};
 
 export const readContract = (): Map<string, readonly ContractField[]> =>
   new Map([...readContractPayloads()].map(([event, payload]) => [event, payload.fields] as const));
@@ -336,10 +380,15 @@ export const readContractPayloads = (): Map<string, ContractPayload> => {
     }
     const payload = checker.getTypeOfSymbolAtLocation(parameter, parameter.valueDeclaration);
     contract.set(event.getName(), {
-      fields: checker.getPropertiesOfType(payload).map((field) => ({
-        name: field.getName(),
-        optional: Boolean(field.flags & ts.SymbolFlags.Optional),
-      })),
+      fields: checker.getPropertiesOfType(payload).map((field) => {
+        const declaredAt = field.valueDeclaration ?? parameter.valueDeclaration;
+        const carried = nestedFields(ts, checker, checker.getTypeOfSymbolAtLocation(field, declaredAt));
+        return {
+          name: field.getName(),
+          optional: Boolean(field.flags & ts.SymbolFlags.Optional),
+          ...(carried ? { nested: carried } : {}),
+        };
+      }),
       variantCount: payload.isUnion?.() ? (payload.types?.length ?? 1) : 1,
     });
   }

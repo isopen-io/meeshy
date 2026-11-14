@@ -129,6 +129,70 @@ des 176 événements n'a de charge `unknown` à la racine.
 
 ---
 
+## Lot D — #18116 : la garde descend d'un cran, et le contrat ment moins
+
+Le premier niveau tenu, la question suivante était écrite depuis le cycle 156 :
+**un champ qui porte un OBJET tue la trame exactement comme un champ de premier
+niveau** — `SocketCommentAddedData.comment`, `ApiNotification.actor` sont des
+documents entiers derrière une seule clé.
+
+Mesure : **40 objets imbriqués confrontés côté Kotlin, 37 côté Swift**, et deux
+résultats de nature opposée.
+
+### Côté Kotlin : UNE divergence, et c'est le CONTRAT qui avait tort
+
+`ApiNotification.actor.id` — requis par le miroir, **optionnel au contrat**.
+`NotificationEventData.actor` redéclarait une jumelle anonyme à quatre clés
+toutes optionnelles, quand `NotificationActor` vit dans le même paquet, deux
+fichiers plus loin, et exige `id` et `username`. C'est le type que l'émetteur
+manipule de bout en bout (`createNotification` → `sanitizeNotificationInputs` →
+`formatNotification`).
+
+**La preuve que le contrat mentait est un `tsc` VERT** : remplacer la jumelle par
+le type partagé laisse `packages/shared` ET `services/gateway` sans une erreur —
+aucun site n'émettait la forme lâche que le contrat autorisait.
+
+> **Une jumelle plus LÂCHE d'un type partagé ne se contente pas de dupliquer :
+> elle rend indécidable tout verdict qui s'adosse au contrat.** « Le miroir exige
+> trop » et « le contrat ment sur ce qu'il émet » ont la même signature — et la
+> réparation tirée de la première est l'inverse de la bonne. C'est #18249.
+
+Une fois le contrat réparé, le balayage imbriqué Kotlin rend **zéro**.
+
+### Côté Swift : trois divergences, une seule cause, et c'est un piège ARMÉ
+
+`APIPostComment.author` sur `comment:added`, `comment:updated` et
+`comment:media-updated` — **l'un des deux pièges que #18120 nommait**, trouvé ici
+mécaniquement plutôt qu'à la relecture. Les émetteurs incluent tous `author`
+(relation Prisma `author: { select: postAuthorSelect }`), donc rien ne tombe
+aujourd'hui.
+
+Il est **inventorié avec son cliquet à deux sens**, et la raison de ne pas le
+réparer est une mesure, pas un arbitrage : le miroir ne peut pas être relâché
+sans chaîne Swift, et le contrat ne peut pas être resserré **avec preuve** — son
+émetteur passe la charge en
+`hoistCommentTrackingLinks(commentCite) as unknown as typeof comment`, un cast
+qui retire au compilateur toute capacité de vérifier le resserrement. C'est
+exactement l'INVERSE de #18249, où le `tsc` vert était la preuve.
+
+### Deux `struct Update` à quatre-vingt-dix lignes l'un de l'autre
+
+La résolution des types imbriqués par **nom simple** rendait le dernier
+rencontré : `MessageSocketEvents+Conversations.swift` déclare deux `Update`
+imbriqués dans deux événements différents, et la garde confrontait donc un type à
+un contrat qui n'est pas le sien — **deux divergences qui n'existent pas**,
+nommant des champs introuvables. Les noms imbriqués sont désormais QUALIFIÉS
+(`Outer.Inner`), et résolus d'abord relativement au type qui les cite.
+
+> Le faux positif n'a pas été évité par prudence : il a été PRODUIT, lu, et c'est
+> son absurdité (`Update.categoryId`, qui n'existe nulle part) qui a nommé la
+> cause. Un outil qu'on n'a jamais vu se tromper n'a pas été mis à l'épreuve.
+
+Vu rougir : le contrat remis dans sa forme lâche (Kotlin), et l'inventaire
+imbriqué vidé (Swift, les trois `comment.author`).
+
+---
+
 ## Pourquoi #18120 n'est pas corrigé par ce cycle
 
 Le correctif demande un type Swift de portée communauté (il n'en existe aucun),
@@ -148,7 +212,8 @@ rougira le jour où on l'en sortira** — et il attend une session avec Xcode.
 | #18070, #18069, #18157, #18158 | les lots des cycles 156 et 157 | **fermés** par la fusion de #18160 |
 | #18240 | la garde plantait au lieu de nommer | **fermée** par ce lot |
 | #18121 | la garde balaie le miroir Swift | **fermée** par ce lot |
+| #18249 | le contrat de `notification:new` redéclarait une jumelle plus lâche | **fermée** par ce lot |
+| #18116 | les champs imbriqués, les deux miroirs | **fermée** par ce lot (UN cran ; au-delà il faudrait suivre alias et unions) |
 | #18120 | la portée COMMUNAUTÉ n'atteint jamais iOS | ouverte — inventoriée par la garde, demande Xcode |
 | #18123 | les deux idiomes de routage Kotlin non vus (66 événements) | ouverte |
-| #18116 | les champs imbriqués, les deux miroirs | ouverte |
 | #18159, #18124, #18115 | les pièges armés du cycle 157 | ouvertes |

@@ -72,6 +72,7 @@ import {
 } from './socket-payload-shape/swift-mirror';
 import {
   SWIFT_MIRROR,
+  describeNestedFindings,
   describeRequiredFieldFinding,
   describeUnresolvedRoute,
   relativeToRepo,
@@ -233,5 +234,70 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
     expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(26);
+  });
+  /**
+   * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —
+   * `APIPostComment.author`, requis par le miroir Swift et optionnel au contrat : c'est l'un des
+   * deux pièges ARMÉS que #18120 nommait, trouvé ici mécaniquement plutôt qu'à la relecture.
+   *
+   * Pourquoi il n'est pas réparé dans le lot qui le trouve, et c'est une mesure : le miroir ne peut
+   * pas être relâché sans chaîne Swift, et le contrat ne peut pas être resserré AVEC PREUVE — son
+   * émetteur passe la charge en `hoistCommentTrackingLinks(commentCite) as unknown as typeof comment`,
+   * un cast qui retire au compilateur toute capacité de vérifier le resserrement. C'est l'inverse de
+   * #18249, où un `tsc` vert sur `shared` ET `gateway` a PROUVÉ que le contrat mentait.
+   */
+  const IMBRIQUÉS_INVENTORIÉS: ReadonlyMap<string, string> = new Map([
+    ['comment:added|comment.author', '#18120 — piège armé : tout émetteur inclut `author` aujourd\'hui (relation Prisma)'],
+    ['comment:updated|comment.author', '#18120 — même cause, même type'],
+    ['comment:media-updated|comment.author', '#18120 — même cause, même type'],
+  ]);
+
+  const imbriqués = (): ReadonlyMap<string, string> => {
+    const found = new Map<string, string>();
+
+    for (const route of named) {
+      const mirror = swift.resolveType(route.typeName);
+      const declared = route.event === undefined ? undefined : contract.get(route.event);
+      if (!mirror || !declared || mirror.customDecoder) continue;
+
+      const byName = new Map(declared.fields.map((field) => [field.name, field] as const));
+      for (const property of mirror.properties) {
+        /* `[T]` se confronte à son ÉLÉMENT ; `?` et `!` ne changent pas ce qui est porté. */
+        const carriedName = property.type.replace(/[?!\s]/g, '').replace(/^\[(.+)\]$/, '$1');
+        const carried = swift.resolveType(carriedName, route.typeName);
+        const counterpart = byName.get(property.name);
+        if (!carried || carried.customDecoder || !counterpart?.nested) continue;
+        const requiredFields = carried.properties.filter(isSwiftRequired).map((nested) => nested.name);
+        const declaredNested = new Map(counterpart.nested.map((nested) => [nested.name, nested.optional] as const));
+        for (const field of requiredFields) {
+          const [message] = describeNestedFindings({
+            event: route.event as string,
+            carrierField: property.name,
+            nestedTypeName: carriedName,
+            nestedFile: carried.file,
+            requiredFields: [field],
+            declared: declaredNested,
+            mirror: SWIFT_MIRROR,
+          });
+          if (message) found.set(`${route.event}|${property.name}.${field}`, message);
+        }
+      }
+    }
+    return found;
+  };
+
+  it('tout champ REQUIS dans un objet IMBRIQUÉ existe au contrat, et y est REQUIS — hors inventaire', () => {
+    const report = [...imbriqués()]
+      .filter(([key]) => !IMBRIQUÉS_INVENTORIÉS.has(key))
+      .map(([, message]) => message)
+      .sort();
+    expect(report, `\n${report.join('\n')}\n`).toEqual([]);
+  });
+
+  /** Le second sens du cliquet, pour l'inventaire imbriqué comme pour celui des portées. */
+  it("chaque divergence imbriquée inventoriée diverge ENCORE", () => {
+    const live = imbriqués();
+    const stale = [...IMBRIQUÉS_INVENTORIÉS.keys()].filter((key) => !live.has(key));
+    expect(stale, `réparée(s) — à retirer de l'inventaire : ${stale.join(', ')}`).toEqual([]);
   });
 });
