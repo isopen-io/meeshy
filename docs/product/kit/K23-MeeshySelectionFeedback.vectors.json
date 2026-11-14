@@ -1,0 +1,678 @@
+{
+ "composant": "MeeshySelectionFeedback",
+ "cle": "K23",
+ "halo": [
+  {
+   "nom": "profonde-normal",
+   "ton": "deep",
+   "contraste": "normal",
+   "echelle": 1,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "unie-normal",
+   "ton": "plain",
+   "contraste": "normal",
+   "echelle": 1,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "theme-normal",
+   "ton": "theme",
+   "contraste": "normal",
+   "echelle": 1,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "claire-normal",
+   "ton": "onLight",
+   "contraste": "normal",
+   "echelle": 1,
+   "encre": "mediaBackdrop",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "profonde-accru",
+   "ton": "deep",
+   "contraste": "accru",
+   "echelle": 1,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     1
+    ],
+    [
+     24,
+     0.8
+    ]
+   ]
+  },
+  {
+   "nom": "claire-accru",
+   "ton": "onLight",
+   "contraste": "accru",
+   "echelle": 1,
+   "encre": "mediaBackdrop",
+   "couches": [
+    [
+     10,
+     1
+    ],
+    [
+     24,
+     0.8
+    ]
+   ]
+  },
+  {
+   "nom": "objet-double",
+   "ton": "deep",
+   "contraste": "normal",
+   "echelle": 2,
+   "encre": "onMedia",
+   "couches": [
+    [
+     5,
+     0.95
+    ],
+    [
+     12,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "objet-reduit",
+   "ton": "deep",
+   "contraste": "normal",
+   "echelle": 0.5,
+   "encre": "onMedia",
+   "couches": [
+    [
+     20,
+     0.95
+    ],
+    [
+     48,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "echelle-nulle",
+   "ton": "deep",
+   "contraste": "normal",
+   "echelle": 0,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  },
+  {
+   "nom": "echelle-negative",
+   "ton": "deep",
+   "contraste": "normal",
+   "echelle": -3,
+   "encre": "onMedia",
+   "couches": [
+    [
+     10,
+     0.95
+    ],
+    [
+     24,
+     0.55
+    ]
+   ]
+  }
+ ],
+ "lignes": [
+  {
+   "nom": "centre-vertical",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     0.5
+    ],
+    "horizontales": []
+   },
+   "candidates": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      179
+     ],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "croix",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     0.5
+    ],
+    "horizontales": [
+     0.25
+    ]
+   },
+   "candidates": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      179
+     ],
+     "horizontales": [
+      159
+     ]
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "bords",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     0
+    ],
+    "horizontales": [
+     1
+    ]
+   },
+   "candidates": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      0
+     ],
+     "horizontales": [
+      636
+     ]
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "hors-bornes",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     -0.1,
+     1.2,
+     0.75
+    ],
+    "horizontales": [
+     2
+    ]
+   },
+   "candidates": {
+    "verticales": [
+     1.5
+    ],
+    "horizontales": [
+     -1
+    ]
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      268.5
+     ],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "candidate-masquee-sous-l-engagee",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     0.5
+    ],
+    "horizontales": []
+   },
+   "candidates": {
+    "verticales": [
+     0.18,
+     0.5,
+     0.82
+    ],
+    "horizontales": [
+     0.18,
+     0.5
+    ]
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      179
+     ],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [
+      64.44,
+      293.56
+     ],
+     "horizontales": [
+      114.48,
+      318
+     ]
+    }
+   }
+  },
+  {
+   "nom": "doublons",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     0.5,
+     0.5
+    ],
+    "horizontales": []
+   },
+   "candidates": {
+    "verticales": [
+     0.25,
+     0.25
+    ],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [
+      179
+     ],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [
+      89.5
+     ],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "non-fini",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [
+     "nan"
+    ],
+    "horizontales": [
+     "inf"
+    ]
+   },
+   "candidates": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  },
+  {
+   "nom": "rien",
+   "taille": [
+    358,
+    636
+   ],
+   "engagees": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "candidates": {
+    "verticales": [],
+    "horizontales": []
+   },
+   "attendu": {
+    "engagees": {
+     "verticales": [],
+     "horizontales": []
+    },
+    "candidates": {
+     "verticales": [],
+     "horizontales": []
+    }
+   }
+  }
+ ],
+ "sequences": [
+  {
+   "nom": "une-accroche",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [],
+      "horizontales": []
+     },
+     "attendu": 0
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    },
+    {
+     "engagees": {
+      "verticales": [],
+      "horizontales": []
+     },
+     "attendu": 0
+    }
+   ]
+  },
+  {
+   "nom": "jamais-en-continu",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    }
+   ]
+  },
+  {
+   "nom": "changer-de-ligne",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.75
+      ],
+      "horizontales": []
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.75
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    }
+   ]
+  },
+  {
+   "nom": "croix-d-un-coup",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": [
+       0.25
+      ]
+     },
+     "attendu": 2
+    }
+   ]
+  },
+  {
+   "nom": "croix-en-deux-temps",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": [
+       0.25
+      ]
+     },
+     "attendu": 1
+    },
+    {
+     "engagees": {
+      "verticales": [],
+      "horizontales": [
+       0.25
+      ]
+     },
+     "attendu": 0
+    }
+   ]
+  },
+  {
+   "nom": "hors-bornes-ignore",
+   "haptique": "light",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       1.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    }
+   ]
+  },
+  {
+   "nom": "le-site-de-l-hote",
+   "haptique": "none",
+   "etapes": [
+    {
+     "engagees": {
+      "verticales": [
+       0.5
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    },
+    {
+     "engagees": {
+      "verticales": [
+       0.75
+      ],
+      "horizontales": []
+     },
+     "attendu": 0
+    }
+   ]
+  }
+ ],
+ "recette": {
+  "engagee": {
+   "epaisseur": 1.5,
+   "filet": 0.5,
+   "jeton": "mediaSnap",
+   "filetJeton": "scrim"
+  },
+  "candidates": {
+   "opacite": 0.3,
+   "epaisseur": 0.5,
+   "tirets": [
+    2,
+    6
+   ]
+  },
+  "contour": {
+   "opacite": 0.9,
+   "epaisseur": 2,
+   "retrait": 1
+  },
+  "fondu": {
+   "apparition": 0.15,
+   "retrait": 0.1
+  }
+ },
+ "contraste": {
+  "jaune": "FBBF24",
+  "surNoir": 12.6,
+  "surBlanc": 1.7,
+  "tolerance": 0.1
+ }
+}
