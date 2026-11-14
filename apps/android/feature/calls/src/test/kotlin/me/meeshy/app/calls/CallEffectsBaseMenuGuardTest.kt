@@ -28,7 +28,7 @@ class CallEffectsBaseMenuGuardTest {
         assertThat(band).doesNotContain("CallEffectsBarMode.Base -> EffectsCarousel(")
         val bar = effects.substringAfter("internal fun EffectsModeBar(").substringBefore("private fun EffectsLooksOrPanel(")
         assertThat(bar).contains("mode.back()?.let(onChange) ?: onFinish()")
-        assertThat(effects).contains("BackHandler { goBack() }")
+        assertThat(effects).contains("BackHandler(enabled = active) { goBack() }")
         assertThat(effects).doesNotContain("BackHandler { finish() }")
     }
 

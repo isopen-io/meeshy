@@ -61,7 +61,7 @@ internal fun CallVideoNoticePill(notice: CallVideoNotice, modifier: Modifier = M
  * E4 (#18227) — « Vidéo réduite / Faible lumière » est un maillon de la pile des bannières du haut, juste sous « En attente » :
  * elle arrive du haut et y repart ([CallBannerPresence], le dernier texte reste le temps de la sortie), et ma vignette descend
  * sous elle. Quand elle se montre, c'est la loi pure qui le dit ([servicePills]) : appel vidéo établi, caméra allumée, hors
- * image dans l'image.
+ * image dans l'image. Elle se range au premier toucher avec les bannières et revient au second ([CallServicePillFade], #18398).
  */
 @Singleton
 class CallVideoNoticeOverlay @Inject constructor() : CallOverlay {
@@ -73,13 +73,15 @@ class CallVideoNoticeOverlay @Inject constructor() : CallOverlay {
     override fun Content(context: CallOverlayContext) {
         val notice = context.servicePills().videoNotice
         CallBannerPresence(notice.takeIf { it != CallVideoNotice.None }) { shown ->
-            CallVideoNoticePill(
-                notice = shown,
-                modifier = Modifier
-                    .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
-                    .padding(top = CallTopBannerStack.GAP_DP.dp)
-                    .reportsTopBannerHeight(CallTopBanner.VideoNotice),
-            )
+            CallServicePillFade(context) {
+                CallVideoNoticePill(
+                    notice = shown,
+                    modifier = Modifier
+                        .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                        .padding(top = CallTopBannerStack.GAP_DP.dp)
+                        .reportsTopBannerHeight(CallTopBanner.VideoNotice),
+                )
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ import {
 } from '../../utils/translation-transformer';
 import type { AttachmentReplyTo } from './attachmentReplySnapshot';
 import { quotableNoticeKind } from '@meeshy/shared/utils/quotable-notice';
+import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -257,7 +258,10 @@ export function servedQuotedMessage(
   // #17441 — un avis AFFICHÉ se cite : sa métadonnée voyage seule, pour que le
   // client le DISE dans la langue de son lecteur (le `content` stocké n'est
   // qu'un repli français). Toujours POSÉE : un autre message n'en porte pas.
-  served['notice'] = quotableNoticeKind(quoted) === null ? undefined : quoted.metadata;
+  served['notice'] = quotableNoticeKind(quoted) === null ? undefined : withoutCallSummaryParticipants(quoted.metadata);
+  // #18242 — une citation ne compose pas les noms des participants d'un résumé
+  // d'appel : la forme stockée `{ userId }` n'en sort pas (POSÉE seulement là).
+  if (withoutCallSummaryParticipants(quoted.metadata) !== quoted.metadata) served['metadata'] = withoutCallSummaryParticipants(quoted.metadata);
 
   return served;
 }

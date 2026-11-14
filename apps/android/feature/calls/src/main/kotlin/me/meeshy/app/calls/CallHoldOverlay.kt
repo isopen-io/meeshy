@@ -19,11 +19,13 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallServicePillLaw
 import me.meeshy.sdk.model.call.CallServicePillSignals
 import me.meeshy.sdk.model.call.CallServicePills
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
+import me.meeshy.sdk.model.call.CallVerticalEdge
 import me.meeshy.ui.theme.MeeshySpacing
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +54,8 @@ internal fun CallOverlayContext.servicePills(): CallServicePills = CallServicePi
 /**
  * E3 (#18227) — « En attente » est un maillon de la pile des bannières du haut, sous l'en-tête, après la capture : elle arrive du
  * haut et y repart ([CallBannerPresence]), dit sa hauteur pour que ma vignette descende dessous, et s'annonce aux lecteurs d'écran.
+ * Comme toute bannière, elle se range au premier toucher et revient au second (`CallChromeElement.ServicePill`, loi 11, #18398) ;
+ * « Réduire les animations » : un fondu ; sous TalkBack, rien ne se range.
  */
 @Singleton
 class CallHoldOverlay @Inject constructor() : CallOverlay {
@@ -62,14 +66,31 @@ class CallHoldOverlay @Inject constructor() : CallOverlay {
     @Composable
     override fun Content(context: CallOverlayContext) {
         CallBannerPresence(context.servicePills().isHoldShown.takeIf { it }) {
-            CallHoldBadge(
-                Modifier
-                    .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
-                    .padding(top = CallTopBannerStack.GAP_DP.dp)
-                    .reportsTopBannerHeight(CallTopBanner.Hold),
-            )
+            CallServicePillFade(context) {
+                CallHoldBadge(
+                    Modifier
+                        .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                        .padding(top = CallTopBannerStack.GAP_DP.dp)
+                        .reportsTopBannerHeight(CallTopBanner.Hold),
+                )
+            }
         }
     }
+}
+
+/**
+ * #18398 — le chemin de rangement des pastilles de service, celui de la puce de capture (#18376) : elles sortent par le haut
+ * AVEC les bannières au premier toucher et reviennent au second ([CallChromeFade]).
+ */
+@Composable
+internal fun CallServicePillFade(context: CallOverlayContext, content: @Composable () -> Unit) {
+    CallChromeFade(
+        isVisible = context.chrome.isVisible(CallChromeElement.ServicePill),
+        onRevive = context.onChromeRevive,
+        stowsToward = CallVerticalEdge.Top,
+        edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
+        content = content,
+    )
 }
 
 /** La pastille « En attente » : une capsule du verre de l'écran d'appel, sous son voile de ton (loi 18.1). */
