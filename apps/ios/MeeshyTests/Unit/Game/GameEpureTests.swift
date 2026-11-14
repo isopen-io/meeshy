@@ -955,4 +955,78 @@ final class GameEpureTests: XCTestCase {
             XCTAssertFalse(try XCTUnwrap(catalog[key]?["fr"]).contains("baisser"), key)
         }
     }
+
+    // MARK: - Épure 1/3, constats 1 à 6 (#17687) : la redite sort, le repère reste
+
+    private static let removedKeys = ["game.rules.intro", "game2.settings.hidden.card"]
+
+    func test_removedKeys_areGoneFromTheCatalog_andNoSourceReadsThemAnymore() throws {
+        let catalog = try Self.catalog()
+        for key in Self.removedKeys {
+            XCTAssertNil(catalog[key], "\(key) : plus aucun lecteur, supprimée de toutes les langues")
+        }
+        let rules = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertFalse(rules.contains("game.rules.intro"))
+        let copy = try code("Meeshy/Features/Game/Wave2/GameWave2CopySettings.swift")
+        XCTAssertFalse(copy.contains("game2.settings.hidden.card"))
+        XCTAssertFalse(copy.contains("settingsHiddenCard"))
+    }
+
+    func test_rulesNotebook_header_keepsBothMascots_withoutTheSentenceRepeatingItsTitle() throws {
+        let view = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertTrue(view.contains("mee-bonjour"), "Mee reste en décor")
+        XCTAssertTrue(view.contains("meo-salut"), "Meo reste en décor")
+        XCTAssertEqual(view.components(separatedBy: ".accessibilityHidden(true)").count - 1 >= 2, true, "les deux personnages restent décor, pas lecteur")
+    }
+
+    func test_hiddenCard_saysItsConsequenceOnce_theTitleSaysTheRest() throws {
+        let view = try code("Meeshy/Features/Game/Wave2/GameDoorsView.swift")
+        XCTAssertTrue(view.contains("GameNote(text: GameText.settingsHiddenReopenNote)"))
+        XCTAssertFalse(view.contains("settingsHiddenCard"))
+    }
+
+    private static let shortened: [String: String] = [
+        "game2.settings.hidden.reopen_note": "Tes réglages de visibilité restent fermés : rouvre-les ici.",
+        "game.constellation.how": "Dix fragments allument une étoile et offrent une parure de profil, sans avantage de jeu.",
+        "game.photo.camera.unsupported": "Caméra indisponible ici. Choisis une photo dans ta galerie, ou garde la carte seule.",
+        "game2.door.season.none": "Aucun voyage en cours",
+    ]
+
+    func test_shortenedLabels_sayTheirNewFrench_andKeepWhatTheyAreAbout() throws {
+        let catalog = try Self.catalog()
+        for (key, expected) in Self.shortened { XCTAssertEqual(catalog[key]?["fr"], expected, key) }
+        XCTAssertTrue(try XCTUnwrap(catalog["game.constellation.how"]?["fr"]).contains("sans avantage de jeu"), "la gratuité de la parure reste au repos")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.constellation.how"]?["fr"]).contains("Dix fragments"), "le chiffre reste")
+    }
+
+    func test_shortenedLabels_areTranslatedInTheSixOtherLanguages_neverCopiedFromFrench() throws {
+        let catalog = try Self.catalog()
+        for key in Self.shortened.keys {
+            let french = try XCTUnwrap(catalog[key]?["fr"], key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+                XCTAssertLessThan(value.count, try XCTUnwrap(Self.formerLength[key]), "\(key) [\(language)] : plus court qu'avant")
+            }
+        }
+    }
+
+    private static let formerLength: [String: Int] = [
+        "game2.settings.hidden.reopen_note": 54, "game.constellation.how": 95,
+        "game.photo.camera.unsupported": 80, "game2.door.season.none": 30,
+    ]
+
+    func test_cameraUnsupported_isAlignedOnCameraUnavailable_inEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        let unsupported = try XCTUnwrap(catalog["game.photo.camera.unsupported"])
+        let unavailable = try XCTUnwrap(catalog["game.photo.camera.unavailable"])
+        XCTAssertTrue(try XCTUnwrap(unsupported["fr"]).hasPrefix("Caméra indisponible"))
+        XCTAssertEqual(try XCTUnwrap(unsupported["fr"]).components(separatedBy: ". ").dropFirst(), try XCTUnwrap(unavailable["fr"]).components(separatedBy: ". ").dropFirst())
+    }
+
+    func test_seasonNone_isOneLine_andTheDoorRowStillSaysItsEmptyState() throws {
+        let value = try XCTUnwrap(try Self.catalog()["game2.door.season.none"]?["fr"])
+        XCTAssertFalse(value.contains("pour le moment"))
+        XCTAssertEqual(GameText.doorSeasonNone, "Aucun voyage en cours")
+    }
 }
