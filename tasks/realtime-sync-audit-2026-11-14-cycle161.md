@@ -131,3 +131,91 @@ RANG s'écrit sur un rang AUTRE que le premier » (leçon 261).
 | #18124 | le champ que le miroir lit et que personne ne posait | **fermé** par le lot E |
 | #18456 | les consommateurs web et iOS de ce champ | **web livré** par le lot F ; **iOS reste** — demande Xcode |
 | #18115 | les trois champs morts de `AttachmentUpdatedEvent` (jumelle Kotlin morte) | ouverte — seules entrées restantes du cliquet |
+
+---
+
+## Lot H — et l'orphan gate masquait l'asymétrie par CONSTRUCTION (#18342, suite)
+
+`eventsNamedByClients` répond « au moins un client connaît ce nom ». C'est
+exactement ce qu'il faut pour trouver l'orphelin TOTAL, et c'est aussi ce qui
+rend l'asymétrie **indiscernable** : un événement lu par iOS et Android et
+ignoré du web y a la même réponse qu'un événement lu par les trois.
+
+#18342 écrivait la limite — « elle ne dit rien des événements écoutés par un
+seul client là où trois devraient l'être ». Le relevé PAR PLATEFORME la lève.
+
+### La mesure
+
+Sur l'énumération du COMPILATEUR (`readContractPayloads`), jamais un `grep` :
+**177 événements** de `ServerToClientEvents`, dont **128** cités par les trois
+clients, **32** par deux, **10** par un seul, **7** par aucun (ces derniers
+restant l'affaire de l'orphan gate, inventaire inchangé).
+
+Des 32, **29 manquent au WEB** et 3 à Android. Le chiffre est frappant, et la
+première chose à faire avec un tel motif est de **douter de l'instrument** :
+29 sur 29 manquant à la même plateforme ressemble plus à un idiome non reconnu
+qu'à 29 lacunes. Vérifié sur quatre d'entre eux, par les DEUX formes de
+citation (le littéral et la constante) : le web ne les cite ni d'une façon ni
+de l'autre. La mesure tient.
+
+> **Un balayage qui cherche UN idiome mesure sa popularité** (cycle 107, sept
+> faux positifs, balayage JETÉ). La règle vaut aussi quand le balayage a
+> RAISON : ce qui la fait tenir ici n'est pas qu'elle soit plausible, c'est
+> qu'elle ait été confrontée à une seconde forme.
+
+### Ce que le cliquet affirme — et le piège qu'il évite
+
+**29 lacunes de citation ne sont pas 29 défauts.** `apps/web` est le chantier
+2.0 qui suit l'interface iOS : « iOS et Android le lisent, le web pas encore »
+y est l'état NORMAL d'une feature non portée. Le cliquet ne prétend donc pas
+qu'il faille toutes les porter ; il prétend que la liste soit CONNUE, qu'elle
+ne grandisse pas en silence, et qu'un portage la fasse rétrécir dans le commit
+qui le livre.
+
+Et il ne porte **aucun verdict** : l'inventaire porte la mesure et une raison
+par FAMILLE, là où la raison vit. Trancher entre écrire le lecteur, retirer
+l'émission et retirer la déclaration n'est pas la même décision pour un vocal
+traduit et pour une sonnerie de Bring — c'est le partage que `SANS_LECTEUR`
+avait déjà établi.
+
+**Deux formes ont été écartées, et pour des raisons qui valent d'être dites :**
+
+- un **plafond chiffré** par plateforme (forme `press-ratchet`, « ne fait que
+  descendre ») interdirait un lot iOS-first au lieu de l'instruire ;
+- **32 issues de portage** substitueraient mon verdict à celui du produit sur
+  32 décisions distinctes, dont plusieurs sont probablement « non, le natif a
+  sa propre voie ».
+
+### Le refactor qui porte la garde
+
+`eventsNamedByClients` est désormais **l'UNION** de `eventsNamedByPlatform`, et
+un témoin structurel l'exige. Sans lui, le relevé fin pourrait se tromper sans
+que l'orphan gate bronche — deux relevés du même fait, gardés séparément, sont
+la forme que ce dépôt a déjà payée plusieurs fois.
+
+| preuve | résultat |
+|---|---|
+| `socket-event-platform-parity-gate` | 5/5, et ROUGE dans les DEUX sens (asymétrie retirée de l'inventaire / retard rattrapé laissé dedans) |
+| `socket-event-orphan-gate` sous le refactor | 3/3, inchangé |
+| `packages/shared/__tests__/ci/` | 22 fichiers, 189 témoins |
+| `tsc --noEmit` shared | EXIT=0 |
+
+Le second sens n'est pas décoratif : **une liste qui se périme affirme un
+retard qui a été rattrapé**, et c'est mot pour mot ce qui est arrivé au
+commentaire de `link:message:new` que le lot G vient de corriger.
+
+---
+
+## Verdict de CI, et ce que la cadence de `dev` en fait
+
+| cycle | fusion | run CI sur `dev` |
+|---|---|---|
+| 160 | `a47634ca1c` | **VERT**, tous les jobs ([43595632236](https://github.com/isopen-io/meeshy/actions/runs/43595632236)) |
+| 161 (+ lot H) | `209511d300`, `512f66718e` | **ANNULÉ** par la fusion suivante — comme les quatre runs qui l'ont précédé |
+
+Les fusions atterrissent plus vite que la CI ne finit (groupe de concurrence
+par `ref`). Ce n'est pas un échec du lot : c'est le régime de ce dépôt, et il
+faut le dire plutôt que de laisser croire à un vert. Le run du cycle 160 a
+servi de mesure de l'environnement, et il a tranché une question que la
+mesure locale laissait ouverte : **les six suites d'images rouges dans ce
+conteneur (AVIF/HEIF, `avifdec` absent) sont VERTES en CI.**
