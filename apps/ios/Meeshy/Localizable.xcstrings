@@ -75673,6 +75673,100 @@
         }
       }
     },
+    "call.video.notice.lowLight": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضاءة ضعيفة: قد تبدو صورتك داكنة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenig Licht: Dein Bild kann dunkel wirken"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low light: your image may look dark"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poca luz: tu imagen puede verse oscura"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lumière insuffisante : votre image peut sembler sombre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poca luce: la tua immagine potrebbe sembrare scura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pouca luz: sua imagem pode parecer escura"
+          }
+        }
+      }
+    },
+    "call.video.notice.reduced": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تقليل الفيديو ليبرد الهاتف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video reduziert, damit das Telefon abkühlt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video reduced to let the phone cool down"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo reducido para que el teléfono se enfríe"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo réduite pour laisser le téléphone refroidir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video ridotto per far raffreddare il telefono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo reduzido para o celular esfriar"
+          }
+        }
+      }
+    },
     "call.video.permission.denied": {
       "extractionState": "manual",
       "localizations": {
