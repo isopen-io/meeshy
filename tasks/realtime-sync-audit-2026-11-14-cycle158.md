@@ -32,12 +32,14 @@ sans conflit dit que les TEXTES ne se contredisent pas ; l'absence de
 recouvrement dit que les SUJETS ne se touchent pas. Les deux ensemble valent
 mieux que l'un des deux.
 
-La compilation JVM nue a demandé de reconstruire le harnais du cycle 157 (resté
-hors dépôt) : un projet Gradle `kotlin("jvm")` qui pointe ses `srcDirs` sur
-`core/model`, applique `gradle/call-frames-catalogue.gradle.kts` et résout depuis
-`repo1.maven.org` — `repo.maven.apache.org` a rendu **429** trois fois, et
-`-Pkotlin.daemon.jvmargs=-Xmx6g` (propriété **Gradle**, pas système) évite l'ICE
-sur les 2 179 sources de test.
+Pour cette compilation, j'ai reconstruit à la main un harnais Gradle
+`kotlin("jvm")` — **et c'était une erreur : il existe**
+(`./apps/android/meeshy.sh jvm-check`, voir plus bas « Ce que ce cycle a appris
+sur son propre outillage »). Deux choses apprises en chemin restent vraies quel
+que soit le harnais : `repo.maven.apache.org` rend **429** sous ce proxy là où
+`repo1.maven.org` répond, et `kotlin.daemon.jvmargs` se passe en propriété
+**Gradle** (`-P`), pas système (`-D`), faute de quoi le compilateur tombe sur un
+ICE qui ressemble à un manque de mémoire.
 
 ---
 
