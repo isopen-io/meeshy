@@ -155,10 +155,10 @@ public fun MessageComposerCapsule(
     }
 }
 
-/** L'invite, rétrécie juste assez pour tenir dans la capsule (#14394, [ComposerPlaceholderFit]). */
 /** L'echelle d'ou entre le micro (aucune sous « Reduire les animations », un fondu court). */
 private const val MIC_FROM_SCALE = 0.6f
 
+/** L'invite, rétrécie juste assez pour tenir dans la capsule (#14394, [ComposerPlaceholderFit]). */
 @Composable
 private fun ComposerPlaceholder(text: String, style: TextStyle) {
     val measurer = rememberTextMeasurer()
