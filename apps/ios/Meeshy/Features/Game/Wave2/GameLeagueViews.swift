@@ -130,8 +130,6 @@ private struct GameLeagueMineView: View {
         case .locked:
             GameCard(title: GameText.leagueTitle) {
                 GameNote(text: GameText.leagueLockedWhat)
-                GameNote(text: GameText.leagueLocked(
-                    level: GameCopy.formatCount(GameLeague.minLevel), current: GameCopy.formatCount(game.level.shown.record)))
                 GameFactChipRow(
                     concept: .league,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.record, required: GameLeague.minLevel), record: true),

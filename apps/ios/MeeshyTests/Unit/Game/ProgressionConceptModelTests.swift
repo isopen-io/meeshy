@@ -504,7 +504,7 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(state(.league, placed(.safe, missing: nil)), place, "sans manque servi, la zone ne s'invente pas")
 
         let locked = GameWave2Fixture.game(league: GameWave2Fixture.league(access: .locked, current: nil))
-        XCTAssertEqual(state(.league, locked), GameText.leagueLocked(level: n(GameLeague.minLevel), current: n(locked.level.shown.level)))
+        XCTAssertEqual(state(.league, locked), GameText.doorLeagueLocked(level: n(GameLeague.minLevel)))
         let unplaced = GameWave2Fixture.game(league: GameWave2Fixture.league(current: nil))
         XCTAssertEqual(state(.league, unplaced), ConceptText.stateLeagueUnplaced)
     }
@@ -530,7 +530,7 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_state_prestige_saysWhereItOpens_andWhereYouAre() {
         let game = GameWave2Fixture.game()
-        XCTAssertEqual(state(.prestige, game), GameText.prestigeLocked(level: n(game.level.shown.level)))
+        XCTAssertEqual(state(.prestige, game), GameText.prestigeLocked)
         XCTAssertEqual(state(.prestige, GameWave2Fixture.atLevel100()), GameText.prestigeMee)
     }
 

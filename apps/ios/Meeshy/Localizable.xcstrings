@@ -261382,43 +261382,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض الشرح الكامل"
+            "value": "لماذا هذه البطاقة؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die ganze Erklärung ansehen"
+            "value": "Warum diese Karte?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "See the full explanation"
+            "value": "Why this card?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver la explicación completa"
+            "value": "¿Por qué esta tarjeta?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir l’explication complète"
+            "value": "Pourquoi cette carte ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vedi la spiegazione completa"
+            "value": "Perché questa carta?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver a explicação completa"
+            "value": "Por que este cartão?"
           }
         }
       }
@@ -269842,43 +269842,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم رفض الكاميرا. اسمح بها من إعدادات جهازك، أو اختر صورة من المعرض."
+            "value": "الكاميرا مرفوضة: اسمح بها من الإعدادات، أو اختر صورة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Kamera ist verweigert. Erlaube sie in den Geräteeinstellungen oder wähle ein Foto aus deiner Galerie."
+            "value": "Kamera verweigert: erlaube sie in den Einstellungen oder wähle ein Foto."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The camera is denied. Allow it in your device settings, or pick a photo from your gallery."
+            "value": "Camera denied: allow it in settings, or pick a photo."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La cámara está denegada. Permítela en los ajustes de tu dispositivo, o elige una foto de tu galería."
+            "value": "Cámara denegada: permítela en los ajustes, o elige una foto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie."
+            "value": "Caméra refusée : autorise-la dans les réglages, ou choisis une photo."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La fotocamera è negata. Consentila nelle impostazioni del dispositivo, oppure scegli una foto dalla galleria."
+            "value": "Fotocamera negata: consentila nelle impostazioni, oppure scegli una foto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A câmera foi negada. Permita-a nos ajustes do aparelho, ou escolha uma foto da galeria."
+            "value": "Câmera negada: permita-a nos ajustes, ou escolha uma foto."
           }
         }
       }
@@ -269889,43 +269889,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكاميرا غير متاحة هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط."
+            "value": "الكاميرا غير متاحة: اختر صورة، أو احتفظ بالبطاقة فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kamera hier nicht verfügbar. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte."
+            "value": "Kamera nicht verfügbar: wähle ein Foto oder behalte nur die Karte."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Camera unavailable here. Pick a photo from your gallery, or keep the card only."
+            "value": "Camera unavailable: pick a photo, or keep the card only."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cámara no disponible aquí. Elige una foto de tu galería, o quédate solo con la tarjeta."
+            "value": "Cámara no disponible: elige una foto, o quédate solo con la tarjeta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Caméra indisponible ici. Choisis une photo dans ta galerie, ou garde la carte seule."
+            "value": "Caméra indisponible : choisis une photo, ou garde la carte seule."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fotocamera non disponibile qui. Scegli una foto dalla galleria, oppure tieni solo la carta."
+            "value": "Fotocamera non disponibile: scegli una foto, oppure tieni solo la carta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Câmera indisponível aqui. Escolha uma foto da galeria, ou fique só com o cartão."
+            "value": "Câmera indisponível: escolha uma foto, ou fique só com o cartão."
           }
         }
       }
@@ -282628,43 +282628,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُفتح الانبعاث عند المستوى 100. أنت في المستوى ⁦%@⁩."
+            "value": "يُفتح الانبعاث عند المستوى 100."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergeburt öffnet sich bei Level 100. Du bist auf Level %@."
+            "value": "Die Wiedergeburt öffnet sich bei Level 100."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rebirth opens at level 100. You are at level %@."
+            "value": "Rebirth opens at level 100."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Renacimiento se abre en el nivel 100. Estás en el nivel %@."
+            "value": "El Renacimiento se abre en el nivel 100."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Renaissance s’ouvre au niveau 100. Tu es au niveau %@."
+            "value": "La Renaissance s’ouvre au niveau 100."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Rinascita si apre al livello 100. Sei al livello %@."
+            "value": "La Rinascita si apre al livello 100."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Renascimento se abre no nível 100. Você está no nível %@."
+            "value": "O Renascimento se abre no nível 100."
           }
         }
       }
@@ -286905,43 +286905,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُفتح التحالف عند المستوى ⁦%1$@⁩ لكليكما. أنت في المستوى ⁦%2$@⁩."
+            "value": "يُفتح التحالف عند المستوى ⁦%@⁩ لكليكما."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Bündnis öffnet bei Level %1$@, für euch beide. Du bist auf Level %2$@."
+            "value": "Das Bündnis öffnet bei Level %@, für euch beide."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The alliance opens at level %1$@, for both of you. You are at level %2$@."
+            "value": "The alliance opens at level %@, for both of you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La alianza se abre en el nivel %1$@, para los dos. Estás en el nivel %2$@."
+            "value": "La alianza se abre en el nivel %@, para los dos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’alliance s’ouvre au niveau %1$@, pour vous deux. Tu es au niveau %2$@."
+            "value": "L’alliance s’ouvre au niveau %@, pour vous deux."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’alleanza si apre al livello %1$@, per entrambi. Sei al livello %2$@."
+            "value": "L’alleanza si apre al livello %@, per entrambi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A aliança se abre no nível %1$@, para vocês dois. Você está no nível %2$@."
+            "value": "A aliança se abre no nível %@, para vocês dois."
           }
         }
       }
@@ -288121,53 +288121,6 @@
         }
       }
     },
-    "game2.league.pseudonym.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك. اتركه فارغًا: يُسحب لك اسم مبارزة بالقرعة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3 bis 20 Zeichen. Weder dein Name noch dein Benutzername. Leer lassen: Dir wird ein Turniername zugelost."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3 to 20 characters. Not your name or your username. Leave it empty: a joust name is drawn for you."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "De 3 a 20 caracteres. Ni tu nombre ni tu usuario. Déjalo vacío: te sorteamos un nombre de justa."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3 à 20 caractères. Ni ton nom, ni ton identifiant. Laisse vide : un nom de joute t’est tiré au sort."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Da 3 a 20 caratteri. Né il tuo nome né il tuo nome utente. Lascia vuoto: un nome di torneo ti viene estratto a sorte."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "De 3 a 20 caracteres. Nem o seu nome, nem o seu usuário. Deixe vazio: um nome de torneio é sorteado para você."
-          }
-        }
-      }
-    },
     "game2.league.pseudonym.label": {
       "extractionState": "manual",
       "localizations": {
@@ -288634,53 +288587,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "O torneio público não está aberto para a sua conta. O Torneio dos amigos, esse, está sempre aberto."
-          }
-        }
-      }
-    },
-    "game2.league.locked": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تُفتح المبارزة عند المستوى ⁦%1$@⁩ · أنت في المستوى ⁦%2$@⁩"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Turnier öffnet bei Level %1$@ · du bist auf Level %2$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The joust opens at level %1$@ · you are at level %2$@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La justa se abre en el nivel %1$@ · estás en el nivel %2$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La joute s’ouvre au niveau %1$@ · tu es au niveau %2$@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il torneo si apre al livello %1$@ · sei al livello %2$@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O torneio se abre no nível %1$@ · você está no nível %2$@"
           }
         }
       }

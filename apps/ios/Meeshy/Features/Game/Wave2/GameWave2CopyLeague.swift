@@ -39,10 +39,6 @@ extension GameText {
         String(localized: "game2.league.locked.what", defaultValue: "Chaque semaine, tu te mesures à 29 héros de lumière semblable.", bundle: .main)
     }
 
-    static func leagueLocked(level: String, current: String) -> String {
-        String(localized: "game2.league.locked", defaultValue: "La joute s’ouvre au niveau \(level) · tu es au niveau \(current)", bundle: .main)
-    }
-
     static var leagueMinor: String { String(localized: "game2.league.minor", defaultValue: "La joute publique n’est pas ouverte pour ton compte. La Joute des amis, elle, l’est toujours.", bundle: .main) }
 
     static var leagueConsentTitle: String { String(localized: "game2.league.consent.title", defaultValue: "Rejoindre la joute publique", bundle: .main) }
@@ -62,8 +58,6 @@ extension GameText {
     static var leagueConsentLeave: String { String(localized: "game2.league.consent.leave", defaultValue: "Quitter la joute publique", bundle: .main) }
 
     static var leaguePseudonymLabel: String { String(localized: "game2.league.pseudonym.label", defaultValue: "Nom de joute (facultatif)", bundle: .main) }
-
-    static var leaguePseudonymHint: String { String(localized: "game2.league.pseudonym.hint", defaultValue: "3 à 20 caractères. Ni ton nom, ni ton identifiant. Laisse vide : un nom de joute t’est tiré au sort.", bundle: .main) }
 
     static var leaguePseudonymDrawn: String { String(localized: "game2.league.pseudonym.drawn", defaultValue: "Ton nom de joute est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque voyage.", bundle: .main) }
 
@@ -124,8 +118,8 @@ extension GameText {
 
     static var duoTitle: String { String(localized: "game2.duo.title", defaultValue: "Alliance", bundle: .main) }
 
-    static func duoLocked(level: String, current: String) -> String {
-        String(localized: "game2.duo.locked", defaultValue: "L’alliance s’ouvre au niveau \(level), pour vous deux. Tu es au niveau \(current).", bundle: .main)
+    static func duoLocked(level: String) -> String {
+        String(localized: "game2.duo.locked", defaultValue: "L’alliance s’ouvre au niveau \(level), pour vous deux.", bundle: .main)
     }
 
     static var duoNone: String { String(localized: "game2.duo.none", defaultValue: "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.", bundle: .main) }

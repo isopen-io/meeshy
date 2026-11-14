@@ -670,7 +670,7 @@ extension ProgressionConceptModel {
     private static func leagueState(_ game: GameBlock?) -> ProgressionFactText? {
         guard let game, let league = game.league else { return nil }
         if league.access == .locked {
-            return ProgressionFactText(GameText.leagueLocked(level: count(GameLeague.minLevel), current: count(game.level.shown.level)),
+            return ProgressionFactText(GameText.doorLeagueLocked(level: count(GameLeague.minLevel)),
                                        .leagueUnlockLevel, .level)
         }
         guard let current = GameLeagueDetail.current(of: league) else { return ProgressionFactText(ConceptText.stateLeagueUnplaced, .league) }
@@ -715,7 +715,7 @@ extension ProgressionConceptModel {
         guard let game, let prestige = game.prestige else { return nil }
         if prestige.canPrestige { return ProgressionFactText(GameText.prestigeMee, .prestigeDoor, .level) }
         if prestige.stars >= prestige.max { return ProgressionFactText(GameText.prestigeMax, .prestigeDoor) }
-        return ProgressionFactText(GameText.prestigeLocked(level: count(game.level.shown.level)), .prestigeDoor, .level)
+        return ProgressionFactText(GameText.prestigeLocked, .prestigeDoor, .level)
     }
 
     private static func elansState(_ progress: EngagementProgress) -> ProgressionFactText? {

@@ -103,7 +103,7 @@ struct GameGuideCardView: View {
                         .foregroundStyle(theme.textMuted)
                         .frame(minWidth: 44, minHeight: 44)
                 }
-                .accessibilityLabel(String(localized: "game.guide.more", defaultValue: "Voir l’explication complète", bundle: .main))
+                .accessibilityLabel(String(localized: "game.guide.more", defaultValue: "Pourquoi cette carte ?", bundle: .main))
                 .accessibilityIdentifier("game.guide.more")
             }
         }

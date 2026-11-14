@@ -195,9 +195,7 @@ extension GameText {
         String(localized: "game2.prestige.stars", defaultValue: "Renaissances : \(stars) sur \(max)", bundle: .main)
     }
 
-    static func prestigeLocked(level: String) -> String {
-        String(localized: "game2.prestige.locked", defaultValue: "La Renaissance s’ouvre au niveau 100. Tu es au niveau \(level).", bundle: .main)
-    }
+    static var prestigeLocked: String { String(localized: "game2.prestige.locked", defaultValue: "La Renaissance s’ouvre au niveau 100.", bundle: .main) }
 
     static var prestigeMax: String { String(localized: "game2.prestige.max", defaultValue: "Ta légende a vécu ses cinq renaissances : le sommet du sommet.", bundle: .main) }
 
