@@ -10,22 +10,6 @@ import MeeshyUI
 
 extension StoryViewerView {
 
-    // MARK: - Text Content · Media Overlay — RETIRÉS (244i)
-    //
-    // Six fonctions vivaient ici sans qu'aucun commit du dépôt ne les appelle :
-    // `storyTextContent(_:storyEffects:)` et `mediaOverlay(media:geometry:)`, plus
-    // les quatre privées qu'elles SEULES appelaient — `fontForStyle`,
-    // `textAlignmentFor`, `compositeAlignment`, `coloredMediaFallback`.
-    //
-    // C'était le lecteur de story d'AVANT le canvas : du texte SwiftUI positionné
-    // par `StoryEffects.textPosition/textAlign`, et une image posée en overlay. Le
-    // rendu vivant est le canvas — `StoryViewerView+Canvas.swift` côté app,
-    // `StorySlideRenderer` côté SDK, qui honore `fontFamily`/`textStyle`.
-    //
-    // Elles emportaient `story.viewer.a11y.storyText` — une clé traduite en sept
-    // locales pour un `accessibilityLabel` qu'aucun lecteur d'écran n'a jamais
-    // annoncé.
-
     // MARK: - Filter Overlay
 
     var filterOverlay: some View {
@@ -55,16 +39,14 @@ extension StoryViewerView {
     }
 
 
-    /// True cross-dissolve for stories within the same user.
-    /// Old content stays visible (outgoing layer) while new content fades in on top —
-    /// eliminates the flash caused by AsyncImage reloading between swaps.
-    /// Supports StoryTransitionEffect: fade, zoom, slide, reveal.
-    // Non-private : appelée par `goToNext`/`goToPrevious`
-    // (`StoryViewerView+Navigation.swift`).
+    /// Fondu entre deux stories d'un auteur : la sortante reste peinte pendant que
+    /// l'entrante, qui joue déjà, apparaît dessus (#18509). En rafale, l'échange
+    /// est franc (`StoryNavigationCadence`).
     func crossFadeStory(update: @escaping () -> Void) {
+        guard transitionLatch.beginChange() == .authored else { return swapStoryFranchement(update) }
         isTransitioning = true
+        let ticket = transitionLatch.begin(.crossFade) { settleCrossFade() }
 
-        // 1. Snapshot current story as outgoing (already rendered, no reload needed)
         outgoingStory = currentStory
         outgoingOpacity = 1
         closingScale = 1.0
@@ -72,25 +54,15 @@ extension StoryViewerView {
 
         let closingEffect = currentStory?.storyEffects?.closing
 
-        // 2. Swap to the incoming story (invisible because contentOpacity = 0)
         update()
-        markCurrentViewed()
-
-        // La slide entrante d'abord ; ses voisines N±1, N±2 se préparent dès
-        // sa première image (`prepareNeighborWindow`, #10348).
-        playback.interruptNeighbors()
-        if let story = currentStory { prefetchAllMedia(for: story) }
+        landIncomingStory()
+        StoryNavigationTrace.shared?.swapped(to: currentStory?.id, phase: .transition)
 
         let incomingEffect = currentStory?.storyEffects?.opening
 
-        // Table d'armement PARTAGÉE avec le retrait de l'interlude inter-groupes
-        // (`dismissGroupIntro(revealing:)`) : une seule grammaire d'apparition,
-        // deux chemins d'entrée. La story entrante était déjà invisible avant
-        // `update()` : le swap reste invisible.
         entrance = .armed(for: incomingEffect)
         let (animDuration, animation) = StoryOpeningEntrance.animation(for: incomingEffect)
 
-        // 3. Animate immediately — thumbHash provides instant visual while full image loads
         withAnimation(animation) {
             outgoingOpacity = 0
             entrance = .rest(after: incomingEffect)
@@ -98,29 +70,45 @@ extension StoryViewerView {
         }
 
         restartTimer()
-        delays.run(after: .seconds(animDuration + 0.04)) { outgoingStory = nil; isTransitioning = false; closingScale = 1.0 }
+        delays.run(after: .seconds(animDuration + 0.04)) { transitionLatch.complete(ticket) }
     }
 
-    /// Transition cube entre groupes d'auteurs (Lot 3). Pendant le drag, les
-    /// deux faces (carte + aperçu voisin) suivent déjà le doigt ; le commit
-    /// termine la rotation jusqu'à ±90° puis swappe le contenu à l'arête —
-    /// la carte réelle remplace la face entrante à transform identité, swap
-    /// invisible. Le canvas voisin est chaud (prefetch inter-groupes), la
-    /// première frame réelle est instantanée.
-    // Non-private : appelée depuis `goBackToPreviousGroupFromIntro()`
-    // (StoryViewerView.swift, fichier d'extension frère) pour rejouer
-    // exactement la même animation de cube quand le tap gauche de l'intro
-    // annule le switch de groupe.
+    private func settleCrossFade() {
+        StoryNavigationTrace.shared?.phase = .lecture
+        outgoingStory = nil
+        isTransitioning = false
+        closingScale = 1.0
+    }
+
+    private func swapStoryFranchement(_ update: () -> Void) {
+        StoryTransitionLatch.instantly {
+            outgoingStory = nil
+            outgoingOpacity = 0
+            closingScale = 1.0
+            update()
+            entrance = .rest(after: currentStory?.storyEffects?.opening)
+        }
+        landIncomingStory()
+        StoryNavigationTrace.shared?.swapped(to: currentStory?.id, phase: .lecture)
+        restartTimer()
+    }
+
+    private func landIncomingStory() {
+        markCurrentViewed()
+        playback.interruptNeighbors()
+        if let story = currentStory { prefetchAllMedia(for: story) }
+    }
+
+    /// Cube entre deux auteurs : la rotation finit à ±90°, puis la vraie carte
+    /// remplace la face entrante à l'identité. Un toucher pendant la rotation la
+    /// conclut (#18509). L'état de toucher hérité est purgé : un drag préempté
+    /// n'a pas eu son `onEnded`.
     func groupTransition(forward: Bool, update: @escaping () -> Void) {
-        guard !isTransitioning else { return }
-        isTransitioning = true
-        // Le groupe change : quel que soit le chemin d'entrée (drag commité, tap
-        // en bord, auto-advance, tap gauche de l'interlude), l'état de toucher
-        // hérité n'a plus de sens sur le nouveau groupe. Purge explicite — un
-        // drag préempté n'a pas eu son `onEnded` et laisserait l'axe collé.
+        guard !isDismissing else { return }
+        let style = transitionLatch.beginChange()
         resetGestureTracking()
-        // Tap-en-bord / auto-advance arrivent ici sans drag : poser la
-        // direction pour que la face entrante participe au commit.
+        guard style == .authored else { return StoryTransitionLatch.instantly { landGroupSwap(update) } }
+        isTransitioning = true
         neighborPreviewDirection = forward ? 1 : -1
 
         let exitX: CGFloat = forward ? -screenW : screenW
@@ -128,24 +116,22 @@ extension StoryViewerView {
             groupSlide = exitX
         }
 
-        // Swap APRÈS la fin de la courbe (#11192) : la face entrante est
-        // exactement à l'identité, la vraie carte la remplace sans saut.
-        delays.run(after: .seconds(StoryGroupCube.swapDelay)) {
-            update()
-            // Pas de `markCurrentViewed()` ici : l'interlude du nouvel auteur
-            // n'est décidé qu'ensuite, par l'`adaptiveOnChange(of:
-            // currentGroupIndex)`. Marquer maintenant comptait la story avant
-            // même que l'écran d'identité ne la recouvre. Le marquage se fait
-            // dans ce onChange, APRÈS `presentGroupIntroIfNeeded()`.
-            prefetchCurrentGroup()
+        let ticket = transitionLatch.begin(.groupCube) { landGroupSwap(update) }
+        delays.run(after: .seconds(StoryGroupCube.swapDelay)) { transitionLatch.complete(ticket) }
+    }
 
-            // Sans animation : la carte réelle prend la place exacte de la
-            // face entrante (transform identité), la face est démontée.
-            groupSlide = 0
-            neighborPreviewDirection = 0
-            restartTimer()
-            delays.run(after: .milliseconds(50)) { isTransitioning = false }
-        }
+    /// Le voile sonore se pose AVANT l'échange : le canvas du nouvel auteur naît
+    /// muet sous l'interlude (#18516). Le marquage suit la décision d'interlude
+    /// (`adaptiveOnChange(of: currentGroupIndex)`).
+    private func landGroupSwap(_ update: () -> Void) {
+        groupIntro.veilSound()
+        update()
+        StoryNavigationTrace.shared?.swapped(to: currentStory?.id, phase: .interlude)
+        prefetchCurrentGroup()
+        groupSlide = 0
+        neighborPreviewDirection = 0
+        restartTimer()
+        isTransitioning = false
     }
 
     // MARK: - Timer

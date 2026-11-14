@@ -237,9 +237,7 @@ extension StoryCanvasUIView {
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
         // l'audio des vidéos qui bouclent ET des clips audio soit audible même
         // silent-switch ON. Idempotent / call-aware via la source unique.
-        if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
-        }
+        MediaSessionCoordinator.shared.ensureContentPlayback(.audible)
         if playsVideoInEditMode {
             // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
             // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
