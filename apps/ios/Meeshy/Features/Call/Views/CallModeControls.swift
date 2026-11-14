@@ -182,7 +182,8 @@ struct CallEffectsModeControls: View {
             isRecording: capture.isRecording,
             hint: gestureHint,
             onCapturePhoto: photoAction,
-            onStartRecording: recordingAction
+            onStartRecording: recordingAction,
+            onConfirm: closeAfterChoice
         ) { effect, isSelected in
             CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
         }
@@ -197,7 +198,8 @@ struct CallEffectsModeControls: View {
             isRecording: capture.isRecording,
             hint: gestureHint,
             onCapturePhoto: photoAction,
-            onStartRecording: recordingAction
+            onStartRecording: recordingAction,
+            onConfirm: closeAfterChoice
         ) { preset, isSelected in
             CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
         }
@@ -564,12 +566,12 @@ struct CallMontageModeControls: View {
                 isRecording: capture.isRecording,
                 hint: CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil,
                 onCapturePhoto: shoot,
-                onStartRecording: film
+                onStartRecording: film,
+                onConfirm: closeAfterChoice,
+                variants: declinationVariants(people: people)
             ) { item, isSelected in
                 cell(item, isSelected: isSelected, people: people)
             }
-            .accessibilityAction(named: CallFrameCopy.nextDeclination) { stepDeclination(1, people: people) }
-            .accessibilityAction(named: CallFrameCopy.previousDeclination) { stepDeclination(-1, people: people) }
             .id(CallMontageCarouselKey(chip: chip, people: people, scope: scope))
         }
     }
@@ -638,10 +640,16 @@ struct CallMontageModeControls: View {
         }
     }
 
-    private func stepDeclination(_ offset: Int, people: Int) {
-        guard case .frame(let id) = CallMontageFrameRule.reconcile(capture.choice, people: people),
-              let next = CallFrameStyleRule.neighbour(of: id, offset: offset, in: CallFrameCatalogue.all) else { return }
-        chooseDeclination(next.id)
+    /// #18192 — à la voix, les déclinaisons du cadre annoncé se parcourent sans s'appliquer ; seule
+    /// l'activation du carrousel pose celle qui est annoncée et rend le menu de base.
+    private func declinationVariants(people: Int) -> CallModeCarouselVariants<CallMontageChoice> {
+        CallModeCarouselVariants(
+            of: { CallMontageFrameRule.declinations(of: $0).map { CallMontageChoice.frame($0) } },
+            current: { declined($0, people: people) },
+            name: CallFrameCopy.choiceName,
+            next: CallFrameCopy.nextDeclination,
+            previous: CallFrameCopy.previousDeclination
+        )
     }
 
     /// Une déclinaison choisie est un cadre choisi : elle s'applique et le carrousel se referme.
