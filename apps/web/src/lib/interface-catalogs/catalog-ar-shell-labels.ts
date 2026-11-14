@@ -224,7 +224,6 @@ const arShellLabels = {
   'hashtag.loading': 'جارٍ تحميل المنشورات',
   'hashtag.error': 'تعذّر تحميل هذا الوسم',
   'hashtag.empty.title': 'لا شيء تحت #{tag}',
-  'hashtag.empty.body': 'لا يوجد منشور مرئي يحمل هذا الوسم.',
   'hashtag.loadMore': 'تحميل المزيد',
   'hashtag.loadingMore': 'جارٍ التحميل…',
 } satisfies ShellLabelsCatalogSlice;

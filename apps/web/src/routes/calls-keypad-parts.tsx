@@ -133,8 +133,8 @@ export function KeypadPad({ onKey }: { readonly onKey: (digit: string) => void }
 
 export type KeypadStatus = 'idle' | 'searching' | 'none' | 'error' | 'offline';
 
-const STATUS_COPY: Readonly<Record<KeypadStatus, readonly ['keypad.prompt.title' | 'keypad.searching' | 'keypad.noMatch.title' | 'keypad.error.title' | 'keypad.offline.title', 'keypad.prompt.subtitle' | 'keypad.noMatch.subtitle' | 'keypad.error.body' | 'keypad.offline.body' | null]>> = {
-  idle: ['keypad.prompt.title', 'keypad.prompt.subtitle'],
+const STATUS_COPY: Readonly<Record<KeypadStatus, readonly ['keypad.prompt.title' | 'keypad.searching' | 'keypad.noMatch.title' | 'keypad.error.title' | 'keypad.offline.title', 'keypad.noMatch.subtitle' | 'keypad.error.body' | 'keypad.offline.body' | null]>> = {
+  idle: ['keypad.prompt.title', null],
   searching: ['keypad.searching', null],
   none: ['keypad.noMatch.title', 'keypad.noMatch.subtitle'],
   error: ['keypad.error.title', 'keypad.error.body'],

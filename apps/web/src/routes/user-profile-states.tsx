@@ -149,9 +149,11 @@ export function ProfilePostsEmpty({ language, filter }: { readonly language: Int
       <p className="text-body font-semibold" style={{ color: INK }}>
         {translate(language, filter === 'all' ? 'userProfile.posts.empty' : FILTERED_EMPTY[filter])}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, filtered ? 'userProfile.posts.emptyFilter' : 'userProfile.posts.emptyBody')}
-      </p>
+      {filtered ? (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          {translate(language, 'userProfile.posts.emptyFilter')}
+        </p>
+      ) : null}
     </div>
   );
 }

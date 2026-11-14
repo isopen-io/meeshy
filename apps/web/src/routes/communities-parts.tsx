@@ -5,7 +5,9 @@ import '@/styles/avatar.css';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { COMMUNITIES_GLYPHS, type CommunitiesGlyphName } from '@/components/glyphs-communities';
-import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoNoted } from '@/components/info-hint';
 import { IosSwitch } from '@/components/ios-switch';
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -231,9 +233,6 @@ export function CommunitiesEmpty({ language }: { readonly language: InterfaceLan
       <p className="text-thread font-bold" style={{ color: INK }}>
         {translate(language, 'community.list.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, 'community.list.empty.subtitle')}
-      </p>
       <Link
         to="communityNew"
         data-community-empty-create
@@ -381,46 +380,12 @@ export function CommunityHero({ language, community }: { readonly language: Inte
   );
 }
 
-function Stat({ icon, value, label, stat }: { readonly icon: ReactNode; readonly value: string; readonly label: string; readonly stat: string }) {
+/** Le panneau de l'onglet Conversations : l'onglet actif porte déjà le nom, aucun titre de section ne le redit (règle 2). */
+export function CommunityConversationsSection({ children }: { readonly children: ReactNode }) {
   return (
-    <div data-community-stat={stat} className="grid flex-1 justify-items-center gap-1 py-3">
-      <span className="flex items-center gap-1">
-        <span aria-hidden="true" style={{ color: BRAND }}>
-          {icon}
-        </span>
-        <strong className="font-bold" style={{ color: INK, fontSize: 'var(--text-lg)' }}>
-          {value}
-        </strong>
-      </span>
-      <span className="text-chip font-medium" style={{ color: INK_2 }}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
-/** Miroir `CommunityDetailView.statsSection` — membres et conversations, en nombres entiers. */
-export function CommunityStats({ language, community }: { readonly language: InterfaceLanguage; readonly community: CommunitySummary }) {
-  const format = new Intl.NumberFormat(language);
-  return (
-    <div className="flex items-stretch rounded-card" style={CARD_STYLE}>
-      <Stat stat="members" icon={<Glyph name="users" size={13} />} value={format.format(community.memberCount)} label={translate(language, 'community.detail.stats.members')} />
-      <span aria-hidden="true" className="my-3 w-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }} />
-      <Stat
-        stat="conversations"
-        icon={<ScreenGlyph name="chatsCircle" size={13} />}
-        value={format.format(community.conversationCount)}
-        label={translate(language, 'community.detail.channels')}
-      />
-    </div>
-  );
-}
-
-export function CommunityConversationsSection({ language, children }: { readonly language: InterfaceLanguage; readonly children: ReactNode }) {
-  return (
-    <GroupedSection id="community-conversations" title={translate(language, 'community.detail.channels')} icon={<ScreenGlyph name="chatsCircle" size={12} />}>
+    <div id="community-conversations" data-community-conversations className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
       {children}
-    </GroupedSection>
+    </div>
   );
 }
 
@@ -561,14 +526,20 @@ export function PrivacyToggle({
       <span aria-hidden="true" className="grid w-8 shrink-0 place-items-center" style={{ color: isPrivate ? BRAND : 'var(--color-success)' }}>
         <ScreenGlyph name={isPrivate ? 'shieldCheck' : 'eye'} size={20} />
       </span>
-      <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-body font-semibold" style={{ color: INK }}>
-          {translate(language, 'community.create.privacy.title')}
-        </span>
-        <span id={captionId} className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, isPrivate ? 'community.create.privacy.private.description' : 'community.create.privacy.public.description')}
-        </span>
-      </span>
+      <div className="min-w-0 flex-1">
+        <InfoNoted
+          noteId={captionId}
+          note={{
+            label: translate(language, 'community.create.privacy.question'),
+            text: translate(language, isPrivate ? 'community.create.privacy.private.description' : 'community.create.privacy.public.description'),
+            glyph: SETTINGS_GLYPHS.info,
+          }}
+        >
+          <span className="text-body font-semibold" style={{ color: INK }}>
+            {translate(language, 'community.create.privacy.title')}
+          </span>
+        </InfoNoted>
+      </div>
       <button
         type="button"
         role="switch"

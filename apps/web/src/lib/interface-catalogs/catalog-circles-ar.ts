@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const ar = {
   'circles.section.requests': 'طلبات رفع المستوى',
+  'circles.intro': 'تحدد كل دائرة ما يراه الشخص منك: كلما اقتربت، زادت مشاركتك.',
   'circles.empty.title': 'ستظهر روابطك هنا',
   'circles.empty.subtitle': 'كلما تواصلت مع أشخاص، انضموا إلى دوائرك.',
   'circles.empty.action': 'البحث عن جهات اتصال',

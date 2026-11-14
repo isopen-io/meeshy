@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const it = {
   'circles.section.requests': 'Richieste di salita',
+  'circles.intro': 'Ogni cerchia decide cosa una persona vede di te: più è vicina, più condividi.',
   'circles.empty.title': 'I tuoi legami appariranno qui',
   'circles.empty.subtitle': 'Man mano che parli con le persone, entrano nelle tue cerchie.',
   'circles.empty.action': 'Trova contatti',

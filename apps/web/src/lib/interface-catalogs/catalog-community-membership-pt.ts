@@ -63,7 +63,6 @@ const ptCommunityMembership = {
   'community.posts.tab.posts': "Publicações",
   'community.posts.loading': "Carregando as publicações",
   'community.posts.empty.title': "Ainda sem publicações",
-  'community.posts.empty.body': "As publicações da comunidade aparecerão aqui.",
   'community.posts.error.title': "Não foi possível carregar as publicações",
   'community.posts.error.offline': "Sem conexão: as publicações aparecerão quando a rede voltar.",
   'community.posts.retry': "Tentar de novo",

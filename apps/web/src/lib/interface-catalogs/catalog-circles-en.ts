@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const en = {
   'circles.section.requests': 'Level-up requests',
+  'circles.intro': 'Each circle sets what a person sees of you: the closer it is, the more you share.',
   'circles.empty.title': 'Your links will appear here',
   'circles.empty.subtitle': 'As you talk with people, they join your circles.',
   'circles.empty.action': 'Find contacts',

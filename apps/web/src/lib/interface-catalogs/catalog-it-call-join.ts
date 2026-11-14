@@ -27,7 +27,6 @@ const itCallJoin = {
   'keypad.input.label': 'Numero o nome da cercare',
   'keypad.delete': 'Cancella',
   'keypad.prompt.title': 'Componi un numero o un nome',
-  'keypad.prompt.subtitle': 'Trova qualcuno per numero di telefono o per nome.',
   'keypad.searching': 'Ricerca…',
   'keypad.noMatch.title': 'Nessun contatto trovato',
   'keypad.noMatch.subtitle': 'Controlla il numero o il nome inserito.',

@@ -63,7 +63,6 @@ const arCommunityMembership = {
   'community.posts.tab.posts': "المنشورات",
   'community.posts.loading': "جارٍ تحميل المنشورات",
   'community.posts.empty.title': "لا توجد منشورات بعد",
-  'community.posts.empty.body': "ستظهر منشورات المجتمع هنا.",
   'community.posts.error.title': "تعذّر تحميل المنشورات",
   'community.posts.error.offline': "غير متصل: ستظهر المنشورات عند عودة الشبكة.",
   'community.posts.retry': "إعادة المحاولة",

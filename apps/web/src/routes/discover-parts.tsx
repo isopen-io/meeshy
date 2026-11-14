@@ -89,12 +89,6 @@ export function DiscoverHeader({ language }: { readonly language: InterfaceLangu
 
 const TAB_LABEL = { discover: 'discover.tab.discover', requests: 'discover.tab.requests', blocked: 'discover.tab.blocked', circles: 'discover.tab.circles' } as const;
 
-function TabGlyph({ tab }: { readonly tab: DiscoverTab }) {
-  if (tab === 'discover') return <Glyph name="magnifyingGlass" size={14} />;
-  if (tab === 'circles') return <Glyph name="users" size={14} />;
-  return <DiscoverGlyph name={tab === 'requests' ? 'userPlus' : 'handPalm'} size={14} />;
-}
-
 /** Le nom d'un onglet — « Demandes » dit son compte quand il en porte un, comme `accessibilityValue` d'iOS. */
 export function discoverTabLabel(language: InterfaceLanguage, tab: DiscoverTab, received: number): string {
   if (tab !== 'requests' || received <= 0) return translate(language, TAB_LABEL[tab]);
@@ -187,12 +181,8 @@ export function DiscoverTabBar({
               className={`flex min-w-0 items-center gap-1 text-caption font-semibold ${active ? BRAND_INK : ''}`}
               style={active ? undefined : { color: INK_2 }}
             >
-              {/* Sous 360 de large, le glyphe cède sa place au NOM : à 320, « Demandes »
-                  et sa pastille ne tenaient plus et se tronquaient (recette). */}
-              <span aria-hidden="true" className="hidden shrink-0 place-items-center min-[360px]:grid">
-                <TabGlyph tab={tab} />
-              </span>
-              <span data-discover-tab-title className="truncate">
+              {/* Le NOM entier, jamais tronqué (règle 5) : les glyphes d'onglet ont quitté la barre pour lui rendre sa largeur. */}
+              <span data-discover-tab-title className="whitespace-nowrap">
                 {translate(language, TAB_LABEL[tab])}
               </span>
               {count > 0 ? (
@@ -431,9 +421,11 @@ export const ReceivedRequestRow = memo(function ReceivedRequestRow({
     <li data-request={request.id} data-request-bucket="received" className="flex items-center gap-3.5 px-5 py-3" style={{ borderBottom: EDGE, minHeight: PERSON_ROW_HEIGHT }}>
       <PersonAvatar person={request.sender} name={name} />
       <PersonText person={request.sender} name={name}>
-        <span data-request-message className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
-          {request.message ?? translate(language, 'discover.requests.intent')}
-        </span>
+        {request.message === null || request.message === undefined ? null : (
+          <span data-request-message className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
+            {request.message}
+          </span>
+        )}
         {levelCaption === null ? null : (
           <span data-request-level className="text-caption font-semibold" style={{ color: INK }}>
             {levelCaption}
@@ -737,7 +729,7 @@ export function DiscoverEmpty({
 }: {
   readonly glyph: ReactNode;
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle?: string;
   readonly data: string;
 }) {
   return (
@@ -748,9 +740,11 @@ export function DiscoverEmpty({
       <p className="text-body font-semibold" style={{ color: INK }}>
         {title}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {subtitle}
-      </p>
+      {subtitle === undefined ? null : (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }

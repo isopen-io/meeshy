@@ -63,7 +63,6 @@ const itCommunityMembership = {
   'community.posts.tab.posts': "Post",
   'community.posts.loading': "Caricamento dei post",
   'community.posts.empty.title': "Ancora nessun post",
-  'community.posts.empty.body': "I post della community appariranno qui.",
   'community.posts.error.title': "Impossibile caricare i post",
   'community.posts.error.offline': "Offline: i post appariranno quando tornerà la rete.",
   'community.posts.retry': "Riprova",

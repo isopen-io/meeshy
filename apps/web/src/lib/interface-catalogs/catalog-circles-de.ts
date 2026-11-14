@@ -5,6 +5,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 
 const de = {
   'circles.section.requests': 'Anfragen für eine höhere Stufe',
+  'circles.intro': 'Jeder Kreis bestimmt, was eine Person von dir sieht: je näher, desto mehr teilst du.',
   'circles.empty.title': 'Deine Verbindungen erscheinen hier',
   'circles.empty.subtitle': 'Je mehr du dich mit Menschen austauschst, desto mehr kommen sie in deine Kreise.',
   'circles.empty.action': 'Kontakte finden',

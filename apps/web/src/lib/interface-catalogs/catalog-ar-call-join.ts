@@ -27,7 +27,6 @@ const arCallJoin = {
   'keypad.input.label': 'الرقم أو الاسم المطلوب البحث عنه',
   'keypad.delete': 'حذف',
   'keypad.prompt.title': 'اطلب رقمًا أو اسمًا',
-  'keypad.prompt.subtitle': 'ابحث عن شخص برقم هاتفه أو باسمه.',
   'keypad.searching': 'جارٍ البحث…',
   'keypad.noMatch.title': 'لم يُعثر على أي جهة اتصال',
   'keypad.noMatch.subtitle': 'تحقق من الرقم أو الاسم المُدخل.',

@@ -7,6 +7,7 @@
  */
 const fr = {
   'circles.section.requests': 'Demandes de montée',
+  'circles.intro': 'Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.',
   'circles.empty.title': 'Vos liens apparaîtront ici',
   'circles.empty.subtitle': 'À mesure que vous échangez avec des personnes, elles rejoignent vos cercles.',
   'circles.empty.action': 'Trouver des contacts',
