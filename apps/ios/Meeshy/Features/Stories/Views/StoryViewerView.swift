@@ -187,8 +187,9 @@ struct StoryViewerView: View {
     var outgoingStory: StoryItem? { get { outgoingStoryCell.wrappedValue } nonmutating set { outgoingStoryCell = Indirect(wrappedValue: newValue) } }
     @State var outgoingOpacity: Double = 0 // internal for cross-file extension access
 
-    // Transition lock — prevents overlapping animations
+    // Transition en vol : un toucher la conclut au lieu d'être jeté (#18509)
     @State var isTransitioning = false // internal for cross-file extension access
+    @State var transitionLatch = StoryTransitionLatch() // internal : `+Navigation`, `+Content`
 
     @State var closingScale: CGFloat = 1.0        // internal for cross-file extension access
 
@@ -370,13 +371,11 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }
-        // Readiness du canvas VISIBLE (StoryReaderRepresentable) — signal
-        // jumeau de celui du canvas préfetché câblé dans
-        // `refreshPrefetchWindowAndTimer` (markContentReady est idempotent,
-        // premier arrivé gagne). Garde le gate fonctionnel même quand le
-        // prefetcher n'a pas (encore) de canvas pour la slide courante.
+        // Readiness du canvas VISIBLE, jumelle de celle du canvas préfetché
+        // (`refreshPrefetchWindowAndTimer`) : premier arrivé gagne.
         .adaptiveOnChange(of: isContentReady) { _, ready in
             guard ready, let id = currentStory?.id else { return }
+            StoryNavigationTrace.shared?.firstFrame(storyId: id)
             slideTimer.markContentReady(slideId: id)
             prepareNeighborWindow()
         }
@@ -570,7 +569,7 @@ struct StoryViewerView: View {
             storyHasTranslatableContent: storyHasTranslatableContent,
             backgroundSoundAnnouncement: backgroundSoundAnnouncement,
             storyHasAudioTranscript: storyHasAudioTranscript,
-            isGlobalMuted: isGlobalMuted,
+            isGlobalMuted: isGlobalMuted, isSoundVeiledByIdentity: groupIntro.veilsSound || showGroupIntro,
             availableTranslationLanguages: availableTranslationLanguages,
             activeLanguageCode: sessionLanguageOverride,
             hasActiveReaderFeature: hasActiveReaderFeature,
@@ -627,7 +626,7 @@ struct StoryViewerView: View {
             seekTimer: { slideTimer.seek(toFraction: $0) },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
-            onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
+            onPlaybackProgressing: { [storyId = currentStory?.id] in slideTimer.setPlaybackStalled(!$0); StoryNavigationTrace.shared?.playback($0, storyId: storyId) },
             loadStoryComments: { commentSession.loadRoots() },
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },

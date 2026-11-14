@@ -161,7 +161,7 @@ internal fun <T> CallModeCarousel(
     val selectedIndex = items.indexOf(selection).coerceAtLeast(0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     val haptics = LocalHapticFeedback.current
-    val centred by rememberCarouselCentre(list, items, selectedIndex, reduceMotion, onSelect)
+    val centred by rememberCarouselCentre(list, items, selection, selectedIndex, reduceMotion, onSelect)
     val shownName = name(centred?.let(items::getOrNull) ?: selection)
     var browse by remember(selection) { mutableStateOf(CallModeCarouselBrowse<T>()) }
     val position = browse.position(selection)
@@ -227,18 +227,20 @@ internal fun <T> CallModeCarousel(
 
 /**
  * L'élément au centre du carrousel, et ce qui le tient : le choix ne part qu'au repos (jamais un effet par élément
- * traversé), et un choix venu d'ailleurs ramène son élément au centre.
+ * traversé, ni l'élément déjà choisi), et un choix venu d'ailleurs ramène son élément au centre.
  */
 @Composable
 private fun <T> rememberCarouselCentre(
     list: LazyListState,
     items: List<T>,
+    selection: T,
     selectedIndex: Int,
     reduceMotion: Boolean,
     onSelect: (T) -> Unit,
 ): State<Int?> {
     val latestSelect by rememberUpdatedState(onSelect)
     val latestItems by rememberUpdatedState(items)
+    val latestSelection by rememberUpdatedState(selection)
     val centred = remember(list) {
         derivedStateOf {
             val layout = list.layoutInfo
@@ -252,7 +254,7 @@ private fun <T> rememberCarouselCentre(
             .distinctUntilChanged()
             .collect { (_, index) ->
                 val item = index?.let(latestItems::getOrNull) ?: return@collect
-                latestSelect(item)
+                if (item != latestSelection) latestSelect(item)
             }
     }
     LaunchedEffect(selectedIndex) {

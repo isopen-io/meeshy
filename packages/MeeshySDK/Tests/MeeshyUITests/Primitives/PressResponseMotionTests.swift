@@ -105,6 +105,19 @@ struct PressResponseMotionTests {
         #expect(code.contains("PressableButtonStyle()"), "\(relative) ne suit plus l'appui de son bouton")
     }
 
+    /// Les deux boutons flottants (libre et hérité) s'écrasent par la MÊME loi
+    /// pendant l'appui long, et l'appui long dure ce que dure l'écrasement (#18428).
+    @Test func les_deux_boutons_flottants_s_ecrasent_par_la_loi_de_l_appui_long() throws {
+        let code = try Self.source("Sources/MeeshyUI/Primitives/FloatingButtons.swift")
+        #expect(code.components(separatedBy: ".modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))").count - 1 == 2,
+                "chaque bouton flottant doit s'écraser, ou s'estomper sous réduction, par FloatingButtonHoldSquash")
+        #expect(code.components(separatedBy: ".updating($isHolding)").count - 1 == 2,
+                "l'écrasement suit le doigt tenu par l'état du geste d'appui long, relâché à l'ouverture ou à l'abandon")
+        #expect(code.components(separatedBy: "LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)").count - 1 == 2,
+                "l'appui long doit durer ce que dure l'écrasement")
+        #expect(!code.contains("minimumDuration: 0.5"), "durée d'appui long littérale, détachée de l'écrasement")
+    }
+
     @Test(arguments: guardedFiles)
     func aucun_style_d_appui_prive_a_echelle(_ relative: String) throws {
         let code = try Self.source(relative)

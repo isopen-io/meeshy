@@ -61,6 +61,16 @@ public nonisolated enum AudioTrackActivationLaw {
         }
     }
 
+    /// **L'écriture d'un élément, sans relire ses pistes** (#18511) : relire
+    /// l'état d'une piste est un aller-retour synchrone vers le serveur média.
+    /// `appliedMuted` est ce que Meeshy a écrit sur l'élément ; `nil`, il est
+    /// vierge et ses pistes sont allumées. Rend l'état à écrire sur ses pistes
+    /// audio, `nil` : rien à écrire.
+    public static func trackWrite(appliedMuted: Bool?, effectiveMuted: Bool) -> Bool? {
+        guard (appliedMuted ?? false) != effectiveMuted else { return nil }
+        return !effectiveMuted
+    }
+
     /// Les pistes d'un élément n'existent qu'une fois l'élément prêt.
     public static func mayTouchTracks(itemStatus: AVPlayerItem.Status?) -> Bool {
         itemStatus == .readyToPlay
