@@ -416,7 +416,7 @@ final class PlayerBannerTests: XCTestCase {
     func test_theSlotNeverReadsTheWindowInsetsItself() throws {
         let host = try source("Meeshy/Features/Game/PlayerBannerHost.swift")
         XCTAssertFalse(host.contains("DeviceLayout.safeAreaTop"), "lire l'encart de la fenêtre clé depuis l'intérieur fige la vue (#8772) : il est mesuré par préférence")
-        XCTAssertTrue(host.contains("withAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, pas par une .animation(value:)")
+        XCTAssertTrue(host.contains("meeshyWithAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, sous la racine du mouvement, pas par une .animation(value:)")
         XCTAssertFalse(host.contains(".animation(TopChromeBarMotion"), "une .animation(value:) n'anime pas une sortie (#9048)")
         XCTAssertFalse(host.contains(".animation(PlayerBannerMotion"), "idem pour la sortie lente : un changement d'état fait sous withAnimation")
     }
