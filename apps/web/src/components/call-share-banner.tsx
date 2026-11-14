@@ -68,7 +68,7 @@ export function CallCaptureAlerts({ members, language }: { readonly members: Rea
 
 /**
  * Les alertes d'un pair (`call:quality-alert`, #8047) : son lien instable, dit poliment dans une région
- * vivante, sous l'en-tête. Elles vivent avec les bandeaux du haut (`call_top_banners`), que l'appel vivant
+ * vivante, sous l'en-tête, sur le verre partagé du kit (loi 18.1). Elles vivent avec les bandeaux du haut (`call_top_banners`), que l'appel vivant
  * précharge : l'écran d'appel n'en paie que l'`import()`.
  */
 export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
@@ -77,9 +77,9 @@ export function CallPeerAlerts({ members, language }: { readonly members: Readon
       {Object.values(members)
         .filter((member) => member.weakNetwork)
         .map((member) => (
-          <span key={`network-${member.userId}`} className="glass-call rounded-full px-3 py-1 text-mini" data-call-alert="weak-network">
+          <MeeshyGlass as="span" key={`network-${member.userId}`} density="dense" className="rounded-full px-3 py-1 text-mini text-on-media" data-call-alert="weak-network">
             {translate(language, 'call.alert.weakNetwork', { name: member.name })}
-          </span>
+          </MeeshyGlass>
         ))}
     </div>
   );
