@@ -151,6 +151,12 @@ struct FocalRowInput: Equatable {
     let translatedAudios: [MessageTranslatedAudio]
     /// CORRIGÉ vs le texte littéral du contrat — voir doc de tête.
     let allAudioItems: [ConversationViewModel.AudioItem]
+    /// #10690 — le message de CETTE rangée quand il porte un vocal : le bloc
+    /// audio s'en sert quand la projection `allAudioItems` du ViewModel ne le
+    /// connaît pas encore, ou plus (bascule d'identifiant local → serveur à
+    /// l'accusé). Sans lui, la rangée d'un vocal qu'on vient d'envoyer restait
+    /// VIDE jusqu'à la réouverture de la conversation. `nil` sans vocal.
+    var audioHostMessage: Message? = nil
     let conversationName: String
 
     // MARK: - Effets (F-083ter, F15)
@@ -291,6 +297,8 @@ struct FocalRowInput: Equatable {
             && lhs.content == rhs.content
             && lhs.density == rhs.density
             && lhs.isFirstInGroup == rhs.isFirstInGroup
+            && lhs.audioHostMessage?.id == rhs.audioHostMessage?.id
+            && lhs.audioHostMessage?.attachments.map(\.id) == rhs.audioHostMessage?.attachments.map(\.id)
             && lhs.senderId == rhs.senderId
             && lhs.senderDisplayName == rhs.senderDisplayName
             && lhs.senderUsername == rhs.senderUsername
