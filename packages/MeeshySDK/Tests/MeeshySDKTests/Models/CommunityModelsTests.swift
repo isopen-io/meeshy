@@ -197,6 +197,46 @@ final class CommunityModelsTests: XCTestCase {
         XCTAssertEqual(community.conversationCount, 3)
     }
 
+    // MARK: - « N en ligne » (#18014)
+
+    private func detailJSON(onlineMemberCount: String?) -> Data {
+        let field = onlineMemberCount.map { ",\n            \"onlineMemberCount\": \($0)" } ?? ""
+        return """
+        {
+            "id": "comm9",
+            "identifier": "club",
+            "name": "Club",
+            "isPrivate": false,
+            "createdBy": "user1",
+            "createdAt": "2026-02-20T14:00:00.000Z",
+            "memberCount": 40,
+            "conversationCount": 2\(field)
+        }
+        """.data(using: .utf8)!
+    }
+
+    func test_toCommunity_servedOnlineCount_reachesTheDomain() throws {
+        let api = try makeDecoder().decode(APICommunity.self, from: detailJSON(onlineMemberCount: "7"))
+        XCTAssertEqual(api.toCommunity().onlineMemberCount, 7)
+    }
+
+    func test_toCommunity_nullOrAbsentOnlineCount_staysNil() throws {
+        let tooSmall = try makeDecoder().decode(APICommunity.self, from: detailJSON(onlineMemberCount: "null"))
+        let olderServer = try makeDecoder().decode(APICommunity.self, from: detailJSON(onlineMemberCount: nil))
+        XCTAssertNil(tooSmall.toCommunity().onlineMemberCount)
+        XCTAssertNil(olderServer.toCommunity().onlineMemberCount)
+    }
+
+    func test_onlineCount_survivesTheCacheRoundTrip() throws {
+        let api = try makeDecoder().decode(APICommunity.self, from: detailJSON(onlineMemberCount: "3"))
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let cached = try decoder.decode(APICommunity.self, from: encoder.encode(api))
+        XCTAssertEqual(cached.onlineMemberCount, 3)
+    }
+
     // MARK: - APICommunitySearchResult
 
     func test_apiCommunitySearchResult_decodes() throws {
