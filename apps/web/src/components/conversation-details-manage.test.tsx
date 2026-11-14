@@ -282,3 +282,36 @@ describe('mes options (#7836)', () => {
     }
   });
 });
+
+/**
+ * ÉPURE #18361 — la fiche du groupe nomme au lieu d'expliquer (règles 1 et 3) : le titre de section porte le verbe,
+ * les rangées sont des noms, le Prisme se dit en une phrase visible, la consigne du surnom est derrière un (i).
+ */
+describe('la fiche du groupe, épurée (#18361)', () => {
+  test('le titre de la section porte le verbe, la rangée du rôle est un nom', async () => {
+    await mount(conversation());
+    const headings = [...document.querySelectorAll('[data-conversation-settings] h5')].map((node) => node.textContent);
+    expect(headings).toEqual(['Autoriser']);
+    expect($('[data-conversation-write-role] legend')?.textContent).toBe('Écrire');
+  });
+
+  test('le Prisme se dit en une phrase visible : « Chacun lit dans sa langue. »', async () => {
+    await mount(conversation());
+    const row = $('[data-conversation-auto-translate]')?.closest('div');
+    expect(row?.textContent).toContain('Traduction automatique');
+    expect(row?.textContent).toContain('Chacun lit dans sa langue.');
+    expect(row?.textContent).not.toContain('Les messages sont traduits automatiquement');
+  });
+
+  test('le surnom : « Surnom » à l’écran, la consigne derrière un (i) « À quoi sert le surnom ? »', async () => {
+    await mount(conversation());
+    expect($('[data-conversation-options-rename]')?.textContent).toContain('Surnom');
+    expect($('[data-conversation-options-rename]')?.textContent).not.toContain('Donnez un surnom');
+    const info = document.querySelector<HTMLButtonElement>('[data-conversation-options] button[aria-label="À quoi sert le surnom ?"]');
+    expect(info).not.toBeNull();
+    expect(info?.closest('[data-conversation-options-rename]')).toBeNull();
+    const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toBe('Donnez un surnom à cette conversation : vous seul le voyez.');
+    expect(note?.className).toContain('sr-only');
+  });
+});

@@ -126,33 +126,6 @@ describe('ce que « Terminé » rend (studioRetouchReturn)', () => {
   });
 });
 
-describe('la caméra de la barre n’est plus l’`input capture` de l’OS', () => {
-  test('un bouton qui ouvre le studio', () => {
-    let opened = 0;
-    const el = mount(
-      <ComposerTopRow
-        ephemeralPickerOpen={false}
-        onToggleEphemeral={() => undefined}
-        blurred={false}
-        onToggleBlur={() => undefined}
-        viewOnce={false}
-        onToggleViewOnce={() => undefined}
-        effectCount={0}
-        effectsPanelOpen={false}
-        onToggleEffects={() => undefined}
-        languageCode="fr"
-        onOpenLanguage={() => undefined}
-        text=""
-        onOpenCamera={() => (opened += 1)}
-      />,
-    );
-    const button = el.querySelector<HTMLButtonElement>('button[data-composer-camera]');
-    expect(button).not.toBeNull();
-    expect(el.querySelector('input[capture]')).toBeNull();
-    act(() => button!.click());
-    expect(opened).toBe(1);
-  });
-});
 
 describe('la tuile caméra du panneau suit la barre', () => {
   test('avec la porte du studio, la tuile l’ouvre', async () => {

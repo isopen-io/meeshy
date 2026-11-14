@@ -87,16 +87,30 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
     expect(new Set([...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((input) => input.name)).size).toBe(1);
   });
 
-  test('chaque mode porte sa phrase en description', async () => {
+  test('chaque mode tient en UNE ligne, en description', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
-    expect(describedText(radio('server'))).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
-    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin. Cet appareil ne la porte pas encore.');
+    expect(describedText(radio('server'))).toBe('Chiffré sur nos serveurs.');
+    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.');
     expect(describedText(radio('hybrid'))).not.toMatch(/bout en bout|chaque message/u);
   });
 
-  test('le pied du choix dit que le bout en bout ne se désactive jamais, et qu’une autre conversation reste possible', async () => {
+  test('le détail du mode retenu est derrière un (i) « Que change ce mode ? », lu même replié', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    const info = document.querySelector<HTMLButtonElement>('button[aria-label="Que change ce mode ?"]');
+    expect(info).not.toBeNull();
+    expect(info?.closest('details')).toBeNull();
+    const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
+    expect(note?.className).toContain('sr-only');
+  });
+
+  test('l’irréversibilité est dite ENTIÈRE, visible au repos, sans rien déplier — et une seule fois', async () => {
     await mount({ platformRole: 'USER', conversationType: 'group' });
-    expect(document.querySelector('[data-creation-encryption-footer]')?.textContent).toBe(
+    const footers = document.querySelectorAll('[data-creation-encryption-footer]');
+    expect(footers).toHaveLength(1);
+    expect(footers[0]?.closest('details')).toBeNull();
+    expect(footers[0]?.className).not.toContain('sr-only');
+    expect(footers[0]?.textContent).toBe(
       'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
     );
   });

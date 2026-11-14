@@ -231,6 +231,11 @@ async function click(button: HTMLElement | null) {
   await settle();
 }
 
+/** Le lien et ses gestes sont rangés derrière « Plus » (épure #18361, règle 6) : on l'ouvre comme le ferait la personne. */
+async function openLinkRow(el: Element) {
+  await click(el.querySelector<HTMLButtonElement>('[data-invite-more]'));
+}
+
 describe('ROUTES — /chat/$link', () => {
   test('s’apparie à /chat/<lien>, en extrait `link`, et à rien d’autre', () => {
     const compiled = compile(ROUTES.chatJoin.pattern);
@@ -288,6 +293,7 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
     expect(text(el.querySelector('[data-invite-meta]'))).toBe('Groupe · créé le 2 sept. 2025');
     expect(text(el.querySelector('[data-invite-description]'))).toBe('Le fil de l’équipe qui livre Meeshy.');
+    await openLinkRow(el);
     const url = text(el.querySelector('[data-invite-url]'));
     expect(url).toContain('meeshy.me/chat/mshy_equipe_7f3a');
     expect(url).not.toContain('/l/');
@@ -321,17 +327,37 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
   test('le lien affiché est celui que sert la passerelle, pas l’adresse tapée', async () => {
     const { deps } = depsWith(withInvitation({ linkId: 'mshy_canonique' }));
     const el = await mount(deps, 'mshy_alias-du-nom');
+    await openLinkRow(el);
     expect(text(el.querySelector('[data-invite-url]'))).toContain('meeshy.me/chat/mshy_canonique');
   });
 
-  test('c. les chiffres sans identité : personnes, langues, et la légende en toutes lettres', async () => {
+  test('c. les chiffres sans identité tiennent en UNE ligne ; la ventilation par langue est derrière « Plus »', async () => {
     const { deps } = depsWith();
     const el = await mount(deps);
-    expect(text(el.querySelector('[data-invite-figure="people"]'))).toContain('personnes');
-    expect(text(el.querySelector('[data-invite-figure="people"] strong'))).toBe('248');
-    expect(text(el.querySelector('[data-invite-figure="languages"]'))).toContain('langues parlées');
-    expect(text(el.querySelector('[data-language-share="fr"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Français 75 %');
-    expect(text(el.querySelector('[data-language-share="es"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Español 25 %');
+    expect(text(el.querySelector('[data-invite-figures-line]'))).toBe('248 personnes · 6 langues parlées');
+    expect(el.querySelector('[data-language-share]')).toBeNull();
+    expect(text(el)).not.toContain('On y parle');
+    const more = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
+    expect(more?.getAttribute('aria-expanded')).toBe('false');
+    await click(more);
+    expect(more?.getAttribute('aria-expanded')).toBe('true');
+    expect(text(el.querySelector('[data-language-share="fr"]'))).toBe('Français 75 %');
+    expect(text(el.querySelector('[data-language-share="es"]'))).toBe('Español 25 %');
+  });
+
+  test('b. au repos, le lien et ses deux gestes ne sont pas à l’écran : « Plus » les ouvre, Copier y reste atteignable', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-url]')).toBeNull();
+    expect(el.querySelector('[data-invite-copy]')).toBeNull();
+    expect(el.querySelector('[data-invite-reshare]')).toBeNull();
+    const more = el.querySelector<HTMLButtonElement>('[data-invite-more]');
+    expect(more?.textContent).toBe('Plus');
+    expect(more?.getAttribute('aria-expanded')).toBe('false');
+    await click(more);
+    expect(more?.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('[data-invite-copy]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-reshare]')).not.toBeNull();
   });
 
   test('sans chiffres servis, la section ne s’affiche pas', async () => {
@@ -394,6 +420,7 @@ describe('Copier et Repartager (#7796 § 3)', () => {
   test('« Copier » copie l’adresse ENTIÈRE, devient « Copié » et le dit', async () => {
     const { deps, recorded } = depsWith();
     const el = await mount(deps);
+    await openLinkRow(el);
     await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
     expect(recorded.copies).toEqual(['https://meeshy.me/chat/mshy_equipe_7f3a']);
     expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copié');
@@ -403,6 +430,7 @@ describe('Copier et Repartager (#7796 § 3)', () => {
   test('un presse-papiers refusé se DIT, en erreur', async () => {
     const { deps } = depsWith({ copyText: async () => 'failed' });
     const el = await mount(deps);
+    await openLinkRow(el);
     await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
     expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copier');
     expect(el.querySelector('[data-invite-announce]')?.getAttribute('data-announce-tone')).toBe('error');
@@ -411,6 +439,7 @@ describe('Copier et Repartager (#7796 § 3)', () => {
   test('« Repartager » ouvre la feuille de partage avec le nom du groupe et l’adresse', async () => {
     const { deps, recorded } = depsWith();
     const el = await mount(deps);
+    await openLinkRow(el);
     await click(el.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
     expect(recorded.shares).toEqual([
       { title: 'Équipe déploiement', text: 'Rejoins Équipe déploiement sur Meeshy — chacun y écrit dans sa langue.', url: 'https://meeshy.me/chat/mshy_equipe_7f3a' },
@@ -419,10 +448,12 @@ describe('Copier et Repartager (#7796 § 3)', () => {
 
   test('sans feuille de partage, la copie de repli se dit ; sans rien du tout, l’absence aussi', async () => {
     const copied = await mount(depsWith({ shareUrl: async () => 'copie' }).deps);
+    await openLinkRow(copied);
     await click(copied.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
     expect(text(copied.querySelector('[data-invite-announce]'))).toBe('Lien copié.');
     act(() => mounted?.root.unmount());
     const none = await mount(depsWith({ shareUrl: async () => 'indisponible' }).deps);
+    await openLinkRow(none);
     await click(none.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
     expect(text(none.querySelector('[data-invite-announce]'))).toBe('Le partage n’est pas disponible ici.');
   });
