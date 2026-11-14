@@ -186,7 +186,9 @@ public actor MediaSessionCoordinator {
     /// l'exécution, sur la file. La couche appel y pose aussi sa session
     /// (`CallAudioSessionController.audioSessionQueue`).
     public nonisolated let sessionQueue = DispatchQueue(label: "me.meeshy.media-session", qos: .userInitiated)
-    nonisolated let audioSession: any AudioSessionProviding
+    nonisolated let audioSession: MemoizingAudioSession
+    /// Ce que l'appelant lit à la place de la session (#18511).
+    nonisolated var sessionMemo: AudioSessionConfigurationMemo { audioSession.memo }
     private nonisolated let _pendingSessionWork = OSAllocatedUnfairLock(initialState: 0)
 
     /// `true` tant qu'une écriture de session attend ou s'exécute sur la file.
@@ -216,7 +218,7 @@ public actor MediaSessionCoordinator {
         leaseNotificationCenter: NotificationCenter = .default
     ) {
         self.scheduleAfter = scheduleAfter
-        self.audioSession = session
+        self.audioSession = MemoizingAudioSession(base: session, memo: AudioSessionConfigurationMemo())
         self.leaseNotificationCenter = leaseNotificationCenter
     }
 
@@ -296,8 +298,9 @@ public actor MediaSessionCoordinator {
             return old
         }
         // L'appel prend ou rend la session (RTCAudioSession) : ce que ce
-        // coordinateur y avait activé ne tient plus.
+        // coordinateur y avait activé ne tient plus, ni ce qu'il en savait.
         playbackLeaseHeld = false
+        sessionMemo.invalidate()
         audibleContentHoldsSession = false
         // L'appel arrête la capture d'un vocal (`stopForCall`) : la session
         // n'appartient plus à l'enregistrement.
@@ -342,7 +345,7 @@ public actor MediaSessionCoordinator {
         bumpActivationGeneration()
         // Sous bail identique et file vide, rien à écrire ni à attendre : un
         // balayage de réel ne paie aucun saut de fil.
-        guard hasPendingSessionWork || playbackActivationNeeded(mode: mode, options: options) else { return }
+        guard hasPendingSessionWork || playbackActivationNeeded(mode: mode, options: options, knownOnly: true) else { return }
         onSessionQueue { [self] in performPlaybackActivation(mode: mode, options: options) }
     }
 
@@ -374,18 +377,27 @@ public actor MediaSessionCoordinator {
     /// Faut-il écrire la session pour cette lecture ? Jamais pendant un appel
     /// ni sous un enregistrement ; sinon dès que la configuration diffère ou
     /// que ce coordinateur ne tient pas le bail (#9702).
-    private nonisolated func playbackActivationNeeded(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) -> Bool {
+    /// `knownOnly` : l'appelant ne lit que la configuration connue — inconnue,
+    /// le travail part sur la file, qui relit la session (#18511).
+    private nonisolated func playbackActivationNeeded(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions,
+                                                      knownOnly: Bool = false) -> Bool {
         guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return false }
+        let configuration = knownOnly ? sessionMemo.known : audioSession.readConfiguration()
         return Self.shouldActivatePlayback(
-            configurationDiffers: currentPlaybackConfigurationDiffers(mode: mode, options: options),
+            configurationDiffers: configuration.map { configurationDiffers($0, mode: mode, options: options) } ?? true,
             leaseHeld: playbackLeaseHeld
         )
     }
 
     private nonisolated func currentPlaybackConfigurationDiffers(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) -> Bool {
+        configurationDiffers(audioSession.readConfiguration(), mode: mode, options: options)
+    }
+
+    private nonisolated func configurationDiffers(_ current: AudioSessionConfiguration, mode: AVAudioSession.Mode,
+                                                  options: AVAudioSession.CategoryOptions) -> Bool {
         Self.playbackConfigurationDiffers(
-            currentCategory: audioSession.category, currentMode: audioSession.mode,
-            currentOptions: audioSession.categoryOptions, mode: mode, options: options
+            currentCategory: current.category, currentMode: current.mode,
+            currentOptions: current.options, mode: mode, options: options
         )
     }
 
@@ -570,6 +582,20 @@ public actor MediaSessionCoordinator {
         onSessionQueue { [self] in performContentPlayback(audibility, mode: mode) }
     }
 
+    /// Comme `activateContentPlayback`, sauf sous une session déjà `.playback` —
+    /// connue de l'appelant, ou relue sur la file, jamais sur l'appelant (#18511).
+    public nonisolated func ensureContentPlayback(_ audibility: ContentPlaybackAudibility) {
+        guard sessionMemo.known?.category != .playback else { return }
+        installLeaseObserversIfNeeded()
+        observeSystemEvents()
+        guard Self.shouldManageSession(callActive: callActive) else { return }
+        onSessionQueue { [self] in
+            guard audioSession.readConfiguration().category != .playback else { return }
+            bumpActivationGeneration()
+            performContentPlayback(audibility, mode: .default)
+        }
+    }
+
     private nonisolated func contentDirective(_ audibility: ContentPlaybackAudibility) -> ContentPlaybackSessionDirective {
         ContentPlaybackSessionLaw.directive(for: audibility, audibleContentHoldsSession: audibleContentHoldsSession)
     }
@@ -577,11 +603,11 @@ public actor MediaSessionCoordinator {
     private nonisolated func contentSessionWorkNeeded(_ audibility: ContentPlaybackAudibility, mode: AVAudioSession.Mode) -> Bool {
         switch contentDirective(audibility) {
         case .activatePlayback:
-            return playbackActivationNeeded(mode: mode, options: ContentPlaybackSessionLaw.audibleOptions)
+            return playbackActivationNeeded(mode: mode, options: ContentPlaybackSessionLaw.audibleOptions, knownOnly: true)
         case .configureAmbientWithoutActivating:
             return Self.shouldManageSession(callActive: callActive)
                 && contentMayReconfigureSession
-                && audioSession.category != .ambient
+                && sessionMemo.known?.category != .ambient
         case .leaveSessionAlone:
             return false
         }
@@ -606,7 +632,7 @@ public actor MediaSessionCoordinator {
         observeSystemEvents()
         guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
         playbackLeaseHeld = false
-        guard audioSession.category != .ambient else { return }
+        guard audioSession.readConfiguration().category != .ambient else { return }
         do {
             try audioSession.setCategory(.ambient, mode: .default, options: [])
         } catch {
@@ -663,6 +689,10 @@ public actor MediaSessionCoordinator {
         let lease = _playbackLeaseLock
         let audibleHold = _audibleHoldLock
         let center = leaseNotificationCenter
+        let memo = sessionMemo
+        _ = center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil) { _ in
+            memo.invalidate()
+        }
         // Le passage en arrière-plan aussi : une app suspendue perd sa session
         // sans interruption notifiée (iOS 14.5+), et le premier balayage au
         // retour doit la réactiver.
@@ -675,6 +705,7 @@ public actor MediaSessionCoordinator {
             _ = center.addObserver(forName: name, object: nil, queue: nil) { _ in
                 lease.withLock { $0 = false }
                 audibleHold.withLock { $0 = false }
+                memo.invalidate()
             }
         }
     }

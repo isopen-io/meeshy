@@ -709,9 +709,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Observers
 
     private func setupObservers(for player: AVPlayer) {
-        // Sync immédiat de l'état de mute effectif sur le nouveau player. Sans
-        // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
-        // entend le son revenir alors que l'icône mute reste activée.
+        PlaybackPlayerCensus.shared?.track(player)
+        // Le mute effectif se pose tout de suite : sans ça, une vidéo ouverte
+        // après un mute en plein écran rendait le son sous l'icône muette.
         bindAudioTracks(to: player)
         if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
         applyLoop(to: player)
