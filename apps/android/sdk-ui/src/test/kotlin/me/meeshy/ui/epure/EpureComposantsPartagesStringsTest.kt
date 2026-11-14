@@ -61,22 +61,20 @@ class EpureComposantsPartagesStringsTest {
         "audio_consent_notice_message",
     )
 
-    private val behindInfo = listOf("recognition_language_question", "bring_silent_question", "bring_silent_note", "recognition_language_hint")
+    private val behindInfo = listOf("post_daily_limit_note_question", "post_daily_limit_note", "recognition_language_question", "bring_silent_question", "bring_silent_note", "recognition_language_hint")
 
     @Test
-    fun `la limite de commentaires dit la limite et la reprise en une ligne et garde le repere etincelles`() {
-        assertThat(text("fr", "post_daily_limit_comment"))
-            .isEqualTo("Limite de commentaires atteinte : reprise à %1\$s. Elle compte vos gestes, jamais vos étincelles.")
-        assertThat(text("fr", "post_daily_limit_comment_untimed"))
-            .isEqualTo("Limite de commentaires atteinte. Elle compte vos gestes, jamais vos étincelles.")
+    fun `la limite de commentaires dit la limite et la reprise en une ligne, la precision etincelles est derriere le i`() {
+        assertThat(text("fr", "post_daily_limit_comment")).isEqualTo("Limite de commentaires atteinte : reprise à %1\$s")
+        assertThat(text("fr", "post_daily_limit_comment_untimed")).isEqualTo("Limite de commentaires atteinte")
+        assertThat(text("fr", "post_daily_limit_note_question")).isEqualTo("Cette limite touche-t-elle mes étincelles ?")
+        assertThat(text("fr", "post_daily_limit_note")).isEqualTo("Elle compte vos gestes, jamais vos étincelles.")
     }
 
     @Test
-    fun `la limite de reactions dit la limite et la reprise en une ligne et garde le repere etincelles`() {
-        assertThat(text("fr", "post_daily_limit_reaction"))
-            .isEqualTo("Limite de réactions atteinte : reprise à %1\$s. Elle compte vos gestes, jamais vos étincelles.")
-        assertThat(text("fr", "post_daily_limit_reaction_untimed"))
-            .isEqualTo("Limite de réactions atteinte. Elle compte vos gestes, jamais vos étincelles.")
+    fun `la limite de reactions dit la limite et la reprise en une ligne`() {
+        assertThat(text("fr", "post_daily_limit_reaction")).isEqualTo("Limite de réactions atteinte : reprise à %1\$s")
+        assertThat(text("fr", "post_daily_limit_reaction_untimed")).isEqualTo("Limite de réactions atteinte")
     }
 
     @Test
@@ -168,7 +166,7 @@ class EpureComposantsPartagesStringsTest {
 
     @Test
     fun `aucun libelle epure ne depasse cent dix caracteres dans aucune langue`() {
-        (shortened + "bring_silent_question" + "recognition_language_question").forEach { key ->
+        (shortened + "bring_silent_question" + "recognition_language_question" + "post_daily_limit_note_question").forEach { key ->
             folders.keys.forEach { language ->
                 assertWithMessage("$language/$key").that(text(language, key).length).isAtMost(110)
             }
