@@ -29,4 +29,11 @@ describe("l'interrupteur d'iOS a une source unique", () => {
       .map((path) => relative(SOURCE_ROOT, path));
     expect(copies).toEqual([OWNER]);
   });
+
+  test("les réglages de l'image d'un appel posent `IosSwitch` : la barre d'Effets ne redessine plus la piste ni la pastille (#18221, P8b.9)", () => {
+    const bar = readFileSync(join(SOURCE_ROOT, 'components/call-effects-bar.tsx'), 'utf8');
+    expect(bar).toContain("from './ios-switch'");
+    expect(bar).toMatch(/<IosSwitch\b/);
+    expect(bar).not.toMatch(/translate-x-\[/);
+  });
 });
