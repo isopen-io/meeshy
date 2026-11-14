@@ -49,11 +49,11 @@ class EpureReglagesRestantsStringsTest {
     }
 
     @Test
-    fun `the encryption section says its status once`() {
+    fun `the encryption section shows its coming-soon status, since the row value is only spoken`() {
         val body = source("PrivacySettingsScreen.kt").substringAfter("private fun EncryptionComingSoonSection")
             .substringBefore("private fun settingsInfo")
         assertThat(body.split("privacy_encryption_status_soon").size - 1).isEqualTo(1)
-        assertThat(body).doesNotContain("trailing =")
+        assertThat(body.substringAfter("trailing =")).contains("text = status")
         assertThat(fr("privacy_encryption_summary"))
             .isEqualTo("Le chiffrement de bout en bout se choisit par conversation et ne se défait pas.")
     }
