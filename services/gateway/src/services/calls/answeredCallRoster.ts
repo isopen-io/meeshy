@@ -37,10 +37,25 @@ export type RosterCall = {
   readonly tracksAnswers: boolean;
 };
 
+/** Les deux clés sont REQUISES (#18453 M32) : un `select` qui en oublie une ne compile pas, au lieu de lire un duo comme un groupe. */
 export type DuoShape = {
-  readonly invitedUserIds?: readonly string[] | null;
-  readonly conversation?: { readonly type?: string | null } | null;
+  readonly invitedUserIds: readonly string[] | null;
+  readonly conversation: { readonly type: string | null } | null;
 };
+
+/**
+ * Pourquoi un appel SUIVI et décroché a pris part sans que ses marques le
+ * disent (#18453) :
+ * - `no-answerer-marked` : l'appel est décroché, donc quelqu'un d'autre que
+ *   l'initiateur a pris part, et aucune ligne non initiatrice n'est marquée —
+ *   même quand l'initiateur l'est (un duo devenu groupe puis revenu à deux) ;
+ * - `lines-without-answer-key` : une ligne ne porte pas la clé (écrite par le
+ *   code d'avant pendant la transition) — elle sort de la liste sans qu'on
+ *   sache si elle avait décroché.
+ */
+export type MissingAnswerMark = 'no-answerer-marked' | 'lines-without-answer-key';
+
+export type KeyedRosterLine = CallRosterLine & { readonly id: string };
 
 const INITIATOR_ROLE = 'initiator';
 
@@ -58,9 +73,32 @@ export function answeredCallRoster<T extends CallRosterLine>(
   return lines.filter((line) => hasAnswered(line) || line.role === INITIATOR_ROLE);
 }
 
-/** Un appel suivi et décroché dont aucune ligne n'est marquée : une écriture perdue ou un chemin de réponse oublié. */
-export const answeredWithoutAnyMark = (lines: ReadonlyArray<CallRosterLine>, call: RosterCall): boolean =>
-  call.answeredAt instanceof Date && call.tracksAnswers && lines.length > 0 && !lines.some(hasAnswered);
+/** Ce qui manque aux marques d'un appel suivi et décroché — une écriture perdue, un chemin de réponse oublié, une ligne d'avant le champ. */
+export function missingAnswerMarks(
+  lines: ReadonlyArray<KeyedRosterLine>,
+  call: RosterCall,
+  keyedLineIds: ReadonlySet<string>
+): ReadonlyArray<MissingAnswerMark> {
+  if (!(call.answeredAt instanceof Date) || !call.tracksAnswers) return [];
+  const answererMarked = lines.some((line) => line.role !== INITIATOR_ROLE && hasAnswered(line));
+  const keyless = lines.some((line) => !keyedLineIds.has(line.id));
+  return [
+    ...(answererMarked ? [] : ['no-answerer-marked' as const]),
+    ...(keyless ? ['lines-without-answer-key' as const] : [])
+  ];
+}
+
+/** Les lignes d'UN appel qui portent la clé `answeredAt` : l'appel est suivi dès qu'il y en a une. */
+export async function answerKeyedLineIds(
+  prisma: Pick<PrismaClient, 'callParticipant'>,
+  callId: string
+): Promise<ReadonlySet<string>> {
+  const keyed: ReadonlyArray<{ readonly id: string }> = await prisma.callParticipant.findMany({
+    where: { callSessionId: callId, answeredAt: { isSet: true } },
+    select: { id: true }
+  });
+  return new Set(keyed.map((line) => line.id));
+}
 
 /** Les appels dont au moins une ligne porte la clé `answeredAt` — une seule requête pour toute une page. */
 export async function callsTrackingAnswers(

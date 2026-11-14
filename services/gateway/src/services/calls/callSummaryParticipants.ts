@@ -13,9 +13,10 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../../utils/logger';
-import { answeredCallRoster, answeredWithoutAnyMark, callsTrackingAnswers, isDuoCall, type DuoShape } from './answeredCallRoster';
+import { answerKeyedLineIds, answeredCallRoster, isDuoCall, missingAnswerMarks, type DuoShape } from './answeredCallRoster';
 
 type JoinedLine = {
+  readonly id: string;
   readonly role: string | null;
   readonly answeredAt: Date | null;
   readonly participant: { readonly userId: string | null } | null;
@@ -31,18 +32,20 @@ export async function resolveCallSummaryParticipantIds(
   call: SummaryCall
 ): Promise<ReadonlyArray<string>> {
   if (!call.answeredAt) return [];
-  const [lines, tracked]: [ReadonlyArray<JoinedLine>, ReadonlySet<string>] = await Promise.all([
+  const [lines, keyed]: [ReadonlyArray<JoinedLine>, ReadonlySet<string>] = await Promise.all([
     prisma.callParticipant.findMany({
       where: { callSessionId: call.id },
       orderBy: { joinedAt: 'asc' },
-      select: { role: true, answeredAt: true, participant: { select: { userId: true } } }
+      select: { id: true, role: true, answeredAt: true, participant: { select: { userId: true } } }
     }),
-    callsTrackingAnswers(prisma, [call.id])
+    answerKeyedLineIds(prisma, call.id)
   ]);
-  const roster = { id: call.id, answeredAt: call.answeredAt, duo: isDuoCall(call), tracksAnswers: tracked.has(call.id) };
+  const roster = { id: call.id, answeredAt: call.answeredAt, duo: isDuoCall(call), tracksAnswers: keyed.size > 0 };
   // #18242 R5 — l'anomalie se signale UNE fois, à l'écriture du résumé ; la lecture du journal se tait.
-  if (answeredWithoutAnyMark(lines, roster)) {
-    logger.warn('Answered call has no answered participant line', { callId: call.id, duo: roster.duo, answeredAt: call.answeredAt.toISOString() });
+  // #18453 — pas seulement quand AUCUNE ligne n'est marquée : dès qu'un participant qui a pris part n'a pas de marque.
+  const missing = missingAnswerMarks(lines, roster, keyed);
+  if (missing.length > 0) {
+    logger.warn('Answered call has a participant without an answer mark', { callId: call.id, duo: roster.duo, answeredAt: call.answeredAt.toISOString(), missing });
   }
   return [...new Set(answeredCallRoster(lines, roster).flatMap(accountOf))];
 }
