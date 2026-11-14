@@ -19,8 +19,9 @@ public final class PlayheadClock: ObservableObject {
     public init() {}
 
     /// Un temps identique ne republie pas : un scrub qui retombe sur la même
-    /// image ne réveille aucune feuille.
-    func move(to seconds: Float) {
+    /// image ne réveille aucune feuille. Public pour l'hôte de la frise du kit
+    /// (K22), qui pose la tête depuis sa propre horloge.
+    public func move(to seconds: Float) {
         guard seconds != time else { return }
         time = seconds
     }

@@ -1,0 +1,858 @@
+{
+ "composant": "MeeshyTimelineFrise",
+ "cle": "K22",
+ "sources": [
+  "apps/ios/MeeshyTests/Unit/Composer/ComposerSceneFriseTests.swift",
+  "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/composer/timeline/FriseBarDragTest.kt",
+  "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/composer/timeline/FriseViewportTest.kt",
+  "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/composer/timeline/FriseRulerTest.kt",
+  "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/SnapEngineTests.swift"
+ ],
+ "glisse": [
+  {
+   "nom": "barre-deplacee-garde-sa-duree",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "move",
+   "delta": 1.5,
+   "attendu": [
+    2.5,
+    4.5
+   ]
+  },
+  {
+   "nom": "barre-bornee-a-la-fin",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "move",
+   "delta": 9,
+   "attendu": [
+    4,
+    6
+   ]
+  },
+  {
+   "nom": "barre-bornee-au-debut",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "move",
+   "delta": -9,
+   "attendu": [
+    0,
+    2
+   ]
+  },
+  {
+   "nom": "debut-allonge",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "start",
+   "delta": -1,
+   "attendu": [
+    1,
+    4
+   ]
+  },
+  {
+   "nom": "debut-raccourcit",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "start",
+   "delta": 1,
+   "attendu": [
+    3,
+    4
+   ]
+  },
+  {
+   "nom": "fin-allonge",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "end",
+   "delta": 1.5,
+   "attendu": [
+    2,
+    5.5
+   ]
+  },
+  {
+   "nom": "fin-bornee",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "end",
+   "delta": 9,
+   "attendu": [
+    2,
+    6
+   ]
+  },
+  {
+   "nom": "debut-ne-franchit-pas-la-fin",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "start",
+   "delta": 5,
+   "attendu": [
+    3.95,
+    4
+   ]
+  },
+  {
+   "nom": "fin-ne-franchit-pas-le-debut",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "end",
+   "delta": -5,
+   "attendu": [
+    2,
+    2.05
+   ]
+  },
+  {
+   "nom": "pas-de-sortie-borne",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    5.8
+   ],
+   "partie": "end",
+   "delta": 0.5,
+   "attendu": [
+    2,
+    6
+   ]
+  },
+  {
+   "nom": "pas-d-entree-borne",
+   "duree": 6,
+   "plancher": 0.05,
+   "plage": [
+    0.2,
+    4
+   ],
+   "partie": "start",
+   "delta": -0.5,
+   "attendu": [
+    0,
+    4
+   ]
+  },
+  {
+   "nom": "android-corps",
+   "duree": 10,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "move",
+   "delta": 1,
+   "attendu": [
+    3,
+    6
+   ]
+  },
+  {
+   "nom": "android-debut",
+   "duree": 10,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "start",
+   "delta": -1,
+   "attendu": [
+    1,
+    5
+   ]
+  },
+  {
+   "nom": "android-fin",
+   "duree": 10,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "end",
+   "delta": 2,
+   "attendu": [
+    2,
+    7
+   ]
+  },
+  {
+   "nom": "android-corps-jamais-sous-zero",
+   "duree": 10,
+   "plancher": 0.05,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "move",
+   "delta": -18,
+   "attendu": [
+    0,
+    3
+   ]
+  }
+ ],
+ "aimant": [
+  {
+   "nom": "fin-accrochee-a-la-tete",
+   "duree": 6,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "end",
+   "delta": 1.9,
+   "candidats": [
+    {
+     "type": "playhead",
+     "temps": 5
+    }
+   ],
+   "tolerance": 0.25,
+   "attendu": [
+    1,
+    5
+   ],
+   "accroche": 5
+  },
+  {
+   "nom": "hors-tolerance-libre",
+   "duree": 6,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "end",
+   "delta": 1.5,
+   "candidats": [
+    {
+     "type": "playhead",
+     "temps": 5
+    }
+   ],
+   "tolerance": 0.25,
+   "attendu": [
+    1,
+    4.5
+   ],
+   "accroche": null
+  },
+  {
+   "nom": "debut-accroche-au-bord-d-une-autre",
+   "duree": 6,
+   "plage": [
+    2,
+    4
+   ],
+   "partie": "start",
+   "delta": -0.9,
+   "candidats": [
+    {
+     "type": "clipEnd",
+     "temps": 1
+    }
+   ],
+   "tolerance": 0.25,
+   "attendu": [
+    1,
+    4
+   ],
+   "accroche": 1
+  },
+  {
+   "nom": "barre-par-son-bord-le-plus-proche",
+   "duree": 6,
+   "plage": [
+    1,
+    3
+   ],
+   "partie": "move",
+   "delta": 0.9,
+   "candidats": [
+    {
+     "type": "clipEnd",
+     "temps": 4
+    }
+   ],
+   "tolerance": 0.25,
+   "attendu": [
+    2,
+    4
+   ],
+   "accroche": 4
+  },
+  {
+   "nom": "android-debut-a-la-tete",
+   "duree": 10,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "start",
+   "delta": 1.02,
+   "candidats": [
+    {
+     "type": "playhead",
+     "temps": 3.05
+    }
+   ],
+   "tolerance": 0.16,
+   "attendu": [
+    3.05,
+    5
+   ],
+   "accroche": 3.05
+  },
+  {
+   "nom": "android-fin-du-corps",
+   "duree": 10,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "move",
+   "delta": 1.04,
+   "candidats": [
+    {
+     "type": "clipStart",
+     "temps": 6
+    }
+   ],
+   "tolerance": 0.16,
+   "attendu": [
+    3,
+    6
+   ],
+   "accroche": 6
+  },
+  {
+   "nom": "android-debut-libre",
+   "duree": 10,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "start",
+   "delta": 0.5,
+   "candidats": [
+    {
+     "type": "playhead",
+     "temps": 3.05
+    }
+   ],
+   "tolerance": 0.16,
+   "attendu": [
+    2.5,
+    5
+   ],
+   "accroche": null
+  },
+  {
+   "nom": "image-cle-voisine",
+   "duree": 10,
+   "plage": [
+    2,
+    5
+   ],
+   "partie": "end",
+   "delta": 1.9,
+   "candidats": [
+    {
+     "type": "keyframe",
+     "temps": 7
+    }
+   ],
+   "tolerance": 0.16,
+   "attendu": [
+    2,
+    7
+   ],
+   "accroche": 7
+  }
+ ],
+ "candidats": [
+  {
+   "nom": "tete-bords-autres-pistes-et-leurs-images-cles",
+   "duree": 6,
+   "tete": 2.5,
+   "exclue": "a",
+   "pistes": [
+    {
+     "id": "a",
+     "plage": [
+      1,
+      2
+     ],
+     "cles": [
+      1.5
+     ]
+    },
+    {
+     "id": "b",
+     "plage": [
+      3,
+      5
+     ],
+     "cles": [
+      4
+     ]
+    }
+   ],
+   "attendu": [
+    0,
+    6,
+    2.5,
+    3,
+    5,
+    4
+   ]
+  },
+  {
+   "nom": "android-la-piste-ne-compte-pas",
+   "duree": 10,
+   "tete": 4,
+   "exclue": "a",
+   "pistes": [
+    {
+     "id": "a",
+     "plage": [
+      2,
+      5
+     ],
+     "cles": []
+    },
+    {
+     "id": "b",
+     "plage": [
+      6,
+      8
+     ],
+     "cles": []
+    }
+   ],
+   "attendu": [
+    0,
+    10,
+    4,
+    6,
+    8
+   ]
+  },
+  {
+   "nom": "sans-tete",
+   "duree": 10,
+   "tete": null,
+   "exclue": "a",
+   "pistes": [
+    {
+     "id": "a",
+     "plage": [
+      2,
+      5
+     ],
+     "cles": []
+    }
+   ],
+   "attendu": [
+    0,
+    10
+   ]
+  }
+ ],
+ "tolerance": [
+  {
+   "nom": "echelle-rendue",
+   "portee": 6,
+   "largeur": 300,
+   "attendu": 0.16
+  },
+  {
+   "nom": "plafond-quart-de-seconde",
+   "portee": 7200,
+   "largeur": 300,
+   "attendu": 0.25
+  },
+  {
+   "nom": "sans-largeur",
+   "portee": 6,
+   "largeur": 0,
+   "attendu": 0
+  }
+ ],
+ "fenetre": [
+  {
+   "nom": "pincer-autour-de-la-tete",
+   "operation": "zoom",
+   "vue": [
+    0,
+    7200
+   ],
+   "duree": 7200,
+   "echelle": 100,
+   "ancre": 3600,
+   "attendu": [
+    3564,
+    72
+   ]
+  },
+  {
+   "nom": "plancher-trois-secondes",
+   "operation": "zoom",
+   "vue": [
+    0,
+    7200
+   ],
+   "duree": 7200,
+   "echelle": 10000,
+   "ancre": 100,
+   "attendu": [
+    99.95833333333333,
+    3
+   ]
+  },
+  {
+   "nom": "ecarter-montre-toute-la-scene",
+   "operation": "zoom",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "echelle": 0.001,
+   "ancre": 120,
+   "attendu": [
+    0,
+    600
+   ]
+  },
+  {
+   "nom": "defiler-moitie",
+   "operation": "pan",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "fraction": 0.5,
+   "attendu": [
+    70,
+    60
+   ]
+  },
+  {
+   "nom": "defiler-borne-debut",
+   "operation": "pan",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "fraction": 10,
+   "attendu": [
+    0,
+    60
+   ]
+  },
+  {
+   "nom": "defiler-borne-fin",
+   "operation": "pan",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "fraction": -100,
+   "attendu": [
+    540,
+    60
+   ]
+  },
+  {
+   "nom": "scene-raccourcie",
+   "operation": "clamp",
+   "vue": [
+    500,
+    60
+   ],
+   "duree": 120,
+   "attendu": [
+    60,
+    60
+   ]
+  },
+  {
+   "nom": "scene-plus-courte-que-la-vue",
+   "operation": "clamp",
+   "vue": [
+    0,
+    60
+   ],
+   "duree": 6,
+   "attendu": [
+    0,
+    6
+   ]
+  },
+  {
+   "nom": "tete-visible-page-inchangee",
+   "operation": "show",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "temps": 130,
+   "attendu": [
+    100,
+    60
+   ]
+  },
+  {
+   "nom": "tete-apres-page-suivante",
+   "operation": "show",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "temps": 200,
+   "attendu": [
+    140,
+    60
+   ]
+  },
+  {
+   "nom": "tete-avant-page-precedente",
+   "operation": "show",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "temps": 20,
+   "attendu": [
+    20,
+    60
+   ]
+  },
+  {
+   "nom": "temps-du-doigt",
+   "operation": "time",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "fraction": 0.5,
+   "attendu": 130
+  },
+  {
+   "nom": "temps-du-doigt-borne",
+   "operation": "time",
+   "vue": [
+    100,
+    60
+   ],
+   "duree": 600,
+   "fraction": 2,
+   "attendu": 160
+  }
+ ],
+ "regle": {
+  "six-secondes": {
+   "vue": [
+    0,
+    6
+   ],
+   "largeur": 300,
+   "majeures": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ]
+  },
+  "deux-heures": {
+   "vue": [
+    0,
+    7200
+   ],
+   "largeur": 300,
+   "majeures_max": 13,
+   "majeures_min": 2
+  },
+  "zoomee": {
+   "vue": [
+    3600,
+    60
+   ],
+   "largeur": 300,
+   "premiere_majeure": 3600,
+   "majeures_max": 12
+  },
+  "lisibles": {
+   "largeur": 280,
+   "ecart": 44,
+   "durees": [
+    1,
+    3,
+    6,
+    15,
+    42,
+    90,
+    600,
+    3599,
+    7200
+   ]
+  },
+  "mineures": {
+   "vue": [
+    0,
+    6
+   ],
+   "largeur": 300,
+   "ecart_min": 6
+  },
+  "police": {
+   "vue": [
+    0,
+    15
+   ],
+   "largeur": 300,
+   "ecart_grand": 120,
+   "pas_standard": 5,
+   "pas_grand": 10
+  },
+  "franchit": [
+   [
+    0.9,
+    1.1,
+    1,
+    true
+   ],
+   [
+    2.2,
+    1.9,
+    1,
+    true
+   ],
+   [
+    1.1,
+    1.6,
+    1,
+    false
+   ],
+   [
+    1.1,
+    1.6,
+    0,
+    false
+   ]
+  ]
+ },
+ "zones": [
+  {
+   "barre": 100,
+   "dedans": 14,
+   "dehors": 30
+  },
+  {
+   "barre": 30,
+   "dedans": 7,
+   "dehors": 30
+  },
+  {
+   "barre": 10,
+   "dedans": 0,
+   "dehors": 30
+  }
+ ],
+ "cles": [
+  {
+   "nom": "le-plus-proche-gagne",
+   "temps": 4.1,
+   "cles": [
+    [
+     "k1",
+     4.0
+    ],
+    [
+     "k2",
+     4.3
+    ]
+   ],
+   "pps": 100,
+   "attendu": "k1"
+  },
+  {
+   "nom": "hors-zone",
+   "temps": 5,
+   "cles": [
+    [
+     "k1",
+     4.0
+    ]
+   ],
+   "pps": 100,
+   "attendu": null
+  },
+  {
+   "nom": "zone-de-32",
+   "temps": 4.15,
+   "cles": [
+    [
+     "k1",
+     4.0
+    ]
+   ],
+   "pps": 100,
+   "attendu": "k1"
+  }
+ ]
+}
