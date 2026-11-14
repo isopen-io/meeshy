@@ -459,7 +459,7 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(ConversationEncryptionRegime.none.summary, String(localized: "conversation.encryption.summary.none", bundle: .main))
         let app = try Self.catalog(Self.appCatalogPath)
         XCTAssertEqual(app["conversation.encryption.summary.none"]?["fr"], "Non chiffrée")
-        XCTAssertEqual(app["conversation.encryption.summary.endToEnd"]?["fr"], "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages",
+        XCTAssertEqual(app["conversation.encryption.summary.endToEnd"]?["fr"], "Chiffrée de bout en bout : seuls les participants lisent",
                        "le bout en bout est un repère propre à Meeshy : la rangée dit, au repos, qui lit les messages (règle 7)")
     }
 
@@ -742,5 +742,143 @@ final class ConversationEpureTests: XCTestCase {
         let source = try code("Meeshy/Features/Talkie/TalkieInfoButton.swift")
         XCTAssertTrue(source.contains("defaultValue: \"Même si Meeshy est en arrière-plan.\""))
         XCTAssertTrue(source.contains(".accessibilityHint(TalkieInfoWording.text)"), "la note reste lue par le lecteur d'écran")
+    }
+
+    // MARK: - Passe 4 : la fiche Chiffrement ne dit rien deux fois, un seul mot pour le code PIN principal
+
+    private static let pass4: [String: [String: String]] = [
+        "conversation.encryption.fact.encryptedOnServerServerReads": [
+            "fr": "Vos messages sont chiffrés sur nos serveurs, qui peuvent les lire.",
+            "en": "Your messages are encrypted on our servers, which can read them.",
+            "es": "Tus mensajes se cifran en nuestros servidores, que pueden leerlos.",
+            "pt-BR": "Suas mensagens são criptografadas em nossos servidores, que podem lê-las.",
+            "de": "Deine Nachrichten werden auf unseren Servern verschlüsselt, die sie lesen können.",
+            "it": "I tuoi messaggi sono crittografati sui nostri server, che possono leggerli.",
+            "ar": "تُشفَّر رسائلك على خوادمنا، ويمكنها قراءتها."
+        ],
+        "conversation.encryption.summary.endToEnd": [
+            "fr": "Chiffrée de bout en bout : seuls les participants lisent",
+            "en": "End-to-end encrypted: only participants can read",
+            "es": "Cifrada de extremo a extremo: solo los participantes leen",
+            "pt-BR": "Criptografada de ponta a ponta: só os participantes leem",
+            "de": "Ende-zu-Ende-verschlüsselt: Nur Teilnehmende lesen",
+            "it": "Crittografata end-to-end: solo i partecipanti leggono",
+            "ar": "مشفّرة تمامًا بين الطرفين: المشاركون وحدهم يقرؤون"
+        ],
+        "conversation.encryption.fact.noNotificationPreview": [
+            "fr": "Les notifications n’affichent pas le texte : le serveur ne le connaît pas.",
+            "en": "Notifications don’t show the text: the server doesn’t know it.",
+            "es": "Las notificaciones no muestran el texto: el servidor no lo conoce.",
+            "pt-BR": "As notificações não mostram o texto: o servidor não o conhece.",
+            "de": "Benachrichtigungen zeigen den Text nicht an: Der Server kennt ihn nicht.",
+            "it": "Le notifiche non mostrano il testo: il server non lo conosce.",
+            "ar": "لا تعرض الإشعارات النص: فالخادم لا يعرفه."
+        ],
+        "conversation.encryption.fact.noOfflineSending": [
+            "fr": "Hors connexion, un message n’est pas mis en attente.",
+            "en": "Offline, a message isn’t queued.",
+            "es": "Sin conexión, el mensaje no queda en espera.",
+            "pt-BR": "Sem conexão, a mensagem não fica na fila.",
+            "de": "Offline wird eine Nachricht nicht vorgemerkt.",
+            "it": "Offline un messaggio non viene messo in coda.",
+            "ar": "دون اتصال، لا تُوضع الرسالة في قائمة الانتظار."
+        ],
+        "conversation.encryption.fact.notYetAttachments": [
+            "fr": "Pas encore de photos, vidéos, fichiers, vocaux, lieux ni stickers.",
+            "en": "No photos, videos, files, voice messages, locations or stickers yet.",
+            "es": "Aún sin fotos, vídeos, archivos, audios, ubicaciones ni stickers.",
+            "pt-BR": "Ainda sem fotos, vídeos, arquivos, áudios, locais nem figurinhas.",
+            "de": "Noch keine Fotos, Videos, Dateien, Sprachnachrichten, Standorte oder Sticker.",
+            "it": "Ancora niente foto, video, file, vocali, posizioni né sticker.",
+            "ar": "لا صور ولا فيديوهات ولا ملفات ولا رسائل صوتية ولا مواقع ولا ملصقات بعد."
+        ],
+        "conversation.encryption.fact.notYetGroups": [
+            "fr": "Pas encore de chiffrement de bout en bout pour les groupes.",
+            "en": "No end-to-end encryption for groups yet.",
+            "es": "Aún sin cifrado de extremo a extremo para los grupos.",
+            "pt-BR": "Ainda sem criptografia de ponta a ponta para grupos.",
+            "de": "Noch keine Ende-zu-Ende-Verschlüsselung für Gruppen.",
+            "it": "Ancora nessuna crittografia end-to-end per i gruppi.",
+            "ar": "لا تشفير تام بين الطرفين للمجموعات بعد."
+        ],
+        "conversation.encryption.fact.notYetSafetyNumbers": [
+            "fr": "La vérification des numéros de sécurité n’est pas encore disponible.",
+            "en": "Verifying safety numbers isn’t available yet.",
+            "es": "La verificación de los números de seguridad aún no está disponible.",
+            "pt-BR": "A verificação dos números de segurança ainda não está disponível.",
+            "de": "Das Überprüfen der Sicherheitsnummern ist noch nicht verfügbar.",
+            "it": "La verifica dei numeri di sicurezza non è ancora disponibile.",
+            "ar": "التحقق من أرقام الأمان غير متاح بعد."
+        ],
+        "conversation.send.attachmentRightNotPermitted": [
+            "fr": "Ce type de pièce jointe n’est pas autorisé ici.",
+            "en": "This type of attachment isn’t allowed here.",
+            "es": "Este tipo de archivo adjunto no está permitido aquí.",
+            "pt-BR": "Este tipo de anexo não é permitido aqui.",
+            "de": "Diese Art von Anhang ist hier nicht erlaubt.",
+            "it": "Questo tipo di allegato non è consentito qui.",
+            "ar": "هذا النوع من المرفقات غير مسموح به هنا."
+        ],
+    ]
+
+    func test_pass4_shortenedLabels_areTranslatedInEveryLanguage_andStayUnderEightyCharacters() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for (key, values) in Self.pass4 {
+            for (language, value) in values {
+                XCTAssertEqual(app[key]?[language], value, "\(key) en \(language)")
+                XCTAssertLessThan(value.count, 80, "\(key) en \(language)")
+            }
+        }
+    }
+
+    func test_pass4_notificationsFact_hasNoReader_andNoTranslationLeft() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        XCTAssertNil(app["conversation.encryption.fact.notYetDecryptedNotifications"], "la clé sans lecteur est retirée de TOUTES les langues")
+        let text = try code("Meeshy/Features/Main/Components/ConversationEncryptionExplanation+Text.swift")
+        XCTAssertFalse(text.contains("notYetDecryptedNotifications"))
+    }
+
+    func test_pass4_encryptionSwitching_whenTheSwitchIsOffered_theFooterSaysTheIrreversibilityOnce_inOneSection() {
+        for mode in [nil, "server", "hybrid"] {
+            let offered = ConversationEncryptionExplanation(mode: mode, isDirect: true, offersModeSwitch: true)
+            XCTAssertEqual(offered.sections.first { $0.topic == .switching }?.facts, [.switchKeepsHistory], "\(String(describing: mode))")
+            XCTAssertFalse(offered.sections.flatMap(\.facts).contains(.endToEndIsFinal), "le pied à côté de l'action le dit déjà")
+            let readOnly = ConversationEncryptionExplanation(mode: mode, isDirect: true)
+            XCTAssertTrue(readOnly.sections.flatMap(\.facts).contains(.endToEndIsFinal), "sans bascule offerte, « définitif » reste dit une fois")
+        }
+        XCTAssertEqual(
+            ConversationEncryptionExplanation(mode: "e2ee", isDirect: true, offersModeSwitch: true).sections,
+            ConversationEncryptionExplanation(mode: "e2ee", isDirect: true).sections
+        )
+    }
+
+    func test_pass4_encryptionSheet_mergesTheTwoSwitchSections_andPassesTheOfferToTheExplanation() throws {
+        let sheet = try code("Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        XCTAssertEqual(sheet.components(separatedBy: "conversation.encryption.detail.switchHeader").count - 1, 1)
+        XCTAssertTrue(sheet.contains("offersModeSwitch:"))
+        XCTAssertTrue(sheet.contains("omitting: [.switching]"), "la section d'explication homonyme est fondue dans celle de la bascule")
+        let sections = try code("Meeshy/Features/Main/Components/ConversationEncryptionExplanationSections.swift")
+        XCTAssertTrue(sections.contains("omitting"))
+    }
+
+    private static let pass4MasterPinKeys = [
+        "conversation.lock.error.masterPinIncorrect", "conversation.lock.subtitle.authorizeLock", "conversation.lock.subtitle.chooseMasterPin",
+        "conversation.lock.subtitle.chooseNewMasterPin", "conversation.lock.subtitle.confirmRemoval", "conversation.lock.subtitle.enterCurrentMasterPin",
+        "conversation.lock.title.confirmMasterPin", "conversation.lock.title.createMasterPin", "conversation.lock.title.newMasterPin",
+        "conversation.lock.title.removeMasterPin", "conversation.lock.title.verifyMasterPin", "conversation.lock.subtitle.enterMasterPin",
+    ]
+
+    func test_pass4_lockSheet_saysCodePINPrincipal_likeSettings_inFrench() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        XCTAssertEqual(app["settings.security.master_pin"]?["fr"], "Code PIN principal")
+        for key in Self.pass4MasterPinKeys {
+            let value = try XCTUnwrap(app[key]?["fr"], key)
+            XCTAssertTrue(value.lowercased().contains("code pin principal"), "\(key) : « \(value) »")
+            XCTAssertFalse(value.lowercased().contains("master"), "\(key) : « \(value) »")
+        }
+        let sheet = try code("Meeshy/Features/Main/Components/ConversationLockSheet.swift")
+        XCTAssertFalse(sheet.lowercased().contains("master pin\""), "le texte de repli ne dit plus « master PIN »")
+        XCTAssertFalse(sheet.contains("le master PIN"))
+        XCTAssertFalse(sheet.contains("votre master PIN"))
     }
 }

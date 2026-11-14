@@ -55,7 +55,7 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
             XCTAssertTrue(facts.contains(absent), "\(absent)")
         }
         for notYet: ConversationEncryptionExplanation.Fact in [
-            .notYetAttachments, .notYetDecryptedNotifications, .notYetGroups, .notYetSafetyNumbers
+            .notYetAttachments, .notYetGroups, .notYetSafetyNumbers
         ] {
             XCTAssertTrue(facts.contains(notYet), "\(notYet)")
         }
@@ -69,6 +69,13 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
     func test_boutEnBout_dansUnGroupe_ditQueLEnvoiNEstPasEncorePossible() {
         XCTAssertTrue(facts("e2ee", isDirect: false).contains(.groupSendingUnavailable))
         XCTAssertFalse(facts("e2ee", isDirect: true).contains(.groupSendingUnavailable))
+    }
+
+    /// Épure #18078 : dans un groupe, « pas encore de bout en bout pour les groupes » et « ce groupe ne peut pas encore
+    /// envoyer » disaient la même chose : seule la seconde reste, le tête-à-tête garde la première.
+    func test_boutEnBout_dansUnGroupe_neDitQuUneFoisQueLesGroupesNeSontPasEncoreLa() {
+        XCTAssertFalse(facts("e2ee", isDirect: false).contains(.notYetGroups))
+        XCTAssertTrue(facts("e2ee", isDirect: true).contains(.notYetGroups))
     }
 
     /// Une conversation que le serveur lit dit qui peut activer, ce que fait la
