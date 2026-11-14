@@ -918,7 +918,7 @@ final class GameEpureTests: XCTestCase {
         let limits = try XCTUnwrap(rules[0].note)
         XCTAssertEqual(try french("game.rules.1.limits.question", servedBy: limits.question, in: catalog), "Y a-t-il des limites ?")
         let body1 = try french("game.rules.1.body", servedBy: rules[0].body, in: catalog)
-        XCTAssertFalse(body1.contains(try french("game.rules.1.limits", servedBy: limits.text, in: catalog)), "la phrase des limites a quitté le repos")
+        XCTAssertFalse(try body1.contains(french("game.rules.1.limits", servedBy: limits.text, in: catalog)), "la phrase des limites a quitté le repos")
         XCTAssertTrue(body1.contains("selon qui peut la voir"), "la valeur d'une publication reste au repos")
         XCTAssertNil(rules[1].note, "la règle 2 se dit en une phrase")
         let share = try XCTUnwrap(rules[2].note)
