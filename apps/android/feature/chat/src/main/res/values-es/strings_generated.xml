@@ -366,8 +366,6 @@
     <string name="encryption_fact_transit_protected">Entre tu dispositivo y el servidor, los mensajes siempre viajan protegidos.</string>
     <string name="encryption_fact_translated_on_device">La traducción automática se hace en tu dispositivo, nunca en el servidor.</string>
     <string name="encryption_fact_who_may_toggle">Durante la fase de pruebas, solo los miembros de la conversación con un rol del equipo Meeshy (analista o superior) pueden cambiar el modo; en un grupo, también deben ser moderadores. El cifrado no se puede desactivar.</string>
-    <string name="encryption_legacy_subtitle">Toca para verificar el número de seguridad</string>
-    <string name="encryption_legacy_title">Cifrado de extremo a extremo</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>

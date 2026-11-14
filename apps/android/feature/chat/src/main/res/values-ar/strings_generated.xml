@@ -384,8 +384,6 @@
     <string name="encryption_fact_transit_protected">بين جهازك والخادم، تنتقل الرسائل دائمًا محمية.</string>
     <string name="encryption_fact_translated_on_device">تتم الترجمة التلقائية على جهازك، وليس على الخادم أبدًا.</string>
     <string name="encryption_fact_who_may_toggle">خلال مرحلة الاختبار، يمكن فقط لأعضاء المحادثة الذين لديهم دور في فريق Meeshy (محلّل أو أعلى) تغيير الوضع؛ وفي المجموعة يجب أن يكونوا مشرفين أيضًا. لا يمكن إيقاف التشفير.</string>
-    <string name="encryption_legacy_subtitle">اضغط للتحقّق من رقم الأمان</string>
-    <string name="encryption_legacy_title">التشفير التام بين الطرفين</string>
     <string name="encryption_mode_e2ee_description">أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك.</string>
     <string name="encryption_mode_e2ee_label">تام بين الطرفين</string>
     <string name="encryption_mode_hybrid_label">هجين</string>

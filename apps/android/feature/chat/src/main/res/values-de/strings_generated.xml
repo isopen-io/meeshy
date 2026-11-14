@@ -360,8 +360,6 @@
     <string name="encryption_fact_transit_protected">Zwischen deinem Gerät und dem Server sind Nachrichten immer geschützt unterwegs.</string>
     <string name="encryption_fact_translated_on_device">Die automatische Übersetzung erfolgt auf deinem Gerät, nie auf dem Server.</string>
     <string name="encryption_fact_who_may_toggle">Während der Testphase können nur Mitglieder der Unterhaltung mit einer Meeshy-Teamrolle (Analyst oder höher) den Modus ändern; in einer Gruppe müssen sie zudem Moderator sein. Die Verschlüsselung lässt sich nicht ausschalten.</string>
-    <string name="encryption_legacy_subtitle">Tippen, um die Sicherheitsnummer zu prüfen</string>
-    <string name="encryption_legacy_title">Ende-zu-Ende-Verschlüsselung</string>
     <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
     <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>

@@ -15,4 +15,5 @@
     <string name="chat_header_flame_card_total_sparks">Funken insgesamt</string>
     <string name="export_card_typeface_pairs_question">Wofür gilt die Schrift?</string>
     <string name="encryption_fact_encrypted_on_server_server_reads">Deine Nachrichten sind auf unseren Servern verschlüsselt und dort lesbar.</string>
+    <string name="encryption_safety_number_title">Sicherheitsnummer</string>
 </resources>

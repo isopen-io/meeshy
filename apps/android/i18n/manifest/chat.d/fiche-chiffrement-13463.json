@@ -54,18 +54,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.legacy.subtitle",
-          "androidName": "encryption_legacy_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.legacy.title",
-          "androidName": "encryption_legacy_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.mode.e2ee.description",
           "androidName": "encryption_mode_e2ee_description",
           "status": "adopted"

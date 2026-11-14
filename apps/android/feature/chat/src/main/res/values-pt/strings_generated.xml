@@ -366,8 +366,6 @@
     <string name="encryption_fact_transit_protected">Entre seu aparelho e o servidor, as mensagens sempre viajam protegidas.</string>
     <string name="encryption_fact_translated_on_device">A tradução automática acontece no seu aparelho, nunca no servidor.</string>
     <string name="encryption_fact_who_may_toggle">Durante a fase de testes, só os membros da conversa com uma função na equipe Meeshy (analista ou acima) podem mudar o modo; em um grupo, também precisam ser moderadores. A criptografia não pode ser desativada.</string>
-    <string name="encryption_legacy_subtitle">Toque para verificar o número de segurança</string>
-    <string name="encryption_legacy_title">Criptografia de ponta a ponta</string>
     <string name="encryption_mode_e2ee_description">Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho.</string>
     <string name="encryption_mode_e2ee_label">Ponta a ponta</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>

@@ -83,6 +83,10 @@
         {
           "androidName": "encryption_note_permanence_question",
           "status": "android-only"
+        },
+        {
+          "androidName": "encryption_safety_number_title",
+          "status": "android-only"
         }
       ]
     }
