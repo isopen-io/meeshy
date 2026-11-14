@@ -323,6 +323,11 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
  * en plein glissé, 7 glissés sur 10 perdus après la rangée de 54 px tirée de
  * 296 px, 0 sur 10 sans elle). Chaque invariant ne dépend ainsi que de sa piste.
  */
+const centerOfSelector = async (page, selector) => {
+  const box = await page.locator(selector).first().boundingBox();
+  return box === null ? [0, 0] : [box.x + box.width / 2, box.y + box.height / 2];
+};
+
 const dragEach = async (page, cdp, selector) => {
   const count = await page.locator(selector).count();
   const results = [];
@@ -730,6 +735,117 @@ try {
       failures.push(`doigt : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
     }
     check(errors.length === 0, `doigt : aucune erreur de page — ${JSON.stringify(errors)}`);
+    await context.close();
+  }
+
+  // ------------------------------------------------ 10. appel VOCAL à hauteur compacte : la pilule ENTIÈRE reste dans l'écran (#18488)
+  /* À 568 × 320 l'avatar, le nom et la durée poussaient la pilule sous le bord : (…) tombait à 326 px dans 320. La scène audio prend la
+     forme compacte de P9b (avatar de 56, de 40 sous 340 px de haut, nom et durée à côté) et la marge sous la pilule se resserre. */
+  const pillFit = (page) =>
+    page.evaluate((floor) => {
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const pill = document.querySelector('[data-call-control-pill]')?.getBoundingClientRect();
+      const buttons = [...document.querySelectorAll('[data-call-control-pill] > div:last-child button')].map((button) => {
+        const box = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { label: button.getAttribute('aria-label'), size: Math.round(Math.min(box.width, box.height)), inside: box.top >= 0 && box.bottom <= vh && box.left >= 0 && box.right <= vw, touchable: hit !== null && button.contains(hit) };
+      });
+      const portrait = document.querySelector('[data-call-incoming-portrait]')?.getBoundingClientRect();
+      const name = document.querySelector('[data-call-audio-stage] h2')?.getBoundingClientRect();
+      const status = document.querySelector('[data-call-audio-stage] [data-call-status]')?.getBoundingClientRect();
+      const header = document.querySelector('[data-call-header]')?.getBoundingClientRect();
+      return {
+        vh,
+        stage: document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') ?? null,
+        pillInside: pill !== undefined && pill.top >= 0 && pill.bottom <= vh && pill.left >= 0 && pill.right <= vw,
+        pill: pill && { top: Math.round(pill.top), bottom: Math.round(pill.bottom) },
+        buttons,
+        floor,
+        avatar: portrait && Math.round(portrait.height),
+        besideAvatar: portrait !== undefined && name !== undefined && name.left >= portrait.right - 1 && name.top < portrait.bottom && name.bottom > portrait.top,
+        durationBeside: portrait !== undefined && status !== undefined && status.left >= portrait.right - 1,
+        clearOfPill: portrait !== undefined && pill !== undefined && portrait.bottom <= pill.top + 1 && (status === undefined || status.bottom <= pill.top + 1),
+        belowHeader: portrait !== undefined && header !== undefined && portrait.top >= header.bottom - 1,
+      };
+    }, TAP_FLOOR);
+  /* L'avatar glisse vers sa nouvelle place (morphisme, loi 17) : on le mesure posé. Une pulsation sans fin ne se termine jamais, elle n'est pas attendue. */
+  const stageSettled = (page) => until(page, () => document.querySelector('[data-call-audio-stage]') !== null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, 3000);
+  const fits = (fit) => fit.pillInside && fit.buttons.length === 4 && fit.buttons.every((button) => button.inside && button.touchable && button.size >= TAP_FLOOR);
+  for (const [width, height, avatar] of [
+    [568, 320, 64],
+    [480, 300, 64],
+    [640, 260, 64],
+    [568, 400, 80],
+  ]) {
+    const label = `vocal ${width} × ${height}`;
+    const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, colorScheme: 'dark', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+    await context.addInitScript(ARM_PEER);
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    try {
+      check(await startConnectedCall(page), `${label} : l'appel se connecte`);
+      await until(page, () => window.__meeshyFixtureCallPeer?.callId() != null);
+      await stageSettled(page);
+      const rest = await pillFit(page);
+      check(fits(rest), `${label} : la pilule ENTIÈRE est dans l'écran, ses quatre boutons d'au moins ${TAP_FLOOR} touchables (${JSON.stringify([rest.pill, rest.buttons])})`);
+      check(rest.stage === 'compact', `${label} : la scène audio prend la forme compacte de P9b (${rest.stage})`);
+      check(rest.avatar !== null && rest.avatar <= avatar, `${label} : l'avatar se resserre, ${avatar} au plus avec son anneau (${rest.avatar})`);
+      check(rest.besideAvatar && rest.durationBeside, `${label} : le nom et la durée sont à côté de l'avatar (${JSON.stringify([rest.besideAvatar, rest.durationBeside])})`);
+      check(rest.clearOfPill && rest.belowHeader, `${label} : ni l'avatar ni la durée ne touchent la pilule ou l'en-tête (${JSON.stringify([rest.clearOfPill, rest.belowHeader])})`);
+      await capture(page, `controles-vocal-${width}x${height}`);
+
+      await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+      check(await appears(page, '[data-call-rails="shown"]'), `${label} : un toucher sur (…) ouvre les actions`);
+      await railsSettled(page);
+      check(fits(await pillFit(page)), `${label} : (…) ouvert, la pilule reste entière dans l'écran`);
+      await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+      await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle');
+
+      if (width === 568 && height === 320) {
+        await page.evaluate(() => {
+          for (const [id, text] of [['j-1', 'Bonjour'], ['j-2', 'On se voit demain'], ['j-3', 'À tout à l’heure']]) window.__meeshyFixtureCallPeer?.speak?.({ id, text, translatedText: text });
+        });
+        await openActions(page);
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control="journal"]')));
+        check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre le journal DANS la pilule`);
+        await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'compact');
+        await stageSettled(page);
+        const journal = await pillFit(page);
+        check(fits(journal), `${label} : journal ouvert, la pilule ENTIÈRE reste dans l'écran, (…) compris (${JSON.stringify([journal.pill, journal.buttons])})`);
+        const list = await page.$eval('[data-call-journal]', (element) => Math.round(element.getBoundingClientRect().height));
+        check(list >= 44, `${label} : le journal garde un plancher lisible, une phrase au moins, ${list} px`);
+        check(journal.avatar !== null && journal.avatar <= 64 && journal.besideAvatar && journal.clearOfPill, `${label} : l'avatar reste compact au-dessus du journal, sans le toucher (${JSON.stringify([journal.avatar, journal.besideAvatar, journal.clearOfPill])})`);
+        /* Sans place pour une phrase, la tête se replie dans le pied : la bascule Traduit · Original et « Journal » (disque blanc, qui le referme) y restent, dans l'écran et touchables. */
+        const foot = await page.evaluate((floor) => {
+          const reach = (selector) => {
+            const element = document.querySelector(selector);
+            const box = element?.getBoundingClientRect();
+            const hit = box === undefined ? null : document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return { size: box === undefined ? 0 : Math.round(Math.min(box.width, box.height)), inside: box !== undefined && box.top >= 0 && box.bottom <= window.innerHeight, touchable: hit !== null && element !== null && element.contains(hit) };
+          };
+          const toggle = reach('[data-call-journal-foot] [data-call-journal-toggle]');
+          const views = reach('[data-call-journal-foot] [data-call-journal-view] button');
+          return { toggle, views, floor, head: document.querySelector('[data-call-journal-panel] h2')?.className ?? null };
+        }, TAP_FLOOR);
+        check([foot.toggle, foot.views].every((control) => control.inside && control.touchable && control.size >= TAP_FLOOR) && foot.head === 'sr-only', `${label} : la tête se replie dans le pied — bascule et « Journal » dans l'écran, touchables, titre gardé pour le lecteur d'écran (${JSON.stringify(foot)})`);
+        await capture(page, `controles-vocal-journal-${width}x${height}`);
+        await page.click('[data-call-control-pill] [data-call-journal-toggle]');
+        await gone(page, '[data-call-journal-panel]');
+      }
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      check(await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'full'), `${label} : la fenêtre redevenue haute, la scène reprend sa forme pleine`);
+      await stageSettled(page);
+      const tall = await pillFit(page);
+      check(fits(tall) && tall.avatar > 100, `${label} : et l'avatar retrouve sa taille (${tall.avatar})`);
+      await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
+    } catch (error) {
+      failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
+    }
+    check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
     await context.close();
   }
 } finally {
