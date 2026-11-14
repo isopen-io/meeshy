@@ -261,6 +261,18 @@ final class EpureFeedStoriesTests: XCTestCase {
         XCTAssertEqual(english, try app()["feed.post.repost"]?["en"], "le rail dit le mot du fil")
     }
 
+    func test_repostMessages_sayTheActionWord_inEveryLanguage() throws {
+        let app = try app()
+        let stems = ["fr": "repartag", "en": "repost", "es": "republica", "pt-BR": "republica", "de": "teil", "it": "ripubblic", "ar": "إعادة"]
+        let messages = ["story.mine.repost.success", "story.mine.repost.error", "story.repost.error.generic", "story.repost.success", "story.repost.success.reel"]
+        for key in messages {
+            for (language, stem) in stems {
+                let value = try XCTUnwrap(app[key]?[language], "\(key) [\(language)]")
+                XCTAssertTrue(value.lowercased().contains(stem), "\(key) [\(language)] : « \(value) » ne dit pas le mot du bouton")
+            }
+        }
+    }
+
     // MARK: - Les publications non envoyées et les toasts de limite
 
     func test_unsentComposerBusy_saysWhatToDo_inOneSentence() throws {

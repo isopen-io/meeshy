@@ -193733,7 +193733,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erneutes Posten fehlgeschlagen"
+            "value": "Erneutes Teilen fehlgeschlagen"
           }
         },
         "en": {
@@ -193757,13 +193757,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricondivisione non riuscita"
+            "value": "Ripubblicazione non riuscita"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Falha ao repostar"
+            "value": "Falha ao republicar"
           }
         }
       }
@@ -193780,7 +193780,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story erneut gepostet"
+            "value": "Story erneut geteilt"
           }
         },
         "en": {
@@ -193804,13 +193804,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Storia ricondivisa"
+            "value": "Storia ripubblicata"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story repostada"
+            "value": "Story republicada"
           }
         }
       }
@@ -195831,7 +195831,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Falha ao repostar"
+            "value": "Falha ao republicar"
           }
         }
       }
@@ -196019,7 +196019,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repostado no seu feed"
+            "value": "Republicado no seu feed"
           }
         }
       }
@@ -196036,7 +196036,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "In deinen Reels erneut gepostet"
+            "value": "In deinen Reels erneut geteilt"
           }
         },
         "en": {
@@ -196060,13 +196060,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricondiviso nei tuoi reel"
+            "value": "Ripubblicato nei tuoi reel"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repostado nos seus reels"
+            "value": "Republicado nos seus reels"
           }
         }
       }
