@@ -208,10 +208,9 @@ final class CallPillMotionTests: XCTestCase {
         let morph = try XCTUnwrap(pill.range(of: "CallMorphingGlass("))
         XCTAssertLessThan(morph.lowerBound, glass.lowerBound, "le verre de la pilule est celui que dessine le morphisme")
         XCTAssertTrue(pill.contains(".modifier(CallGlassSpace())"), "ce qui suit le verre se mesure depuis son bord du bas")
-        XCTAssertTrue(pill.contains(".transition(captionsTransition)"), "les sous-titres entrent en fondu, sans attendre la mise en page")
+        XCTAssertTrue(pill.contains(".transition(AnyTransition.opacity.animation(disclosureAnimation))"), "les sous-titres entrent en fondu, sans attendre la mise en page")
         let transitions = try block("private var unfoldTransition: AnyTransition {", until: "/// UN bloc de verre", in: source)
         XCTAssertTrue(transitions.contains(".animation(disclosureAnimation)"), "la transition porte son mouvement : la mise en page ne s'anime plus")
-        XCTAssertTrue(source.contains("private var captionsTransition: AnyTransition {"))
     }
 
     /// Loi 17.2 — les boutons de la rangée de base et les sous-titres repartent de là où on les
@@ -222,6 +221,8 @@ final class CallPillMotionTests: XCTestCase {
         XCTAssertEqual(base.components(separatedBy: ".modifier(CallGlassFollow(reduceMotion: reduceMotion))").count - 1, 4, "(…) · Micro · Sortie · Fin")
         let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: source)
         XCTAssertTrue(pill.contains("captionsBand(hasOwnGlass: false)\n                        .modifier(CallGlassFollow(reduceMotion: reduceMotion))"))
+        let label = try block("struct CallPillButtonLabel: View {", until: "struct CallPillButton: View {", in: try unit("CallDeviceControls.swift"))
+        XCTAssertTrue(label.contains(".transition(AnyTransition.opacity.animation(.easeInOut(duration: CallPillMotion.reducedDuration)))"), "la légende d'un bouton se fond sur place")
     }
 
     func test_glassViews_animateOnlyTransformAndOpacity() throws {
@@ -231,7 +232,7 @@ final class CallPillMotionTests: XCTestCase {
         XCTAssertTrue(views.contains(".scaleEffect(x: frame.scaleX, y: frame.scaleY, anchor: .bottom)"), "le verre morphe par une échelle ancrée à son bord du bas")
         XCTAssertTrue(views.contains(".offset(x: shift.width, y: shift.height)"), "ce qui suit glisse par une translation")
         XCTAssertTrue(views.contains(".transaction { $0.animation = nil }"), "la taille posée du verre ne s'anime jamais")
-        XCTAssertTrue(views.contains("TimelineView(.animation(paused: !clock.isRunning))"), "rien ne tourne au repos")
+        XCTAssertTrue(views.contains("TimelineView(CallGlassMotionTimer.schedule(running: clock.isRunning))"), "rien ne tourne au repos")
         XCTAssertFalse(views.contains(".frame(width: shown"), "aucune taille animée")
         XCTAssertFalse(views.contains("reduceMotion ? nil"))
     }
@@ -258,11 +259,11 @@ final class CallPillMotionTests: XCTestCase {
     func test_reduceMotion_isAShortFade_neverASnap_norASlide() throws {
         let feedback = try unit("CallFeedbackCard.swift")
         XCTAssertFalse(feedback.contains("reduceMotion ? nil"))
-        XCTAssertTrue(feedback.contains(".transition(.opacity.animation(.easeInOut(duration: CallPillMotion.reducedDuration)))"), "les motifs entrent en fondu")
+        XCTAssertTrue(feedback.contains(".transition(AnyTransition.opacity.animation(.easeInOut(duration: CallPillMotion.reducedDuration)))"), "les motifs entrent en fondu")
         let liveFrame = try unit("CallView+LiveFrame.swift")
         XCTAssertTrue(liveFrame.contains(".transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))"), "la carte du cadre ne glisse plus sous réduction")
         let cameraRail = try unit("CallView+CameraRail.swift")
         XCTAssertFalse(cameraRail.contains("reduceMotion ? nil"))
-        XCTAssertTrue(cameraRail.contains("withAnimation(CallSelfTileMotion.spring(response: 0.3, dampingFraction: 0.85, reduceMotion: reduceMotion))"))
+        XCTAssertTrue(cameraRail.contains("meeshyWithAnimation(.spring(response: 0.3, dampingFraction: 0.85), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion)"), "le fondu court réduit traverse la racine")
     }
 }
