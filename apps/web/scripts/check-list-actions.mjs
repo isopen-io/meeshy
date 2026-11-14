@@ -499,6 +499,8 @@ const chip = (id) => `nav[data-list-filters] button[data-list-filter="${id}"]`;
 /* Attendre l'ÉTAT, jamais un délai : la puce a basculé quand son
    `aria-pressed` a changé — « Tous » se dit toujours choisi après son appui. */
 const tapChip = async (id) => {
+  /* Le rare est rangé derrière « Plus » (épure #18361) : on l'ouvre comme la personne, si la puce n'est pas là. */
+  if ((await page.locator(chip(id)).count()) === 0) await page.click('nav[data-list-filters] [data-list-filters-more]');
   const before = await page.getAttribute(chip(id), 'aria-pressed');
   await page.click(chip(id));
   await page.waitForFunction(

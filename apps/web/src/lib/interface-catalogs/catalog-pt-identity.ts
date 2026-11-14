@@ -38,7 +38,7 @@ const ptIdentity = {
   'conversation.details.role.moderator': 'Moderador',
   'conversation.details.share': 'Compartilhar um link',
   'conversation.details.share.busy': 'Criando o link…',
-  'conversation.details.share.copied': 'Link copiado — é só colar.',
+  'conversation.details.share.copied': 'Link copiado.',
   'conversation.details.share.failed': 'Não foi possível criar o link — tente novamente em instantes.',
   'conversation.details.share.unavailable': 'Não é possível compartilhar aqui — copie o link: {url}',
   'thread.header.active_members': 'Membros mais ativos',

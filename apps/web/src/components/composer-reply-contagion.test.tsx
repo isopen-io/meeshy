@@ -7,6 +7,7 @@ import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protecti
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { EPHEMERAL_AFTER_READ_SECONDS, type ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
+import { openComposerTools } from '@/test-support/composer-tools';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 
@@ -71,6 +72,7 @@ describe('Composer — la contagion de la citation (#8557)', () => {
         );
       });
     render(imposed);
+    openComposerTools(container);
     return { sent, reports, render };
   };
 
