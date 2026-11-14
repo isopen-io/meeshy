@@ -366,6 +366,20 @@ describe('/me et /u : les repères restent, le reste se range', () => {
     expect(host.querySelector('[data-profile-action="report"]')).not.toBeNull();
   });
 
+  test('⋯ ne désigne au lecteur d’écran qu’un panneau présent', async () => {
+    const host = await mount(relation(['add', 'write', 'block', 'report']));
+    const more = host.querySelector<HTMLButtonElement>('[data-profile-more]');
+    if (more === null) throw new Error('⋯ absent');
+    const target = (): Element | null => {
+      const id = more.getAttribute('aria-controls');
+      return id === null ? null : host.ownerDocument.getElementById(id);
+    };
+    if (more.hasAttribute('aria-controls')) expect(target()).not.toBeNull();
+    const { act } = await import('react');
+    act(() => more.click());
+    expect(target()?.querySelector('[data-profile-action="block"]')).not.toBeNull();
+  });
+
   test('sans geste rare, aucun ⋯', () => {
     expect(renderToStaticMarkup(relation(['add', 'write']))).not.toContain('data-profile-more');
   });

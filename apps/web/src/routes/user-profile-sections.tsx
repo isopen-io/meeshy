@@ -69,7 +69,7 @@ function ProfileMoreActions({
         type="button"
         data-profile-more
         aria-expanded={open}
-        aria-controls={panelId}
+        {...(open ? { 'aria-controls': panelId } : {})}
         aria-label={translate(language, 'action.more')}
         onClick={() => setOpen(!open)}
         className={`grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
