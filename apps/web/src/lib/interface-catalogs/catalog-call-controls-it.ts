@@ -41,7 +41,6 @@ const it = {
   'callControls.incoming.silent': '{name} non ti vedrà né ti sentirà',
   'callControls.incoming.noVideo': 'Senza video',
   'callControls.incoming.answer': 'Rispondi',
-  'callControls.incoming.me': 'io',
   'callControls.error.invite': 'Impossibile invitare {name}',
   'callControls.error.mute': 'Impossibile disattivare il microfono di {name}',
   'callControls.error.remove': 'Impossibile rimuovere {name}',

@@ -11,7 +11,7 @@ import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-c
 import { CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, callGridView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
+import { CallStage, callGridView, duoCornerView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -116,8 +116,8 @@ const CallIncomingAnswer = incomingAnswer.View;
 const endedControls = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallEndedControls));
 const CallEndedControls = endedControls.View;
 
-/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, la capture déjà en cours, la fin. */
-export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), captureAlerts.load(), endedControls.load()]);
+/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, ma vignette du duo, la capture déjà en cours, la fin. */
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), duoCornerView.load(), captureAlerts.load(), endedControls.load()]);
 
 /** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
 const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -212,6 +212,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   callGridView.load,
   endedControls.load,
   screenZoomSurfaceView.load,
+  duoCornerView.load,
 ];
 
 const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));
@@ -481,9 +482,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
     if (expanded || grown) prefetchCallChunks();
   }, [expanded, grown]);
 
-  /* Un groupe sonne avant de se connecter : sa grille arrive pendant ce temps (#17650). */
+  /* Un appel sonne avant de se connecter : la grille d'un groupe (#17650), la vignette du coin d'un duo (#17982) arrivent pendant ce temps. */
   useEffect(() => {
-    if (call.isGroup) void callGridView.load().catch(() => undefined);
+    void (call.isGroup ? callGridView : duoCornerView).load().catch(() => undefined);
   }, [call.isGroup]);
 
   useEffect(() => {
@@ -596,8 +597,10 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
 
   const recordingCard = useStore(callChromeStore, (chrome) => chrome.recordingCard);
   const selfTopInset = selfTileClearance(present, recordingCard);
+  const railsShown = rails.length > 0 && !hidden;
   const self: SelfView = {
     topInset: selfTopInset,
+    railsOpen: railsShown,
     full: selfFull,
     tileHidden: framed && !selfFull,
     onToggle: () => setSelfFull((full) => !full),
@@ -637,7 +640,6 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   );
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
-  const railsShown = rails.length > 0 && !hidden;
   const stowedWithCaptions = hidden && pillStaysWhenChromeStowed(text);
   /* Toujours montés : c'est `CallCaptionsSlot`, dans son chunk, qui les pose quand
      `visible` et les fait repartir en fondu sinon (#17406) — rangés par (…),
@@ -811,7 +813,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
               Rail={CallActionRail}
               viewport={viewport}
               inset={bleedEnd}
-              tile={selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset, bleed: bleedEnd })}
+              tile={selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset, bleed: bleedEnd, railsOpen: railsShown })}
             />
           </Suspense>
         ) : null}
