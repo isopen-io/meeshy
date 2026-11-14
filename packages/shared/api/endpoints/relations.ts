@@ -18,6 +18,9 @@ export const byUserId = (userId: string): string => `/api/v1/relations/${encodeU
 /** POST /api/v1/relations/:userId/level */
 export const byUserIdLevel = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/level`;
 
+/** GET /api/v1/relations/:userId/location/history */
+export const byUserIdLocationHistory = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/location/history`;
+
 /** POST /api/v1/relations/:userId/ritual */
 export const byUserIdRitual = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/ritual`;
 

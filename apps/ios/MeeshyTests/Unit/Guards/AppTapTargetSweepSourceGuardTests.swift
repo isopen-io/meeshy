@@ -386,7 +386,8 @@ final class AppTapTargetSweepSourceGuardTests: XCTestCase {
     private static let namedTapExemptions: [(path: String, action: String)] = [
         ("Features/Auth/Views/LoginView.swift", "focusedField = nil"),
         ("Features/Composer/ComposerSceneSurface+Stage.swift", "onBackgroundTapped"),
-        ("Features/Composer/ComposerSceneFrise.swift", "choisir(piste")
+        ("Features/Composer/ComposerSceneFrise.swift", "choisir(piste"),
+        ("Features/Call/Views/CallView+Connected.swift", "if exposesTheTapToggle")
     ]
 
     func test_aucuneActionDAccessibiliteHorsMainNePorteUneReferenceDeFonction() throws {

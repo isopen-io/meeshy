@@ -39,6 +39,12 @@
  *   les deux moitiés — la route qui la lit, et le serveur qui la pose.
  * - `translator` est `null` sans gestionnaire Socket.IO : la traduction n'a
  *   alors aucune statistique à lire.
+ * - `translatorClient` (#18064) est `null` tant que le client ZMQ de traduction
+ *   n'est pas initialisé ou ne sait pas lire ses compteurs. Il porte ce que la
+ *   carte `translator` ne voit pas : les refus de pool plein, les traductions
+ *   ignorées et les erreurs reçues du traducteur, comptés au plus près du fil.
+ *   `avg_response_time` n'en sort pas : le client ne l'alimente jamais, il
+ *   vaudrait toujours 0. `errorsReceived` inclut les refus de pool plein.
  * - `backups` (#9668) est `null` quand le verdict de la sauvegarde nocturne est
  *   absent, illisible ou hors schéma (`services/admin/backup-status.ts`) : la
  *   passerelle ne voit que ce fichier, jamais les sauvegardes elles-mêmes.
@@ -90,10 +96,21 @@ type StatusMetricsLike = {
   readonly failedUpdates: number;
 };
 
+type ZmqClientStatsLike = {
+  readonly requests_sent?: number;
+  readonly results_received?: number;
+  readonly errors_received?: number;
+  readonly pool_full_rejections?: number;
+  readonly translation_skipped?: number;
+};
+
 type FastifyWithLiveServices = {
   readonly socketIOHandler?: { readonly getManager?: () => { readonly getStats?: () => SocketStatsLike } | null };
   readonly statusService?: { readonly getMetrics?: () => StatusMetricsLike };
-  readonly translationService?: { readonly healthCheck?: () => Promise<boolean> };
+  readonly translationService?: {
+    readonly healthCheck?: () => Promise<boolean>;
+    readonly getZmqClient?: () => { readonly getStats?: () => ZmqClientStatsLike } | null;
+  };
 };
 
 /** Le délai de la sonde du traducteur : la supervision ne doit pas attendre un traducteur muet. */
@@ -172,6 +189,26 @@ function readTranslator(stats: SocketStatsLike | null, reachable: boolean) {
   };
 }
 
+/** Les compteurs du client ZMQ de traduction — `null` s'il n'est pas prêt ou ne sait pas les lire. */
+function readTranslatorClient(fastify: FastifyInstance) {
+  const service = (fastify as unknown as FastifyWithLiveServices).translationService;
+  if (typeof service?.getZmqClient !== 'function') return null;
+  try {
+    const client = service.getZmqClient();
+    if (typeof client?.getStats !== 'function') return null;
+    const stats = client.getStats();
+    return {
+      requestsSent: count(stats.requests_sent),
+      resultsReceived: count(stats.results_received),
+      errorsReceived: count(stats.errors_received),
+      poolFullRejections: count(stats.pool_full_rejections),
+      translationSkipped: count(stats.translation_skipped),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const dependencySchema = {
   type: 'object',
   properties: { status: chaine, latencyMs: nombreNul },
@@ -243,6 +280,18 @@ const monitoringSchema = {
         uptimeSeconds: nombre,
       },
     },
+    translatorClient: {
+      type: 'object',
+      nullable: true,
+      description: 'Les compteurs du client ZMQ de traduction (#18064) — null tant que le client n’est pas prêt',
+      properties: {
+        requestsSent: nombre,
+        resultsReceived: nombre,
+        errorsReceived: nombre,
+        poolFullRejections: nombre,
+        translationSkipped: nombre,
+      },
+    },
     circuitBreakers: {
       type: 'array',
       items: {
@@ -284,7 +333,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
       ],
       schema: {
         description:
-          "La santé de la plateforme en une lecture : processus, base, Redis, temps réel, traduction, disjoncteurs, présence, sauvegarde nocturne. canAccessAdmin + canViewAnalytics + rang d'administration. #8876, #9668.",
+          "La santé de la plateforme en une lecture : processus, base, Redis, temps réel, traduction, client ZMQ de traduction, disjoncteurs, présence, sauvegarde nocturne. canAccessAdmin + canViewAnalytics + rang d'administration. #8876, #9668, #18064.",
         tags: ['admin'],
         summary: 'Platform health overview (admin)',
         security: [{ bearerAuth: [] }],
@@ -319,6 +368,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
             errors: count(socketStats?.errors),
           },
           translator: readTranslator(socketStats, translatorReachable),
+          translatorClient: readTranslatorClient(fastify),
           circuitBreakers: servedCircuitBreakers().map(({ lastFailure, ...breaker }) => ({
             ...breaker,
             lastFailureAt: lastFailure,

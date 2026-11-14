@@ -2,9 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/talkie-event-names';
 
-import type { SocketClient } from '@/lib/net/socket';
-
-import { bindTalkieSender, createTalkieSender, outcomeOfRefusal, type TalkieCaptureFactory, type TalkieSendOutcome } from './talkie-sender';
+import { bindTalkieSender, outcomeOfRefusal } from './talkie-sender';
+import { fakeCapture, harness, PROCHE, settle, TALKIE_ID } from './talkie-sender.test-support';
 
 /**
  * ÉMETTRE LE TALKIE DEPUIS LE WEB (#16641) — appuyer ouvre `talkie:start` et le
@@ -12,85 +11,6 @@ import { bindTalkieSender, createTalkieSender, outcomeOfRefusal, type TalkieCapt
  * (`talkie:send-chunk`, `seq` croissant), relâcher vide ce qui reste puis ferme
  * (`talkie:end`). Un refus codé se rend sans fuite, la limite de 30 s ferme seule.
  */
-
-const PROCHE = '64b000000000000000000001';
-const TALKIE_ID = 'a'.repeat(24);
-
-type Emitted = { readonly event: string; readonly payload: unknown };
-
-function fakeSocket(ack: () => Promise<unknown>) {
-  const emitted: Emitted[] = [];
-  const handlers = new Map<string, Set<(payload: unknown) => void>>();
-  const socket: SocketClient = {
-    connected: true,
-    connect: () => undefined,
-    disconnect: () => undefined,
-    on: (event, handler) => {
-      const set = handlers.get(event) ?? new Set();
-      set.add(handler as (payload: unknown) => void);
-      handlers.set(event, set);
-    },
-    off: (event, handler) => {
-      handlers.get(event)?.delete(handler as (payload: unknown) => void);
-    },
-    emit: (event, payload) => {
-      emitted.push({ event, payload });
-    },
-    emitWithAck: async (event, payload) => {
-      emitted.push({ event, payload });
-      return ack();
-    },
-  };
-  const fire = (event: string, payload: unknown): void => handlers.get(event)?.forEach((handler) => handler(payload));
-  return { socket, emitted, fire, listeners: (event: string) => handlers.get(event)?.size ?? 0 };
-}
-
-const accepted = () => Promise.resolve({ success: true, data: { talkieId: TALKIE_ID, maxDurationMs: 30_000, maxChunkBytes: 16_384 } });
-
-function fakeCapture({ fails = false }: { readonly fails?: boolean } = {}) {
-  let frame: ((bytes: Uint8Array, durationMs: number) => void) | null = null;
-  let stopped = 0;
-  const factory: TalkieCaptureFactory = async ({ onFrame }) => {
-    if (fails) throw new Error('NotAllowedError');
-    frame = onFrame;
-    return {
-      stop: async () => {
-        stopped += 1;
-      },
-    };
-  };
-  return {
-    factory,
-    push: (count: number, bytes = 200, durationMs = 50) => Array.from({ length: count }, () => frame?.(new Uint8Array(bytes).fill(7), durationMs)),
-    stopped: () => stopped,
-  };
-}
-
-function harness({ ack = accepted, capture = fakeCapture(), socketPresent = true }: { readonly ack?: () => Promise<unknown>; readonly capture?: ReturnType<typeof fakeCapture>; readonly socketPresent?: boolean } = {}) {
-  const wire = fakeSocket(ack);
-  const outcomes: TalkieSendOutcome[] = [];
-  const timers: Array<{ readonly run: () => void; readonly ms: number; cancelled: boolean }> = [];
-  let clock = 1_000;
-  const sender = createTalkieSender({
-    socket: () => (socketPresent ? wire.socket : null),
-    capture: capture.factory,
-    now: () => clock,
-    schedule: (run, ms) => {
-      const timer = { run, ms, cancelled: false };
-      timers.push(timer);
-      return () => {
-        timer.cancelled = true;
-      };
-    },
-    onOutcome: (outcome) => outcomes.push(outcome),
-  });
-  const chunks = () => wire.emitted.filter((e) => e.event === TALKIE_CLIENT_EVENTS.TALKIE_SEND_CHUNK).map((e) => e.payload as { talkieId: string; seq: number; data: Uint8Array; capturedAt: number });
-  const ends = () => wire.emitted.filter((e) => e.event === TALKIE_CLIENT_EVENTS.TALKIE_END).map((e) => e.payload);
-  const fireTimers = () => timers.filter((t) => !t.cancelled).forEach((t) => t.run());
-  return { sender, wire, outcomes, capture, chunks, ends, timers, fireTimers, tick: (ms: number) => (clock += ms) };
-}
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('appuyer → parler → relâcher', () => {
   test('appuyer ouvre talkie:start vers le Proche, en AAC ADTS, et passe en « je parle » à l’accusé', async () => {
@@ -244,7 +164,7 @@ describe('les refus, rendus sans fuite', () => {
   });
 
   test('un refus arrête le micro, n’envoie rien et revient au repos', async () => {
-    const h = harness({ ack: () => Promise.resolve({ success: false, error: 'x', code: 'TALKIE_FALLBACK_VOICE' }) });
+    const h = harness({ ack: () => Promise.resolve({ success: false, error: 'x', code: 'TALKIE_E2EE_CONVERSATION' }) });
     h.sender.press(PROCHE);
     await settle();
     await settle();
@@ -252,7 +172,7 @@ describe('les refus, rendus sans fuite', () => {
     expect(h.chunks()).toEqual([]);
     expect(h.ends()).toEqual([]);
     expect(h.capture.stopped()).toBe(1);
-    expect(h.outcomes).toEqual(['voice']);
+    expect(h.outcomes).toEqual(['e2ee']);
     expect(h.sender.store.getState().phase).toEqual({ kind: 'idle' });
   });
 

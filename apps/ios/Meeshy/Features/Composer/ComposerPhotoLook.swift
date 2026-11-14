@@ -27,13 +27,15 @@ nonisolated struct ComposerPhotoLook: Hashable, Sendable {
     var filter: VideoFilterPreset = .natural
     var frame: ComposerPhotoFrame = .none
     var effect: CallFaceEffect = .none
+    /// La dose de l'ambiance et le pavé chaleur × contraste (OPUS-2).
+    var tuning = ComposerLookTuning.neutral
 
     /// Rien n'a été choisi : la prise part telle quelle, octets d'origine compris.
-    var isUntouched: Bool { filter == .natural && frame == .none && effect == .none }
+    var isUntouched: Bool { filter == .natural && frame == .none && effect == .none && !tuning.adjusts }
 
     /// Le même look sans son cadre — ce qui se peint le temps que le cadre cuise.
     var withoutFrame: ComposerPhotoLook {
-        ComposerPhotoLook(filter: filter, frame: .none, effect: effect)
+        ComposerPhotoLook(filter: filter, frame: .none, effect: effect, tuning: tuning)
     }
 
     /// L'identité du cadre pour la loi d'enregistrement (#10284) : deux looks

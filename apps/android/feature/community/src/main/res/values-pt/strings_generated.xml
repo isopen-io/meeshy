@@ -51,6 +51,13 @@
     <string name="community_list_empty_title">Sem comunidades</string>
     <string name="community_list_search_placeholder">Pesquisar...</string>
     <string name="community_list_title">Comunidades</string>
+    <string name="community_load_network_body">Verifique sua conexão e tente novamente.</string>
+    <string name="community_load_network_title">Não foi possível carregar esta comunidade</string>
+    <string name="community_load_refused_back">Voltar às comunidades</string>
+    <string name="community_load_refused_body">Ela não existe, ou é privada e você não é membro.</string>
+    <string name="community_load_refused_title">Comunidade não encontrada</string>
+    <string name="community_load_server_body">O problema é do nosso lado. Tente novamente em instantes.</string>
+    <string name="community_load_server_title">O Meeshy não conseguiu carregar esta comunidade</string>
     <string name="community_members_section_creator">Criadores</string>
     <string name="community_members_section_member">Membros</string>
     <string name="community_members_section_moderator">Moderadores</string>
@@ -75,6 +82,9 @@
     <string name="community_settings_leave_confirm_title">Sair da comunidade</string>
     <string name="community_settings_leave_label">Sair da comunidade</string>
     <string name="community_settings_privacy_by_invitation">Por convite</string>
+    <string name="community_settings_privacy_confirm_button">Tornar privada</string>
+    <string name="community_settings_privacy_confirm_message">Ex-membros e contas bloqueadas sairão das suas conversas, sem volta.</string>
+    <string name="community_settings_privacy_confirm_title">Tornar a comunidade privada?</string>
     <string name="community_settings_privacy_open_to_all">Aberta a todos</string>
     <string name="community_settings_privacy_title">Comunidade privada</string>
     <string name="community_settings_section_danger">Zona de perigo</string>

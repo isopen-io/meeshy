@@ -23,6 +23,7 @@ import {
 import { CommunityRole } from './types';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
+import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -533,6 +534,8 @@ export async function registerMembershipRoutes(
               }
             }
           });
+
+      scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [inviteeId] });
 
       // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
       // rejoint le cercle (#5759).

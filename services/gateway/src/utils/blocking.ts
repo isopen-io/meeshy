@@ -11,6 +11,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from './logger-enhanced';
 
 /**
  * Returns true when either user has blocked the other.
@@ -106,6 +107,28 @@ export async function getBlockedUserIdsAmong(
     if (candidateSet.has(bid)) blocked.add(bid);
   }
   return blocked;
+}
+
+/**
+ * The recipients of a broadcast by `authorId`, minus every account in a block
+ * relationship with them (either side). One filter for every live broadcast of
+ * a publication (#13350, #17209). A block lookup that fails closes the audience:
+ * only `authorId` survives, if it was a recipient.
+ */
+export async function withoutBlockedRecipients(
+  prisma: Pick<PrismaClient, 'user'>,
+  authorId: string,
+  recipientIds: readonly string[]
+): Promise<string[]> {
+  try {
+    const blocked = await getBlockedUserIdsAmong(prisma, authorId, [...recipientIds]);
+    return recipientIds.filter((id) => !blocked.has(id));
+  } catch (error) {
+    enhancedLogger
+      .child({ module: 'blocking' })
+      .error('broadcast — block resolution failed, audience closed', { authorId, error });
+    return recipientIds.filter((id) => id === authorId);
+  }
 }
 
 /**

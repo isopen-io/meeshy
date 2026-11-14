@@ -52,6 +52,8 @@ export type TalkieSendOutcome = 'not-allowed' | 'voice' | 'e2ee' | 'rate-limited
 export type TalkieSendPhase =
   | { readonly kind: 'idle' }
   | { readonly kind: 'starting'; readonly toUserId: string }
+  /** Le talkie ne passe pas (#16698, #17141) : la voix continue de s'enregistrer et partira en message vocal au relâcher. */
+  | { readonly kind: 'recording-copy'; readonly toUserId: string }
   | { readonly kind: 'talking'; readonly toUserId: string; readonly talkieId: string; readonly delivery: TalkieDelivery };
 
 /**
@@ -67,9 +69,31 @@ export type TalkieSender = {
   readonly store: StoreApi<TalkieSenderState>;
   press(toUserId: string): void;
   release(): Promise<void>;
-  /** La passerelle a fermé une prise de parole : si c'est la mienne, tout s'arrête. */
-  ended(talkieId: string, reason: 'sender' | 'limit' | 'cut'): void;
+  /**
+   * La passerelle a fermé une prise de parole : si c'est la mienne, tout s'arrête. `joined` (voix réveillée seulement) :
+   * `false` ⇒ personne ne l'a entendue, elle part en copie vocale.
+   */
+  ended(talkieId: string, reason: 'sender' | 'limit' | 'cut', joined?: boolean): void;
 };
+
+/**
+ * La copie vocale d'un talkie qui n'a pas été entendu (#16698) : les trames AAC ADTS captées, leur durée, le
+ * destinataire, et la conversation que la passerelle a nommée (`TalkieStartAck.conversationId`) — `null` : le client
+ * choisit la conversation partagée la plus récente.
+ */
+export type TalkieVoiceCopy = {
+  readonly frames: readonly Uint8Array[];
+  readonly durationMs: number;
+  readonly toUserId: string;
+  readonly conversationId: string | null;
+};
+
+/** Envoie la copie en message vocal ; rend `false` si elle n'est pas partie. */
+export type TalkieVoiceCopier = (copy: TalkieVoiceCopy) => Promise<boolean>;
+
+/** Les voix réveillées closes dont on attend encore le verdict `joined` : au-delà, la plus ancienne est oubliée. */
+const AWAITING_JOIN_CAP = 4;
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 
 const REFUSALS: Readonly<Record<string, TalkieSendOutcome>> = {
   [TALKIE_ERROR_CODES.NOT_ALLOWED]: 'not-allowed',
@@ -87,10 +111,15 @@ type Wire = Readonly<Record<string, unknown>>;
 const objectOf = (raw: unknown): Wire | null => (typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Wire) : null);
 const positive = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback);
 
-function decodeStartAck(raw: unknown): Opened | { readonly refused: TalkieSendOutcome } {
+type Refused = { readonly refused: TalkieSendOutcome; readonly conversationId: string | null };
+
+function decodeStartAck(raw: unknown): Opened | Refused {
   const ack = objectOf(raw);
   const data = objectOf(ack?.data);
-  if (ack?.success !== true || data === null || typeof data.talkieId !== 'string' || data.talkieId === '') return { refused: outcomeOfRefusal(ack?.code) };
+  if (ack?.success !== true || data === null || typeof data.talkieId !== 'string' || data.talkieId === '') {
+    const conversationId = typeof ack?.conversationId === 'string' && OBJECT_ID.test(ack.conversationId) ? ack.conversationId : null;
+    return { refused: outcomeOfRefusal(ack?.code), conversationId };
+  }
   return {
     talkieId: data.talkieId,
     maxDurationMs: Math.min(positive(data.maxDurationMs, TALKIE_MAX_DURATION_MS), TALKIE_MAX_DURATION_MS),
@@ -127,7 +156,16 @@ type Session = {
   seq: number;
   sentBytes: number;
   cancelLimit: (() => void) | null;
+  /** Le talkie est refusé en voix : on n'émet plus, on enregistre pour la copie vocale. */
+  copying: boolean;
+  conversationId: string | null;
+  /** Toutes les trames captées, gardées tant qu'une copie peut être demandée (repli ou réveil). */
+  kept: readonly Uint8Array[];
+  keptBytes: number;
+  keptMs: number;
 };
+
+type Kept = { readonly frames: readonly Uint8Array[]; readonly durationMs: number; readonly toUserId: string };
 
 export function createTalkieSender({
   socket,
@@ -138,15 +176,26 @@ export function createTalkieSender({
     return () => clearTimeout(timer);
   },
   onOutcome,
+  copier,
 }: {
   readonly socket: () => SocketClient | null;
   readonly capture: TalkieCaptureFactory;
   readonly now?: () => number;
   readonly schedule?: (run: () => void, ms: number) => () => void;
   readonly onOutcome: (outcome: TalkieSendOutcome) => void;
+  readonly copier: TalkieVoiceCopier;
 }): TalkieSender {
   const store = createStore<TalkieSenderState>(() => ({ phase: { kind: 'idle' } }));
   let session: Session | null = null;
+  /** Voix réveillées closes, en attente de `joined`. */
+  const awaitingJoin = new Map<string, Kept>();
+  /** Verdicts `joined` arrivés avant que la prise de parole n'ait fini de se fermer. */
+  const earlyVerdicts = new Map<string, boolean>();
+
+  const sendCopy = async (copy: TalkieVoiceCopy): Promise<void> => {
+    const sent = copy.frames.length > 0 && (await copier(copy).catch(() => false));
+    onOutcome(sent ? 'voice' : 'failed');
+  };
 
   const limitOf = (s: Session): number => s.opened?.maxChunkBytes ?? TALKIE_MAX_CHUNK_BYTES;
 
@@ -173,6 +222,12 @@ export function createTalkieSender({
     (s: Session) =>
     (bytes: Uint8Array, durationMs: number): void => {
       if (!s.accepting || bytes.byteLength === 0) return;
+      if (s.keptBytes + bytes.byteLength <= TALKIE_MAX_TOTAL_BYTES) {
+        s.kept = [...s.kept, bytes];
+        s.keptBytes += bytes.byteLength;
+        s.keptMs += durationMs;
+      }
+      if (s.copying) return;
       if (s.current.bytes > 0 && s.current.bytes + bytes.byteLength > limitOf(s)) {
         dispatch(s, s.current);
         s.current = EMPTY_FRAGMENT;
@@ -215,7 +270,43 @@ export function createTalkieSender({
     }
     s.current = EMPTY_FRAGMENT;
     settleIdle(s, outcome);
+    if (s.opened?.delivery === 'waking') await awaitVerdict(s.opened.talkieId, { frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId });
   }
+
+  /** Une voix réveillée close : son verdict est peut-être déjà là, sinon elle l'attend (bornée). */
+  async function awaitVerdict(talkieId: string, kept: Kept): Promise<void> {
+    const verdict = earlyVerdicts.get(talkieId);
+    earlyVerdicts.delete(talkieId);
+    if (verdict === true) return;
+    if (verdict === false) return sendCopy({ ...kept, conversationId: null });
+    awaitingJoin.set(talkieId, kept);
+    if (awaitingJoin.size > AWAITING_JOIN_CAP) {
+      const oldest = awaitingJoin.keys().next().value;
+      if (oldest !== undefined) awaitingJoin.delete(oldest);
+    }
+    return undefined;
+  }
+
+  /** Ferme l'enregistrement de repli : micro arrêté, repos, puis la voix part en message vocal. */
+  async function finishCopy(s: Session): Promise<void> {
+    if (s.finishing) return;
+    s.finishing = true;
+    s.cancelLimit?.();
+    await stopMic(s);
+    settleIdle(s, null);
+    await sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: s.conversationId });
+  }
+
+  const startCopy = (s: Session, conversationId: string | null): Promise<void> | undefined => {
+    s.copying = true;
+    s.conversationId = conversationId;
+    s.queue = [];
+    s.current = EMPTY_FRAGMENT;
+    if (s.released) return finishCopy(s);
+    store.setState({ phase: { kind: 'recording-copy', toUserId: s.toUserId } });
+    s.cancelLimit = schedule(() => void finishCopy(s), TALKIE_MAX_DURATION_MS);
+    return undefined;
+  };
 
   const refuse = async (s: Session, outcome: TalkieSendOutcome): Promise<void> => {
     s.finishing = true;
@@ -242,7 +333,24 @@ export function createTalkieSender({
       onOutcome('offline');
       return;
     }
-    const s: Session = { toUserId, opened: null, capture: null, accepting: true, released: false, finishing: false, queue: [], current: EMPTY_FRAGMENT, seq: 0, sentBytes: 0, cancelLimit: null };
+    const s: Session = {
+      toUserId,
+      opened: null,
+      capture: null,
+      accepting: true,
+      released: false,
+      finishing: false,
+      queue: [],
+      current: EMPTY_FRAGMENT,
+      seq: 0,
+      sentBytes: 0,
+      cancelLimit: null,
+      copying: false,
+      conversationId: null,
+      kept: [],
+      keptBytes: 0,
+      keptMs: 0,
+    };
     session = s;
     store.setState({ phase: { kind: 'starting', toUserId } });
 
@@ -260,11 +368,12 @@ export function createTalkieSender({
     void live
       .emitWithAck(TALKIE_CLIENT_EVENTS.TALKIE_START, { toUserId, codec: TALKIE_WEB_CODEC }, TALKIE_START_ACK_MS)
       .then(
-        (raw) => decodeStartAck(raw),
-        () => ({ refused: 'offline' as const }),
+        (raw): Opened | Refused => decodeStartAck(raw),
+        (): Refused => ({ refused: 'offline', conversationId: null }),
       )
       .then(async (verdict) => {
         const micReady = await mic;
+        if ('refused' in verdict && verdict.refused === 'voice') return micReady ? startCopy(s, verdict.conversationId) : refuse(s, 'mic-denied');
         if ('refused' in verdict) return refuse(s, verdict.refused);
         if (!micReady) {
           s.opened = verdict;
@@ -278,6 +387,7 @@ export function createTalkieSender({
     const s = session;
     if (s === null || s.released) return;
     s.released = true;
+    if (s.copying) return finishCopy(s);
     if (s.opened !== null) return finish(s, null);
     await stopMic(s);
     if (s.current.bytes > 0) {
@@ -287,9 +397,16 @@ export function createTalkieSender({
     return undefined;
   };
 
-  const ended = (talkieId: string, reason: 'sender' | 'limit' | 'cut'): void => {
+  const ended = (talkieId: string, reason: 'sender' | 'limit' | 'cut', joined?: boolean): void => {
+    const waiting = awaitingJoin.get(talkieId);
+    if (waiting !== undefined && joined !== undefined) {
+      awaitingJoin.delete(talkieId);
+      if (!joined) void sendCopy({ ...waiting, conversationId: null });
+      return;
+    }
     const s = session;
     if (s === null || s.opened?.talkieId !== talkieId) return;
+    if (joined !== undefined && s.opened.delivery === 'waking') earlyVerdicts.set(talkieId, joined);
     void finish(s, reason === 'sender' ? null : reason === 'limit' ? 'limit' : 'failed', { notify: false });
   };
 
@@ -300,7 +417,7 @@ export function createTalkieSender({
 export function bindTalkieSender({ socket, sender }: { readonly socket: SocketClient; readonly sender: TalkieSender }): () => void {
   const onEnded = (payload: unknown): void => {
     const ended = decodeTalkieEnded(payload);
-    if (ended !== null) sender.ended(ended.talkieId, ended.reason);
+    if (ended !== null) sender.ended(ended.talkieId, ended.reason, ended.joined);
   };
   socket.on(TALKIE_SERVER_EVENTS.TALKIE_ENDED, onEnded);
   return () => socket.off(TALKIE_SERVER_EVENTS.TALKIE_ENDED, onEnded);

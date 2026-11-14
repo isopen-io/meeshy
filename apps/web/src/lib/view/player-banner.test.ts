@@ -347,3 +347,17 @@ describe('bannerShortCount', () => {
     expect(bannerShortCount(12_345, 'ar')).toMatch(/12[.,٫]3/);
   });
 });
+
+describe('le bandeau porte l’Offrande prête et la Flamme à risque (#17796)', () => {
+  test('le signal est lu du bloc servi, sans rien recalculer', () => {
+    const base = gameBlockFixture();
+    const served = { ...base, missions: { ...base.missions, unlocked: true }, chest: { ...base.chest, status: 'ready' as const }, flame: { ...base.flame, status: 'at-risk' as const, days: 4 } };
+    expect(playerBannerModel(served)?.attention).toEqual({ chestReady: true, flameAtRisk: true });
+  });
+
+  test('une Offrande voilée et une Flamme allumée ne signalent rien', () => {
+    const base = gameBlockFixture();
+    const quiet = { ...base, chest: { ...base.chest, status: 'locked' as const }, flame: { ...base.flame, status: 'lit' as const } };
+    expect(playerBannerModel(quiet)?.attention).toEqual({ chestReady: false, flameAtRisk: false });
+  });
+});

@@ -366,6 +366,33 @@ describe('GET …/profile — ce que le visiteur peut faire', () => {
     }
   });
 
+  /**
+   * #17140 — la fiche ANNONCE ce que `historyFloorFor` APPLIQUE, et le repli
+   * `shareLink?.allowViewHistory ?? true` confondait deux raisons d'avoir
+   * `null` en face : « ce visiteur n'a emprunté aucun lien » (accorde) et
+   * « son lien a disparu » (refuse). La seconde est FABRIQUÉE en production —
+   * le balayage horaire supprime les liens ÉCHUS après n'avoir révoqué que
+   * leurs invités anonymes — et elle annonçait donc « voit l'historique » au
+   * modérateur pendant que la lecture le lui refusait.
+   */
+  it('refuse l’historique quand la ligne du lien a DISPARU — la fiche dit ce que la lecture fait (#17140)', async () => {
+    const ctx = setup('admin');
+    (ctx.prisma.conversationShareLink.findUnique as any).mockResolvedValue(null);
+
+    const data = await fetchProfile(ctx);
+
+    expect(data.entryCapabilities.canViewHistory).toBe(false);
+  });
+
+  it('et l’accorde toujours à un visiteur qu’AUCUN lien n’a fait entrer', async () => {
+    const ctx = setup('admin', { ...anonymousRow, anonymousSession: { ...anonymousRow.anonymousSession, shareLinkId: null } });
+
+    const data = await fetchProfile(ctx);
+
+    expect(data.entryCapabilities.canViewHistory).toBe(true);
+    expect(ctx.prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
   it('n’en énonce aucune pour un participant qui a un compte', async () => {
     const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID);
 

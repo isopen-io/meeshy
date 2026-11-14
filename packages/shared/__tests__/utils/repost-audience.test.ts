@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   allowedRepostVisibilities,
   isRepostVisibilityAllowed,
+  isRepostable,
   repostVisibilityInheritsAudienceList,
 } from '../../utils/repost-audience.js';
 import type { PostVisibility } from '../../types/post.js';
@@ -92,6 +93,21 @@ describe('repostVisibilityInheritsAudienceList', () => {
   it('needs no list for the audiences that are self-describing', () => {
     for (const v of ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'PRIVATE'] as const) {
       expect(repostVisibilityInheritsAudienceList(v)).toBe(false);
+    }
+  });
+});
+
+describe('isRepostable (#14501)', () => {
+  it('ne refuse que le Sang : un contenu BLOOD ne se repartage jamais, toute autre audience offre au moins une cible', () => {
+    for (const v of [...ALL, 'ACQUAINTANCES', 'CLOSE'] as const) {
+      expect(isRepostable(v)).toBe(true);
+    }
+    expect(isRepostable('BLOOD')).toBe(false);
+  });
+
+  it('est la vue « offre-t-on le geste ? » de la même loi, jamais une seconde liste', () => {
+    for (const v of [...ALL, 'ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const) {
+      expect(isRepostable(v)).toBe(allowedRepostVisibilities(v).length > 0);
     }
   });
 });

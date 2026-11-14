@@ -39,6 +39,11 @@ jest.mock('../../../../services/conversations/obsoleteCapability', () => ({
   announceParticipantRoleWithCapabilities: (...args: unknown[]) => announceParticipantRoleWithCapabilities(...args),
 }));
 
+const runPendingGuestRevocation = jest.fn<any>(async () => undefined);
+jest.mock('../../../../socketio/closeShareLinkRevokingGuests', () => ({
+  runWithRetries: (...args: unknown[]) => runPendingGuestRevocation(...args),
+}));
+
 jest.mock('../../../../services/message-translation/conversationLanguageChanges', () => ({
   announceConversationLanguageChange: jest.fn(),
 }));
@@ -75,6 +80,7 @@ type Ligne = {
 type Monde = {
   readonly salons?: ReadonlyArray<{ readonly id: string; readonly communityId: string; readonly isActive?: boolean }>;
   readonly lignes?: readonly Ligne[];
+  readonly liens?: ReadonlyArray<{ readonly id: string; readonly conversationId: string }>;
 };
 
 const ligne = (overrides: Partial<Ligne> & Pick<Ligne, 'id' | 'conversationId' | 'userId'>): Ligne => ({
@@ -91,6 +97,7 @@ function prismaDouble(monde: Monde = {}) {
     { id: HORS_COMMUNAUTE, communityId: 'autre' },
   ];
   const lignes = monde.lignes ?? [];
+  const liens = monde.liens ?? [];
   const participant = {
     findMany: jest.fn<any>(async (args: any) => lignes
       .filter((l) => (args.where.userId === undefined || l.userId === args.where.userId))
@@ -110,6 +117,12 @@ function prismaDouble(monde: Monde = {}) {
         .map((s) => ({ id: s.id, isActive: s.isActive ?? true }))),
     },
     participant,
+    conversationShareLink: {
+      findMany: jest.fn<any>(async (args: any) => liens
+        .filter((l) => l.conversationId === args.where.conversationId)
+        .map((l) => ({ id: l.id }))),
+      updateMany: jest.fn<any>(async (args: any) => ({ count: args.where.id.in.length })),
+    },
     user: { findFirst: jest.fn<any>(async () => null) },
     $transaction: jest.fn<any>(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -308,6 +321,89 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
     expect(result.exitedConversationIds).toEqual([SALON_A]);
     expect(prisma.participant.update).toHaveBeenCalledTimes(1);
     expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-a' }, data: { isActive: false, leftAt: NOW } });
+  });
+
+  it('créateur sans héritier inscrit : les liens du salon se ferment et se marquent PENDANT la requête, puis leurs invités sont révoqués (#16712)', async () => {
+    const prisma = prismaDouble({
+      lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'creator' })],
+      liens: [
+        { id: 'lien-1', conversationId: SALON_A },
+        { id: 'lien-2', conversationId: SALON_A },
+        { id: 'lien-b', conversationId: SALON_B },
+      ],
+    });
+    resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'close' });
+    let revocationsAuRetour = -1;
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    revocationsAuRetour = runPendingGuestRevocation.mock.calls.length;
+    await result.announcements;
+
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['lien-1', 'lien-2'] } },
+      data: { isActive: false, guestRevocationPendingAt: NOW },
+    });
+    expect(revocationsAuRetour).toBe(0);
+    expect(runPendingGuestRevocation.mock.calls.map((c: any) => [c[0].shareLinkId, c[0].pendingSince])).toEqual([
+      ['lien-1', NOW],
+      ['lien-2', NOW],
+    ]);
+    expect(runPendingGuestRevocation.mock.calls[0][0]).toEqual(expect.objectContaining({ prisma, io, manager }));
+  });
+
+  it('un salon qui a un héritier garde ses liens et ses invités', async () => {
+    const prisma = prismaDouble({
+      lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'creator' })],
+      liens: [{ id: 'lien-1', conversationId: SALON_A }],
+    });
+    resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'transfer', successor: { id: 'r-a', userId: RESTANT } });
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    await result.announcements;
+
+    expect(prisma.conversationShareLink.updateMany).not.toHaveBeenCalled();
+    expect(runPendingGuestRevocation).not.toHaveBeenCalled();
+  });
+
+  it('un simple membre qui part ne ferme aucun lien', async () => {
+    const prisma = prismaDouble({
+      lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT })],
+      liens: [{ id: 'lien-1', conversationId: SALON_A }],
+    });
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    await result.announcements;
+
+    expect(prisma.conversationShareLink.updateMany).not.toHaveBeenCalled();
+    expect(runPendingGuestRevocation).not.toHaveBeenCalled();
+  });
+
+  it('une fermeture de liens qui échoue laisse la sortie écrite et ne rejette pas ; une révocation qui échoue reste marquée pour le balayage', async () => {
+    const prisma = prismaDouble({
+      lignes: [
+        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'creator' }),
+        ligne({ id: 'p-b', conversationId: SALON_B, userId: PARTANT, role: 'creator' }),
+      ],
+      liens: [{ id: 'lien-a', conversationId: SALON_A }, { id: 'lien-b', conversationId: SALON_B }],
+    });
+    resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'close' });
+    prisma.conversationShareLink.updateMany.mockImplementationOnce(async () => { throw new Error('écriture perdue'); });
+    runPendingGuestRevocation.mockImplementationOnce(async () => { throw new Error('registre muet'); });
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    await expect(result.announcements).resolves.toBeUndefined();
+
+    expect(result.exitedConversationIds).toEqual([SALON_A, SALON_B]);
+    expect(runPendingGuestRevocation.mock.calls.map((c: any) => c[0].shareLinkId)).toEqual(['lien-b']);
   });
 
   it('la succession d\'un salon qui échoue n\'empêche pas la sortie des autres', async () => {

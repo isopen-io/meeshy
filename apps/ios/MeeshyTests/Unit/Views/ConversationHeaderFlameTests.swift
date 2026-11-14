@@ -295,6 +295,37 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertTrue(header.contains("onOpenGame: onOpenGame"))
     }
 
+    // MARK: - La pastille dépliée ouvre la même carte (#17987)
+
+    func test_pillTap_runningStreak_opensTheSameCardAsTheFoldedFlame() {
+        let snapshot = engagement(total: 340, today: 40, streak: 12)
+        XCTAssertEqual(ConversationEngagementPillTap.of(snapshot), .flameCard(HeaderFlameCardModel.make(snapshot)!))
+    }
+
+    func test_pillTap_totalAlone_leadsToTheLegend() {
+        XCTAssertEqual(ConversationEngagementPillTap.of(engagement(streak: 0)), .legend)
+    }
+
+    func test_pillTap_withoutPoints_doesNothing() {
+        XCTAssertNil(ConversationEngagementPillTap.of(engagement(total: 0, streak: 0)))
+        XCTAssertNil(ConversationEngagementPillTap.of(nil))
+    }
+
+    func test_expandedBadge_rendersTheFlameCard_andTheHeaderWiresItsActions() throws {
+        let band = AppSourceGuard.stripComments(try String(
+            contentsOf: Self.appFile("Meeshy/Features/Main/Components/ConversationEngagementPill.swift"), encoding: .utf8))
+        let start = try XCTUnwrap(band.range(of: "struct ConversationEngagementBadge: View {"))
+        let badge = String(band[start.upperBound...].prefix(2_400))
+        XCTAssertTrue(badge.contains("HeaderFlameCard("), "la pastille dépliée ouvre la carte de la Flamme")
+        XCTAssertTrue(badge.contains("anchoredBubble("), "même bulle ancrée que la flamme repliée")
+        let header = AppSourceGuard.stripComments(try String(
+            contentsOf: Self.appFile("Meeshy/Features/Main/Views/ConversationView+Header.swift"), encoding: .utf8))
+        let row = try XCTUnwrap(header.range(of: "ConversationHeaderTagsRow("))
+        let call = String(header[row.upperBound...].prefix(500))
+        XCTAssertTrue(call.contains("onOpenGame: { router.push(.progression) }"), "« Voir le jeu » mène à Ma Légende")
+        XCTAssertTrue(call.contains("onHideFlame: { dismissHeaderFlame() }"), "« Masquer la flamme » masque la même flamme")
+    }
+
     private static func appFile(_ relative: String) -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

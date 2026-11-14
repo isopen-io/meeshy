@@ -147,21 +147,38 @@ nonisolated enum CallEffectsStackRule {
     }
 }
 
-/// Où en est la barre d'Effets : son menu de base (puces et `‹ · Réglages · (+)`), les réglages
-/// ou la liste des effets appliqués. Après le choix d'une fonction, elle revient au menu de base.
+/// Où en est la barre de la famille d'outils : son menu de base (la rangée Visage · Couleur ·
+/// Cadres et `‹ · Réglages · (+)`, rien d'ouvert), le carrousel d'un genre ouvert au-dessus
+/// d'elle, les réglages ou la liste des effets appliqués. Après le choix d'une fonction, elle
+/// revient au menu de base (C1 généralisée, #18184).
 nonisolated enum CallEffectsBarMode: Equatable, Sendable {
     case base
+    case looks
     case settings
     case applied
 }
 
 nonisolated enum CallEffectsBarRule {
+    /// P8 et C1 tels que dessinés : un mode s'ouvre sur le carrousel du genre où l'on entre.
+    static let entering: CallEffectsBarMode = .looks
+
     static func afterSettings(from mode: CallEffectsBarMode) -> CallEffectsBarMode {
         mode == .settings ? .base : .settings
     }
 
+    /// (+) ouvre le carrousel d'un genre absent de la pile, d'où que l'on parte.
     static func afterAddingLook(from mode: CallEffectsBarMode) -> CallEffectsBarMode {
-        .base
+        .looks
+    }
+
+    /// Un genre de la rangée ouvre son carrousel ; retoucher le genre déjà ouvert le referme.
+    static func afterGenre(from mode: CallEffectsBarMode, isOpen: Bool) -> CallEffectsBarMode {
+        mode == .looks && isOpen ? .base : .looks
+    }
+
+    /// Le genre pressé de la rangée : celui dont le carrousel est ouvert ; au menu de base, aucun.
+    static func pressed(_ genre: CallEffectKind, in mode: CallEffectsBarMode) -> CallEffectKind? {
+        mode == .looks ? genre : nil
     }
 
     static func afterShowingApplied(from mode: CallEffectsBarMode, hasLayers: Bool) -> CallEffectsBarMode {
@@ -171,7 +188,9 @@ nonisolated enum CallEffectsBarRule {
     /// Annuler un effet referme la liste et rend le menu de base.
     static let afterRemoval: CallEffectsBarMode = .base
 
-    /// Toute fonction choisie dans les réglages (« Chaque visage » au Montage) rend le menu de base.
+    /// Toute fonction choisie — un look, une couleur, une déformation, un cadre, l'option « Cadre »,
+    /// « Chaque visage » — referme ce qu'elle avait ouvert et rend le menu de base. Le carrousel ne
+    /// reste pas (remplace #17962 point 2).
     static let afterChoice: CallEffectsBarMode = .base
 
     /// #17947 — ‹ referme le panneau de réglages par le chemin inverse de « Réglages » ; ailleurs il
@@ -187,8 +206,14 @@ nonisolated enum CallEffectsBarRule {
         mode == .applied && !hasLayers ? .base : mode
     }
 
-    /// La rangée de puces n'existe que sur le menu de base : réglages et liste resserrent la barre.
+    /// La rangée de genres vit au menu de base et sous un carrousel ouvert : réglages et liste
+    /// resserrent la barre sur ‹ · Réglages · (+).
     static func showsLooks(_ mode: CallEffectsBarMode) -> Bool {
-        mode == .base
+        mode == .base || mode == .looks
+    }
+
+    /// Le carrousel ne se montre que quand un genre l'a ouvert.
+    static func showsCarousel(_ mode: CallEffectsBarMode) -> Bool {
+        mode == .looks
     }
 }

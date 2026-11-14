@@ -43,7 +43,6 @@ const arUserProfile = {
   'userProfile.blocked.title': 'لقد حظرت هذا الشخص',
   'userProfile.blocked.body': 'تبقى منشوراته وإحصاءاته مخفية ما دام الحظر قائمًا.',
   'userProfile.signin.title': 'سجّل الدخول للتواصل',
-  'userProfile.signin.body': 'طلبات الاتصال والرسائل تتطلب حسابًا.',
   'userProfile.signin.cta': 'تسجيل الدخول',
   'userProfile.announce.blocked': 'تم حظر الشخص',
   'userProfile.announce.blockFailed': 'تعذّر الحظر',

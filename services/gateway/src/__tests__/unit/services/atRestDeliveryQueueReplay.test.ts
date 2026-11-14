@@ -162,7 +162,7 @@ describe('une entrée qui ne se rouvre pas pour une raison PASSAGÈRE est remise
     expect(await queueOf(redis.cacheStore, sealerOf(gateway(keys.prisma, null))).drain('u-1')).toEqual([]);
 
     expect(redis.stored()).toHaveLength(1);
-    expect(JSON.stringify(redis.stored())).not.toContain('4471');
+    expect(JSON.stringify(redis.stored())).not.toContain('coffre');
     expect(await queueOf(redis.cacheStore, sealerOf(gateway(keys.prisma))).drain('u-1')).toHaveLength(1);
   });
 

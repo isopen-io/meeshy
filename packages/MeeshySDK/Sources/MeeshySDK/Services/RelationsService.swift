@@ -16,6 +16,9 @@ public protocol RelationsProviding: Sendable {
     func config() async throws -> RelationsConfig
     /// `GET /relations/now-playing` — les écoutes de mes Proches et de mes Sangs, déjà tronquées pour moi (#16755).
     func nowPlaying() async throws -> [NowPlayingChanged]
+    /// `GET /relations/locations?bbox=` — les positions qu'on me partage, à la précision qu'on m'a donnée (#16983).
+    /// `nil` couvre toute la carte.
+    func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged]
     func ritual(
         userId: String,
         phase: RelationRitualPhase,
@@ -65,6 +68,14 @@ public final class RelationsService: RelationsProviding, Sendable {
     public func nowPlaying() async throws -> [NowPlayingChanged] {
         let response: APIResponse<NowPlayingSnapshot> = try await api.request(
             RelationsEndpoint.nowPlaying, method: "GET", body: nil, queryItems: nil
+        )
+        return response.data.items
+    }
+
+    public func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged] {
+        let query = bounds.map { [URLQueryItem(name: "bbox", value: $0.queryValue)] }
+        let response: APIResponse<SharedLocationSnapshot> = try await api.request(
+            RelationsEndpoint.locations, method: "GET", body: nil, queryItems: query
         )
         return response.data.items
     }

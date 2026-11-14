@@ -25,6 +25,8 @@ import me.meeshy.sdk.community.InMemoryCommunityAppearanceStore
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityLoadFailure
+import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -179,30 +181,89 @@ class CommunityDetailViewModelTest {
         assertThat(CommunityAppearance("6366F1", "")).isNotNull()
     }
 
-    @Test
-    fun `a 404 on the community sends the reader back to the list and forgets it`() = runTest {
+    private fun failingViewModel(): Pair<CommunityDetailViewModel, (Throwable) -> Unit> {
         val onError = slot<(Throwable) -> Unit>()
         every { session.currentUserId } returns "me"
         every { cache.detail("c1", capture(onError)) } returns detail
         every { cache.channels("c1", any()) } returns channels
         val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+        return vm to { error -> onError.captured(error) }
+    }
 
-        onError.captured(CommunityFetchException("not found", 404))
+    @Test
+    fun `a 404 is a refusal that offers no retry and forgets the community`() = runTest {
+        val (vm, fail) = failingViewModel()
 
-        assertThat(vm.effects.first()).isEqualTo(CommunityDetailEffect.NotFound)
+        fail(CommunityFetchException("not found", 404))
+
+        assertThat(vm.state.value.showError).isTrue()
+        assertThat(vm.state.value.failure).isEqualTo(CommunityLoadFailure.REFUSED)
+        assertThat(vm.state.value.failure?.offersRetry).isFalse()
         coVerify { cache.forget("c1") }
     }
 
     @Test
-    fun `any other failure on a cold fiche shows the retry state`() = runTest {
-        val onError = slot<(Throwable) -> Unit>()
-        every { session.currentUserId } returns "me"
-        every { cache.detail("c1", capture(onError)) } returns detail
-        every { cache.channels("c1", any()) } returns channels
-        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+    fun `a 403 reads exactly like a 404, so the id never says a private community exists`() = runTest {
+        val (vm, fail) = failingViewModel()
 
-        onError.captured(CommunityFetchException("boom", 500))
+        fail(CommunityFetchException("forbidden", 403))
+
+        assertThat(vm.state.value.failure).isEqualTo(CommunityLoadFailure.REFUSED)
+        coVerify { cache.forget("c1") }
+    }
+
+    @Test
+    fun `a refusal clears a cached fiche the reader may no longer read`() = runTest {
+        val (vm, fail) = failingViewModel()
+        detail.emit(CacheResult.Stale(community(role = "member", isPrivate = true), 0))
+        assertThat(vm.state.value.community).isNotNull()
+
+        fail(CommunityFetchException("forbidden", 403))
+
+        assertThat(vm.state.value.community).isNull()
+        assertThat(vm.state.value.access).isNull()
+        assertThat(vm.state.value.showError).isTrue()
+    }
+
+    @Test
+    fun `an unreachable server says check your connection and offers retry`() = runTest {
+        val (vm, fail) = failingViewModel()
+
+        fail(CommunityFetchException("offline", failure = ContentFetchFailure.NETWORK))
+
+        assertThat(vm.state.value.failure).isEqualTo(CommunityLoadFailure.NETWORK)
+        assertThat(vm.state.value.failure?.offersRetry).isTrue()
+        coVerify(exactly = 0) { cache.forget(any()) }
+    }
+
+    @Test
+    fun `a raw io failure is a network failure too`() = runTest {
+        val (vm, fail) = failingViewModel()
+
+        fail(java.io.IOException("offline"))
+
+        assertThat(vm.state.value.failure).isEqualTo(CommunityLoadFailure.NETWORK)
+    }
+
+    @Test
+    fun `a 500 says the problem is on our side and offers retry`() = runTest {
+        val (vm, fail) = failingViewModel()
+
+        fail(CommunityFetchException("boom", 500))
 
         assertThat(vm.state.value.showError).isTrue()
+        assertThat(vm.state.value.failure).isEqualTo(CommunityLoadFailure.SERVER)
+        assertThat(vm.state.value.failure?.offersRetry).isTrue()
+    }
+
+    @Test
+    fun `a network failure behind a cached fiche keeps the fiche`() = runTest {
+        val (vm, fail) = failingViewModel()
+        detail.emit(CacheResult.Stale(community(role = "member"), 0))
+
+        fail(CommunityFetchException("offline", failure = ContentFetchFailure.NETWORK))
+
+        assertThat(vm.state.value.community).isNotNull()
+        assertThat(vm.state.value.showError).isFalse()
     }
 }

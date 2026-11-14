@@ -402,7 +402,7 @@ function reelActions({
       count: model.stats.repostCount,
       ink: reposted ? 'var(--color-ok)' : undefined,
       contour: ringed(reposted),
-      onPress: onRepost === undefined ? undefined : () => onRepost(model.id),
+      onPress: onRepost === undefined || model.repostClosed === true ? undefined : () => onRepost(model.id),
       probe: { 'data-reel-gesture': 'repost' },
     },
     {

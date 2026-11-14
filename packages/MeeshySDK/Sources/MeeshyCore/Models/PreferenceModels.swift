@@ -434,6 +434,16 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     /// « Notifications du jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`,
     /// `game_season_step`, #9490) : au plus une par jour. Activé par défaut ; ABSENT = reçu.
     public var gameEnabled: Bool
+    /// « Recevoir des Bring » (`notification.bringEnabled`, #14441, #16609) tel
+    /// que le serveur l'a servi ou que l'utilisateur l'a choisi ; `nil` = jamais
+    /// appris. Absent du corps envoyé tant qu'il est `nil` : la passerelle garde
+    /// alors la valeur qu'elle a (`keptWhenUnnamed`), et un cache relu d'avant le
+    /// champ ne rallume pas un refus posé ailleurs. L'écran lit `receivesBrings`.
+    public var bringEnabled: Bool?
+    public var receivesBrings: Bool {
+        get { bringEnabled ?? true }
+        set { bringEnabled = newValue }
+    }
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -471,7 +481,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
         friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true, gameEnabled: Bool = true,
-        dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        bringEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
@@ -491,6 +501,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.friendContentEnabled = friendContentEnabled
         self.contactActivityEnabled = contactActivityEnabled
         self.gameEnabled = gameEnabled
+        self.bringEnabled = bringEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -505,6 +516,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
         case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled, gameEnabled
+        case bringEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -538,6 +550,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         friendContentEnabled = try c.decodeIfPresent(Bool.self, forKey: .friendContentEnabled) ?? Self.defaults.friendContentEnabled
         contactActivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .contactActivityEnabled) ?? Self.defaults.contactActivityEnabled
         gameEnabled = try c.decodeIfPresent(Bool.self, forKey: .gameEnabled) ?? Self.defaults.gameEnabled
+        bringEnabled = try c.decodeIfPresent(Bool.self, forKey: .bringEnabled)
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime

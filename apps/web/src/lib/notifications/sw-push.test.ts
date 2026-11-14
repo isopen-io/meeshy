@@ -563,6 +563,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/u/awa']);
   });
 
+  test('« Ajouté à la communauté Y » ouvre la communauté (#18052)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'community_invite', communityId: 'c1' }).event);
+    expect(worker.opened).toEqual(['/communities/c1']);
+  });
+
   test('« X était sur Meeshy récemment » ouvre le profil du contact revenu (#8285)', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'contact_recently_active', senderUsername: 'marie' }).event);
@@ -618,6 +624,7 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       post: '/post/$post',
       discover: '/discover',
       userProfile: '/u/$username',
+      community: '/communities/$community',
       progression: '/me/progression',
       progressionLigue: '/me/progression/ligue',
       progressionSaison: '/me/progression/saison',

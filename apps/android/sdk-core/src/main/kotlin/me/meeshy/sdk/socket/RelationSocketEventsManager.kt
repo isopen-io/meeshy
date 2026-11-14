@@ -15,6 +15,9 @@ import me.meeshy.sdk.model.relation.RelationLevelRaisedEvent
 import me.meeshy.sdk.model.relation.RelationRitualCompletedEvent
 import me.meeshy.sdk.model.relation.RelationRitualProgressEvent
 import me.meeshy.sdk.model.relation.RelationRitualStartedEvent
+import me.meeshy.sdk.model.relation.SharedLocation
+import me.meeshy.sdk.model.relation.SharedLocationChangedWire
+import me.meeshy.sdk.model.relation.SharedLocationEndedEvent
 import me.meeshy.sdk.model.relation.TalkieChunk
 import me.meeshy.sdk.model.relation.TalkieEnded
 import me.meeshy.sdk.model.relation.TalkieEvent
@@ -23,8 +26,9 @@ import me.meeshy.sdk.model.socket.SocketEventNames
 import org.json.JSONObject
 
 /**
- * Les quatre événements du LIEN entre deux personnes (#13933, #13938), l'arrêt d'un Bring (#13936) et le talkie reçu
- * (#16675) — miroir de `MessageSocketManager+Relations.swift` et `MessageSocketManager+Talkie.swift`.
+ * Les quatre événements du LIEN entre deux personnes (#13933, #13938), l'arrêt d'un Bring (#13936), le talkie reçu
+ * (#16675) et les positions qu'on me partage (#16985) — miroir de `MessageSocketManager+Relations.swift`,
+ * `MessageSocketManager+Talkie.swift` et de `SharedLocationEvents` du SDK iOS.
  *
  * Tous serveur → client, tous sur la room `user:<id>` (`packages/shared/types/socketio-events/relation-event-names.ts`).
  * Chaque charge nomme `userId` = l'AUTRE personne, du point de vue du destinataire. Il n'existe AUCUN événement de baisse,
@@ -47,6 +51,8 @@ class RelationSocketEventsManager @Inject constructor(
     private val _ritualCompleted = SocketInboundRoute.subject<RelationRitualCompletedEvent>()
     private val _bringStopped = SocketInboundRoute.subject<BringStoppedEvent>()
     private val _talkie = SocketInboundRoute.subject<TalkieEvent>()
+    private val _sharedLocationChanged = SocketInboundRoute.subject<SharedLocation>()
+    private val _sharedLocationEnded = SocketInboundRoute.subject<SharedLocationEndedEvent>()
 
     /** `relation:level-raised` — le niveau effectif de la paire a monté (aux DEUX). */
     val levelRaised: SharedFlow<RelationLevelRaisedEvent> = _levelRaised.exposed()
@@ -74,6 +80,15 @@ class RelationSocketEventsManager @Inject constructor(
      */
     val talkie: SharedFlow<TalkieEvent> = _talkie.exposed()
 
+    /**
+     * `location:share-changed` (#16985) — la position d'une personne, déjà tronquée pour moi par la passerelle. Une charge
+     * hors du contrat (coordonnée hors du globe, précision inconnue, instant illisible) n'atteint jamais ce flux.
+     */
+    val sharedLocationChanged: SharedFlow<SharedLocation> = _sharedLocationChanged.exposed()
+
+    /** `location:share-ended` (#16985) — son partage ne m'est plus servi (arrêt, baisse sous Ami, blocage, retrait). */
+    val sharedLocationEnded: SharedFlow<SharedLocationEndedEvent> = _sharedLocationEnded.exposed()
+
     override fun attach() {
         if (installed.compareAndSet(false, true)) router.install(routes())
     }
@@ -97,6 +112,10 @@ class RelationSocketEventsManager @Inject constructor(
         SocketInboundRoute.decoding(SocketEventNames.TALKIE_ENDED, json, TalkieEnded.serializer()) {
             publishTalkie(SocketEventNames.TALKIE_ENDED, TalkieEvent.Closed(it))
         },
+        SocketInboundRoute.decoding(SocketEventNames.LOCATION_SHARE_CHANGED, json, SharedLocationChangedWire.serializer()) { wire ->
+            wire.served()?.let { SocketInboundRoute.run { _sharedLocationChanged.emitOrLog(SocketEventNames.LOCATION_SHARE_CHANGED, it) } }
+        },
+        SocketInboundRoute.decoding(SocketEventNames.LOCATION_SHARE_ENDED, json, _sharedLocationEnded),
     )
 
     private fun publishTalkie(event: String, value: TalkieEvent) {

@@ -12,9 +12,10 @@
  * défaut (D-3) : elle se coupe pour une personne (`RelationFeatureSetting.
  * bringBlockedAt`) ou pour tout le monde (`notification.bringEnabled`), et
  * l'orchestrateur la traduit en `consent: 'granted'` tant qu'elle n'est pas
- * coupée. Les deux coupures se servent en `BRING_BLOCKED` — « Bring
- * indisponible » chez l'expéditeur, sans dire laquelle. Ce service ne compare
- * aucun niveau.
+ * coupée. Les deux coupures se servent comme un niveau insuffisant : le MÊME
+ * `403 BRING_NOT_ALLOWED`, même corps (#14677) — « Il ne saura pas que tu l'as
+ * bloqué » se tient aussi dans la réponse HTTP. Ce service ne compare aucun
+ * niveau.
  *
  * ## Le quota
  *
@@ -112,7 +113,6 @@ const BRING_ID = /^[0-9a-f]{24}$/;
 
 const refuse = (status: number, code: BringErrorCode, message: string): BringRefusal => ({ ok: false, status, code, message });
 const NOT_ALLOWED = refuse(403, BRING_ERROR_CODES.NOT_ALLOWED, 'Bring indisponible');
-const BLOCKED = refuse(403, BRING_ERROR_CODES.BLOCKED, 'Bring indisponible');
 const QUOTA = refuse(429, BRING_ERROR_CODES.QUOTA_EXCEEDED, "Plus de Bring aujourd'hui vers cette personne");
 const UNAVAILABLE = refuse(503, BRING_ERROR_CODES.UNAVAILABLE, 'Bring momentanément indisponible');
 const NOT_FOUND = refuse(404, BRING_ERROR_CODES.NOT_FOUND, 'Bring introuvable');
@@ -206,7 +206,7 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     feature: 'bring',
     consent: prefs.receives && !setting?.bringBlockedAt ? 'granted' : 'refused',
   });
-  if (!verdict.allowed) return verdict.reason === 'consent' ? BLOCKED : NOT_ALLOWED;
+  if (!verdict.allowed) return NOT_ALLOWED;
 
   const perDay = perDayFor(deps.thresholds, verdict.effectiveLevel);
   if (perDay === 0) return NOT_ALLOWED;

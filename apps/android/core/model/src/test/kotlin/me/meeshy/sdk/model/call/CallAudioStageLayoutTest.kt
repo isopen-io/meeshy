@@ -39,7 +39,7 @@ class CallAudioStageLayoutTest {
     /** #17945 (B) : en duo audio, le toucher sur le fond range le journal avec la pilule ; l'avatar regrandit à 120, et revient au second toucher. */
     @Test
     fun `a tap on the background of a duo audio call stows the journal and grows the avatar back to 120 (#17945)`() {
-        val tapStage = CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = true)
+        val tapStage = CallChromeVisibility.isTapStage(isVideoStage = false, isConnected = true)
         val stowed = CallChromeVisibility(isRevealed = true).toggled()
         assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = tapStage)).isTrue()
         assertThat(stowed.isVisible(CallChromeElement.Header)).isFalse()

@@ -66,6 +66,12 @@ const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
 const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
 
 /**
+ * LE (i) PORTE UNE QUESTION (épure #17584, règle 1 ; #17666) : « Comment se
+ * connecter sans mot de passe ? », jamais « Comment ça marche ». Le titre et
+ * « Recevoir le lien » disent déjà la porte ; le « comment » et la durée du
+ * lien restent derrière le (i), comme #6626 l'a tranché — et l'écran ne passe
+ * pas le budget d'avant l'épure (`verbosity-socle.json`).
+ *
  * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
  *
  * Directive porteur 2026-09-15 : « L'utilisateur a besoin de savoir qu'il va se

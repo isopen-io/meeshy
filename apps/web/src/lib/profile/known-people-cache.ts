@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import { getUserPresenceStatus, type UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { knownPerson, type KnownPerson } from '@/lib/profile/known-people';
@@ -68,4 +69,28 @@ export function knownPersonInConversations(client: QueryClient, handle: string):
 export function knownPersonByIdInConversations(client: QueryClient, userId: string): KnownPerson | null {
   if (userId === '') return null;
   return participantsInConversations(client).find((person) => person.id === userId) ?? null;
+}
+
+/**
+ * La présence que la liste des conversations a DÉJÀ servie pour cette personne (#16984) :
+ * `undefined` quand elle n'y est pas, ou que le serveur n'a servi ni `isOnline` ni
+ * `lastActiveAt` (présence masquée par la loi d'amitié) — jamais déduite, jamais « hors
+ * ligne » par défaut : une présence absente ne dessine rien.
+ */
+export function servedPresenceByIdInConversations(client: QueryClient, userId: string, now: number = Date.now()): UserPresenceStatus | undefined {
+  if (userId === '') return undefined;
+  const data = asRecord(client.getQueryData(CONVERSATIONS_QUERY_KEY));
+  const users = asList(data?.pages).flatMap((page) =>
+    asList(asRecord(page)?.conversations).flatMap((conversation) =>
+      asList(asRecord(conversation)?.participants).flatMap((entry) => {
+        const participant = asRecord(entry);
+        const user = asRecord(participant?.user);
+        return filled(user?.id) === userId || filled(participant?.userId) === userId ? [user ?? participant] : [];
+      }),
+    ),
+  );
+  const served = users.find((user) => typeof user?.isOnline === 'boolean' || filled(user?.lastActiveAt) !== null);
+  if (served === undefined || served === null) return undefined;
+  const lastActiveAt = filled(served.lastActiveAt);
+  return getUserPresenceStatus({ isOnline: served.isOnline === true, ...(lastActiveAt === null ? {} : { lastActiveAt }) }, now);
 }

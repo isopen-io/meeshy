@@ -133,7 +133,7 @@ export async function bringRoutes(fastify: FastifyInstance): Promise<void> {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, sends.middleware()],
     schema: {
-      description: `Ring this person's phone for an extreme emergency (through Do Not Disturb). Open from Friend, a daily quota per pair, refused with BRING_BLOCKED when they blocked my Bring. Rings for ${BRING_RING_WINDOW_MS / 1000} s at most.`,
+      description: `Ring this person's phone for an extreme emergency (through Do Not Disturb). Open from Friend, a daily quota per pair, refused with the same BRING_NOT_ALLOWED whether the link is too low, my Bring is blocked or their reception is off. Rings for ${BRING_RING_WINDOW_MS / 1000} s at most.`,
       tags: ['bring'],
       summary: 'Send a Bring',
       params: userIdParams,

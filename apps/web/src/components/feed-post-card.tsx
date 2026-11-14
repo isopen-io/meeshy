@@ -321,12 +321,14 @@ type CardHosts = {
 };
 
 /** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
- * refuse de poser une clé optionnelle à `undefined`. */
-const hostsOf = ({ onGesture, onShare, onComment, onRepost }: CardHosts): Omit<CardHosts, 'menu'> => ({
+ * refuse de poser une clé optionnelle à `undefined`. « Republier » tombe sur
+ * un contenu dont l'audience le ferme (`repostClosed`, #14501) : le compte
+ * reste une statistique lue (loi 4). */
+const hostsOf = ({ onGesture, onShare, onComment, onRepost }: CardHosts, model: FeedCardModel): Omit<CardHosts, 'menu'> => ({
   ...(onGesture !== undefined ? { onGesture } : {}),
   ...(onShare !== undefined ? { onShare } : {}),
   ...(onComment !== undefined ? { onComment } : {}),
-  ...(onRepost !== undefined ? { onRepost } : {}),
+  ...(onRepost !== undefined && model.repostClosed !== true ? { onRepost } : {}),
 });
 
 /** LE « ⋯ » D'UNE CARTE (#7533) — la MÊME pose pour les deux natures, seul le
@@ -413,7 +415,7 @@ function FeedReelCard({ model, impressionRef, openOrigin, ...hosts }: { readonly
           </p>
         ) : null}
         <div className="pointer-events-auto">
-          <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
+          <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts, model)} />
         </div>
       </div>
     </div>
@@ -656,7 +658,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
     if (tap !== null) readingTelemetry.recordV2(interactionOf(postId, tap));
   }, [postId]);
 
-  if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} openOrigin={openOrigin} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
+  if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} openOrigin={openOrigin} {...hostsOf(hosts, model)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
   // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
   // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
@@ -714,7 +716,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
         </div>
       ) : null}
       <div className="px-3">
-        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onLight" {...hostsOf(hosts)} />
+        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onLight" {...hostsOf(hosts, model)} />
       </div>
     </article>
   );

@@ -24,7 +24,7 @@ internal data class CallChromeState(
 
 /**
  * The state of the call chrome (header, pill, panels): which layer is open and whether a tap on
- * the stage hid it (the image on video, the background of a duo audio call — law 11, #17945). Every rule is the shared [CallScreenLayer] / [CallChromeVisibility] law;
+ * the stage hid it (the image on video, the background of a call in progress, duo or group — law 11, #17945). Every rule is the shared [CallScreenLayer] / [CallChromeVisibility] law;
  * this class only holds the current value. Mirrors the `layer` / `showControls` state of iOS
  * `CallView`.
  */

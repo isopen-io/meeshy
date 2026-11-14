@@ -94,6 +94,7 @@ fun CommunitySettingsScreen(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 2) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    var confirmPrivate by rememberSaveable { mutableStateOf(false) }
     val editor = rememberEntityImageRetouch { target, item -> viewModel.upload(target, item) }
     val pick = rememberEntityImagePicker(editor::offer)
 
@@ -134,7 +135,10 @@ fun CommunitySettingsScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = tokens.textPrimary,
                 )
-                TextButton(onClick = viewModel::save, enabled = state.canSave) {
+                TextButton(
+                    onClick = { if (state.draft?.needsPrivacyConfirmation == true) confirmPrivate = true else viewModel.save() },
+                    enabled = state.canSave,
+                ) {
                     if (state.isSaving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Text(stringResource(R.string.community_common_save), fontWeight = FontWeight.Bold)
                 }
@@ -246,6 +250,19 @@ fun CommunitySettingsScreen(
             title = { Text(stringResource(R.string.community_settings_error_title)) },
             text = { Text(message.ifBlank { stringResource(R.string.community_settings_error_default) }) },
             confirmButton = { TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.community_common_ok)) } },
+        )
+    }
+    if (confirmPrivate) {
+        AlertDialog(
+            onDismissRequest = { confirmPrivate = false },
+            title = { Text(stringResource(R.string.community_settings_privacy_confirm_title)) },
+            text = { Text(stringResource(R.string.community_settings_privacy_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = { confirmPrivate = false; viewModel.save() }) {
+                    Text(stringResource(R.string.community_settings_privacy_confirm_button), color = MeeshyTheme.tokens.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmPrivate = false }) { Text(stringResource(R.string.community_common_cancel)) } },
         )
     }
     if (confirmLeave) {

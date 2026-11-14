@@ -57,6 +57,7 @@ import {
   type ConversationRoomEmitter,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import { cutTogetherWhere } from '../services/together/togetherDeps';
 
 /**
  * L'état éphémère par conversation que le gestionnaire porte, en structural —
@@ -96,6 +97,10 @@ export function announceConversationClosed(
   // le registre des partages est un état SERVEUR, il ne se vide pas parce qu'il
   // ne reste personne à prévenir.
   manager?.endLiveLocationsForClosedConversation?.(conversationId);
+  // #17147 — une séance « ensemble » ne survit pas à la clôture : la porte refuse désormais
+  // une conversation close, et ce rejugement la coupe chez les deux sans attendre le
+  // prochain geste. Détaché (l'annonce reste synchrone), jamais sans `.catch`.
+  void cutTogetherWhere({ conversationId }).catch(() => undefined);
 
   // Une audience vide ne diffuse rien : c'est la garde que deux des trois
   // appelants portaient déjà en propre, et l'annonce n'a pas de destinataire

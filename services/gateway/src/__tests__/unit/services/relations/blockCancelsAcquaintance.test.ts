@@ -9,6 +9,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify from 'fastify';
 import { pairInteractionStore } from '../../../helpers/pair-interaction-store';
+import { ritualSharesStore } from '../../../helpers/ritual-shares-store';
 
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),
@@ -47,7 +48,7 @@ async function block(relations: unknown[]) {
     relations: relations as never,
   });
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', store.prisma as never);
+  app.decorate('prisma', { ...store.prisma, relationFeatureSetting: ritualSharesStore([]).relationFeatureSetting } as never);
   app.decorate('authenticate', async (req: unknown) => {
     (req as { authContext: unknown }).authContext = {
       isAuthenticated: true, type: 'user', userId: LOW, registeredUser: { id: LOW, role: 'USER' },

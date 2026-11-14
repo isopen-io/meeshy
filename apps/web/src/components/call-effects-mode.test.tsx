@@ -229,6 +229,33 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
+  test('#17947 — le panneau reste ouvert tant qu’on règle : un réglage continu n’est pas un choix ; « Réglages » le referme, ‹ rend l’appel (P8b, loi 14)', async () => {
+    const view = mount({ blur: true });
+    view.press('[data-call-effects-settings-toggle]');
+    const slider = view.find('input[type="range"]') as HTMLInputElement;
+    for (const value of ['-10', '-20', '15']) {
+      act(() => {
+        slider.value = value;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      act(() => void slider.dispatchEvent(new Event('change', { bubbles: true })));
+    }
+    view.press('[data-call-effects-blur]');
+    await later(260);
+    expect(view.applied).toEqual([{ brightness: -0.1 }, { brightness: -0.2 }, { brightness: 0.15 }, { blur: true }]);
+    expect(view.find('[data-call-effects-settings]')).not.toBeNull();
+    expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(view.find('[data-call-mode-carousel]')).toBeNull();
+    view.press('[data-call-effects-settings-toggle]');
+    await later(260);
+    expect(view.find('[data-call-effects-settings]')).toBeNull();
+    expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
+    view.press('[data-call-effects-settings-toggle]');
+    view.press('[data-call-mode-quit]');
+    expect(view.exits).toEqual(['exit']);
+    view.done();
+  });
+
   test('sans traitement d’images, seul le flou reste — ni carrousel, ni Réglages, ni (+), ni puces', () => {
     const view = mount({ color: false, blur: true });
     expect(view.find('[data-call-mode-carousel]')).toBeNull();

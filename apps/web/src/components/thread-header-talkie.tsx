@@ -11,7 +11,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
 import { resolveTalkieHeaderDelivery, resolveTalkieHeaderVoice } from '@/lib/talkie/talkie-header-law';
 import { talkieStore, type TalkieStoreApi } from '@/lib/talkie/talkie-live';
-import type { TalkieCaptureFactory, TalkieSendOutcome } from '@/lib/talkie/talkie-sender';
+import type { TalkieCaptureFactory, TalkieSendOutcome, TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { talkieHoldHandlers, talkieOfferedAt, TALKIE_OUTCOME_NOTICE, useTalkieSender } from '@/routes/user-profile-talkie';
 
@@ -63,6 +63,7 @@ export function ThreadHeaderTalkie({
   capture = createTalkieCapture(),
   supported = talkieEncodingSupportedOnce,
   store = talkieStore,
+  copier,
 }: {
   readonly language: InterfaceLanguage;
   readonly peerId: string;
@@ -75,6 +76,7 @@ export function ThreadHeaderTalkie({
   readonly capture?: TalkieCaptureFactory;
   readonly supported?: () => Promise<boolean>;
   readonly store?: TalkieStoreApi;
+  readonly copier?: TalkieVoiceCopier;
 }) {
   const ready = useCirclesCatalog(language);
   const links = useQuery(relationLinksQueryOptions(deps), appQueryClient);
@@ -88,7 +90,7 @@ export function ThreadHeaderTalkie({
     if (outcome === 'not-allowed') return setRefused(true);
     announceNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]));
   };
-  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome });
+  const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome, language, ...(copier === undefined ? {} : { copier }) });
   const phase = useStore(sender.store, (state) => state.phase.kind);
   const waking = useStore(sender.store, (state) => state.phase.kind === 'talking' && state.phase.delivery === 'waking');
   const peerSpeaking = useStore(store, (state) => state.active.some((entry) => entry.fromUserId === peerId));

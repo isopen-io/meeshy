@@ -67,7 +67,7 @@ export type TestApp = {
   /** L'état des lignes `RelationFeatureSetting` après les appels. */
   readonly reglages: () => Record<string, unknown>[];
   /** Le double Prisma, pour qu'un témoin fasse ÉCHOUER une écriture précise. */
-  readonly prisma: Readonly<Record<'friendRequest' | 'userRelation', Record<string, unknown>>>;
+  readonly prisma: Readonly<Record<'friendRequest' | 'userRelation' | 'relationFeatureSetting', Record<string, unknown>>>;
   readonly call: (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, body?: unknown, as?: string) => Promise<{ status: number; body: any }>;
   readonly close: () => Promise<void>;
 };

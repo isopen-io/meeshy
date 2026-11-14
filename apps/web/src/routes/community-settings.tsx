@@ -15,6 +15,7 @@ import {
   performCommunityImageUpload,
   performDeleteCommunity,
   performUpdateCommunitySettings,
+  privacyConfirmationNeeded,
   settingsChangesOf,
   settingsDraftOf,
   type CommunityImageKind,
@@ -53,6 +54,11 @@ import { href, Link, navigate } from '@/routes/route-table';
  * nouveau nom partout au geste et rend l'ancien sur un refus
  * (`community-settings.ts`). Supprimer ramène à la liste, où la carte a déjà
  * disparu.
+ *
+ * **Rendre la communauté privée se confirme** (#16787) : la passerelle fait
+ * alors sortir de ses conversations les anciens membres et les comptes qui ne
+ * peuvent pas y entrer, sans retour. Une communauté désactivée pendant
+ * l'édition (404) quitte le cache et l'écran dessine le refus.
  *
  * **L'avatar et la bannière** (miroir `visualSection`) : l'image choisie
  * s'affiche AUSSITÔT sous un voile, est recompressée et montée par le chemin du
@@ -118,6 +124,8 @@ export default function CommunitySettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingPrivacy, setConfirmingPrivacy] = useState(false);
+  const [gone, setGone] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [previews, setPreviews] = useState<Previews>({});
   const [images, setImages] = useState<Readonly<Partial<Record<CommunityImageKind, string>>>>({});
@@ -129,7 +137,7 @@ export default function CommunitySettingsScreen() {
   const detail = useQuery(
     {
       ...communityQueryOptions(apiDeps, communityId),
-      enabled,
+      enabled: enabled && !gone,
       initialData: () =>
         findCachedCommunity(
           appQueryClient.getQueriesData<InfiniteData<CommunityPage, number>>({ queryKey: [...COMMUNITIES_QUERY_PREFIX, 'list'] }).map(([, data]) => data),
@@ -181,14 +189,19 @@ export default function CommunitySettingsScreen() {
      de sa cible ; seule l'image retouchée part, Annuler ne pose rien. */
   const retouch = useEntityImageEdit<CommunityImageKind>({ deliver: (kind, file) => void uploadImage(kind, file) });
 
-  const save = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const save = async ({ confirmed }: { readonly confirmed: boolean }) => {
+    setConfirmingPrivacy(false);
     if (community === undefined || draft === null || saving || deleting) return;
+    if (!confirmed && privacyConfirmationNeeded(community, draft)) {
+      setConfirmingPrivacy(true);
+      return;
+    }
     setSaving(true);
     setNotice(null);
     const outcome = await performUpdateCommunitySettings({ community, draft, deps });
     setSaving(false);
     setNotice(noticeOfSave(outcome));
+    if (outcome.status === 'gone') setGone(true);
     if (outcome.status === 'saved' || outcome.status === 'unchanged') {
       setEdited(null);
       setImages({});
@@ -219,13 +232,22 @@ export default function CommunitySettingsScreen() {
   const busy = saving || deleting || previews.avatar !== undefined || previews.banner !== undefined;
 
   const body =
-    community === undefined || draft === null ? (
-      refused ? <CommunityRefused language={language} /> : <CommunityDetailSkeleton language={language} />
+    gone || (refused && (community === undefined || draft === null)) ? (
+      <CommunityRefused language={language} />
+    ) : community === undefined || draft === null ? (
+      <CommunityDetailSkeleton language={language} />
     ) : !canEditSettingsOf(community, viewerId) ? (
       <SettingsCreatorOnly language={language} />
     ) : (
       <>
-        <form noValidate onSubmit={(event) => void save(event)} className="grid gap-6">
+        <form
+          noValidate
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            void save({ confirmed: false });
+          }}
+          className="grid gap-6"
+        >
           <SettingsImages
             language={language}
             name={draft.name.trim() === '' ? community.name : draft.name}
@@ -352,6 +374,18 @@ export default function CommunitySettingsScreen() {
         />
       ))}
       {retouch.layer}
+      {confirmingPrivacy && community !== undefined ? (
+        <ConfirmDialog
+          name="community-private"
+          title={translateCommunitySettings(language, 'community.settings.privacy.confirm.title')}
+          body={translateCommunitySettings(language, 'community.settings.privacy.confirm.body')}
+          cancelLabel={translate(language, 'common.cancel')}
+          confirmLabel={translateCommunitySettings(language, 'community.settings.privacy.confirm.action')}
+          tone="destructive"
+          onCancel={() => setConfirmingPrivacy(false)}
+          onConfirm={() => void save({ confirmed: true })}
+        />
+      ) : null}
       {confirmingDelete && community !== undefined ? (
         <ConfirmDialog
           name="community-delete"

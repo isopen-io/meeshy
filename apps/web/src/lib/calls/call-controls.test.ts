@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene } from './call-controls';
+import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene, tapStowsChrome } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -138,6 +138,36 @@ describe('la scène vidéo', () => {
 
   test('pendant la sonnerie, rien ne s’efface', () => {
     expect(isVideoScene(call({ cameraOn: true, phase: { kind: 'outgoing' } }))).toBe(false);
+  });
+});
+
+/* LA LOI 11 VAUT POUR LA SCÈNE, VIDÉO OU AUDIO (#17945, décision porteur du 2026-11-13) : en duo
+   audio, le fond derrière l'avatar range l'en-tête, la pilule et le journal ; en groupe sans caméra,
+   le fond de la grille aussi (extension du 2026-11-13). Vecteurs : vidéo oui · duo audio établi oui ·
+   duo audio pas encore établi non · groupe avec caméra oui · groupe sans caméra oui. Mêmes vecteurs que
+   `CallChromeVisibility.mayToggleByTap` (iOS) et `CallChromeController` (Android). */
+describe('un toucher sur la scène range les commandes, vidéo ou audio (loi 11, #17945)', () => {
+  const call = (overrides: Partial<Parameters<typeof isVideoScene>[0]> = {}) => ({ members: { a: member() }, cameraOn: false, remoteStreams: {}, isGroup: false, phase: { kind: 'connected' } as ActiveCall['phase'], ...overrides });
+
+  test('un duo audio joint : le fond derrière l’avatar est la scène', () => {
+    expect(tapStowsChrome(call())).toBe(true);
+    expect(tapStowsChrome(call({ phase: { kind: 'reconnecting' } }))).toBe(true);
+  });
+
+  test('une scène vidéo, duo ou groupe, comme avant', () => {
+    expect(tapStowsChrome(call({ cameraOn: true }))).toBe(true);
+    expect(tapStowsChrome(call({ isGroup: true, members: { a: member(), b: member({ userId: 'u-b', cameraOn: true }) } }))).toBe(true);
+  });
+
+  test('un groupe SANS AUCUNE caméra range aussi, comme le duo audio (extension porteur du 2026-11-13, #17945)', () => {
+    expect(tapStowsChrome(call({ isGroup: true, members: { a: member(), b: member({ userId: 'u-b' }) } }))).toBe(true);
+    expect(tapStowsChrome(call({ isGroup: true, phase: { kind: 'outgoing' }, members: { a: member(), b: member({ userId: 'u-b' }) } }))).toBe(false);
+  });
+
+  test('pendant la sonnerie et à la fin, rien ne se range', () => {
+    expect(tapStowsChrome(call({ phase: { kind: 'outgoing' } }))).toBe(false);
+    expect(tapStowsChrome(call({ phase: { kind: 'incoming' } }))).toBe(false);
+    expect(tapStowsChrome(call({ phase: { kind: 'ended', reason: 'local', detail: null } }))).toBe(false);
   });
 });
 

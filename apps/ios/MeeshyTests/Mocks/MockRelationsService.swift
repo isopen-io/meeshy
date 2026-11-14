@@ -70,6 +70,14 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
         return try nowPlayingResult.get()
     }
 
+    var sharedLocationsResult: Result<[SharedLocationChanged], Error> = .success([])
+    var sharedLocationsBounds: [SharedLocationBounds?] = []
+
+    func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged] {
+        sharedLocationsBounds.append(bounds)
+        return try sharedLocationsResult.get()
+    }
+
     func ritual(
         userId: String,
         phase: RelationRitualPhase,

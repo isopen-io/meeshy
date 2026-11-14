@@ -50,9 +50,11 @@ export type SiteHeaderProps = {
   readonly languageControl: ReactNode;
   /** L'adresse d'une page du site : le chemin sur le web, l'origine publique dans la coque (#12930), comme `SiteFooter.pageHref`. */
   readonly siteHref?: (path: string) => string;
+  /** Pas de lien vers la page où l'on est : `/download` ne se propose pas à elle-même « Télécharger » (épure #17584, règle 2). */
+  readonly hideDownload?: boolean;
 };
 
-export function SiteHeader({ language, copy, onLanding, languageControl, siteHref = (path) => path }: SiteHeaderProps) {
+export function SiteHeader({ language, copy, onLanding, languageControl, siteHref = (path) => path, hideDownload = false }: SiteHeaderProps) {
   const anchor = (id: string): string => (onLanding ? `#${id}` : siteHref(`${landingPath(language)}#${id}`));
   return (
     <header className="ld-header">
@@ -68,9 +70,11 @@ export function SiteHeader({ language, copy, onLanding, languageControl, siteHre
         </nav>
         <span className="ld-spacer" />
         {languageControl}
-        <a href="/download" className="ld-btn ld-btn--ghost" data-download>
-          {copy.navDownload}
-        </a>
+        {hideDownload ? null : (
+          <a href="/download" className="ld-btn ld-btn--ghost" data-download>
+            {copy.navDownload}
+          </a>
+        )}
         <a href="/chats" className="ld-btn ld-btn--primary" data-my-conversations>
           {copy.myConversations}
         </a>
@@ -189,20 +193,39 @@ export type SiteFooterProps = {
   readonly pageHref?: (page: SitePage) => string;
   /** La rangée des landings par langue — absente là où l'en-tête change déjà la langue de la page. */
   readonly languageLinks?: boolean;
+  /** Les pages qui ne se proposent pas ici (la page courante, déjà dite par le titre). */
+  readonly omit?: readonly SitePage[];
+  /** Le rare, rangé derrière un « Plus » : les pages nommées ne sont plus au repos, elles restent atteignables (épure #17584, règle 6). */
+  readonly more?: { readonly pages: readonly SitePage[]; readonly label: string };
   readonly children?: ReactNode;
 };
 
-export function SiteFooter({ language, copy, onLanding, pageHref = (page) => `/${page}`, languageLinks = true, children }: SiteFooterProps) {
+export function SiteFooter({ language, copy, onLanding, pageHref = (page) => `/${page}`, languageLinks = true, omit = [], more, children }: SiteFooterProps) {
+  const shown = FOOTER_PAGES.filter((page) => !omit.includes(page));
+  const rest = more === undefined ? [] : shown.filter((page) => more.pages.includes(page));
+  const direct = shown.filter((page) => !rest.includes(page));
   return (
     <footer className="ld-footer">
       <div className="ld-wrap ld-footer-row">
         <span className="ld-footer-name">Meeshy</span>
         <nav aria-label={copy.footerLabel}>
-          {FOOTER_PAGES.map((page) => (
+          {direct.map((page) => (
             <a key={page} href={pageHref(page)}>
               {copy[page]}
             </a>
           ))}
+          {more === undefined || rest.length === 0 ? null : (
+            <details className="ld-footer-more">
+              <summary>{more.label}</summary>
+              <span className="ld-footer-more-links">
+                {rest.map((page) => (
+                  <a key={page} href={pageHref(page)}>
+                    {copy[page]}
+                  </a>
+                ))}
+              </span>
+            </details>
+          )}
         </nav>
         <span className="ld-spacer" />
         {languageLinks ? (

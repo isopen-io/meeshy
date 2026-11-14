@@ -65,12 +65,11 @@ describe('#13933 — un cran à la fois', () => {
     expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'FRIEND' });
   });
 
-  it('une demande SANS niveau vaut Ami et suit la même loi : depuis Public c’est un saut', async () => {
-    const { status, body, store } = await envoyer({});
+  it('une demande SANS niveau vaut Ami et passe directement depuis Public (#18101)', async () => {
+    const { status, store } = await envoyer({});
 
-    expect(status).toBe(409);
-    expect(body.code).toBe('RELATION_PHASE_SKIP');
-    expect(store.friendRequests()).toHaveLength(0);
+    expect(status).toBe(201);
+    expect(store.friendRequests()[0]).toMatchObject({ targetLevel: 'FRIEND' });
   });
 
   it('une demande SANS niveau depuis Connaissance est une demande d’Ami', async () => {

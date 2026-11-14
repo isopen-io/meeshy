@@ -56,6 +56,7 @@ import { isServerAtRestCiphertextRefusal, isServerAtRestUnavailable } from './se
 import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
 import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
+import { mayReturnToSalon } from '../conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -875,6 +876,16 @@ export class MessagingService {
         select: { id: true }
       });
       if (existing) return null;
+
+      // #16724 — recréer une participation, c'est ENTRER dans le salon : un
+      // salon d'une communauté privée (ou désactivée) n'accueille que son
+      // créateur et ses membres actifs (#16695, #16704).
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { communityId: true }
+      });
+      if (!conversation) return null;
+      if (!(await mayReturnToSalon(this.prisma, { communityId: conversation.communityId, userId }))) return null;
 
       // Check legacy ConversationMember collection via raw query
       const members = await (this.prisma as any).$runCommandRaw({

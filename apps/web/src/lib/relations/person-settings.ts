@@ -8,7 +8,7 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
  * /relations/:userId/settings` (`packages/shared/types/relation-person-settings.ts`).
  *
  * Une seule lecture sert toute la fiche d'un lien : le Bring (#13936) et le
- * talkie (#16638) sont deux champs du même objet, actifs par défaut, que JE
+ * talkie (#16638) et les invitations « ensemble » (#17023) sont des champs du même objet, actifs par défaut, que JE
  * coupe pour une personne ; la catégorie de mon écoute (#16831) est un ACCORD,
  * refusé par défaut, que je donne ou retire. L'écriture est PARTIELLE et
  * STRICTE (un champ à la fois, jamais un champ inconnu) ; la réponse rend
@@ -20,12 +20,12 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
 
 export type PersonSettingsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export const RECEPTION_BLOCKS = ['bringBlocked', 'talkieBlocked', 'listeningCategoryShared'] as const;
+export const RECEPTION_BLOCKS = ['bringBlocked', 'talkieBlocked', 'togetherBlocked', 'listeningCategoryShared'] as const;
 export type ReceptionBlock = (typeof RECEPTION_BLOCKS)[number];
 
 export type ReceptionSettings = Readonly<Record<ReceptionBlock, boolean>>;
 
-const OPEN: ReceptionSettings = { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false };
+const OPEN: ReceptionSettings = { bringBlocked: false, talkieBlocked: false, togetherBlocked: false, listeningCategoryShared: false };
 
 const objectOf = (raw: unknown): Readonly<Record<string, unknown>> | null =>
   typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Readonly<Record<string, unknown>>) : null;

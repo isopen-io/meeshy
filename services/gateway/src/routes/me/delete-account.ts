@@ -10,6 +10,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConfli
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { buildDeletionPageUrl } from '../../utils/email-secret-link';
+import { withdrawRitualSharesOfUser } from '../../services/relations/ritualShareWithdrawal';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -87,6 +88,8 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
           where: { userId, status: 'GRACE_PERIOD_EXPIRED' }
         });
         if (expiredRequests > 0) {
+          // #14924 — le compte revient : une purge de fin de grâce en panne ne lui rend aucun partage du rituel.
+          await withdrawRitualSharesOfUser(fastify.prisma, { userId });
           await fastify.prisma.$transaction([
             fastify.prisma.accountDeletionRequest.updateMany({
               where: { userId, status: 'GRACE_PERIOD_EXPIRED' },

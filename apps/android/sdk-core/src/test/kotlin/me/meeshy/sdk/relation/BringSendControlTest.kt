@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.RelationShareGrant
 import org.junit.Test
 
 /**
@@ -43,6 +44,11 @@ class BringSendControlTest {
             userId: String,
             setting: RelationReceptionSetting,
             blocked: Boolean,
+        ): RelationPersonSettings? = null
+        override suspend fun setShareGranted(
+            userId: String,
+            grant: RelationShareGrant,
+            granted: Boolean,
         ): RelationPersonSettings? = null
     }
 

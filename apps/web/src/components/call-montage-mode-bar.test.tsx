@@ -193,6 +193,30 @@ describe('CallMontageMode — la barre d’Effets', () => {
     view.done();
   });
 
+  test('#17947 — au Montage aussi, régler la luminosité ou le flou laisse le panneau ouvert ; seuls « Réglages » et ‹ le referment', async () => {
+    const view = await mount();
+    await view.press('[data-call-effects-settings-toggle]');
+    const slider = view.find('input[type="range"]') as HTMLInputElement;
+    for (const value of ['10', '25']) {
+      await act(async () => {
+        slider.value = value;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await view.press('[data-call-effects-blur]');
+    await later(260);
+    expect(view.applied).toEqual([{ brightness: 0.1 }, { brightness: 0.25 }, { blur: true }]);
+    expect(view.find('[data-call-effects-settings]')).not.toBeNull();
+    expect(view.find('[data-call-effects-settings-toggle]')?.getAttribute('aria-pressed')).toBe('true');
+    await view.press('[data-call-effects-settings-toggle]');
+    await later(260);
+    expect(view.find('[data-call-effects-settings]')).toBeNull();
+    await view.press('[data-call-effects-settings-toggle]');
+    await view.press('[data-call-mode-quit]');
+    expect(view.exits).toEqual(['exit']);
+    view.done();
+  });
+
   test('choisir un cadre le pose dans la pile : l’appui long sur (+) liste l’effet, annuler le retire, referme la liste et rend le menu de base', async () => {
     const view = await mount();
     await view.pickFrame();

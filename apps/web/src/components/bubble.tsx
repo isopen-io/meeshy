@@ -522,7 +522,7 @@ export function Bubble({
               event.stopPropagation();
               onToggleSelect?.(message.id);
             }}
-            className="absolute grid place-items-center"
+            className="absolute z-[1] grid place-items-center"
             style={{ top: -2, [isMine ? 'left' : 'right']: -46, width: 44, minHeight: 44 }}
           >
             <span

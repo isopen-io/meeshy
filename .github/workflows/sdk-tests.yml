@@ -200,7 +200,7 @@ env:
 jobs:
   sdk-plan:
     name: Répartir les suites du SDK
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -221,7 +221,7 @@ jobs:
   # Le NOM du job est lu par la file des autres runs.
   file-mac:
     name: File d'attente Mac
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -571,7 +571,7 @@ jobs:
   sdk-tests:
     name: Verdict iOS SDK
     needs: [sdk-plan, sdk-build, sdk-test-shard]
-    if: ${{ always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') }}
+    if: ${{ always() && ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

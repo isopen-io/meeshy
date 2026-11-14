@@ -1,5 +1,13 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_locations_footnote">يختار كل شخص الدقة والمدة؛ ويُمحى كل شيء عند انتهائها.</string>
+    <string name="circles_locations_map">خريطة المواقع المشتركة</string>
+    <string name="circles_locations_pin_until">حتى %1$s</string>
+    <string name="circles_locations_precision_city">على مستوى المدينة</string>
+    <string name="circles_locations_precision_exact">موقع دقيق</string>
+    <string name="circles_locations_precision_neighborhood">على مستوى الحي</string>
+    <string name="circles_locations_someone">شخص ما</string>
+    <string name="circles_locations_title">مواقع تمت مشاركتها معك</string>
     <string name="circles_settings_block_talkie">كتم التوكي الخاص به</string>
     <string name="circles_settings_block_talkie_detail">لن يُسمع صوته مباشرةً على جهازك بعد الآن: سيصلك كرسالة صوتية. لن يتم إعلام هذا الشخص.</string>
     <string name="contacts_back">رجوع</string>

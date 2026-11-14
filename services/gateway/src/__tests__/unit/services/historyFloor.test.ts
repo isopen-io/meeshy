@@ -18,6 +18,7 @@ import {
   historyFloorClause,
   historyFloorFor,
   historyReaderFromAuthContext,
+  linkGrantsHistory,
   loadHistoryFloor,
   loadHistoryFloors,
   loadHistoryFloorsFor,
@@ -256,8 +257,114 @@ describe('historyFloorFor — (iv) le lien de partage, quand rien n’est figé'
     expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} }, { allowViewHistory: false })).toEqual(JOINED);
   });
 
-  it('ne borne RIEN quand le lien est INTROUVABLE — posture unique du dépôt', () => {
-    expect(historyFloorFor(participation(), null)).toBeNull();
+  /**
+   * #17140 — le témoin INVERSE de celui qu'il remplace.
+   *
+   * Il gelait « ne borne RIEN quand le lien est INTROUVABLE », présenté comme
+   * la posture unique du dépôt. C'était un fail-OPEN décisionnel : la
+   * participation DÉCLARE être entrée par un lien, et on ne sait plus rien de
+   * ce que ce lien accordait. Deux unités de production fabriquent ce cas —
+   * `deleteShareLinksRevokingGuests` (purge d'un compte) et `cleanupExpiredData`
+   * (balayage horaire des liens ÉCHUS) — parce que toutes deux ne révoquent
+   * que les invités `type: 'anonymous'` avant de supprimer la ligne.
+   */
+  it('borne à l’arrivée quand le lien est INTROUVABLE — fail-CLOSED (#17140)', () => {
+    expect(historyFloorFor(participation(), null)).toEqual(JOINED);
+  });
+
+  it('et ce refus ne prime PAS sur un droit figé qui accorde — le lien n’est que le dernier repli', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: true } }, null),
+    ).toBeNull();
+  });
+
+  it('ni sur un octroi par DATE, ni sur un rang d’administrateur', () => {
+    expect(historyFloorFor(participation({ historyVisibleFrom: GRANTED_FROM }), null)).toEqual(GRANTED_FROM);
+    expect(historyFloorFor(participation({ role: 'admin' }), null)).toBeNull();
+  });
+});
+
+/**
+ * #17140 — l'arbitrage du lien, ÉNONCÉ UNE FOIS.
+ *
+ * `linkGrantsHistory` existe parce que la fiche d'un participant
+ * (`participants-reads.ts`) doit ANNONCER exactement ce que `historyFloorFor`
+ * APPLIQUE. Elle le retapait (`shareLink?.allowViewHistory ?? true`), et le
+ * retapage confondait les deux raisons d'avoir `null` en face.
+ */
+/**
+ * #17140 (audit adversarial) — **le prédicat partagé ne suffit pas : l'OPÉRANDE
+ * doit l'être aussi.**
+ *
+ * `Participant.shareLinkId` et `anonymousSession.shareLinkId` coexistent en
+ * base — la migration vers le modèle Participant n'écrit QUE la seconde, et
+ * `ExpiredShareLinksCleanupService.shareLinkIdsHeldByActiveGuests` PAGINE les
+ * lignes qui n'ont que celle-là. Ce module ne lisait que la colonne : une ligne
+ * migrée se réglait au rang « aucun lien emprunté » ⇒ AUCUN plancher, même
+ * quand le lien EXISTE et ferme l'historique. La loi est `guestShareLinkId()`.
+ */
+describe('historyFloorFor — l’id du lien se prend sur les DEUX champs (#17140)', () => {
+  const migre = (over: Partial<HistoryFloorParticipation> = {}): HistoryFloorParticipation => ({
+    conversationId: 'c1',
+    joinedAt: JOINED,
+    shareLinkId: null,
+    anonymousSession: { shareLinkId: 'sl-1' },
+    ...over,
+  });
+
+  it('BORNE une ligne migrée dont le lien ferme l’historique — la colonne est absente, pas le lien', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  it('n’ouvre rien de plus quand ce lien-là est INTROUVABLE', () => {
+    expect(historyFloorFor(migre(), null)).toEqual(JOINED);
+  });
+
+  it('et ouvre quand ce lien-là accorde', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: true })).toBeNull();
+  });
+
+  it('la COLONNE prime sur la copie embarquée — même précédence que `guestShareLinkId`', async () => {
+    const prisma = prismaWith([{ id: 'sl-colonne', allowViewHistory: false }]);
+    const floor = await loadHistoryFloor(prisma, {
+      joinedAt: JOINED,
+      shareLinkId: 'sl-colonne',
+      anonymousSession: { shareLinkId: 'sl-embarque' },
+    });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique.mock.calls[0][0].where.id).toBe('sl-colonne');
+  });
+
+  it('le chargeur ALIGNÉ interroge l’id embarqué quand la colonne manque', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    expect(await loadHistoryFloorsFor(prisma, [migre()])).toEqual([JOINED]);
+    expect((prisma as any).conversationShareLink.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['sl-1'] } });
+  });
+
+  it('et la PROJECTION demande les deux — une loi qu’aucun `select` ne ramène n’est appliquée nulle part', () => {
+    expect(HISTORY_FLOOR_PARTICIPANT_SELECT.anonymousSession).toEqual({
+      select: { rights: true, shareLinkId: true },
+    });
+  });
+
+  it('une ligne SANS aucun des deux reste au rang legacy — rien ne borne', () => {
+    expect(historyFloorFor(migre({ anonymousSession: { shareLinkId: null } }), null)).toBeNull();
+  });
+});
+
+describe('linkGrantsHistory — « aucun lien » et « lien disparu » ne sont pas la même réponse', () => {
+  it('accorde quand la participation n’a emprunté AUCUN lien — rien ne borne qui n’est entré par rien', () => {
+    expect(linkGrantsHistory(null, null)).toBe(true);
+    expect(linkGrantsHistory(undefined, null)).toBe(true);
+  });
+
+  it('refuse quand un `shareLinkId` est posé et que sa ligne a DISPARU', () => {
+    expect(linkGrantsHistory('sl-1', null)).toBe(false);
+  });
+
+  it('rend ce que la ligne dit quand elle est là', () => {
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: true })).toBe(true);
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: false })).toBe(false);
   });
 });
 
@@ -317,6 +424,22 @@ describe('loadHistoryFloor — forme unitaire', () => {
     } as never;
     await expect(loadHistoryFloor(prisma, participation())).rejects.toThrow('mongo down');
   });
+
+  /**
+   * #17140 — la lecture ABOUTIT et ne trouve rien. Ce n'est pas l'échec
+   * ci-dessus : elle a répondu, et sa réponse est « ce lien n'existe plus ».
+   */
+  it('borne à l’arrivée quand la lecture aboutit sur RIEN (lien supprimé depuis la jointure)', async () => {
+    const prisma = prismaWith([]);
+    expect(await loadHistoryFloor(prisma, participation())).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('et quand l’appelant tient un lien qui n’est pas le sien, c’est la LECTURE qui tranche — pas le sien', async () => {
+    const prisma = prismaWith([]);
+    const floor = await loadHistoryFloor(prisma, participation(), { link: { id: 'sl-other', allowViewHistory: true } });
+    expect(floor).toEqual(JOINED);
+  });
 });
 
 describe('loadHistoryFloorsFor — forme ALIGNÉE (un plancher par ligne)', () => {
@@ -347,6 +470,19 @@ describe('loadHistoryFloorsFor — forme ALIGNÉE (un plancher par ligne)', () =
     ]);
     expect(floors).toEqual([null, JOINED]);
     expect((prisma as any).conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * #17140 — sur une page MIXTE, une seule ligne orpheline ne doit emporter ni
+   * ouvrir les autres : chaque index garde son propre verdict.
+   */
+  it('borne la SEULE participation dont le lien a disparu, et laisse les autres intactes', async () => {
+    const floors = await loadHistoryFloorsFor(prismaWith([{ id: 'sl-vivant', allowViewHistory: true }]), [
+      { joinedAt: JOINED, shareLinkId: 'sl-vivant' },
+      { joinedAt: LATER, shareLinkId: 'sl-mort' },
+      { joinedAt: JOINED, shareLinkId: null },
+    ]);
+    expect(floors).toEqual([null, LATER, null]);
   });
 });
 
@@ -392,9 +528,9 @@ describe('loadHistoryFloors — forme ENSEMBLISTE (par conversation)', () => {
     expect(floors.get('c2')).toEqual(LATER);
   });
 
-  it('ne borne pas sur un lien introuvable — même posture que GET messages', async () => {
+  it('BORNE sur un lien introuvable — même posture que GET messages, désormais fail-CLOSED (#17140)', async () => {
     const floors = await loadHistoryFloors(prismaWith([]), [participation()]);
-    expect(floors.size).toBe(0);
+    expect(floors.get('c1')).toEqual(JOINED);
   });
 
   it('rend le MÊME verdict que la forme unitaire', async () => {
@@ -544,6 +680,18 @@ describe('loadHistoryFloorsOrFail', () => {
 
   it('ne retire rien quand la lecture aboutit', async () => {
     const result = await loadHistoryFloorsOrFail(prismaWith([{ id: 'sl-1', allowViewHistory: false }]), [participation()]);
+    expect(result.unreadableConversationIds).toEqual([]);
+    expect(result.floors.get('c1')).toEqual(JOINED);
+  });
+
+  /**
+   * #17140 — la distinction que ce lot pose, vue d'ici : une LEVÉE rend la
+   * conversation ILLISIBLE (on ne sait rien, on ne sert rien) ; une lecture qui
+   * ABOUTIT sur rien rend un PLANCHER (on sait que le lien a disparu, on sert
+   * depuis l'arrivée). Les confondre renverrait à « aucun plancher ».
+   */
+  it('une lecture qui aboutit sur RIEN n’est pas illisible — elle BORNE', async () => {
+    const result = await loadHistoryFloorsOrFail(prismaWith([]), [participation()]);
     expect(result.unreadableConversationIds).toEqual([]);
     expect(result.floors.get('c1')).toEqual(JOINED);
   });

@@ -57,6 +57,8 @@ const translatableSource = (source: string | undefined): boolean =>
   !source || source === 'auto' || isServerTranslatableLanguage(canonicalLanguage(source));
 
 
+export type PendingRequestKind = 'translation' | 'audio_process' | 'transcription' | 'voice_api' | 'voice_profile';
+
 export interface RequestSenderStats {
   translationRequests: number;
   audioProcessRequests: number;
@@ -75,6 +77,7 @@ export class ZmqRequestSender {
   // `translationCompleted`. Elle n'est soldée qu'une fois ce jeu vidé — sinon
   // les langues 2..N perdraient deadman, retry et erreur dès la première rendue.
   private pendingRequests: Map<string, {
+    kind: PendingRequestKind;
     request: any;
     timestamp: number;
     timeoutId?: NodeJS.Timeout;
@@ -154,6 +157,7 @@ export class ZmqRequestSender {
     // il ne porte plus que les langues encore manquantes). `servableTargetLanguages`
     // est déjà canonique (ci-dessus) — plus besoin de re-canonicaliser ici.
     this.pendingRequests.set(taskId, {
+      kind: 'translation',
       request: request,
       timestamp: Date.now(),
       pendingLanguages: new Set(servableTargetLanguages)
@@ -263,6 +267,7 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
+      kind: 'audio_process',
       request: requestMessage,
       timestamp: Date.now()
     });
@@ -356,6 +361,7 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
+      kind: 'transcription',
       request: requestMessage,
       timestamp: Date.now()
     });
@@ -391,6 +397,7 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(request.taskId, {
+      kind: 'voice_api',
       request: request,
       timestamp: Date.now()
     });
@@ -420,6 +427,7 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(request.request_id, {
+      kind: 'voice_profile',
       request: request,
       timestamp: Date.now()
     });
@@ -539,6 +547,15 @@ export class ZmqRequestSender {
    */
   hasPendingRequest(taskId: string): boolean {
     return this.pendingRequests.has(taskId);
+  }
+
+  /**
+   * Vrai seulement si la requête en attente sous ce taskId est une traduction
+   * TEXTE : un refus propre à la traduction texte (`translation_skipped`) ne
+   * doit solder ni un audio, ni une transcription, ni un appel voix (#18042).
+   */
+  hasPendingTranslationRequest(taskId: string): boolean {
+    return this.pendingRequests.get(taskId)?.kind === 'translation';
   }
 
   /**

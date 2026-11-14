@@ -1,4 +1,5 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
+import { gameAttention, type GameAttention } from '@meeshy/shared/utils/game/attention';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision5, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -76,6 +77,11 @@ export type PlayerBannerModel = {
   readonly season: { readonly stars: number } | null;
   /** Le contenant de l'Héritage, de la Bourse à la Réserve (#17437) ; `null` sans Meesh gardée. */
   readonly treasury: TreasuryTierKey | null;
+  /**
+   * L'Offrande prête et la Flamme à risque, lues du bloc servi (#17796) — jamais une pièce : un signal que le bandeau
+   * et le menu posent sur ce qu'ils montrent déjà. Il ne fait naître aucun bandeau.
+   */
+  readonly attention: GameAttention;
 };
 
 const BURNING: ReadonlySet<GameBlock['flame']['status']> = new Set(['lit', 'at-risk', 'covered']);
@@ -117,6 +123,7 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
     missions: game.missions.unlocked && game.missions.items.length > 0 ? { done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length } : null,
     season: game.season === null || game.season === undefined ? null : { stars: game.season.stars },
     treasury: treasury.held > 0 ? treasury.tier : null,
+    attention: gameAttention(game, { hidden: false }),
   };
   return hasAnything(model) ? model : null;
 }

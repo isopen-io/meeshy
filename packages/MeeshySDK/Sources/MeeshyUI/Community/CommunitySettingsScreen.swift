@@ -72,6 +72,14 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         } message: {
             Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.", bundle: .module))
         }
+        .alert(String(localized: "community.settings.privacy.confirm.title", defaultValue: "Rendre la communauté privée ?", bundle: .module), isPresented: $viewModel.showPrivacyConfirm) {
+            Button(String(localized: "community.settings.privacy.confirm.button", defaultValue: "Rendre privée", bundle: .module), role: .destructive) {
+                commitSave()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+        } message: {
+            Text(String(localized: "community.settings.privacy.confirm.message", defaultValue: "Anciens membres et comptes bloqués quitteront ses conversations, sans retour.", bundle: .module))
+        }
         .alert(String(localized: "community.settings.leave.confirm.title", defaultValue: "Quitter la communauté", bundle: .module), isPresented: $viewModel.showLeaveConfirm) {
             Button(String(localized: "community.settings.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
                 Task {
@@ -89,6 +97,16 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         }
         .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
+        }
+    }
+
+    private func commitSave() {
+        Task {
+            let updated = await viewModel.save()
+            if let updated {
+                onUpdated?(updated)
+                dismiss()
+            }
         }
     }
 
@@ -111,12 +129,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             Spacer()
 
             Button {
-                Task {
-                    let updated = await viewModel.save()
-                    if let updated {
-                        onUpdated?(updated)
-                        dismiss()
-                    }
+                if viewModel.needsPrivacyConfirmation {
+                    viewModel.showPrivacyConfirm = true
+                } else {
+                    commitSave()
                 }
             } label: {
                 if viewModel.isSaving {

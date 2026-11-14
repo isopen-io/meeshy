@@ -11,7 +11,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
-import { getBlockedUserIdsAmong } from '../../utils/blocking';
+import { withoutBlockedRecipients } from '../../utils/blocking';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -169,14 +169,7 @@ export class SocialEventsHandler {
    * l'expiration des 30 s. Une lecture qui échoue ferme l'audience.
    */
   private async withoutBlocked(authorId: string, recipientIds: string[]): Promise<string[]> {
-    if (recipientIds.length === 0) return recipientIds;
-    try {
-      const blocked = await getBlockedUserIdsAmong(this.prisma, authorId, recipientIds);
-      return blocked.size === 0 ? recipientIds : recipientIds.filter((id) => !blocked.has(id));
-    } catch (error) {
-      logger.error('social events — block resolution failed, audience closed', { authorId, error });
-      return [];
-    }
+    return withoutBlockedRecipients(this.prisma, authorId, recipientIds);
   }
 
   /** Les amis de l'auteur hors relation de blocage (#13350). */

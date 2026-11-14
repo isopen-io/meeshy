@@ -214,7 +214,8 @@ describe('NotificationPreferenceSchema', () => {
       gameEnabled: false,
       gamePhotoEnabled: false,
       bringEnabled: false,
-      talkieEnabled: false
+      talkieEnabled: false,
+      togetherEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);

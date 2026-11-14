@@ -353,6 +353,10 @@ struct ConversationHeaderTagsRow: View {
     let showsEngagement: Bool
     let accentColor: String
     let successColor: Color
+    /// « Voir le jeu » de la carte, ou le toucher sur le cumul seul (#17987).
+    let onOpenGame: () -> Void
+    /// « Masquer la flamme » de la carte (#17987).
+    let onHideFlame: () -> Void
 
     /// #11374 — « de bout en bout » pour `e2ee` seul, « sur le serveur » pour `server`/`hybrid`.
     private var encryptionBadge: ConversationEncryptionBadge? {
@@ -386,7 +390,9 @@ struct ConversationHeaderTagsRow: View {
         ConversationEngagementBadge(
             conversationId: conversation?.id ?? "",
             seed: conversation?.viewerEngagement,
-            accentColor: accentColor
+            accentColor: accentColor,
+            onOpenGame: onOpenGame,
+            onHideFlame: onHideFlame
         )
     }
 

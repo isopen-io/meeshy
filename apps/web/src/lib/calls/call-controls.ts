@@ -97,17 +97,26 @@ export function cameraSwitchOf(devices: readonly CameraDevice[]): CameraSwitch {
   return cameras.some(rearFacing) ? 'flip' : 'picker';
 }
 
-/**
- * La scène est-elle VIDÉO ? Seule une scène vidéo range ses commandes : en
- * audio, il n'y a rien à dégager.
- */
-export function isVideoScene(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup' | 'phase'>): boolean {
+type SceneCall = Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup' | 'phase'>;
+
+/** La scène est-elle VIDÉO ? Une image à capturer (« Capture »), et une scène qui range ses commandes au toucher. */
+export function isVideoScene(call: SceneCall): boolean {
   if (!joined(call.phase.kind)) return false;
   const layout: CallLayout = callLayout(call);
   if (layout === 'video-duo' || layout === 'screen') return true;
   if (layout !== 'grid') return false;
   return call.cameraOn || Object.values(call.members).some((member) => member.cameraOn || member.screenSharing);
 }
+
+/**
+ * Un toucher sur la SCÈNE range-t-il les commandes (loi 11, #16663) ? Dès que l'appel est établi :
+ * l'image d'une vidéo, le fond derrière l'avatar d'un duo audio (#17945) et le fond d'une grille de
+ * groupe sans caméra (extension porteur du 2026-11-13, #17945) — une vignette, bouton, garde son
+ * toucher. Pendant la sonnerie et à la fin, rien ne se range. Mêmes vecteurs que
+ * `CallChromeVisibility.mayToggleByTap` (iOS) et `CallChromeController` (Android) : vidéo oui · duo
+ * audio établi oui · duo audio pas encore établi non · groupe avec caméra oui · groupe sans caméra oui.
+ */
+export const tapStowsChrome = (call: Pick<ActiveCall, 'phase'>): boolean => joined(call.phase.kind);
 
 /**
  * Ce que montrent les commandes d'une vidéo (#8550, #8988) : `shown`, ou

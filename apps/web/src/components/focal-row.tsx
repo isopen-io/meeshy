@@ -691,7 +691,7 @@ export const FocalRow = memo(function FocalRow({
               event.stopPropagation();
               onToggleSelect?.(message.id);
             }}
-            className="grid place-items-center"
+            className="relative z-[1] grid place-items-center"
             style={{ width: TEXT_INDENT, minHeight: 44 }}
           >
             <span

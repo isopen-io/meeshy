@@ -17,8 +17,10 @@ import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringBlockBody
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.BringStoppedEvent
+import me.meeshy.sdk.model.relation.ListeningCategoryShareBody
 import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.net.api.BringApi
 import me.meeshy.sdk.net.api.BringStopResponse
@@ -161,5 +163,21 @@ class BringRepositoryTest {
         assertThat(served?.isBlocked(RelationReceptionSetting.TALKIE)).isTrue()
         assertThat(served?.isBlocked(RelationReceptionSetting.BRING)).isFalse()
         coVerify(exactly = 0) { relations.setBringBlocked(any(), any()) }
+    }
+
+    @Test
+    fun `accorder ce que j'ecoute ecrit son seul champ, et un refus rend null`() = runTest {
+        val repository = repository()
+        coEvery { relations.setListeningCategoryShared("u2", ListeningCategoryShareBody(true)) } returns
+            ApiResponse(success = true, data = RelationPersonSettings("u2", listeningCategoryShared = true))
+
+        val served = repository.setShareGranted("u2", RelationShareGrant.LISTENING_CATEGORY, granted = true)
+
+        assertThat(served?.isGranted(RelationShareGrant.LISTENING_CATEGORY)).isTrue()
+        coVerify(exactly = 0) { relations.setBringBlocked(any(), any()) }
+        coVerify(exactly = 0) { relations.setTalkieBlocked(any(), any()) }
+
+        coEvery { relations.setListeningCategoryShared("u2", ListeningCategoryShareBody(false)) } throws http(500)
+        assertThat(repository.setShareGranted("u2", RelationShareGrant.LISTENING_CATEGORY, granted = false)).isNull()
     }
 }

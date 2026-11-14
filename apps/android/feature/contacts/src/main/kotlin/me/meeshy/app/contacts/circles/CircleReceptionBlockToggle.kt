@@ -23,30 +23,33 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.relation.RelationPersonSwitch
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 internal const val CIRCLE_BLOCK_BRING_TAG = "circles.settings.blockBring"
 internal const val CIRCLE_BLOCK_TALKIE_TAG = "circles.settings.blockTalkie"
+internal const val CIRCLE_SHARE_LISTENING_TAG = "circles.settings.listening"
 
 private const val FAILURE_VISIBLE_MS = 4_000L
 
 /**
- * L'interrupteur ACTIF d'une préférence de réception sur la fiche d'un lien — « Bloquer ses Bring » (#16617) et « Couper
- * son talkie » (#16675) —, iso `CircleReceptionBlockToggle.swift`. La ligne entière bascule (48 dp), annoncée comme un
+ * L'interrupteur ACTIF d'un réglage par personne sur la fiche d'un lien — « Bloquer ses Bring » (#16617), « Couper son
+ * talkie » (#16675) et « Ce que j'écoute » (#16836) —, iso `CircleReceptionBlockToggle.swift`. La ligne entière bascule (48 dp), annoncée comme un
  * interrupteur par TalkBack, avec son explication quand elle en a une.
  */
 @Composable
 internal fun CircleReceptionBlockToggle(
     userId: String,
-    setting: RelationReceptionSetting,
+    personSwitch: RelationPersonSwitch,
     title: String,
     detail: String? = null,
-    viewModel: CircleReceptionBlockViewModel = hiltViewModel(key = "reception-block-${setting.name}-$userId"),
+    viewModel: CircleReceptionBlockViewModel = hiltViewModel(key = "person-switch-${personSwitch.tag()}-$userId"),
 ) {
-    LaunchedEffect(userId, setting) { viewModel.load(userId, setting) }
+    LaunchedEffect(userId, personSwitch) { viewModel.load(userId, personSwitch) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column {
         Row(
@@ -54,12 +57,12 @@ internal fun CircleReceptionBlockToggle(
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .toggleable(
-                    value = state.blocked,
+                    value = state.isOn,
                     enabled = !state.isSaving,
                     role = Role.Switch,
-                    onValueChange = viewModel::setBlocked,
+                    onValueChange = viewModel::setOn,
                 )
-                .testTag(setting.tag()),
+                .testTag(personSwitch.tag()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -68,7 +71,7 @@ internal fun CircleReceptionBlockToggle(
                 color = MeeshyTheme.tokens.textPrimary,
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = state.blocked, onCheckedChange = null, enabled = !state.isSaving)
+            Switch(checked = state.isOn, onCheckedChange = null, enabled = !state.isSaving)
         }
         detail?.let {
             Text(
@@ -92,7 +95,12 @@ internal fun CircleReceptionBlockToggle(
     }
 }
 
-private fun RelationReceptionSetting.tag(): String = when (this) {
-    RelationReceptionSetting.BRING -> CIRCLE_BLOCK_BRING_TAG
-    RelationReceptionSetting.TALKIE -> CIRCLE_BLOCK_TALKIE_TAG
+private fun RelationPersonSwitch.tag(): String = when (this) {
+    is RelationPersonSwitch.Reception -> when (setting) {
+        RelationReceptionSetting.BRING -> CIRCLE_BLOCK_BRING_TAG
+        RelationReceptionSetting.TALKIE -> CIRCLE_BLOCK_TALKIE_TAG
+    }
+    is RelationPersonSwitch.Share -> when (grant) {
+        RelationShareGrant.LISTENING_CATEGORY -> CIRCLE_SHARE_LISTENING_TAG
+    }
 }

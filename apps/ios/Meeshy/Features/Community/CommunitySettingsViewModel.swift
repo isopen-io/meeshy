@@ -21,6 +21,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     @Published private(set) var errorMessage: String?
     @Published var showDeleteConfirm = false
     @Published var showLeaveConfirm = false
+    @Published var showPrivacyConfirm = false
 
     let communityId: String
     let isCreator: Bool
@@ -44,6 +45,9 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
         localColor != originalLocalColor ||
         localEmoji != originalLocalEmoji
     }
+
+    /// Publique → privée seulement : rouvrir une communauté, ou tout autre changement, part sans détour.
+    var needsPrivacyConfirmation: Bool { !originalIsPrivate && isPrivate }
 
     init(
         community: MeeshyCommunity,

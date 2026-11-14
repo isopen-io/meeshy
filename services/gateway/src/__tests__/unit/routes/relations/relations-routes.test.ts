@@ -51,6 +51,35 @@ describe('#13933 — GET /relations/config', () => {
   });
 });
 
+describe('#13937 — GET /relations/config dit au lecteur si la position du Sang lui est ouverte', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('drapeau éteint : `services.bloodLocation` est faux', async () => {
+    delete process.env.BLOOD_LOCATION_ENABLED;
+    delete process.env.BLOOD_LOCATION_ALLOWLIST;
+    const app = await appli();
+    const res = await app.call('GET', `${PREFIXE}/config`);
+    await app.close();
+
+    expect(res.body.data.services.bloodLocation).toBe(false);
+  });
+
+  it('drapeau allumé : vrai pour un compte de la liste blanche, faux pour un autre', async () => {
+    process.env.BLOOD_LOCATION_ENABLED = 'true';
+    process.env.BLOOD_LOCATION_ALLOWLIST = MOI;
+    const app = await appli();
+    const moi = await app.call('GET', `${PREFIXE}/config`);
+    const autre = await app.call('GET', `${PREFIXE}/config`, undefined, AUTRE);
+    await app.close();
+
+    expect(moi.body.data.services.bloodLocation).toBe(true);
+    expect(autre.body.data.services.bloodLocation).toBe(false);
+  });
+});
+
 describe('#13933 — GET /relations', () => {
   it('liste les liens d’au moins Connaissance, avec le niveau effectif, ce que J’accorde et la progression', async () => {
     const app = await appli({

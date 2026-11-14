@@ -1216,13 +1216,13 @@ describe('GET /sync — plancher d’historique des liens de partage', () => {
     await app.close();
   });
 
-  it('un lien introuvable ne borne pas — même posture que GET messages', async () => {
+  // #17140 — sans plancher, le delta rapatriait tout l'avant-jointure d'un
+  // inscrit dont le lien a été supprimé (purge, balayage des liens ÉCHUS).
+  it('un lien introuvable BORNE à l’arrivée — fail-CLOSED (#17140)', async () => {
     const prisma = linkedPrisma(undefined);
     const app = await buildApp(prisma);
-
     await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
-
-    expect(scopeClause(prisma, 0)).toBeUndefined();
+    expect(scopeClause(prisma, 0)).toEqual([{ OR: [{ conversationId: 'c1', createdAt: { gte: JOINED } }] }]);
     await app.close();
   });
 });

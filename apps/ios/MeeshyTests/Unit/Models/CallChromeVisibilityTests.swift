@@ -80,17 +80,48 @@ final class CallChromeVisibilityTests: XCTestCase {
 
     // MARK: - Qui peut masquer par un toucher (loi 11, #17945)
 
-    /// #17945 — la scène, c'est l'image en vidéo et le fond derrière l'avatar d'un duo audio
-    /// établi. Un groupe sans caméra n'a pas d'image à libérer : ses vignettes répondent au
-    /// toucher. Les MÊMES vecteurs qu'Android (`CallChromeVisibility.isTapStage`) et le web. Le
-    /// témoin d'avant (« une scène audio ne cache jamais ses contrôles ») figeait le dessin que
-    /// la décision porteur a retourné.
+    /// #17945 — la scène, c'est l'image en vidéo, le fond derrière l'avatar d'un duo audio établi
+    /// et, par l'extension du porteur (dernier commentaire de #17945), le fond d'un GROUPE sans
+    /// aucune caméra allumée. Les MÊMES vecteurs qu'Android (`CallChromeVisibility.isTapStage`) et le
+    /// web, composés depuis la règle de la scène vidéo. Le vecteur « groupe, aucune caméra → non »
+    /// figeait le dessin d'avant l'extension : il devient « oui ».
     func test_isTapStage_followsTheSharedVectors() {
-        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: true, isConnected: true), "duo, vidéo")
-        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: false, isConnected: true), "duo, audio établi")
-        XCTAssertFalse(CallChromeVisibility.isTapStage(isGroup: false, isVideoStage: false, isConnected: false), "duo, audio pas encore établi")
-        XCTAssertTrue(CallChromeVisibility.isTapStage(isGroup: true, isVideoStage: true, isConnected: true), "groupe, une caméra")
-        XCTAssertFalse(CallChromeVisibility.isTapStage(isGroup: true, isVideoStage: false, isConnected: true), "groupe, aucune caméra")
+        XCTAssertTrue(tapStage(isGroup: false, camera: true, isConnected: true), "duo, vidéo")
+        XCTAssertTrue(tapStage(isGroup: false, camera: false, isConnected: true), "duo, audio établi")
+        XCTAssertFalse(tapStage(isGroup: false, camera: false, isConnected: false), "duo, audio pas encore établi")
+        XCTAssertTrue(tapStage(isGroup: true, camera: true, isConnected: true), "groupe, une caméra")
+        XCTAssertTrue(tapStage(isGroup: true, camera: false, isConnected: true), "groupe, aucune caméra")
+    }
+
+    /// #17945 étendu — en groupe sans caméra, le toucher range l'en-tête, la pilule, le journal et
+    /// les bannières ; les sous-titres restent dans un verre sans rangée (loi 11), et la capsule de
+    /// la une se range avec les contrôles. Le second toucher rend le journal.
+    func test_groupWithoutCamera_aTapStowsTheChrome_captionsStay() {
+        XCTAssertTrue(CallChromeVisibility.mayToggleByTap(isTapStage: tapStage(isGroup: true, camera: false, isConnected: true), isVoiceOverRunning: false))
+        let stowed = CallChromeVisibility(isRevealed: true).toggled()
+        for element in hideable { XCTAssertFalse(stowed.isVisible(element), "\(element) se range") }
+        XCTAssertTrue(stowed.isVisible(.captions))
+        let journal = CallScreenLayer.panel(.journal)
+        let stowedText = CallPillText.resolve(isCaptionsEnabled: true, layer: journal, isChromeRevealed: stowed.isVisible(.controls))
+        XCTAssertEqual(stowedText, .captionsAlone, "le journal se range, les sous-titres restent")
+        XCTAssertTrue(stowedText.isOnStage(isStageFullScreen: false), "le verre des sous-titres reste dans le flux de la grille")
+        let revealedText = CallPillText.resolve(isCaptionsEnabled: true, layer: journal, isChromeRevealed: stowed.toggled().isVisible(.controls))
+        XCTAssertEqual(revealedText, .journal)
+    }
+
+    /// Sous VoiceOver, rien ne se range — groupe sans caméra compris.
+    func test_groupWithoutCamera_underVoiceOver_nothingStows() {
+        XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isTapStage: tapStage(isGroup: true, camera: false, isConnected: true), isVoiceOverRunning: true))
+    }
+
+    private func tapStage(isGroup: Bool, camera: Bool, isConnected: Bool) -> Bool {
+        let isVideoStage = CallChromeVisibility.isVideoStage(
+            isGroup: isGroup,
+            isLocalVideoEnabled: false,
+            isDuoVideoActive: !isGroup && camera,
+            remoteCamerasOn: isGroup && camera ? 1 : 0
+        )
+        return CallChromeVisibility.isTapStage(isVideoStage: isVideoStage, isConnected: isConnected)
     }
 
     /// Sous VoiceOver les contrôles restent en place : le toucher ne les range pas.

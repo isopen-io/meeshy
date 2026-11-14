@@ -192,7 +192,7 @@ describe('useCallChrome', () => {
 
   function Screen({ videoScene }: { readonly videoScene: boolean }) {
     const root = useRef<HTMLDivElement>(null);
-    const { visibility } = useCallChrome({ videoScene, root });
+    const { visibility } = useCallChrome({ scene: videoScene, root });
     return (
       <div ref={root} data-visibility={visibility}>
         <div data-stage="" />
