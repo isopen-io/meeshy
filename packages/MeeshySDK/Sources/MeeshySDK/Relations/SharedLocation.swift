@@ -14,6 +14,8 @@ public enum SharedLocationContract {
     public static let exactMinRadiusMeters: Double = 10
     /// `sharedLocationPositionSchema.accuracy` : au-delà, le rayon servi n'a plus de sens.
     public static let maxRadiusMeters: Double = 100_000
+    /// `SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS` : l'échéance d'une personne ne dépasse jamais 8 h (#18205).
+    public static let recipientDeadlineMaxSeconds = 8 * 3600
 }
 
 /// `SHARED_LOCATION_PRECISIONS` : ce que l'émetteur a choisi de me montrer.
