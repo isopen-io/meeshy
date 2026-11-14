@@ -47,6 +47,8 @@ final class EpureCerclesContactsTests: XCTestCase {
         AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot.appendingPathComponent(relativePath), encoding: .utf8))
     }
 
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+
     private func specifiers(in text: String) -> [String] {
         let regex = try? NSRegularExpression(pattern: #"%(\d+\$)?(@|lld|d|ld)"#)
         let range = NSRange(text.startIndex..., in: text)
@@ -174,7 +176,10 @@ final class EpureCerclesContactsTests: XCTestCase {
 
     func test_deadKitKeys_haveNoReader_andAreGoneFromEveryLanguage() throws {
         let kit = try kit()
-        XCTAssertTrue(kit.keys.filter { $0.hasPrefix("voiceProfile.") }.isEmpty, "l'assistant vocal vit dans l'app (voice.profile.wizard.*)")
+        let sources = try shippedSources()
+        for key in kit.keys where key.hasPrefix("voiceProfile.") {
+            XCTAssertTrue(sources.contains("\"\(key)\""), "\(key) : l'assistant vocal vit dans l'app (voice.profile.wizard.*), le kit ne garde que ce que l'enregistreur lit")
+        }
         for key in [
             "community.detail.posts.empty.action", "community.detail.posts.empty.subtitle", "community.detail.posts.empty.title",
             "community.settings.avatar", "community.settings.avatar.change", "community.settings.banner",
@@ -382,8 +387,8 @@ final class EpureCerclesContactsTests: XCTestCase {
     func test_progressionEmpty_isOneShortLine_withoutTheListOfGestes() throws {
         let app = try app()
         XCTAssertEqual(app["progression.empty"]?["fr"], "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.")
-        XCTAssertEqual(ProgressionNotice(kind: .empty).text, "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.")
-        XCTAssertFalse(ProgressionNotice(kind: .empty).text.contains("story"), "le premier geste est partout dans l'app : l'énumération part")
+        XCTAssertEqual(ProgressionNotice(kind: .empty).text, served("progression.empty"))
+        XCTAssertFalse(try XCTUnwrap(app["progression.empty"]?["fr"]).contains("story"), "le premier geste est partout dans l'app : l'énumération part")
     }
 
     /// Sans élan, ni pastille de famille ni `elansHint` ne s'affichent : la phrase lue est la SEULE à dire ce qui
@@ -393,12 +398,12 @@ final class EpureCerclesContactsTests: XCTestCase {
         let app = try app()
         let expected = "Publie, commente et écris en même temps pour multiplier tes étincelles."
         XCTAssertEqual(app["progression.elans.empty"]?["fr"], expected)
-        XCTAssertEqual(ProgressionCopy.elansEmpty, expected)
+        XCTAssertEqual(ProgressionCopy.elansEmpty, served("progression.elans.empty"))
         for gesture in ["Publie", "commente", "écris"] {
-            XCTAssertTrue(ProgressionCopy.elansEmpty.contains(gesture), "l'état vide dit le geste « \(gesture) »")
+            XCTAssertTrue(expected.contains(gesture), "l'état vide dit le geste « \(gesture) »")
         }
-        XCTAssertFalse(ProgressionCopy.elansEmpty.contains("famille"), "« famille » n'est défini par aucune pastille tant qu'il n'y a pas d'élan")
-        XCTAssertLessThanOrEqual(ProgressionCopy.elansEmpty.count, 80, "une ligne, pas un paragraphe")
+        XCTAssertFalse(expected.contains("famille"), "« famille » n'est défini par aucune pastille tant qu'il n'y a pas d'élan")
+        XCTAssertLessThanOrEqual(expected.count, 80, "une ligne, pas un paragraphe")
         let french = try XCTUnwrap(app["progression.elans.empty"]?["fr"])
         for language in Self.otherLanguages {
             let value = try XCTUnwrap(app["progression.elans.empty"]?[language])
@@ -406,8 +411,9 @@ final class EpureCerclesContactsTests: XCTestCase {
         }
     }
 
-    func test_progressionNotice_empty_saysWhatLightsTheFirstMedal() {
-        let text = ProgressionNotice(kind: .empty).text
+    func test_progressionNotice_empty_saysWhatLightsTheFirstMedal() throws {
+        XCTAssertEqual(ProgressionNotice(kind: .empty).text, served("progression.empty"))
+        let text = try XCTUnwrap(try app()["progression.empty"]?["fr"])
         XCTAssertTrue(text.contains("médaille"), "l'avis lu à l'écran oriente vers le premier geste : « \(text) »")
     }
 
@@ -460,17 +466,25 @@ final class EpureCerclesContactsTests: XCTestCase {
     }
 
     func test_callTranscriptRetention_saysWhereItIsKeptAtRest_andTheDetailBehindAQuestion() throws {
-        let server = try XCTUnwrap(CallTranscriptRetentionNotice.serverKeepsFinalSentences.text)
-        let device = try XCTUnwrap(CallTranscriptRetentionNotice.deviceOnly.text)
+        let app = try app()
+        func fr(_ key: String) throws -> String { try XCTUnwrap(app[key]?["fr"], key) }
+        XCTAssertEqual(CallTranscriptRetentionNotice.serverKeepsFinalSentences.text, served("call.transcript.disclaimer.server"))
+        XCTAssertEqual(CallTranscriptRetentionNotice.deviceOnly.text, served("call.transcript.disclaimer.endToEnd"))
+        let server = try fr("call.transcript.disclaimer.server")
+        let device = try fr("call.transcript.disclaimer.endToEnd")
         XCTAssertEqual(server, "Transcription gardée sur cet appareil et, pour les phrases finales, sur le serveur Meeshy.")
         XCTAssertEqual(device, "Transcription gardée sur cet appareil seulement : rien ne quitte une conversation chiffrée de bout en bout.")
         XCTAssertFalse(server.contains("iCloud"), "la sauvegarde est le détail secondaire : derrière le (i)")
         XCTAssertFalse(device.contains("interlocuteur"))
+        let question = try fr("call.transcript.disclaimer.question")
+        let detail = try fr("call.transcript.disclaimer.note")
+        XCTAssertEqual(question, "Où se retrouve cette transcription ?")
+        XCTAssertTrue(detail.contains("iCloud") && detail.contains("interlocuteur"), "aucun texte perdu : « \(detail) »")
         for notice in [CallTranscriptRetentionNotice.serverKeepsFinalSentences, .deviceOnly] {
             let note = try XCTUnwrap(notice.infoNote, "le (i) accompagne chaque phrase de conservation")
-            XCTAssertEqual(note.question, "Où se retrouve cette transcription ?")
+            XCTAssertEqual(note.question, served("call.transcript.disclaimer.question"))
             XCTAssertTrue(note.question.hasSuffix("?"))
-            XCTAssertTrue(note.text.contains("iCloud") && note.text.contains("interlocuteur"), "aucun texte perdu : « \(note.text) »")
+            XCTAssertEqual(note.text, served("call.transcript.disclaimer.note"))
         }
         XCTAssertNil(CallTranscriptRetentionNotice.hidden.text)
         XCTAssertNil(CallTranscriptRetentionNotice.hidden.infoNote, "régime inconnu : la mention n'affirme rien, le (i) non plus")
@@ -562,8 +576,8 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// Le parrainage est propre à Meeshy (règle 7) : l'état vide « Aucun filleul » garde, au repos, la phrase qui dit
     /// qui apparaîtra dans cette liste — le bouton « Partager le lien de parrainage » dit le geste, pas son effet.
     func test_affiliatesEmpty_saysWhoWillAppearHere_atRest_inEveryLanguage() throws {
-        XCTAssertEqual(AffiliatesListView.emptyOrientation, "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici.")
-        try assertTranslated(try app(), "contacts.affiliates.empty.orientation", french: AffiliatesListView.emptyOrientation)
+        XCTAssertEqual(AffiliatesListView.emptyOrientation, served("contacts.affiliates.empty.orientation"))
+        try assertTranslated(try app(), "contacts.affiliates.empty.orientation", french: "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici.")
         let source = try code("apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift")
         XCTAssertTrue(source.contains("subtitle: viewModel.isEmpty ? Self.emptyOrientation : \"\""), "la phrase se lit sous « Aucun filleul », pas sous « Aucun résultat »")
     }
@@ -689,8 +703,8 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// vide dit en une ligne que c'est le réseau qui manque et ce qui revient avec lui. La bannière, au-dessus d'une
     /// liste déjà affichée, garde le mot seul.
     func test_circlesOfflineEmpty_saysTheNetworkIsMissing_notThatPeopleAreOffline_inEveryLanguage() throws {
-        let title = CirclesTab.offlineEmptyTitle
-        XCTAssertEqual(title, "Hors ligne : tes cercles reviennent avec le réseau")
+        XCTAssertEqual(CirclesTab.offlineEmptyTitle, served("circles.offline.empty.title"))
+        let title = "Hors ligne : tes cercles reviennent avec le réseau"
         XCTAssertTrue(title.contains("réseau"))
         XCTAssertLessThanOrEqual(title.count, 60, "une ligne")
         try assertTranslated(try app(), "circles.offline.empty.title", french: title)
@@ -700,7 +714,8 @@ final class EpureCerclesContactsTests: XCTestCase {
     func test_starredEmpty_isOneLine_theGestureBehindAQuestion() throws {
         let note = StarredMessagesView.emptyInfoNote
         XCTAssertTrue(note.question.hasSuffix("?"), "le nom accessible du (i) est la question")
-        XCTAssertEqual(note.text, "Appui long sur un message, puis « Ajouter aux favoris ».", "le geste reste appris à cet endroit")
+        XCTAssertEqual(note.text, served("starred.messages.empty.subtitle"))
+        XCTAssertEqual(try app()["starred.messages.empty.subtitle"]?["fr"], "Appui long sur un message, puis « Ajouter aux favoris ».", "le geste reste appris à cet endroit")
         XCTAssertNotEqual(note.question, note.text)
         let source = try code("apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift")
         XCTAssertTrue(source.contains("MeeshyInfoNoted(note: Self.emptyInfoNote"))
@@ -731,9 +746,9 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// encore (la route de retrait #14401 est ouverte) : on refuse ICI, retirer après coup n'est pas encore possible.
     func test_ritualWithdrawal_saysWhereToRefuse_andThatWithdrawingLaterIsNotYetPossible_inEveryLanguage() throws {
         let expected = "Chaque partage se refuse ici ; le retirer après coup n'est pas encore possible."
-        XCTAssertEqual(BloodRitualConsentCopy.withdrawal, expected)
+        XCTAssertEqual(BloodRitualConsentCopy.withdrawal, served("circles.ritual.consent.withdrawal"))
         try assertTranslated(try app(), "circles.ritual.consent.withdrawal", french: expected)
-        XCTAssertFalse(BloodRitualConsentCopy.withdrawal.contains("Bientôt"), "plus de promesse datée")
+        XCTAssertFalse(expected.contains("Bientôt"), "plus de promesse datée")
         let view = try code("apps/ios/Meeshy/Features/Contacts/BloodRitualView.swift")
         XCTAssertTrue(view.contains("Text(BloodRitualConsentCopy.withdrawal)"), "la phrase reste visible au repos, sans (i)")
     }
