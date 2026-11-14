@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 
 /// **Un mixeur qui n'a rien planifié n'a aucun nœud à arrêter** (#18511).
